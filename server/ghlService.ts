@@ -142,6 +142,7 @@ async function syncGHLCall(ghlCall: GHLCall): Promise<{ success: boolean; callId
       contactPhone: ghlCall.contactPhone,
       recordingUrl: ghlCall.recordingUrl,
       duration: ghlCall.duration,
+      callDirection: ghlCall.direction || "outbound", // Store inbound/outbound direction
       teamMemberId: teamMember.id,
       teamMemberName: teamMember.name,
       callType: teamMember.role === "acquisition_manager" ? "offer" : "qualification",
