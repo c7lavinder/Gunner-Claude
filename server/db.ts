@@ -271,6 +271,9 @@ export async function getLeaderboardData(): Promise<Array<{
   gradedCalls: number;
   skippedCalls: number;
   averageScore: number;
+  appointmentsSet: number;
+  offersAccepted: number;
+  abScoredCalls: number;
   gradeDistribution: { A: number; B: number; C: number; D: number; F: number };
 }>> {
   const db = await getDb();
@@ -287,6 +290,10 @@ export async function getLeaderboardData(): Promise<Array<{
       // Only count completed (graded) calls for leaderboard
       const gradedCalls = memberCalls.filter(c => c.status === "completed" && c.classification === "conversation");
       const skippedCalls = memberCalls.filter(c => c.status === "skipped");
+      
+      // Count appointments and offers
+      const appointmentsSet = memberCalls.filter(c => c.callOutcome === "appointment_set").length;
+      const offersAccepted = memberCalls.filter(c => c.callOutcome === "offer_accepted").length;
       
       const grades = await Promise.all(
         gradedCalls.map(async (call) => {
@@ -307,6 +314,9 @@ export async function getLeaderboardData(): Promise<Array<{
           totalScore += parseFloat(grade.overallScore);
         }
       });
+      
+      // Count A and B scored calls
+      const abScoredCalls = gradeDistribution.A + gradeDistribution.B;
 
       return {
         teamMember: member,
@@ -314,6 +324,9 @@ export async function getLeaderboardData(): Promise<Array<{
         gradedCalls: gradedCalls.length,
         skippedCalls: skippedCalls.length,
         averageScore: validGrades.length > 0 ? totalScore / validGrades.length : 0,
+        appointmentsSet,
+        offersAccepted,
+        abScoredCalls,
         gradeDistribution,
       };
     })

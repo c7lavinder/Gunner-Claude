@@ -186,7 +186,7 @@ export default function Home() {
               <CardTitle>Team Leaderboard</CardTitle>
               <CardDescription>Top performers this period</CardDescription>
             </div>
-            <Link href="/leaderboard">
+            <Link href="/analytics">
               <Button variant="outline" size="sm">View Full</Button>
             </Link>
           </CardHeader>

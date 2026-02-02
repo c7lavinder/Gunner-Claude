@@ -127,3 +127,11 @@
 
 ## Dashboard Improvements
 - [x] Add "Conversations" count to dashboard (only actual graded conversations)
+
+
+## Leaderboard Improvements
+- [x] Fix "View Full" button on dashboard to link to Analytics page
+- [x] Add leaderboard section to Analytics page
+- [x] Lead Manager metrics: Total Calls, Conversations, Appointments Set, A-B Scored Calls
+- [x] Acquisition Manager metrics: Total Calls, Conversations, Offers Accepted, A-B Scored Calls
+- [x] Update leaderboard data query to include A-B scored calls count

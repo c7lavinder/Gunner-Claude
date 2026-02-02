@@ -1,7 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, TrendingUp, Clock, CheckCircle, AlertCircle, Calendar, BarChart3 } from "lucide-react";
+import { Phone, TrendingUp, Clock, CheckCircle, AlertCircle, Calendar, BarChart3, Trophy, Users } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function StatCard({ 
   title, 
@@ -53,10 +54,14 @@ function StatCard({
 }
 
 export default function Analytics() {
-  const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery();
+  const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({});
   const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery();
 
   const isLoading = statsLoading || leaderboardLoading;
+
+  // Separate lead managers and acquisition managers
+  const leadManagers = leaderboard?.filter(e => e.teamMember.teamRole === "lead_manager") || [];
+  const acquisitionManagers = leaderboard?.filter(e => e.teamMember.teamRole === "acquisition_manager") || [];
 
   // Calculate team-wide metrics
   const teamMetrics = leaderboard?.reduce((acc, entry) => {
@@ -133,6 +138,155 @@ export default function Analytics() {
           variant={passingRate >= 80 ? "success" : passingRate >= 60 ? "warning" : "danger"}
         />
       </div>
+
+      {/* Team Leaderboard */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-yellow-500" />
+            Team Leaderboard
+          </CardTitle>
+          <CardDescription>
+            Performance rankings by role
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="lead_managers" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="lead_managers">Lead Managers</TabsTrigger>
+              <TabsTrigger value="acquisition_managers">Acquisition Managers</TabsTrigger>
+            </TabsList>
+
+            {/* Lead Managers Leaderboard */}
+            <TabsContent value="lead_managers">
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <Skeleton key={i} className="h-20 w-full" />
+                  ))}
+                </div>
+              ) : leadManagers.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Rank</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Name</th>
+                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Total Calls</th>
+                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Conversations</th>
+                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Appts Set</th>
+                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">A-B Calls</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leadManagers
+                        .sort((a, b) => b.appointmentsSet - a.appointmentsSet)
+                        .map((entry, index) => (
+                        <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="py-4 px-4">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                              index === 0 ? "bg-yellow-500 text-white" :
+                              index === 1 ? "bg-gray-400 text-white" :
+                              "bg-amber-700 text-white"
+                            }`}>
+                              {index + 1}
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <p className="font-medium">{entry.teamMember.name}</p>
+                            <p className="text-sm text-muted-foreground">Lead Manager</p>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <p className="text-lg font-bold">{entry.totalCalls}</p>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <p className="text-lg font-bold">{entry.gradedCalls}</p>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <p className="text-lg font-bold text-blue-600">{entry.appointmentsSet}</p>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <p className="text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No lead managers data yet</p>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Acquisition Managers Leaderboard */}
+            <TabsContent value="acquisition_managers">
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1].map((i) => (
+                    <Skeleton key={i} className="h-20 w-full" />
+                  ))}
+                </div>
+              ) : acquisitionManagers.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Rank</th>
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Name</th>
+                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Total Calls</th>
+                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Conversations</th>
+                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Offers Accepted</th>
+                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">A-B Calls</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {acquisitionManagers
+                        .sort((a, b) => b.offersAccepted - a.offersAccepted)
+                        .map((entry, index) => (
+                        <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="py-4 px-4">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                              index === 0 ? "bg-yellow-500 text-white" :
+                              index === 1 ? "bg-gray-400 text-white" :
+                              "bg-amber-700 text-white"
+                            }`}>
+                              {index + 1}
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <p className="font-medium">{entry.teamMember.name}</p>
+                            <p className="text-sm text-muted-foreground">Acquisition Manager</p>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <p className="text-lg font-bold">{entry.totalCalls}</p>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <p className="text-lg font-bold">{entry.gradedCalls}</p>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <p className="text-lg font-bold text-green-600">{entry.offersAccepted}</p>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <p className="text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No acquisition managers data yet</p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
       {/* Grade Distribution */}
       <Card>
@@ -227,65 +381,6 @@ export default function Analytics() {
         </CardContent>
       </Card>
 
-      {/* Individual Performance */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Individual Performance</CardTitle>
-          <CardDescription>
-            Performance breakdown by team member
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : leaderboard && leaderboard.length > 0 ? (
-            <div className="space-y-4">
-              {leaderboard.map((entry) => (
-                <div 
-                  key={entry.teamMember.id}
-                  className="flex items-center gap-4 p-4 border rounded-lg"
-                >
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium">{entry.teamMember.name}</h4>
-                    <p className="text-sm text-muted-foreground capitalize">
-                      {entry.teamMember.teamRole?.replace("_", " ")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-6 text-sm">
-                    <div className="text-center">
-                      <p className="font-bold">{entry.totalCalls}</p>
-                      <p className="text-muted-foreground">Calls</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold">
-                        {entry.averageScore ? `${Math.round(entry.averageScore)}%` : "N/A"}
-                      </p>
-                      <p className="text-muted-foreground">Avg</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold text-emerald-500">{entry.gradeDistribution.A}</p>
-                      <p className="text-muted-foreground">A's</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold text-red-500">{entry.gradeDistribution.F}</p>
-                      <p className="text-muted-foreground">F's</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No team data available</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Processing Status */}
       <Card>
         <CardHeader>
@@ -295,46 +390,78 @@ export default function Analytics() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-4">
-            <div className="flex items-center gap-3 p-4 border rounded-lg">
-              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-full">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats?.gradedCalls ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Graded</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-4 border rounded-lg">
-              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
-                <Phone className="h-5 w-5 text-gray-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats?.skippedCalls ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Skipped</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-4 border rounded-lg">
-              <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-full">
-                <Clock className="h-5 w-5 text-yellow-600" />
-              </div>
-              <div>
+          {isLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <Clock className="h-6 w-6 mx-auto mb-2 text-blue-500" />
                 <p className="text-2xl font-bold">{stats?.pendingCalls ?? 0}</p>
                 <p className="text-sm text-muted-foreground">Pending</p>
               </div>
-            </div>
-            <div className="flex items-center gap-3 p-4 border rounded-lg">
-              <div className="p-2 bg-red-100 dark:bg-red-900 rounded-full">
-                <AlertCircle className="h-5 w-5 text-red-600" />
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <CheckCircle className="h-6 w-6 mx-auto mb-2 text-green-500" />
+                <p className="text-2xl font-bold">{stats?.gradedCalls ?? 0}</p>
+                <p className="text-sm text-muted-foreground">Graded</p>
               </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {(stats?.totalCalls ?? 0) - (stats?.gradedCalls ?? 0) - (stats?.skippedCalls ?? 0) - (stats?.pendingCalls ?? 0)}
-                </p>
-                <p className="text-sm text-muted-foreground">Failed</p>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <AlertCircle className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
+                <p className="text-2xl font-bold">{stats?.skippedCalls ?? 0}</p>
+                <p className="text-sm text-muted-foreground">Skipped</p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <Phone className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-2xl font-bold">{stats?.totalCalls ?? 0}</p>
+                <p className="text-sm text-muted-foreground">Total</p>
               </div>
             </div>
-          </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Call Classification Breakdown */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Call Classification</CardTitle>
+          <CardDescription>
+            Breakdown of call types received
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : stats?.classificationBreakdown ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                <p className="text-xl font-bold text-green-600">{stats.classificationBreakdown.conversation}</p>
+                <p className="text-xs text-muted-foreground">Conversations</p>
+              </div>
+              <div className="text-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                <p className="text-xl font-bold text-gray-600">{stats.classificationBreakdown.voicemail}</p>
+                <p className="text-xs text-muted-foreground">Voicemails</p>
+              </div>
+              <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
+                <p className="text-xl font-bold text-yellow-600">{stats.classificationBreakdown.no_answer}</p>
+                <p className="text-xs text-muted-foreground">No Answer</p>
+              </div>
+              <div className="text-center p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                <p className="text-xl font-bold text-blue-600">{stats.classificationBreakdown.callback_request}</p>
+                <p className="text-xs text-muted-foreground">Callbacks</p>
+              </div>
+              <div className="text-center p-3 bg-red-50 dark:bg-red-950 rounded-lg">
+                <p className="text-xl font-bold text-red-600">{stats.classificationBreakdown.wrong_number}</p>
+                <p className="text-xs text-muted-foreground">Wrong Number</p>
+              </div>
+              <div className="text-center p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
+                <p className="text-xl font-bold text-orange-600">{stats.classificationBreakdown.too_short}</p>
+                <p className="text-xs text-muted-foreground">Too Short</p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No classification data yet</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
