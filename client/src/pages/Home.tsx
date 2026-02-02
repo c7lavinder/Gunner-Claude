@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, TrendingUp, Award, Calendar, CheckCircle2, MessageSquare } from "lucide-react";
+import { Phone, TrendingUp, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -238,6 +238,119 @@ export default function Home() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Call Processing Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            Call Processing Status
+          </CardTitle>
+          <CardDescription>
+            Overview of call queue and processing results
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {statsLoading ? (
+            <div className="grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Processing Status Row */}
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+                  <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900">
+                    <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{stats?.pendingCalls ?? 0}</p>
+                    <p className="text-sm text-blue-600 dark:text-blue-400">Queued</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800">
+                  <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
+                    <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{stats?.gradedCalls ?? 0}</p>
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400">Scored</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+                  <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900">
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{stats?.skippedCalls ?? 0}</p>
+                    <p className="text-sm text-amber-600 dark:text-amber-400">Skipped</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                  <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-800">
+                    <Phone className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{stats?.totalCalls ?? 0}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Classification Breakdown */}
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground mb-3">Classification Breakdown</h4>
+                <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                  <div className="flex items-center gap-2 p-3 rounded-lg border">
+                    <MessageSquare className="h-4 w-4 text-emerald-500" />
+                    <div>
+                      <p className="font-bold">{stats?.classificationBreakdown?.conversation ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">Conversations</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 rounded-lg border">
+                    <VoicemailIcon className="h-4 w-4 text-purple-500" />
+                    <div>
+                      <p className="font-bold">{stats?.classificationBreakdown?.voicemail ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">Voicemail</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 rounded-lg border">
+                    <PhoneMissed className="h-4 w-4 text-red-500" />
+                    <div>
+                      <p className="font-bold">{stats?.classificationBreakdown?.no_answer ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">No Answer</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 rounded-lg border">
+                    <Phone className="h-4 w-4 text-blue-500" />
+                    <div>
+                      <p className="font-bold">{stats?.classificationBreakdown?.callback_request ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">Callback</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 rounded-lg border">
+                    <PhoneOff className="h-4 w-4 text-orange-500" />
+                    <div>
+                      <p className="font-bold">{stats?.classificationBreakdown?.wrong_number ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">Wrong Number</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 rounded-lg border">
+                    <Clock className="h-4 w-4 text-gray-500" />
+                    <div>
+                      <p className="font-bold">{stats?.classificationBreakdown?.too_short ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">Too Short</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -211,3 +211,9 @@
 - [x] Display team-wide score trend over time
 - [x] Display individual team member trends
 - [x] Add trend section to Analytics page below insights
+
+
+## Dashboard Call Processing Status
+- [x] Add call processing status section to bottom of Dashboard
+- [x] Show queued, scored, failed, skipped counts
+- [x] Display classification breakdown (conversation, voicemail, no_answer, etc.)
