@@ -173,32 +173,6 @@ export default function Analytics() {
         />
       </div>
 
-      {/* Additional Analytics Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          title="Passing Rate"
-          value={`${passingRate}%`}
-          description="A & B grades"
-          icon={CheckCircle}
-          loading={isLoading}
-          variant={passingRate >= 80 ? "success" : passingRate >= 60 ? "warning" : "danger"}
-        />
-        <StatCard
-          title="Total Graded"
-          value={totalGradedCalls}
-          description="All time graded calls"
-          icon={Phone}
-          loading={isLoading}
-        />
-        <StatCard
-          title="Team Members"
-          value={leaderboard?.length ?? 0}
-          description="Active team members"
-          icon={Users}
-          loading={isLoading}
-        />
-      </div>
-
       {/* Team Leaderboard */}
       <Card>
         <CardHeader>
