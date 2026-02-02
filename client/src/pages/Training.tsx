@@ -52,7 +52,9 @@ import {
   Bot,
   Trophy,
   Calendar,
-  Check
+  Check,
+  Upload,
+  File
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -415,7 +417,11 @@ export default function Training() {
     content: "",
     category: "other" as string,
     applicableTo: "all" as string,
+    fileName: "" as string,
+    fileType: "" as string,
+    fileData: "" as string,
   });
+  const [isUploading, setIsUploading] = useState(false);
 
   const { data: materials, isLoading, refetch } = trpc.training.list.useQuery({});
   const { data: rubrics, isLoading: rubricsLoading } = trpc.rubrics.getAll.useQuery();
@@ -461,7 +467,63 @@ export default function Training() {
       content: "",
       category: "other",
       applicableTo: "all",
+      fileName: "",
+      fileType: "",
+      fileData: "",
     });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword",
+      "text/plain",
+      "text/markdown",
+    ];
+    const validExtensions = [".pdf", ".docx", ".doc", ".txt", ".md"];
+    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
+    
+    if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+      toast.error("Please upload a PDF, DOCX, DOC, TXT, or MD file");
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File size must be less than 10MB");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // Read file as base64
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(",")[1];
+        setFormData(prev => ({
+          ...prev,
+          fileName: file.name,
+          fileType: file.type || `application/${fileExtension.slice(1)}`,
+          fileData: base64,
+          title: prev.title || file.name.replace(/\.[^/.]+$/, ""),
+        }));
+        toast.success(`File "${file.name}" ready for upload`);
+        setIsUploading(false);
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read file");
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      toast.error("Failed to process file");
+      setIsUploading(false);
+    }
   };
 
   const handleSubmit = () => {
@@ -469,8 +531,9 @@ export default function Training() {
       toast.error("Title is required");
       return;
     }
-    if (!formData.content.trim()) {
-      toast.error("Content is required");
+    // Content is required unless a file is being uploaded
+    if (!formData.content.trim() && !formData.fileData) {
+      toast.error("Content or file upload is required");
       return;
     }
 
@@ -498,6 +561,9 @@ export default function Training() {
       content: material.content || "",
       category: material.category || "other",
       applicableTo: material.applicableTo || "all",
+      fileName: material.fileName || "",
+      fileType: material.fileType || "",
+      fileData: "", // Don't reload file data on edit
     });
   };
 
@@ -597,15 +663,80 @@ export default function Training() {
                     </Select>
                   </div>
                 </div>
+                {/* File Upload Section */}
                 <div className="space-y-2">
-                  <Label htmlFor="content">Content *</Label>
+                  <Label>Upload Document (Optional)</Label>
+                  <div className="border-2 border-dashed rounded-lg p-4 hover:border-primary/50 transition-colors">
+                    {formData.fileName ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <File className="h-5 w-5 text-blue-500" />
+                          <span className="text-sm font-medium">{formData.fileName}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {formData.fileType.includes('pdf') ? 'PDF' : 
+                             formData.fileType.includes('word') || formData.fileType.includes('docx') ? 'DOCX' :
+                             formData.fileType.includes('doc') ? 'DOC' :
+                             formData.fileType.includes('text') || formData.fileType.includes('txt') ? 'TXT' : 'File'}
+                          </Badge>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setFormData({ ...formData, fileName: '', fileType: '', fileData: '' })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center cursor-pointer">
+                        <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                        <span className="text-sm text-muted-foreground">Click to upload PDF, DOCX, DOC, TXT, or MD</span>
+                        <span className="text-xs text-muted-foreground mt-1">Max file size: 10MB</span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.docx,.doc,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain,text/markdown"
+                          onChange={handleFileUpload}
+                          disabled={isUploading}
+                        />
+                      </label>
+                    )}
+                    {isUploading && (
+                      <div className="flex items-center justify-center mt-2">
+                        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                        <span className="text-sm">Processing file...</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Upload a document to automatically extract its text content. The extracted text will be used for AI grading.
+                  </p>
+                </div>
+
+                {/* Divider */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or paste content directly</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="content">Content {!formData.fileData && '*'}</Label>
                   <Textarea
                     id="content"
                     placeholder="Paste your training content here..."
-                    className="min-h-[300px] font-mono text-sm"
+                    className="min-h-[200px] font-mono text-sm"
                     value={formData.content}
                     onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   />
+                  {formData.fileData && (
+                    <p className="text-xs text-muted-foreground">
+                      A file has been uploaded. You can add additional content here or leave it empty to use only the uploaded file.
+                    </p>
+                  )}
                 </div>
               </div>
               <DialogFooter>

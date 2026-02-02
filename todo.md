@@ -135,3 +135,10 @@
 - [x] Lead Manager metrics: Total Calls, Conversations, Appointments Set, A-B Scored Calls
 - [x] Acquisition Manager metrics: Total Calls, Conversations, Offers Accepted, A-B Scored Calls
 - [x] Update leaderboard data query to include A-B scored calls count
+
+
+## Training Material File Support
+- [x] Add PDF parsing to extract text from uploaded PDFs
+- [x] Add DOCX parsing to extract text from uploaded Word documents
+- [x] Update frontend to accept PDF and DOCX file types
+- [x] Store extracted text content in database for AI reference

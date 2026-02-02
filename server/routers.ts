@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { parseDocument } from "./documentParser";
 import {
   getCalls,
   getCallById,
@@ -263,14 +264,32 @@ export const appRouter = router({
         fileName: z.string().optional(),
         fileUrl: z.string().optional(),
         fileType: z.string().optional(),
+        fileData: z.string().optional(), // Base64 encoded file data for PDF/DOCX
         category: z.enum(["script", "objection_handling", "methodology", "best_practices", "examples", "other"]).optional(),
         applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
       }))
       .mutation(async ({ input }) => {
+        let extractedContent = input.content;
+        
+        // If file data is provided, parse the document to extract text
+        if (input.fileData && input.fileType) {
+          try {
+            const buffer = Buffer.from(input.fileData, "base64");
+            extractedContent = await parseDocument(buffer, input.fileType, input.fileName);
+            console.log(`[Training] Extracted ${extractedContent.length} characters from ${input.fileName}`);
+          } catch (error) {
+            console.error("[Training] Error parsing document:", error);
+            throw new TRPCError({ 
+              code: "BAD_REQUEST", 
+              message: `Failed to parse document: ${error instanceof Error ? error.message : "Unknown error"}` 
+            });
+          }
+        }
+        
         return await createTrainingMaterial({
           title: input.title,
           description: input.description,
-          content: input.content,
+          content: extractedContent,
           fileName: input.fileName,
           fileUrl: input.fileUrl,
           fileType: input.fileType,
