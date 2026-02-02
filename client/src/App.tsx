@@ -11,6 +11,7 @@ import CallDetail from "./pages/CallDetail";
 import TeamMembers from "./pages/TeamMembers";
 import Analytics from "./pages/Analytics";
 import Training from "./pages/Training";
+import SocialMedia from "./pages/SocialMedia";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/team" component={TeamMembers} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/training" component={Training} />
+      <Route path="/social" component={SocialMedia} />
       {/* Redirects for removed/consolidated pages */}
       <Route path="/feedback">
         <Redirect to="/calls" />

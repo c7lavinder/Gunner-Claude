@@ -6,7 +6,10 @@ import {
   trainingMaterials, aiFeedback, gradingRules, teamTrainingItems,
   InsertTrainingMaterial, InsertAIFeedback, InsertGradingRule,
   TrainingMaterial, AIFeedback, GradingRule,
-  TeamTrainingItem, InsertTeamTrainingItem
+  TeamTrainingItem, InsertTeamTrainingItem,
+  brandAssets, socialPosts, contentIdeas,
+  InsertBrandAsset, InsertSocialPost, InsertContentIdea,
+  BrandAsset, SocialPost, ContentIdea
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -783,4 +786,221 @@ export async function getUpcomingMeetingAgenda(meetingDate?: Date): Promise<Team
   return await db.select().from(teamTrainingItems)
     .where(and(...conditions))
     .orderBy(teamTrainingItems.sortOrder);
+}
+
+
+// ============ BRAND ASSETS FUNCTIONS ============
+
+export async function createBrandAsset(asset: InsertBrandAsset): Promise<BrandAsset | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.insert(brandAssets).values(asset);
+  const insertId = result[0].insertId;
+  const created = await db.select().from(brandAssets).where(eq(brandAssets.id, insertId)).limit(1);
+  return created[0] || null;
+}
+
+export async function getBrandAssets(options?: {
+  assetType?: string;
+  activeOnly?: boolean;
+}): Promise<BrandAsset[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [];
+  
+  if (options?.activeOnly !== false) {
+    conditions.push(eq(brandAssets.isActive, "true"));
+  }
+  if (options?.assetType) {
+    conditions.push(eq(brandAssets.assetType, options.assetType as any));
+  }
+
+  let query = db.select().from(brandAssets);
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  return await query.orderBy(desc(brandAssets.createdAt));
+}
+
+export async function getBrandAssetById(id: number): Promise<BrandAsset | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(brandAssets).where(eq(brandAssets.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function updateBrandAsset(id: number, updates: Partial<InsertBrandAsset>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(brandAssets).set(updates).where(eq(brandAssets.id, id));
+}
+
+export async function deleteBrandAsset(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(brandAssets).set({ isActive: "false" }).where(eq(brandAssets.id, id));
+}
+
+// ============ SOCIAL POSTS FUNCTIONS ============
+
+export async function createSocialPost(post: InsertSocialPost): Promise<SocialPost | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.insert(socialPosts).values(post);
+  const insertId = result[0].insertId;
+  const created = await db.select().from(socialPosts).where(eq(socialPosts.id, insertId)).limit(1);
+  return created[0] || null;
+}
+
+export async function getSocialPosts(options?: {
+  contentType?: "brand" | "creator";
+  platform?: string;
+  status?: string;
+  startDate?: Date;
+  endDate?: Date;
+}): Promise<SocialPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [];
+  
+  if (options?.contentType) {
+    conditions.push(eq(socialPosts.contentType, options.contentType));
+  }
+  if (options?.platform) {
+    conditions.push(eq(socialPosts.platform, options.platform as any));
+  }
+  if (options?.status) {
+    conditions.push(eq(socialPosts.status, options.status as any));
+  }
+  if (options?.startDate) {
+    conditions.push(gte(socialPosts.scheduledAt, options.startDate));
+  }
+  if (options?.endDate) {
+    conditions.push(lte(socialPosts.scheduledAt, options.endDate));
+  }
+
+  let query = db.select().from(socialPosts);
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  return await query.orderBy(desc(socialPosts.createdAt));
+}
+
+export async function getSocialPostById(id: number): Promise<SocialPost | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(socialPosts).where(eq(socialPosts.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function updateSocialPost(id: number, updates: Partial<InsertSocialPost>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(socialPosts).set(updates).where(eq(socialPosts.id, id));
+}
+
+export async function deleteSocialPost(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(socialPosts).where(eq(socialPosts.id, id));
+}
+
+export async function getScheduledPosts(startDate: Date, endDate: Date): Promise<SocialPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(socialPosts)
+    .where(
+      and(
+        gte(socialPosts.scheduledAt, startDate),
+        lte(socialPosts.scheduledAt, endDate),
+        eq(socialPosts.status, "scheduled")
+      )
+    )
+    .orderBy(socialPosts.scheduledAt);
+}
+
+export async function getCalendarPosts(startDate: Date, endDate: Date): Promise<SocialPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get all posts (scheduled, published, draft) within the date range for calendar view
+  return await db.select().from(socialPosts)
+    .where(
+      and(
+        gte(socialPosts.scheduledAt, startDate),
+        lte(socialPosts.scheduledAt, endDate)
+      )
+    )
+    .orderBy(socialPosts.scheduledAt);
+}
+
+// ============ CONTENT IDEAS FUNCTIONS ============
+
+export async function createContentIdea(idea: InsertContentIdea): Promise<ContentIdea | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.insert(contentIdeas).values(idea);
+  const insertId = result[0].insertId;
+  const created = await db.select().from(contentIdeas).where(eq(contentIdeas.id, insertId)).limit(1);
+  return created[0] || null;
+}
+
+export async function getContentIdeas(options?: {
+  status?: string;
+  targetPlatform?: string;
+}): Promise<ContentIdea[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [];
+  
+  if (options?.status) {
+    conditions.push(eq(contentIdeas.status, options.status as any));
+  }
+  if (options?.targetPlatform) {
+    conditions.push(eq(contentIdeas.targetPlatform, options.targetPlatform as any));
+  }
+
+  let query = db.select().from(contentIdeas);
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  return await query.orderBy(desc(contentIdeas.createdAt));
+}
+
+export async function getContentIdeaById(id: number): Promise<ContentIdea | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(contentIdeas).where(eq(contentIdeas.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function updateContentIdea(id: number, updates: Partial<InsertContentIdea>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(contentIdeas).set(updates).where(eq(contentIdeas.id, id));
+}
+
+export async function deleteContentIdea(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(contentIdeas).where(eq(contentIdeas.id, id));
 }

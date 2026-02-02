@@ -90,10 +90,25 @@
 - [x] Add "Generate AI Insights" button to regenerate AI suggestions
 - [x] Mark AI-generated items with badge to distinguish from manual
 
-
 ## Navigation & UI Updates
 - [x] Add "Today" filter to dashboard date selector
 - [x] Make "Today" the default filter on dashboard
 - [x] Move Team Training content into AI Training page
 - [x] Remove Leaderboard from navigation
 - [x] Move Team tab to bottom of navigation
+
+## Social Media Content Page
+- [x] Rename "AI Training" to "Training" in navigation
+- [x] Create database schema for social media posts
+- [x] Create database schema for brand assets/files
+- [x] Create database schema for content ideas
+- [x] Build Brand Content section with blog post creation
+- [x] Build Brand Content section with Meta posting (Facebook/Instagram)
+- [x] Build Brand Content section with Google Business posting
+- [x] Add brand assets/branding upload functionality
+- [x] Build Content Creator section with X (Twitter) posting
+- [x] Build Content Creator section with content ideas generation (AI-powered)
+- [x] Create posting calendar view showing all scheduled content
+- [x] Add easy posting workflow for quick content creation
+- [x] AI content generation for all platforms
+- [x] Add Social Media to navigation menu

@@ -280,3 +280,128 @@ export const teamTrainingItems = mysqlTable("team_training_items", {
 
 export type TeamTrainingItem = typeof teamTrainingItems.$inferSelect;
 export type InsertTeamTrainingItem = typeof teamTrainingItems.$inferInsert;
+
+
+/**
+ * Brand Assets - stores branding files, logos, style guides
+ */
+export const brandAssets = mysqlTable("brand_assets", {
+  id: int("id").autoincrement().primaryKey(),
+  // Asset info
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  // Asset type
+  assetType: mysqlEnum("assetType", [
+    "logo",
+    "color_palette",
+    "font",
+    "style_guide",
+    "image",
+    "video",
+    "document",
+    "other"
+  ]).notNull(),
+  // File storage
+  fileUrl: text("fileUrl"),
+  fileKey: varchar("fileKey", { length: 512 }),
+  mimeType: varchar("mimeType", { length: 128 }),
+  fileSize: int("fileSize"),
+  // Metadata (JSON for flexible storage)
+  metadata: text("metadata"), // e.g., { colors: ["#fff", "#000"], fonts: ["Arial"] }
+  // Status
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BrandAsset = typeof brandAssets.$inferSelect;
+export type InsertBrandAsset = typeof brandAssets.$inferInsert;
+
+/**
+ * Social Media Posts - stores all social media content
+ */
+export const socialPosts = mysqlTable("social_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  // Content type - brand or creator
+  contentType: mysqlEnum("contentType", ["brand", "creator"]).notNull(),
+  // Platform
+  platform: mysqlEnum("platform", [
+    "blog",
+    "meta_facebook",
+    "meta_instagram",
+    "google_business",
+    "x_twitter",
+    "linkedin",
+    "other"
+  ]).notNull(),
+  // Post content
+  title: varchar("title", { length: 500 }),
+  content: text("content").notNull(),
+  // For blog posts - additional fields
+  excerpt: text("excerpt"),
+  slug: varchar("slug", { length: 255 }),
+  // Media attachments (JSON array of URLs)
+  mediaUrls: text("mediaUrls"),
+  // Hashtags and mentions
+  hashtags: text("hashtags"),
+  mentions: text("mentions"),
+  // Scheduling
+  status: mysqlEnum("status", [
+    "draft",
+    "scheduled",
+    "published",
+    "failed"
+  ]).default("draft"),
+  scheduledAt: timestamp("scheduledAt"),
+  publishedAt: timestamp("publishedAt"),
+  // External post ID (if published)
+  externalPostId: varchar("externalPostId", { length: 255 }),
+  // AI generation tracking
+  isAiGenerated: mysqlEnum("isAiGenerated", ["true", "false"]).default("false"),
+  aiPrompt: text("aiPrompt"), // The prompt used to generate this content
+  // Author
+  createdBy: int("createdBy").references(() => users.id),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SocialPost = typeof socialPosts.$inferSelect;
+export type InsertSocialPost = typeof socialPosts.$inferInsert;
+
+/**
+ * Content Ideas - stores content ideas for creators
+ */
+export const contentIdeas = mysqlTable("content_ideas", {
+  id: int("id").autoincrement().primaryKey(),
+  // Idea content
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  // Category/topic
+  category: varchar("category", { length: 255 }),
+  // Target platform
+  targetPlatform: mysqlEnum("targetPlatform", [
+    "x_twitter",
+    "blog",
+    "meta",
+    "any"
+  ]).default("any"),
+  // Status
+  status: mysqlEnum("status", [
+    "new",
+    "in_progress",
+    "used",
+    "archived"
+  ]).default("new"),
+  // Link to post if used
+  usedInPostId: int("usedInPostId").references(() => socialPosts.id),
+  // AI generation tracking
+  isAiGenerated: mysqlEnum("isAiGenerated", ["true", "false"]).default("false"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ContentIdea = typeof contentIdeas.$inferSelect;
+export type InsertContentIdea = typeof contentIdeas.$inferInsert;

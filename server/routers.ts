@@ -43,6 +43,23 @@ import {
   updateTeamTrainingItem,
   deleteTeamTrainingItem,
   getActiveTrainingItems,
+  // Social media
+  createBrandAsset,
+  getBrandAssets,
+  getBrandAssetById,
+  updateBrandAsset,
+  deleteBrandAsset,
+  createSocialPost,
+  getSocialPosts,
+  getSocialPostById,
+  updateSocialPost,
+  deleteSocialPost,
+  getCalendarPosts,
+  createContentIdea,
+  getContentIdeas,
+  getContentIdeaById,
+  updateContentIdea,
+  deleteContentIdea,
 } from "./db";
 import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
@@ -597,6 +614,347 @@ When answering questions:
       .mutation(async () => {
         await clearAiGeneratedInsights();
         return { success: true };
+      }),
+  }),
+
+  // ============ BRAND ASSETS ============
+  brandAssets: router({
+    list: protectedProcedure
+      .input(z.object({
+        assetType: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getBrandAssets(input || {});
+      }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const asset = await getBrandAssetById(input.id);
+        if (!asset) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Asset not found" });
+        }
+        return asset;
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        assetType: z.enum(["logo", "color_palette", "font", "style_guide", "image", "video", "document", "other"]),
+        fileUrl: z.string().optional(),
+        fileKey: z.string().optional(),
+        mimeType: z.string().optional(),
+        fileSize: z.number().optional(),
+        metadata: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await createBrandAsset(input);
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        assetType: z.enum(["logo", "color_palette", "font", "style_guide", "image", "video", "document", "other"]).optional(),
+        fileUrl: z.string().optional(),
+        metadata: z.string().optional(),
+        isActive: z.enum(["true", "false"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await updateBrandAsset(id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteBrandAsset(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ============ SOCIAL POSTS ============
+  socialPosts: router({
+    list: protectedProcedure
+      .input(z.object({
+        contentType: z.enum(["brand", "creator"]).optional(),
+        platform: z.string().optional(),
+        status: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getSocialPosts(input || {});
+      }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const post = await getSocialPostById(input.id);
+        if (!post) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Post not found" });
+        }
+        return post;
+      }),
+
+    getCalendar: protectedProcedure
+      .input(z.object({
+        startDate: z.date(),
+        endDate: z.date(),
+      }))
+      .query(async ({ input }) => {
+        return await getCalendarPosts(input.startDate, input.endDate);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        contentType: z.enum(["brand", "creator"]),
+        platform: z.enum(["blog", "meta_facebook", "meta_instagram", "google_business", "x_twitter", "linkedin", "other"]),
+        title: z.string().optional(),
+        content: z.string(),
+        excerpt: z.string().optional(),
+        slug: z.string().optional(),
+        mediaUrls: z.string().optional(),
+        hashtags: z.string().optional(),
+        mentions: z.string().optional(),
+        status: z.enum(["draft", "scheduled", "published", "failed"]).optional(),
+        scheduledAt: z.date().optional(),
+        isAiGenerated: z.enum(["true", "false"]).optional(),
+        aiPrompt: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await createSocialPost({
+          ...input,
+          createdBy: ctx.user?.id,
+        });
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        content: z.string().optional(),
+        excerpt: z.string().optional(),
+        mediaUrls: z.string().optional(),
+        hashtags: z.string().optional(),
+        mentions: z.string().optional(),
+        status: z.enum(["draft", "scheduled", "published", "failed"]).optional(),
+        scheduledAt: z.date().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await updateSocialPost(id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteSocialPost(input.id);
+        return { success: true };
+      }),
+
+    generateContent: protectedProcedure
+      .input(z.object({
+        contentType: z.enum(["brand", "creator"]),
+        platform: z.enum(["blog", "meta_facebook", "meta_instagram", "google_business", "x_twitter", "linkedin"]),
+        topic: z.string(),
+        tone: z.string().optional(),
+        additionalContext: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Get brand assets for context
+        const assets = await getBrandAssets({ activeOnly: true });
+        const brandContext = assets.map(a => `${a.name}: ${a.description || ""}`).join("\n");
+
+        const platformGuidelines: Record<string, string> = {
+          blog: "Write a comprehensive blog post with introduction, main points, and conclusion. Use headers and formatting.",
+          meta_facebook: "Write an engaging Facebook post. Keep it conversational and include a call-to-action. 1-3 paragraphs max.",
+          meta_instagram: "Write a captivating Instagram caption. Start with a hook, tell a story, and end with a call-to-action. Include relevant hashtag suggestions.",
+          google_business: "Write a professional Google Business post. Keep it concise and informative. Include a clear call-to-action.",
+          x_twitter: "Write a punchy tweet or thread. Be concise and engaging. Max 280 characters per tweet.",
+          linkedin: "Write a professional LinkedIn post. Be insightful and add value. Include a thought-provoking question or call-to-action.",
+        };
+
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a social media content creator for a real estate wholesaling business. Create engaging content that resonates with property sellers and real estate investors.
+
+Brand Context:
+${brandContext}
+
+Platform: ${input.platform}
+Guidelines: ${platformGuidelines[input.platform]}
+Tone: ${input.tone || "professional yet approachable"}
+
+Provide the content in JSON format with fields: title (optional for non-blog), content, hashtags (array), suggestedMediaDescription (what image/video would work well).`,
+            },
+            {
+              role: "user",
+              content: `Create ${input.platform} content about: ${input.topic}${input.additionalContext ? `\n\nAdditional context: ${input.additionalContext}` : ""}`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "social_content",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", description: "Title for blog posts, optional for other platforms" },
+                  content: { type: "string", description: "The main content/copy" },
+                  hashtags: { type: "array", items: { type: "string" }, description: "Relevant hashtags" },
+                  suggestedMediaDescription: { type: "string", description: "Description of suggested visual content" },
+                },
+                required: ["content", "hashtags", "suggestedMediaDescription"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (typeof content === "string") {
+          return JSON.parse(content);
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate content" });
+      }),
+  }),
+
+  // ============ CONTENT IDEAS ============
+  contentIdeas: router({
+    list: protectedProcedure
+      .input(z.object({
+        status: z.string().optional(),
+        targetPlatform: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getContentIdeas(input || {});
+      }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const idea = await getContentIdeaById(input.id);
+        if (!idea) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Idea not found" });
+        }
+        return idea;
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string(),
+        description: z.string().optional(),
+        category: z.string().optional(),
+        targetPlatform: z.enum(["x_twitter", "blog", "meta", "any"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await createContentIdea(input);
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        category: z.string().optional(),
+        targetPlatform: z.enum(["x_twitter", "blog", "meta", "any"]).optional(),
+        status: z.enum(["new", "in_progress", "used", "archived"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await updateContentIdea(id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteContentIdea(input.id);
+        return { success: true };
+      }),
+
+    generateIdeas: protectedProcedure
+      .input(z.object({
+        count: z.number().min(1).max(10).default(5),
+        targetPlatform: z.enum(["x_twitter", "blog", "meta", "any"]).optional(),
+        category: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a content strategist for a real estate wholesaling business. Generate creative content ideas that will engage property sellers and real estate investors.
+
+Focus on topics like:
+- Selling distressed properties
+- Working with cash buyers
+- Real estate market insights
+- Success stories and testimonials
+- Tips for homeowners facing foreclosure, divorce, or inherited properties
+- Behind-the-scenes of real estate wholesaling
+
+Provide ${input.count} unique content ideas in JSON format.`,
+            },
+            {
+              role: "user",
+              content: `Generate ${input.count} content ideas${input.targetPlatform && input.targetPlatform !== "any" ? ` for ${input.targetPlatform}` : ""}${input.category ? ` in the category: ${input.category}` : ""}.`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "content_ideas",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  ideas: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        description: { type: "string" },
+                        category: { type: "string" },
+                        targetPlatform: { type: "string", enum: ["x_twitter", "blog", "meta", "any"] },
+                      },
+                      required: ["title", "description", "category", "targetPlatform"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["ideas"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (typeof content === "string") {
+          const parsed = JSON.parse(content);
+          // Save ideas to database
+          const savedIdeas = [];
+          for (const idea of parsed.ideas) {
+            const saved = await createContentIdea({
+              title: idea.title,
+              description: idea.description,
+              category: idea.category,
+              targetPlatform: idea.targetPlatform as any,
+              isAiGenerated: "true",
+            });
+            if (saved) savedIdeas.push(saved);
+          }
+          return { ideas: savedIdeas };
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate ideas" });
       }),
   }),
 });
