@@ -89,3 +89,11 @@
 - [x] Allow manual items alongside AI-generated ones
 - [x] Add "Generate AI Insights" button to regenerate AI suggestions
 - [x] Mark AI-generated items with badge to distinguish from manual
+
+
+## Navigation & UI Updates
+- [x] Add "Today" filter to dashboard date selector
+- [x] Make "Today" the default filter on dashboard
+- [x] Move Team Training content into AI Training page
+- [x] Remove Leaderboard from navigation
+- [x] Move Team tab to bottom of navigation

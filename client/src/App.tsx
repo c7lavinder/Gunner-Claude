@@ -8,11 +8,9 @@ import DashboardLayout from "./components/DashboardLayout";
 import Home from "./pages/Home";
 import CallInbox from "./pages/CallInbox";
 import CallDetail from "./pages/CallDetail";
-import Leaderboard from "./pages/Leaderboard";
 import TeamMembers from "./pages/TeamMembers";
 import Analytics from "./pages/Analytics";
 import Training from "./pages/Training";
-import TeamTraining from "./pages/TeamTraining";
 
 function Router() {
   return (
@@ -20,12 +18,10 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/calls" component={CallInbox} />
       <Route path="/calls/:id" component={CallDetail} />
-      <Route path="/leaderboard" component={Leaderboard} />
       <Route path="/team" component={TeamMembers} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/training" component={Training} />
-      <Route path="/team-training" component={TeamTraining} />
-      {/* Redirects for removed pages */}
+      {/* Redirects for removed/consolidated pages */}
       <Route path="/feedback">
         <Redirect to="/calls" />
       </Route>
@@ -33,6 +29,12 @@ function Router() {
         <Redirect to="/training" />
       </Route>
       <Route path="/rules">
+        <Redirect to="/training" />
+      </Route>
+      <Route path="/leaderboard">
+        <Redirect to="/" />
+      </Route>
+      <Route path="/team-training">
         <Redirect to="/training" />
       </Route>
       <Route path="/404" component={NotFound} />

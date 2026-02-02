@@ -7,7 +7,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-type DateRange = "week" | "month" | "ytd" | "all";
+type DateRange = "today" | "week" | "month" | "ytd" | "all";
 
 function StatCard({ 
   title, 
@@ -48,6 +48,7 @@ function GradeBadge({ grade }: { grade: string }) {
 }
 
 const dateRangeLabels: Record<DateRange, string> = {
+  today: "Today",
   week: "Last 7 Days",
   month: "Last 30 Days",
   ytd: "Year to Date",
@@ -55,7 +56,7 @@ const dateRangeLabels: Record<DateRange, string> = {
 };
 
 export default function Home() {
-  const [dateRange, setDateRange] = useState<DateRange>("week");
+  const [dateRange, setDateRange] = useState<DateRange>("today");
   
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
   const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ limit: 5 });
@@ -75,6 +76,7 @@ export default function Home() {
             <SelectValue placeholder="Select period" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="today">Today</SelectItem>
             <SelectItem value="week">Last 7 Days</SelectItem>
             <SelectItem value="month">Last 30 Days</SelectItem>
             <SelectItem value="ytd">Year to Date</SelectItem>

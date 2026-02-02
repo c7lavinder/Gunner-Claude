@@ -322,7 +322,7 @@ export async function getLeaderboardData(): Promise<Array<{
 // ============ ANALYTICS FUNCTIONS ============
 
 export async function getCallStats(options?: {
-  dateRange?: "week" | "month" | "ytd" | "all";
+  dateRange?: "today" | "week" | "month" | "ytd" | "all";
 }): Promise<{
   totalCalls: number;
   gradedCalls: number;
@@ -372,6 +372,9 @@ export async function getCallStats(options?: {
   let startDate: Date | null = null;
   
   switch (options?.dateRange) {
+    case "today":
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Start of today
+      break;
     case "week":
       startDate = new Date(now);
       startDate.setDate(startDate.getDate() - 7);

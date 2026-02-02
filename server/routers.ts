@@ -203,7 +203,7 @@ export const appRouter = router({
   analytics: router({
     stats: protectedProcedure
       .input(z.object({
-        dateRange: z.enum(["week", "month", "ytd", "all"]).optional(),
+        dateRange: z.enum(["today", "week", "month", "ytd", "all"]).optional(),
       }).optional())
       .query(async ({ input }) => {
         return await getCallStats(input || {});
