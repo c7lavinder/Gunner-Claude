@@ -123,3 +123,7 @@
 - [x] Add brand description/voice section to Branding tab
 - [x] Add mission statement field to Branding tab
 - [x] Integrate call data into content generation prompts
+
+
+## Dashboard Improvements
+- [x] Add "Conversations" count to dashboard (only actual graded conversations)
