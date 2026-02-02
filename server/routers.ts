@@ -47,6 +47,7 @@ import {
 import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
 import { invokeLLM } from "./_core/llm";
+import { generateTeamInsights, saveGeneratedInsights, clearAiGeneratedInsights } from "./insights";
 
 export const appRouter = router({
   system: systemRouter,
@@ -566,6 +567,35 @@ When answering questions:
           status: "completed",
           completedAt: new Date(),
         });
+        return { success: true };
+      }),
+
+    // AI-generated insights
+    generateInsights: protectedProcedure
+      .mutation(async () => {
+        // Clear existing AI-generated items
+        await clearAiGeneratedInsights();
+        
+        // Generate new insights from recent calls
+        const insights = await generateTeamInsights();
+        
+        // Save to database
+        await saveGeneratedInsights(insights);
+        
+        return {
+          success: true,
+          generated: {
+            issues: insights.issues.length,
+            wins: insights.wins.length,
+            skills: insights.skills.length,
+            agenda: insights.agenda.length,
+          },
+        };
+      }),
+
+    clearAiInsights: protectedProcedure
+      .mutation(async () => {
+        await clearAiGeneratedInsights();
         return { success: true };
       }),
   }),

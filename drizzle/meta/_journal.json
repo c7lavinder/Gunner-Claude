@@ -43,6 +43,13 @@
       "when": 1770016416931,
       "tag": "0005_slow_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1770017112919,
+      "tag": "0006_funny_gwen_stacy",
+      "breakpoints": true
     }
   ]
 }

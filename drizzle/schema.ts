@@ -267,6 +267,9 @@ export const teamTrainingItems = mysqlTable("team_training_items", {
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   // Status
   status: mysqlEnum("status", ["active", "in_progress", "completed", "archived"]).default("active"),
+  // AI generation tracking
+  isAiGenerated: mysqlEnum("isAiGenerated", ["true", "false"]).default("false"),
+  sourceCallIds: text("sourceCallIds"), // JSON array of call IDs that informed this insight
   // For agenda items: which meeting date
   meetingDate: timestamp("meetingDate"),
   // Timestamps

@@ -77,3 +77,15 @@
 - [x] Weekly team call itinerary/agenda builder
 - [x] Backend routes for CRUD operations on training items
 - [x] Add Team Training to navigation menu
+
+## AI-Generated Team Training Insights
+- [x] Create AI insights generation service that analyzes all team calls
+- [x] Auto-generate issues from recurring problems across calls
+- [x] Auto-generate wins from standout performances
+- [x] Auto-generate skills to develop based on grading trends
+- [x] Auto-generate weekly meeting agenda from call insights
+- [x] Backend routes for generating and refreshing AI insights
+- [x] Update Team Training UI to show AI-generated items
+- [x] Allow manual items alongside AI-generated ones
+- [x] Add "Generate AI Insights" button to regenerate AI suggestions
+- [x] Mark AI-generated items with badge to distinguish from manual

@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Target, AlertTriangle, Trophy, Calendar, Plus, Check, Trash2, 
-  ChevronUp, ChevronDown, GripVertical, Users, Clock
+  Sparkles, RefreshCw, Bot
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,6 +30,7 @@ interface TrainingItem {
   teamMemberId: number | null;
   status: string | null;
   sortOrder: number | null;
+  isAiGenerated: string | null;
   createdAt: Date;
 }
 
@@ -115,7 +116,7 @@ function AddItemDialog({
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
           <Plus className="h-4 w-4 mr-1" />
-          Add
+          Add Manual
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -226,6 +227,8 @@ function TrainingItemCard({
   onDelete: () => void;
   showPriority?: boolean;
 }) {
+  const utils = trpc.useUtils();
+  
   const completeMutation = trpc.teamTraining.complete.useMutation({
     onSuccess: () => {
       toast.success("Item marked as complete");
@@ -240,11 +243,19 @@ function TrainingItemCard({
     },
   });
 
+  const isAiGenerated = item.isAiGenerated === "true";
+
   return (
-    <div className="flex items-start gap-3 p-4 rounded-lg border bg-card">
+    <div className={`flex items-start gap-3 p-4 rounded-lg border bg-card ${isAiGenerated ? "border-l-4 border-l-purple-500" : ""}`}>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <h4 className="font-medium">{item.title}</h4>
+          {isAiGenerated && (
+            <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-xs">
+              <Bot className="h-3 w-3 mr-1" />
+              AI Generated
+            </Badge>
+          )}
           {showPriority && item.priority && (
             <Badge variant="secondary" className={`${priorityColors[item.priority]} text-white text-xs`}>
               {priorityLabels[item.priority]}
@@ -290,6 +301,43 @@ function TrainingItemCard({
   );
 }
 
+function GenerateInsightsButton({ onSuccess }: { onSuccess: () => void }) {
+  const generateMutation = trpc.teamTraining.generateInsights.useMutation({
+    onSuccess: (data) => {
+      const total = data.generated.issues + data.generated.wins + data.generated.skills + data.generated.agenda;
+      toast.success(`Generated ${total} insights from recent calls`, {
+        description: `${data.generated.issues} issues, ${data.generated.wins} wins, ${data.generated.skills} skills, ${data.generated.agenda} agenda items`,
+      });
+      onSuccess();
+    },
+    onError: (error) => {
+      toast.error("Failed to generate insights", {
+        description: error.message,
+      });
+    },
+  });
+
+  return (
+    <Button 
+      onClick={() => generateMutation.mutate()}
+      disabled={generateMutation.isPending}
+      className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+    >
+      {generateMutation.isPending ? (
+        <>
+          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+          Analyzing Calls...
+        </>
+      ) : (
+        <>
+          <Sparkles className="h-4 w-4 mr-2" />
+          Generate AI Insights
+        </>
+      )}
+    </Button>
+  );
+}
+
 function SkillsSection() {
   const utils = trpc.useUtils();
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
@@ -300,6 +348,9 @@ function SkillsSection() {
   const handleRefresh = () => {
     utils.teamTraining.list.invalidate();
   };
+
+  const aiItems = items?.filter(i => i.isAiGenerated === "true") || [];
+  const manualItems = items?.filter(i => i.isAiGenerated !== "true") || [];
 
   return (
     <Card>
@@ -322,7 +373,15 @@ function SkillsSection() {
           </div>
         ) : items && items.length > 0 ? (
           <div className="space-y-3">
-            {items.map((item) => (
+            {aiItems.map((item) => (
+              <TrainingItemCard 
+                key={item.id} 
+                item={item as TrainingItem}
+                onComplete={handleRefresh}
+                onDelete={handleRefresh}
+              />
+            ))}
+            {manualItems.map((item) => (
               <TrainingItemCard 
                 key={item.id} 
                 item={item as TrainingItem}
@@ -335,7 +394,7 @@ function SkillsSection() {
           <div className="text-center py-8 text-muted-foreground">
             <Target className="h-10 w-10 mx-auto mb-2 opacity-50" />
             <p>No skills being tracked</p>
-            <p className="text-sm">Add skills your team is working on</p>
+            <p className="text-sm">Click "Generate AI Insights" or add manually</p>
           </div>
         )}
       </CardContent>
@@ -354,10 +413,16 @@ function IssuesSection() {
     utils.teamTraining.list.invalidate();
   };
 
-  // Sort by priority (urgent first)
+  // Sort by priority (urgent first), then AI-generated first
   const sortedItems = items?.sort((a, b) => {
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-    return (priorityOrder[a.priority as Priority] || 3) - (priorityOrder[b.priority as Priority] || 3);
+    const aPriority = priorityOrder[a.priority as Priority] || 3;
+    const bPriority = priorityOrder[b.priority as Priority] || 3;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    // AI-generated items first within same priority
+    if (a.isAiGenerated === "true" && b.isAiGenerated !== "true") return -1;
+    if (a.isAiGenerated !== "true" && b.isAiGenerated === "true") return 1;
+    return 0;
   });
 
   return (
@@ -394,7 +459,7 @@ function IssuesSection() {
           <div className="text-center py-8 text-muted-foreground">
             <AlertTriangle className="h-10 w-10 mx-auto mb-2 opacity-50" />
             <p>No issues to address</p>
-            <p className="text-sm">Great job! Keep up the good work</p>
+            <p className="text-sm">Click "Generate AI Insights" to analyze calls</p>
           </div>
         )}
       </CardContent>
@@ -412,6 +477,13 @@ function WinsSection() {
   const handleRefresh = () => {
     utils.teamTraining.list.invalidate();
   };
+
+  // AI-generated first
+  const sortedItems = items?.sort((a, b) => {
+    if (a.isAiGenerated === "true" && b.isAiGenerated !== "true") return -1;
+    if (a.isAiGenerated !== "true" && b.isAiGenerated === "true") return 1;
+    return 0;
+  });
 
   return (
     <Card className="border-green-200">
@@ -432,9 +504,9 @@ function WinsSection() {
           <div className="space-y-3">
             {[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
           </div>
-        ) : items && items.length > 0 ? (
+        ) : sortedItems && sortedItems.length > 0 ? (
           <div className="space-y-3">
-            {items.map((item) => (
+            {sortedItems.map((item) => (
               <TrainingItemCard 
                 key={item.id} 
                 item={item as TrainingItem}
@@ -448,7 +520,7 @@ function WinsSection() {
           <div className="text-center py-8 text-muted-foreground">
             <Trophy className="h-10 w-10 mx-auto mb-2 opacity-50" />
             <p>No wins recorded yet</p>
-            <p className="text-sm">Add wins to celebrate with the team</p>
+            <p className="text-sm">Click "Generate AI Insights" to find wins</p>
           </div>
         )}
       </CardContent>
@@ -467,8 +539,22 @@ function AgendaSection() {
     utils.teamTraining.list.invalidate();
   };
 
-  // Sort by sortOrder
-  const sortedItems = items?.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const completeMutation = trpc.teamTraining.complete.useMutation({
+    onSuccess: () => {
+      toast.success("Agenda item completed");
+      handleRefresh();
+    },
+  });
+
+  // Sort by sortOrder, then AI-generated first
+  const sortedItems = items?.sort((a, b) => {
+    const aOrder = a.sortOrder || 0;
+    const bOrder = b.sortOrder || 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    if (a.isAiGenerated === "true" && b.isAiGenerated !== "true") return -1;
+    if (a.isAiGenerated !== "true" && b.isAiGenerated === "true") return 1;
+    return 0;
+  });
 
   return (
     <Card className="border-purple-200">
@@ -479,7 +565,7 @@ function AgendaSection() {
           </div>
           <div>
             <CardTitle className="text-lg">Weekly Team Call Agenda</CardTitle>
-            <CardDescription>Items to cover in the next team meeting</CardDescription>
+            <CardDescription>AI-suggested topics based on call analysis</CardDescription>
           </div>
         </div>
         <AddItemDialog itemType="agenda" onSuccess={handleRefresh} />
@@ -494,30 +580,34 @@ function AgendaSection() {
             {sortedItems.map((item, index) => (
               <div 
                 key={item.id}
-                className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                className={`flex items-center gap-3 p-3 rounded-lg border bg-card ${item.isAiGenerated === "true" ? "border-l-4 border-l-purple-500" : ""}`}
               >
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-bold text-sm">
                   {index + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium">{item.title}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium">{item.title}</h4>
+                    {item.isAiGenerated === "true" && (
+                      <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-xs">
+                        <Bot className="h-3 w-3 mr-1" />
+                        AI
+                      </Badge>
+                    )}
+                  </div>
                   {item.description && (
                     <p className="text-sm text-muted-foreground">{item.description}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button 
-                    size="icon" 
-                    variant="ghost" 
-                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                    onClick={() => {
-                      trpc.teamTraining.complete.useMutation().mutate({ id: item.id });
-                      handleRefresh();
-                    }}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                  onClick={() => completeMutation.mutate({ id: item.id })}
+                  disabled={completeMutation.isPending}
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
               </div>
             ))}
           </div>
@@ -525,7 +615,7 @@ function AgendaSection() {
           <div className="text-center py-8 text-muted-foreground">
             <Calendar className="h-10 w-10 mx-auto mb-2 opacity-50" />
             <p>No agenda items</p>
-            <p className="text-sm">Add items for the next team call</p>
+            <p className="text-sm">Click "Generate AI Insights" to create agenda</p>
           </div>
         )}
       </CardContent>
@@ -534,13 +624,36 @@ function AgendaSection() {
 }
 
 export default function TeamTraining() {
+  const utils = trpc.useUtils();
+
+  const handleInsightsGenerated = () => {
+    utils.teamTraining.list.invalidate();
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Team Training</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage ongoing team development, track issues, and plan weekly calls
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Team Training</h1>
+          <p className="text-muted-foreground mt-1">
+            AI-powered insights from call analysis and manual tracking
+          </p>
+        </div>
+        <GenerateInsightsButton onSuccess={handleInsightsGenerated} />
+      </div>
+
+      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="font-medium text-purple-900">AI-Powered Insights</h3>
+            <p className="text-sm text-purple-700 mt-1">
+              Click "Generate AI Insights" to analyze your team's recent calls and automatically identify issues, wins, skills to develop, and meeting agenda items. Items marked with the AI badge were generated from call analysis.
+            </p>
+          </div>
+        </div>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
@@ -551,10 +664,10 @@ export default function TeamTraining() {
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            <SkillsSection />
             <IssuesSection />
+            <WinsSection />
           </div>
-          <WinsSection />
+          <SkillsSection />
         </TabsContent>
 
         <TabsContent value="agenda">
