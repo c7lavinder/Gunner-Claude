@@ -142,3 +142,21 @@
 - [x] Add DOCX parsing to extract text from uploaded Word documents
 - [x] Update frontend to accept PDF and DOCX file types
 - [x] Store extracted text content in database for AI reference
+
+
+## Manual Call Upload Feature
+- [x] Create upload UI for manual call recording submission
+- [x] Accept audio files (mp3, wav, m4a, webm)
+- [x] Allow selection of team member for the call
+- [x] Add call metadata fields (phone number, duration, date)
+- [x] Process uploaded calls through transcription and grading pipeline
+- [x] Show upload progress and processing status
+
+## GoHighLevel API Polling
+- [x] Create GHL API service for fetching calls
+- [x] Implement polling mechanism to check for new calls periodically
+- [x] Store last poll timestamp to avoid duplicate processing
+- [x] Match calls to team members by GHL User ID
+- [x] Download call recordings from GHL for transcription
+- [x] Add polling status indicator to admin dashboard
+- [x] Add manual "Sync Now" button for on-demand polling

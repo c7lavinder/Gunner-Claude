@@ -21,9 +21,31 @@ import {
   Send,
   Bot,
   Sparkles,
-  Loader2
+  Loader2,
+  Upload,
+  FileAudio,
+  Cloud,
+  CloudOff
 } from "lucide-react";
 import { Link } from "wouter";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -362,6 +384,250 @@ function AICoachQA() {
   );
 }
 
+// Manual Upload Dialog Component
+function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [teamMemberId, setTeamMemberId] = useState<string>("");
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [propertyAddress, setPropertyAddress] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+
+  const { data: teamMembers } = trpc.team.list.useQuery();
+  const uploadMutation = trpc.calls.uploadManual.useMutation({
+    onSuccess: () => {
+      toast.success("Call uploaded successfully! Processing will begin shortly.");
+      setOpen(false);
+      resetForm();
+      onSuccess();
+    },
+    onError: (error) => {
+      toast.error("Failed to upload call: " + error.message);
+      setIsUploading(false);
+    },
+  });
+
+  const resetForm = () => {
+    setAudioFile(null);
+    setTeamMemberId("");
+    setContactName("");
+    setContactPhone("");
+    setPropertyAddress("");
+    setIsUploading(false);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/m4a", "audio/webm", "audio/ogg"];
+    const validExtensions = [".mp3", ".wav", ".m4a", ".webm", ".ogg"];
+    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
+
+    if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+      toast.error("Please upload an audio file (MP3, WAV, M4A, WebM, or OGG)");
+      return;
+    }
+
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("File size must be less than 16MB");
+      return;
+    }
+
+    setAudioFile(file);
+  };
+
+  const handleSubmit = async () => {
+    if (!audioFile) {
+      toast.error("Please select an audio file");
+      return;
+    }
+    if (!teamMemberId) {
+      toast.error("Please select a team member");
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(",")[1];
+        uploadMutation.mutate({
+          audioData: base64,
+          audioType: audioFile.type || "audio/mpeg",
+          fileName: audioFile.name,
+          teamMemberId: parseInt(teamMemberId),
+          contactName: contactName || undefined,
+          contactPhone: contactPhone || undefined,
+          propertyAddress: propertyAddress || undefined,
+        });
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read audio file");
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(audioFile);
+    } catch (error) {
+      toast.error("Failed to process audio file");
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Upload className="h-4 w-4 mr-2" />
+          Upload Call
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Upload Call Recording</DialogTitle>
+          <DialogDescription>
+            Upload a call recording to transcribe and grade. Supports MP3, WAV, M4A, WebM, and OGG files.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          {/* Audio File Upload */}
+          <div className="space-y-2">
+            <Label>Audio File *</Label>
+            <div className="border-2 border-dashed rounded-lg p-4 hover:border-primary/50 transition-colors">
+              {audioFile ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileAudio className="h-5 w-5 text-blue-500" />
+                    <span className="text-sm font-medium">{audioFile.name}</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {(audioFile.size / 1024 / 1024).toFixed(1)} MB
+                    </Badge>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setAudioFile(null)}>
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center cursor-pointer">
+                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  <span className="text-sm text-muted-foreground">Click to upload audio file</span>
+                  <span className="text-xs text-muted-foreground mt-1">Max 16MB</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*"
+                    onChange={handleFileChange}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+
+          {/* Team Member Selection */}
+          <div className="space-y-2">
+            <Label>Team Member *</Label>
+            <Select value={teamMemberId} onValueChange={setTeamMemberId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select team member" />
+              </SelectTrigger>
+              <SelectContent>
+                {teamMembers?.map((member) => (
+                  <SelectItem key={member.id} value={member.id.toString()}>
+                    {member.name} ({member.teamRole === "acquisition_manager" ? "Acquisition" : "Lead Manager"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Optional Fields */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Contact Name</Label>
+              <Input
+                placeholder="John Smith"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone Number</Label>
+              <Input
+                placeholder="(555) 123-4567"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Property Address</Label>
+            <Input
+              placeholder="123 Main St, Nashville, TN"
+              value={propertyAddress}
+              onChange={(e) => setPropertyAddress(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={isUploading}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={isUploading || !audioFile || !teamMemberId}>
+            {isUploading ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+            ) : (
+              <><Upload className="h-4 w-4 mr-2" />Upload & Process</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// GHL Sync Status Component
+function GHLSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
+  const { data: status, refetch: refetchStatus } = trpc.ghlSync.status.useQuery();
+  const syncNowMutation = trpc.ghlSync.syncNow.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success(`Synced ${result.synced} calls from GoHighLevel`);
+        onSyncComplete();
+      } else {
+        toast.error("Sync failed: " + result.errors.join(", "));
+      }
+      refetchStatus();
+    },
+    onError: (error) => {
+      toast.error("Sync failed: " + error.message);
+    },
+  });
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => syncNowMutation.mutate()}
+        disabled={syncNowMutation.isPending || status?.isPolling}
+      >
+        {syncNowMutation.isPending || status?.isPolling ? (
+          <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Syncing...</>
+        ) : (
+          <><Cloud className="h-4 w-4 mr-2" />Sync from GHL</>
+        )}
+      </Button>
+      {status?.lastPollTime && (
+        <span className="text-xs text-muted-foreground">
+          Last sync: {formatDistanceToNow(new Date(status.lastPollTime), { addSuffix: true })}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function CallInbox() {
   const [activeTab, setActiveTab] = useState("calls");
   const { data: calls, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery({ limit: 50 });
@@ -395,14 +661,18 @@ export default function CallInbox() {
             Review calls, provide feedback, and get coaching advice
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={handleRefresh}
-          disabled={isRefetching}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <GHLSyncStatus onSyncComplete={handleRefresh} />
+          <ManualUploadDialog onSuccess={handleRefresh} />
+          <Button 
+            variant="outline" 
+            onClick={handleRefresh}
+            disabled={isRefetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

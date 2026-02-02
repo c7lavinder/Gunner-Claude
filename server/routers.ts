@@ -73,6 +73,8 @@ import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
 import { invokeLLM } from "./_core/llm";
 import { generateTeamInsights, saveGeneratedInsights, clearAiGeneratedInsights } from "./insights";
+import { pollForNewCalls, getPollingStatus, startPolling, stopPolling } from "./ghlService";
+import { storagePut } from "./storage";
 
 export const appRouter = router({
   system: systemRouter,
@@ -215,6 +217,95 @@ export const appRouter = router({
 
         return { success: true };
       }),
+
+    // Manual call upload with audio file
+    uploadManual: protectedProcedure
+      .input(z.object({
+        audioData: z.string(), // Base64 encoded audio
+        audioType: z.string(), // MIME type
+        fileName: z.string(),
+        teamMemberId: z.number(),
+        contactName: z.string().optional(),
+        contactPhone: z.string().optional(),
+        propertyAddress: z.string().optional(),
+        duration: z.number().optional(),
+        callDate: z.string().optional(), // ISO date string
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          // Upload audio to S3
+          const buffer = Buffer.from(input.audioData, "base64");
+          const timestamp = Date.now();
+          const randomSuffix = Math.random().toString(36).substring(7);
+          const fileKey = `calls/manual-${timestamp}-${randomSuffix}-${input.fileName}`;
+          
+          const { url: recordingUrl } = await storagePut(fileKey, buffer, input.audioType);
+          console.log(`[ManualUpload] Uploaded audio to: ${recordingUrl}`);
+
+          // Get team member info
+          const teamMember = await getTeamMemberById(input.teamMemberId);
+          if (!teamMember) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found" });
+          }
+
+          // Create call record
+          const call = await createCall({
+            contactName: input.contactName,
+            contactPhone: input.contactPhone,
+            propertyAddress: input.propertyAddress,
+            recordingUrl,
+            duration: input.duration,
+            teamMemberId: input.teamMemberId,
+            teamMemberName: teamMember.name,
+            callType: teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification",
+            status: "pending",
+            callTimestamp: input.callDate ? new Date(input.callDate) : new Date(),
+          });
+
+          if (call) {
+            // Process the call asynchronously
+            processCall(call.id).catch(err => {
+              console.error("[ManualUpload] Error processing call:", err);
+            });
+          }
+
+          return { success: true, callId: call?.id };
+        } catch (error) {
+          console.error("[ManualUpload] Error:", error);
+          throw new TRPCError({ 
+            code: "INTERNAL_SERVER_ERROR", 
+            message: error instanceof Error ? error.message : "Failed to upload call" 
+          });
+        }
+      }),
+  }),
+
+  // ============ GHL SYNC ============
+  ghlSync: router({
+    // Get current sync status
+    status: protectedProcedure.query(async () => {
+      return getPollingStatus();
+    }),
+
+    // Manually trigger a sync
+    syncNow: protectedProcedure.mutation(async () => {
+      const result = await pollForNewCalls();
+      return result;
+    }),
+
+    // Start automatic polling
+    startAutoSync: protectedProcedure
+      .input(z.object({ intervalMinutes: z.number().min(1).max(60).default(5) }))
+      .mutation(async ({ input }) => {
+        startPolling(input.intervalMinutes);
+        return { success: true, message: `Auto-sync started with ${input.intervalMinutes} minute interval` };
+      }),
+
+    // Stop automatic polling
+    stopAutoSync: protectedProcedure.mutation(async () => {
+      stopPolling();
+      return { success: true, message: "Auto-sync stopped" };
+    }),
   }),
 
   // ============ LEADERBOARD ============
