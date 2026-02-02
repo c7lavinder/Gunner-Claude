@@ -1,0 +1,1 @@
+ALTER TABLE `calls` MODIFY COLUMN `classification` enum('pending','conversation','voicemail','no_answer','callback_request','wrong_number','too_short','admin_call') DEFAULT 'pending';

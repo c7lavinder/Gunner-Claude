@@ -648,9 +648,12 @@ export default function CallInbox() {
   const pendingFeedback = allFeedback?.filter(f => f.status === "pending") || [];
   const processedFeedback = allFeedback?.filter(f => f.status !== "pending") || [];
 
-  // Separate graded calls from skipped calls
+  // Separate graded calls from skipped/admin calls
   const gradedCalls = calls?.filter(c => c.status === "completed" && c.classification === "conversation") || [];
-  const skippedCalls = calls?.filter(c => c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending")) || [];
+  const adminCalls = calls?.filter(c => c.classification === "admin_call") || [];
+  const skippedCalls = calls?.filter(c => 
+    (c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call"))
+  ) || [];
 
   return (
     <div className="space-y-6">
@@ -683,6 +686,9 @@ export default function CallInbox() {
               <TabsTrigger value="calls">
                 <Phone className="h-4 w-4 mr-2" />
                 Graded Calls ({gradedCalls.length})
+              </TabsTrigger>
+              <TabsTrigger value="admin">
+                N/A ({adminCalls.length})
               </TabsTrigger>
               <TabsTrigger value="skipped">
                 Skipped ({skippedCalls.length})
@@ -717,6 +723,65 @@ export default function CallInbox() {
                     <h3 className="text-lg font-semibold mb-2">No graded calls yet</h3>
                     <p className="text-muted-foreground text-center max-w-md">
                       Calls will appear here once they're received and graded via the GoHighLevel webhook.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="admin" className="space-y-4">
+              {adminCalls.length > 0 ? (
+                <div className="space-y-4">
+                  {adminCalls.map((item) => (
+                    <Link key={item.id} href={`/calls/${item.id}`}>
+                      <Card className="card-hover cursor-pointer">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold truncate">
+                                  {item.contactName || item.contactPhone || "Unknown Contact"}
+                                </h3>
+                                <Badge variant="secondary" className="text-xs bg-gray-200 text-gray-700">
+                                  N/A
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                {item.teamMemberName && (
+                                  <span className="flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    {item.teamMemberName}
+                                  </span>
+                                )}
+                                {item.duration && (
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
+                                  </span>
+                                )}
+                                {item.createdAt && (
+                                  <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
+                                )}
+                              </div>
+                              {item.classificationReason && (
+                                <p className="text-sm text-muted-foreground mt-2 italic">
+                                  {item.classificationReason}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-16">
+                    <CheckCircle className="h-16 w-16 text-muted-foreground/50 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No administrative calls</h3>
+                    <p className="text-muted-foreground text-center max-w-md">
+                      Administrative calls (scheduling, follow-ups, etc.) that don't require grading will appear here.
                     </p>
                   </CardContent>
                 </Card>

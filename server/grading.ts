@@ -355,7 +355,8 @@ export type CallClassification =
   | "no_answer"         // No one answered
   | "callback_request"  // Brief "call me back" type call
   | "wrong_number"      // Wrong number or disconnected
-  | "too_short";        // Under minimum duration threshold
+  | "too_short"         // Under minimum duration threshold
+  | "admin_call";       // Administrative call (scheduling, follow-ups, etc.) - N/A for grading
 
 export interface ClassificationResult {
   classification: CallClassification;
@@ -389,24 +390,34 @@ export async function classifyCall(
           content: `You are a call classification system for a real estate investment company.
 Analyze the transcript and classify the call into one of these categories:
 
-1. "conversation" - A real conversation with substantive discussion about selling a property. This includes:
+1. "conversation" - A real sales conversation with substantive discussion about selling a property. This includes:
    - Discussion of property details, condition, or location
    - Discussion of seller's situation or motivation
    - Price discussion or negotiation
-   - Appointment setting or scheduling
-   - Objection handling
+   - Qualification questions about the property or seller
+   - Objection handling related to selling
    
-2. "voicemail" - The rep left a voicemail message (one-sided, no response from other party)
+2. "admin_call" - An administrative or non-sales call. This includes:
+   - Scheduling or rescheduling appointments (without sales discussion)
+   - Follow-up calls just to confirm times/dates
+   - Calls about paperwork, contracts, or closing logistics
+   - Calls to title companies, inspectors, or other vendors
+   - Internal team calls
+   - Calls where the main purpose is NOT qualifying or making an offer
+   
+3. "voicemail" - The rep left a voicemail message (one-sided, no response from other party)
 
-3. "no_answer" - Call went unanswered, straight to voicemail, or disconnected quickly
+4. "no_answer" - Call went unanswered, straight to voicemail, or disconnected quickly
 
-4. "callback_request" - Very brief call where someone just said "call me back", "not a good time", "I'm busy", etc. with no substantive conversation
+5. "callback_request" - Very brief call where someone just said "call me back", "not a good time", "I'm busy", etc. with no substantive conversation
 
-5. "wrong_number" - Wrong number, disconnected number, or person says they don't own the property
+6. "wrong_number" - Wrong number, disconnected number, or person says they don't own the property
+
+IMPORTANT: If the call is primarily about scheduling, confirming appointments, or administrative matters WITHOUT substantive sales discussion (qualification, motivation, price), classify it as "admin_call".
 
 Respond with JSON only:
 {
-  "classification": "conversation" | "voicemail" | "no_answer" | "callback_request" | "wrong_number",
+  "classification": "conversation" | "admin_call" | "voicemail" | "no_answer" | "callback_request" | "wrong_number",
   "reason": "Brief explanation of why this classification was chosen",
   "shouldGrade": true/false (only true for "conversation")
 }`,
@@ -426,7 +437,7 @@ Respond with JSON only:
             properties: {
               classification: {
                 type: "string",
-                enum: ["conversation", "voicemail", "no_answer", "callback_request", "wrong_number"],
+                enum: ["conversation", "admin_call", "voicemail", "no_answer", "callback_request", "wrong_number"],
               },
               reason: { type: "string" },
               shouldGrade: { type: "boolean" },

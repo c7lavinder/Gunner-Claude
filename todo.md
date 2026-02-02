@@ -160,3 +160,17 @@
 - [x] Download call recordings from GHL for transcription
 - [x] Add polling status indicator to admin dashboard
 - [x] Add manual "Sync Now" button for on-demand polling
+
+
+## N/A Call Classification
+- [x] Add N/A call result for administrative/non-sales calls
+- [x] Update grading logic to detect admin calls (scheduling, follow-ups, etc.)
+- [x] Skip scoring for N/A calls - only provide summary
+- [x] Update UI to display N/A calls in appropriate section
+
+
+## Reclassify Button Feature
+- [x] Add reclassify endpoint to server routers
+- [x] Add reclassify dropdown/button to call detail page
+- [x] Allow changing classification to: conversation, admin_call, voicemail, no_answer, callback_request, wrong_number
+- [x] Update call status appropriately when reclassified

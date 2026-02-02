@@ -66,6 +66,8 @@ export default function CallDetail() {
   const params = useParams<{ id: string }>();
   const callId = parseInt(params.id || "0", 10);
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [reclassifyDialogOpen, setReclassifyDialogOpen] = useState(false);
+  const [selectedClassification, setSelectedClassification] = useState("");
   const [feedbackForm, setFeedbackForm] = useState({
     feedbackType: "general_correction",
     criteriaName: "",
@@ -112,6 +114,20 @@ export default function CallDetail() {
     },
     onError: (error) => {
       toast.error(`Failed to submit feedback: ${error.message}`);
+    },
+  });
+
+  const utils = trpc.useUtils();
+  const reclassifyMutation = trpc.calls.reclassify.useMutation({
+    onSuccess: (result) => {
+      toast.success(`Call reclassified to ${result.classification.replace(/_/g, " ")}`);
+      setReclassifyDialogOpen(false);
+      setSelectedClassification("");
+      utils.calls.getById.invalidate({ id: callId });
+      utils.calls.withGrades.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`Failed to reclassify: ${error.message}`);
     },
   });
 
@@ -328,6 +344,71 @@ export default function CallDetail() {
               Retry
             </Button>
           )}
+          {/* Reclassify Dialog */}
+          <Dialog open={reclassifyDialogOpen} onOpenChange={setReclassifyDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                Reclassify
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Reclassify Call</DialogTitle>
+                <DialogDescription>
+                  Change the classification of this call. Selecting "Conversation" will trigger grading if not already graded.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Current Classification</Label>
+                  <div className="p-2 border rounded-lg">
+                    <Badge variant="outline" className="capitalize">
+                      {call.classification?.replace(/_/g, " ") || "Unknown"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>New Classification</Label>
+                  <Select
+                    value={selectedClassification}
+                    onValueChange={setSelectedClassification}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select classification" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="conversation">Conversation (will be graded)</SelectItem>
+                      <SelectItem value="admin_call">N/A - Administrative Call</SelectItem>
+                      <SelectItem value="voicemail">Voicemail</SelectItem>
+                      <SelectItem value="no_answer">No Answer</SelectItem>
+                      <SelectItem value="callback_request">Callback Request</SelectItem>
+                      <SelectItem value="wrong_number">Wrong Number</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setReclassifyDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (!selectedClassification) {
+                      toast.error("Please select a classification");
+                      return;
+                    }
+                    reclassifyMutation.mutate({
+                      callId,
+                      classification: selectedClassification as any,
+                    });
+                  }}
+                  disabled={reclassifyMutation.isPending || !selectedClassification}
+                >
+                  {reclassifyMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

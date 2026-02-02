@@ -278,6 +278,39 @@ export const appRouter = router({
           });
         }
       }),
+
+    // Reclassify a call (change classification manually)
+    reclassify: protectedProcedure
+      .input(z.object({
+        callId: z.number(),
+        classification: z.enum(["conversation", "admin_call", "voicemail", "no_answer", "callback_request", "wrong_number"]),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const call = await getCallById(input.callId);
+        if (!call) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
+        }
+
+        // Determine new status based on classification
+        const shouldGrade = input.classification === "conversation";
+        const newStatus = shouldGrade ? "completed" : "skipped";
+
+        await updateCall(input.callId, {
+          classification: input.classification,
+          classificationReason: input.reason || `Manually reclassified to ${input.classification.replace(/_/g, " ")}`,
+          status: newStatus,
+        });
+
+        // If reclassified to conversation and wasn't graded before, trigger grading
+        if (shouldGrade && call.status === "skipped") {
+          processCall(input.callId).catch(err => {
+            console.error("[Reclassify] Error processing call:", err);
+          });
+        }
+
+        return { success: true, newStatus, classification: input.classification };
+      }),
   }),
 
   // ============ GHL SYNC ============
