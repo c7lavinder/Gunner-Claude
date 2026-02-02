@@ -143,6 +143,9 @@ export const ACQUISITION_MANAGER_RUBRIC = {
 
 // ============ GRADING FUNCTION ============
 
+// Must match the callOutcome enum in drizzle/schema.ts
+export type CallOutcome = "none" | "appointment_set" | "offer_accepted" | "offer_rejected" | "follow_up" | "disqualified";
+
 export interface GradingResult {
   overallScore: number;
   overallGrade: "A" | "B" | "C" | "D" | "F";
@@ -157,6 +160,7 @@ export interface GradingResult {
   coachingTips: string[];
   redFlags: string[];
   summary: string;
+  callOutcome: CallOutcome;
 }
 
 function getGradeFromScore(score: number): "A" | "B" | "C" | "D" | "F" {
@@ -232,6 +236,7 @@ Analyze the transcript and provide:
 5. Specific coaching tips based on the training methodology
 6. Any red flags identified
 7. A brief summary of the call performance
+8. The call outcome - determine what happened at the end of the call
 
 Be specific and reference actual quotes from the transcript when possible.`;
 
@@ -249,8 +254,17 @@ Respond with a JSON object in this exact format:
   "improvements": ["improvement 1", "improvement 2"],
   "coachingTips": ["tip 1", "tip 2"],
   "redFlags": ["red flag 1"] or [],
-  "summary": "brief overall summary"
-}`;
+  "summary": "brief overall summary",
+  "callOutcome": "appointment_set" or "offer_accepted" or "offer_rejected" or "follow_up" or "disqualified" or "none"
+}
+
+CALL OUTCOME DEFINITIONS:
+- appointment_set: A walkthrough, meeting, or follow-up appointment was scheduled with a specific date/time
+- offer_accepted: The seller accepted an offer or verbally agreed to the deal
+- offer_rejected: An offer was made but the seller declined
+- follow_up: A follow-up call was scheduled but no appointment for in-person meeting
+- disqualified: The lead was disqualified (price too high, not motivated, etc.)
+- none: The call ended without a clear outcome or next step`;
 
   try {
     const response = await invokeLLM({
@@ -285,8 +299,12 @@ Respond with a JSON object in this exact format:
               coachingTips: { type: "array", items: { type: "string" } },
               redFlags: { type: "array", items: { type: "string" } },
               summary: { type: "string" },
+              callOutcome: { 
+                type: "string", 
+                enum: ["none", "appointment_set", "offer_accepted", "offer_rejected", "follow_up", "disqualified"] 
+              },
             },
-            required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "summary"],
+            required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "summary", "callOutcome"],
             additionalProperties: false,
           },
         },
@@ -314,6 +332,7 @@ Respond with a JSON object in this exact format:
       coachingTips: parsed.coachingTips,
       redFlags: parsed.redFlags,
       summary: parsed.summary,
+      callOutcome: parsed.callOutcome,
     };
   } catch (error) {
     console.error("[Grading] Error grading call:", error);
@@ -576,11 +595,12 @@ export async function processCall(callId: number): Promise<void> {
       rubricType: callType === "qualification" ? "lead_manager" : "acquisition_manager",
     });
 
-    // Step 6: Mark complete
+    // Step 6: Mark complete and save outcome
     await updateCall(callId, { 
       status: "completed", 
       callType,
       classification: "conversation",
+      callOutcome: gradeResult.callOutcome,
     });
 
     console.log(`[ProcessCall] Successfully processed call ${callId}`);

@@ -186,3 +186,11 @@
 - [x] Add inbound/outbound badge to call list items
 - [x] Style badges appropriately (different colors for in/out)
 - [x] Display direction in call detail page header
+
+
+## Bug Fixes
+- [x] Fix appointments set count not tracking correctly (e.g., Jack Brewster call should count as appointment set)
+
+## Analytics Page Improvements
+- [x] Add stats cards (Calls Made, Conversations, Appointments Set, Offers Accepted, Average Score) to Analytics page
+- [x] Add date filter dropdown to Analytics page (same as Dashboard)

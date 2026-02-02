@@ -1,0 +1,24 @@
+{
+  "query": "SELECT id, contactName, teamMemberName, callOutcome, status FROM calls WHERE contactName LIKE '%Jack Brewster%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, teamMemberName, callOutcome, status FROM calls WHERE contactName LIKE '%Jack Brewster%';",
+  "rows": [
+    {
+      "id": "1",
+      "contactName": "Jack Brewster",
+      "teamMemberName": "Daniel Lozano",
+      "callOutcome": "none",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "contactName": "Jack Brewster",
+      "teamMemberName": "Daniel Lozano",
+      "callOutcome": "none",
+      "status": "completed"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tteamMemberName\tcallOutcome\tstatus\n1\tJack Brewster\tDaniel Lozano\tnone\tcompleted\n2\tJack Brewster\tDaniel Lozano\tnone\tcompleted\n",
+  "stderr": "",
+  "execution_time_ms": 381
+}
