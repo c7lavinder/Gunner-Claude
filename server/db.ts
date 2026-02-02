@@ -9,7 +9,8 @@ import {
   TeamTrainingItem, InsertTeamTrainingItem,
   brandAssets, socialPosts, contentIdeas, brandProfile,
   InsertBrandAsset, InsertSocialPost, InsertContentIdea,
-  BrandAsset, SocialPost, ContentIdea, BrandProfile, InsertBrandProfile
+  BrandAsset, SocialPost, ContentIdea, BrandProfile, InsertBrandProfile,
+  teamAssignments, TeamAssignment, InsertTeamAssignment
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -363,6 +364,7 @@ export async function getLeaderboardData(): Promise<Array<{
 
 export async function getCallStats(options?: {
   dateRange?: "today" | "week" | "month" | "ytd" | "all";
+  viewableTeamMemberIds?: number[] | 'all'; // Permission-based filtering
 }): Promise<{
   totalCalls: number;
   gradedCalls: number;
@@ -481,6 +483,13 @@ export async function getCallStats(options?: {
   } else {
     allCalls = await db.select().from(calls).where(eq(calls.isArchived, "false"));
   }
+  
+  // Apply permission-based filtering if viewableTeamMemberIds is provided
+  if (options?.viewableTeamMemberIds && options.viewableTeamMemberIds !== 'all') {
+    const viewableIds = options.viewableTeamMemberIds;
+    allCalls = allCalls.filter(c => c.teamMemberId && viewableIds.includes(c.teamMemberId));
+  }
+  
   const gradedCalls = allCalls.filter(c => c.status === "completed" && c.classification === "conversation");
   const skippedCalls = allCalls.filter(c => c.status === "skipped");
   const pendingCalls = allCalls.filter(c => c.status === "pending" || c.status === "transcribing" || c.status === "classifying" || c.status === "grading");
@@ -1478,4 +1487,232 @@ export async function getAllCallsForTraining(options?: {
     classification: r.classification as string | null,
     isArchived: r.isArchived as string,
   }));
+}
+
+
+// ============ TEAM ASSIGNMENT FUNCTIONS ============
+
+export async function getTeamAssignments(): Promise<TeamAssignment[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(teamAssignments);
+}
+
+export async function getLeadManagersForAcquisitionManager(acquisitionManagerId: number): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const assignments = await db.select()
+    .from(teamAssignments)
+    .where(eq(teamAssignments.acquisitionManagerId, acquisitionManagerId));
+  
+  return assignments.map(a => a.leadManagerId);
+}
+
+export async function assignLeadManagerToAcquisitionManager(
+  leadManagerId: number, 
+  acquisitionManagerId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Remove existing assignment for this lead manager
+  await db.delete(teamAssignments)
+    .where(eq(teamAssignments.leadManagerId, leadManagerId));
+  
+  // Create new assignment
+  await db.insert(teamAssignments).values({
+    leadManagerId,
+    acquisitionManagerId,
+  });
+}
+
+export async function removeLeadManagerAssignment(leadManagerId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(teamAssignments)
+    .where(eq(teamAssignments.leadManagerId, leadManagerId));
+}
+
+// ============ PERMISSION-BASED CALL QUERIES ============
+
+export type UserPermissionContext = {
+  teamMemberId?: number;
+  teamRole?: 'admin' | 'lead_manager' | 'acquisition_manager';
+  userId?: number;
+};
+
+/**
+ * Get calls filtered by user permissions:
+ * - Admin: sees all calls
+ * - Acquisition Manager: sees own calls + all assigned Lead Manager calls
+ * - Lead Manager: sees only own calls
+ */
+export async function getCallsWithPermissions(
+  permissionContext: UserPermissionContext,
+  options: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+    includeArchived?: boolean;
+    startDate?: Date;
+    endDate?: Date;
+  } = {}
+): Promise<Call[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [];
+  
+  // Exclude archived calls by default
+  if (!options.includeArchived) {
+    conditions.push(eq(calls.isArchived, "false"));
+  }
+  
+  if (options.status) {
+    conditions.push(eq(calls.status, options.status as any));
+  }
+  
+  if (options.startDate) {
+    conditions.push(gte(calls.callTimestamp, options.startDate));
+  }
+  
+  if (options.endDate) {
+    conditions.push(lte(calls.callTimestamp, options.endDate));
+  }
+
+  // Apply permission-based filtering
+  if (permissionContext.teamRole === 'admin') {
+    // Admin sees all calls - no additional filter
+  } else if (permissionContext.teamRole === 'acquisition_manager' && permissionContext.teamMemberId) {
+    // Acquisition Manager sees own calls + assigned Lead Manager calls
+    const assignedLeadManagers = await getLeadManagersForAcquisitionManager(permissionContext.teamMemberId);
+    const allowedTeamMemberIds = [permissionContext.teamMemberId, ...assignedLeadManagers];
+    
+    if (allowedTeamMemberIds.length > 0) {
+      conditions.push(sql`${calls.teamMemberId} IN (${sql.join(allowedTeamMemberIds.map(id => sql`${id}`), sql`, `)})`);
+    }
+  } else if (permissionContext.teamRole === 'lead_manager' && permissionContext.teamMemberId) {
+    // Lead Manager sees only own calls
+    conditions.push(eq(calls.teamMemberId, permissionContext.teamMemberId));
+  } else if (permissionContext.teamMemberId) {
+    // Fallback: if role not set but teamMemberId exists, show only own calls
+    conditions.push(eq(calls.teamMemberId, permissionContext.teamMemberId));
+  }
+
+  let query = db.select().from(calls);
+  
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  return await query
+    .orderBy(desc(calls.createdAt))
+    .limit(options.limit || 50)
+    .offset(options.offset || 0);
+}
+
+/**
+ * Get team member IDs that a user can view based on their permissions
+ */
+export async function getViewableTeamMemberIds(
+  permissionContext: UserPermissionContext
+): Promise<number[] | 'all'> {
+  if (permissionContext.teamRole === 'admin') {
+    return 'all';
+  }
+  
+  if (permissionContext.teamRole === 'acquisition_manager' && permissionContext.teamMemberId) {
+    const assignedLeadManagers = await getLeadManagersForAcquisitionManager(permissionContext.teamMemberId);
+    return [permissionContext.teamMemberId, ...assignedLeadManagers];
+  }
+  
+  if (permissionContext.teamMemberId) {
+    return [permissionContext.teamMemberId];
+  }
+  
+  return [];
+}
+
+// ============ TEAM MEMBER MANAGEMENT ============
+
+export async function updateTeamMemberRole(
+  teamMemberId: number, 
+  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager'
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(teamMembers)
+    .set({ teamRole })
+    .where(eq(teamMembers.id, teamMemberId));
+}
+
+export async function getTeamMemberByUserId(userId: number): Promise<TeamMember | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select()
+    .from(teamMembers)
+    .where(eq(teamMembers.userId, userId))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+export async function linkUserToTeamMember(userId: number, teamMemberId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(teamMembers)
+    .set({ userId })
+    .where(eq(teamMembers.id, teamMemberId));
+}
+
+export async function getAllUsers(): Promise<Array<{
+  id: number;
+  openId: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  teamRole: string | null;
+  teamMemberId: number | null;
+  createdAt: Date;
+  lastSignedIn: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get all users and find their linked team member
+  const allUsers = await db.select().from(users).orderBy(desc(users.lastSignedIn));
+  const allTeamMembers = await db.select().from(teamMembers);
+  
+  return allUsers.map(u => {
+    const linkedMember = allTeamMembers.find(tm => tm.userId === u.id);
+    return {
+      id: u.id,
+      openId: u.openId,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      teamRole: u.teamRole,
+      teamMemberId: linkedMember?.id || null,
+      createdAt: u.createdAt,
+      lastSignedIn: u.lastSignedIn,
+    };
+  });
+}
+
+export async function updateUserTeamRole(
+  userId: number, 
+  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager'
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users)
+    .set({ teamRole })
+    .where(eq(users.id, userId));
 }

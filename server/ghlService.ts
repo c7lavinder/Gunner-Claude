@@ -8,6 +8,8 @@ import { createCall, getTeamMembers, updateCall, getCallById, getCallByGhlId } f
 import { processCall } from "./grading";
 import { storagePut } from "./storage";
 import { runArchivalJob } from "./archival";
+import { generateTeamInsights } from "./insights";
+import { createTeamTrainingItem } from "./db";
 
 // GHL API Configuration
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
@@ -477,6 +479,93 @@ let currentIntervalMinutes: number = 30;
 let archivalInterval: ReturnType<typeof setInterval> | null = null;
 let lastArchivalTime: Date | null = null;
 
+// Weekly insights generation (runs Monday mornings)
+let insightsInterval: ReturnType<typeof setInterval> | null = null;
+let lastInsightsTime: Date | null = null;
+
+/**
+ * Check if it's Monday morning (6 AM) and run insights generation
+ */
+async function checkAndRunWeeklyInsights(): Promise<void> {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday
+  const hour = now.getHours();
+  
+  // Run on Monday between 6-7 AM
+  if (dayOfWeek === 1 && hour >= 6 && hour < 7) {
+    // Check if we already ran today
+    if (lastInsightsTime) {
+      const lastRunDate = lastInsightsTime.toDateString();
+      const todayDate = now.toDateString();
+      if (lastRunDate === todayDate) {
+        return; // Already ran today
+      }
+    }
+    
+    console.log("[Insights] Running weekly AI insights generation (Monday morning)");
+    try {
+      const insights = await generateTeamInsights();
+      
+      // Save all generated insights to the database
+      let savedCount = 0;
+      for (const skill of insights.skills) {
+        await createTeamTrainingItem({
+          itemType: "skill",
+          title: skill.title,
+          description: skill.description,
+          targetBehavior: skill.targetBehavior,
+          priority: skill.priority,
+          status: "active",
+          teamMemberId: skill.teamMemberId,
+          sourceCallIds: skill.sourceCallIds ? JSON.stringify(skill.sourceCallIds) : null,
+        });
+        savedCount++;
+      }
+      for (const issue of insights.issues) {
+        await createTeamTrainingItem({
+          itemType: "issue",
+          title: issue.title,
+          description: issue.description,
+          priority: issue.priority,
+          status: "active",
+          teamMemberId: issue.teamMemberId,
+          sourceCallIds: issue.sourceCallIds ? JSON.stringify(issue.sourceCallIds) : null,
+        });
+        savedCount++;
+      }
+      for (const win of insights.wins) {
+        await createTeamTrainingItem({
+          itemType: "win",
+          title: win.title,
+          description: win.description,
+          priority: win.priority,
+          status: "active",
+          teamMemberId: win.teamMemberId,
+          sourceCallIds: win.sourceCallIds ? JSON.stringify(win.sourceCallIds) : null,
+        });
+        savedCount++;
+      }
+      for (const agenda of insights.agenda) {
+        await createTeamTrainingItem({
+          itemType: "agenda",
+          title: agenda.title,
+          description: agenda.description,
+          priority: agenda.priority,
+          status: "active",
+          teamMemberId: agenda.teamMemberId,
+          sourceCallIds: agenda.sourceCallIds ? JSON.stringify(agenda.sourceCallIds) : null,
+        });
+        savedCount++;
+      }
+      
+      lastInsightsTime = new Date();
+      console.log(`[Insights] Weekly generation complete. Saved ${savedCount} insights.`);
+    } catch (err) {
+      console.error("[Insights] Weekly generation error:", err);
+    }
+  }
+}
+
 /**
  * Start automatic polling at the specified interval (in minutes)
  */
@@ -520,6 +609,18 @@ export function startPolling(intervalMinutes: number = 30): void {
         .catch(err => console.error("[Archival] Daily run error:", err));
     }, 24 * 60 * 60 * 1000); // 24 hours
   }
+
+  // Start weekly insights generation check (checks every hour if it's Monday 6 AM)
+  if (!insightsInterval) {
+    console.log("[Insights] Starting weekly insights scheduler (Monday 6 AM)");
+    // Check immediately at startup
+    checkAndRunWeeklyInsights().catch(err => console.error("[Insights] Initial check error:", err));
+    
+    // Then check every hour
+    insightsInterval = setInterval(() => {
+      checkAndRunWeeklyInsights().catch(err => console.error("[Insights] Hourly check error:", err));
+    }, 60 * 60 * 1000); // 1 hour
+  }
 }
 
 /**
@@ -535,6 +636,11 @@ export function stopPolling(): void {
     clearInterval(archivalInterval);
     archivalInterval = null;
     console.log("[Archival] Daily archival job stopped");
+  }
+  if (insightsInterval) {
+    clearInterval(insightsInterval);
+    insightsInterval = null;
+    console.log("[Insights] Weekly insights scheduler stopped");
   }
 }
 

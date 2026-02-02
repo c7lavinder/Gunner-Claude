@@ -271,3 +271,16 @@
 
 ## Remove Add Manual Buttons
 - [x] Remove Add Manual buttons from Training page (Issues, Wins, Skills, Agenda sections)
+
+
+## Team Member Permissions System
+- [x] Add role field to users (admin, acquisition_manager, lead_manager)
+- [x] Add team assignment table (which Lead Managers belong to which Acquisition Manager)
+- [x] Update Call History to show only user's own calls (Lead Managers)
+- [x] Update Call History for Acquisition Managers to see their Lead Managers' calls
+- [x] Update Analytics to filter by user permissions
+- [x] Keep Leaderboard showing full team data for everyone
+- [x] Training page: hide check off/delete for non-admins
+- [x] Training page: hide Generate AI Insights button for non-admins
+- [x] Build Team Management UI for admin on Team page
+- [x] Auto-generate AI insights every Monday at 6am

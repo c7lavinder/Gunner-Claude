@@ -21,20 +21,26 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2 } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Phone, label: "Call History", path: "/calls" },
-  { icon: BarChart3, label: "Analytics", path: "/analytics" },
-  { icon: BookOpen, label: "Training", path: "/training" },
-  { icon: Share2, label: "Social Media", path: "/social" },
-  { icon: Users, label: "Team", path: "/team" },
-];
+const getMenuItems = (isAdmin: boolean) => {
+  const items = [
+    { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+    { icon: Phone, label: "Call History", path: "/calls" },
+    { icon: BarChart3, label: "Analytics", path: "/analytics" },
+    { icon: BookOpen, label: "Training", path: "/training" },
+    { icon: Share2, label: "Social Media", path: "/social" },
+    { icon: Users, label: "Team", path: "/team" },
+  ];
+  if (isAdmin) {
+    items.push({ icon: Settings, label: "Team Management", path: "/team-management" });
+  }
+  return items;
+};
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
@@ -116,6 +122,8 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const isAdmin = user?.teamRole === 'admin';
+  const menuItems = getMenuItems(isAdmin);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

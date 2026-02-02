@@ -40,6 +40,23 @@ export type TeamMember = typeof teamMembers.$inferSelect;
 export type InsertTeamMember = typeof teamMembers.$inferInsert;
 
 /**
+ * Team Assignments - maps Lead Managers to their Acquisition Manager supervisor
+ */
+export const teamAssignments = mysqlTable("team_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  // The Lead Manager being assigned
+  leadManagerId: int("leadManagerId").references(() => teamMembers.id).notNull(),
+  // The Acquisition Manager they report to
+  acquisitionManagerId: int("acquisitionManagerId").references(() => teamMembers.id).notNull(),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TeamAssignment = typeof teamAssignments.$inferSelect;
+export type InsertTeamAssignment = typeof teamAssignments.$inferInsert;
+
+/**
  * Calls table - stores incoming calls from GHL webhook
  */
 export const calls = mysqlTable("calls", {

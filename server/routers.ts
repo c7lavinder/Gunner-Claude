@@ -68,6 +68,18 @@ import {
   getCallsForContentGeneration,
   getKPIsForContentGeneration,
   getInterestingCallStories,
+  // Permission-based queries
+  getCallsWithPermissions,
+  getViewableTeamMemberIds,
+  getTeamMemberByUserId,
+  getTeamAssignments,
+  assignLeadManagerToAcquisitionManager,
+  removeLeadManagerAssignment,
+  updateTeamMemberRole,
+  linkUserToTeamMember,
+  getAllUsers,
+  updateUserTeamRole,
+  UserPermissionContext,
 } from "./db";
 import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
@@ -119,6 +131,95 @@ export const appRouter = router({
       await seedTeamMembers();
       return { success: true };
     }),
+
+    // Get current user's team member profile
+    myProfile: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return null;
+      return await getTeamMemberByUserId(ctx.user.id);
+    }),
+
+    // Admin: Get all users for management
+    allUsers: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user?.teamRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      return await getAllUsers();
+    }),
+
+    // Admin: Get team assignments
+    getAssignments: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user?.teamRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      return await getTeamAssignments();
+    }),
+
+    // Admin: Update team member role
+    updateRole: protectedProcedure
+      .input(z.object({
+        teamMemberId: z.number(),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        await updateTeamMemberRole(input.teamMemberId, input.teamRole);
+        return { success: true };
+      }),
+
+    // Admin: Link user account to team member
+    linkUser: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        teamMemberId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        await linkUserToTeamMember(input.userId, input.teamMemberId);
+        return { success: true };
+      }),
+
+    // Admin: Assign Lead Manager to Acquisition Manager
+    assignToManager: protectedProcedure
+      .input(z.object({
+        leadManagerId: z.number(),
+        acquisitionManagerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        await assignLeadManagerToAcquisitionManager(input.leadManagerId, input.acquisitionManagerId);
+        return { success: true };
+      }),
+
+    // Admin: Remove Lead Manager assignment
+    removeAssignment: protectedProcedure
+      .input(z.object({ leadManagerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        await removeLeadManagerAssignment(input.leadManagerId);
+        return { success: true };
+      }),
+
+    // Admin: Update user's team role
+    updateUserRole: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        await updateUserTeamRole(input.userId, input.teamRole);
+        return { success: true };
+      }),
   }),
 
   // ============ CALLS ============
@@ -130,14 +231,37 @@ export const appRouter = router({
         limit: z.number().optional(),
         offset: z.number().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getCalls(input || {});
+      .query(async ({ ctx, input }) => {
+        // Get user's permission context
+        const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+        const permissionContext: UserPermissionContext = {
+          teamMemberId: teamMember?.id,
+          teamRole: (ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager') || 'lead_manager',
+          userId: ctx.user?.id,
+        };
+        
+        // Use permission-based query
+        return await getCallsWithPermissions(permissionContext, {
+          status: input?.status,
+          limit: input?.limit,
+          offset: input?.offset,
+        });
       }),
 
     recent: protectedProcedure
       .input(z.object({ limit: z.number().optional() }).optional())
-      .query(async ({ input }) => {
-        return await getRecentCalls(input?.limit || 20);
+      .query(async ({ ctx, input }) => {
+        // Get user's permission context
+        const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+        const permissionContext: UserPermissionContext = {
+          teamMemberId: teamMember?.id,
+          teamRole: (ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager') || 'lead_manager',
+          userId: ctx.user?.id,
+        };
+        
+        return await getCallsWithPermissions(permissionContext, {
+          limit: input?.limit || 20,
+        });
       }),
 
     getById: protectedProcedure
@@ -355,8 +479,23 @@ export const appRouter = router({
       .input(z.object({
         dateRange: z.enum(["today", "week", "month", "ytd", "all"]).optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getCallStats(input || {});
+      .query(async ({ ctx, input }) => {
+        // Get user's permission context for filtering
+        const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+        const permissionContext: UserPermissionContext = {
+          teamMemberId: teamMember?.id,
+          teamRole: (ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager') || 'lead_manager',
+          userId: ctx.user?.id,
+        };
+        
+        // Get viewable team member IDs based on permissions
+        const viewableIds = await getViewableTeamMemberIds(permissionContext);
+        
+        // Pass viewable IDs to getCallStats for filtering
+        return await getCallStats({
+          ...input,
+          viewableTeamMemberIds: viewableIds,
+        });
       }),
   }),
 
