@@ -146,6 +146,12 @@ export const ACQUISITION_MANAGER_RUBRIC = {
 // Must match the callOutcome enum in drizzle/schema.ts
 export type CallOutcome = "none" | "appointment_set" | "offer_accepted" | "offer_rejected" | "follow_up" | "disqualified";
 
+export interface ObjectionHandlingItem {
+  objection: string; // The objection identified (e.g., "Price too high", "Need to think about it")
+  context: string; // Quote or context from transcript where objection occurred
+  suggestedResponses: string[]; // 2-3 script responses they could have used
+}
+
 export interface GradingResult {
   overallScore: number;
   overallGrade: "A" | "B" | "C" | "D" | "F";
@@ -159,6 +165,7 @@ export interface GradingResult {
   improvements: string[];
   coachingTips: string[];
   redFlags: string[];
+  objectionHandling: ObjectionHandlingItem[];
   summary: string;
   callOutcome: CallOutcome;
 }
@@ -235,8 +242,9 @@ Analyze the transcript and provide:
 4. Areas for improvement
 5. Specific coaching tips based on the training methodology
 6. Any red flags identified
-7. A brief summary of the call performance
-8. The call outcome - determine what happened at the end of the call
+7. OBJECTION HANDLING: Identify any objections the seller raised (price concerns, timing, need to think about it, talking to other investors, etc.) and provide 2-3 specific script responses they could have used. Include the context/quote where the objection occurred.
+8. A brief summary of the call performance
+9. The call outcome - determine what happened at the end of the call
 
 Be specific and reference actual quotes from the transcript when possible.`;
 
@@ -254,6 +262,9 @@ Respond with a JSON object in this exact format:
   "improvements": ["improvement 1", "improvement 2"],
   "coachingTips": ["tip 1", "tip 2"],
   "redFlags": ["red flag 1"] or [],
+  "objectionHandling": [
+    {"objection": "Price too high", "context": "Seller said: 'I was hoping for at least $200k'", "suggestedResponses": ["Response 1", "Response 2"]}
+  ],
   "summary": "brief overall summary",
   "callOutcome": "appointment_set" or "offer_accepted" or "offer_rejected" or "follow_up" or "disqualified" or "none"
 }
@@ -298,13 +309,26 @@ CALL OUTCOME DEFINITIONS:
               improvements: { type: "array", items: { type: "string" } },
               coachingTips: { type: "array", items: { type: "string" } },
               redFlags: { type: "array", items: { type: "string" } },
+              objectionHandling: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    objection: { type: "string" },
+                    context: { type: "string" },
+                    suggestedResponses: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["objection", "context", "suggestedResponses"],
+                  additionalProperties: false,
+                },
+              },
               summary: { type: "string" },
               callOutcome: { 
                 type: "string", 
                 enum: ["none", "appointment_set", "offer_accepted", "offer_rejected", "follow_up", "disqualified"] 
               },
             },
-            required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "summary", "callOutcome"],
+            required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "objectionHandling", "summary", "callOutcome"],
             additionalProperties: false,
           },
         },
@@ -331,6 +355,7 @@ CALL OUTCOME DEFINITIONS:
       improvements: parsed.improvements,
       coachingTips: parsed.coachingTips,
       redFlags: parsed.redFlags,
+      objectionHandling: parsed.objectionHandling || [],
       summary: parsed.summary,
       callOutcome: parsed.callOutcome,
     };

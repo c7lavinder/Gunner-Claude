@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing, Clock, User, RefreshCw, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, FileText, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing, Clock, User, RefreshCw, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, FileText, MessageSquare, ThumbsUp, ThumbsDown, MessageCircle, Quote } from "lucide-react";
 import { Link, useParams } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
@@ -183,6 +183,11 @@ export default function CallDetail() {
   const improvements = grade?.improvements as string[] || [];
   const coachingTips = grade?.coachingTips as string[] || [];
   const redFlags = grade?.redFlags as string[] || [];
+  const objectionHandling = grade?.objectionHandling as Array<{
+    objection: string;
+    context: string;
+    suggestedResponses: string[];
+  }> || [];
 
   return (
     <div className="space-y-6">
@@ -613,6 +618,55 @@ export default function CallDetail() {
                           </li>
                         ))}
                       </ul>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Objection Handling - Potential Replies */}
+                {objectionHandling.length > 0 && (
+                  <Card className="border-purple-200 dark:border-purple-900">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                        <MessageCircle className="h-4 w-4" />
+                        Potential Replies to Objections
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        Objections identified in this call with suggested responses
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {objectionHandling.map((item, i) => (
+                        <div key={i} className="border rounded-lg overflow-hidden">
+                          {/* Objection Header */}
+                          <div className="bg-purple-50 dark:bg-purple-950 px-4 py-3 border-b">
+                            <div className="font-medium text-purple-700 dark:text-purple-300">
+                              {item.objection}
+                            </div>
+                          </div>
+                          
+                          {/* Context Quote */}
+                          <div className="px-4 py-3 bg-muted/30 border-b">
+                            <div className="flex gap-2">
+                              <Quote className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                              <p className="text-sm italic text-muted-foreground">
+                                {item.context}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {/* Suggested Responses */}
+                          <div className="px-4 py-3">
+                            <p className="text-xs font-medium text-muted-foreground mb-2">SUGGESTED RESPONSES:</p>
+                            <ul className="space-y-2">
+                              {item.suggestedResponses.map((response, j) => (
+                                <li key={j} className="text-sm p-3 bg-purple-50 dark:bg-purple-950/50 rounded-lg border-l-2 border-purple-400">
+                                  "{response}"
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      ))}
                     </CardContent>
                   </Card>
                 )}

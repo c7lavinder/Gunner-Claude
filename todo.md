@@ -250,3 +250,10 @@
 ## Button Alignment Fix
 - [x] Make all header buttons level (Sync, Upload, Refresh)
 - [x] Reposition sync timestamp inline with button text
+
+
+## Objection Handling / Potential Replies
+- [x] Update grading to identify objections from call transcript
+- [x] Generate suggested responses for each objection type
+- [x] Add objection handling section to call detail page
+- [x] Show potential replies with script examples

@@ -100,6 +100,8 @@ export const callGrades = mysqlTable("call_grades", {
   coachingTips: json("coachingTips"), // Array of specific coaching tips
   // Red flags identified
   redFlags: json("redFlags"), // Array of strings
+  // Objection handling - identified objections and suggested responses
+  objectionHandling: json("objectionHandling"), // Array of {objection, context, suggestedResponses[]}
   // Summary
   summary: text("summary"),
   // Which rubric was used
