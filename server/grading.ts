@@ -1,0 +1,380 @@
+import { invokeLLM } from "./_core/llm";
+
+// ============ GRADING RUBRICS ============
+
+export const LEAD_MANAGER_RUBRIC = {
+  name: "Lead Manager Qualification Call Rubric",
+  description: "For Chris and Daniel - Qualification/Diagnosis calls",
+  criteria: [
+    {
+      name: "Introduction & Rapport",
+      maxPoints: 10,
+      description: "Proper introduction, verified correct person, confirmed good time, professional tone",
+      keyPhrases: ["I probably caught you at a bad time", "Is this a good time for a 5-10 minute conversation?"],
+    },
+    {
+      name: "Setting Expectations",
+      maxPoints: 10,
+      description: "Explained call structure, working together process, comfort with saying 'not a good fit'",
+      keyPhrases: ["Let me explain what this call will look like", "comfortable saying not a good fit"],
+    },
+    {
+      name: "Property Condition",
+      maxPoints: 10,
+      description: "Gathered beds/baths, property condition, confirmed or updated previous info",
+      keyPhrases: ["number of bedrooms", "condition of the property"],
+    },
+    {
+      name: "Roadblock Identification",
+      maxPoints: 10,
+      description: "Identified decision makers, timeline, other obstacles",
+      keyPhrases: ["other decision makers", "If we could agree on a price today", "within 30 days"],
+    },
+    {
+      name: "Motivation Extraction",
+      maxPoints: 20,
+      description: "MOST IMPORTANT - Identified true motivation, asked follow-up questions, pulled emotional pain points",
+      keyPhrases: ["Why do you want to sell?", "How long has that been going on?", "Can you tell me more?", "What have you tried?"],
+    },
+    {
+      name: "Price Discussion",
+      maxPoints: 15,
+      description: "Did NOT give price first, got seller's price, used price anchor (50-60% Zillow), asked 'What were you hoping I would say?'",
+      keyPhrases: ["What were you hoping I would at least say?", "other investors are paying around"],
+    },
+    {
+      name: "Tonality & Empathy",
+      maxPoints: 10,
+      description: "Matched seller's pace/tone, soft tone during motivation, genuine empathy, professional bearing",
+      keyPhrases: [],
+    },
+    {
+      name: "Objection Handling",
+      maxPoints: 10,
+      description: "Addressed objections appropriately, used third party stories, didn't get defensive",
+      keyPhrases: ["I had a seller just like you", "We've helped people in similar situations"],
+    },
+    {
+      name: "Call Outcome",
+      maxPoints: 5,
+      description: "Appropriate disqualification or proper appointment setting, clear next steps",
+      keyPhrases: ["schedule a walkthrough", "within 48 hours"],
+    },
+  ],
+  redFlags: [
+    "Giving price before seller",
+    "Not price anchoring",
+    "Rushing through motivation",
+    "Not asking follow-up questions",
+    "Getting defensive with angry sellers",
+    "Not confirming all decision makers",
+    "Not setting clear expectations",
+    "Talking too fast or too slow",
+    "Not matching seller's tone",
+    "Weak objection handling",
+  ],
+  disqualificationTarget: "Under 4 minutes for clear disqualifications",
+};
+
+export const ACQUISITION_MANAGER_RUBRIC = {
+  name: "Acquisition Manager Offer Call Rubric",
+  description: "For Kyle - Offer/Closing calls",
+  criteria: [
+    {
+      name: "Intro & Confirmation",
+      maxPoints: 10,
+      description: "Confirmed scheduled time works, professional greeting",
+      keyPhrases: ["Is this still a good time?", "Thank you for taking my call"],
+    },
+    {
+      name: "Setting the Stage",
+      maxPoints: 10,
+      description: "Explained what happens if they move forward, confirmed email review capability",
+      keyPhrases: ["Let me explain what happens next", "review the agreement via email"],
+    },
+    {
+      name: "Roadblock Confirmation",
+      maxPoints: 15,
+      description: "Confirmed all decision makers present, asked 'In a perfect world, if we agree on price, what would happen next?'",
+      keyPhrases: ["all decision makers present", "In a perfect world", "what would happen next"],
+    },
+    {
+      name: "Motivation Restatement",
+      maxPoints: 20,
+      description: "Revisited their motivation, used empathy phrases, mirrored their words",
+      keyPhrases: ["How long has that been going on?", "How has that impacted you?", "Seems like", "Feels like", "Sounds like"],
+    },
+    {
+      name: "Offer Setup",
+      maxPoints: 15,
+      description: "Reminded of benefits: no closing costs, no commissions, as-is, no repairs, no cleaning",
+      keyPhrases: ["no closing costs", "no commissions", "as-is condition", "no repairs needed", "solving your problem"],
+    },
+    {
+      name: "Price Delivery",
+      maxPoints: 15,
+      description: "Gave specific number, stated it's what they walk away with, confident delivery",
+      keyPhrases: ["walk away with", "in your pocket"],
+    },
+    {
+      name: "Tonality & Confidence",
+      maxPoints: 10,
+      description: "Confident but empathetic tone, professional bearing, matched energy appropriately",
+      keyPhrases: [],
+    },
+    {
+      name: "Closing Technique",
+      maxPoints: 5,
+      description: "Asked for commitment, handled final objections, clear next steps",
+      keyPhrases: ["confident yes or no", "What questions do you have?"],
+    },
+  ],
+  redFlags: [
+    "Not confirming all decision makers",
+    "Skipping motivation restatement",
+    "Rushing to the price",
+    "Not explaining benefits before price",
+    "Weak or uncertain price delivery",
+    "Not asking for commitment",
+    "Getting defensive on objections",
+    "Not using empathy phrases",
+  ],
+};
+
+// ============ GRADING FUNCTION ============
+
+export interface GradingResult {
+  overallScore: number;
+  overallGrade: "A" | "B" | "C" | "D" | "F";
+  criteriaScores: Array<{
+    name: string;
+    score: number;
+    maxPoints: number;
+    feedback: string;
+  }>;
+  strengths: string[];
+  improvements: string[];
+  coachingTips: string[];
+  redFlags: string[];
+  summary: string;
+}
+
+function getGradeFromScore(score: number): "A" | "B" | "C" | "D" | "F" {
+  if (score >= 90) return "A";
+  if (score >= 80) return "B";
+  if (score >= 70) return "C";
+  if (score >= 60) return "D";
+  return "F";
+}
+
+export async function gradeCall(
+  transcript: string,
+  callType: "qualification" | "offer",
+  teamMemberName: string
+): Promise<GradingResult> {
+  const rubric = callType === "qualification" ? LEAD_MANAGER_RUBRIC : ACQUISITION_MANAGER_RUBRIC;
+
+  const systemPrompt = `You are an expert sales coach for a real estate wholesaling company called Nashville Area Home Buyers. 
+Your job is to analyze phone call transcripts and grade them based on a specific rubric.
+
+You are grading a ${callType === "qualification" ? "Qualification/Diagnosis" : "Offer"} call made by ${teamMemberName}.
+
+RUBRIC: ${rubric.name}
+${rubric.description}
+
+CRITERIA TO EVALUATE:
+${rubric.criteria.map((c, i) => `
+${i + 1}. ${c.name} (${c.maxPoints} points max)
+   - ${c.description}
+   - Key phrases to look for: ${c.keyPhrases.length > 0 ? c.keyPhrases.join(", ") : "N/A - evaluate based on tone and approach"}
+`).join("\n")}
+
+RED FLAGS TO IDENTIFY:
+${rubric.redFlags.map(f => `- ${f}`).join("\n")}
+
+${callType === "qualification" ? `DISQUALIFICATION TARGET: ${LEAD_MANAGER_RUBRIC.disqualificationTarget}` : ""}
+
+Analyze the transcript and provide:
+1. A score for each criterion (0 to max points)
+2. Specific feedback for each criterion
+3. Overall strengths (what they did well)
+4. Areas for improvement
+5. Specific coaching tips based on the training methodology
+6. Any red flags identified
+7. A brief summary of the call performance
+
+Be specific and reference actual quotes from the transcript when possible.`;
+
+  const userPrompt = `Please analyze this call transcript and provide a detailed grade:
+
+TRANSCRIPT:
+${transcript}
+
+Respond with a JSON object in this exact format:
+{
+  "criteriaScores": [
+    {"name": "criterion name", "score": number, "maxPoints": number, "feedback": "specific feedback"}
+  ],
+  "strengths": ["strength 1", "strength 2"],
+  "improvements": ["improvement 1", "improvement 2"],
+  "coachingTips": ["tip 1", "tip 2"],
+  "redFlags": ["red flag 1"] or [],
+  "summary": "brief overall summary"
+}`;
+
+  try {
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "call_grade",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              criteriaScores: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    score: { type: "number" },
+                    maxPoints: { type: "number" },
+                    feedback: { type: "string" },
+                  },
+                  required: ["name", "score", "maxPoints", "feedback"],
+                  additionalProperties: false,
+                },
+              },
+              strengths: { type: "array", items: { type: "string" } },
+              improvements: { type: "array", items: { type: "string" } },
+              coachingTips: { type: "array", items: { type: "string" } },
+              redFlags: { type: "array", items: { type: "string" } },
+              summary: { type: "string" },
+            },
+            required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "summary"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content || typeof content !== 'string') {
+      throw new Error("No response from LLM");
+    }
+
+    const parsed = JSON.parse(content);
+    
+    // Calculate overall score
+    const totalPoints = parsed.criteriaScores.reduce((sum: number, c: any) => sum + c.score, 0);
+    const maxPoints = parsed.criteriaScores.reduce((sum: number, c: any) => sum + c.maxPoints, 0);
+    const overallScore = maxPoints > 0 ? (totalPoints / maxPoints) * 100 : 0;
+
+    return {
+      overallScore: Math.round(overallScore * 100) / 100,
+      overallGrade: getGradeFromScore(overallScore),
+      criteriaScores: parsed.criteriaScores,
+      strengths: parsed.strengths,
+      improvements: parsed.improvements,
+      coachingTips: parsed.coachingTips,
+      redFlags: parsed.redFlags,
+      summary: parsed.summary,
+    };
+  } catch (error) {
+    console.error("[Grading] Error grading call:", error);
+    throw error;
+  }
+}
+
+// ============ TRANSCRIPTION FUNCTION ============
+
+import { transcribeAudio } from "./_core/voiceTranscription";
+
+export async function transcribeCallRecording(recordingUrl: string): Promise<string> {
+  try {
+    const result = await transcribeAudio({
+      audioUrl: recordingUrl,
+      language: "en",
+      prompt: "Real estate sales call between a lead manager and a property seller discussing selling their home",
+    });
+
+    // Check if it's an error response
+    if ('error' in result) {
+      throw new Error(result.error + (result.details ? `: ${result.details}` : ''));
+    }
+
+    return result.text;
+  } catch (error) {
+    console.error("[Transcription] Error transcribing call:", error);
+    throw error;
+  }
+}
+
+// ============ PROCESS CALL FUNCTION ============
+
+import { getCallById, updateCall, createCallGrade, getTeamMemberById } from "./db";
+
+export async function processCall(callId: number): Promise<void> {
+  const call = await getCallById(callId);
+  if (!call) {
+    console.error(`[ProcessCall] Call ${callId} not found`);
+    return;
+  }
+
+  if (!call.recordingUrl) {
+    console.error(`[ProcessCall] Call ${callId} has no recording URL`);
+    await updateCall(callId, { status: "failed" });
+    return;
+  }
+
+  try {
+    // Step 1: Transcribe
+    await updateCall(callId, { status: "transcribing" });
+    const transcript = await transcribeCallRecording(call.recordingUrl);
+    await updateCall(callId, { transcript });
+
+    // Step 2: Grade
+    await updateCall(callId, { status: "grading" });
+    
+    // Determine call type based on team member role
+    let callType: "qualification" | "offer" = "qualification";
+    let teamMemberName = call.teamMemberName || "Team Member";
+    
+    if (call.teamMemberId) {
+      const teamMember = await getTeamMemberById(call.teamMemberId);
+      if (teamMember) {
+        teamMemberName = teamMember.name;
+        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
+      }
+    }
+
+    const gradeResult = await gradeCall(transcript, callType, teamMemberName);
+
+    // Step 3: Save grade
+    await createCallGrade({
+      callId: call.id,
+      overallScore: gradeResult.overallScore.toString(),
+      overallGrade: gradeResult.overallGrade,
+      criteriaScores: gradeResult.criteriaScores,
+      strengths: gradeResult.strengths,
+      improvements: gradeResult.improvements,
+      coachingTips: gradeResult.coachingTips,
+      redFlags: gradeResult.redFlags,
+      summary: gradeResult.summary,
+      rubricType: callType === "qualification" ? "lead_manager" : "acquisition_manager",
+    });
+
+    // Step 4: Mark complete
+    await updateCall(callId, { status: "completed", callType });
+
+    console.log(`[ProcessCall] Successfully processed call ${callId}`);
+  } catch (error) {
+    console.error(`[ProcessCall] Error processing call ${callId}:`, error);
+    await updateCall(callId, { status: "failed" });
+  }
+}

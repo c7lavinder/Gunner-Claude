@@ -174,4 +174,43 @@
       max-width: 1280px; /* Standard content width */
     }
   }
+
+  /* Grade badge styles */
+  .grade-badge {
+    @apply inline-flex items-center justify-center font-bold rounded-lg px-3 py-1 text-sm;
+  }
+
+  .grade-a {
+    @apply bg-emerald-500 text-white;
+  }
+
+  .grade-b {
+    @apply bg-teal-500 text-white;
+  }
+
+  .grade-c {
+    @apply bg-yellow-500 text-white;
+  }
+
+  .grade-d {
+    @apply bg-orange-500 text-white;
+  }
+
+  .grade-f {
+    @apply bg-red-500 text-white;
+  }
+
+  /* Score progress bar */
+  .score-bar {
+    @apply h-2 rounded-full overflow-hidden bg-muted;
+  }
+
+  .score-bar-fill {
+    @apply h-full rounded-full transition-all duration-500;
+  }
+
+  /* Card hover effects */
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-lg hover:border-primary/20;
+  }
 }
