@@ -112,3 +112,14 @@
 - [x] Add easy posting workflow for quick content creation
 - [x] AI content generation for all platforms
 - [x] Add Social Media to navigation menu
+
+## Social Media Content Improvements
+- [x] Add brand profile table with website URL, brand description, mission statement
+- [x] Update Brand Content AI to pull from real call conversations (problems solved)
+- [x] Update Brand Content AI to reference business KPIs (deals closed, appointments)
+- [x] Update Content Creator AI to find attention-grabbing situations from calls
+- [x] Update Content Creator AI to suggest property photo content ideas
+- [x] Add website URL field to Branding tab (auto-extract colors/branding)
+- [x] Add brand description/voice section to Branding tab
+- [x] Add mission statement field to Branding tab
+- [x] Integrate call data into content generation prompts

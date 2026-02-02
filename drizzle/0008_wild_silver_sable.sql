@@ -1,0 +1,22 @@
+CREATE TABLE `brand_profile` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`websiteUrl` varchar(500),
+	`extractedColors` text,
+	`extractedLogo` varchar(500),
+	`companyName` varchar(255),
+	`brandDescription` text,
+	`brandVoice` text,
+	`missionStatement` text,
+	`tagline` varchar(500),
+	`targetAudience` text,
+	`uniqueValueProposition` text,
+	`keyMessages` text,
+	`facebookUrl` varchar(500),
+	`instagramUrl` varchar(500),
+	`twitterUrl` varchar(500),
+	`linkedinUrl` varchar(500),
+	`googleBusinessUrl` varchar(500),
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `brand_profile_id` PRIMARY KEY(`id`)
+);

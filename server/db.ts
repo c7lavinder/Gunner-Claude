@@ -7,9 +7,9 @@ import {
   InsertTrainingMaterial, InsertAIFeedback, InsertGradingRule,
   TrainingMaterial, AIFeedback, GradingRule,
   TeamTrainingItem, InsertTeamTrainingItem,
-  brandAssets, socialPosts, contentIdeas,
+  brandAssets, socialPosts, contentIdeas, brandProfile,
   InsertBrandAsset, InsertSocialPost, InsertContentIdea,
-  BrandAsset, SocialPost, ContentIdea
+  BrandAsset, SocialPost, ContentIdea, BrandProfile, InsertBrandProfile
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1003,4 +1003,214 @@ export async function deleteContentIdea(id: number): Promise<void> {
   if (!db) return;
 
   await db.delete(contentIdeas).where(eq(contentIdeas.id, id));
+}
+
+
+// ============ BRAND PROFILE FUNCTIONS ============
+
+export async function getBrandProfile(): Promise<BrandProfile | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(brandProfile).limit(1);
+  return result[0] || null;
+}
+
+export async function upsertBrandProfile(profile: Partial<InsertBrandProfile>): Promise<BrandProfile | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Check if profile exists
+  const existing = await getBrandProfile();
+  
+  if (existing) {
+    // Update existing profile
+    await db.update(brandProfile).set(profile).where(eq(brandProfile.id, existing.id));
+    return await getBrandProfile();
+  } else {
+    // Create new profile
+    const result = await db.insert(brandProfile).values(profile as InsertBrandProfile);
+    const insertId = result[0].insertId;
+    const created = await db.select().from(brandProfile).where(eq(brandProfile.id, insertId)).limit(1);
+    return created[0] || null;
+  }
+}
+
+// ============ CONTENT GENERATION DATA HELPERS ============
+
+/**
+ * Get recent call conversations for content generation
+ * Returns interesting/notable calls with transcripts
+ */
+export async function getCallsForContentGeneration(limit: number = 20): Promise<Array<{
+  id: number;
+  transcript: string | null;
+  contactName: string | null;
+  teamMemberName: string | null;
+  overallScore: string | null;
+  strengths: string | null;
+  improvements: string | null;
+  callOutcome: string | null;
+  duration: number | null;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db
+    .select({
+      id: calls.id,
+      transcript: calls.transcript,
+      contactName: calls.contactName,
+      teamMemberName: teamMembers.name,
+      overallScore: callGrades.overallScore,
+      strengths: callGrades.strengths,
+      improvements: callGrades.improvements,
+      callOutcome: calls.callOutcome,
+      duration: calls.duration,
+    })
+    .from(calls)
+    .leftJoin(callGrades, eq(calls.id, callGrades.callId))
+    .leftJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
+    .where(
+      and(
+        eq(calls.classification, "conversation"),
+        eq(calls.status, "completed")
+      )
+    )
+    .orderBy(desc(calls.createdAt))
+    .limit(limit);
+
+  return result.map(r => ({
+    ...r,
+    strengths: r.strengths as string | null,
+    improvements: r.improvements as string | null,
+    callOutcome: r.callOutcome as string | null,
+  }));
+}
+
+/**
+ * Get business KPIs for content generation
+ */
+export async function getKPIsForContentGeneration(): Promise<{
+  totalDeals: number;
+  appointmentsThisMonth: number;
+  offersAcceptedThisMonth: number;
+  averageScore: number | null;
+  topPerformer: string | null;
+}> {
+  const db = await getDb();
+  if (!db) return {
+    totalDeals: 0,
+    appointmentsThisMonth: 0,
+    offersAcceptedThisMonth: 0,
+    averageScore: null,
+    topPerformer: null,
+  };
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // Get total deals (offers accepted all time)
+  const totalDealsResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(calls)
+    .where(eq(calls.callOutcome, "offer_accepted"));
+  const totalDeals = totalDealsResult[0]?.count || 0;
+
+  // Get appointments this month
+  const appointmentsResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(calls)
+    .where(
+      and(
+        eq(calls.callOutcome, "appointment_set"),
+        gte(calls.createdAt, startOfMonth)
+      )
+    );
+  const appointmentsThisMonth = appointmentsResult[0]?.count || 0;
+
+  // Get offers accepted this month
+  const offersResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(calls)
+    .where(
+      and(
+        eq(calls.callOutcome, "offer_accepted"),
+        gte(calls.createdAt, startOfMonth)
+      )
+    );
+  const offersAcceptedThisMonth = offersResult[0]?.count || 0;
+
+  // Get average score
+  const avgScoreResult = await db
+    .select({ avg: sql<number>`AVG(${callGrades.overallScore})` })
+    .from(callGrades);
+  const averageScore = avgScoreResult[0]?.avg || null;
+
+  // Get top performer this month
+  const topPerformerResult = await db
+    .select({
+      name: teamMembers.name,
+      avgScore: sql<number>`AVG(${callGrades.overallScore})`,
+    })
+    .from(callGrades)
+    .innerJoin(calls, eq(callGrades.callId, calls.id))
+    .innerJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
+    .where(gte(calls.createdAt, startOfMonth))
+    .groupBy(teamMembers.id)
+    .orderBy(desc(sql`AVG(${callGrades.overallScore})`))
+    .limit(1);
+  const topPerformer = topPerformerResult[0]?.name || null;
+
+  return {
+    totalDeals,
+    appointmentsThisMonth,
+    offersAcceptedThisMonth,
+    averageScore,
+    topPerformer,
+  };
+}
+
+/**
+ * Get interesting call stories for content creator posts
+ * Finds calls with notable situations, objections handled, or unique scenarios
+ */
+export async function getInterestingCallStories(limit: number = 10): Promise<Array<{
+  id: number;
+  transcript: string | null;
+  contactName: string | null;
+  strengths: string | null;
+  coachingTips: string | null;
+  overallScore: string | null;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get high-scoring calls with good stories
+  const result = await db
+    .select({
+      id: calls.id,
+      transcript: calls.transcript,
+      contactName: calls.contactName,
+      strengths: callGrades.strengths,
+      coachingTips: callGrades.coachingTips,
+      overallScore: callGrades.overallScore,
+    })
+    .from(calls)
+    .innerJoin(callGrades, eq(calls.id, callGrades.callId))
+    .where(
+      and(
+        eq(calls.classification, "conversation"),
+        eq(calls.status, "completed"),
+        gte(callGrades.overallScore, "70")
+      )
+    )
+    .orderBy(desc(callGrades.overallScore))
+    .limit(limit);
+
+  return result.map(r => ({
+    ...r,
+    strengths: r.strengths as string | null,
+    coachingTips: r.coachingTips as string | null,
+  }));
 }

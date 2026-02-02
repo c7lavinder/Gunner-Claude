@@ -60,6 +60,13 @@ import {
   getContentIdeaById,
   updateContentIdea,
   deleteContentIdea,
+  // Brand profile
+  getBrandProfile,
+  upsertBrandProfile,
+  // Content generation helpers
+  getCallsForContentGeneration,
+  getKPIsForContentGeneration,
+  getInterestingCallStories,
 } from "./db";
 import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
@@ -955,6 +962,248 @@ Provide ${input.count} unique content ideas in JSON format.`,
           return { ideas: savedIdeas };
         }
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate ideas" });
+      }),
+  }),
+
+  // ============ BRAND PROFILE ============
+  brandProfile: router({
+    get: protectedProcedure.query(async () => {
+      return await getBrandProfile();
+    }),
+
+    update: protectedProcedure
+      .input(z.object({
+        websiteUrl: z.string().optional(),
+        extractedColors: z.string().optional(),
+        extractedLogo: z.string().optional(),
+        companyName: z.string().optional(),
+        brandDescription: z.string().optional(),
+        brandVoice: z.string().optional(),
+        missionStatement: z.string().optional(),
+        tagline: z.string().optional(),
+        targetAudience: z.string().optional(),
+        uniqueValueProposition: z.string().optional(),
+        keyMessages: z.string().optional(),
+        facebookUrl: z.string().optional(),
+        instagramUrl: z.string().optional(),
+        twitterUrl: z.string().optional(),
+        linkedinUrl: z.string().optional(),
+        googleBusinessUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await upsertBrandProfile(input);
+      }),
+
+    extractFromWebsite: protectedProcedure
+      .input(z.object({ url: z.string() }))
+      .mutation(async ({ input }) => {
+        // Use LLM to analyze website and extract branding info
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a brand analyst. Given a website URL, analyze the brand identity and extract key branding elements. Return a JSON object with the following fields:
+- colors: array of hex color codes used on the site
+- companyName: the company name
+- tagline: any tagline or slogan found
+- brandVoice: description of the tone/voice (professional, casual, etc.)
+- targetAudience: who the brand seems to target`,
+            },
+            {
+              role: "user",
+              content: `Analyze the brand identity from this website: ${input.url}`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "brand_analysis",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  colors: { type: "array", items: { type: "string" } },
+                  companyName: { type: "string" },
+                  tagline: { type: "string" },
+                  brandVoice: { type: "string" },
+                  targetAudience: { type: "string" },
+                },
+                required: ["colors", "companyName", "tagline", "brandVoice", "targetAudience"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (content && typeof content === "string") {
+          const parsed = JSON.parse(content);
+          return {
+            extractedColors: JSON.stringify(parsed.colors),
+            companyName: parsed.companyName,
+            tagline: parsed.tagline,
+            brandVoice: parsed.brandVoice,
+            targetAudience: parsed.targetAudience,
+          };
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to extract brand info" });
+      }),
+  }),
+
+  // ============ CONTENT GENERATION WITH CALL DATA ============
+  contentGeneration: router({
+    // Get data for content generation
+    getData: protectedProcedure.query(async () => {
+      const [calls, kpis, stories, brandProfileData] = await Promise.all([
+        getCallsForContentGeneration(20),
+        getKPIsForContentGeneration(),
+        getInterestingCallStories(10),
+        getBrandProfile(),
+      ]);
+      return { calls, kpis, stories, brandProfile: brandProfileData };
+    }),
+
+    // Generate brand content from call data
+    generateBrandContent: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["blog", "meta", "google_business", "linkedin"]),
+        contentType: z.enum(["problem_solved", "success_story", "market_insight", "tips"]),
+      }))
+      .mutation(async ({ input }) => {
+        const [calls, kpis, brandProfileData] = await Promise.all([
+          getCallsForContentGeneration(10),
+          getKPIsForContentGeneration(),
+          getBrandProfile(),
+        ]);
+
+        // Build context from real call data
+        const callContext = calls.slice(0, 5).map(c => ({
+          situation: c.transcript?.substring(0, 500) || "No transcript",
+          outcome: c.callOutcome,
+          strengths: c.strengths,
+        }));
+
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a content creator for ${brandProfileData?.companyName || "a real estate wholesaling company"}.
+
+Brand Voice: ${brandProfileData?.brandVoice || "Professional yet approachable"}
+Mission: ${brandProfileData?.missionStatement || "Help homeowners sell their properties quickly and hassle-free"}
+Target Audience: ${brandProfileData?.targetAudience || "Homeowners facing difficult situations"}
+
+Business KPIs:
+- Total deals closed: ${kpis.totalDeals}
+- Appointments this month: ${kpis.appointmentsThisMonth}
+- Offers accepted this month: ${kpis.offersAcceptedThisMonth}
+
+Recent call situations (use these for authentic content):
+${JSON.stringify(callContext, null, 2)}
+
+Create content that:
+1. References real situations from calls (anonymized)
+2. Shows how we solve problems for sellers
+3. Demonstrates our expertise and track record
+4. Maintains our brand voice`,
+            },
+            {
+              role: "user",
+              content: `Create a ${input.contentType.replace("_", " ")} post for ${input.platform}. Make it authentic by drawing from the real call situations provided.`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "brand_content",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  content: { type: "string" },
+                  hashtags: { type: "array", items: { type: "string" } },
+                  callToAction: { type: "string" },
+                },
+                required: ["title", "content", "hashtags", "callToAction"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (content && typeof content === "string") {
+          return JSON.parse(content);
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate content" });
+      }),
+
+    // Generate creator content (attention-grabbing stories)
+    generateCreatorContent: protectedProcedure
+      .input(z.object({
+        style: z.enum(["crazy_story", "property_walkthrough", "day_in_life", "tips_tricks"]),
+      }))
+      .mutation(async ({ input }) => {
+        const [stories, brandProfileData] = await Promise.all([
+          getInterestingCallStories(10),
+          getBrandProfile(),
+        ]);
+
+        // Extract interesting moments from calls
+        const storyContext = stories.map(s => ({
+          transcript_snippet: s.transcript?.substring(0, 300) || "No transcript",
+          strengths: s.strengths,
+          score: s.overallScore,
+        }));
+
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a content creator building a personal brand in real estate wholesaling.
+
+Brand: ${brandProfileData?.companyName || "Real estate investor"}
+Voice: Authentic, engaging, sometimes edgy - designed to grab attention on X/Twitter
+
+Recent interesting call moments (use these for authentic stories):
+${JSON.stringify(storyContext, null, 2)}
+
+Create content that:
+1. Grabs attention in the first line
+2. Tells a real story from actual calls (anonymized)
+3. Shows the reality of real estate wholesaling
+4. Encourages engagement and discussion`,
+            },
+            {
+              role: "user",
+              content: `Create a ${input.style.replace(/_/g, " ")} post for X/Twitter. Make it attention-grabbing and authentic based on real call situations.`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "creator_content",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  hook: { type: "string", description: "Attention-grabbing first line" },
+                  content: { type: "string" },
+                  hashtags: { type: "array", items: { type: "string" } },
+                },
+                required: ["hook", "content", "hashtags"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (content && typeof content === "string") {
+          return JSON.parse(content);
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate content" });
       }),
   }),
 });

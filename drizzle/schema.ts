@@ -405,3 +405,38 @@ export const contentIdeas = mysqlTable("content_ideas", {
 
 export type ContentIdea = typeof contentIdeas.$inferSelect;
 export type InsertContentIdea = typeof contentIdeas.$inferInsert;
+
+
+/**
+ * Brand Profile - stores company brand identity and settings
+ */
+export const brandProfile = mysqlTable("brand_profile", {
+  id: int("id").autoincrement().primaryKey(),
+  // Website and branding
+  websiteUrl: varchar("websiteUrl", { length: 500 }),
+  extractedColors: text("extractedColors"), // JSON array of colors extracted from website
+  extractedLogo: varchar("extractedLogo", { length: 500 }), // URL to extracted logo
+  // Brand identity
+  companyName: varchar("companyName", { length: 255 }),
+  brandDescription: text("brandDescription"), // How we describe ourselves
+  brandVoice: text("brandVoice"), // Tone and style of communication
+  missionStatement: text("missionStatement"),
+  tagline: varchar("tagline", { length: 500 }),
+  // Target audience
+  targetAudience: text("targetAudience"), // Who we serve
+  uniqueValueProposition: text("uniqueValueProposition"), // What makes us different
+  // Key messaging
+  keyMessages: text("keyMessages"), // JSON array of key messages/talking points
+  // Social media handles
+  facebookUrl: varchar("facebookUrl", { length: 500 }),
+  instagramUrl: varchar("instagramUrl", { length: 500 }),
+  twitterUrl: varchar("twitterUrl", { length: 500 }),
+  linkedinUrl: varchar("linkedinUrl", { length: 500 }),
+  googleBusinessUrl: varchar("googleBusinessUrl", { length: 500 }),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BrandProfile = typeof brandProfile.$inferSelect;
+export type InsertBrandProfile = typeof brandProfile.$inferInsert;

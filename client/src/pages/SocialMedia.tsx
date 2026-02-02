@@ -9,15 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { 
   Building2, User, Plus, Sparkles, Calendar, FileText, 
   Facebook, Instagram, MapPin, Twitter, Linkedin, Trash2,
-  Edit, Send, Clock, CheckCircle, XCircle, Lightbulb,
-  ChevronLeft, ChevronRight, Image as ImageIcon
+  Clock, Lightbulb, ChevronLeft, ChevronRight, Image as ImageIcon,
+  Globe, Palette, Target, MessageSquare, Link as LinkIcon, Loader2
 } from "lucide-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from "date-fns";
 
 type ContentMode = "brand" | "creator";
 
@@ -64,9 +63,8 @@ export default function SocialMedia() {
   });
   const [generateForm, setGenerateForm] = useState({
     platform: "" as string,
-    topic: "",
-    tone: "professional yet approachable",
-    additionalContext: "",
+    contentType: "problem_solved" as string,
+    style: "crazy_story" as string,
   });
   const [newIdea, setNewIdea] = useState<{
     title: string;
@@ -88,6 +86,8 @@ export default function SocialMedia() {
     status: "new",
   });
   const { data: brandAssets, refetch: refetchAssets } = trpc.brandAssets.list.useQuery({});
+  const { data: brandProfile, refetch: refetchBrandProfile } = trpc.brandProfile.get.useQuery();
+  const { data: contentData } = trpc.contentGeneration.getData.useQuery();
   
   // Calendar posts
   const calendarStart = startOfMonth(calendarMonth);
@@ -116,18 +116,34 @@ export default function SocialMedia() {
     onError: (error) => toast.error(error.message),
   });
 
-  const generateContent = trpc.socialPosts.generateContent.useMutation({
+  const generateBrandContent = trpc.contentGeneration.generateBrandContent.useMutation({
     onSuccess: (data) => {
       setNewPost({
         ...newPost,
         platform: generateForm.platform,
         title: data.title || "",
-        content: data.content,
+        content: data.content + "\n\n" + data.callToAction,
         hashtags: data.hashtags?.join(" ") || "",
       });
       setIsGenerateOpen(false);
       setIsCreatePostOpen(true);
-      toast.success("Content generated! Review and edit before posting.");
+      toast.success("Content generated from your call data! Review and edit before posting.");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const generateCreatorContent = trpc.contentGeneration.generateCreatorContent.useMutation({
+    onSuccess: (data) => {
+      setNewPost({
+        ...newPost,
+        platform: "x_twitter",
+        title: "",
+        content: data.hook + "\n\n" + data.content,
+        hashtags: data.hashtags?.join(" ") || "",
+      });
+      setIsGenerateOpen(false);
+      setIsCreatePostOpen(true);
+      toast.success("Content generated from your call stories! Review and edit before posting.");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -174,6 +190,28 @@ export default function SocialMedia() {
     onError: (error) => toast.error(error.message),
   });
 
+  const updateBrandProfile = trpc.brandProfile.update.useMutation({
+    onSuccess: () => {
+      toast.success("Brand profile updated");
+      refetchBrandProfile();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const extractFromWebsite = trpc.brandProfile.extractFromWebsite.useMutation({
+    onSuccess: (data) => {
+      updateBrandProfile.mutate({
+        extractedColors: data.extractedColors,
+        companyName: data.companyName,
+        tagline: data.tagline,
+        brandVoice: data.brandVoice,
+        targetAudience: data.targetAudience,
+      });
+      toast.success("Brand info extracted from website!");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
   const handleCreatePost = () => {
     if (!newPost.platform || !newPost.content) {
       toast.error("Platform and content are required");
@@ -191,65 +229,89 @@ export default function SocialMedia() {
   };
 
   const handleGenerateContent = () => {
-    if (!generateForm.platform || !generateForm.topic) {
-      toast.error("Platform and topic are required");
-      return;
+    if (contentMode === "brand") {
+      if (!generateForm.platform) {
+        toast.error("Platform is required");
+        return;
+      }
+      generateBrandContent.mutate({
+        platform: generateForm.platform as any,
+        contentType: generateForm.contentType as any,
+      });
+    } else {
+      generateCreatorContent.mutate({
+        style: generateForm.style as any,
+      });
     }
-    generateContent.mutate({
-      contentType: contentMode,
-      platform: generateForm.platform as any,
-      topic: generateForm.topic,
-      tone: generateForm.tone,
-      additionalContext: generateForm.additionalContext || undefined,
-    });
   };
 
   // Calendar helpers
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   const getPostsForDay = (day: Date) => {
-    return calendarPosts?.filter(post => 
-      post.scheduledAt && isSameDay(new Date(post.scheduledAt), day)
-    ) || [];
+    return calendarPosts?.filter((post) => {
+      if (!post.scheduledAt) return false;
+      return isSameDay(new Date(post.scheduledAt), day);
+    }) || [];
   };
 
-  // Brand content platforms
   const brandPlatforms = ["blog", "meta_facebook", "meta_instagram", "google_business", "linkedin"];
-  // Creator platforms
-  const creatorPlatforms = ["x_twitter", "meta_instagram", "linkedin"];
-
-  const availablePlatforms = contentMode === "brand" ? brandPlatforms : creatorPlatforms;
+  const creatorPlatforms = ["x_twitter"];
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header with mode toggle */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Social Media Content</h1>
-          <p className="text-muted-foreground">Create and schedule content for your brand and personal accounts</p>
-        </div>
-        <div className="flex gap-2 p-1 bg-muted rounded-lg">
-          <Button
-            variant={contentMode === "brand" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setContentMode("brand")}
-            className="gap-2"
-          >
-            <Building2 className="h-4 w-4" />
-            Brand Content
-          </Button>
-          <Button
-            variant={contentMode === "creator" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setContentMode("creator")}
-            className="gap-2"
-          >
-            <User className="h-4 w-4" />
-            Content Creator
-          </Button>
-        </div>
+    <div className="space-y-6">
+      {/* Mode Toggle */}
+      <div className="flex items-center gap-4">
+        <Button
+          variant={contentMode === "brand" ? "default" : "outline"}
+          onClick={() => setContentMode("brand")}
+          className="gap-2"
+        >
+          <Building2 className="h-4 w-4" />
+          Brand Content
+        </Button>
+        <Button
+          variant={contentMode === "creator" ? "default" : "outline"}
+          onClick={() => setContentMode("creator")}
+          className="gap-2"
+        >
+          <User className="h-4 w-4" />
+          Content Creator
+        </Button>
       </div>
 
-      {/* Main content tabs */}
+      {/* Content Data Preview */}
+      {contentData && (
+        <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-purple-600" />
+              AI Content Generation Data
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Calls Available</p>
+                <p className="font-semibold">{contentData.calls.length} conversations</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Total Deals</p>
+                <p className="font-semibold">{contentData.kpis.totalDeals}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Appointments (Month)</p>
+                <p className="font-semibold">{contentData.kpis.appointmentsThisMonth}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Story Ideas</p>
+                <p className="font-semibold">{contentData.stories.length} high-score calls</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="posts">Posts</TabsTrigger>
@@ -268,11 +330,11 @@ export default function SocialMedia() {
                   Create Post
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Create New Post</DialogTitle>
                   <DialogDescription>
-                    Create content for {contentMode === "brand" ? "your brand" : "your personal account"}
+                    Create a post for {contentMode === "brand" ? "your brand channels" : "your personal brand"}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
@@ -283,7 +345,7 @@ export default function SocialMedia() {
                         <SelectValue placeholder="Select platform" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availablePlatforms.map((p) => (
+                        {(contentMode === "brand" ? brandPlatforms : creatorPlatforms).map((p) => (
                           <SelectItem key={p} value={p}>
                             <div className="flex items-center gap-2">
                               {platformIcons[p]}
@@ -294,23 +356,21 @@ export default function SocialMedia() {
                       </SelectContent>
                     </Select>
                   </div>
-                  {newPost.platform === "blog" && (
-                    <div className="space-y-2">
-                      <Label>Title</Label>
-                      <Input
-                        value={newPost.title}
-                        onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-                        placeholder="Blog post title"
-                      />
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label>Title (optional)</Label>
+                    <Input
+                      value={newPost.title}
+                      onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+                      placeholder="Post title..."
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label>Content</Label>
                     <Textarea
                       value={newPost.content}
                       onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
                       placeholder="Write your post content..."
-                      rows={6}
+                      rows={5}
                     />
                   </div>
                   <div className="space-y-2">
@@ -343,64 +403,76 @@ export default function SocialMedia() {
               <DialogTrigger asChild>
                 <Button variant="outline" className="gap-2">
                   <Sparkles className="h-4 w-4" />
-                  Generate with AI
+                  Generate from Calls
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Generate Content with AI</DialogTitle>
+                  <DialogTitle>Generate Content from Call Data</DialogTitle>
                   <DialogDescription>
-                    Let AI create content based on your topic and preferences
+                    AI will analyze your recent calls and KPIs to create authentic content
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Platform</Label>
-                    <Select value={generateForm.platform} onValueChange={(v) => setGenerateForm({ ...generateForm, platform: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select platform" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availablePlatforms.map((p) => (
-                          <SelectItem key={p} value={p}>
-                            <div className="flex items-center gap-2">
-                              {platformIcons[p]}
-                              {platformLabels[p]}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Topic</Label>
-                    <Input
-                      value={generateForm.topic}
-                      onChange={(e) => setGenerateForm({ ...generateForm, topic: e.target.value })}
-                      placeholder="e.g., Benefits of selling to cash buyers"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tone</Label>
-                    <Input
-                      value={generateForm.tone}
-                      onChange={(e) => setGenerateForm({ ...generateForm, tone: e.target.value })}
-                      placeholder="e.g., professional, friendly, urgent"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Additional Context (optional)</Label>
-                    <Textarea
-                      value={generateForm.additionalContext}
-                      onChange={(e) => setGenerateForm({ ...generateForm, additionalContext: e.target.value })}
-                      placeholder="Any specific points to include..."
-                      rows={3}
-                    />
-                  </div>
+                  {contentMode === "brand" ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Platform</Label>
+                        <Select value={generateForm.platform} onValueChange={(v) => setGenerateForm({ ...generateForm, platform: v })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select platform" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="blog">Blog Post</SelectItem>
+                            <SelectItem value="meta">Facebook/Instagram</SelectItem>
+                            <SelectItem value="google_business">Google Business</SelectItem>
+                            <SelectItem value="linkedin">LinkedIn</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Content Type</Label>
+                        <Select value={generateForm.contentType} onValueChange={(v) => setGenerateForm({ ...generateForm, contentType: v })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="problem_solved">Problem We Solved</SelectItem>
+                            <SelectItem value="success_story">Success Story</SelectItem>
+                            <SelectItem value="market_insight">Market Insight</SelectItem>
+                            <SelectItem value="tips">Tips for Sellers</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label>Content Style</Label>
+                      <Select value={generateForm.style} onValueChange={(v) => setGenerateForm({ ...generateForm, style: v })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="crazy_story">Crazy Story (Attention Grabber)</SelectItem>
+                          <SelectItem value="property_walkthrough">Property Walkthrough</SelectItem>
+                          <SelectItem value="day_in_life">Day in the Life</SelectItem>
+                          <SelectItem value="tips_tricks">Tips & Tricks</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setIsGenerateOpen(false)}>Cancel</Button>
-                    <Button onClick={handleGenerateContent} disabled={generateContent.isPending}>
-                      {generateContent.isPending ? "Generating..." : "Generate"}
+                    <Button 
+                      onClick={handleGenerateContent} 
+                      disabled={generateBrandContent.isPending || generateCreatorContent.isPending}
+                    >
+                      {(generateBrandContent.isPending || generateCreatorContent.isPending) ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : "Generate"}
                     </Button>
                   </div>
                 </div>
@@ -415,7 +487,7 @@ export default function SocialMedia() {
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <FileText className="h-12 w-12 text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">No posts yet</p>
-                  <p className="text-sm text-muted-foreground">Create your first post or generate one with AI</p>
+                  <p className="text-sm text-muted-foreground">Create your first post or generate one from your call data</p>
                 </CardContent>
               </Card>
             )}
@@ -489,7 +561,6 @@ export default function SocialMedia() {
                     {day}
                   </div>
                 ))}
-                {/* Padding for first week */}
                 {Array.from({ length: calendarStart.getDay() }).map((_, i) => (
                   <div key={`pad-${i}`} className="h-24 bg-muted/30 rounded" />
                 ))}
@@ -501,24 +572,24 @@ export default function SocialMedia() {
                       key={day.toISOString()}
                       className={`h-24 border rounded p-1 ${isToday ? "border-primary bg-primary/5" : "border-border"}`}
                     >
-                      <div className={`text-sm font-medium ${isToday ? "text-primary" : ""}`}>
+                      <div className={`text-xs font-medium ${isToday ? "text-primary" : "text-muted-foreground"}`}>
                         {format(day, "d")}
                       </div>
-                      <ScrollArea className="h-16">
-                        {dayPosts.map((post) => (
+                      <div className="space-y-0.5 mt-1">
+                        {dayPosts.slice(0, 2).map((post) => (
                           <div
                             key={post.id}
-                            className={`text-xs p-1 rounded mb-1 truncate ${
-                              post.contentType === "brand" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"
-                            }`}
+                            className="text-xs truncate px-1 py-0.5 rounded bg-blue-100 text-blue-800"
                           >
-                            <div className="flex items-center gap-1">
-                              {platformIcons[post.platform]}
-                              <span className="truncate">{post.title || post.content.substring(0, 20)}...</span>
-                            </div>
+                            {platformLabels[post.platform]}
                           </div>
                         ))}
-                      </ScrollArea>
+                        {dayPosts.length > 2 && (
+                          <div className="text-xs text-muted-foreground px-1">
+                            +{dayPosts.length - 2} more
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -540,7 +611,7 @@ export default function SocialMedia() {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Add Content Idea</DialogTitle>
+                    <DialogTitle>Save Content Idea</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="space-y-2">
@@ -548,7 +619,7 @@ export default function SocialMedia() {
                       <Input
                         value={newIdea.title}
                         onChange={(e) => setNewIdea({ ...newIdea, title: e.target.value })}
-                        placeholder="Content idea title"
+                        placeholder="Idea title..."
                       />
                     </div>
                     <div className="space-y-2">
@@ -561,24 +632,19 @@ export default function SocialMedia() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Category</Label>
-                      <Input
-                        value={newIdea.category}
-                        onChange={(e) => setNewIdea({ ...newIdea, category: e.target.value })}
-                        placeholder="e.g., Market Tips, Success Stories"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Target Platform</Label>
-                      <Select value={newIdea.targetPlatform} onValueChange={(v) => setNewIdea({ ...newIdea, targetPlatform: v as "x_twitter" | "blog" | "meta" | "any" })}>
+                      <Label>Platform</Label>
+                      <Select 
+                        value={newIdea.targetPlatform} 
+                        onValueChange={(v) => setNewIdea({ ...newIdea, targetPlatform: v as typeof newIdea.targetPlatform })}
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="any">Any Platform</SelectItem>
                           <SelectItem value="x_twitter">X (Twitter)</SelectItem>
                           <SelectItem value="blog">Blog</SelectItem>
-                          <SelectItem value="meta">Meta (FB/IG)</SelectItem>
+                          <SelectItem value="meta">Meta</SelectItem>
+                          <SelectItem value="any">Any</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -591,11 +657,10 @@ export default function SocialMedia() {
                   </div>
                 </DialogContent>
               </Dialog>
-
               <Button
                 variant="outline"
                 className="gap-2"
-                onClick={() => generateIdeas.mutate({ count: 5 })}
+                onClick={() => generateIdeas.mutate({ count: 5, targetPlatform: "x_twitter" })}
                 disabled={generateIdeas.isPending}
               >
                 <Sparkles className="h-4 w-4" />
@@ -617,17 +682,7 @@ export default function SocialMedia() {
                 <Card key={idea.id}>
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        {idea.isAiGenerated === "true" && (
-                          <Badge variant="outline" className="gap-1">
-                            <Sparkles className="h-3 w-3" />
-                            AI
-                          </Badge>
-                        )}
-                        {idea.category && (
-                          <Badge variant="secondary">{idea.category}</Badge>
-                        )}
-                      </div>
+                      <Badge variant="secondary">{idea.targetPlatform}</Badge>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -639,25 +694,9 @@ export default function SocialMedia() {
                     <CardTitle className="text-base">{idea.title}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-muted-foreground">{idea.description}</p>
-                    <div className="flex items-center gap-2 mt-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setGenerateForm({
-                            platform: idea.targetPlatform === "any" ? "x_twitter" : idea.targetPlatform || "x_twitter",
-                            topic: idea.title,
-                            tone: "professional yet approachable",
-                            additionalContext: idea.description || "",
-                          });
-                          setIsGenerateOpen(true);
-                        }}
-                      >
-                        <Sparkles className="h-3 w-3 mr-1" />
-                        Create Post
-                      </Button>
-                    </div>
+                    {idea.description && (
+                      <p className="text-sm text-muted-foreground">{idea.description}</p>
+                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -667,70 +706,100 @@ export default function SocialMedia() {
 
         {/* Branding Tab (Brand only) */}
         {contentMode === "brand" && (
-          <TabsContent value="branding" className="space-y-4">
-            <div className="flex gap-2">
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Brand Asset
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add Brand Asset</DialogTitle>
-                    <DialogDescription>
-                      Add logos, color palettes, style guides, and other brand assets
-                    </DialogDescription>
-                  </DialogHeader>
-                  <AddBrandAssetForm onSubmit={(data) => createAsset.mutate(data)} isPending={createAsset.isPending} />
-                </DialogContent>
-              </Dialog>
-            </div>
+          <TabsContent value="branding" className="space-y-6">
+            {/* Brand Profile Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  Brand Profile
+                </CardTitle>
+                <CardDescription>
+                  Define your brand identity to help AI generate consistent content
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <BrandProfileForm 
+                  profile={brandProfile} 
+                  onUpdate={(data) => updateBrandProfile.mutate(data)}
+                  onExtractFromWebsite={(url) => extractFromWebsite.mutate({ url })}
+                  isPending={updateBrandProfile.isPending}
+                  isExtracting={extractFromWebsite.isPending}
+                />
+              </CardContent>
+            </Card>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {brandAssets?.length === 0 && (
-                <Card className="col-span-full">
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <ImageIcon className="h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No brand assets yet</p>
-                    <p className="text-sm text-muted-foreground">Add your logo, colors, and style guides</p>
-                  </CardContent>
-                </Card>
-              )}
-              {brandAssets?.map((asset) => (
-                <Card key={asset.id}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <Badge variant="secondary">{asset.assetType.replace("_", " ")}</Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteAsset.mutate({ id: asset.id })}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+            {/* Brand Assets Section */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <ImageIcon className="h-5 w-5" />
+                      Brand Assets
+                    </CardTitle>
+                    <CardDescription>
+                      Logos, images, and other brand materials
+                    </CardDescription>
+                  </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add Asset
                       </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add Brand Asset</DialogTitle>
+                      </DialogHeader>
+                      <AddBrandAssetForm onSubmit={(data) => createAsset.mutate(data)} isPending={createAsset.isPending} />
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {brandAssets?.length === 0 && (
+                    <div className="col-span-full text-center py-8 text-muted-foreground">
+                      No brand assets yet. Add your logo, images, and other materials.
                     </div>
-                    <CardTitle className="text-base">{asset.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {asset.description && (
-                      <p className="text-sm text-muted-foreground mb-2">{asset.description}</p>
-                    )}
-                    {asset.fileUrl && (
-                      <a
-                        href={asset.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:underline"
-                      >
-                        View File
-                      </a>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  )}
+                  {brandAssets?.map((asset) => (
+                    <Card key={asset.id}>
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <Badge variant="secondary">{asset.assetType.replace("_", " ")}</Badge>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteAsset.mutate({ id: asset.id })}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                        <CardTitle className="text-base">{asset.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {asset.description && (
+                          <p className="text-sm text-muted-foreground mb-2">{asset.description}</p>
+                        )}
+                        {asset.fileUrl && (
+                          <a
+                            href={asset.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:underline"
+                          >
+                            View File
+                          </a>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         )}
       </Tabs>
@@ -738,7 +807,276 @@ export default function SocialMedia() {
   );
 }
 
-// Separate component for add brand asset form
+// Brand Profile Form Component
+function BrandProfileForm({ 
+  profile, 
+  onUpdate, 
+  onExtractFromWebsite,
+  isPending,
+  isExtracting
+}: { 
+  profile: any; 
+  onUpdate: (data: any) => void;
+  onExtractFromWebsite: (url: string) => void;
+  isPending: boolean;
+  isExtracting: boolean;
+}) {
+  const [form, setForm] = useState({
+    websiteUrl: profile?.websiteUrl || "",
+    companyName: profile?.companyName || "",
+    tagline: profile?.tagline || "",
+    brandDescription: profile?.brandDescription || "",
+    brandVoice: profile?.brandVoice || "",
+    missionStatement: profile?.missionStatement || "",
+    targetAudience: profile?.targetAudience || "",
+    uniqueValueProposition: profile?.uniqueValueProposition || "",
+    keyMessages: profile?.keyMessages || "",
+    facebookUrl: profile?.facebookUrl || "",
+    instagramUrl: profile?.instagramUrl || "",
+    twitterUrl: profile?.twitterUrl || "",
+    linkedinUrl: profile?.linkedinUrl || "",
+    googleBusinessUrl: profile?.googleBusinessUrl || "",
+  });
+
+  const [websiteInput, setWebsiteInput] = useState("");
+
+  // Update form when profile changes
+  useState(() => {
+    if (profile) {
+      setForm({
+        websiteUrl: profile.websiteUrl || "",
+        companyName: profile.companyName || "",
+        tagline: profile.tagline || "",
+        brandDescription: profile.brandDescription || "",
+        brandVoice: profile.brandVoice || "",
+        missionStatement: profile.missionStatement || "",
+        targetAudience: profile.targetAudience || "",
+        uniqueValueProposition: profile.uniqueValueProposition || "",
+        keyMessages: profile.keyMessages || "",
+        facebookUrl: profile.facebookUrl || "",
+        instagramUrl: profile.instagramUrl || "",
+        twitterUrl: profile.twitterUrl || "",
+        linkedinUrl: profile.linkedinUrl || "",
+        googleBusinessUrl: profile.googleBusinessUrl || "",
+      });
+    }
+  });
+
+  const extractedColors = profile?.extractedColors ? JSON.parse(profile.extractedColors) : [];
+
+  return (
+    <div className="space-y-6">
+      {/* Website URL Extraction */}
+      <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+        <div className="flex items-center gap-2 mb-2">
+          <Globe className="h-5 w-5 text-blue-600" />
+          <h3 className="font-semibold">Extract Brand from Website</h3>
+        </div>
+        <p className="text-sm text-muted-foreground mb-3">
+          Enter your website URL and we'll automatically extract colors, company name, and brand voice
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={websiteInput}
+            onChange={(e) => setWebsiteInput(e.target.value)}
+            placeholder="https://yourcompany.com"
+            className="flex-1"
+          />
+          <Button 
+            onClick={() => onExtractFromWebsite(websiteInput)}
+            disabled={isExtracting || !websiteInput}
+          >
+            {isExtracting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Extracting...
+              </>
+            ) : "Extract"}
+          </Button>
+        </div>
+        {extractedColors.length > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Extracted Colors:</span>
+            <div className="flex gap-1">
+              {extractedColors.map((color: string, i: number) => (
+                <div
+                  key={i}
+                  className="w-6 h-6 rounded border"
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Brand Identity */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            Company Name
+          </Label>
+          <Input
+            value={form.companyName}
+            onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+            placeholder="Your Company Name"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Tagline
+          </Label>
+          <Input
+            value={form.tagline}
+            onChange={(e) => setForm({ ...form, tagline: e.target.value })}
+            placeholder="Your catchy tagline"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          Brand Description
+        </Label>
+        <Textarea
+          value={form.brandDescription}
+          onChange={(e) => setForm({ ...form, brandDescription: e.target.value })}
+          placeholder="Describe your brand in a few sentences..."
+          rows={3}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Brand Voice</Label>
+          <Input
+            value={form.brandVoice}
+            onChange={(e) => setForm({ ...form, brandVoice: e.target.value })}
+            placeholder="Professional, friendly, authoritative..."
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Target Audience
+          </Label>
+          <Input
+            value={form.targetAudience}
+            onChange={(e) => setForm({ ...form, targetAudience: e.target.value })}
+            placeholder="Homeowners facing difficult situations..."
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Mission Statement</Label>
+        <Textarea
+          value={form.missionStatement}
+          onChange={(e) => setForm({ ...form, missionStatement: e.target.value })}
+          placeholder="What is your company's mission?"
+          rows={2}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Unique Value Proposition</Label>
+        <Textarea
+          value={form.uniqueValueProposition}
+          onChange={(e) => setForm({ ...form, uniqueValueProposition: e.target.value })}
+          placeholder="What makes you different from competitors?"
+          rows={2}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Key Messages</Label>
+        <Textarea
+          value={form.keyMessages}
+          onChange={(e) => setForm({ ...form, keyMessages: e.target.value })}
+          placeholder="Main points you want to communicate in your content..."
+          rows={2}
+        />
+      </div>
+
+      {/* Social Media Links */}
+      <div className="border-t pt-4">
+        <h3 className="font-semibold mb-3 flex items-center gap-2">
+          <LinkIcon className="h-4 w-4" />
+          Social Media Links
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Facebook className="h-4 w-4" />
+              Facebook
+            </Label>
+            <Input
+              value={form.facebookUrl}
+              onChange={(e) => setForm({ ...form, facebookUrl: e.target.value })}
+              placeholder="https://facebook.com/yourpage"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Instagram className="h-4 w-4" />
+              Instagram
+            </Label>
+            <Input
+              value={form.instagramUrl}
+              onChange={(e) => setForm({ ...form, instagramUrl: e.target.value })}
+              placeholder="https://instagram.com/yourhandle"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Twitter className="h-4 w-4" />
+              X (Twitter)
+            </Label>
+            <Input
+              value={form.twitterUrl}
+              onChange={(e) => setForm({ ...form, twitterUrl: e.target.value })}
+              placeholder="https://x.com/yourhandle"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Linkedin className="h-4 w-4" />
+              LinkedIn
+            </Label>
+            <Input
+              value={form.linkedinUrl}
+              onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })}
+              placeholder="https://linkedin.com/company/yourcompany"
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              Google Business
+            </Label>
+            <Input
+              value={form.googleBusinessUrl}
+              onChange={(e) => setForm({ ...form, googleBusinessUrl: e.target.value })}
+              placeholder="Your Google Business Profile URL"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={() => onUpdate(form)} disabled={isPending}>
+          {isPending ? "Saving..." : "Save Brand Profile"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Add Brand Asset Form Component
 function AddBrandAssetForm({ onSubmit, isPending }: { onSubmit: (data: any) => void; isPending: boolean }) {
   const [form, setForm] = useState({
     name: "",
@@ -791,15 +1129,6 @@ function AddBrandAssetForm({ onSubmit, isPending }: { onSubmit: (data: any) => v
           value={form.fileUrl}
           onChange={(e) => setForm({ ...form, fileUrl: e.target.value })}
           placeholder="https://..."
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>Metadata (optional, JSON)</Label>
-        <Textarea
-          value={form.metadata}
-          onChange={(e) => setForm({ ...form, metadata: e.target.value })}
-          placeholder='{"colors": ["#fff", "#000"]}'
-          rows={2}
         />
       </div>
       <div className="flex justify-end gap-2">

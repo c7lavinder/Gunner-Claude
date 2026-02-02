@@ -57,6 +57,13 @@
       "when": 1770018810567,
       "tag": "0007_illegal_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1770019473790,
+      "tag": "0008_wild_silver_sable",
+      "breakpoints": true
     }
   ]
 }
