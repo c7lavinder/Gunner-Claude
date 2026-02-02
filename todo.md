@@ -245,3 +245,8 @@
 - [x] Better visual separation between user and AI messages
 - [x] Add Clear button to reset conversation
 - [x] Add bot icon avatar for AI responses
+
+
+## Button Alignment Fix
+- [x] Make all header buttons level (Sync, Upload, Refresh)
+- [x] Reposition sync timestamp inline with button text

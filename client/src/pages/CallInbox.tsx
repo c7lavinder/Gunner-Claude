@@ -640,26 +640,24 @@ function GHLSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
     },
   });
 
+  const lastSyncText = status?.lastPollTime 
+    ? formatDistanceToNow(new Date(status.lastPollTime), { addSuffix: true })
+    : null;
+
   return (
-    <div className="flex flex-col items-center">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => syncNowMutation.mutate()}
-        disabled={syncNowMutation.isPending || status?.isPolling}
-      >
-        {syncNowMutation.isPending || status?.isPolling ? (
-          <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Syncing...</>
-        ) : (
-          <><Cloud className="h-4 w-4 mr-2" />Sync from GHL</>
-        )}
-      </Button>
-      {status?.lastPollTime && (
-        <span className="text-xs text-muted-foreground mt-1">
-          {formatDistanceToNow(new Date(status.lastPollTime), { addSuffix: true })}
-        </span>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => syncNowMutation.mutate()}
+      disabled={syncNowMutation.isPending || status?.isPolling}
+      title={lastSyncText ? `Last synced ${lastSyncText}` : undefined}
+    >
+      {syncNowMutation.isPending || status?.isPolling ? (
+        <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Syncing...</>
+      ) : (
+        <><Cloud className="h-4 w-4 mr-2" />Sync from GHL{lastSyncText && <span className="ml-1 text-muted-foreground font-normal">({lastSyncText})</span>}</>
       )}
-    </div>
+    </Button>
   );
 }
 
