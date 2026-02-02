@@ -194,3 +194,11 @@
 ## Analytics Page Improvements
 - [x] Add stats cards (Calls Made, Conversations, Appointments Set, Offers Accepted, Average Score) to Analytics page
 - [x] Add date filter dropdown to Analytics page (same as Dashboard)
+
+
+## Enhanced Analytics Insights
+- [x] Add average call length for graded calls
+- [x] Add score distribution chart (A, B, C, D, F breakdown)
+- [x] Add team member score breakdown table
+- [x] Add call metrics panel (total graded, passing rate)
+- [x] Place insights section below the leaderboard

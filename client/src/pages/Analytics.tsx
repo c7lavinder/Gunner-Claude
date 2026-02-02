@@ -2,7 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, TrendingUp, CheckCircle, Calendar, Trophy, Users, MessageSquare, CheckCircle2 } from "lucide-react";
+import { Phone, TrendingUp, CheckCircle, Calendar, Trophy, Users, MessageSquare, CheckCircle2, Clock, BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -174,7 +174,7 @@ export default function Analytics() {
       </div>
 
       {/* Team Leaderboard */}
-      <Card>
+      <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
@@ -319,6 +319,163 @@ export default function Analytics() {
               )}
             </TabsContent>
           </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Analytics Insights Section */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Score Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-500" />
+              Score Distribution
+            </CardTitle>
+            <CardDescription>
+              Grade breakdown across all graded calls
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : (
+              <div className="space-y-3">
+                {["A", "B", "C", "D", "F"].map((grade) => {
+                  const count = stats?.gradeDistribution?.[grade as keyof typeof stats.gradeDistribution] ?? 0;
+                  const total = Object.values(stats?.gradeDistribution ?? {}).reduce((a, b) => a + b, 0);
+                  const percentage = total > 0 ? (count / total) * 100 : 0;
+                  const colors: Record<string, string> = {
+                    A: "bg-emerald-500",
+                    B: "bg-green-500",
+                    C: "bg-yellow-500",
+                    D: "bg-orange-500",
+                    F: "bg-red-500",
+                  };
+                  return (
+                    <div key={grade} className="flex items-center gap-3">
+                      <span className="w-8 font-bold text-lg">{grade}</span>
+                      <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${colors[grade]} transition-all duration-500`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                      <span className="w-16 text-right text-sm text-muted-foreground">
+                        {count} ({Math.round(percentage)}%)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Call Metrics */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-purple-500" />
+              Call Metrics
+            </CardTitle>
+            <CardDescription>
+              Performance metrics for graded calls
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                  <span className="text-muted-foreground">Average Call Duration</span>
+                  <span className="text-xl font-bold">
+                    {stats?.averageCallDuration 
+                      ? `${Math.floor(stats.averageCallDuration / 60)}m ${Math.round(stats.averageCallDuration % 60)}s`
+                      : "N/A"
+                    }
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                  <span className="text-muted-foreground">Total Graded Calls</span>
+                  <span className="text-xl font-bold">{stats?.gradedCalls ?? 0}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                  <span className="text-muted-foreground">Passing Rate (A & B)</span>
+                  <span className="text-xl font-bold text-emerald-600">
+                    {stats?.gradeDistribution 
+                      ? `${Math.round(((stats.gradeDistribution.A + stats.gradeDistribution.B) / Math.max(1, Object.values(stats.gradeDistribution).reduce((a, b) => a + b, 0))) * 100)}%`
+                      : "N/A"
+                    }
+                  </span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Team Member Scores Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-indigo-500" />
+            Team Member Scores
+          </CardTitle>
+          <CardDescription>
+            Individual performance breakdown by team member
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {statsLoading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : stats?.teamMemberScores && stats.teamMemberScores.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Team Member</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">Avg Score</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">Total Graded</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">A</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">B</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">C</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">D</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">F</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.teamMemberScores
+                    .filter(m => m.totalGraded > 0)
+                    .sort((a, b) => b.averageScore - a.averageScore)
+                    .map((member) => (
+                    <tr key={member.memberId} className="border-b last:border-0 hover:bg-muted/50">
+                      <td className="py-4 px-4 font-medium">{member.memberName}</td>
+                      <td className="py-4 px-4 text-center">
+                        <span className={`font-bold ${
+                          member.averageScore >= 80 ? "text-emerald-600" :
+                          member.averageScore >= 60 ? "text-yellow-600" : "text-red-600"
+                        }`}>
+                          {Math.round(member.averageScore)}%
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-center">{member.totalGraded}</td>
+                      <td className="py-4 px-4 text-center text-emerald-600 font-medium">{member.gradeDistribution.A}</td>
+                      <td className="py-4 px-4 text-center text-green-600 font-medium">{member.gradeDistribution.B}</td>
+                      <td className="py-4 px-4 text-center text-yellow-600 font-medium">{member.gradeDistribution.C}</td>
+                      <td className="py-4 px-4 text-center text-orange-600 font-medium">{member.gradeDistribution.D}</td>
+                      <td className="py-4 px-4 text-center text-red-600 font-medium">{member.gradeDistribution.F}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No graded calls yet</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

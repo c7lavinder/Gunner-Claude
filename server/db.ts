@@ -367,6 +367,22 @@ export async function getCallStats(options?: {
     wrong_number: number;
     too_short: number;
   };
+  // Extended analytics
+  averageCallDuration: number; // in seconds
+  gradeDistribution: {
+    A: number;
+    B: number;
+    C: number;
+    D: number;
+    F: number;
+  };
+  teamMemberScores: Array<{
+    memberId: number;
+    memberName: string;
+    averageScore: number;
+    totalGraded: number;
+    gradeDistribution: { A: number; B: number; C: number; D: number; F: number };
+  }>;
 }> {
   const db = await getDb();
   if (!db) return {
@@ -389,6 +405,9 @@ export async function getCallStats(options?: {
       wrong_number: 0,
       too_short: 0,
     },
+    averageCallDuration: 0,
+    gradeDistribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
+    teamMemberScores: [],
   };
 
   // Calculate date range
@@ -455,6 +474,50 @@ export async function getCallStats(options?: {
   const appointmentsSet = allCalls.filter(c => c.callOutcome === "appointment_set").length;
   const offersAccepted = allCalls.filter(c => c.callOutcome === "offer_accepted").length;
 
+  // Calculate average call duration for graded calls
+  const gradedCallDurations = gradedCalls.filter(c => c.duration).map(c => c.duration || 0);
+  const averageCallDuration = gradedCallDurations.length > 0 
+    ? gradedCallDurations.reduce((sum, d) => sum + d, 0) / gradedCallDurations.length 
+    : 0;
+
+  // Calculate grade distribution
+  const gradeDistribution = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  for (const grade of grades) {
+    const score = parseFloat(grade.overallScore || "0");
+    if (score >= 90) gradeDistribution.A++;
+    else if (score >= 80) gradeDistribution.B++;
+    else if (score >= 70) gradeDistribution.C++;
+    else if (score >= 60) gradeDistribution.D++;
+    else gradeDistribution.F++;
+  }
+
+  // Calculate team member scores
+  const members = await getTeamMembers();
+  const teamMemberScores = members.map(member => {
+    const memberCalls = gradedCalls.filter(c => c.teamMemberId === member.id);
+    const memberGrades = grades.filter(g => memberCalls.some(c => c.id === g.callId));
+    const memberTotalScore = memberGrades.reduce((sum, g) => sum + parseFloat(g.overallScore || "0"), 0);
+    const memberAvgScore = memberGrades.length > 0 ? memberTotalScore / memberGrades.length : 0;
+    
+    const memberGradeDistribution = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+    for (const grade of memberGrades) {
+      const score = parseFloat(grade.overallScore || "0");
+      if (score >= 90) memberGradeDistribution.A++;
+      else if (score >= 80) memberGradeDistribution.B++;
+      else if (score >= 70) memberGradeDistribution.C++;
+      else if (score >= 60) memberGradeDistribution.D++;
+      else memberGradeDistribution.F++;
+    }
+    
+    return {
+      memberId: member.id,
+      memberName: member.name,
+      averageScore: memberAvgScore,
+      totalGraded: memberGrades.length,
+      gradeDistribution: memberGradeDistribution,
+    };
+  });
+
   return {
     totalCalls: allCalls.length,
     gradedCalls: gradedCalls.length,
@@ -468,6 +531,9 @@ export async function getCallStats(options?: {
     appointmentsSet,
     offersAccepted,
     classificationBreakdown,
+    averageCallDuration,
+    gradeDistribution,
+    teamMemberScores,
   };
 }
 
