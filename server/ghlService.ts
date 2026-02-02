@@ -469,15 +469,19 @@ export async function pollForNewCalls(): Promise<{
   return results;
 }
 
+// Current polling interval in minutes
+let currentIntervalMinutes: number = 30;
+
 /**
  * Start automatic polling at the specified interval (in minutes)
  */
-export function startPolling(intervalMinutes: number = 5): void {
+export function startPolling(intervalMinutes: number = 30): void {
   if (pollInterval) {
     console.log("[GHL] Polling already started");
     return;
   }
 
+  currentIntervalMinutes = intervalMinutes;
   console.log(`[GHL] Starting automatic polling every ${intervalMinutes} minutes`);
   
   // Do an initial poll
@@ -507,11 +511,13 @@ export function getPollingStatus(): {
   isPolling: boolean;
   lastPollTime: Date | null;
   isAutoPollingEnabled: boolean;
+  intervalMinutes: number;
 } {
   return {
     isPolling,
     lastPollTime: lastPollTimestamp,
     isAutoPollingEnabled: pollInterval !== null,
+    intervalMinutes: currentIntervalMinutes,
   };
 }
 

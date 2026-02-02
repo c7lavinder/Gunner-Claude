@@ -174,3 +174,15 @@
 - [x] Add reclassify dropdown/button to call detail page
 - [x] Allow changing classification to: conversation, admin_call, voicemail, no_answer, callback_request, wrong_number
 - [x] Update call status appropriately when reclassified
+
+
+## Automatic GHL Polling
+- [x] Create scheduled job to sync GHL calls every 30 minutes
+- [x] Add polling status indicator showing last sync time
+- [x] Handle errors gracefully without blocking future syncs
+- [x] Log sync activity for debugging
+
+## Call Direction Badges
+- [x] Add inbound/outbound badge to call list items
+- [x] Style badges appropriately (different colors for in/out)
+- [x] Display direction in call detail page header

@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Phone, 
+  PhoneIncoming,
+  PhoneOutgoing,
   Clock, 
   User, 
   RefreshCw, 
@@ -86,6 +88,17 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
                 <h3 className="font-semibold truncate">
                   {call.contactName || call.contactPhone || "Unknown Contact"}
                 </h3>
+                {call.callDirection === "inbound" ? (
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                    <PhoneIncoming className="h-3 w-3 mr-1" />
+                    Inbound
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
+                    <PhoneOutgoing className="h-3 w-3 mr-1" />
+                    Outbound
+                  </Badge>
+                )}
                 {call.callType === "offer" ? (
                   <Badge variant="secondary" className="text-xs">Offer</Badge>
                 ) : (

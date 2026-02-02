@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Phone, Clock, User, RefreshCw, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, FileText, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing, Clock, User, RefreshCw, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, FileText, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Link, useParams } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
@@ -485,9 +485,22 @@ export default function CallDetail() {
                 <p className="text-3xl font-bold mt-4">
                   {grade?.overallScore ? `${Math.round(parseFloat(grade.overallScore))}%` : "N/A"}
                 </p>
-                <Badge variant="secondary" className="mt-2 capitalize">
-                  {call.callType === "offer" ? "Offer Call" : "Qualification Call"}
-                </Badge>
+                <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                  {call.callDirection === "inbound" ? (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                      <PhoneIncoming className="h-3 w-3 mr-1" />
+                      Inbound
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
+                      <PhoneOutgoing className="h-3 w-3 mr-1" />
+                      Outbound
+                    </Badge>
+                  )}
+                  <Badge variant="secondary" className="capitalize">
+                    {call.callType === "offer" ? "Offer Call" : "Qualification Call"}
+                  </Badge>
+                </div>
               </CardContent>
             </Card>
 

@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { handleGHLWebhook } from "../webhook";
 import { seedTeamMembers } from "../db";
+import { startPolling } from "../ghlService";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -67,6 +68,12 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // Start GHL automatic polling every 30 minutes
+    // Delay start to let server fully initialize
+    setTimeout(() => {
+      startPolling(30);
+    }, 10000);
   });
 }
 
