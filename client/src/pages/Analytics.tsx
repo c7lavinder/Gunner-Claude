@@ -2,7 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, TrendingUp, CheckCircle, Calendar, Trophy, Users, MessageSquare, CheckCircle2, Clock, BarChart3 } from "lucide-react";
+import { Phone, TrendingUp, CheckCircle, Calendar, Trophy, Users, MessageSquare, CheckCircle2, Clock, BarChart3, LineChart } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -478,6 +478,233 @@ export default function Analytics() {
           )}
         </CardContent>
       </Card>
+
+      {/* Score Trends Over Time */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <LineChart className="h-5 w-5 text-cyan-500" />
+            Score Trends Over Time
+          </CardTitle>
+          <CardDescription>
+            Weekly average scores for the past 12 weeks
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {statsLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : stats?.weeklyTrends && stats.weeklyTrends.length > 0 ? (
+            <div className="space-y-6">
+              {/* Team Average Trend Chart */}
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground mb-4">Team Average Score</h4>
+                <div className="relative h-48">
+                  {/* Y-axis labels */}
+                  <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-xs text-muted-foreground">
+                    <span>100%</span>
+                    <span>75%</span>
+                    <span>50%</span>
+                    <span>25%</span>
+                    <span>0%</span>
+                  </div>
+                  {/* Chart area */}
+                  <div className="ml-12 h-full relative">
+                    {/* Grid lines */}
+                    <div className="absolute inset-0 flex flex-col justify-between">
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <div key={i} className="border-t border-muted h-0" />
+                      ))}
+                    </div>
+                    {/* Line chart */}
+                    <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                      {/* Gradient fill under line */}
+                      <defs>
+                        <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="rgb(6, 182, 212)" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="rgb(6, 182, 212)" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {/* Area fill */}
+                      <path
+                        d={`M 0 ${100 - (stats.weeklyTrends[0]?.averageScore || 0)} ` +
+                          stats.weeklyTrends.map((week, i) => {
+                            const x = (i / (stats.weeklyTrends.length - 1)) * 100;
+                            const y = 100 - week.averageScore;
+                            return `L ${x} ${y}`;
+                          }).join(' ') +
+                          ` L 100 100 L 0 100 Z`}
+                        fill="url(#scoreGradient)"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {/* Line */}
+                      <path
+                        d={`M 0 ${100 - (stats.weeklyTrends[0]?.averageScore || 0)} ` +
+                          stats.weeklyTrends.map((week, i) => {
+                            const x = (i / (stats.weeklyTrends.length - 1)) * 100;
+                            const y = 100 - week.averageScore;
+                            return `L ${x} ${y}`;
+                          }).join(' ')}
+                        fill="none"
+                        stroke="rgb(6, 182, 212)"
+                        strokeWidth="2"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {/* Data points */}
+                      {stats.weeklyTrends.map((week, i) => {
+                        const x = (i / (stats.weeklyTrends.length - 1)) * 100;
+                        const y = 100 - week.averageScore;
+                        return (
+                          <circle
+                            key={i}
+                            cx={`${x}%`}
+                            cy={`${y}%`}
+                            r="4"
+                            fill="rgb(6, 182, 212)"
+                            className="hover:r-6 transition-all"
+                          >
+                            <title>{`Week of ${week.weekStart}: ${week.averageScore}% (${week.gradedCalls} calls)`}</title>
+                          </circle>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                </div>
+                {/* X-axis labels */}
+                <div className="ml-12 flex justify-between text-xs text-muted-foreground mt-2">
+                  {stats.weeklyTrends.filter((_, i) => i % 3 === 0 || i === stats.weeklyTrends.length - 1).map((week, i) => (
+                    <span key={i}>{new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weekly Stats Table */}
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left py-2 px-3 font-medium">Week</th>
+                      <th className="text-center py-2 px-3 font-medium">Avg Score</th>
+                      <th className="text-center py-2 px-3 font-medium">Total Calls</th>
+                      <th className="text-center py-2 px-3 font-medium">Graded</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.weeklyTrends.slice().reverse().slice(0, 6).map((week, i) => (
+                      <tr key={i} className="border-t hover:bg-muted/30">
+                        <td className="py-2 px-3">
+                          {new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className={`font-medium ${
+                            week.averageScore >= 80 ? "text-emerald-600" :
+                            week.averageScore >= 60 ? "text-yellow-600" :
+                            week.averageScore > 0 ? "text-red-600" : "text-muted-foreground"
+                          }`}>
+                            {week.averageScore > 0 ? `${week.averageScore}%` : "—"}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-center">{week.totalCalls}</td>
+                        <td className="py-2 px-3 text-center">{week.gradedCalls}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <LineChart className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No trend data available yet</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Individual Team Member Trends */}
+      {stats?.teamMemberTrends && stats.teamMemberTrends.filter(m => m.weeklyScores.some(w => w.callCount > 0)).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-violet-500" />
+              Individual Performance Trends
+            </CardTitle>
+            <CardDescription>
+              Weekly score trends by team member
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-6 md:grid-cols-2">
+              {stats.teamMemberTrends
+                .filter(member => member.weeklyScores.some(w => w.callCount > 0))
+                .map((member, memberIndex) => {
+                  const colors = [
+                    "rgb(59, 130, 246)", // blue
+                    "rgb(16, 185, 129)", // emerald
+                    "rgb(245, 158, 11)", // amber
+                    "rgb(139, 92, 246)", // violet
+                  ];
+                  const color = colors[memberIndex % colors.length];
+                  
+                  return (
+                    <div key={member.memberId} className="border rounded-lg p-4">
+                      <h4 className="font-medium mb-3">{member.memberName}</h4>
+                      <div className="relative h-32">
+                        {/* Mini chart */}
+                        <svg className="w-full h-full" preserveAspectRatio="none">
+                          <defs>
+                            <linearGradient id={`gradient-${member.memberId}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+                              <stop offset="100%" stopColor={color} stopOpacity="0" />
+                            </linearGradient>
+                          </defs>
+                          {/* Area */}
+                          <path
+                            d={`M 0 ${100 - (member.weeklyScores[0]?.averageScore || 0)} ` +
+                              member.weeklyScores.map((week, i) => {
+                                const x = (i / (member.weeklyScores.length - 1)) * 100;
+                                const y = 100 - week.averageScore;
+                                return `L ${x} ${y}`;
+                              }).join(' ') +
+                              ` L 100 100 L 0 100 Z`}
+                            fill={`url(#gradient-${member.memberId})`}
+                            vectorEffect="non-scaling-stroke"
+                          />
+                          {/* Line */}
+                          <path
+                            d={`M 0 ${100 - (member.weeklyScores[0]?.averageScore || 0)} ` +
+                              member.weeklyScores.map((week, i) => {
+                                const x = (i / (member.weeklyScores.length - 1)) * 100;
+                                const y = 100 - week.averageScore;
+                                return `L ${x} ${y}`;
+                              }).join(' ')}
+                            fill="none"
+                            stroke={color}
+                            strokeWidth="2"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        </svg>
+                      </div>
+                      {/* Stats summary */}
+                      <div className="flex justify-between text-sm mt-2">
+                        <span className="text-muted-foreground">
+                          {member.weeklyScores.reduce((sum, w) => sum + w.callCount, 0)} total calls
+                        </span>
+                        <span className="font-medium" style={{ color }}>
+                          {(() => {
+                            const recentScores = member.weeklyScores.slice(-4).filter(w => w.callCount > 0);
+                            if (recentScores.length === 0) return "No recent data";
+                            const avg = recentScores.reduce((sum, w) => sum + w.averageScore, 0) / recentScores.length;
+                            return `${Math.round(avg)}% avg (last 4 weeks)`;
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

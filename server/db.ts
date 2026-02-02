@@ -383,6 +383,22 @@ export async function getCallStats(options?: {
     totalGraded: number;
     gradeDistribution: { A: number; B: number; C: number; D: number; F: number };
   }>;
+  // Trend data
+  weeklyTrends: Array<{
+    weekStart: string; // ISO date string
+    averageScore: number;
+    totalCalls: number;
+    gradedCalls: number;
+  }>;
+  teamMemberTrends: Array<{
+    memberId: number;
+    memberName: string;
+    weeklyScores: Array<{
+      weekStart: string;
+      averageScore: number;
+      callCount: number;
+    }>;
+  }>;
 }> {
   const db = await getDb();
   if (!db) return {
@@ -408,6 +424,8 @@ export async function getCallStats(options?: {
     averageCallDuration: 0,
     gradeDistribution: { A: 0, B: 0, C: 0, D: 0, F: 0 },
     teamMemberScores: [],
+    weeklyTrends: [],
+    teamMemberTrends: [],
   };
 
   // Calculate date range
@@ -518,6 +536,91 @@ export async function getCallStats(options?: {
     };
   });
 
+  // Calculate weekly trends (last 12 weeks)
+  const weeklyTrends: Array<{
+    weekStart: string;
+    averageScore: number;
+    totalCalls: number;
+    gradedCalls: number;
+  }> = [];
+  
+  // Get all calls and grades for trend calculation (ignore date filter for trends)
+  const allCallsForTrends = await db.select().from(calls);
+  const allGradesForTrends = await db.select().from(callGrades);
+  
+  for (let i = 11; i >= 0; i--) {
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    
+    const weekCalls = allCallsForTrends.filter(c => 
+      c.createdAt >= weekStart && c.createdAt < weekEnd
+    );
+    const weekGradedCalls = weekCalls.filter(c => 
+      c.status === "completed" && c.classification === "conversation"
+    );
+    const weekGrades = allGradesForTrends.filter(g => 
+      weekGradedCalls.some(c => c.id === g.callId)
+    );
+    
+    const weekTotalScore = weekGrades.reduce((sum, g) => sum + parseFloat(g.overallScore || "0"), 0);
+    const weekAvgScore = weekGrades.length > 0 ? weekTotalScore / weekGrades.length : 0;
+    
+    weeklyTrends.push({
+      weekStart: weekStart.toISOString().split('T')[0],
+      averageScore: Math.round(weekAvgScore * 10) / 10,
+      totalCalls: weekCalls.length,
+      gradedCalls: weekGradedCalls.length,
+    });
+  }
+
+  // Calculate team member trends (last 12 weeks per member)
+  const teamMemberTrends = members.map(member => {
+    const memberWeeklyScores: Array<{
+      weekStart: string;
+      averageScore: number;
+      callCount: number;
+    }> = [];
+    
+    for (let i = 11; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+      
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      
+      const memberWeekCalls = allCallsForTrends.filter(c => 
+        c.teamMemberId === member.id && 
+        c.createdAt >= weekStart && 
+        c.createdAt < weekEnd &&
+        c.status === "completed" && 
+        c.classification === "conversation"
+      );
+      const memberWeekGrades = allGradesForTrends.filter(g => 
+        memberWeekCalls.some(c => c.id === g.callId)
+      );
+      
+      const memberWeekTotalScore = memberWeekGrades.reduce((sum, g) => sum + parseFloat(g.overallScore || "0"), 0);
+      const memberWeekAvgScore = memberWeekGrades.length > 0 ? memberWeekTotalScore / memberWeekGrades.length : 0;
+      
+      memberWeeklyScores.push({
+        weekStart: weekStart.toISOString().split('T')[0],
+        averageScore: Math.round(memberWeekAvgScore * 10) / 10,
+        callCount: memberWeekCalls.length,
+      });
+    }
+    
+    return {
+      memberId: member.id,
+      memberName: member.name,
+      weeklyScores: memberWeeklyScores,
+    };
+  });
+
   return {
     totalCalls: allCalls.length,
     gradedCalls: gradedCalls.length,
@@ -534,6 +637,8 @@ export async function getCallStats(options?: {
     averageCallDuration,
     gradeDistribution,
     teamMemberScores,
+    weeklyTrends,
+    teamMemberTrends,
   };
 }
 

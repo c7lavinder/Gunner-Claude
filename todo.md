@@ -202,3 +202,12 @@
 - [x] Add team member score breakdown table
 - [x] Add call metrics panel (total graded, passing rate)
 - [x] Place insights section below the leaderboard
+
+
+## Trend Charts
+- [x] Add weekly score trend data to backend analytics
+- [x] Add monthly score trend data to backend analytics
+- [x] Create line chart component for score trends
+- [x] Display team-wide score trend over time
+- [x] Display individual team member trends
+- [x] Add trend section to Analytics page below insights
