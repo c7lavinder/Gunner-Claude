@@ -63,6 +63,7 @@ async function getRecentCallsWithGrades(daysBack: number = 7): Promise<CallWithG
       and(
         gte(calls.createdAt, cutoffDate),
         eq(calls.status, "completed"),
+        eq(calls.isArchived, "false"), // Exclude archived calls
         isNotNull(calls.transcript)
       )
     )

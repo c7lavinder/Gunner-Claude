@@ -189,6 +189,7 @@ export async function getCalls(options: {
   status?: string;
   limit?: number;
   offset?: number;
+  includeArchived?: boolean; // Default false - exclude archived calls
 }): Promise<Call[]> {
   const db = await getDb();
   if (!db) return [];
@@ -196,6 +197,12 @@ export async function getCalls(options: {
   let query = db.select().from(calls);
   
   const conditions = [];
+  
+  // Exclude archived calls by default
+  if (!options.includeArchived) {
+    conditions.push(eq(calls.isArchived, "false"));
+  }
+  
   if (options.teamMemberId) {
     conditions.push(eq(calls.teamMemberId, options.teamMemberId));
   }
@@ -213,11 +220,17 @@ export async function getCalls(options: {
     .offset(options.offset || 0);
 }
 
-export async function getRecentCalls(limit: number = 20): Promise<Call[]> {
+export async function getRecentCalls(limit: number = 20, includeArchived: boolean = false): Promise<Call[]> {
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select().from(calls)
+  let query = db.select().from(calls);
+  
+  if (!includeArchived) {
+    query = query.where(eq(calls.isArchived, "false")) as any;
+  }
+
+  return await query
     .orderBy(desc(calls.createdAt))
     .limit(limit);
 }
@@ -291,9 +304,12 @@ export async function getLeaderboardData(): Promise<Array<{
   
   const leaderboard = await Promise.all(
     members.map(async (member) => {
-      // Get all calls for this member
+      // Get all non-archived calls for this member
       const memberCalls = await db.select().from(calls)
-        .where(eq(calls.teamMemberId, member.id));
+        .where(and(
+          eq(calls.teamMemberId, member.id),
+          eq(calls.isArchived, "false")
+        ));
       
       // Only count completed (graded) calls for leaderboard
       const gradedCalls = memberCalls.filter(c => c.status === "completed" && c.classification === "conversation");
@@ -453,12 +469,17 @@ export async function getCallStats(options?: {
       break;
   }
 
-  // Get calls with optional date filter
+  // Get calls with optional date filter (exclude archived calls)
   let allCalls: Call[];
   if (startDate) {
-    allCalls = await db.select().from(calls).where(gte(calls.createdAt, startDate));
+    allCalls = await db.select().from(calls).where(
+      and(
+        gte(calls.createdAt, startDate),
+        eq(calls.isArchived, "false")
+      )
+    );
   } else {
-    allCalls = await db.select().from(calls);
+    allCalls = await db.select().from(calls).where(eq(calls.isArchived, "false"));
   }
   const gradedCalls = allCalls.filter(c => c.status === "completed" && c.classification === "conversation");
   const skippedCalls = allCalls.filter(c => c.status === "skipped");
@@ -1404,5 +1425,57 @@ export async function getInterestingCallStories(limit: number = 10): Promise<Arr
     ...r,
     strengths: r.strengths as string | null,
     coachingTips: r.coachingTips as string | null,
+  }));
+}
+
+
+// ============ ARCHIVAL FUNCTIONS ============
+
+/**
+ * Get all calls including archived ones - for AI training purposes
+ * This function fetches transcripts from S3 for archived calls
+ */
+export async function getAllCallsForTraining(options?: {
+  limit?: number;
+  includeTranscripts?: boolean;
+}): Promise<Array<{
+  id: number;
+  transcript: string | null;
+  transcriptUrl: string | null;
+  contactName: string | null;
+  teamMemberName: string | null;
+  callType: string | null;
+  callOutcome: string | null;
+  classification: string | null;
+  isArchived: string;
+  createdAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db
+    .select({
+      id: calls.id,
+      transcript: calls.transcript,
+      transcriptUrl: calls.transcriptUrl,
+      contactName: calls.contactName,
+      teamMemberName: calls.teamMemberName,
+      callType: calls.callType,
+      callOutcome: calls.callOutcome,
+      classification: calls.classification,
+      isArchived: calls.isArchived,
+      createdAt: calls.createdAt,
+    })
+    .from(calls)
+    .where(eq(calls.classification, "conversation"))
+    .orderBy(desc(calls.createdAt))
+    .limit(options?.limit || 1000);
+
+  return result.map(r => ({
+    ...r,
+    callType: r.callType as string | null,
+    callOutcome: r.callOutcome as string | null,
+    classification: r.classification as string | null,
+    isArchived: r.isArchived as string,
   }));
 }

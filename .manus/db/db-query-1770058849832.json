@@ -1,0 +1,65 @@
+{
+  "query": "SELECT id, contactName, contactPhone, status, classification, teamMemberId, duration, \n       LEFT(recordingUrl, 100) as recordingUrlShort, createdAt \nFROM calls \nWHERE status IN ('pending', 'transcribing', 'classifying', 'grading', 'failed')\nORDER BY createdAt DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, contactPhone, status, classification, teamMemberId, duration, \n       LEFT(recordingUrl, 100) as recordingUrlShort, createdAt \nFROM calls \nWHERE status IN ('pending', 'transcribing', 'classifying', 'grading', 'failed')\nORDER BY createdAt DESC;",
+  "rows": [
+    {
+      "id": "120008",
+      "contactName": "Michele Clary",
+      "contactPhone": "+19178286780",
+      "status": "grading",
+      "classification": "conversation",
+      "teamMemberId": "2",
+      "duration": "188",
+      "recordingUrlShort": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/m6Qb8",
+      "createdAt": "2026-02-02 19:00:22"
+    },
+    {
+      "id": "90005",
+      "contactName": "James Spears",
+      "contactPhone": "+15133154046",
+      "status": "failed",
+      "classification": "pending",
+      "teamMemberId": "2",
+      "duration": "270",
+      "recordingUrlShort": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/zqKK0",
+      "createdAt": "2026-02-02 18:00:29"
+    },
+    {
+      "id": "90002",
+      "contactName": "Varahi Partners",
+      "contactPhone": "+16154787706",
+      "status": "failed",
+      "classification": "pending",
+      "teamMemberId": "2",
+      "duration": "233",
+      "recordingUrlShort": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/Nw4S2",
+      "createdAt": "2026-02-02 18:00:22"
+    },
+    {
+      "id": "90001",
+      "contactName": "Terri Kahl",
+      "contactPhone": "+19314466079",
+      "status": "failed",
+      "classification": "pending",
+      "teamMemberId": "3",
+      "duration": "350",
+      "recordingUrlShort": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/yHmkz",
+      "createdAt": "2026-02-02 18:00:17"
+    },
+    {
+      "id": "60003",
+      "contactName": "Berry Hampton",
+      "contactPhone": "+19317974085",
+      "status": "failed",
+      "classification": "pending",
+      "teamMemberId": "2",
+      "duration": "376",
+      "recordingUrlShort": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/SsEF9",
+      "createdAt": "2026-02-02 17:28:58"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tcontactPhone\tstatus\tclassification\tteamMemberId\tduration\trecordingUrlShort\tcreatedAt\n120008\tMichele Clary\t+19178286780\tgrading\tconversation\t2\t188\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/m6Qb8\t2026-02-02 19:00:22\n90005\tJames Spears\t+15133154046\tfailed\tpending\t2\t270\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/zqKK0\t2026-02-02 18:00:29\n90002\tVarahi Partners\t+16154787706\tfailed\tpending\t2\t233\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/Nw4S2\t2026-02-02 18:00:22\n90001\tTerri Kahl\t+19314466079\tfailed\tpending\t3\t350\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/yHmkz\t2026-02-02 18:00:17\n60003\tBerry Hampton\t+19317974085\tfailed\tpending\t2\t376\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/SsEF9\t2026-02-02 17:28:58\n",
+  "stderr": "",
+  "execution_time_ms": 348
+}

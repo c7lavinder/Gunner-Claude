@@ -75,6 +75,7 @@ import { invokeLLM } from "./_core/llm";
 import { generateTeamInsights, saveGeneratedInsights, clearAiGeneratedInsights } from "./insights";
 import { pollForNewCalls, getPollingStatus, startPolling, stopPolling } from "./ghlService";
 import { storagePut } from "./storage";
+import { runArchivalJob, getArchivalStats, archiveCall } from "./archival";
 
 export const appRouter = router({
   system: systemRouter,
@@ -356,6 +357,29 @@ export const appRouter = router({
       }).optional())
       .query(async ({ input }) => {
         return await getCallStats(input || {});
+      }),
+  }),
+
+  // ============ ARCHIVAL ============
+  archival: router({
+    // Get archival statistics
+    stats: protectedProcedure.query(async () => {
+      return await getArchivalStats();
+    }),
+
+    // Run archival job manually
+    runJob: protectedProcedure.mutation(async () => {
+      console.log("[Archival] Manual archival job triggered");
+      const result = await runArchivalJob();
+      return result;
+    }),
+
+    // Archive a specific call
+    archiveCall: protectedProcedure
+      .input(z.object({ callId: z.number() }))
+      .mutation(async ({ input }) => {
+        const success = await archiveCall(input.callId);
+        return { success };
       }),
   }),
 

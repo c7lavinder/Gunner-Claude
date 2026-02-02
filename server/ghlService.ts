@@ -7,6 +7,7 @@ import { ENV } from "./_core/env";
 import { createCall, getTeamMembers, updateCall, getCallById, getCallByGhlId } from "./db";
 import { processCall } from "./grading";
 import { storagePut } from "./storage";
+import { runArchivalJob } from "./archival";
 
 // GHL API Configuration
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
@@ -472,6 +473,10 @@ export async function pollForNewCalls(): Promise<{
 // Current polling interval in minutes
 let currentIntervalMinutes: number = 30;
 
+// Archival job interval (runs daily)
+let archivalInterval: ReturnType<typeof setInterval> | null = null;
+let lastArchivalTime: Date | null = null;
+
 /**
  * Start automatic polling at the specified interval (in minutes)
  */
@@ -491,6 +496,30 @@ export function startPolling(intervalMinutes: number = 30): void {
   pollInterval = setInterval(() => {
     pollForNewCalls().catch(err => console.error("[GHL] Poll error:", err));
   }, intervalMinutes * 60 * 1000);
+
+  // Start daily archival job (runs every 24 hours)
+  if (!archivalInterval) {
+    console.log("[Archival] Starting daily archival job");
+    // Run archival job once at startup (after a short delay)
+    setTimeout(() => {
+      runArchivalJob()
+        .then(result => {
+          lastArchivalTime = new Date();
+          console.log(`[Archival] Initial run: archived ${result.totalArchived} calls`);
+        })
+        .catch(err => console.error("[Archival] Initial run error:", err));
+    }, 60000); // Wait 1 minute after startup
+
+    // Then run every 24 hours
+    archivalInterval = setInterval(() => {
+      runArchivalJob()
+        .then(result => {
+          lastArchivalTime = new Date();
+          console.log(`[Archival] Daily run: archived ${result.totalArchived} calls`);
+        })
+        .catch(err => console.error("[Archival] Daily run error:", err));
+    }, 24 * 60 * 60 * 1000); // 24 hours
+  }
 }
 
 /**
@@ -501,6 +530,11 @@ export function stopPolling(): void {
     clearInterval(pollInterval);
     pollInterval = null;
     console.log("[GHL] Polling stopped");
+  }
+  if (archivalInterval) {
+    clearInterval(archivalInterval);
+    archivalInterval = null;
+    console.log("[Archival] Daily archival job stopped");
   }
 }
 

@@ -217,3 +217,13 @@
 - [x] Add call processing status section to bottom of Dashboard
 - [x] Show queued, scored, failed, skipped counts
 - [x] Display classification breakdown (conversation, voicemail, no_answer, etc.)
+
+
+## Call Archival System (14-day threshold)
+- [x] Add isArchived flag to calls schema
+- [x] Add transcriptUrl field for S3-stored transcripts
+- [x] Move transcripts to S3 for archived calls
+- [x] Update main queries to exclude archived calls
+- [x] Create automatic archival job (runs daily)
+- [x] Keep archived calls accessible for AI training
+- [ ] Add archive management UI (optional)

@@ -70,6 +70,10 @@ export const calls = mysqlTable("calls", {
   status: mysqlEnum("status", ["pending", "transcribing", "classifying", "grading", "completed", "skipped", "failed"]).default("pending"),
   // Transcript
   transcript: text("transcript"),
+  transcriptUrl: text("transcriptUrl"), // S3 URL for archived transcripts
+  // Archival
+  isArchived: mysqlEnum("isArchived", ["true", "false"]).default("false"),
+  archivedAt: timestamp("archivedAt"),
   // Timestamps
   callTimestamp: timestamp("callTimestamp"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
