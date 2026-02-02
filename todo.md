@@ -227,3 +227,13 @@
 - [x] Create automatic archival job (runs daily)
 - [x] Keep archived calls accessible for AI training
 - [ ] Add archive management UI (optional)
+
+
+## Call History Page Improvements
+- [x] Shorten AI coaching response to max 2 paragraphs
+- [x] Make AI coaching tone optimistic
+- [x] Move "Last sync" text under Sync from GHL button
+- [x] Add multi-select filter for team member
+- [x] Add multi-select filter for call type (qualification/offer)
+- [x] Add multi-select filter for score range (low/high)
+- [x] Add multi-select filter for call direction (inbound/outbound)

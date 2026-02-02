@@ -27,7 +27,10 @@ import {
   Upload,
   FileAudio,
   Cloud,
-  CloudOff
+  CloudOff,
+  Filter,
+  ChevronDown,
+  X
 } from "lucide-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -49,9 +52,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function GradeBadge({ grade }: { grade: string }) {
   const gradeClass = `grade-${grade.toLowerCase()}`;
@@ -619,7 +624,7 @@ function GHLSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
   });
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col items-center">
       <Button
         variant="outline"
         size="sm"
@@ -633,11 +638,82 @@ function GHLSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
         )}
       </Button>
       {status?.lastPollTime && (
-        <span className="text-xs text-muted-foreground">
-          Last sync: {formatDistanceToNow(new Date(status.lastPollTime), { addSuffix: true })}
+        <span className="text-xs text-muted-foreground mt-1">
+          {formatDistanceToNow(new Date(status.lastPollTime), { addSuffix: true })}
         </span>
       )}
     </div>
+  );
+}
+
+// Multi-select filter component
+function MultiSelectFilter({ 
+  label, 
+  options, 
+  selected, 
+  onChange,
+  icon: Icon
+}: { 
+  label: string; 
+  options: { value: string; label: string }[]; 
+  selected: string[]; 
+  onChange: (values: string[]) => void;
+  icon?: React.ElementType;
+}) {
+  const [open, setOpen] = useState(false);
+  
+  const toggleOption = (value: string) => {
+    if (selected.includes(value)) {
+      onChange(selected.filter(v => v !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  };
+
+  const clearAll = () => {
+    onChange([]);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 border-dashed">
+          {Icon && <Icon className="h-3.5 w-3.5 mr-2" />}
+          {label}
+          {selected.length > 0 && (
+            <Badge variant="secondary" className="ml-2 rounded-sm px-1 font-normal">
+              {selected.length}
+            </Badge>
+          )}
+          <ChevronDown className="h-3.5 w-3.5 ml-2 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-2" align="start">
+        <div className="space-y-2">
+          {options.map((option) => (
+            <div
+              key={option.value}
+              className="flex items-center space-x-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
+              onClick={() => toggleOption(option.value)}
+            >
+              <Checkbox
+                checked={selected.includes(option.value)}
+                onCheckedChange={() => toggleOption(option.value)}
+              />
+              <span className="text-sm">{option.label}</span>
+            </div>
+          ))}
+          {selected.length > 0 && (
+            <div className="border-t pt-2 mt-2">
+              <Button variant="ghost" size="sm" className="w-full justify-center" onClick={clearAll}>
+                Clear filters
+              </Button>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -647,6 +723,12 @@ export default function CallInbox() {
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
   const updateStatusMutation = trpc.feedback.updateStatus.useMutation();
   const utils = trpc.useUtils();
+
+  // Filter states
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  const [selectedCallTypes, setSelectedCallTypes] = useState<string[]>([]);
+  const [selectedScoreRanges, setSelectedScoreRanges] = useState<string[]>([]);
+  const [selectedDirections, setSelectedDirections] = useState<string[]>([]);
 
   const handleRefresh = () => {
     refetch();
@@ -661,12 +743,86 @@ export default function CallInbox() {
   const pendingFeedback = allFeedback?.filter(f => f.status === "pending") || [];
   const processedFeedback = allFeedback?.filter(f => f.status !== "pending") || [];
 
+  // Get unique team members from calls for filter options
+  const teamMemberOptions = useMemo(() => {
+    const members = new Set<string>();
+    calls?.forEach(c => {
+      if (c.teamMemberName) members.add(c.teamMemberName);
+    });
+    return Array.from(members).sort().map(name => ({ value: name, label: name }));
+  }, [calls]);
+
+  // Call type options
+  const callTypeOptions = [
+    { value: "qualification", label: "Qualification" },
+    { value: "offer", label: "Offer Call" },
+  ];
+
+  // Score range options
+  const scoreRangeOptions = [
+    { value: "high", label: "High (80%+)" },
+    { value: "medium", label: "Medium (60-79%)" },
+    { value: "low", label: "Low (Below 60%)" },
+  ];
+
+  // Call direction options
+  const directionOptions = [
+    { value: "inbound", label: "Inbound" },
+    { value: "outbound", label: "Outbound" },
+  ];
+
   // Separate graded calls from skipped/admin calls
-  const gradedCalls = calls?.filter(c => c.status === "completed" && c.classification === "conversation") || [];
+  const allGradedCalls = calls?.filter(c => c.status === "completed" && c.classification === "conversation") || [];
   const adminCalls = calls?.filter(c => c.classification === "admin_call") || [];
   const skippedCalls = calls?.filter(c => 
     (c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call"))
   ) || [];
+
+  // Apply filters to graded calls
+  const gradedCalls = useMemo(() => {
+    let filtered = allGradedCalls;
+
+    // Filter by team member
+    if (selectedTeamMembers.length > 0) {
+      filtered = filtered.filter(c => c.teamMemberName && selectedTeamMembers.includes(c.teamMemberName));
+    }
+
+    // Filter by call type
+    if (selectedCallTypes.length > 0) {
+      filtered = filtered.filter(c => c.callType && selectedCallTypes.includes(c.callType));
+    }
+
+    // Filter by score range
+    if (selectedScoreRanges.length > 0) {
+      filtered = filtered.filter(c => {
+        const score = parseFloat(c.grade?.overallScore || "0");
+        return selectedScoreRanges.some(range => {
+          if (range === "high") return score >= 80;
+          if (range === "medium") return score >= 60 && score < 80;
+          if (range === "low") return score < 60;
+          return false;
+        });
+      });
+    }
+
+    // Filter by call direction
+    if (selectedDirections.length > 0) {
+      filtered = filtered.filter(c => c.callDirection && selectedDirections.includes(c.callDirection));
+    }
+
+    return filtered;
+  }, [allGradedCalls, selectedTeamMembers, selectedCallTypes, selectedScoreRanges, selectedDirections]);
+
+  // Check if any filters are active
+  const hasActiveFilters = selectedTeamMembers.length > 0 || selectedCallTypes.length > 0 || 
+    selectedScoreRanges.length > 0 || selectedDirections.length > 0;
+
+  const clearAllFilters = () => {
+    setSelectedTeamMembers([]);
+    setSelectedCallTypes([]);
+    setSelectedScoreRanges([]);
+    setSelectedDirections([]);
+  };
 
   return (
     <div className="space-y-6">
@@ -698,7 +854,7 @@ export default function CallInbox() {
             <TabsList className="mb-4">
               <TabsTrigger value="calls">
                 <Phone className="h-4 w-4 mr-2" />
-                Graded Calls ({gradedCalls.length})
+                Graded Calls ({gradedCalls.length}{allGradedCalls.length !== gradedCalls.length ? `/${allGradedCalls.length}` : ""})
               </TabsTrigger>
               <TabsTrigger value="admin">
                 N/A ({adminCalls.length})
@@ -711,6 +867,53 @@ export default function CallInbox() {
                 Feedback ({pendingFeedback.length} pending)
               </TabsTrigger>
             </TabsList>
+
+            {/* Filters - shown only on calls tab */}
+            {activeTab === "calls" && (
+              <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-muted/30 rounded-lg border">
+                <div className="flex items-center gap-1 text-sm text-muted-foreground mr-2">
+                  <Filter className="h-4 w-4" />
+                  <span>Filters:</span>
+                </div>
+                <MultiSelectFilter
+                  label="Team Member"
+                  options={teamMemberOptions}
+                  selected={selectedTeamMembers}
+                  onChange={setSelectedTeamMembers}
+                  icon={User}
+                />
+                <MultiSelectFilter
+                  label="Call Type"
+                  options={callTypeOptions}
+                  selected={selectedCallTypes}
+                  onChange={setSelectedCallTypes}
+                  icon={Phone}
+                />
+                <MultiSelectFilter
+                  label="Score"
+                  options={scoreRangeOptions}
+                  selected={selectedScoreRanges}
+                  onChange={setSelectedScoreRanges}
+                />
+                <MultiSelectFilter
+                  label="Direction"
+                  options={directionOptions}
+                  selected={selectedDirections}
+                  onChange={setSelectedDirections}
+                />
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-muted-foreground hover:text-foreground"
+                    onClick={clearAllFilters}
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" />
+                    Clear all
+                  </Button>
+                )}
+              </div>
+            )}
 
             <TabsContent value="calls" className="space-y-4">
               {isLoading ? (

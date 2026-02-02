@@ -620,19 +620,21 @@ export const appRouter = router({
           })
           .join("\n\n");
 
-        const systemPrompt = `You are an expert sales coach for a real estate wholesaling team. Your role is to help team members improve their phone skills based on the company's training methodology.
+        const systemPrompt = `You are an expert sales coach for a real estate wholesaling team. Your role is to help team members improve their phone skills.
 
 You have access to the following training materials:
 ${trainingContext}
 
 ${successfulCalls.length > 0 ? `Here are examples from recent high-scoring calls:\n${callExamples}` : ""}
 
-When answering questions:
-1. Reference specific training materials when relevant
-2. Provide concrete examples and scripts when possible
-3. If discussing objection handling, give word-for-word responses they can use
-4. Be encouraging but direct - these are salespeople who want actionable advice
-5. If you reference a successful call example, explain what made it effective`;
+IMPORTANT RESPONSE FORMAT:
+- Keep your response to MAXIMUM 2 short paragraphs
+- Be OPTIMISTIC and encouraging - celebrate what they're doing right
+- Give ONE clear, actionable tip they can use immediately
+- Use a warm, supportive tone - you believe in their ability to succeed
+- If providing a script, keep it brief (2-3 sentences max)
+
+Remember: Short, positive, actionable. You're their biggest cheerleader!`;
 
         const response = await invokeLLM({
           messages: [
