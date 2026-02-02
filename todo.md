@@ -257,3 +257,12 @@
 - [x] Generate suggested responses for each objection type
 - [x] Add objection handling section to call detail page
 - [x] Show potential replies with script examples
+
+
+## AI Meeting Facilitator
+- [x] Create backend endpoint for meeting facilitator chat
+- [x] Build meeting chat interface on agenda page
+- [x] Add role-play mode with seller simulation
+- [x] Add example pulling from real calls
+- [x] Add agenda navigation and progress tracking
+- [x] Add meeting summary generation

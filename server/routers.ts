@@ -656,6 +656,232 @@ Format: Start with brief encouragement, then give your one tip in 1-2 sentences.
       }),
   }),
 
+  // ============ MEETING FACILITATOR ============
+  meeting: router({
+    // Start a meeting session with agenda context
+    startSession: protectedProcedure
+      .input(z.object({
+        agendaItems: z.array(z.object({
+          id: z.number(),
+          title: z.string(),
+          description: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        // Get training materials for context
+        const trainingMaterials = await getTrainingMaterials({});
+        const trainingContext = trainingMaterials
+          .map(m => `${m.title}: ${m.content?.substring(0, 500) || ""}`)
+          .join("\n");
+
+        // Get recent calls for examples
+        const recentCalls = await getCallsWithGrades({ limit: 30 });
+        const goodCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 75).slice(0, 5);
+        const badCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") < 60).slice(0, 5);
+
+        return {
+          sessionId: Date.now().toString(),
+          agendaItems: input.agendaItems,
+          context: {
+            trainingMaterialCount: trainingMaterials.length,
+            goodCallExamples: goodCalls.length,
+            badCallExamples: badCalls.length,
+          },
+        };
+      }),
+
+    // Chat with the meeting facilitator
+    chat: protectedProcedure
+      .input(z.object({
+        message: z.string(),
+        mode: z.enum(["facilitate", "roleplay", "example", "qa"]),
+        currentAgendaItem: z.object({
+          id: z.number(),
+          title: z.string(),
+          description: z.string().optional(),
+        }).optional(),
+        roleplayContext: z.object({
+          scenario: z.string().optional(),
+          sellerPersonality: z.string().optional(),
+        }).optional(),
+        conversationHistory: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+        })).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Get training materials
+        const trainingMaterials = await getTrainingMaterials({});
+        const trainingContext = trainingMaterials
+          .map(m => `### ${m.title}\n${m.content?.substring(0, 800) || ""}`)
+          .join("\n\n");
+
+        // Get recent calls for examples
+        const recentCalls = await getCallsWithGrades({ limit: 30 });
+        const goodCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 75).slice(0, 5);
+        const badCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") < 60).slice(0, 5);
+
+        let systemPrompt = "";
+
+        if (input.mode === "roleplay") {
+          // Role-play mode: AI plays the seller
+          systemPrompt = `You are playing the role of a SELLER in a real estate wholesaling role-play exercise.
+
+Your personality: ${input.roleplayContext?.sellerPersonality || "Skeptical homeowner who inherited a property and is unsure about selling"}
+Scenario: ${input.roleplayContext?.scenario || "First call - seller is exploring options"}
+
+BEHAVIOR RULES:
+1. Stay in character as the seller - never break character
+2. Respond naturally as a real homeowner would
+3. Raise realistic objections (price concerns, timing, other offers, need to think about it)
+4. If the team member handles objections well, gradually warm up
+5. If they push too hard or miss cues, become more resistant
+6. Keep responses conversational (2-4 sentences max)
+
+Common objections to use:
+- "That seems low, I was hoping for more"
+- "I need to talk to my spouse/family first"
+- "I'm talking to other investors too"
+- "I'm not in a rush to sell"
+- "How do I know you're legitimate?"
+
+Respond as the seller would. Stay in character.`;
+        } else if (input.mode === "example") {
+          // Example mode: Show real call examples
+          const callExamples = [...goodCalls, ...badCalls].map(c => {
+            const grade = c.grade;
+            const score = parseFloat(grade?.overallScore || "0");
+            return `### ${score >= 75 ? "✅ GOOD" : "❌ NEEDS WORK"} - Call with ${c.contactName || "Unknown"} (${Math.round(score)}%)
+Team Member: ${c.teamMemberName || "Unknown"}
+Summary: ${grade?.summary || "N/A"}
+Strengths: ${(grade?.strengths as string[] || []).join(", ") || "N/A"}
+Improvements: ${(grade?.improvements as string[] || []).join(", ") || "N/A"}
+Transcript excerpt: "${c.transcript?.substring(0, 600) || "N/A"}..."`;
+          }).join("\n\n");
+
+          systemPrompt = `You are a meeting facilitator helping a real estate wholesaling team learn from real call examples.
+
+RECENT CALL EXAMPLES:
+${callExamples}
+
+TRAINING CONTEXT:
+${trainingContext.substring(0, 2000)}
+
+Your role:
+1. When asked, share relevant examples from the calls above
+2. Highlight what worked well and what could improve
+3. Connect examples to the current agenda topic: "${input.currentAgendaItem?.title || "General discussion"}"
+4. Keep responses focused and actionable (3-5 sentences)
+5. Quote specific parts of transcripts when relevant
+
+Be encouraging but honest about areas for improvement.`;
+        } else if (input.mode === "qa") {
+          // Q&A mode: Answer coaching questions
+          systemPrompt = `You are a sales coach for a real estate wholesaling team, answering questions during a team meeting.
+
+TRAINING MATERIALS:
+${trainingContext.substring(0, 3000)}
+
+Current agenda topic: "${input.currentAgendaItem?.title || "General discussion"}"
+${input.currentAgendaItem?.description ? `Topic details: ${input.currentAgendaItem.description}` : ""}
+
+RESPONSE RULES:
+1. Keep answers concise (3-5 sentences max)
+2. Be warm and encouraging
+3. Give specific, actionable advice
+4. Reference training materials when relevant
+5. If asked about scripts, give a brief example phrase, not full scripts
+
+Answer the team's question helpfully and concisely.`;
+        } else {
+          // Facilitate mode: Guide through agenda
+          systemPrompt = `You are an AI meeting facilitator guiding a real estate wholesaling team through their weekly training call.
+
+Current agenda item: "${input.currentAgendaItem?.title || "Meeting start"}"
+${input.currentAgendaItem?.description ? `Details: ${input.currentAgendaItem.description}` : ""}
+
+TRAINING CONTEXT:
+${trainingContext.substring(0, 1500)}
+
+Your role:
+1. Guide discussion on the current agenda topic
+2. Ask thought-provoking questions to engage the team
+3. Suggest when to do role-plays or review examples
+4. Keep the meeting moving - suggest transitioning after thorough discussion
+5. Be encouraging and energetic
+
+RESPONSE FORMAT:
+- Keep responses brief (2-4 sentences)
+- End with a question or action suggestion when appropriate
+- Use a warm, coach-like tone`;
+        }
+
+        // Build conversation history
+        const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+          { role: "system", content: systemPrompt },
+        ];
+
+        // Add conversation history
+        if (input.conversationHistory) {
+          for (const msg of input.conversationHistory.slice(-10)) {
+            messages.push({ role: msg.role === "user" ? "user" : "assistant", content: msg.content });
+          }
+        }
+
+        // Add current message
+        messages.push({ role: "user", content: input.message });
+
+        const response = await invokeLLM({ messages });
+
+        const messageContent = response.choices?.[0]?.message?.content;
+        const answer = typeof messageContent === "string"
+          ? messageContent
+          : "I apologize, I couldn't generate a response. Please try again.";
+
+        return { answer, mode: input.mode };
+      }),
+
+    // Generate meeting summary
+    generateSummary: protectedProcedure
+      .input(z.object({
+        agendaItems: z.array(z.object({
+          title: z.string(),
+          discussed: z.boolean(),
+        })),
+        conversationHighlights: z.array(z.string()).optional(),
+        roleplayCount: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const systemPrompt = `Generate a brief meeting summary for a sales team training call.
+
+Agenda items covered:
+${input.agendaItems.map(item => `- ${item.discussed ? "✅" : "⏭️"} ${item.title}`).join("\n")}
+
+${input.roleplayCount ? `Role-plays conducted: ${input.roleplayCount}` : ""}
+
+Generate:
+1. A 2-3 sentence summary of what was covered
+2. 2-3 key action items for the team
+3. One encouraging closing statement
+
+Keep it brief and actionable.`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: "Generate the meeting summary." },
+          ],
+        });
+
+        const messageContent = response.choices?.[0]?.message?.content;
+        return {
+          summary: typeof messageContent === "string"
+            ? messageContent
+            : "Meeting completed. Great work team!",
+        };
+      }),
+  }),
+
   // ============ RUBRICS (Read-only) ============
   rubrics: router({
     get: protectedProcedure
