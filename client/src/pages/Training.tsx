@@ -273,7 +273,7 @@ function TeamSkillsSection() {
           <div className="p-2 rounded-lg bg-blue-100 text-blue-600"><Target className="h-5 w-5" /></div>
           <div><CardTitle className="text-lg">Long-Term Skills</CardTitle><CardDescription>Skills the team is actively developing</CardDescription></div>
         </div>
-        <AddTeamItemDialog itemType="skill" onSuccess={handleRefresh} />
+
       </CardHeader>
       <CardContent>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}</div> : items && items.length > 0 ? (
@@ -300,7 +300,7 @@ function TeamIssuesSection() {
           <div className="p-2 rounded-lg bg-red-100 text-red-600"><AlertTriangle className="h-5 w-5" /></div>
           <div><CardTitle className="text-lg">Issues to Address</CardTitle><CardDescription>Urgent incompetencies from call analysis</CardDescription></div>
         </div>
-        <AddTeamItemDialog itemType="issue" onSuccess={handleRefresh} />
+
       </CardHeader>
       <CardContent>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}</div> : sortedItems && sortedItems.length > 0 ? (
@@ -323,7 +323,7 @@ function TeamWinsSection() {
           <div className="p-2 rounded-lg bg-green-100 text-green-600"><Trophy className="h-5 w-5" /></div>
           <div><CardTitle className="text-lg">Wins to Celebrate</CardTitle><CardDescription>Small victories to recognize</CardDescription></div>
         </div>
-        <AddTeamItemDialog itemType="win" onSuccess={handleRefresh} />
+
       </CardHeader>
       <CardContent>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : items && items.length > 0 ? (
@@ -522,7 +522,6 @@ function TeamAgendaSection() {
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={() => setShowFacilitator(true)} className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700" disabled={!sortedItems || sortedItems.length === 0}><Play className="h-4 w-4 mr-2" />Start Meeting</Button>
-            <AddTeamItemDialog itemType="agenda" onSuccess={handleRefresh} />
           </div>
       </CardHeader>
       <CardContent>

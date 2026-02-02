@@ -267,3 +267,7 @@
 - [x] Add agenda navigation and progress tracking
 - [x] Add meeting summary generation
 - [x] Fix Start Meeting button visibility on Training page (was in wrong file)
+
+
+## Remove Add Manual Buttons
+- [x] Remove Add Manual buttons from Training page (Issues, Wins, Skills, Agenda sections)
