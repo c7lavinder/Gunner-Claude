@@ -3,9 +3,10 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users, calls, callGrades, teamMembers, performanceMetrics, 
   InsertCall, InsertCallGrade, InsertTeamMember, Call, CallGrade, TeamMember,
-  trainingMaterials, aiFeedback, gradingRules,
+  trainingMaterials, aiFeedback, gradingRules, teamTrainingItems,
   InsertTrainingMaterial, InsertAIFeedback, InsertGradingRule,
-  TrainingMaterial, AIFeedback, GradingRule
+  TrainingMaterial, AIFeedback, GradingRule,
+  TeamTrainingItem, InsertTeamTrainingItem
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -320,7 +321,9 @@ export async function getLeaderboardData(): Promise<Array<{
 
 // ============ ANALYTICS FUNCTIONS ============
 
-export async function getCallStats(): Promise<{
+export async function getCallStats(options?: {
+  dateRange?: "week" | "month" | "ytd" | "all";
+}): Promise<{
   totalCalls: number;
   gradedCalls: number;
   skippedCalls: number;
@@ -364,7 +367,35 @@ export async function getCallStats(): Promise<{
     },
   };
 
-  const allCalls = await db.select().from(calls);
+  // Calculate date range
+  const now = new Date();
+  let startDate: Date | null = null;
+  
+  switch (options?.dateRange) {
+    case "week":
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 7);
+      break;
+    case "month":
+      startDate = new Date(now);
+      startDate.setMonth(startDate.getMonth() - 1);
+      break;
+    case "ytd":
+      startDate = new Date(now.getFullYear(), 0, 1); // January 1st of current year
+      break;
+    case "all":
+    default:
+      startDate = null;
+      break;
+  }
+
+  // Get calls with optional date filter
+  let allCalls: Call[];
+  if (startDate) {
+    allCalls = await db.select().from(calls).where(gte(calls.createdAt, startDate));
+  } else {
+    allCalls = await db.select().from(calls);
+  }
   const gradedCalls = allCalls.filter(c => c.status === "completed" && c.classification === "conversation");
   const skippedCalls = allCalls.filter(c => c.status === "skipped");
   const pendingCalls = allCalls.filter(c => c.status === "pending" || c.status === "transcribing" || c.status === "classifying" || c.status === "grading");
@@ -374,7 +405,6 @@ export async function getCallStats(): Promise<{
   const totalScore = grades.reduce((sum, g) => sum + (parseFloat(g.overallScore || "0")), 0);
   const averageScore = grades.length > 0 ? totalScore / grades.length : 0;
 
-  const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const weekStart = new Date(todayStart);
   weekStart.setDate(weekStart.getDate() - 7);
@@ -644,4 +674,110 @@ export async function getGradingContext(callType: "qualification" | "offer"): Pr
     gradingRules: filteredRules,
     recentFeedback: feedback,
   };
+}
+
+
+// ============ TEAM TRAINING ITEMS FUNCTIONS ============
+
+export async function createTeamTrainingItem(item: InsertTeamTrainingItem): Promise<TeamTrainingItem | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.insert(teamTrainingItems).values(item);
+  const insertId = result[0].insertId;
+  const created = await db.select().from(teamTrainingItems).where(eq(teamTrainingItems.id, insertId)).limit(1);
+  return created[0] || null;
+}
+
+export async function getTeamTrainingItems(options?: {
+  itemType?: "skill" | "issue" | "win" | "agenda";
+  status?: "active" | "in_progress" | "completed" | "archived";
+  teamMemberId?: number;
+  meetingDate?: Date;
+}): Promise<TeamTrainingItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [];
+  
+  if (options?.itemType) {
+    conditions.push(eq(teamTrainingItems.itemType, options.itemType));
+  }
+  if (options?.status) {
+    conditions.push(eq(teamTrainingItems.status, options.status));
+  }
+  if (options?.teamMemberId) {
+    conditions.push(eq(teamTrainingItems.teamMemberId, options.teamMemberId));
+  }
+
+  let query = db.select().from(teamTrainingItems);
+  
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  return await query.orderBy(desc(teamTrainingItems.createdAt));
+}
+
+export async function getTeamTrainingItemById(id: number): Promise<TeamTrainingItem | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(teamTrainingItems).where(eq(teamTrainingItems.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function updateTeamTrainingItem(id: number, updates: Partial<InsertTeamTrainingItem>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(teamTrainingItems).set(updates).where(eq(teamTrainingItems.id, id));
+}
+
+export async function deleteTeamTrainingItem(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(teamTrainingItems).where(eq(teamTrainingItems.id, id));
+}
+
+export async function getActiveTrainingItems(): Promise<{
+  skills: TeamTrainingItem[];
+  issues: TeamTrainingItem[];
+  wins: TeamTrainingItem[];
+  agenda: TeamTrainingItem[];
+}> {
+  const db = await getDb();
+  if (!db) return { skills: [], issues: [], wins: [], agenda: [] };
+
+  const activeItems = await db.select().from(teamTrainingItems)
+    .where(
+      and(
+        eq(teamTrainingItems.status, "active"),
+      )
+    )
+    .orderBy(teamTrainingItems.sortOrder);
+
+  return {
+    skills: activeItems.filter(i => i.itemType === "skill"),
+    issues: activeItems.filter(i => i.itemType === "issue"),
+    wins: activeItems.filter(i => i.itemType === "win"),
+    agenda: activeItems.filter(i => i.itemType === "agenda"),
+  };
+}
+
+export async function getUpcomingMeetingAgenda(meetingDate?: Date): Promise<TeamTrainingItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get agenda items, optionally filtered by meeting date
+  const conditions = [eq(teamTrainingItems.itemType, "agenda")];
+  
+  if (meetingDate) {
+    conditions.push(eq(teamTrainingItems.meetingDate, meetingDate));
+  }
+
+  return await db.select().from(teamTrainingItems)
+    .where(and(...conditions))
+    .orderBy(teamTrainingItems.sortOrder);
 }

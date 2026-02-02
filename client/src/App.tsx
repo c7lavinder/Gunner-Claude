@@ -12,6 +12,7 @@ import Leaderboard from "./pages/Leaderboard";
 import TeamMembers from "./pages/TeamMembers";
 import Analytics from "./pages/Analytics";
 import Training from "./pages/Training";
+import TeamTraining from "./pages/TeamTraining";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/team" component={TeamMembers} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/training" component={Training} />
+      <Route path="/team-training" component={TeamTraining} />
       {/* Redirects for removed pages */}
       <Route path="/feedback">
         <Redirect to="/calls" />

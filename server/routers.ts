@@ -36,6 +36,13 @@ import {
   deleteGradingRule,
   // Grading context
   getGradingContext,
+  // Team training items
+  createTeamTrainingItem,
+  getTeamTrainingItems,
+  getTeamTrainingItemById,
+  updateTeamTrainingItem,
+  deleteTeamTrainingItem,
+  getActiveTrainingItems,
 } from "./db";
 import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
@@ -193,9 +200,13 @@ export const appRouter = router({
 
   // ============ ANALYTICS ============
   analytics: router({
-    stats: protectedProcedure.query(async () => {
-      return await getCallStats();
-    }),
+    stats: protectedProcedure
+      .input(z.object({
+        dateRange: z.enum(["week", "month", "ytd", "all"]).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getCallStats(input || {});
+      }),
   }),
 
   // ============ TRAINING MATERIALS ============
@@ -466,6 +477,96 @@ When answering questions:
       .input(z.object({ callType: z.enum(["qualification", "offer"]) }))
       .query(async ({ input }) => {
         return await getGradingContext(input.callType);
+      }),
+  }),
+
+  // ============ TEAM TRAINING ITEMS ============
+  teamTraining: router({
+    list: protectedProcedure
+      .input(z.object({
+        itemType: z.enum(["skill", "issue", "win", "agenda"]).optional(),
+        status: z.enum(["active", "in_progress", "completed", "archived"]).optional(),
+        teamMemberId: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getTeamTrainingItems(input || {});
+      }),
+
+    getActive: protectedProcedure.query(async () => {
+      return await getActiveTrainingItems();
+    }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const item = await getTeamTrainingItemById(input.id);
+        if (!item) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Training item not found" });
+        }
+        return item;
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        itemType: z.enum(["skill", "issue", "win", "agenda"]),
+        title: z.string(),
+        description: z.string().optional(),
+        targetBehavior: z.string().optional(),
+        callReference: z.number().optional(),
+        sortOrder: z.number().optional(),
+        priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+        teamMemberId: z.number().optional(),
+        teamMemberName: z.string().optional(),
+        meetingDate: z.date().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await createTeamTrainingItem({
+          itemType: input.itemType,
+          title: input.title,
+          description: input.description,
+          targetBehavior: input.targetBehavior,
+          callReference: input.callReference,
+          sortOrder: input.sortOrder || 0,
+          priority: input.priority || "medium",
+          teamMemberId: input.teamMemberId,
+          teamMemberName: input.teamMemberName,
+          meetingDate: input.meetingDate,
+          status: "active",
+        });
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        targetBehavior: z.string().optional(),
+        sortOrder: z.number().optional(),
+        priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+        status: z.enum(["active", "in_progress", "completed", "archived"]).optional(),
+        meetingDate: z.date().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await updateTeamTrainingItem(id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteTeamTrainingItem(input.id);
+        return { success: true };
+      }),
+
+    complete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await updateTeamTrainingItem(input.id, { 
+          status: "completed",
+          completedAt: new Date(),
+        });
+        return { success: true };
       }),
   }),
 });

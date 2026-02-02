@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Phone, TrendingUp, Award, Calendar, CheckCircle2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type DateRange = "week" | "month" | "ytd" | "all";
 
 function StatCard({ 
   title, 
@@ -43,40 +47,62 @@ function GradeBadge({ grade }: { grade: string }) {
   return <span className={`grade-badge ${gradeClass}`}>{grade}</span>;
 }
 
+const dateRangeLabels: Record<DateRange, string> = {
+  week: "Last 7 Days",
+  month: "Last 30 Days",
+  ytd: "Year to Date",
+  all: "All Time",
+};
+
 export default function Home() {
-  const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery();
+  const [dateRange, setDateRange] = useState<DateRange>("week");
+  
+  const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
   const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ limit: 5 });
   const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Welcome to Gunner - Your AI-powered call coaching platform
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Welcome to Gunner - Your AI-powered call coaching platform
+          </p>
+        </div>
+        <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select period" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="week">Last 7 Days</SelectItem>
+            <SelectItem value="month">Last 30 Days</SelectItem>
+            <SelectItem value="ytd">Year to Date</SelectItem>
+            <SelectItem value="all">All Time</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Calls Made"
-          value={stats?.callsToday ?? 0}
-          description="Today"
+          value={stats?.totalCalls ?? 0}
+          description={dateRangeLabels[dateRange]}
           icon={Phone}
           loading={statsLoading}
         />
         <StatCard
           title="Appointments Set"
           value={stats?.appointmentsSet ?? 0}
-          description="All time"
+          description={dateRangeLabels[dateRange]}
           icon={Calendar}
           loading={statsLoading}
         />
         <StatCard
           title="Offers Accepted"
           value={stats?.offersAccepted ?? 0}
-          description="All time"
+          description={dateRangeLabels[dateRange]}
           icon={CheckCircle2}
           loading={statsLoading}
         />

@@ -236,3 +236,44 @@ export const gradingRules = mysqlTable("grading_rules", {
 
 export type GradingRule = typeof gradingRules.$inferSelect;
 export type InsertGradingRule = typeof gradingRules.$inferInsert;
+
+
+/**
+ * Team Training Items - tracks ongoing team development items
+ * Used for weekly team calls and ongoing coaching
+ */
+export const teamTrainingItems = mysqlTable("team_training_items", {
+  id: int("id").autoincrement().primaryKey(),
+  // Item type
+  itemType: mysqlEnum("itemType", [
+    "skill",           // Long-term skills being developed
+    "issue",           // Urgent issues/incompetencies to address
+    "win",             // Small wins to celebrate
+    "agenda"           // Weekly team call agenda items
+  ]).notNull(),
+  // Content
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  // For skills: what we're working toward
+  targetBehavior: text("targetBehavior"),
+  // For issues: what went wrong and how to fix it
+  callReference: int("callReference").references(() => calls.id), // Link to specific call if applicable
+  // For agenda items: order in the meeting
+  sortOrder: int("sortOrder").default(0),
+  // Priority level
+  priority: mysqlEnum("priority", ["low", "medium", "high", "urgent"]).default("medium"),
+  // Who this applies to (null = whole team)
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
+  teamMemberName: varchar("teamMemberName", { length: 255 }),
+  // Status
+  status: mysqlEnum("status", ["active", "in_progress", "completed", "archived"]).default("active"),
+  // For agenda items: which meeting date
+  meetingDate: timestamp("meetingDate"),
+  // Timestamps
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TeamTrainingItem = typeof teamTrainingItems.$inferSelect;
+export type InsertTeamTrainingItem = typeof teamTrainingItems.$inferInsert;

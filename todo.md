@@ -63,3 +63,17 @@
 - [x] Remove Grading Rules page from navigation
 - [x] Add AI Coach Q&A feature in Call History (ask questions about objections, reference past calls and training)
 - [x] Add callOutcome field for tracking appointments and offers
+
+## Dashboard Date Filter
+- [x] Add date range selector to dashboard (Last Week, Last Month, YTD, All Time)
+- [x] Update stats queries to accept date range parameters
+- [x] Filter all dashboard metrics by selected date range
+
+## Team Training Page
+- [x] Database schema for training items (skills, issues, wins, agenda)
+- [x] Long-term skills tracking section
+- [x] Urgent issues/incompetencies section (from call analysis)
+- [x] Small wins celebration section
+- [x] Weekly team call itinerary/agenda builder
+- [x] Backend routes for CRUD operations on training items
+- [x] Add Team Training to navigation menu
