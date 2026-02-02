@@ -41,3 +41,17 @@
 - [x] Exclude filtered calls from leaderboard calculations
 - [x] Show filtered calls separately in UI (Analytics page shows breakdown)
 - [x] Classification breakdown in analytics (conversation, voicemail, no_answer, callback_request, wrong_number, too_short)
+
+## Training & Feedback System
+- [x] Database schema for training materials
+- [x] Database schema for AI feedback/corrections
+- [x] Database schema for custom grading rules
+- [x] Training materials upload functionality
+- [x] Training materials management UI (view, edit, delete)
+- [x] AI feedback form on call detail page
+- [x] Feedback history tracking and management
+- [x] Display current grading criteria/methodology (Methodology page)
+- [x] Custom grading rules management
+- [x] Integrate feedback into grading prompts
+- [x] Integrate custom training materials into grading
+- [x] Integrate custom grading rules into grading

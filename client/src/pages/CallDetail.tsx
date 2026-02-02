@@ -5,10 +5,39 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Phone, Clock, User, RefreshCw, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, FileText } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Phone, Clock, User, RefreshCw, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, FileText, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Link, useParams } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
+import { useState } from "react";
+
+const FEEDBACK_TYPES = [
+  { value: "score_too_high", label: "Score is too high" },
+  { value: "score_too_low", label: "Score is too low" },
+  { value: "wrong_criteria", label: "Wrong criteria applied" },
+  { value: "missed_issue", label: "Missed an issue" },
+  { value: "incorrect_feedback", label: "Incorrect feedback given" },
+  { value: "general_correction", label: "General correction" },
+  { value: "praise", label: "AI did great!" },
+];
 
 function GradeBadge({ grade, size = "default" }: { grade: string; size?: "default" | "large" }) {
   const gradeClass = `grade-${grade.toLowerCase()}`;
@@ -36,6 +65,14 @@ function CriteriaCard({ criteria }: { criteria: any }) {
 export default function CallDetail() {
   const params = useParams<{ id: string }>();
   const callId = parseInt(params.id || "0", 10);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [feedbackForm, setFeedbackForm] = useState({
+    feedbackType: "general_correction",
+    criteriaName: "",
+    suggestedGrade: "",
+    explanation: "",
+    correctBehavior: "",
+  });
 
   const { data: call, isLoading: callLoading } = trpc.calls.getById.useQuery(
     { id: callId },
@@ -47,6 +84,11 @@ export default function CallDetail() {
     { enabled: callId > 0 }
   );
 
+  const { data: existingFeedback } = trpc.feedback.list.useQuery(
+    { callId, limit: 10 },
+    { enabled: callId > 0 }
+  );
+
   const reprocessMutation = trpc.calls.reprocess.useMutation({
     onSuccess: () => {
       toast.success("Call queued for reprocessing");
@@ -55,6 +97,41 @@ export default function CallDetail() {
       toast.error(`Failed to reprocess: ${error.message}`);
     },
   });
+
+  const feedbackMutation = trpc.feedback.create.useMutation({
+    onSuccess: () => {
+      toast.success("Feedback submitted successfully");
+      setFeedbackDialogOpen(false);
+      setFeedbackForm({
+        feedbackType: "general_correction",
+        criteriaName: "",
+        suggestedGrade: "",
+        explanation: "",
+        correctBehavior: "",
+      });
+    },
+    onError: (error) => {
+      toast.error(`Failed to submit feedback: ${error.message}`);
+    },
+  });
+
+  const handleSubmitFeedback = () => {
+    if (!feedbackForm.explanation.trim()) {
+      toast.error("Please provide an explanation");
+      return;
+    }
+
+    feedbackMutation.mutate({
+      callId,
+      callGradeId: grade?.id,
+      feedbackType: feedbackForm.feedbackType as any,
+      criteriaName: feedbackForm.criteriaName || undefined,
+      originalGrade: grade?.overallGrade as any,
+      suggestedGrade: feedbackForm.suggestedGrade ? feedbackForm.suggestedGrade as any : undefined,
+      explanation: feedbackForm.explanation,
+      correctBehavior: feedbackForm.correctBehavior || undefined,
+    });
+  };
 
   const isLoading = callLoading || gradeLoading;
 
@@ -124,35 +201,193 @@ export default function CallDetail() {
             )}
           </div>
         </div>
-        {call.status === "failed" && (
-          <Button 
-            variant="outline"
-            onClick={() => reprocessMutation.mutate({ callId })}
-            disabled={reprocessMutation.isPending}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${reprocessMutation.isPending ? "animate-spin" : ""}`} />
-            Retry
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {call.status === "completed" && grade && (
+            <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Give Feedback
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Provide Feedback on AI Grading</DialogTitle>
+                  <DialogDescription>
+                    Help improve the AI by letting us know what it got right or wrong.
+                    Your feedback will be used to improve future grading.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Feedback Type</Label>
+                    <Select
+                      value={feedbackForm.feedbackType}
+                      onValueChange={(value) => setFeedbackForm({ ...feedbackForm, feedbackType: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FEEDBACK_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Current Grade</Label>
+                      <div className="p-2 border rounded-lg text-center">
+                        <GradeBadge grade={grade?.overallGrade || "?"} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Suggested Grade (optional)</Label>
+                      <Select
+                        value={feedbackForm.suggestedGrade}
+                        onValueChange={(value) => setFeedbackForm({ ...feedbackForm, suggestedGrade: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select grade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="A">A</SelectItem>
+                          <SelectItem value="B">B</SelectItem>
+                          <SelectItem value="C">C</SelectItem>
+                          <SelectItem value="D">D</SelectItem>
+                          <SelectItem value="F">F</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Specific Criteria (optional)</Label>
+                    <Select
+                      value={feedbackForm.criteriaName}
+                      onValueChange={(value) => setFeedbackForm({ ...feedbackForm, criteriaName: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select criteria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {criteriaScores.map((criteria) => (
+                          <SelectItem key={criteria.name} value={criteria.name}>
+                            {criteria.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Explanation *</Label>
+                    <Textarea
+                      placeholder="Describe what the AI got wrong or right..."
+                      value={feedbackForm.explanation}
+                      onChange={(e) => setFeedbackForm({ ...feedbackForm, explanation: e.target.value })}
+                      className="min-h-[100px]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>What Should the AI Have Done? (optional)</Label>
+                    <Textarea
+                      placeholder="Describe the correct behavior or scoring..."
+                      value={feedbackForm.correctBehavior}
+                      onChange={(e) => setFeedbackForm({ ...feedbackForm, correctBehavior: e.target.value })}
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setFeedbackDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSubmitFeedback}
+                    disabled={feedbackMutation.isPending}
+                  >
+                    {feedbackMutation.isPending ? "Submitting..." : "Submit Feedback"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+          {call.status === "failed" && (
+            <Button 
+              variant="outline"
+              onClick={() => reprocessMutation.mutate({ callId })}
+              disabled={reprocessMutation.isPending}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${reprocessMutation.isPending ? "animate-spin" : ""}`} />
+              Retry
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Existing Feedback Notice */}
+      {existingFeedback && existingFeedback.length > 0 && (
+        <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+          <CardContent className="flex items-center gap-4 py-4">
+            <MessageSquare className="h-5 w-5 text-blue-600" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                You've submitted {existingFeedback.length} feedback item(s) for this call
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                {existingFeedback.filter(f => f.status === "incorporated").length} incorporated, 
+                {" "}{existingFeedback.filter(f => f.status === "pending").length} pending review
+              </p>
+            </div>
+            <Link href="/feedback">
+              <Button variant="outline" size="sm">
+                View All Feedback
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Content */}
       {call.status !== "completed" ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <RefreshCw className="h-12 w-12 text-muted-foreground/50 mb-4 animate-spin" />
-            <h3 className="text-lg font-semibold mb-2">Processing Call</h3>
-            <p className="text-muted-foreground text-center">
-              Status: <span className="font-medium capitalize">{call.status}</span>
-            </p>
-            {call.status === "failed" && (
-              <Button 
-                className="mt-4"
-                onClick={() => reprocessMutation.mutate({ callId })}
-                disabled={reprocessMutation.isPending}
-              >
-                Retry Processing
-              </Button>
+            {call.status === "skipped" ? (
+              <>
+                <AlertTriangle className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Call Skipped</h3>
+                <p className="text-muted-foreground text-center max-w-md">
+                  This call was classified as non-gradable: <span className="font-medium capitalize">{call.classification?.replace(/_/g, " ")}</span>
+                </p>
+                {call.classificationReason && (
+                  <p className="text-sm text-muted-foreground mt-2 text-center max-w-md">
+                    {call.classificationReason}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-12 w-12 text-muted-foreground/50 mb-4 animate-spin" />
+                <h3 className="text-lg font-semibold mb-2">Processing Call</h3>
+                <p className="text-muted-foreground text-center">
+                  Status: <span className="font-medium capitalize">{call.status}</span>
+                </p>
+                {call.status === "failed" && (
+                  <Button 
+                    className="mt-4"
+                    onClick={() => reprocessMutation.mutate({ callId })}
+                    disabled={reprocessMutation.isPending}
+                  >
+                    Retry Processing
+                  </Button>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

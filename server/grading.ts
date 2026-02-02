@@ -170,9 +170,39 @@ function getGradeFromScore(score: number): "A" | "B" | "C" | "D" | "F" {
 export async function gradeCall(
   transcript: string,
   callType: "qualification" | "offer",
-  teamMemberName: string
+  teamMemberName: string,
+  context?: {
+    trainingMaterials?: { title: string; content: string | null; category: string | null }[];
+    gradingRules?: { title: string; ruleText: string | null; priority: number | null }[];
+    recentFeedback?: { feedbackType: string | null; explanation: string | null; correctBehavior: string | null }[];
+  }
 ): Promise<GradingResult> {
   const rubric = callType === "qualification" ? LEAD_MANAGER_RUBRIC : ACQUISITION_MANAGER_RUBRIC;
+
+  // Build training materials context
+  let trainingContext = "";
+  if (context?.trainingMaterials && context.trainingMaterials.length > 0) {
+    trainingContext = `\n\nADDITIONAL TRAINING MATERIALS TO CONSIDER:\n${context.trainingMaterials.map(m => 
+      `--- ${m.title} (${m.category}) ---\n${m.content || "(No content)"}`
+    ).join("\n\n")}`;
+  }
+
+  // Build custom grading rules context
+  let rulesContext = "";
+  if (context?.gradingRules && context.gradingRules.length > 0) {
+    const sortedRules = [...context.gradingRules].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    rulesContext = `\n\nCUSTOM GRADING RULES (apply these in addition to standard criteria):\n${sortedRules.map(r => 
+      `- ${r.title}: ${r.ruleText}`
+    ).join("\n")}`;
+  }
+
+  // Build feedback learning context
+  let feedbackContext = "";
+  if (context?.recentFeedback && context.recentFeedback.length > 0) {
+    feedbackContext = `\n\nLEARNINGS FROM PREVIOUS FEEDBACK (avoid these mistakes):\n${context.recentFeedback.map(f => 
+      `- ${f.feedbackType}: ${f.explanation}${f.correctBehavior ? ` (Correct approach: ${f.correctBehavior})` : ""}`
+    ).join("\n")}`;
+  }
 
   const systemPrompt = `You are an expert sales coach for a real estate wholesaling company called Nashville Area Home Buyers. 
 Your job is to analyze phone call transcripts and grade them based on a specific rubric.
@@ -192,7 +222,7 @@ ${i + 1}. ${c.name} (${c.maxPoints} points max)
 RED FLAGS TO IDENTIFY:
 ${rubric.redFlags.map(f => `- ${f}`).join("\n")}
 
-${callType === "qualification" ? `DISQUALIFICATION TARGET: ${LEAD_MANAGER_RUBRIC.disqualificationTarget}` : ""}
+${callType === "qualification" ? `DISQUALIFICATION TARGET: ${LEAD_MANAGER_RUBRIC.disqualificationTarget}` : ""}${trainingContext}${rulesContext}${feedbackContext}
 
 Analyze the transcript and provide:
 1. A score for each criterion (0 to max points)
@@ -437,7 +467,7 @@ Respond with JSON only:
 
 // ============ PROCESS CALL FUNCTION ============
 
-import { getCallById, updateCall, createCallGrade, getTeamMemberById } from "./db";
+import { getCallById, updateCall, createCallGrade, getTeamMemberById, getGradingContext } from "./db";
 
 export async function processCall(callId: number): Promise<void> {
   const call = await getCallById(callId);
@@ -500,7 +530,26 @@ export async function processCall(callId: number): Promise<void> {
       }
     }
 
-    const gradeResult = await gradeCall(transcript, callType, teamMemberName);
+    // Fetch grading context (training materials, rules, feedback)
+    const gradingContext = await getGradingContext(callType);
+    
+    const gradeResult = await gradeCall(transcript, callType, teamMemberName, {
+      trainingMaterials: gradingContext.trainingMaterials.map(m => ({
+        title: m.title,
+        content: m.content,
+        category: m.category,
+      })),
+      gradingRules: gradingContext.gradingRules.map(r => ({
+        title: r.title,
+        ruleText: r.ruleText,
+        priority: r.priority,
+      })),
+      recentFeedback: gradingContext.recentFeedback.map(f => ({
+        feedbackType: f.feedbackType,
+        explanation: f.explanation,
+        correctBehavior: f.correctBehavior,
+      })),
+    });
 
     // Step 5: Save grade
     await createCallGrade({

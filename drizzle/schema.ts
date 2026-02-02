@@ -132,3 +132,105 @@ export const performanceMetrics = mysqlTable("performance_metrics", {
 
 export type PerformanceMetric = typeof performanceMetrics.$inferSelect;
 export type InsertPerformanceMetric = typeof performanceMetrics.$inferInsert;
+
+
+/**
+ * Training materials - uploaded documents that influence grading criteria
+ */
+export const trainingMaterials = mysqlTable("training_materials", {
+  id: int("id").autoincrement().primaryKey(),
+  // Material info
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  // Content - can be extracted text from uploaded documents
+  content: text("content"),
+  // File info if uploaded
+  fileName: varchar("fileName", { length: 255 }),
+  fileUrl: text("fileUrl"),
+  fileType: varchar("fileType", { length: 50 }), // pdf, docx, txt, etc.
+  // Category for organization
+  category: mysqlEnum("category", [
+    "script",
+    "objection_handling", 
+    "methodology",
+    "best_practices",
+    "examples",
+    "other"
+  ]).default("other"),
+  // Which role this applies to
+  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager"]).default("all"),
+  // Status
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TrainingMaterial = typeof trainingMaterials.$inferSelect;
+export type InsertTrainingMaterial = typeof trainingMaterials.$inferInsert;
+
+/**
+ * AI Feedback - corrections and feedback on AI grading to improve future scoring
+ */
+export const aiFeedback = mysqlTable("ai_feedback", {
+  id: int("id").autoincrement().primaryKey(),
+  // Link to the call/grade being corrected
+  callId: int("callId").references(() => calls.id),
+  callGradeId: int("callGradeId").references(() => callGrades.id),
+  // Who provided the feedback
+  userId: int("userId").references(() => users.id),
+  // Feedback type
+  feedbackType: mysqlEnum("feedbackType", [
+    "score_too_high",
+    "score_too_low", 
+    "wrong_criteria",
+    "missed_issue",
+    "incorrect_feedback",
+    "general_correction",
+    "praise"
+  ]).notNull(),
+  // The specific criteria being corrected (if applicable)
+  criteriaName: varchar("criteriaName", { length: 255 }),
+  // Original values
+  originalScore: decimal("originalScore", { precision: 5, scale: 2 }),
+  originalGrade: mysqlEnum("originalGrade", ["A", "B", "C", "D", "F"]),
+  // Suggested corrections
+  suggestedScore: decimal("suggestedScore", { precision: 5, scale: 2 }),
+  suggestedGrade: mysqlEnum("suggestedGrade", ["A", "B", "C", "D", "F"]),
+  // Detailed feedback explanation
+  explanation: text("explanation").notNull(),
+  // What the AI should have noticed or done differently
+  correctBehavior: text("correctBehavior"),
+  // Status - whether this feedback has been incorporated
+  status: mysqlEnum("status", ["pending", "reviewed", "incorporated", "dismissed"]).default("pending"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AIFeedback = typeof aiFeedback.$inferSelect;
+export type InsertAIFeedback = typeof aiFeedback.$inferInsert;
+
+/**
+ * Grading rules - custom rules that override or supplement default rubrics
+ */
+export const gradingRules = mysqlTable("grading_rules", {
+  id: int("id").autoincrement().primaryKey(),
+  // Rule info
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  // The rule itself - natural language instruction for the AI
+  ruleText: text("ruleText").notNull(),
+  // Priority (higher = more important)
+  priority: int("priority").default(0),
+  // Which rubric this applies to
+  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager"]).default("all"),
+  // Status
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GradingRule = typeof gradingRules.$inferSelect;
+export type InsertGradingRule = typeof gradingRules.$inferInsert;

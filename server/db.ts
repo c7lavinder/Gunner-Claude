@@ -1,6 +1,12 @@
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, calls, callGrades, teamMembers, performanceMetrics, InsertCall, InsertCallGrade, InsertTeamMember, Call, CallGrade, TeamMember } from "../drizzle/schema";
+import { 
+  InsertUser, users, calls, callGrades, teamMembers, performanceMetrics, 
+  InsertCall, InsertCallGrade, InsertTeamMember, Call, CallGrade, TeamMember,
+  trainingMaterials, aiFeedback, gradingRules,
+  InsertTrainingMaterial, InsertAIFeedback, InsertGradingRule,
+  TrainingMaterial, AIFeedback, GradingRule
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -418,4 +424,214 @@ export async function seedTeamMembers(): Promise<void> {
   }
 
   console.log("[Database] Seeded default team members");
+}
+
+
+// ============ TRAINING MATERIALS FUNCTIONS ============
+
+export async function createTrainingMaterial(material: InsertTrainingMaterial): Promise<TrainingMaterial | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.insert(trainingMaterials).values(material);
+  const insertId = result[0].insertId;
+  const created = await db.select().from(trainingMaterials).where(eq(trainingMaterials.id, insertId)).limit(1);
+  return created[0] || null;
+}
+
+export async function getTrainingMaterials(options?: {
+  category?: string;
+  applicableTo?: string;
+  activeOnly?: boolean;
+}): Promise<TrainingMaterial[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [];
+  
+  if (options?.activeOnly !== false) {
+    conditions.push(eq(trainingMaterials.isActive, "true"));
+  }
+  if (options?.category) {
+    conditions.push(eq(trainingMaterials.category, options.category as any));
+  }
+  if (options?.applicableTo) {
+    conditions.push(eq(trainingMaterials.applicableTo, options.applicableTo as any));
+  }
+
+  let query = db.select().from(trainingMaterials);
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  return await query.orderBy(desc(trainingMaterials.createdAt));
+}
+
+export async function getTrainingMaterialById(id: number): Promise<TrainingMaterial | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(trainingMaterials).where(eq(trainingMaterials.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function updateTrainingMaterial(id: number, updates: Partial<InsertTrainingMaterial>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(trainingMaterials).set(updates).where(eq(trainingMaterials.id, id));
+}
+
+export async function deleteTrainingMaterial(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Soft delete by setting isActive to false
+  await db.update(trainingMaterials).set({ isActive: "false" }).where(eq(trainingMaterials.id, id));
+}
+
+// ============ AI FEEDBACK FUNCTIONS ============
+
+export async function createAIFeedback(feedback: InsertAIFeedback): Promise<AIFeedback | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.insert(aiFeedback).values(feedback);
+  const insertId = result[0].insertId;
+  const created = await db.select().from(aiFeedback).where(eq(aiFeedback.id, insertId)).limit(1);
+  return created[0] || null;
+}
+
+export async function getAIFeedback(options?: {
+  callId?: number;
+  status?: string;
+  limit?: number;
+}): Promise<AIFeedback[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [];
+  
+  if (options?.callId) {
+    conditions.push(eq(aiFeedback.callId, options.callId));
+  }
+  if (options?.status) {
+    conditions.push(eq(aiFeedback.status, options.status as any));
+  }
+
+  let query = db.select().from(aiFeedback);
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  return await query.orderBy(desc(aiFeedback.createdAt)).limit(options?.limit || 100);
+}
+
+export async function getAIFeedbackById(id: number): Promise<AIFeedback | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(aiFeedback).where(eq(aiFeedback.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function updateAIFeedback(id: number, updates: Partial<InsertAIFeedback>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(aiFeedback).set(updates).where(eq(aiFeedback.id, id));
+}
+
+export async function getPendingFeedbackForGrading(): Promise<AIFeedback[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(aiFeedback)
+    .where(eq(aiFeedback.status, "incorporated"))
+    .orderBy(desc(aiFeedback.createdAt))
+    .limit(50);
+}
+
+// ============ GRADING RULES FUNCTIONS ============
+
+export async function createGradingRule(rule: InsertGradingRule): Promise<GradingRule | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.insert(gradingRules).values(rule);
+  const insertId = result[0].insertId;
+  const created = await db.select().from(gradingRules).where(eq(gradingRules.id, insertId)).limit(1);
+  return created[0] || null;
+}
+
+export async function getGradingRules(options?: {
+  applicableTo?: string;
+  activeOnly?: boolean;
+}): Promise<GradingRule[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [];
+  
+  if (options?.activeOnly !== false) {
+    conditions.push(eq(gradingRules.isActive, "true"));
+  }
+  if (options?.applicableTo) {
+    conditions.push(eq(gradingRules.applicableTo, options.applicableTo as any));
+  }
+
+  let query = db.select().from(gradingRules);
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  return await query.orderBy(desc(gradingRules.priority));
+}
+
+export async function updateGradingRule(id: number, updates: Partial<InsertGradingRule>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(gradingRules).set(updates).where(eq(gradingRules.id, id));
+}
+
+export async function deleteGradingRule(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(gradingRules).set({ isActive: "false" }).where(eq(gradingRules.id, id));
+}
+
+// ============ GET GRADING CONTEXT ============
+
+/**
+ * Get all active training materials and rules for grading context
+ */
+export async function getGradingContext(callType: "qualification" | "offer"): Promise<{
+  trainingMaterials: TrainingMaterial[];
+  gradingRules: GradingRule[];
+  recentFeedback: AIFeedback[];
+}> {
+  const applicableTo = callType === "qualification" ? "lead_manager" : "acquisition_manager";
+  
+  // Get training materials applicable to this call type or all
+  const materials = await getTrainingMaterials({ activeOnly: true });
+  const filteredMaterials = materials.filter(m => 
+    m.applicableTo === "all" || m.applicableTo === applicableTo
+  );
+
+  // Get grading rules applicable to this call type or all
+  const rules = await getGradingRules({ activeOnly: true });
+  const filteredRules = rules.filter(r => 
+    r.applicableTo === "all" || r.applicableTo === applicableTo
+  );
+
+  // Get recent incorporated feedback for learning
+  const feedback = await getPendingFeedbackForGrading();
+
+  return {
+    trainingMaterials: filteredMaterials,
+    gradingRules: filteredRules,
+    recentFeedback: feedback,
+  };
 }

@@ -11,6 +11,10 @@ import CallDetail from "./pages/CallDetail";
 import Leaderboard from "./pages/Leaderboard";
 import TeamMembers from "./pages/TeamMembers";
 import Analytics from "./pages/Analytics";
+import Training from "./pages/Training";
+import GradingRules from "./pages/GradingRules";
+import Feedback from "./pages/Feedback";
+import Methodology from "./pages/Methodology";
 
 function Router() {
   return (
@@ -21,6 +25,10 @@ function Router() {
       <Route path="/leaderboard" component={Leaderboard} />
       <Route path="/team" component={TeamMembers} />
       <Route path="/analytics" component={Analytics} />
+      <Route path="/training" component={Training} />
+      <Route path="/rules" component={GradingRules} />
+      <Route path="/feedback" component={Feedback} />
+      <Route path="/methodology" component={Methodology} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

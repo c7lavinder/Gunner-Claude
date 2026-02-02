@@ -18,7 +18,26 @@ import {
   getRecentCalls,
   createTeamMember,
   updateCall,
+  // Training materials
+  createTrainingMaterial,
+  getTrainingMaterials,
+  getTrainingMaterialById,
+  updateTrainingMaterial,
+  deleteTrainingMaterial,
+  // AI Feedback
+  createAIFeedback,
+  getAIFeedback,
+  getAIFeedbackById,
+  updateAIFeedback,
+  // Grading rules
+  createGradingRule,
+  getGradingRules,
+  updateGradingRule,
+  deleteGradingRule,
+  // Grading context
+  getGradingContext,
 } from "./db";
+import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
 
 export const appRouter = router({
@@ -176,6 +195,220 @@ export const appRouter = router({
     stats: protectedProcedure.query(async () => {
       return await getCallStats();
     }),
+  }),
+
+  // ============ TRAINING MATERIALS ============
+  training: router({
+    list: protectedProcedure
+      .input(z.object({
+        category: z.string().optional(),
+        applicableTo: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getTrainingMaterials(input || {});
+      }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const material = await getTrainingMaterialById(input.id);
+        if (!material) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Training material not found" });
+        }
+        return material;
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string(),
+        description: z.string().optional(),
+        content: z.string().optional(),
+        fileName: z.string().optional(),
+        fileUrl: z.string().optional(),
+        fileType: z.string().optional(),
+        category: z.enum(["script", "objection_handling", "methodology", "best_practices", "examples", "other"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await createTrainingMaterial({
+          title: input.title,
+          description: input.description,
+          content: input.content,
+          fileName: input.fileName,
+          fileUrl: input.fileUrl,
+          fileType: input.fileType,
+          category: input.category || "other",
+          applicableTo: input.applicableTo || "all",
+        });
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        content: z.string().optional(),
+        category: z.enum(["script", "objection_handling", "methodology", "best_practices", "examples", "other"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
+        isActive: z.enum(["true", "false"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await updateTrainingMaterial(id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteTrainingMaterial(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ============ AI FEEDBACK ============
+  feedback: router({
+    list: protectedProcedure
+      .input(z.object({
+        callId: z.number().optional(),
+        status: z.string().optional(),
+        limit: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getAIFeedback(input || {});
+      }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const feedback = await getAIFeedbackById(input.id);
+        if (!feedback) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Feedback not found" });
+        }
+        return feedback;
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        callId: z.number(),
+        callGradeId: z.number().optional(),
+        feedbackType: z.enum([
+          "score_too_high",
+          "score_too_low",
+          "wrong_criteria",
+          "missed_issue",
+          "incorrect_feedback",
+          "general_correction",
+          "praise"
+        ]),
+        criteriaName: z.string().optional(),
+        originalScore: z.number().optional(),
+        originalGrade: z.enum(["A", "B", "C", "D", "F"]).optional(),
+        suggestedScore: z.number().optional(),
+        suggestedGrade: z.enum(["A", "B", "C", "D", "F"]).optional(),
+        explanation: z.string(),
+        correctBehavior: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await createAIFeedback({
+          callId: input.callId,
+          callGradeId: input.callGradeId,
+          userId: ctx.user?.id,
+          feedbackType: input.feedbackType,
+          criteriaName: input.criteriaName,
+          originalScore: input.originalScore?.toString(),
+          originalGrade: input.originalGrade,
+          suggestedScore: input.suggestedScore?.toString(),
+          suggestedGrade: input.suggestedGrade,
+          explanation: input.explanation,
+          correctBehavior: input.correctBehavior,
+          status: "pending",
+        });
+      }),
+
+    updateStatus: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["pending", "reviewed", "incorporated", "dismissed"]),
+      }))
+      .mutation(async ({ input }) => {
+        await updateAIFeedback(input.id, { status: input.status });
+        return { success: true };
+      }),
+  }),
+
+  // ============ GRADING RULES ============
+  rules: router({
+    list: protectedProcedure
+      .input(z.object({
+        applicableTo: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getGradingRules(input || {});
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string(),
+        description: z.string().optional(),
+        ruleText: z.string(),
+        priority: z.number().optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await createGradingRule({
+          title: input.title,
+          description: input.description,
+          ruleText: input.ruleText,
+          priority: input.priority || 0,
+          applicableTo: input.applicableTo || "all",
+        });
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        ruleText: z.string().optional(),
+        priority: z.number().optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
+        isActive: z.enum(["true", "false"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await updateGradingRule(id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteGradingRule(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ============ RUBRICS (Read-only) ============
+  rubrics: router({
+    get: protectedProcedure
+      .input(z.object({ type: z.enum(["lead_manager", "acquisition_manager"]) }))
+      .query(async ({ input }) => {
+        return input.type === "lead_manager" ? LEAD_MANAGER_RUBRIC : ACQUISITION_MANAGER_RUBRIC;
+      }),
+
+    getAll: protectedProcedure.query(async () => {
+      return {
+        leadManager: LEAD_MANAGER_RUBRIC,
+        acquisitionManager: ACQUISITION_MANAGER_RUBRIC,
+      };
+    }),
+
+    getContext: protectedProcedure
+      .input(z.object({ callType: z.enum(["qualification", "offer"]) }))
+      .query(async ({ input }) => {
+        return await getGradingContext(input.callType);
+      }),
   }),
 });
 
