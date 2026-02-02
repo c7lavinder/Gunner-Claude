@@ -258,6 +258,8 @@ export async function getCallsWithGrades(options: {
 export async function getLeaderboardData(): Promise<Array<{
   teamMember: TeamMember;
   totalCalls: number;
+  gradedCalls: number;
+  skippedCalls: number;
   averageScore: number;
   gradeDistribution: { A: number; B: number; C: number; D: number; F: number };
 }>> {
@@ -268,11 +270,16 @@ export async function getLeaderboardData(): Promise<Array<{
   
   const leaderboard = await Promise.all(
     members.map(async (member) => {
+      // Get all calls for this member
       const memberCalls = await db.select().from(calls)
         .where(eq(calls.teamMemberId, member.id));
       
+      // Only count completed (graded) calls for leaderboard
+      const gradedCalls = memberCalls.filter(c => c.status === "completed" && c.classification === "conversation");
+      const skippedCalls = memberCalls.filter(c => c.status === "skipped");
+      
       const grades = await Promise.all(
-        memberCalls.map(async (call) => {
+        gradedCalls.map(async (call) => {
           return await getCallGradeByCallId(call.id);
         })
       );
@@ -294,6 +301,8 @@ export async function getLeaderboardData(): Promise<Array<{
       return {
         teamMember: member,
         totalCalls: memberCalls.length,
+        gradedCalls: gradedCalls.length,
+        skippedCalls: skippedCalls.length,
         averageScore: validGrades.length > 0 ? totalScore / validGrades.length : 0,
         gradeDistribution,
       };
@@ -307,26 +316,50 @@ export async function getLeaderboardData(): Promise<Array<{
 
 export async function getCallStats(): Promise<{
   totalCalls: number;
-  completedCalls: number;
+  gradedCalls: number;
+  skippedCalls: number;
   pendingCalls: number;
   averageScore: number;
   callsToday: number;
   callsThisWeek: number;
+  gradedToday: number;
+  skippedToday: number;
+  classificationBreakdown: {
+    conversation: number;
+    voicemail: number;
+    no_answer: number;
+    callback_request: number;
+    wrong_number: number;
+    too_short: number;
+  };
 }> {
   const db = await getDb();
   if (!db) return {
     totalCalls: 0,
-    completedCalls: 0,
+    gradedCalls: 0,
+    skippedCalls: 0,
     pendingCalls: 0,
     averageScore: 0,
     callsToday: 0,
     callsThisWeek: 0,
+    gradedToday: 0,
+    skippedToday: 0,
+    classificationBreakdown: {
+      conversation: 0,
+      voicemail: 0,
+      no_answer: 0,
+      callback_request: 0,
+      wrong_number: 0,
+      too_short: 0,
+    },
   };
 
   const allCalls = await db.select().from(calls);
-  const completedCalls = allCalls.filter(c => c.status === "completed");
-  const pendingCalls = allCalls.filter(c => c.status === "pending");
+  const gradedCalls = allCalls.filter(c => c.status === "completed" && c.classification === "conversation");
+  const skippedCalls = allCalls.filter(c => c.status === "skipped");
+  const pendingCalls = allCalls.filter(c => c.status === "pending" || c.status === "transcribing" || c.status === "classifying" || c.status === "grading");
 
+  // Only count grades from graded conversations
   const grades = await db.select().from(callGrades);
   const totalScore = grades.reduce((sum, g) => sum + (parseFloat(g.overallScore || "0")), 0);
   const averageScore = grades.length > 0 ? totalScore / grades.length : 0;
@@ -338,14 +371,30 @@ export async function getCallStats(): Promise<{
 
   const callsToday = allCalls.filter(c => c.createdAt >= todayStart).length;
   const callsThisWeek = allCalls.filter(c => c.createdAt >= weekStart).length;
+  const gradedToday = gradedCalls.filter(c => c.createdAt >= todayStart).length;
+  const skippedToday = skippedCalls.filter(c => c.createdAt >= todayStart).length;
+
+  // Classification breakdown
+  const classificationBreakdown = {
+    conversation: allCalls.filter(c => c.classification === "conversation").length,
+    voicemail: allCalls.filter(c => c.classification === "voicemail").length,
+    no_answer: allCalls.filter(c => c.classification === "no_answer").length,
+    callback_request: allCalls.filter(c => c.classification === "callback_request").length,
+    wrong_number: allCalls.filter(c => c.classification === "wrong_number").length,
+    too_short: allCalls.filter(c => c.classification === "too_short").length,
+  };
 
   return {
     totalCalls: allCalls.length,
-    completedCalls: completedCalls.length,
+    gradedCalls: gradedCalls.length,
+    skippedCalls: skippedCalls.length,
     pendingCalls: pendingCalls.length,
     averageScore,
     callsToday,
     callsThisWeek,
+    gradedToday,
+    skippedToday,
+    classificationBreakdown,
   };
 }
 

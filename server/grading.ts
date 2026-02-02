@@ -315,6 +315,126 @@ export async function transcribeCallRecording(recordingUrl: string): Promise<str
   }
 }
 
+// ============ CALL CLASSIFICATION ============
+
+const MINIMUM_CALL_DURATION_SECONDS = 60; // Calls under 60 seconds are auto-skipped
+
+export type CallClassification = 
+  | "conversation"      // Real conversation - should be graded
+  | "voicemail"         // Left a voicemail
+  | "no_answer"         // No one answered
+  | "callback_request"  // Brief "call me back" type call
+  | "wrong_number"      // Wrong number or disconnected
+  | "too_short";        // Under minimum duration threshold
+
+export interface ClassificationResult {
+  classification: CallClassification;
+  reason: string;
+  shouldGrade: boolean;
+}
+
+/**
+ * Classify a call based on duration and transcript content
+ * Returns whether the call should be graded or skipped
+ */
+export async function classifyCall(
+  transcript: string,
+  durationSeconds: number | null | undefined
+): Promise<ClassificationResult> {
+  // First check: Duration filter
+  if (durationSeconds && durationSeconds < MINIMUM_CALL_DURATION_SECONDS) {
+    return {
+      classification: "too_short",
+      reason: `Call duration (${durationSeconds}s) is under the ${MINIMUM_CALL_DURATION_SECONDS}s minimum threshold`,
+      shouldGrade: false,
+    };
+  }
+
+  // Second check: AI classification based on transcript content
+  try {
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `You are a call classification system for a real estate investment company.
+Analyze the transcript and classify the call into one of these categories:
+
+1. "conversation" - A real conversation with substantive discussion about selling a property. This includes:
+   - Discussion of property details, condition, or location
+   - Discussion of seller's situation or motivation
+   - Price discussion or negotiation
+   - Appointment setting or scheduling
+   - Objection handling
+   
+2. "voicemail" - The rep left a voicemail message (one-sided, no response from other party)
+
+3. "no_answer" - Call went unanswered, straight to voicemail, or disconnected quickly
+
+4. "callback_request" - Very brief call where someone just said "call me back", "not a good time", "I'm busy", etc. with no substantive conversation
+
+5. "wrong_number" - Wrong number, disconnected number, or person says they don't own the property
+
+Respond with JSON only:
+{
+  "classification": "conversation" | "voicemail" | "no_answer" | "callback_request" | "wrong_number",
+  "reason": "Brief explanation of why this classification was chosen",
+  "shouldGrade": true/false (only true for "conversation")
+}`,
+        },
+        {
+          role: "user",
+          content: `Classify this call transcript:\n\n${transcript.substring(0, 3000)}`,
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "call_classification",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              classification: {
+                type: "string",
+                enum: ["conversation", "voicemail", "no_answer", "callback_request", "wrong_number"],
+              },
+              reason: { type: "string" },
+              shouldGrade: { type: "boolean" },
+            },
+            required: ["classification", "reason", "shouldGrade"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content || typeof content !== 'string') {
+      // Default to conversation if classification fails
+      return {
+        classification: "conversation",
+        reason: "Classification failed, defaulting to conversation",
+        shouldGrade: true,
+      };
+    }
+
+    const parsed = JSON.parse(content);
+    return {
+      classification: parsed.classification,
+      reason: parsed.reason,
+      shouldGrade: parsed.shouldGrade,
+    };
+  } catch (error) {
+    console.error("[Classification] Error classifying call:", error);
+    // Default to conversation if classification fails
+    return {
+      classification: "conversation",
+      reason: "Classification error, defaulting to conversation",
+      shouldGrade: true,
+    };
+  }
+}
+
 // ============ PROCESS CALL FUNCTION ============
 
 import { getCallById, updateCall, createCallGrade, getTeamMemberById } from "./db";
@@ -333,12 +453,39 @@ export async function processCall(callId: number): Promise<void> {
   }
 
   try {
-    // Step 1: Transcribe
+    // Step 1: Check duration first (quick filter)
+    if (call.duration && call.duration < MINIMUM_CALL_DURATION_SECONDS) {
+      console.log(`[ProcessCall] Call ${callId} is too short (${call.duration}s), skipping`);
+      await updateCall(callId, {
+        status: "skipped",
+        classification: "too_short",
+        classificationReason: `Call duration (${call.duration}s) is under the ${MINIMUM_CALL_DURATION_SECONDS}s minimum threshold`,
+      });
+      return;
+    }
+
+    // Step 2: Transcribe
     await updateCall(callId, { status: "transcribing" });
     const transcript = await transcribeCallRecording(call.recordingUrl);
     await updateCall(callId, { transcript });
 
-    // Step 2: Grade
+    // Step 3: Classify the call
+    await updateCall(callId, { status: "classifying" });
+    const classificationResult = await classifyCall(transcript, call.duration);
+    
+    await updateCall(callId, {
+      classification: classificationResult.classification,
+      classificationReason: classificationResult.reason,
+    });
+
+    // If not a real conversation, skip grading
+    if (!classificationResult.shouldGrade) {
+      console.log(`[ProcessCall] Call ${callId} classified as ${classificationResult.classification}, skipping grading`);
+      await updateCall(callId, { status: "skipped" });
+      return;
+    }
+
+    // Step 4: Grade (only for real conversations)
     await updateCall(callId, { status: "grading" });
     
     // Determine call type based on team member role
@@ -355,7 +502,7 @@ export async function processCall(callId: number): Promise<void> {
 
     const gradeResult = await gradeCall(transcript, callType, teamMemberName);
 
-    // Step 3: Save grade
+    // Step 5: Save grade
     await createCallGrade({
       callId: call.id,
       overallScore: gradeResult.overallScore.toString(),
@@ -369,8 +516,12 @@ export async function processCall(callId: number): Promise<void> {
       rubricType: callType === "qualification" ? "lead_manager" : "acquisition_manager",
     });
 
-    // Step 4: Mark complete
-    await updateCall(callId, { status: "completed", callType });
+    // Step 6: Mark complete
+    await updateCall(callId, { 
+      status: "completed", 
+      callType,
+      classification: "conversation",
+    });
 
     console.log(`[ProcessCall] Successfully processed call ${callId}`);
   } catch (error) {

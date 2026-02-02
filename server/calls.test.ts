@@ -113,7 +113,7 @@ describe("leaderboard router", () => {
 });
 
 describe("analytics router", () => {
-  it("should get call stats", async () => {
+  it("should get call stats with classification breakdown", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
@@ -121,14 +121,24 @@ describe("analytics router", () => {
     
     // Result should have expected properties
     expect(result).toHaveProperty("totalCalls");
-    expect(result).toHaveProperty("completedCalls");
+    expect(result).toHaveProperty("gradedCalls");
+    expect(result).toHaveProperty("skippedCalls");
     expect(result).toHaveProperty("pendingCalls");
     expect(result).toHaveProperty("callsToday");
     expect(result).toHaveProperty("callsThisWeek");
+    expect(result).toHaveProperty("classificationBreakdown");
     
     // Values should be numbers
     expect(typeof result.totalCalls).toBe("number");
-    expect(typeof result.completedCalls).toBe("number");
+    expect(typeof result.gradedCalls).toBe("number");
+    expect(typeof result.skippedCalls).toBe("number");
+    
+    // Classification breakdown should have all categories
+    expect(result.classificationBreakdown).toHaveProperty("conversation");
+    expect(result.classificationBreakdown).toHaveProperty("voicemail");
+    expect(result.classificationBreakdown).toHaveProperty("no_answer");
+    expect(result.classificationBreakdown).toHaveProperty("callback_request");
+    expect(result.classificationBreakdown).toHaveProperty("too_short");
   });
 });
 
@@ -160,5 +170,17 @@ describe("grading rubrics", () => {
     const criteriaNames = ACQUISITION_MANAGER_RUBRIC.criteria.map((c: any) => c.name);
     expect(criteriaNames).toContain("Motivation Restatement");
     expect(criteriaNames).toContain("Price Delivery");
+  });
+});
+
+describe("call classification", () => {
+  it("should classify too short calls without AI", async () => {
+    const { classifyCall } = await import("./grading");
+    
+    const result = await classifyCall("Some transcript", 30);
+    
+    expect(result.classification).toBe("too_short");
+    expect(result.shouldGrade).toBe(false);
+    expect(result.reason).toContain("60s minimum");
   });
 });

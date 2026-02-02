@@ -295,14 +295,23 @@ export default function Analytics() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <div className="flex items-center gap-3 p-4 border rounded-lg">
               <div className="p-2 bg-green-100 dark:bg-green-900 rounded-full">
                 <CheckCircle className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.completedCalls ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Completed</p>
+                <p className="text-2xl font-bold">{stats?.gradedCalls ?? 0}</p>
+                <p className="text-sm text-muted-foreground">Graded</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 border rounded-lg">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
+                <Phone className="h-5 w-5 text-gray-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats?.skippedCalls ?? 0}</p>
+                <p className="text-sm text-muted-foreground">Skipped</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-4 border rounded-lg">
@@ -320,7 +329,7 @@ export default function Analytics() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {(stats?.totalCalls ?? 0) - (stats?.completedCalls ?? 0) - (stats?.pendingCalls ?? 0)}
+                  {(stats?.totalCalls ?? 0) - (stats?.gradedCalls ?? 0) - (stats?.skippedCalls ?? 0) - (stats?.pendingCalls ?? 0)}
                 </p>
                 <p className="text-sm text-muted-foreground">Failed</p>
               </div>

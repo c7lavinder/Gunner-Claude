@@ -1,0 +1,3 @@
+ALTER TABLE `calls` MODIFY COLUMN `status` enum('pending','transcribing','classifying','grading','completed','skipped','failed') DEFAULT 'pending';--> statement-breakpoint
+ALTER TABLE `calls` ADD `classification` enum('pending','conversation','voicemail','no_answer','callback_request','wrong_number','too_short') DEFAULT 'pending';--> statement-breakpoint
+ALTER TABLE `calls` ADD `classificationReason` text;

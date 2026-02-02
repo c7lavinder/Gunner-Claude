@@ -75,7 +75,7 @@ export default function Home() {
         />
         <StatCard
           title="Completed"
-          value={stats?.completedCalls ?? 0}
+          value={stats?.gradedCalls ?? 0}
           description="Graded calls"
           icon={CheckCircle}
           loading={statsLoading}

@@ -32,3 +32,12 @@
 - [x] Professional design with light/dark theme support
 - [x] Responsive layout
 - [x] Loading states and error handling
+
+## Call Filtering
+- [x] Add call classification field to database schema
+- [x] Implement minimum duration filter (< 60 seconds = auto-skip)
+- [x] AI-based call classification (conversation vs voicemail/callback)
+- [x] Exclude filtered calls from grading
+- [x] Exclude filtered calls from leaderboard calculations
+- [x] Show filtered calls separately in UI (Analytics page shows breakdown)
+- [x] Classification breakdown in analytics (conversation, voicemail, no_answer, callback_request, wrong_number, too_short)
