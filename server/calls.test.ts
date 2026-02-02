@@ -52,11 +52,11 @@ describe("team router", () => {
     const teamMembers = await caller.team.list();
     expect(teamMembers.length).toBeGreaterThanOrEqual(3);
     
-    // Check for Chris, Daniel, and Kyle
+    // Check for Chris Segura, Daniel Lozano, and Kyle Barks
     const names = teamMembers.map(m => m.name);
-    expect(names).toContain("Chris");
-    expect(names).toContain("Daniel");
-    expect(names).toContain("Kyle");
+    expect(names.some(n => n?.includes("Chris"))).toBe(true);
+    expect(names.some(n => n?.includes("Daniel"))).toBe(true);
+    expect(names.some(n => n?.includes("Kyle"))).toBe(true);
   });
 });
 

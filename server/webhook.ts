@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createCall, getTeamMemberByName, getCallByGhlId } from "./db";
+import { createCall, getTeamMemberByName, getTeamMemberByGhlUserId, getCallByGhlId } from "./db";
 import { processCall } from "./grading";
 
 /**
@@ -128,16 +128,31 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
     const directionRaw = extractField<string>(payload, "direction", "callDirection", "call_direction");
     const callDirection = directionRaw?.toLowerCase() === "inbound" ? "inbound" : "outbound";
     
-    // Team member identification
-    const teamMemberName = extractField<string>(payload, "userName", "user_name", "assignedTo", "assigned_to");
+    // Team member identification - try GHL User ID first, then fall back to name
+    const ghlUserId = extractField<string>(payload, "userId", "user_id", "assignedTo", "assigned_to");
+    const teamMemberName = extractField<string>(payload, "userName", "user_name");
     let teamMemberId: number | undefined;
+    let resolvedTeamMemberName: string | undefined = teamMemberName;
     let callType: "qualification" | "offer" = "qualification";
     
-    if (teamMemberName) {
+    // First try to match by GHL User ID
+    if (ghlUserId) {
+      const teamMember = await getTeamMemberByGhlUserId(ghlUserId);
+      if (teamMember) {
+        teamMemberId = teamMember.id;
+        resolvedTeamMemberName = teamMember.name;
+        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
+        console.log(`[Webhook] Matched team member by GHL User ID: ${teamMember.name} (${ghlUserId})`);
+      }
+    }
+    
+    // Fall back to name matching if GHL User ID didn't match
+    if (!teamMemberId && teamMemberName) {
       const teamMember = await getTeamMemberByName(teamMemberName);
       if (teamMember) {
         teamMemberId = teamMember.id;
         callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
+        console.log(`[Webhook] Matched team member by name: ${teamMember.name}`);
       }
     }
 
@@ -157,7 +172,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
       duration,
       callDirection,
       teamMemberId,
-      teamMemberName,
+      teamMemberName: resolvedTeamMemberName,
       callType,
       status: "pending",
       callTimestamp,

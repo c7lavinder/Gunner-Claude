@@ -134,6 +134,14 @@ export async function getTeamMemberByName(name: string): Promise<TeamMember | nu
   return result[0] || null;
 }
 
+export async function getTeamMemberByGhlUserId(ghlUserId: string): Promise<TeamMember | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(teamMembers).where(eq(teamMembers.ghlUserId, ghlUserId)).limit(1);
+  return result[0] || null;
+}
+
 export async function updateTeamMemberUserId(teamMemberId: number, userId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
