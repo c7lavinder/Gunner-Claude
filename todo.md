@@ -237,3 +237,11 @@
 - [x] Add multi-select filter for call type (qualification/offer)
 - [x] Add multi-select filter for score range (low/high)
 - [x] Add multi-select filter for call direction (inbound/outbound)
+
+
+## AI Coach UI Fix
+- [x] Shorten AI coach responses to truly 2 brief paragraphs
+- [x] Improve chat UI layout and styling
+- [x] Better visual separation between user and AI messages
+- [x] Add Clear button to reset conversation
+- [x] Add bot icon avatar for AI responses

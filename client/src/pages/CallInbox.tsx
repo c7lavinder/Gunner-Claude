@@ -326,43 +326,56 @@ function AICoachQA() {
     }
   };
 
+  const clearConversation = () => {
+    setConversation([]);
+  };
+
   return (
-    <Card className="h-[600px] flex flex-col">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-primary" />
-          AI Sales Coach
-        </CardTitle>
-        <CardDescription>
-          Ask questions about objections, techniques, or get coaching advice
-        </CardDescription>
+    <Card className="h-[500px] flex flex-col border-2">
+      <CardHeader className="pb-2 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Bot className="h-4 w-4 text-primary" />
+            AI Coach
+          </CardTitle>
+          {conversation.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearConversation} className="h-7 text-xs">
+              Clear
+            </Button>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col min-h-0">
-        <ScrollArea className="flex-1 pr-4">
+      <CardContent className="flex-1 flex flex-col min-h-0 p-3 pt-0">
+        <ScrollArea className="flex-1">
           {conversation.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-8 text-center">
-              <Sparkles className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <h3 className="font-medium mb-2">Ask Your AI Coach</h3>
-              <p className="text-sm text-muted-foreground max-w-sm">
-                Get coaching advice based on your training materials and past successful calls.
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <Sparkles className="h-8 w-8 text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground mb-3">
+                Ask for coaching tips
               </p>
-              <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                <p className="italic">"How should I handle the 'I need to think about it' objection?"</p>
-                <p className="italic">"What's the best way to anchor price?"</p>
-                <p className="italic">"Show me examples of good motivation extraction"</p>
+              <div className="space-y-1.5 text-xs text-muted-foreground/70">
+                <p className="italic">"How do I handle price objections?"</p>
+                <p className="italic">"Best way to set the anchor?"</p>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {conversation.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] rounded-lg p-3 ${
+                  {msg.role === "assistant" && (
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-1">
+                      <Bot className="h-3 w-3 text-primary" />
+                    </div>
+                  )}
+                  <div className={`rounded-xl px-3 py-2 ${
                     msg.role === "user" 
-                      ? "bg-primary text-primary-foreground" 
-                      : "bg-muted"
+                      ? "bg-primary text-primary-foreground max-w-[80%]" 
+                      : "bg-muted/60 flex-1"
                   }`}>
                     {msg.role === "assistant" ? (
-                      <Streamdown>{msg.content}</Streamdown>
+                      <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                        <Streamdown>{msg.content}</Streamdown>
+                      </div>
                     ) : (
                       <p className="text-sm">{msg.content}</p>
                     )}
@@ -371,8 +384,11 @@ function AICoachQA() {
               ))}
               {isAsking && (
                 <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg p-3">
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2">
+                    <Bot className="h-3 w-3 text-primary" />
+                  </div>
+                  <div className="bg-muted/60 rounded-xl px-3 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 </div>
               )}
@@ -380,19 +396,20 @@ function AICoachQA() {
           )}
         </ScrollArea>
         
-        <div className="flex gap-2 mt-4 pt-4 border-t">
+        <div className="flex gap-2 mt-3 pt-3 border-t">
           <Textarea
-            placeholder="Ask about objections, techniques, or get coaching advice..."
+            placeholder="Ask a question..."
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="min-h-[60px] resize-none"
+            className="min-h-[44px] max-h-[80px] resize-none text-sm"
             disabled={isAsking}
           />
           <Button 
             onClick={handleAsk} 
             disabled={!question.trim() || isAsking}
-            className="self-end"
+            size="sm"
+            className="self-end h-[44px] w-[44px] p-0"
           >
             <Send className="h-4 w-4" />
           </Button>
