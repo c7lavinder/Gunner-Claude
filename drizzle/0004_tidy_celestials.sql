@@ -1,0 +1,1 @@
+ALTER TABLE `calls` ADD `callOutcome` enum('none','appointment_set','offer_accepted','offer_rejected','follow_up','disqualified') DEFAULT 'none';

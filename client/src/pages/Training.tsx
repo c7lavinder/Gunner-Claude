@@ -45,8 +45,8 @@ import {
   MessageSquare,
   Lightbulb,
   CheckCircle,
-  Clock,
-  AlertCircle
+  AlertTriangle,
+  Scale
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -82,6 +82,7 @@ function getApplicableLabel(applicableTo: string) {
 }
 
 export default function Training() {
+  const [mainTab, setMainTab] = useState("materials");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<any>(null);
   const [formData, setFormData] = useState({
@@ -93,6 +94,10 @@ export default function Training() {
   });
 
   const { data: materials, isLoading, refetch } = trpc.training.list.useQuery({});
+  const { data: rubrics, isLoading: rubricsLoading } = trpc.rubrics.getAll.useQuery();
+  const { data: qualificationContext } = trpc.rubrics.getContext.useQuery({ callType: "qualification" });
+  const { data: offerContext } = trpc.rubrics.getContext.useQuery({ callType: "offer" });
+
   const createMutation = trpc.training.create.useMutation({
     onSuccess: () => {
       toast.success("Training material added successfully");
@@ -183,197 +188,253 @@ export default function Training() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Training Materials</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Training & Methodology</h1>
           <p className="text-muted-foreground">
-            Manage scripts, methodology, and learning materials that influence AI grading
+            Manage training materials and view grading criteria
           </p>
         </div>
-        <Dialog open={isAddDialogOpen || !!editingMaterial} onOpenChange={(open) => {
-          if (!open) {
-            setIsAddDialogOpen(false);
-            setEditingMaterial(null);
-            resetForm();
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Material
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingMaterial ? "Edit Training Material" : "Add Training Material"}
-              </DialogTitle>
-              <DialogDescription>
-                Add training content that will be used to evaluate and grade calls.
-                The AI will reference this material when providing feedback.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  placeholder="e.g., Script Mastery - Introduction"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  placeholder="Brief description of this material"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+        {mainTab === "materials" && (
+          <Dialog open={isAddDialogOpen || !!editingMaterial} onOpenChange={(open) => {
+            if (!open) {
+              setIsAddDialogOpen(false);
+              setEditingMaterial(null);
+              resetForm();
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setIsAddDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Material
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingMaterial ? "Edit Training Material" : "Add Training Material"}
+                </DialogTitle>
+                <DialogDescription>
+                  Add training content that will be used to evaluate and grade calls.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Category</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATEGORIES.map((cat) => (
-                        <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="title">Title *</Label>
+                  <Input
+                    id="title"
+                    placeholder="e.g., Script Mastery - Introduction"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>Applies To</Label>
-                  <Select
-                    value={formData.applicableTo}
-                    onValueChange={(value) => setFormData({ ...formData, applicableTo: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {APPLICABLE_TO.map((app) => (
-                        <SelectItem key={app.value} value={app.value}>
-                          {app.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    placeholder="Brief description of this material"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Category</Label>
+                    <Select
+                      value={formData.category}
+                      onValueChange={(value) => setFormData({ ...formData, category: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Applies To</Label>
+                    <Select
+                      value={formData.applicableTo}
+                      onValueChange={(value) => setFormData({ ...formData, applicableTo: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {APPLICABLE_TO.map((app) => (
+                          <SelectItem key={app.value} value={app.value}>
+                            {app.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="content">Content *</Label>
+                  <Textarea
+                    id="content"
+                    placeholder="Paste your training content here..."
+                    className="min-h-[300px] font-mono text-sm"
+                    value={formData.content}
+                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="content">Content *</Label>
-                <Textarea
-                  id="content"
-                  placeholder="Paste your training content here. This can include scripts, objection handling examples, methodology descriptions, etc."
-                  className="min-h-[300px] font-mono text-sm"
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  The AI will use this content to evaluate calls and provide feedback based on your training methodology.
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setIsAddDialogOpen(false);
-                setEditingMaterial(null);
-                resetForm();
-              }}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save Material"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => {
+                  setIsAddDialogOpen(false);
+                  setEditingMaterial(null);
+                  resetForm();
+                }}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSubmit}
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                >
+                  {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save Material"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-5 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-20 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : materials?.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Training Materials Yet</h3>
-            <p className="text-muted-foreground text-center max-w-md mb-4">
-              Add your training scripts, methodology, and best practices to help the AI 
-              grade calls according to your standards.
-            </p>
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Your First Material
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Tabs defaultValue="all" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="all">All ({materials?.length || 0})</TabsTrigger>
-            {CATEGORIES.map((cat) => {
-              const count = groupedMaterials?.[cat.value]?.length || 0;
-              if (count === 0) return null;
-              return (
-                <TabsTrigger key={cat.value} value={cat.value}>
-                  {cat.label} ({count})
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+      {/* Main Tabs - Materials vs Methodology */}
+      <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="materials" className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            Training Materials
+          </TabsTrigger>
+          <TabsTrigger value="methodology" className="flex items-center gap-2">
+            <Scale className="h-4 w-4" />
+            Methodology
+          </TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="all" className="space-y-4">
+        {/* Training Materials Tab */}
+        <TabsContent value="materials" className="space-y-4">
+          {isLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {materials?.map((material) => (
-                <MaterialCard
-                  key={material.id}
-                  material={material}
-                  onEdit={() => openEditDialog(material)}
-                  onDelete={() => deleteMutation.mutate({ id: material.id })}
-                />
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardHeader>
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-20 w-full" />
+                  </CardContent>
+                </Card>
               ))}
             </div>
-          </TabsContent>
+          ) : materials?.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Training Materials Yet</h3>
+                <p className="text-muted-foreground text-center max-w-md mb-4">
+                  Add your training scripts, methodology, and best practices to help the AI 
+                  grade calls according to your standards.
+                </p>
+                <Button onClick={() => setIsAddDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Your First Material
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Tabs defaultValue="all" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="all">All ({materials?.length || 0})</TabsTrigger>
+                {CATEGORIES.map((cat) => {
+                  const count = groupedMaterials?.[cat.value]?.length || 0;
+                  if (count === 0) return null;
+                  return (
+                    <TabsTrigger key={cat.value} value={cat.value}>
+                      {cat.label} ({count})
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
 
-          {CATEGORIES.map((cat) => (
-            <TabsContent key={cat.value} value={cat.value} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {groupedMaterials?.[cat.value]?.map((material) => (
-                  <MaterialCard
-                    key={material.id}
-                    material={material}
-                    onEdit={() => openEditDialog(material)}
-                    onDelete={() => deleteMutation.mutate({ id: material.id })}
-                  />
-                ))}
-              </div>
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
+              <TabsContent value="all" className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {materials?.map((material) => (
+                    <MaterialCard
+                      key={material.id}
+                      material={material}
+                      onEdit={() => openEditDialog(material)}
+                      onDelete={() => deleteMutation.mutate({ id: material.id })}
+                    />
+                  ))}
+                </div>
+              </TabsContent>
+
+              {CATEGORIES.map((cat) => (
+                <TabsContent key={cat.value} value={cat.value} className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {groupedMaterials?.[cat.value]?.map((material) => (
+                      <MaterialCard
+                        key={material.id}
+                        material={material}
+                        onEdit={() => openEditDialog(material)}
+                        onDelete={() => deleteMutation.mutate({ id: material.id })}
+                      />
+                    ))}
+                  </div>
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
+        </TabsContent>
+
+        {/* Methodology Tab */}
+        <TabsContent value="methodology" className="space-y-6">
+          {rubricsLoading ? (
+            <div className="space-y-6">
+              <Skeleton className="h-48" />
+              <Skeleton className="h-96" />
+            </div>
+          ) : (
+            <Tabs defaultValue="lead_manager" className="space-y-6">
+              <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsTrigger value="lead_manager" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Lead Manager
+                </TabsTrigger>
+                <TabsTrigger value="acquisition_manager" className="flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Acquisition Manager
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="lead_manager" className="space-y-6">
+                <RubricDisplay 
+                  rubric={rubrics?.leadManager} 
+                  context={qualificationContext}
+                  title="Lead Manager Rubric"
+                  description="Used for qualification calls by Chris and Daniel"
+                />
+              </TabsContent>
+
+              <TabsContent value="acquisition_manager" className="space-y-6">
+                <RubricDisplay 
+                  rubric={rubrics?.acquisitionManager} 
+                  context={offerContext}
+                  title="Acquisition Manager Rubric"
+                  description="Used for offer calls by Kyle"
+                />
+              </TabsContent>
+            </Tabs>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -455,5 +516,103 @@ function MaterialCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function RubricDisplay({ 
+  rubric, 
+  context,
+  title, 
+  description 
+}: { 
+  rubric: any; 
+  context: any;
+  title: string; 
+  description: string;
+}) {
+  if (!rubric) return null;
+
+  const totalPoints = rubric.criteria?.reduce((sum: number, c: any) => sum + c.maxPoints, 0) || 100;
+
+  return (
+    <div className="space-y-6">
+      {/* Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Scale className="h-5 w-5" />
+            {title}
+          </CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="p-4 bg-muted/50 rounded-lg text-center">
+              <p className="text-2xl font-bold">{rubric.criteria?.length || 0}</p>
+              <p className="text-sm text-muted-foreground">Grading Criteria</p>
+            </div>
+            <div className="p-4 bg-muted/50 rounded-lg text-center">
+              <p className="text-2xl font-bold">{totalPoints}</p>
+              <p className="text-sm text-muted-foreground">Total Points</p>
+            </div>
+            <div className="p-4 bg-muted/50 rounded-lg text-center">
+              <p className="text-2xl font-bold">{context?.trainingMaterials?.length || 0}</p>
+              <p className="text-sm text-muted-foreground">Training Materials</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Criteria */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-500" />
+            Grading Criteria
+          </CardTitle>
+          <CardDescription>
+            Each call is evaluated on these criteria
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {rubric.criteria?.map((criterion: any, index: number) => (
+              <div key={index} className="p-4 border rounded-lg">
+                <div className="flex items-start justify-between mb-2">
+                  <h4 className="font-medium">{criterion.name}</h4>
+                  <Badge variant="secondary">{criterion.maxPoints} pts</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{criterion.description}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Red Flags */}
+      {rubric.redFlags && rubric.redFlags.length > 0 && (
+        <Card className="border-red-200 dark:border-red-900">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
+              <AlertTriangle className="h-5 w-5" />
+              Red Flags
+            </CardTitle>
+            <CardDescription>
+              Issues that will be flagged during grading
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {rubric.redFlags.map((flag: string, index: number) => (
+                <li key={index} className="flex items-start gap-2 text-sm">
+                  <span className="text-red-500 mt-0.5">•</span>
+                  {flag}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

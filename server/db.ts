@@ -330,6 +330,8 @@ export async function getCallStats(): Promise<{
   callsThisWeek: number;
   gradedToday: number;
   skippedToday: number;
+  appointmentsSet: number;
+  offersAccepted: number;
   classificationBreakdown: {
     conversation: number;
     voicemail: number;
@@ -350,6 +352,8 @@ export async function getCallStats(): Promise<{
     callsThisWeek: 0,
     gradedToday: 0,
     skippedToday: 0,
+    appointmentsSet: 0,
+    offersAccepted: 0,
     classificationBreakdown: {
       conversation: 0,
       voicemail: 0,
@@ -390,6 +394,10 @@ export async function getCallStats(): Promise<{
     too_short: allCalls.filter(c => c.classification === "too_short").length,
   };
 
+  // Count outcomes
+  const appointmentsSet = allCalls.filter(c => c.callOutcome === "appointment_set").length;
+  const offersAccepted = allCalls.filter(c => c.callOutcome === "offer_accepted").length;
+
   return {
     totalCalls: allCalls.length,
     gradedCalls: gradedCalls.length,
@@ -400,6 +408,8 @@ export async function getCallStats(): Promise<{
     callsThisWeek,
     gradedToday,
     skippedToday,
+    appointmentsSet,
+    offersAccepted,
     classificationBreakdown,
   };
 }

@@ -61,6 +61,8 @@ export const calls = mysqlTable("calls", {
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   // Call type determines which rubric to use
   callType: mysqlEnum("callType", ["qualification", "offer"]).default("qualification"),
+  // Call outcome - what was achieved on this call
+  callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_accepted", "offer_rejected", "follow_up", "disqualified"]).default("none"),
   // Call classification - determines if call should be graded
   classification: mysqlEnum("classification", ["pending", "conversation", "voicemail", "no_answer", "callback_request", "wrong_number", "too_short"]).default("pending"),
   classificationReason: text("classificationReason"), // AI explanation for classification

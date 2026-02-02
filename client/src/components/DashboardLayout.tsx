@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, Trophy, BarChart3, BookOpen, Scale, MessageSquare, FileText } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, Trophy, BarChart3, BookOpen } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -29,14 +29,11 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Phone, label: "Call Inbox", path: "/calls" },
+  { icon: Phone, label: "Call History", path: "/calls" },
   { icon: Trophy, label: "Leaderboard", path: "/leaderboard" },
   { icon: Users, label: "Team", path: "/team" },
   { icon: BarChart3, label: "Analytics", path: "/analytics" },
   { icon: BookOpen, label: "Training", path: "/training" },
-  { icon: Scale, label: "Grading Rules", path: "/rules" },
-  { icon: FileText, label: "Methodology", path: "/methodology" },
-  { icon: MessageSquare, label: "AI Feedback", path: "/feedback" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

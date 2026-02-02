@@ -39,6 +39,7 @@ import {
 } from "./db";
 import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
+import { invokeLLM } from "./_core/llm";
 
 export const appRouter = router({
   system: systemRouter,
@@ -386,6 +387,63 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await deleteGradingRule(input.id);
         return { success: true };
+      }),
+  }),
+
+  // ============ AI COACH ============
+  coach: router({
+    askQuestion: protectedProcedure
+      .input(z.object({ question: z.string() }))
+      .mutation(async ({ input }) => {
+        // Get training materials and recent successful calls for context
+        const trainingMaterials = await getTrainingMaterials({});
+        const recentCalls = await getCallsWithGrades({ limit: 20 });
+        
+        // Filter for high-scoring calls to use as examples
+        const successfulCalls = recentCalls
+          .filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 80)
+          .slice(0, 5);
+
+        // Build context from training materials
+        const trainingContext = trainingMaterials
+          .map(m => `### ${m.title}\n${m.content || ""}`)
+          .join("\n\n");
+
+        // Build context from successful calls
+        const callExamples = successfulCalls
+          .map(c => {
+            const grade = c.grade;
+            return `### Call with ${c.contactName || "Unknown"} (Score: ${grade?.overallScore}%)\nSummary: ${grade?.summary || "N/A"}\nStrengths: ${JSON.stringify(grade?.strengths || [])}\nTranscript excerpt: ${c.transcript?.substring(0, 500) || "N/A"}...`;
+          })
+          .join("\n\n");
+
+        const systemPrompt = `You are an expert sales coach for a real estate wholesaling team. Your role is to help team members improve their phone skills based on the company's training methodology.
+
+You have access to the following training materials:
+${trainingContext}
+
+${successfulCalls.length > 0 ? `Here are examples from recent high-scoring calls:\n${callExamples}` : ""}
+
+When answering questions:
+1. Reference specific training materials when relevant
+2. Provide concrete examples and scripts when possible
+3. If discussing objection handling, give word-for-word responses they can use
+4. Be encouraging but direct - these are salespeople who want actionable advice
+5. If you reference a successful call example, explain what made it effective`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: input.question },
+          ],
+        });
+
+        const messageContent = response.choices?.[0]?.message?.content;
+        const answer = typeof messageContent === "string" 
+          ? messageContent 
+          : "I apologize, I couldn't generate a response. Please try again.";
+        
+        return { answer };
       }),
   }),
 

@@ -55,3 +55,11 @@
 - [x] Integrate feedback into grading prompts
 - [x] Integrate custom training materials into grading
 - [x] Integrate custom grading rules into grading
+
+## UI Streamlining
+- [x] Update dashboard: Replace Total Calls with Calls Made, Appointments Set, Offers Accepted
+- [x] Consolidate Training and Methodology into single page
+- [x] Move Feedback form/history into Call History page
+- [x] Remove Grading Rules page from navigation
+- [x] Add AI Coach Q&A feature in Call History (ask questions about objections, reference past calls and training)
+- [x] Add callOutcome field for tracking appointments and offers

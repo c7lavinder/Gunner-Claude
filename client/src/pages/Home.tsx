@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, TrendingUp, Users, Award, Clock, CheckCircle } from "lucide-react";
+import { Phone, TrendingUp, Award, Calendar, CheckCircle2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -60,24 +60,24 @@ export default function Home() {
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Total Calls"
-          value={stats?.totalCalls ?? 0}
-          description="All time"
+          title="Calls Made"
+          value={stats?.callsToday ?? 0}
+          description="Today"
           icon={Phone}
           loading={statsLoading}
         />
         <StatCard
-          title="Calls Today"
-          value={stats?.callsToday ?? 0}
-          description="Since midnight"
-          icon={Clock}
+          title="Appointments Set"
+          value={stats?.appointmentsSet ?? 0}
+          description="All time"
+          icon={Calendar}
           loading={statsLoading}
         />
         <StatCard
-          title="Completed"
-          value={stats?.gradedCalls ?? 0}
-          description="Graded calls"
-          icon={CheckCircle}
+          title="Offers Accepted"
+          value={stats?.offersAccepted ?? 0}
+          description="All time"
+          icon={CheckCircle2}
           loading={statsLoading}
         />
         <StatCard
