@@ -1,0 +1,34 @@
+{
+  "query": "SELECT id, itemType, title, status FROM team_training_items WHERE itemType = 'agenda' AND status = 'active' LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, itemType, title, status FROM team_training_items WHERE itemType = 'agenda' AND status = 'active' LIMIT 10;",
+  "rows": [
+    {
+      "id": "30036",
+      "itemType": "agenda",
+      "title": "Review: The Power of a Strong Call Opening",
+      "status": "active"
+    },
+    {
+      "id": "30037",
+      "itemType": "agenda",
+      "title": "Training Focus: Deepening Motivation with Mirroring & Labeling",
+      "status": "active"
+    },
+    {
+      "id": "30038",
+      "itemType": "agenda",
+      "title": "Role Play: Handling Price Objections & Implementing Price Anchoring",
+      "status": "active"
+    },
+    {
+      "id": "30039",
+      "itemType": "agenda",
+      "title": "Win Celebration: Daniel's Effective Disqualification & Kyle's Empathy",
+      "status": "active"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\titemType\ttitle\tstatus\n30036\tagenda\tReview: The Power of a Strong Call Opening\tactive\n30037\tagenda\tTraining Focus: Deepening Motivation with Mirroring & Labeling\tactive\n30038\tagenda\tRole Play: Handling Price Objections & Implementing Price Anchoring\tactive\n30039\tagenda\tWin Celebration: Daniel's Effective Disqualification & Kyle's Empathy\tactive\n",
+  "stderr": "",
+  "execution_time_ms": 345
+}

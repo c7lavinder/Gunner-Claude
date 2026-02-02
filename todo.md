@@ -266,3 +266,4 @@
 - [x] Add example pulling from real calls
 - [x] Add agenda navigation and progress tracking
 - [x] Add meeting summary generation
+- [x] Fix Start Meeting button visibility on Training page (was in wrong file)

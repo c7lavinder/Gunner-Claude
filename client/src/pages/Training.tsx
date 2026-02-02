@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +55,13 @@ import {
   Calendar,
   Check,
   Upload,
-  File
+  File,
+  Play,
+  MessageCircle,
+  HelpCircle,
+  Send,
+  X,
+  SkipForward
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -327,21 +334,196 @@ function TeamWinsSection() {
   );
 }
 
+type MeetingMode = "facilitate" | "roleplay" | "example" | "qa";
+type ChatMessage = { role: "user" | "assistant"; content: string; mode?: MeetingMode };
+
+const SELLER_PERSONALITIES = [
+  { value: "skeptical", label: "Skeptical Seller", desc: "Doubtful about investors, questions everything" },
+  { value: "motivated", label: "Motivated Seller", desc: "Eager to sell, has clear timeline" },
+  { value: "price_focused", label: "Price-Focused", desc: "Only cares about getting top dollar" },
+  { value: "emotional", label: "Emotional Seller", desc: "Attached to property, needs empathy" },
+];
+
+const ROLEPLAY_SCENARIOS = [
+  { value: "first_call", label: "First Qualification Call", desc: "Initial contact with new lead" },
+  { value: "follow_up", label: "Follow-Up Call", desc: "Second touch after initial interest" },
+  { value: "offer_presentation", label: "Offer Presentation", desc: "Presenting numbers to seller" },
+  { value: "closing", label: "Closing Call", desc: "Getting commitment to move forward" },
+];
+
+function MeetingFacilitator({ agendaItems, onClose }: { agendaItems: Array<{ id: number; title: string; description: string | null }>; onClose: () => void }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [mode, setMode] = useState<MeetingMode>("facilitate");
+  const [currentAgendaIndex, setCurrentAgendaIndex] = useState(0);
+  const [roleplayPersonality, setRoleplayPersonality] = useState("skeptical");
+  const [roleplayScenario, setRoleplayScenario] = useState("first_call");
+  const [roleplayCount, setRoleplayCount] = useState(0);
+  const [isStarted, setIsStarted] = useState(false);
+
+  const chatMutation = trpc.meeting.chat.useMutation({
+    onSuccess: (data) => setMessages(prev => [...prev, { role: "assistant", content: data.answer, mode: data.mode }]),
+    onError: () => toast.error("Failed to get response"),
+  });
+
+  const summaryMutation = trpc.meeting.generateSummary.useMutation({
+    onSuccess: (data) => setMessages(prev => [...prev, { role: "assistant", content: `📋 **Meeting Summary**\n\n${data.summary}`, mode: "facilitate" }]),
+  });
+
+  const currentAgenda = agendaItems[currentAgendaIndex];
+
+  const startMeeting = () => {
+    setIsStarted(true);
+    setMessages([{ role: "assistant", content: `🎯 **Welcome to your team training session!**\n\nToday's agenda has ${agendaItems.length} items. Let's start with:\n\n**${currentAgenda?.title || "General Discussion"}**\n${currentAgenda?.description ? `\n${currentAgenda.description}` : ""}\n\nUse the mode buttons below to:\n- 💬 **Facilitate** - Guide discussion\n- 🎭 **Role-Play** - Practice with AI seller\n- 📄 **Examples** - See real call clips\n- ❓ **Q&A** - Ask coaching questions\n\nWhat would you like to focus on first?`, mode: "facilitate" }]);
+  };
+
+  const handleSend = () => {
+    if (!input.trim() || chatMutation.isPending) return;
+    const userMessage = input.trim();
+    setMessages(prev => [...prev, { role: "user", content: userMessage }]);
+    setInput("");
+    if (mode === "roleplay") setRoleplayCount(prev => prev + 1);
+    chatMutation.mutate({
+      message: userMessage,
+      mode,
+      currentAgendaItem: currentAgenda ? { id: currentAgenda.id, title: currentAgenda.title, description: currentAgenda.description || undefined } : undefined,
+      roleplayContext: mode === "roleplay" ? { scenario: ROLEPLAY_SCENARIOS.find(s => s.value === roleplayScenario)?.desc, sellerPersonality: SELLER_PERSONALITIES.find(p => p.value === roleplayPersonality)?.desc } : undefined,
+      conversationHistory: messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+    });
+  };
+
+  const nextAgendaItem = () => {
+    if (currentAgendaIndex < agendaItems.length - 1) {
+      const nextIndex = currentAgendaIndex + 1;
+      setCurrentAgendaIndex(nextIndex);
+      const nextItem = agendaItems[nextIndex];
+      setMessages(prev => [...prev, { role: "assistant", content: `⏭️ **Moving to next agenda item:**\n\n**${nextItem.title}**\n${nextItem.description ? `\n${nextItem.description}` : ""}\n\nHow would you like to approach this topic?`, mode: "facilitate" }]);
+    } else {
+      summaryMutation.mutate({ agendaItems: agendaItems.map((item, i) => ({ title: item.title, discussed: i <= currentAgendaIndex })), roleplayCount });
+    }
+  };
+
+  const getModeIcon = (m: MeetingMode) => {
+    switch (m) {
+      case "facilitate": return <MessageCircle className="h-4 w-4" />;
+      case "roleplay": return <Users className="h-4 w-4" />;
+      case "example": return <FileText className="h-4 w-4" />;
+      case "qa": return <HelpCircle className="h-4 w-4" />;
+    }
+  };
+
+  if (!isStarted) {
+    return (
+      <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-2xl">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white"><Bot className="h-6 w-6" /></div>
+                <div><CardTitle>AI Meeting Facilitator</CardTitle><CardDescription>Your AI-powered training session guide</CardDescription></div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={onClose}><X className="h-5 w-5" /></Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-4">
+              <h3 className="font-semibold mb-2">Today's Agenda ({agendaItems.length} items)</h3>
+              <div className="space-y-2">
+                {agendaItems.map((item, i) => (
+                  <div key={item.id} className="flex items-center gap-2 text-sm">
+                    <span className="w-6 h-6 rounded-full bg-purple-200 text-purple-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                    <span>{item.title}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 border rounded-lg"><div className="flex items-center gap-2 mb-2"><Users className="h-5 w-5 text-purple-600" /><span className="font-medium">Role-Play Practice</span></div><p className="text-sm text-muted-foreground">AI plays the seller so your team can practice</p></div>
+              <div className="p-4 border rounded-lg"><div className="flex items-center gap-2 mb-2"><FileText className="h-5 w-5 text-purple-600" /><span className="font-medium">Real Examples</span></div><p className="text-sm text-muted-foreground">Pull clips from actual calls</p></div>
+              <div className="p-4 border rounded-lg"><div className="flex items-center gap-2 mb-2"><HelpCircle className="h-5 w-5 text-purple-600" /><span className="font-medium">Q&A Coaching</span></div><p className="text-sm text-muted-foreground">Get instant coaching answers</p></div>
+              <div className="p-4 border rounded-lg"><div className="flex items-center gap-2 mb-2"><MessageCircle className="h-5 w-5 text-purple-600" /><span className="font-medium">Guided Discussion</span></div><p className="text-sm text-muted-foreground">AI guides you through each topic</p></div>
+            </div>
+            <Button className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700" size="lg" onClick={startMeeting}><Play className="h-5 w-5 mr-2" />Start Meeting</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex flex-col">
+      <div className="border-b bg-card px-4 py-3">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white"><Bot className="h-5 w-5" /></div>
+            <div><h2 className="font-semibold">AI Meeting Facilitator</h2><p className="text-xs text-muted-foreground">Item {currentAgendaIndex + 1} of {agendaItems.length}: {currentAgenda?.title}</p></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={nextAgendaItem} disabled={summaryMutation.isPending}><SkipForward className="h-4 w-4 mr-1" />{currentAgendaIndex < agendaItems.length - 1 ? "Next Item" : "End Meeting"}</Button>
+            <Button variant="ghost" size="icon" onClick={onClose}><X className="h-5 w-5" /></Button>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-hidden max-w-4xl mx-auto w-full">
+        <ScrollArea className="h-full p-4">
+          <div className="space-y-4 pb-4">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] rounded-lg p-3 ${msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                  {msg.role === "assistant" && msg.mode && <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">{getModeIcon(msg.mode)}<span className="capitalize">{msg.mode}</span></div>}
+                  <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                </div>
+              </div>
+            ))}
+            {chatMutation.isPending && <div className="flex justify-start"><div className="bg-muted rounded-lg p-3"><div className="flex items-center gap-2 text-sm text-muted-foreground"><RefreshCw className="h-4 w-4 animate-spin" />Thinking...</div></div></div>}
+          </div>
+        </ScrollArea>
+      </div>
+      <div className="border-t bg-card p-4">
+        <div className="max-w-4xl mx-auto space-y-3">
+          <div className="flex items-center gap-2">
+            {(["facilitate", "roleplay", "example", "qa"] as MeetingMode[]).map((m) => (
+              <Button key={m} variant={mode === m ? "default" : "outline"} size="sm" onClick={() => setMode(m)} className={mode === m ? "bg-purple-600 hover:bg-purple-700" : ""}>{getModeIcon(m)}<span className="ml-1 capitalize">{m === "qa" ? "Q&A" : m === "roleplay" ? "Role-Play" : m}</span></Button>
+            ))}
+          </div>
+          {mode === "roleplay" && (
+            <div className="flex items-center gap-2 text-sm">
+              <Select value={roleplayPersonality} onValueChange={setRoleplayPersonality}><SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger><SelectContent>{SELLER_PERSONALITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent></Select>
+              <Select value={roleplayScenario} onValueChange={setRoleplayScenario}><SelectTrigger className="w-44 h-8"><SelectValue /></SelectTrigger><SelectContent>{ROLEPLAY_SCENARIOS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Input placeholder={mode === "roleplay" ? "Practice your response to the seller..." : mode === "example" ? "What technique would you like to see examples of?" : mode === "qa" ? "Ask a coaching question..." : "Type your message..."} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()} disabled={chatMutation.isPending} />
+            <Button onClick={handleSend} disabled={!input.trim() || chatMutation.isPending} className="bg-purple-600 hover:bg-purple-700"><Send className="h-4 w-4" /></Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TeamAgendaSection() {
   const utils = trpc.useUtils();
+  const [showFacilitator, setShowFacilitator] = useState(false);
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "agenda", status: "active" });
   const handleRefresh = () => utils.teamTraining.list.invalidate();
   const completeMutation = trpc.teamTraining.complete.useMutation({ onSuccess: () => { toast.success("Agenda item completed"); handleRefresh(); } });
   const sortedItems = items?.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const agendaForFacilitator = sortedItems?.map(item => ({ id: item.id, title: item.title, description: item.description })) || [];
 
   return (
-    <Card className="border-purple-200">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-purple-100 text-purple-600"><Calendar className="h-5 w-5" /></div>
-          <div><CardTitle className="text-lg">Weekly Team Call Agenda</CardTitle><CardDescription>AI-suggested topics based on call analysis</CardDescription></div>
-        </div>
-        <AddTeamItemDialog itemType="agenda" onSuccess={handleRefresh} />
+    <>
+      {showFacilitator && agendaForFacilitator.length > 0 && <MeetingFacilitator agendaItems={agendaForFacilitator} onClose={() => setShowFacilitator(false)} />}
+      <Card className="border-purple-200">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-100 text-purple-600"><Calendar className="h-5 w-5" /></div>
+            <div><CardTitle className="text-lg">Weekly Team Call Agenda</CardTitle><CardDescription>AI-suggested topics based on call analysis</CardDescription></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setShowFacilitator(true)} className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700" disabled={!sortedItems || sortedItems.length === 0}><Play className="h-4 w-4 mr-2" />Start Meeting</Button>
+            <AddTeamItemDialog itemType="agenda" onSuccess={handleRefresh} />
+          </div>
       </CardHeader>
       <CardContent>
         {isLoading ? <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : sortedItems && sortedItems.length > 0 ? (
@@ -363,6 +545,7 @@ function TeamAgendaSection() {
         ) : <div className="text-center py-8 text-muted-foreground"><Calendar className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No agenda items</p></div>}
       </CardContent>
     </Card>
+    </>
   );
 }
 

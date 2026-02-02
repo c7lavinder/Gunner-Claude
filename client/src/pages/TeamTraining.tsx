@@ -953,15 +953,14 @@ function AgendaSection() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {sortedItems && sortedItems.length > 0 && (
-              <Button 
-                onClick={() => setShowFacilitator(true)}
-                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Start Meeting
-              </Button>
-            )}
+            <Button 
+              onClick={() => setShowFacilitator(true)}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+              disabled={!sortedItems || sortedItems.length === 0}
+            >
+              <Play className="h-4 w-4 mr-2" />
+              Start Meeting
+            </Button>
             <AddItemDialog itemType="agenda" onSuccess={handleRefresh} />
           </div>
         </CardHeader>
