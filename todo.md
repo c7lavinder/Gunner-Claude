@@ -756,3 +756,17 @@
 - [x] Add Google Sign-In button to Login page
 - [x] Add Google Sign-Up flow to Signup page
 - [x] Configure Google OAuth credentials
+
+
+## Bug Fixes - Feb 3
+
+- [ ] Fix broken Gunner logo on onboarding page
+- [ ] Fix "Failed to save" error on signup flow
+- [ ] Fix Google OAuth redirect_uri mismatch for team members
+
+
+## Google Sign-In Authentication Fix
+- [x] Fix cookie name mismatch between self-serve auth (auth_token) and tRPC context (app_session_id)
+- [x] Update context.ts to support both authentication methods
+- [x] Add unit tests for dual authentication context
+- [x] Verify onboarding flow works for new Google signups

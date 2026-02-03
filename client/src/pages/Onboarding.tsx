@@ -460,7 +460,7 @@ export default function Onboarding() {
         {/* Logo */}
         <div className="text-center mb-8">
           <img
-            src="https://manus-storage-test.oss-cn-beijing.aliyuncs.com/user-file/a0e4e2cd-b4d4-4866-9c05-c8e0eb0f4f4a/gunner-logo-final.png"
+            src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/ORoxztkyoTJEjMxT.png"
             alt="Gunner"
             className="h-16 mx-auto"
           />
