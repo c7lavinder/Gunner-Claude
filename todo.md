@@ -696,3 +696,5 @@
 
 - [x] Make logo bigger on landing page (h-14 header, h-12 footer)
 - [x] Use transparent background version of logo
+
+- [x] Fix broken logo URL on landing page (using cannon icon + GUNNER text)
