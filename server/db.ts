@@ -449,31 +449,53 @@ export async function getCallStats(options?: {
   // Calculate date range using CST timezone (Central Standard Time)
   // This ensures date filtering matches the user's local time
   const now = new Date();
-  // Get current time in CST by adjusting for timezone offset
-  // CST is UTC-6, so we need to subtract 6 hours from UTC to get CST
-  const cstOffset = -6 * 60; // CST offset in minutes
-  const utcOffset = now.getTimezoneOffset(); // Server's offset in minutes
-  const cstNow = new Date(now.getTime() + (utcOffset - cstOffset) * 60 * 1000);
+  
+  // Helper function to get start of day in CST as UTC timestamp
+  // CST is UTC-6, so midnight CST = 6:00 AM UTC
+  const getStartOfDayCST = (date: Date): Date => {
+    // Get the date components in CST timezone using Intl.DateTimeFormat
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const parts = formatter.formatToParts(date);
+    const year = parseInt(parts.find(p => p.type === 'year')!.value);
+    const month = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
+    const day = parseInt(parts.find(p => p.type === 'day')!.value);
+    
+    // Create midnight CST as UTC: midnight CST = 6:00 AM UTC
+    return new Date(Date.UTC(year, month, day, 6, 0, 0, 0));
+  };
   
   let startDate: Date | null = null;
   
   switch (options?.dateRange) {
     case "today":
-      // Start of today in CST, then convert back to UTC for comparison
-      const todayCST = new Date(cstNow.getFullYear(), cstNow.getMonth(), cstNow.getDate());
-      // Convert CST midnight back to UTC (add 6 hours)
-      startDate = new Date(todayCST.getTime() - (utcOffset - cstOffset) * 60 * 1000);
+      // Midnight CST today = 6:00 AM UTC today
+      startDate = getStartOfDayCST(now);
       break;
     case "week":
-      startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 7);
+      const weekAgo = new Date(now);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      startDate = getStartOfDayCST(weekAgo);
       break;
     case "month":
-      startDate = new Date(now);
-      startDate.setMonth(startDate.getMonth() - 1);
+      const monthAgo = new Date(now);
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      startDate = getStartOfDayCST(monthAgo);
       break;
     case "ytd":
-      startDate = new Date(cstNow.getFullYear(), 0, 1); // January 1st of current year in CST
+      // January 1st of current year at midnight CST
+      const ytdFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago',
+        year: 'numeric',
+      });
+      const ytdParts = ytdFormatter.formatToParts(now);
+      const ytdYear = parseInt(ytdParts.find(p => p.type === 'year')!.value);
+      // Jan 1st midnight CST = Jan 1st 6:00 AM UTC
+      startDate = new Date(Date.UTC(ytdYear, 0, 1, 6, 0, 0, 0));
       break;
     case "all":
     default:

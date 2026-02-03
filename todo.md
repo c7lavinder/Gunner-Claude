@@ -291,3 +291,7 @@
 - [x] Ensure admin sees all team data in analytics
 - [x] Fix Team Member Scores table not populating
 - [x] Fix date filter "Today" showing 0 when data exists (timezone fix for CST)
+
+## Timezone Bug Fix
+- [x] Fix calls from today (CST) showing as yesterday - Tim Brice 8am call example
+- [x] Ensure all date filtering uses CST timezone consistently (midnight CST = 6:00 AM UTC)
