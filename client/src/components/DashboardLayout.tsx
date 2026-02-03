@@ -189,13 +189,23 @@ function DashboardLayoutContent({
                 className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                {isCollapsed ? (
+                  <img 
+                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/jEHaMPpWmarLSeJu.png" 
+                    alt="Gunner" 
+                    className="h-6 w-6 object-contain"
+                  />
+                ) : (
+                  <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                )}
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Gunner
-                  </span>
+                  <img 
+                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/hsWvcxbQeqFBiUwY.png" 
+                    alt="Gunner" 
+                    className="h-8 object-contain"
+                  />
                 </div>
               ) : null}
             </div>

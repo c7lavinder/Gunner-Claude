@@ -420,3 +420,12 @@
 ## Archive KPI Dashboard
 - [x] Remove KPI Dashboard from sidebar navigation
 - [x] Keep code and database intact for future use
+
+
+## Gunner Logo Implementation
+- [x] Create cannon logo with "GUNNER" wordmark (cannon shooting AI)
+- [x] Create square icon version (cannon only)
+- [x] Upload logos to CDN
+- [x] Add full logo to sidebar header (expanded view)
+- [x] Add cannon icon to sidebar header (collapsed view)
+- [x] Add favicon using cannon icon
