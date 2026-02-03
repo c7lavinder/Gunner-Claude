@@ -796,3 +796,10 @@
 - [x] Fix contentGeneration.getData to use tenant filtering
 - [x] Fix contentGeneration.generateBrandContent to use tenant filtering
 - [x] Fix contentGeneration.generateCreatorContent to use tenant filtering
+
+
+## UX Improvements (Feb 3, 2026)
+- [x] Clean up test user (coreydenzel14@gmail.com) and tenant (Purple Doors)
+- [x] Add friendly empty states for new tenants with no data (already existed in pages)
+- [x] Hide sidebar during onboarding flow to prevent navigation away
+- [x] Auto-redirect to onboarding if not completed

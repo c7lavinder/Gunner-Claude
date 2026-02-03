@@ -21,9 +21,10 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
+import { trpc } from "@/lib/trpc";
 import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings, User, Building2, Shield } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Redirect } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
@@ -76,12 +77,19 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  const [location] = useLocation();
+  
+  // Fetch tenant settings to check onboarding status
+  const { data: tenantSettings, isLoading: tenantLoading } = trpc.tenant.getSettings.useQuery(
+    undefined,
+    { enabled: !!user }
+  );
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
 
-  if (loading) {
+  if (loading || (user && tenantLoading)) {
     return <DashboardLayoutSkeleton />
   }
 
@@ -107,6 +115,24 @@ export default function DashboardLayout({
             Sign in
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  // Check if onboarding is not completed - redirect to onboarding
+  // Skip redirect if already on onboarding or pricing pages
+  const isOnboardingRoute = location === '/onboarding' || location === '/pricing';
+  const onboardingCompleted = tenantSettings?.onboardingCompleted === 'true';
+  
+  if (!isOnboardingRoute && !onboardingCompleted && tenantSettings) {
+    return <Redirect to="/onboarding" />;
+  }
+
+  // If on onboarding page and not completed, render without sidebar
+  if (isOnboardingRoute && !onboardingCompleted) {
+    return (
+      <div className="min-h-screen bg-background">
+        {children}
       </div>
     );
   }
