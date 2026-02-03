@@ -3,10 +3,11 @@ import { users, tenants } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import * as crypto from "crypto";
 import { createSessionToken, getUserWithTenant } from "./selfServeAuth";
+import { ENV } from "./_core/env";
 
-// Google OAuth configuration
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+// Google OAuth configuration - use getter functions to ensure ENV is loaded
+const getGoogleClientId = () => ENV.googleClientId;
+const getGoogleClientSecret = () => ENV.googleClientSecret;
 
 // Generate a unique openId for Google users
 function generateGoogleOpenId(googleId: string): string {
@@ -20,6 +21,14 @@ export async function exchangeCodeForTokens(code: string, redirectUri: string): 
   refresh_token?: string;
 } | null> {
   try {
+    const clientId = getGoogleClientId();
+    const clientSecret = getGoogleClientSecret();
+    
+    if (!clientId || !clientSecret) {
+      console.error('[GoogleAuth] Missing Google OAuth credentials');
+      return null;
+    }
+    
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -27,8 +36,8 @@ export async function exchangeCodeForTokens(code: string, redirectUri: string): 
       },
       body: new URLSearchParams({
         code,
-        client_id: GOOGLE_CLIENT_ID!,
-        client_secret: GOOGLE_CLIENT_SECRET!,
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       }),
@@ -65,8 +74,9 @@ export function decodeIdToken(idToken: string): {
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
     
     // Verify the token is for our client
-    if (payload.aud !== GOOGLE_CLIENT_ID) {
-      console.error('[GoogleAuth] Token audience mismatch');
+    const clientId = getGoogleClientId();
+    if (payload.aud !== clientId) {
+      console.error('[GoogleAuth] Token audience mismatch. Expected:', clientId, 'Got:', payload.aud);
       return null;
     }
     
@@ -289,8 +299,14 @@ export async function completeGoogleSignup(params: {
 
 // Generate Google OAuth URL
 export function getGoogleAuthUrl(redirectUri: string, state?: string): string {
+  const clientId = getGoogleClientId();
+  
+  if (!clientId) {
+    console.error('[GoogleAuth] Missing GOOGLE_CLIENT_ID');
+  }
+  
   const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID!,
+    client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
