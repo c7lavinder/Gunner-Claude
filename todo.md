@@ -435,3 +435,61 @@
 - [x] Create LoadingScreen component with Gunner logo
 - [x] Add cannon firing animation effect
 - [x] Integrate loading screen into app initialization
+
+
+## White-Label SaaS Platform - Phase 1 MVP
+
+### Multi-Tenancy
+- [x] Create tenants table (company_id, name, domain, settings, created_at)
+- [x] Add tenant_id to users table
+- [x] Add tenant_id to calls table
+- [x] Add tenant_id to team_members table
+- [x] Add tenant_id to training_materials table
+- [x] Add tenant_id to grading_rubrics table
+- [x] Add tenant_id to badges table
+- [x] Add tenant_id to all KPI tables
+- [ ] Ensure all queries are tenant-scoped
+- [ ] Add tenant context to auth/session
+
+### Stripe Billing Integration
+- [x] Set up Stripe integration using webdev_add_feature
+- [x] Create subscription tiers (Starter $99, Growth $249, Scale $499)
+- [x] Build pricing page
+- [x] Implement checkout flow
+- [ ] Build billing management (upgrade/downgrade/cancel)
+- [ ] Handle failed payments with grace period
+- [x] Add free trial (14 days)
+
+### Onboarding Wizard
+- [x] Step 1: Create Account (company name, admin email)
+- [x] Step 2: Choose Plan (select tier, enter payment)
+- [x] Step 3: Connect CRM (GHL OAuth, extensible for others)
+- [x] Step 4: Upload Training Materials (scripts, docs)
+- [x] Step 5: Define Roles (custom roles per tenant)
+- [x] Step 6: Invite Team (add members by email)
+- [x] Step 7: Done (land on dashboard)
+- [ ] Progress saving (resume if interrupted)
+
+### Tenant Admin Dashboard
+- [x] Manage team members
+- [x] Manage billing/subscription
+- [x] View usage stats
+- [x] Configure CRM integrations
+- [x] Upload/edit training materials
+- [x] Manage roles and grading rubrics
+
+### Super Admin Dashboard (Platform Owner)
+- [x] View all tenants
+- [x] MRR/ARR/churn metrics
+- [x] Revenue by plan tier
+- [x] New signups tracking
+- [x] Tenants with failed payments
+- [x] Low usage tenants (churn risk)
+- [ ] Support access to tenant accounts
+
+### Migrate NAH as First Tenant
+- [x] Create NAH tenant record
+- [x] Associate existing users with NAH tenant
+- [x] Associate existing calls with NAH tenant
+- [x] Associate existing training materials with NAH tenant
+- [x] Verify all data properly scoped

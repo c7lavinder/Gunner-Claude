@@ -16,6 +16,10 @@ import SocialMedia from "./pages/SocialMedia";
 import TeamManagement from "./pages/TeamManagement";
 import Profile from "./pages/Profile";
 import KpiDashboard from "./pages/KpiDashboard";
+import Onboarding from "./pages/Onboarding";
+import Pricing from "./pages/Pricing";
+import SuperAdmin from "./pages/SuperAdmin";
+import TenantSettings from "./pages/TenantSettings";
 
 function Router() {
   return (
@@ -30,6 +34,10 @@ function Router() {
       <Route path="/team-management" component={TeamManagement} />
       <Route path="/profile" component={Profile} />
       <Route path="/kpi" component={KpiDashboard} />
+      <Route path="/onboarding" component={Onboarding} />
+      <Route path="/pricing" component={Pricing} />
+      <Route path="/admin" component={SuperAdmin} />
+      <Route path="/settings" component={TenantSettings} />
       <Route path="/leaderboard">
         <Redirect to="/team" />
       </Route>

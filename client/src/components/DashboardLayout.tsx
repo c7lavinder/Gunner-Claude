@@ -21,14 +21,15 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings, User } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings, User, Building2, Shield } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const getMenuItems = (teamRole: string | null | undefined) => {
+const getMenuItems = (teamRole: string | null | undefined, openId?: string) => {
   const isAdmin = teamRole === 'admin';
+  const isPlatformOwner = openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
   const isLeadManager = teamRole === 'lead_manager';
   
   const items = [
@@ -46,9 +47,15 @@ const getMenuItems = (teamRole: string | null | undefined) => {
   items.push({ icon: Users, label: "Team", path: "/team" });
   items.push({ icon: User, label: "My Profile", path: "/profile" });
   
-  // Team Management is admin-only (KPI Dashboard archived for future development)
+  // Team Management and Company Settings are admin-only
   if (isAdmin) {
     items.push({ icon: Settings, label: "Team Management", path: "/team-management" });
+    items.push({ icon: Building2, label: "Company Settings", path: "/settings" });
+  }
+  
+  // Platform Admin is only for platform owner
+  if (isPlatformOwner) {
+    items.push({ icon: Shield, label: "Platform Admin", path: "/admin" });
   }
   
   return items;
@@ -134,7 +141,7 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const menuItems = getMenuItems(user?.teamRole);
+  const menuItems = getMenuItems(user?.teamRole, user?.openId);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

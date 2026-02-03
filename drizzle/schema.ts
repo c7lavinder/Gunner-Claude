@@ -1,18 +1,64 @@
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, decimal } from "drizzle-orm/mysql-core";
 
+// ============ MULTI-TENANCY SYSTEM ============
+
+/**
+ * Tenants table - each company/customer is a tenant
+ * This is the core of the white-label SaaS platform
+ */
+export const tenants = mysqlTable("tenants", {
+  id: int("id").autoincrement().primaryKey(),
+  // Company info
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(), // URL-friendly identifier
+  domain: varchar("domain", { length: 255 }), // Custom domain if provided
+  // Stripe billing
+  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
+  // Subscription tier: starter, growth, scale
+  subscriptionTier: mysqlEnum("subscriptionTier", ["trial", "starter", "growth", "scale"]).default("trial"),
+  subscriptionStatus: mysqlEnum("subscriptionStatus", ["active", "past_due", "canceled", "paused"]).default("active"),
+  // Trial info
+  trialEndsAt: timestamp("trialEndsAt"),
+  // User limits based on tier
+  maxUsers: int("maxUsers").default(3), // Starter: 3, Growth: 10, Scale: unlimited (999)
+  // CRM integration
+  crmType: mysqlEnum("crmType", ["ghl", "hubspot", "salesforce", "close", "pipedrive", "none"]).default("none"),
+  crmConnected: mysqlEnum("crmConnected", ["true", "false"]).default("false"),
+  crmConfig: text("crmConfig"), // JSON config for CRM connection
+  // Branding (Phase 2)
+  logoUrl: text("logoUrl"),
+  primaryColor: varchar("primaryColor", { length: 20 }),
+  // Onboarding progress
+  onboardingStep: int("onboardingStep").default(1),
+  onboardingCompleted: mysqlEnum("onboardingCompleted", ["true", "false"]).default("false"),
+  // Settings
+  settings: text("settings"), // JSON for tenant-specific settings
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = typeof tenants.$inferInsert;
+
 /**
  * Core user table backing auth flow.
  * Extended with team role for call coaching platform.
+ * Now includes tenantId for multi-tenancy.
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "super_admin"]).default("user").notNull(), // Added super_admin for platform owner
   // Team role for call coaching
   teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager"]).default("lead_manager"),
+  // Is this user a tenant admin?
+  isTenantAdmin: mysqlEnum("isTenantAdmin", ["true", "false"]).default("false"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -23,11 +69,13 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * Team members table for pre-configured team (Chris, Daniel, Kyle)
+ * Team members table for pre-configured team
  * These are mapped to users when they log in
+ * Now includes tenantId for multi-tenancy.
  */
 export const teamMembers = mysqlTable("team_members", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   name: varchar("name", { length: 255 }).notNull(),
   teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager"]).notNull(),
   userId: int("userId").references(() => users.id),
@@ -45,6 +93,7 @@ export type InsertTeamMember = typeof teamMembers.$inferInsert;
  */
 export const teamAssignments = mysqlTable("team_assignments", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // The Lead Manager being assigned
   leadManagerId: int("leadManagerId").references(() => teamMembers.id).notNull(),
   // The Acquisition Manager they report to
@@ -58,11 +107,72 @@ export type TeamAssignment = typeof teamAssignments.$inferSelect;
 export type InsertTeamAssignment = typeof teamAssignments.$inferInsert;
 
 /**
- * Calls table - stores incoming calls from GHL webhook
+ * Tenant Roles - custom roles defined by each tenant
+ * Replaces hardcoded LM/AM roles
+ */
+export const tenantRoles = mysqlTable("tenant_roles", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  name: varchar("name", { length: 100 }).notNull(), // e.g., "SDR", "AE", "Closer"
+  code: varchar("code", { length: 50 }).notNull(), // e.g., "sdr", "ae", "closer"
+  description: text("description"),
+  // Which grading rubric to use
+  rubricId: int("rubricId"), // References tenant_rubrics.id
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  sortOrder: int("sortOrder").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TenantRole = typeof tenantRoles.$inferSelect;
+export type InsertTenantRole = typeof tenantRoles.$inferInsert;
+
+/**
+ * Tenant Rubrics - custom grading rubrics per tenant
+ */
+export const tenantRubrics = mysqlTable("tenant_rubrics", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  // Criteria as JSON array: [{name, description, weight, maxScore}]
+  criteria: text("criteria").notNull(),
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TenantRubric = typeof tenantRubrics.$inferSelect;
+export type InsertTenantRubric = typeof tenantRubrics.$inferInsert;
+
+/**
+ * Tenant Call Types - custom call type classifications per tenant
+ */
+export const tenantCallTypes = mysqlTable("tenant_call_types", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  name: varchar("name", { length: 100 }).notNull(), // e.g., "Discovery", "Demo", "Closing"
+  code: varchar("code", { length: 50 }).notNull(),
+  description: text("description"),
+  // Which rubric to use for this call type
+  rubricId: int("rubricId").references(() => tenantRubrics.id),
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  sortOrder: int("sortOrder").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TenantCallType = typeof tenantCallTypes.$inferSelect;
+export type InsertTenantCallType = typeof tenantCallTypes.$inferInsert;
+
+/**
+ * Calls table - stores incoming calls from CRM webhook
+ * Now includes tenantId for multi-tenancy.
  */
 export const calls = mysqlTable("calls", {
   id: int("id").autoincrement().primaryKey(),
-  // GHL webhook data
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
+  // GHL webhook data (kept for backwards compatibility, works with any CRM)
   ghlCallId: varchar("ghlCallId", { length: 255 }).unique(),
   ghlContactId: varchar("ghlContactId", { length: 255 }),
   ghlLocationId: varchar("ghlLocationId", { length: 255 }),
@@ -77,8 +187,9 @@ export const calls = mysqlTable("calls", {
   // Team member who handled the call
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
-  // Call type determines which rubric to use
+  // Call type - now references tenant_call_types for custom types
   callType: mysqlEnum("callType", ["qualification", "offer"]).default("qualification"),
+  tenantCallTypeId: int("tenantCallTypeId").references(() => tenantCallTypes.id), // Custom call type
   // Call outcome - what was achieved on this call
   callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_accepted", "offer_rejected", "follow_up", "disqualified"]).default("none"),
   // Call classification - determines if call should be graded
@@ -106,6 +217,7 @@ export type InsertCall = typeof calls.$inferInsert;
  */
 export const callGrades = mysqlTable("call_grades", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   callId: int("callId").references(() => calls.id).notNull(),
   // Overall score
   overallScore: decimal("overallScore", { precision: 5, scale: 2 }),
@@ -122,8 +234,10 @@ export const callGrades = mysqlTable("call_grades", {
   objectionHandling: json("objectionHandling"), // Array of {objection, context, suggestedResponses[]}
   // Summary
   summary: text("summary"),
-  // Which rubric was used
+  // Which rubric was used (legacy)
   rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager"]).notNull(),
+  // Custom rubric reference
+  tenantRubricId: int("tenantRubricId").references(() => tenantRubrics.id),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -136,6 +250,7 @@ export type InsertCallGrade = typeof callGrades.$inferInsert;
  */
 export const performanceMetrics = mysqlTable("performance_metrics", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   // Time period
   periodType: mysqlEnum("periodType", ["daily", "weekly", "monthly", "all_time"]).notNull(),
@@ -165,6 +280,7 @@ export type InsertPerformanceMetric = typeof performanceMetrics.$inferInsert;
  */
 export const trainingMaterials = mysqlTable("training_materials", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // Material info
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
@@ -183,8 +299,9 @@ export const trainingMaterials = mysqlTable("training_materials", {
     "examples",
     "other"
   ]).default("other"),
-  // Which role this applies to
+  // Which role this applies to (legacy - use tenantRoleId for custom roles)
   applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager"]).default("all"),
+  tenantRoleId: int("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
   // Status
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
   // Timestamps
@@ -200,6 +317,7 @@ export type InsertTrainingMaterial = typeof trainingMaterials.$inferInsert;
  */
 export const aiFeedback = mysqlTable("ai_feedback", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // Link to the call/grade being corrected
   callId: int("callId").references(() => calls.id),
   callGradeId: int("callGradeId").references(() => callGrades.id),
@@ -242,6 +360,7 @@ export type InsertAIFeedback = typeof aiFeedback.$inferInsert;
  */
 export const gradingRules = mysqlTable("grading_rules", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // Rule info
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
@@ -249,8 +368,9 @@ export const gradingRules = mysqlTable("grading_rules", {
   ruleText: text("ruleText").notNull(),
   // Priority (higher = more important)
   priority: int("priority").default(0),
-  // Which rubric this applies to
+  // Which rubric this applies to (legacy)
   applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager"]).default("all"),
+  tenantRoleId: int("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
   // Status
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
   // Timestamps
@@ -268,6 +388,7 @@ export type InsertGradingRule = typeof gradingRules.$inferInsert;
  */
 export const teamTrainingItems = mysqlTable("team_training_items", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // Item type
   itemType: mysqlEnum("itemType", [
     "skill",           // Long-term skills being developed
@@ -311,6 +432,7 @@ export type InsertTeamTrainingItem = typeof teamTrainingItems.$inferInsert;
  */
 export const brandAssets = mysqlTable("brand_assets", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // Asset info
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
@@ -347,6 +469,7 @@ export type InsertBrandAsset = typeof brandAssets.$inferInsert;
  */
 export const socialPosts = mysqlTable("social_posts", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // Content type - brand or creator
   contentType: mysqlEnum("contentType", ["brand", "creator"]).notNull(),
   // Platform
@@ -399,6 +522,7 @@ export type InsertSocialPost = typeof socialPosts.$inferInsert;
  */
 export const contentIdeas = mysqlTable("content_ideas", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // Idea content
   title: varchar("title", { length: 500 }).notNull(),
   description: text("description"),
@@ -436,6 +560,7 @@ export type InsertContentIdea = typeof contentIdeas.$inferInsert;
  */
 export const brandProfile = mysqlTable("brand_profile", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   // Website and branding
   websiteUrl: varchar("websiteUrl", { length: 500 }),
   extractedColors: text("extractedColors"), // JSON array of colors extracted from website
@@ -470,9 +595,11 @@ export type InsertBrandProfile = typeof brandProfile.$inferInsert;
 
 /**
  * Badge definitions - stores all available badges
+ * Now tenant-scoped for custom badges per company
  */
 export const badges = mysqlTable("badges", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy (null = platform default)
   code: varchar("code", { length: 50 }).notNull(), // e.g., "on_fire", "script_starter"
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
@@ -493,6 +620,7 @@ export type InsertBadge = typeof badges.$inferInsert;
  */
 export const userBadges = mysqlTable("user_badges", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   badgeId: int("badgeId").references(() => badges.id).notNull(),
   earnedAt: timestamp("earnedAt").defaultNow().notNull(),
@@ -506,6 +634,7 @@ export type InsertUserBadge = typeof userBadges.$inferInsert;
  */
 export const badgeProgress = mysqlTable("badge_progress", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   badgeCode: varchar("badgeCode", { length: 50 }).notNull(),
   currentCount: int("currentCount").default(0).notNull(),
@@ -520,6 +649,7 @@ export type InsertBadgeProgress = typeof badgeProgress.$inferInsert;
  */
 export const userStreaks = mysqlTable("user_streaks", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   // Hot streak (consecutive C+ grades)
   hotStreakCurrent: int("hotStreakCurrent").default(0).notNull(),
@@ -540,6 +670,7 @@ export type InsertUserStreak = typeof userStreaks.$inferInsert;
  */
 export const userXp = mysqlTable("user_xp", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   totalXp: int("totalXp").default(0).notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -553,6 +684,7 @@ export type InsertUserXp = typeof userXp.$inferInsert;
  */
 export const xpTransactions = mysqlTable("xp_transactions", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   amount: int("amount").notNull(),
   reason: varchar("reason", { length: 100 }).notNull(),
@@ -568,6 +700,7 @@ export type InsertXpTransaction = typeof xpTransactions.$inferInsert;
  */
 export const deals = mysqlTable("deals", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }).notNull().unique(),
   ghlContactId: varchar("ghlContactId", { length: 255 }),
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
@@ -586,6 +719,7 @@ export type InsertDeal = typeof deals.$inferInsert;
  */
 export const rewardViews = mysqlTable("reward_views", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   callId: int("callId").references(() => calls.id).notNull(),
   xpAwarded: int("xpAwarded").default(0).notNull(),
@@ -603,6 +737,7 @@ export type InsertRewardView = typeof rewardViews.$inferInsert;
  */
 export const kpiPeriods = mysqlTable("kpi_periods", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   periodType: mysqlEnum("periodType", ["daily", "weekly", "monthly"]).notNull(),
   periodStart: timestamp("periodStart").notNull(),
   periodEnd: timestamp("periodEnd").notNull(),
@@ -615,13 +750,10 @@ export type InsertKpiPeriod = typeof kpiPeriods.$inferInsert;
 
 /**
  * Team Member KPIs - tracks the 3 key metrics per team member per period
- * AM: calls, offers, contracts
- * LM: calls, conversations, appointments
- * LG Cold Caller: time on phones, conversations, leads
- * LG SMS: sms sent, responses, leads
  */
 export const teamMemberKpis = mysqlTable("team_member_kpis", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   periodId: int("periodId").references(() => kpiPeriods.id).notNull(),
   // Role type determines which metrics are used
@@ -646,10 +778,10 @@ export type InsertTeamMemberKpi = typeof teamMemberKpis.$inferInsert;
 
 /**
  * Campaign KPIs - tracks lead gen channel performance
- * Channels: CC (Cold Calls), SMS, Forms, PPL, JV, PPC, Postcards, Referrals
  */
 export const campaignKpis = mysqlTable("campaign_kpis", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   periodId: int("periodId").references(() => kpiPeriods.id).notNull(),
   market: mysqlEnum("market", ["tennessee", "global"]).default("global").notNull(),
   channel: mysqlEnum("channel", [
@@ -685,6 +817,7 @@ export type InsertCampaignKpi = typeof campaignKpis.$inferInsert;
  */
 export const kpiDeals = mysqlTable("kpi_deals", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   periodId: int("periodId").references(() => kpiPeriods.id),
   // Deal info
   propertyAddress: text("propertyAddress").notNull(),
@@ -741,6 +874,7 @@ export type InsertKpiDeal = typeof kpiDeals.$inferInsert;
  */
 export const kpiGoals = mysqlTable("kpi_goals", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   periodId: int("periodId").references(() => kpiPeriods.id),
   // Goal type
   goalType: mysqlEnum("goalType", ["campaign", "team_member"]).notNull(),
@@ -775,6 +909,7 @@ export type InsertKpiGoal = typeof kpiGoals.$inferInsert;
  */
 export const leadGenStaff = mysqlTable("lead_gen_staff", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   name: varchar("name", { length: 255 }).notNull(),
   roleType: mysqlEnum("roleType", ["lg_cold_caller", "lg_sms", "am", "lm"]).notNull(),
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
@@ -793,6 +928,7 @@ export type InsertLeadGenStaff = typeof leadGenStaff.$inferInsert;
  */
 export const kpiMarkets = mysqlTable("kpi_markets", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   name: varchar("name", { length: 255 }).notNull(),
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -807,6 +943,7 @@ export type InsertKpiMarket = typeof kpiMarkets.$inferInsert;
  */
 export const kpiChannels = mysqlTable("kpi_channels", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   name: varchar("name", { length: 255 }).notNull(),
   code: varchar("code", { length: 50 }).notNull(), // short code like 'cold_calls', 'sms'
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
@@ -816,3 +953,35 @@ export const kpiChannels = mysqlTable("kpi_channels", {
 
 export type KpiChannel = typeof kpiChannels.$inferSelect;
 export type InsertKpiChannel = typeof kpiChannels.$inferInsert;
+
+
+// ============ SUBSCRIPTION PRICING ============
+
+/**
+ * Subscription Plans - defines available pricing tiers
+ */
+export const subscriptionPlans = mysqlTable("subscription_plans", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(), // "Starter", "Growth", "Scale"
+  code: varchar("code", { length: 50 }).notNull().unique(), // "starter", "growth", "scale"
+  description: text("description"),
+  // Pricing
+  priceMonthly: int("priceMonthly").notNull(), // in cents (e.g., 9900 = $99)
+  priceYearly: int("priceYearly"), // in cents (optional annual discount)
+  // Stripe Price IDs
+  stripePriceIdMonthly: varchar("stripePriceIdMonthly", { length: 255 }),
+  stripePriceIdYearly: varchar("stripePriceIdYearly", { length: 255 }),
+  // Limits
+  maxUsers: int("maxUsers").notNull(), // 3, 10, 999 (unlimited)
+  maxCrmIntegrations: int("maxCrmIntegrations").default(1),
+  // Features (JSON array of feature codes)
+  features: text("features"),
+  // Status
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  sortOrder: int("sortOrder").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
