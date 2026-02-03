@@ -21,22 +21,63 @@ import {
   UserPlus,
   CreditCard,
   XCircle,
-  Clock
+  Clock,
+  Mail,
+  LogOut,
+  CheckCircle
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
 
 export default function SuperAdmin() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, refresh: refetchAuth } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [sendingOutreach, setSendingOutreach] = useState<number | null>(null);
+  const [outreachSent, setOutreachSent] = useState<Set<number>>(new Set());
 
   // Fetch real data from backend
   const { data: tenants, isLoading: tenantsLoading, refetch: refetchTenants } = trpc.tenant.list.useQuery();
   const { data: metrics, isLoading: metricsLoading, refetch: refetchMetrics } = trpc.tenant.getMetrics.useQuery();
   const { data: recentActivity, isLoading: activityLoading, refetch: refetchActivity } = trpc.tenant.getRecentActivity.useQuery();
   const { data: lowUsageTenants, isLoading: lowUsageLoading, refetch: refetchLowUsage } = trpc.tenant.getLowUsageTenants.useQuery();
+  const { data: impersonationStatus } = trpc.tenant.getImpersonationStatus.useQuery();
+
+  // Mutations
+  const startImpersonation = trpc.tenant.startImpersonation.useMutation({
+    onSuccess: () => {
+      toast.success("Now viewing as tenant");
+      refetchAuth();
+      setLocation("/");
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to start impersonation");
+    }
+  });
+
+  const stopImpersonation = trpc.tenant.stopImpersonation.useMutation({
+    onSuccess: () => {
+      toast.success("Returned to super admin view");
+      refetchAuth();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to stop impersonation");
+    }
+  });
+
+  const sendOutreachEmail = trpc.tenant.sendChurnOutreach.useMutation({
+    onSuccess: (_: unknown, variables: { tenantId: number }) => {
+      toast.success("Re-engagement email sent successfully");
+      setOutreachSent(prev => new Set(prev).add(variables.tenantId));
+      setSendingOutreach(null);
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Failed to send outreach email");
+      setSendingOutreach(null);
+    }
+  });
 
   // Check if user is super admin or platform owner
   const isPlatformOwner = user?.openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
@@ -100,6 +141,7 @@ export default function SuperAdmin() {
     refetchTenants();
     refetchMetrics();
     refetchActivity();
+    refetchLowUsage();
   };
 
   const getActivityIcon = (type: string) => {
@@ -129,8 +171,47 @@ export default function SuperAdmin() {
     return then.toLocaleDateString();
   };
 
+  const handleImpersonate = (tenantId: number) => {
+    startImpersonation.mutate({ tenantId });
+  };
+
+  const handleStopImpersonation = () => {
+    stopImpersonation.mutate();
+  };
+
+  const handleSendOutreach = (tenantId: number) => {
+    setSendingOutreach(tenantId);
+    sendOutreachEmail.mutate({ tenantId });
+  };
+
   return (
     <div className="space-y-6">
+      {/* Impersonation Banner */}
+      {impersonationStatus?.isImpersonating && (
+        <div className="bg-amber-100 border border-amber-300 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Eye className="h-5 w-5 text-amber-600" />
+            <div>
+              <p className="font-medium text-amber-900">
+                Viewing as: {impersonationStatus.impersonatedTenantName}
+              </p>
+              <p className="text-sm text-amber-700">
+                You are currently impersonating this tenant. All actions will be performed as this tenant.
+              </p>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            className="border-amber-600 text-amber-700 hover:bg-amber-200"
+            onClick={handleStopImpersonation}
+            disabled={stopImpersonation.isPending}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Exit Impersonation
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -300,7 +381,7 @@ export default function SuperAdmin() {
                   <TableHead>Calls</TableHead>
                   <TableHead>MRR</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead></TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -314,7 +395,7 @@ export default function SuperAdmin() {
                       <TableCell><Skeleton className="h-6 w-12" /></TableCell>
                       <TableCell><Skeleton className="h-6 w-12" /></TableCell>
                       <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-24" /></TableCell>
                     </TableRow>
                   ))
                 ) : filteredTenants.length === 0 ? (
@@ -349,8 +430,14 @@ export default function SuperAdmin() {
                         <TableCell>${mrr}</TableCell>
                         <TableCell>{new Date(tenant.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon">
-                            <Eye className="h-4 w-4" />
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleImpersonate(tenant.id)}
+                            disabled={startImpersonation.isPending}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View as Tenant
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -461,7 +548,7 @@ export default function SuperAdmin() {
                 Low Usage Tenants (Churn Risk)
               </CardTitle>
               <CardDescription>
-                Tenants with no call activity in the last 7+ days. These accounts may need outreach.
+                Tenants with no call activity in the last 7+ days. Send re-engagement emails to bring them back.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -515,6 +602,31 @@ export default function SuperAdmin() {
                         }`}>
                           {tenant.subscriptionTier}
                         </Badge>
+                        {outreachSent.has(tenant.id) ? (
+                          <Button variant="outline" size="sm" disabled className="text-green-600">
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Sent
+                          </Button>
+                        ) : (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleSendOutreach(tenant.id)}
+                            disabled={sendingOutreach === tenant.id}
+                          >
+                            {sendingOutreach === tenant.id ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                Sending...
+                              </>
+                            ) : (
+                              <>
+                                <Mail className="h-4 w-4 mr-1" />
+                                Send Outreach
+                              </>
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}

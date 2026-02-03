@@ -204,7 +204,7 @@ export async function getUserWithTenant(userId: number) {
 // ============ PASSWORD RESET FUNCTIONS ============
 
 import { passwordResetTokens } from "../drizzle/schema";
-import { notifyOwner } from "./_core/notification";
+import { sendPasswordResetEmail } from "./emailService";
 
 // Generate a secure reset token
 function generateResetToken(): string {
@@ -245,14 +245,9 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
       expiresAt,
     });
 
-    // Send notification (in production, this would be an email)
-    // For now, we'll notify the owner about the reset request
-    const resetLink = `${process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai'}/reset-password?token=${token}`;
-    
-    await notifyOwner({
-      title: `Password Reset Requested: ${user.name || email}`,
-      content: `A password reset was requested for ${email}.\n\nReset link: ${resetLink}\n\nThis link expires in 1 hour.`,
-    });
+    // Send password reset email
+    const baseUrl = process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai';
+    await sendPasswordResetEmail(email, token, baseUrl);
 
     console.log(`[PasswordReset] Token created for user ${user.id}, email: ${email}`);
     

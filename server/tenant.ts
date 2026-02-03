@@ -16,6 +16,7 @@ import {
 } from "../drizzle/schema";
 import { createCheckoutSession, createBillingPortalSession, getSubscription, cancelSubscription, reactivateSubscription } from "./stripe/checkout";
 import { notifyOwner } from "./_core/notification";
+import { sendTeamInviteEmail, sendWelcomeEmail } from "./emailService";
 
 // ============ TENANT QUERIES ============
 
@@ -474,16 +475,26 @@ export async function inviteUserToTenant(
     status: 'pending',
   });
 
-  // Get tenant name for notification
+  // Get tenant name and inviter name for notification
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
   const tenantName = tenant?.name || 'your organization';
+  
+  let inviterName = 'Team Admin';
+  if (invitedBy) {
+    const [inviter] = await db.select().from(users).where(eq(users.id, invitedBy));
+    inviterName = inviter?.name || 'Team Admin';
+  }
 
-  // Send notification to platform owner about new invite
+  // Send team invite email notification
   try {
-    await notifyOwner({
-      title: `New Team Invite: ${email}`,
-      content: `A new team member (${email}) has been invited to ${tenantName} as ${teamRole.replace('_', ' ')}. They will be added when they sign in with their Manus account.`,
-    });
+    const baseUrl = process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai';
+    await sendTeamInviteEmail(
+      email,
+      inviterName,
+      tenantName,
+      teamRole.replace('_', ' '),
+      baseUrl
+    );
   } catch (e) {
     // Don't fail the invite if notification fails
     console.warn('[Tenant] Failed to send invite notification:', e);
@@ -617,14 +628,16 @@ export async function checkAndAcceptPendingInvitation(
   const [user] = await db.select().from(users).where(eq(users.id, userId));
   const userName = user?.name || email;
 
-  // Send notification about accepted invite
+  // Send welcome email notification
   try {
-    await notifyOwner({
-      title: `Team Member Joined: ${userName}`,
-      content: `${userName} (${email}) has accepted their invitation and joined ${tenant?.name || 'the organization'} as ${invitation.teamRole?.replace('_', ' ') || 'team member'}.`,
-    });
+    await sendWelcomeEmail(
+      userName,
+      email,
+      tenant?.name || 'the organization',
+      invitation.teamRole?.replace('_', ' ') || 'team member'
+    );
   } catch (e) {
-    console.warn('[Tenant] Failed to send join notification:', e);
+    console.warn('[Tenant] Failed to send welcome notification:', e);
   }
 
   return {

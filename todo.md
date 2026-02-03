@@ -698,3 +698,24 @@
 - [x] Use transparent background version of logo
 
 - [x] Fix broken logo URL on landing page (using cannon icon + GUNNER text)
+
+
+## Advanced Platform Features
+
+### Email Delivery Service
+- [x] Create email service using built-in notification API
+- [x] Send password reset emails with reset link
+- [x] Send team invite emails with login link
+- [x] Send welcome emails when users join a tenant
+
+### Tenant Impersonation
+- [x] Add "View as Tenant" button in super admin tenant list
+- [x] Create impersonation session that preserves super admin identity
+- [x] Add visual indicator when viewing as another tenant
+- [x] Add "Exit Impersonation" button to return to super admin view
+
+### Automated Churn Outreach
+- [x] Add "Send Re-engagement Email" button on low-usage tenants
+- [x] Create re-engagement email template
+- [ ] Track when outreach emails were sent
+- [ ] Add outreach history to tenant detail view

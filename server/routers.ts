@@ -2525,6 +2525,130 @@ Create content that:
       }
       return canProcessCall(ctx.user.tenantId);
     }),
+
+    // Super Admin: Start impersonating a tenant
+    startImpersonation: protectedProcedure
+      .input(z.object({ tenantId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { isPlatformOwner } = await import("./tenant");
+        const { startImpersonation } = await import("./impersonation");
+        
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        
+        const result = await startImpersonation(ctx.user.id, input.tenantId);
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'Failed to start impersonation' });
+        }
+        
+        // Set the impersonation token as a cookie
+        ctx.res.cookie('session', result.token, getSessionCookieOptions(ctx.req));
+        
+        return { success: true };
+      }),
+
+    // Super Admin: Stop impersonating and return to normal view
+    stopImpersonation: protectedProcedure.mutation(async ({ ctx }) => {
+      const { stopImpersonation } = await import("./impersonation");
+      
+      if (!ctx.user?.id) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' });
+      }
+      
+      const result = await stopImpersonation(ctx.user.id);
+      if (!result.success) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'Failed to stop impersonation' });
+      }
+      
+      // Set the regular session token as a cookie
+      ctx.res.cookie('session', result.token, getSessionCookieOptions(ctx.req));
+      
+      return { success: true };
+    }),
+
+    // Get impersonation status
+    getImpersonationStatus: protectedProcedure.query(async ({ ctx }) => {
+      const { getImpersonationInfo } = await import("./impersonation");
+      const jwt = await import("jsonwebtoken");
+      
+      // Get the session token from cookies
+      const token = ctx.req.cookies?.session;
+      if (!token) {
+        return { isImpersonating: false };
+      }
+      
+      try {
+        const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'dev-secret');
+        return getImpersonationInfo(decoded);
+      } catch {
+        return { isImpersonating: false };
+      }
+    }),
+
+    // Super Admin: Send churn outreach email
+    sendChurnOutreach: protectedProcedure
+      .input(z.object({ tenantId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { isPlatformOwner, getTenantById, getTenantUsers } = await import("./tenant");
+        const { sendChurnOutreachEmail } = await import("./emailService");
+        
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        
+        // Get tenant info
+        const tenant = await getTenantById(input.tenantId);
+        if (!tenant) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+        }
+        
+        // Get tenant admin/users to find contact
+        const tenantUsers = await getTenantUsers(input.tenantId);
+        const adminUser = tenantUsers.find(u => u.role === 'admin') || tenantUsers[0];
+        
+        if (!adminUser?.email) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'No contact email found for tenant' });
+        }
+        
+        // Calculate days inactive
+        const db = await import("./db").then(m => m.getDb());
+        const { calls } = await import("../drizzle/schema");
+        const { eq, desc } = await import("drizzle-orm");
+        
+        let daysInactive = 0;
+        let lastActivity = tenant.createdAt;
+        
+        if (db) {
+          const [latestCall] = await db
+            .select({ createdAt: calls.createdAt })
+            .from(calls)
+            .where(eq(calls.tenantId, input.tenantId))
+            .orderBy(desc(calls.createdAt))
+            .limit(1);
+          
+          if (latestCall?.createdAt) {
+            lastActivity = latestCall.createdAt;
+          }
+          
+          daysInactive = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
+        }
+        
+        // Send the outreach email
+        const success = await sendChurnOutreachEmail(
+          tenant.name,
+          adminUser.name || 'there',
+          adminUser.email,
+          daysInactive,
+          new Date(lastActivity).toLocaleDateString()
+        );
+        
+        if (!success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to send outreach email' });
+        }
+        
+        return { success: true, sentTo: adminUser.email };
+      }),
   }),
 });
 
