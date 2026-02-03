@@ -301,13 +301,13 @@
 
 
 ## Gamification System
-- [ ] Database schema for badges, user_badges, badge_progress, user_streaks, user_xp, xp_transactions, deals, reward_views
-- [ ] Badge definitions: 3 universal, 6 LM-specific, 5 AM-specific
-- [ ] XP system with levels (Rookie → Closer → Veteran → Elite → Legend)
-- [ ] Streak tracking with weekend pause logic
-- [ ] GHL opportunity polling for Closer badge (dispo pipeline → new deal)
-- [ ] Backend API endpoints for gamification data
-- [ ] Dashboard gamification widgets (Level/XP, Hot Streak, Consistency, Badges)
-- [ ] Enhanced Leaderboard with badges, streaks, levels
-- [ ] Profile page with full badge collection
-- [ ] XP toast notifications on call grade view
+- [x] Database schema for badges, user_badges, badge_progress, user_streaks, user_xp, xp_transactions, deals, reward_views
+- [x] Badge definitions: 3 universal, 6 LM-specific, 5 AM-specific (42 total with tiers)
+- [x] XP system with levels (Rookie → Closer → Veteran → Elite → Legend)
+- [x] Streak tracking with weekend pause logic
+- [x] GHL opportunity polling for Closer badge (dispo pipeline → new deal)
+- [x] Backend API endpoints for gamification data
+- [x] Dashboard gamification widgets (Level/XP, Hot Streak, Consistency, Badges)
+- [x] Enhanced Leaderboard with badges, streaks, levels
+- [x] Profile page with full badge collection
+- [x] XP toast notifications on call grade view

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings, Trophy, User } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -44,6 +44,8 @@ const getMenuItems = (teamRole: string | null | undefined) => {
   }
   
   items.push({ icon: Users, label: "Team", path: "/team" });
+  items.push({ icon: Trophy, label: "Leaderboard", path: "/leaderboard" });
+  items.push({ icon: User, label: "My Profile", path: "/profile" });
   
   // Team Management is admin-only
   if (isAdmin) {

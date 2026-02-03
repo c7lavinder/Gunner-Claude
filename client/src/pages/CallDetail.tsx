@@ -27,7 +27,8 @@ import { ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing, Clock, User, RefreshCw,
 import { Link, useParams } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Zap } from "lucide-react";
 
 const FEEDBACK_TYPES = [
   { value: "score_too_high", label: "Score is too high" },
@@ -118,6 +119,32 @@ export default function CallDetail() {
   });
 
   const utils = trpc.useUtils();
+
+  // XP processing for gamification
+  const processedRef = useRef(false);
+  const processRewardsMutation = trpc.gamification.processCallView.useMutation({
+    onSuccess: (data) => {
+      if (data && data.xpEarned > 0) {
+        toast.success(
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-yellow-500" />
+            <span>+{data.xpEarned} XP earned!</span>
+            {data.badgesEarned && data.badgesEarned.length > 0 && (
+              <span className="text-orange-500">🏆 New badge!</span>
+            )}
+          </div>
+        );
+      }
+    },
+  });
+
+  // Process rewards when viewing a graded call for the first time
+  useEffect(() => {
+    if (grade && !processedRef.current && callId > 0) {
+      processedRef.current = true;
+      processRewardsMutation.mutate({ callId });
+    }
+  }, [grade, callId]);
   const reclassifyMutation = trpc.calls.reclassify.useMutation({
     onSuccess: (result) => {
       toast.success(`Call reclassified to ${result.classification.replace(/_/g, " ")}`);

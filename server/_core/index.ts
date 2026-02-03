@@ -10,6 +10,7 @@ import { serveStatic, setupVite } from "./vite";
 import { handleGHLWebhook } from "../webhook";
 import { seedTeamMembers } from "../db";
 import { startPolling } from "../ghlService";
+import { initializeBadges } from "../gamification";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -44,6 +45,9 @@ async function startServer() {
   
   // Seed team members on startup
   seedTeamMembers().catch(err => console.error("Failed to seed team members:", err));
+  
+  // Initialize gamification badges
+  initializeBadges().catch(err => console.error("Failed to initialize badges:", err));
   // tRPC API
   app.use(
     "/api/trpc",

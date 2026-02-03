@@ -13,6 +13,8 @@ import Analytics from "./pages/Analytics";
 import Training from "./pages/Training";
 import SocialMedia from "./pages/SocialMedia";
 import TeamManagement from "./pages/TeamManagement";
+import Profile from "./pages/Profile";
+import Leaderboard from "./pages/Leaderboard";
 
 function Router() {
   return (
@@ -25,6 +27,8 @@ function Router() {
       <Route path="/training" component={Training} />
       <Route path="/social" component={SocialMedia} />
       <Route path="/team-management" component={TeamManagement} />
+      <Route path="/profile" component={Profile} />
+      <Route path="/leaderboard" component={Leaderboard} />
       {/* Redirects for removed/consolidated pages */}
       <Route path="/feedback">
         <Redirect to="/calls" />
@@ -35,9 +39,7 @@ function Router() {
       <Route path="/rules">
         <Redirect to="/training" />
       </Route>
-      <Route path="/leaderboard">
-        <Redirect to="/" />
-      </Route>
+      
       <Route path="/team-training">
         <Redirect to="/training" />
       </Route>

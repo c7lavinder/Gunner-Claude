@@ -1,13 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
-import { Award, Trophy, Medal, TrendingUp, Phone } from "lucide-react";
-
-function GradeBadge({ grade }: { grade: string }) {
-  const gradeClass = `grade-${grade.toLowerCase()}`;
-  return <span className={`grade-badge ${gradeClass}`}>{grade}</span>;
-}
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Award, Trophy, Medal, TrendingUp, Phone, Flame, Zap, Target } from "lucide-react";
 
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) {
@@ -38,7 +33,76 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-function LeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
+// Tier badge colors
+const tierColors: Record<string, string> = {
+  bronze: "bg-amber-700 text-amber-100",
+  silver: "bg-gray-400 text-gray-900",
+  gold: "bg-yellow-500 text-yellow-900",
+};
+
+function BadgeDisplay({ badges }: { badges: Array<{ code: string; name: string; icon: string; tier: string }> }) {
+  if (!badges || badges.length === 0) return null;
+  
+  return (
+    <div className="flex flex-wrap gap-1">
+      {badges.slice(0, 5).map((badge, i) => (
+        <span 
+          key={i} 
+          className={`text-sm px-1.5 py-0.5 rounded ${tierColors[badge.tier] || "bg-gray-200"}`}
+          title={`${badge.name} (${badge.tier})`}
+        >
+          {badge.icon}
+        </span>
+      ))}
+      {badges.length > 5 && (
+        <span className="text-xs text-muted-foreground">+{badges.length - 5}</span>
+      )}
+    </div>
+  );
+}
+
+function GamificationLeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
+  const { teamMember, xp, level, title, hotStreak, badges } = entry;
+
+  return (
+    <Card className={`${rank <= 3 ? "border-2" : ""} ${
+      rank === 1 ? "border-yellow-400" : 
+      rank === 2 ? "border-gray-400" : 
+      rank === 3 ? "border-amber-600" : ""
+    }`}>
+      <CardContent className="p-6">
+        <div className="flex items-center gap-6">
+          <RankBadge rank={rank} />
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold">{teamMember.name}</h3>
+              {hotStreak > 0 && (
+                <span className="text-sm bg-red-100 text-red-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Flame className="h-3 w-3" /> {hotStreak}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground capitalize">
+              {teamMember.teamRole?.replace("_", " ")}
+            </p>
+            <BadgeDisplay badges={badges} />
+          </div>
+
+          <div className="text-right">
+            <p className="text-3xl font-bold text-orange-600">
+              Lvl {level}
+            </p>
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="text-xs text-orange-500">{xp.toLocaleString()} XP</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ScoreLeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
   const { teamMember, totalCalls, averageScore, gradeDistribution } = entry;
   const totalGrades = gradeDistribution.A + gradeDistribution.B + gradeDistribution.C + gradeDistribution.D + gradeDistribution.F;
 
@@ -132,44 +196,88 @@ function LeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
 }
 
 export default function Leaderboard() {
-  const { data: leaderboard, isLoading } = trpc.leaderboard.get.useQuery();
+  const { data: scoreLeaderboard, isLoading: scoreLoading } = trpc.leaderboard.get.useQuery();
+  const { data: gamificationLeaderboard, isLoading: gamificationLoading } = trpc.gamification.getLeaderboard.useQuery();
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Team Leaderboard</h1>
         <p className="text-muted-foreground mt-1">
-          Track team performance and rankings
+          Track team performance, rankings, and achievements
         </p>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <Skeleton className="h-32 w-full" />
+      <Tabs defaultValue="xp" className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="xp" className="flex items-center gap-2">
+            <Zap className="h-4 w-4" /> XP & Level
+          </TabsTrigger>
+          <TabsTrigger value="score" className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" /> Avg Score
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="xp" className="mt-6">
+          {gamificationLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-6">
+                    <Skeleton className="h-24 w-full" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : gamificationLeaderboard && gamificationLeaderboard.length > 0 ? (
+            <div className="space-y-4">
+              {gamificationLeaderboard.map((entry: any, index: number) => (
+                <GamificationLeaderboardCard key={entry.teamMember.id} entry={entry} rank={index + 1} />
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <Zap className="h-16 w-16 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No XP earned yet</h3>
+                <p className="text-muted-foreground text-center max-w-md">
+                  XP rankings will appear here once team members view their graded calls.
+                </p>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      ) : leaderboard && leaderboard.length > 0 ? (
-        <div className="space-y-4">
-          {leaderboard.map((entry, index) => (
-            <LeaderboardCard key={entry.teamMember.id} entry={entry} rank={index + 1} />
-          ))}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Award className="h-16 w-16 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No rankings yet</h3>
-            <p className="text-muted-foreground text-center max-w-md">
-              Rankings will appear here once team members have graded calls.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </TabsContent>
+
+        <TabsContent value="score" className="mt-6">
+          {scoreLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-6">
+                    <Skeleton className="h-32 w-full" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : scoreLeaderboard && scoreLeaderboard.length > 0 ? (
+            <div className="space-y-4">
+              {scoreLeaderboard.map((entry, index) => (
+                <ScoreLeaderboardCard key={entry.teamMember.id} entry={entry} rank={index + 1} />
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <Award className="h-16 w-16 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No rankings yet</h3>
+                <p className="text-muted-foreground text-center max-w-md">
+                  Rankings will appear here once team members have graded calls.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

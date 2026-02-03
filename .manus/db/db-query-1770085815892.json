@@ -1,0 +1,304 @@
+{
+  "query": "SELECT code, name, tier, target, category FROM badges ORDER BY category, code, tier;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT code, name, tier, target, category FROM badges ORDER BY category, code, tier;",
+  "rows": [
+    {
+      "code": "comeback_kid",
+      "name": "Comeback Kid",
+      "tier": "bronze",
+      "target": "1",
+      "category": "universal"
+    },
+    {
+      "code": "comeback_kid",
+      "name": "Comeback Kid",
+      "tier": "silver",
+      "target": "5",
+      "category": "universal"
+    },
+    {
+      "code": "comeback_kid",
+      "name": "Comeback Kid",
+      "tier": "gold",
+      "target": "15",
+      "category": "universal"
+    },
+    {
+      "code": "consistency_king",
+      "name": "Consistency King",
+      "tier": "bronze",
+      "target": "20",
+      "category": "universal"
+    },
+    {
+      "code": "consistency_king",
+      "name": "Consistency King",
+      "tier": "silver",
+      "target": "60",
+      "category": "universal"
+    },
+    {
+      "code": "consistency_king",
+      "name": "Consistency King",
+      "tier": "gold",
+      "target": "180",
+      "category": "universal"
+    },
+    {
+      "code": "on_fire",
+      "name": "On Fire",
+      "tier": "bronze",
+      "target": "5",
+      "category": "universal"
+    },
+    {
+      "code": "on_fire",
+      "name": "On Fire",
+      "tier": "silver",
+      "target": "10",
+      "category": "universal"
+    },
+    {
+      "code": "on_fire",
+      "name": "On Fire",
+      "tier": "gold",
+      "target": "20",
+      "category": "universal"
+    },
+    {
+      "code": "appointment_machine",
+      "name": "Appointment Machine",
+      "tier": "bronze",
+      "target": "50",
+      "category": "lead_manager"
+    },
+    {
+      "code": "appointment_machine",
+      "name": "Appointment Machine",
+      "tier": "silver",
+      "target": "250",
+      "category": "lead_manager"
+    },
+    {
+      "code": "appointment_machine",
+      "name": "Appointment Machine",
+      "tier": "gold",
+      "target": "1500",
+      "category": "lead_manager"
+    },
+    {
+      "code": "motivation_miner",
+      "name": "Motivation Miner",
+      "tier": "bronze",
+      "target": "25",
+      "category": "lead_manager"
+    },
+    {
+      "code": "motivation_miner",
+      "name": "Motivation Miner",
+      "tier": "silver",
+      "target": "100",
+      "category": "lead_manager"
+    },
+    {
+      "code": "motivation_miner",
+      "name": "Motivation Miner",
+      "tier": "gold",
+      "target": "500",
+      "category": "lead_manager"
+    },
+    {
+      "code": "price_anchor_pro",
+      "name": "Price Anchor Pro",
+      "tier": "bronze",
+      "target": "25",
+      "category": "lead_manager"
+    },
+    {
+      "code": "price_anchor_pro",
+      "name": "Price Anchor Pro",
+      "tier": "silver",
+      "target": "100",
+      "category": "lead_manager"
+    },
+    {
+      "code": "price_anchor_pro",
+      "name": "Price Anchor Pro",
+      "tier": "gold",
+      "target": "500",
+      "category": "lead_manager"
+    },
+    {
+      "code": "script_starter",
+      "name": "Script Starter",
+      "tier": "bronze",
+      "target": "25",
+      "category": "lead_manager"
+    },
+    {
+      "code": "script_starter",
+      "name": "Script Starter",
+      "tier": "silver",
+      "target": "100",
+      "category": "lead_manager"
+    },
+    {
+      "code": "script_starter",
+      "name": "Script Starter",
+      "tier": "gold",
+      "target": "500",
+      "category": "lead_manager"
+    },
+    {
+      "code": "tone_master",
+      "name": "Tone Master",
+      "tier": "bronze",
+      "target": "50",
+      "category": "lead_manager"
+    },
+    {
+      "code": "tone_master",
+      "name": "Tone Master",
+      "tier": "silver",
+      "target": "200",
+      "category": "lead_manager"
+    },
+    {
+      "code": "tone_master",
+      "name": "Tone Master",
+      "tier": "gold",
+      "target": "1000",
+      "category": "lead_manager"
+    },
+    {
+      "code": "volume_dialer",
+      "name": "Volume Dialer",
+      "tier": "bronze",
+      "target": "10",
+      "category": "lead_manager"
+    },
+    {
+      "code": "volume_dialer",
+      "name": "Volume Dialer",
+      "tier": "silver",
+      "target": "25",
+      "category": "lead_manager"
+    },
+    {
+      "code": "volume_dialer",
+      "name": "Volume Dialer",
+      "tier": "gold",
+      "target": "50",
+      "category": "lead_manager"
+    },
+    {
+      "code": "clear_answer",
+      "name": "Clear Answer",
+      "tier": "bronze",
+      "target": "25",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "clear_answer",
+      "name": "Clear Answer",
+      "tier": "silver",
+      "target": "100",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "clear_answer",
+      "name": "Clear Answer",
+      "tier": "gold",
+      "target": "750",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "closer",
+      "name": "Closer",
+      "tier": "bronze",
+      "target": "25",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "closer",
+      "name": "Closer",
+      "tier": "silver",
+      "target": "75",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "closer",
+      "name": "Closer",
+      "tier": "gold",
+      "target": "200",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "negotiator",
+      "name": "Negotiator",
+      "tier": "bronze",
+      "target": "50",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "negotiator",
+      "name": "Negotiator",
+      "tier": "silver",
+      "target": "200",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "negotiator",
+      "name": "Negotiator",
+      "tier": "gold",
+      "target": "1000",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "offer_architect",
+      "name": "Offer Architect",
+      "tier": "bronze",
+      "target": "25",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "offer_architect",
+      "name": "Offer Architect",
+      "tier": "silver",
+      "target": "100",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "offer_architect",
+      "name": "Offer Architect",
+      "tier": "gold",
+      "target": "500",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "price_confidence",
+      "name": "Price Confidence",
+      "tier": "bronze",
+      "target": "25",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "price_confidence",
+      "name": "Price Confidence",
+      "tier": "silver",
+      "target": "100",
+      "category": "acquisition_manager"
+    },
+    {
+      "code": "price_confidence",
+      "name": "Price Confidence",
+      "tier": "gold",
+      "target": "500",
+      "category": "acquisition_manager"
+    }
+  ],
+  "messages": [],
+  "stdout": "code\tname\ttier\ttarget\tcategory\ncomeback_kid\tComeback Kid\tbronze\t1\tuniversal\ncomeback_kid\tComeback Kid\tsilver\t5\tuniversal\ncomeback_kid\tComeback Kid\tgold\t15\tuniversal\nconsistency_king\tConsistency King\tbronze\t20\tuniversal\nconsistency_king\tConsistency King\tsilver\t60\tuniversal\nconsistency_king\tConsistency King\tgold\t180\tuniversal\non_fire\tOn Fire\tbronze\t5\tuniversal\non_fire\tOn Fire\tsilver\t10\tuniversal\non_fire\tOn Fire\tgold\t20\tuniversal\nappointment_machine\tAppointment Machine\tbronze\t50\tlead_manager\nappointment_machine\tAppointment Machine\tsilver\t250\tlead_manager\nappointment_machine\tAppointment Machine\tgold\t1500\tlead_manager\nmotivation_miner\tMotivation Miner\tbronze\t25\tlead_manager\nmotivation_miner\tMotivation Miner\tsilver\t100\tlead_manager\nmotivation_miner\tMotivation Miner\tgold\t500\tlead_manager\nprice_anchor_pro\tPrice Anchor Pro\tbronze\t25\tlead_manager\nprice_anchor_pro\tPrice Anchor Pro\tsilver\t100\tlead_manager\nprice_anchor_pro\tPrice Anchor Pro\tgold\t500\tlead_manager\nscript_starter\tScript Starter\tbronze\t25\tlead_manager\nscript_starter\tScript Starter\tsilver\t100\tlead_manager\nscript_starter\tScript Starter\tgold\t500\tlead_manager\ntone_master\tTone Master\tbronze\t50\tlead_manager\ntone_master\tTone Master\tsilver\t200\tlead_manager\ntone_master\tTone Master\tgold\t1000\tlead_manager\nvolume_dialer\tVolume Dialer\tbronze\t10\tlead_manager\nvolume_dialer\tVolume Dialer\tsilver\t25\tlead_manager\nvolume_dialer\tVolume Dialer\tgold\t50\tlead_manager\nclear_answer\tClear Answer\tbronze\t25\tacquisition_manager\nclear_answer\tClear Answer\tsilver\t100\tacquisition_manager\nclear_answer\tClear Answer\tgold\t750\tacquisition_manager\ncloser\tCloser\tbronze\t25\tacquisition_manager\ncloser\tCloser\tsilver\t75\tacquisition_manager\ncloser\tCloser\tgold\t200\tacquisition_manager\nnegotiator\tNegotiator\tbronze\t50\tacquisition_manager\nnegotiator\tNegotiator\tsilver\t200\tacquisition_manager\nnegotiator\tNegotiator\tgold\t1000\tacquisition_manager\noffer_architect\tOffer Architect\tbronze\t25\tacquisition_manager\noffer_architect\tOffer Architect\tsilver\t100\tacquisition_manager\noffer_architect\tOffer Architect\tgold\t500\tacquisition_manager\nprice_confidence\tPrice Confidence\tbronze\t25\tacquisition_manager\nprice_confidence\tPrice Confidence\tsilver\t100\tacquisition_manager\nprice_confidence\tPrice Confidence\tgold\t500\tacquisition_manager\n",
+  "stderr": "",
+  "execution_time_ms": 51
+}
