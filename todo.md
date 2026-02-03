@@ -336,3 +336,4 @@
 
 ## Dashboard UI Improvements
 - [x] Remove Classification Breakdown section from dashboard
+- [x] Add sharp red accents and lines to dashboard

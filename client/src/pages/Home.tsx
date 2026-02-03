@@ -23,19 +23,19 @@ function StatCard({
   loading?: boolean;
 }) {
   return (
-    <Card>
+    <Card className="border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <CardTitle className="text-sm font-medium text-stone-600">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-red-600" />
       </CardHeader>
       <CardContent>
         {loading ? (
           <Skeleton className="h-8 w-20" />
         ) : (
-          <div className="text-2xl font-bold">{value}</div>
+          <div className="text-2xl font-bold text-stone-800">{value}</div>
         )}
         {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
+          <p className="text-xs text-stone-500 mt-1">{description}</p>
         )}
       </CardContent>
     </Card>
@@ -128,7 +128,7 @@ export default function Home() {
       {/* Gamification Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Level & XP */}
-        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
+        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-red-600/30 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-orange-700">Level & XP</CardTitle>
             <Trophy className="h-4 w-4 text-orange-500" />
@@ -156,7 +156,7 @@ export default function Home() {
         </Card>
 
         {/* Hot Streak */}
-        <Card className="bg-gradient-to-br from-red-50 to-orange-50 border-red-200">
+        <Card className="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-600/30 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-red-700">Hot Streak</CardTitle>
             <Flame className="h-4 w-4 text-red-500" />
@@ -178,7 +178,7 @@ export default function Home() {
         </Card>
 
         {/* Consistency Streak */}
-        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-red-600/30 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-blue-700">Consistency</CardTitle>
             <Target className="h-4 w-4 text-blue-500" />
@@ -200,7 +200,7 @@ export default function Home() {
         </Card>
 
         {/* Badges */}
-        <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
+        <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-red-600/30 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-purple-700">Badges</CardTitle>
             <Award className="h-4 w-4 text-purple-500" />
@@ -229,8 +229,8 @@ export default function Home() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Calls */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="border-t-4 border-t-red-600 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-stone-200">
             <div>
               <CardTitle>Recent Calls</CardTitle>
               <CardDescription>Latest graded calls from your team</CardDescription>
@@ -283,8 +283,8 @@ export default function Home() {
         </Card>
 
         {/* Leaderboard Preview */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="border-t-4 border-t-red-600 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-stone-200">
             <div>
               <CardTitle>Team Leaderboard</CardTitle>
               <CardDescription>Top performers this period</CardDescription>
