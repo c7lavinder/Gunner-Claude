@@ -288,6 +288,7 @@ export const appRouter = router({
           teamMemberId: teamMember?.id,
           teamRole: (ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager') || 'lead_manager',
           userId: ctx.user?.id,
+          tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };
         
         // Use permission-based query
@@ -307,6 +308,7 @@ export const appRouter = router({
           teamMemberId: teamMember?.id,
           teamRole: (ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager') || 'lead_manager',
           userId: ctx.user?.id,
+          tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };
         
         return await getCallsWithPermissions(permissionContext, {
@@ -539,6 +541,7 @@ export const appRouter = router({
           teamMemberId: teamMember?.id,
           teamRole: userRole || 'lead_manager',
           userId: ctx.user?.id,
+          tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };
         
         // Get viewable team member IDs based on permissions
@@ -796,10 +799,10 @@ export const appRouter = router({
   coach: router({
     askQuestion: protectedProcedure
       .input(z.object({ question: z.string() }))
-      .mutation(async ({ input }) => {
-        // Get training materials and recent successful calls for context
-        const trainingMaterials = await getTrainingMaterials({});
-        const recentCalls = await getCallsWithGrades({ limit: 20 });
+      .mutation(async ({ ctx, input }) => {
+        // Get training materials and recent successful calls for context (filtered by tenant)
+        const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
+        const recentCalls = await getCallsWithGrades({ limit: 20, tenantId: ctx.user?.tenantId || undefined });
         
         // Filter for high-scoring calls to use as examples
         const successfulCalls = recentCalls
@@ -866,15 +869,15 @@ Format: Start with brief encouragement, then give your one tip in 1-2 sentences.
           description: z.string().optional(),
         })),
       }))
-      .mutation(async ({ input }) => {
-        // Get training materials for context
-        const trainingMaterials = await getTrainingMaterials({});
+      .mutation(async ({ ctx, input }) => {
+        // Get training materials for context (filtered by tenant)
+        const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
         const trainingContext = trainingMaterials
           .map(m => `${m.title}: ${m.content?.substring(0, 500) || ""}`)
           .join("\n");
 
-        // Get recent calls for examples
-        const recentCalls = await getCallsWithGrades({ limit: 30 });
+        // Get recent calls for examples (filtered by tenant)
+        const recentCalls = await getCallsWithGrades({ limit: 30, tenantId: ctx.user?.tenantId || undefined });
         const goodCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 75).slice(0, 5);
         const badCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") < 60).slice(0, 5);
 
@@ -908,15 +911,15 @@ Format: Start with brief encouragement, then give your one tip in 1-2 sentences.
           content: z.string(),
         })).optional(),
       }))
-      .mutation(async ({ input }) => {
-        // Get training materials
-        const trainingMaterials = await getTrainingMaterials({});
+      .mutation(async ({ ctx, input }) => {
+        // Get training materials (filtered by tenant)
+        const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
         const trainingContext = trainingMaterials
           .map(m => `### ${m.title}\n${m.content?.substring(0, 800) || ""}`)
           .join("\n\n");
 
-        // Get recent calls for examples
-        const recentCalls = await getCallsWithGrades({ limit: 30 });
+        // Get recent calls for examples (filtered by tenant)
+        const recentCalls = await getCallsWithGrades({ limit: 30, tenantId: ctx.user?.tenantId || undefined });
         const goodCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 75).slice(0, 5);
         const badCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") < 60).slice(0, 5);
 
@@ -1289,8 +1292,8 @@ Keep it brief and actionable.`;
         platform: z.string().optional(),
         status: z.string().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getSocialPosts(input || {});
+      .query(async ({ ctx, input }) => {
+        return await getSocialPosts({ ...input, tenantId: ctx.user?.tenantId || undefined });
       }),
 
     getById: protectedProcedure
@@ -1565,8 +1568,8 @@ Provide ${input.count} unique content ideas in JSON format.`,
 
   // ============ BRAND PROFILE ============
   brandProfile: router({
-    get: protectedProcedure.query(async () => {
-      return await getBrandProfile();
+    get: protectedProcedure.query(async ({ ctx }) => {
+      return await getBrandProfile(ctx.user?.tenantId || undefined);
     }),
 
     update: protectedProcedure
@@ -1651,12 +1654,13 @@ Provide ${input.count} unique content ideas in JSON format.`,
   // ============ CONTENT GENERATION WITH CALL DATA ============
   contentGeneration: router({
     // Get data for content generation
-    getData: protectedProcedure.query(async () => {
+    getData: protectedProcedure.query(async ({ ctx }) => {
+      const tenantId = ctx.user?.tenantId || undefined;
       const [calls, kpis, stories, brandProfileData] = await Promise.all([
-        getCallsForContentGeneration(20),
-        getKPIsForContentGeneration(),
-        getInterestingCallStories(10),
-        getBrandProfile(),
+        getCallsForContentGeneration(20, tenantId),
+        getKPIsForContentGeneration(tenantId),
+        getInterestingCallStories(10, tenantId),
+        getBrandProfile(tenantId),
       ]);
       return { calls, kpis, stories, brandProfile: brandProfileData };
     }),
@@ -1667,11 +1671,12 @@ Provide ${input.count} unique content ideas in JSON format.`,
         platform: z.enum(["blog", "meta", "google_business", "linkedin"]),
         contentType: z.enum(["problem_solved", "success_story", "market_insight", "tips"]),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const tenantId = ctx.user?.tenantId || undefined;
         const [calls, kpis, brandProfileData] = await Promise.all([
-          getCallsForContentGeneration(10),
-          getKPIsForContentGeneration(),
-          getBrandProfile(),
+          getCallsForContentGeneration(10, tenantId),
+          getKPIsForContentGeneration(tenantId),
+          getBrandProfile(tenantId),
         ]);
 
         // Build context from real call data
@@ -1742,10 +1747,11 @@ Create content that:
       .input(z.object({
         style: z.enum(["crazy_story", "property_walkthrough", "day_in_life", "tips_tricks"]),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const tenantId = ctx.user?.tenantId || undefined;
         const [stories, brandProfileData] = await Promise.all([
-          getInterestingCallStories(10),
-          getBrandProfile(),
+          getInterestingCallStories(10, tenantId),
+          getBrandProfile(tenantId),
         ]);
 
         // Extract interesting moments from calls

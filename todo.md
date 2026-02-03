@@ -777,3 +777,22 @@
 - [x] Ensure new signups create their own tenant (verified working)
 - [x] Prevent new users from accessing other tenants' data (fixed getAllUsers and getTeamAssignments to filter by tenantId)
 - [ ] Remove test user from wrong tenant (not needed - user was on correct tenant)
+
+
+## Tenant Isolation Bug Fix (Feb 3, 2026)
+- [x] Fix Google signup assigning users to wrong tenant (was already correct - users get their own tenant)
+- [x] Ensure new signups create their own tenant (verified working)
+- [x] Fix getAllUsers to filter by tenantId
+- [x] Fix getTeamAssignments to filter by tenantId
+- [x] Fix getCallsWithPermissions to require tenantId
+- [x] Fix getCallsWithGrades to filter by tenant
+- [x] Fix getSocialPosts to filter by tenant
+- [x] Fix getBrandProfile to filter by tenant
+- [x] Fix getCallsForContentGeneration to filter by tenant
+- [x] Fix getKPIsForContentGeneration to filter by tenant
+- [x] Fix getInterestingCallStories to filter by tenant
+- [x] Fix coach.askQuestion to use tenant filtering
+- [x] Fix meeting.startSession and meeting.chat to use tenant filtering
+- [x] Fix contentGeneration.getData to use tenant filtering
+- [x] Fix contentGeneration.generateBrandContent to use tenant filtering
+- [x] Fix contentGeneration.generateCreatorContent to use tenant filtering

@@ -305,11 +305,12 @@ export async function getCallsWithGrades(options: {
   teamMemberId?: number;
   limit?: number;
   offset?: number;
+  tenantId?: number; // For multi-tenant filtering
 }): Promise<Array<Call & { grade: CallGrade | null }>> {
   const db = await getDb();
   if (!db) return [];
 
-  const callsList = await getCalls(options);
+  const callsList = await getCalls({ ...options, tenantId: options.tenantId });
   
   const result = await Promise.all(
     callsList.map(async (call) => {
@@ -1179,11 +1180,17 @@ export async function getSocialPosts(options?: {
   status?: string;
   startDate?: Date;
   endDate?: Date;
+  tenantId?: number; // For multi-tenant filtering
 }): Promise<SocialPost[]> {
   const db = await getDb();
   if (!db) return [];
 
   const conditions = [];
+  
+  // Filter by tenant if provided
+  if (options?.tenantId) {
+    conditions.push(eq(socialPosts.tenantId, options.tenantId));
+  }
   
   if (options?.contentType) {
     conditions.push(eq(socialPosts.contentType, options.contentType));
@@ -1322,10 +1329,16 @@ export async function deleteContentIdea(id: number): Promise<void> {
 
 // ============ BRAND PROFILE FUNCTIONS ============
 
-export async function getBrandProfile(): Promise<BrandProfile | null> {
+export async function getBrandProfile(tenantId?: number): Promise<BrandProfile | null> {
   const db = await getDb();
   if (!db) return null;
 
+  // Filter by tenant if provided
+  if (tenantId) {
+    const result = await db.select().from(brandProfile).where(eq(brandProfile.tenantId, tenantId)).limit(1);
+    return result[0] || null;
+  }
+  
   const result = await db.select().from(brandProfile).limit(1);
   return result[0] || null;
 }
@@ -1356,7 +1369,7 @@ export async function upsertBrandProfile(profile: Partial<InsertBrandProfile>): 
  * Get recent call conversations for content generation
  * Returns interesting/notable calls with transcripts
  */
-export async function getCallsForContentGeneration(limit: number = 20): Promise<Array<{
+export async function getCallsForContentGeneration(limit: number = 20, tenantId?: number): Promise<Array<{
   id: number;
   transcript: string | null;
   contactName: string | null;
@@ -1369,6 +1382,16 @@ export async function getCallsForContentGeneration(limit: number = 20): Promise<
 }>> {
   const db = await getDb();
   if (!db) return [];
+
+  const conditions = [
+    eq(calls.classification, "conversation"),
+    eq(calls.status, "completed")
+  ];
+  
+  // Filter by tenant if provided
+  if (tenantId) {
+    conditions.push(eq(calls.tenantId, tenantId));
+  }
 
   const result = await db
     .select({
@@ -1385,12 +1408,7 @@ export async function getCallsForContentGeneration(limit: number = 20): Promise<
     .from(calls)
     .leftJoin(callGrades, eq(calls.id, callGrades.callId))
     .leftJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
-    .where(
-      and(
-        eq(calls.classification, "conversation"),
-        eq(calls.status, "completed")
-      )
-    )
+    .where(and(...conditions))
     .orderBy(desc(calls.createdAt))
     .limit(limit);
 
@@ -1405,7 +1423,7 @@ export async function getCallsForContentGeneration(limit: number = 20): Promise<
 /**
  * Get business KPIs for content generation
  */
-export async function getKPIsForContentGeneration(): Promise<{
+export async function getKPIsForContentGeneration(tenantId?: number): Promise<{
   totalDeals: number;
   appointmentsThisMonth: number;
   offersAcceptedThisMonth: number;
@@ -1425,43 +1443,50 @@ export async function getKPIsForContentGeneration(): Promise<{
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   // Get total deals (offers accepted all time)
+  const totalDealsConditions = [eq(calls.callOutcome, "offer_accepted")];
+  if (tenantId) totalDealsConditions.push(eq(calls.tenantId, tenantId));
+  
   const totalDealsResult = await db
     .select({ count: sql<number>`count(*)` })
     .from(calls)
-    .where(eq(calls.callOutcome, "offer_accepted"));
+    .where(and(...totalDealsConditions));
   const totalDeals = totalDealsResult[0]?.count || 0;
 
   // Get appointments this month
+  const appointmentsConditions = [eq(calls.callOutcome, "appointment_set"), gte(calls.createdAt, startOfMonth)];
+  if (tenantId) appointmentsConditions.push(eq(calls.tenantId, tenantId));
+  
   const appointmentsResult = await db
     .select({ count: sql<number>`count(*)` })
     .from(calls)
-    .where(
-      and(
-        eq(calls.callOutcome, "appointment_set"),
-        gte(calls.createdAt, startOfMonth)
-      )
-    );
+    .where(and(...appointmentsConditions));
   const appointmentsThisMonth = appointmentsResult[0]?.count || 0;
 
   // Get offers accepted this month
+  const offersConditions = [eq(calls.callOutcome, "offer_accepted"), gte(calls.createdAt, startOfMonth)];
+  if (tenantId) offersConditions.push(eq(calls.tenantId, tenantId));
+  
   const offersResult = await db
     .select({ count: sql<number>`count(*)` })
     .from(calls)
-    .where(
-      and(
-        eq(calls.callOutcome, "offer_accepted"),
-        gte(calls.createdAt, startOfMonth)
-      )
-    );
+    .where(and(...offersConditions));
   const offersAcceptedThisMonth = offersResult[0]?.count || 0;
 
-  // Get average score
-  const avgScoreResult = await db
+  // Get average score (join with calls to filter by tenant)
+  const avgScoreQuery = db
     .select({ avg: sql<number>`AVG(${callGrades.overallScore})` })
-    .from(callGrades);
+    .from(callGrades)
+    .innerJoin(calls, eq(callGrades.callId, calls.id));
+  
+  const avgScoreResult = tenantId 
+    ? await avgScoreQuery.where(eq(calls.tenantId, tenantId))
+    : await avgScoreQuery;
   const averageScore = avgScoreResult[0]?.avg || null;
 
   // Get top performer this month
+  const topPerformerConditions = [gte(calls.createdAt, startOfMonth)];
+  if (tenantId) topPerformerConditions.push(eq(calls.tenantId, tenantId));
+  
   const topPerformerResult = await db
     .select({
       name: teamMembers.name,
@@ -1470,7 +1495,7 @@ export async function getKPIsForContentGeneration(): Promise<{
     .from(callGrades)
     .innerJoin(calls, eq(callGrades.callId, calls.id))
     .innerJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
-    .where(gte(calls.createdAt, startOfMonth))
+    .where(and(...topPerformerConditions))
     .groupBy(teamMembers.id)
     .orderBy(desc(sql`AVG(${callGrades.overallScore})`))
     .limit(1);
@@ -1489,7 +1514,7 @@ export async function getKPIsForContentGeneration(): Promise<{
  * Get interesting call stories for content creator posts
  * Finds calls with notable situations, objections handled, or unique scenarios
  */
-export async function getInterestingCallStories(limit: number = 10): Promise<Array<{
+export async function getInterestingCallStories(limit: number = 10, tenantId?: number): Promise<Array<{
   id: number;
   transcript: string | null;
   contactName: string | null;
@@ -1499,6 +1524,18 @@ export async function getInterestingCallStories(limit: number = 10): Promise<Arr
 }>> {
   const db = await getDb();
   if (!db) return [];
+
+  // Build conditions for filtering
+  const conditions = [
+    eq(calls.classification, "conversation"),
+    eq(calls.status, "completed"),
+    gte(callGrades.overallScore, "70")
+  ];
+  
+  // Filter by tenant if provided
+  if (tenantId) {
+    conditions.push(eq(calls.tenantId, tenantId));
+  }
 
   // Get high-scoring calls with good stories
   const result = await db
@@ -1512,13 +1549,7 @@ export async function getInterestingCallStories(limit: number = 10): Promise<Arr
     })
     .from(calls)
     .innerJoin(callGrades, eq(calls.id, callGrades.callId))
-    .where(
-      and(
-        eq(calls.classification, "conversation"),
-        eq(calls.status, "completed"),
-        gte(callGrades.overallScore, "70")
-      )
-    )
+    .where(and(...conditions))
     .orderBy(desc(callGrades.overallScore))
     .limit(limit);
 
@@ -1638,6 +1669,7 @@ export type UserPermissionContext = {
   teamMemberId?: number;
   teamRole?: 'admin' | 'lead_manager' | 'acquisition_manager';
   userId?: number;
+  tenantId?: number; // Required for multi-tenant isolation
 };
 
 /**
@@ -1662,6 +1694,11 @@ export async function getCallsWithPermissions(
 
   const conditions = [];
   
+  // CRITICAL: Always filter by tenant for multi-tenant isolation
+  if (permissionContext.tenantId) {
+    conditions.push(eq(calls.tenantId, permissionContext.tenantId));
+  }
+  
   // Exclude archived calls by default
   if (!options.includeArchived) {
     conditions.push(eq(calls.isArchived, "false"));
@@ -1679,9 +1716,9 @@ export async function getCallsWithPermissions(
     conditions.push(lte(calls.callTimestamp, options.endDate));
   }
 
-  // Apply permission-based filtering
+  // Apply permission-based filtering (within tenant)
   if (permissionContext.teamRole === 'admin') {
-    // Admin sees all calls - no additional filter
+    // Admin sees all calls within their tenant - no additional filter
   } else if (permissionContext.teamRole === 'acquisition_manager' && permissionContext.teamMemberId) {
     // Acquisition Manager sees own calls + assigned Lead Manager calls
     const assignedLeadManagers = await getLeadManagersForAcquisitionManager(permissionContext.teamMemberId);
