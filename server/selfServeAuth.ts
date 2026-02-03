@@ -199,3 +199,130 @@ export async function getUserWithTenant(userId: number) {
 
   return { user, tenant };
 }
+
+
+// ============ PASSWORD RESET FUNCTIONS ============
+
+import { passwordResetTokens } from "../drizzle/schema";
+import { notifyOwner } from "./_core/notification";
+
+// Generate a secure reset token
+function generateResetToken(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+// Request password reset - creates token and sends email
+export async function requestPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Database not available" };
+
+  // Find user by email
+  const [user] = await db.select().from(users).where(
+    and(
+      eq(users.email, email),
+      eq(users.loginMethod, 'email_password')
+    )
+  ).limit(1);
+
+  // Always return success to prevent email enumeration
+  if (!user) {
+    return { success: true };
+  }
+
+  // Generate token
+  const token = generateResetToken();
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 1); // Token expires in 1 hour
+
+  try {
+    // Delete any existing tokens for this user
+    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, user.id));
+
+    // Create new token
+    await db.insert(passwordResetTokens).values({
+      userId: user.id,
+      token,
+      expiresAt,
+    });
+
+    // Send notification (in production, this would be an email)
+    // For now, we'll notify the owner about the reset request
+    const resetLink = `${process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai'}/reset-password?token=${token}`;
+    
+    await notifyOwner({
+      title: `Password Reset Requested: ${user.name || email}`,
+      content: `A password reset was requested for ${email}.\n\nReset link: ${resetLink}\n\nThis link expires in 1 hour.`,
+    });
+
+    console.log(`[PasswordReset] Token created for user ${user.id}, email: ${email}`);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('[PasswordReset] Error creating token:', error);
+    return { success: false, error: "Failed to create reset token" };
+  }
+}
+
+// Verify reset token is valid
+export async function verifyResetToken(token: string): Promise<{ valid: boolean; userId?: number; error?: string }> {
+  const db = await getDb();
+  if (!db) return { valid: false, error: "Database not available" };
+
+  const [resetToken] = await db.select()
+    .from(passwordResetTokens)
+    .where(eq(passwordResetTokens.token, token))
+    .limit(1);
+
+  if (!resetToken) {
+    return { valid: false, error: "Invalid or expired reset link" };
+  }
+
+  if (resetToken.usedAt) {
+    return { valid: false, error: "This reset link has already been used" };
+  }
+
+  if (new Date() > resetToken.expiresAt) {
+    return { valid: false, error: "This reset link has expired" };
+  }
+
+  return { valid: true, userId: resetToken.userId };
+}
+
+// Complete password reset
+export async function resetPassword(token: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Database not available" };
+
+  // Verify token first
+  const verification = await verifyResetToken(token);
+  if (!verification.valid) {
+    return { success: false, error: verification.error };
+  }
+
+  // Validate password strength
+  if (newPassword.length < 8) {
+    return { success: false, error: "Password must be at least 8 characters" };
+  }
+
+  try {
+    // Hash new password
+    const passwordHash = await hashPassword(newPassword);
+
+    // Update user's password
+    await db.update(users)
+      .set({ passwordHash })
+      .where(eq(users.id, verification.userId!));
+
+    // Mark token as used
+    await db.update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(passwordResetTokens.token, token));
+
+    console.log(`[PasswordReset] Password updated for user ${verification.userId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('[PasswordReset] Error resetting password:', error);
+    return { success: false, error: "Failed to reset password" };
+  }
+}

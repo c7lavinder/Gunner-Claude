@@ -660,3 +660,29 @@
 - [x] Revenue breakdown by plan (Revenue tab)
 - [ ] Low usage flagged (churn risk) - enhancement
 - [ ] Support access to view any tenant's data - enhancement
+
+
+## Post-Launch Enhancements
+
+### Test Signup Flow
+- [x] Navigate to /landing page
+- [x] Click "Start Free Trial" 
+- [x] Complete signup with test email/password (API tested successfully)
+- [x] Select plan and Stripe checkout URL generated
+- [x] Login API verified working
+- [ ] Complete onboarding steps (manual test)
+
+### Password Reset Flow
+- [x] Create password reset tokens table in schema
+- [x] Add forgot password page (/forgot-password)
+- [x] Add reset password page (/reset-password)
+- [x] Create API routes for requesting and completing reset
+- [x] Send reset notification with token link (owner notification for now)
+- [x] Add "Forgot Password?" link to login page (already existed)
+
+### Low-Usage Churn Alerts
+- [x] Track last call date per tenant (getLowUsageTenants function)
+- [x] Add query to find tenants with no calls in 7+ days
+- [x] Display low-usage tenants in new "Churn Risk" tab in super admin
+- [x] Show days since last activity with color-coded severity
+- [x] Summary cards showing count by risk level (7-13, 14-30, 30+ days)

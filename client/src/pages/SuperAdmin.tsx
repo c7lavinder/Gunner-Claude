@@ -36,6 +36,7 @@ export default function SuperAdmin() {
   const { data: tenants, isLoading: tenantsLoading, refetch: refetchTenants } = trpc.tenant.list.useQuery();
   const { data: metrics, isLoading: metricsLoading, refetch: refetchMetrics } = trpc.tenant.getMetrics.useQuery();
   const { data: recentActivity, isLoading: activityLoading, refetch: refetchActivity } = trpc.tenant.getRecentActivity.useQuery();
+  const { data: lowUsageTenants, isLoading: lowUsageLoading, refetch: refetchLowUsage } = trpc.tenant.getLowUsageTenants.useQuery();
 
   // Check if user is super admin or platform owner
   const isPlatformOwner = user?.openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
@@ -153,6 +154,7 @@ export default function SuperAdmin() {
           <TabsTrigger value="tenants">Tenants</TabsTrigger>
           <TabsTrigger value="revenue">Revenue</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="churn-risk">Churn Risk</TabsTrigger>
           <TabsTrigger value="alerts">Alerts</TabsTrigger>
         </TabsList>
 
@@ -449,6 +451,114 @@ export default function SuperAdmin() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="churn-risk" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-amber-500 rotate-180" />
+                Low Usage Tenants (Churn Risk)
+              </CardTitle>
+              <CardDescription>
+                Tenants with no call activity in the last 7+ days. These accounts may need outreach.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {lowUsageLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : !lowUsageTenants || lowUsageTenants.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                  <p>No low-usage tenants detected</p>
+                  <p className="text-sm">All active tenants have recent activity</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {lowUsageTenants.map((tenant) => (
+                    <div
+                      key={tenant.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          tenant.daysSinceLastCall >= 14 ? 'bg-red-100' : 'bg-amber-100'
+                        }`}>
+                          <Clock className={`h-5 w-5 ${
+                            tenant.daysSinceLastCall >= 14 ? 'text-red-600' : 'text-amber-600'
+                          }`} />
+                        </div>
+                        <div>
+                          <p className="font-medium">{tenant.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {tenant.userCount} users · {tenant.totalCalls} total calls
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className={`font-medium ${
+                            tenant.daysSinceLastCall >= 14 ? 'text-red-600' : 'text-amber-600'
+                          }`}>
+                            {tenant.daysSinceLastCall} days inactive
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Last activity: {new Date(tenant.lastActivityDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className={`${
+                          tenant.subscriptionTier === 'trial' ? 'border-blue-200 text-blue-700' : ''
+                        }`}>
+                          {tenant.subscriptionTier}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Churn Risk Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>7-13 Days Inactive</CardDescription>
+                <CardTitle className="text-2xl text-amber-600">
+                  {lowUsageTenants?.filter(t => t.daysSinceLastCall >= 7 && t.daysSinceLastCall < 14).length || 0}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">Moderate risk - consider outreach</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>14-30 Days Inactive</CardDescription>
+                <CardTitle className="text-2xl text-orange-600">
+                  {lowUsageTenants?.filter(t => t.daysSinceLastCall >= 14 && t.daysSinceLastCall < 30).length || 0}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">High risk - urgent outreach needed</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>30+ Days Inactive</CardDescription>
+                <CardTitle className="text-2xl text-red-600">
+                  {lowUsageTenants?.filter(t => t.daysSinceLastCall >= 30).length || 0}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">Critical - likely to churn</p>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="alerts" className="space-y-4">

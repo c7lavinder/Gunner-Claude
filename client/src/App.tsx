@@ -23,9 +23,11 @@ import TenantSettings from "./pages/TenantSettings";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 // Public routes that don't need DashboardLayout
-const PUBLIC_ROUTES = ['/landing', '/login', '/signup', '/forgot-password'];
+const PUBLIC_ROUTES = ['/landing', '/login', '/signup', '/forgot-password', '/reset-password'];
 
 function PublicRouter() {
   return (
@@ -33,6 +35,8 @@ function PublicRouter() {
       <Route path="/landing" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -2265,6 +2265,15 @@ Create content that:
       return getRecentActivity();
     }),
 
+    // Super Admin: Get low usage tenants (churn risk)
+    getLowUsageTenants: protectedProcedure.query(async ({ ctx }) => {
+      const { isPlatformOwner, getLowUsageTenants } = await import("./tenant");
+      if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+      }
+      return getLowUsageTenants();
+    }),
+
     // Super Admin: Get tenant by ID
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))

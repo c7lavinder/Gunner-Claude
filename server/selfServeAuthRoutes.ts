@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { signUpWithEmail, signInWithEmail, getUserWithTenant, createSessionToken } from "./selfServeAuth";
+import { signUpWithEmail, signInWithEmail, getUserWithTenant, createSessionToken, requestPasswordReset, verifyResetToken, resetPassword } from "./selfServeAuth";
 import { createTenantCheckoutSession } from "./tenant";
 
 const router = Router();
@@ -173,6 +173,68 @@ router.get("/me", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[Auth] Get me error:', error);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+// Request password reset
+router.post("/forgot-password", async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({ success: false, error: "Email is required" });
+      return;
+    }
+
+    const result = await requestPasswordReset(email);
+    
+    // Always return success to prevent email enumeration
+    res.json({ success: true, message: "If an account exists with this email, you will receive a password reset link." });
+  } catch (error) {
+    console.error('[Auth] Forgot password error:', error);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+// Verify reset token
+router.get("/verify-reset-token", async (req: Request, res: Response) => {
+  try {
+    const token = req.query.token as string;
+
+    if (!token) {
+      res.status(400).json({ valid: false, error: "Token is required" });
+      return;
+    }
+
+    const result = await verifyResetToken(token);
+    res.json(result);
+  } catch (error) {
+    console.error('[Auth] Verify token error:', error);
+    res.status(500).json({ valid: false, error: "Internal server error" });
+  }
+});
+
+// Reset password
+router.post("/reset-password", async (req: Request, res: Response) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      res.status(400).json({ success: false, error: "Token and password are required" });
+      return;
+    }
+
+    const result = await resetPassword(token, password);
+    
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.json({ success: true, message: "Password has been reset successfully. You can now log in with your new password." });
+  } catch (error) {
+    console.error('[Auth] Reset password error:', error);
     res.status(500).json({ success: false, error: "Internal server error" });
   }
 });

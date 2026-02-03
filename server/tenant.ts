@@ -197,6 +197,81 @@ export async function getPlatformMetrics() {
 }
 
 /**
+ * Get tenants with low usage (churn risk) for super admin alerts
+ * Identifies tenants with no calls in the last 7+ days
+ */
+export async function getLowUsageTenants() {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get all active/trial tenants
+  const activeTenants = await db
+    .select()
+    .from(tenants)
+    .where(
+      sql`${tenants.subscriptionStatus} IN ('active') OR ${tenants.subscriptionTier} = 'trial'`
+    );
+
+  const lowUsageTenants = [];
+
+  for (const tenant of activeTenants) {
+    // Get the most recent call for this tenant
+    const [latestCall] = await db
+      .select({ createdAt: calls.createdAt })
+      .from(calls)
+      .where(eq(calls.tenantId, tenant.id))
+      .orderBy(desc(calls.createdAt))
+      .limit(1);
+
+    // Calculate days since last activity
+    let daysSinceLastCall: number | null = null;
+    let lastActivityDate: Date | null = null;
+
+    if (latestCall?.createdAt) {
+      lastActivityDate = new Date(latestCall.createdAt);
+      const now = new Date();
+      daysSinceLastCall = Math.floor((now.getTime() - lastActivityDate.getTime()) / (1000 * 60 * 60 * 24));
+    } else {
+      // No calls ever - use tenant creation date
+      lastActivityDate = new Date(tenant.createdAt);
+      const now = new Date();
+      daysSinceLastCall = Math.floor((now.getTime() - lastActivityDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    // Flag as low usage if 7+ days since last call
+    if (daysSinceLastCall !== null && daysSinceLastCall >= 7) {
+      // Get user count for context
+      const [userCount] = await db
+        .select({ count: count() })
+        .from(users)
+        .where(eq(users.tenantId, tenant.id));
+
+      // Get total call count
+      const [callCount] = await db
+        .select({ count: count() })
+        .from(calls)
+        .where(eq(calls.tenantId, tenant.id));
+
+      lowUsageTenants.push({
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        subscriptionTier: tenant.subscriptionTier,
+        subscriptionStatus: tenant.subscriptionStatus,
+        daysSinceLastCall,
+        lastActivityDate,
+        userCount: userCount?.count || 0,
+        totalCalls: callCount?.count || 0,
+        createdAt: tenant.createdAt,
+      });
+    }
+  }
+
+  // Sort by days since last call (most inactive first)
+  return lowUsageTenants.sort((a, b) => b.daysSinceLastCall - a.daysSinceLastCall);
+}
+
+/**
  * Get tenant settings (for tenant admin)
  */
 export async function getTenantSettings(tenantId: number) {
