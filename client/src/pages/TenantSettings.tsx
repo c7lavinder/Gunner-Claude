@@ -19,7 +19,10 @@ import {
   ExternalLink,
   RefreshCw,
   Trash2,
-  UserMinus
+  UserMinus,
+  Clock,
+  X,
+  AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -43,6 +46,18 @@ export default function TenantSettings() {
 
   // Fetch team members
   const { data: teamMembers, isLoading: teamLoading, refetch: refetchTeam } = trpc.tenant.getUsers.useQuery(
+    undefined,
+    { enabled: !!user?.tenantId }
+  );
+
+  // Fetch pending invitations
+  const { data: pendingInvitations, isLoading: invitationsLoading, refetch: refetchInvitations } = trpc.tenant.getPendingInvitations.useQuery(
+    undefined,
+    { enabled: !!user?.tenantId && user?.role === 'admin' }
+  );
+
+  // Fetch subscription status
+  const { data: subscriptionStatus, refetch: refetchSubscription } = trpc.tenant.getSubscriptionStatus.useQuery(
     undefined,
     { enabled: !!user?.tenantId }
   );
@@ -104,6 +119,67 @@ export default function TenantSettings() {
     },
   });
 
+  // Revoke invitation mutation
+  const revokeInvitationMutation = trpc.tenant.revokeInvitation.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message || "Invitation revoked");
+        refetchInvitations();
+      } else {
+        toast.error(data.error || "Failed to revoke invitation");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to revoke invitation");
+    },
+  });
+
+  // Billing portal mutation
+  const billingPortalMutation = trpc.tenant.getBillingPortal.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.url) {
+        window.open(data.url, '_blank');
+      } else {
+        toast.error(data.error || "Failed to open billing portal");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to open billing portal");
+    },
+  });
+
+  // Cancel subscription mutation
+  const cancelSubscriptionMutation = trpc.tenant.cancelSubscription.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message || "Subscription canceled");
+        refetchSubscription();
+        refetchSettings();
+      } else {
+        toast.error(data.error || "Failed to cancel subscription");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to cancel subscription");
+    },
+  });
+
+  // Reactivate subscription mutation
+  const reactivateSubscriptionMutation = trpc.tenant.reactivateSubscription.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message || "Subscription reactivated");
+        refetchSubscription();
+        refetchSettings();
+      } else {
+        toast.error(data.error || "Failed to reactivate subscription");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to reactivate subscription");
+    },
+  });
+
   // Initialize form values when settings load
   useEffect(() => {
     if (settings) {
@@ -138,6 +214,12 @@ export default function TenantSettings() {
     });
   };
 
+  const handleRevokeInvitation = (invitationId: number, email: string) => {
+    if (confirm(`Are you sure you want to revoke the invitation for ${email}?`)) {
+      revokeInvitationMutation.mutate({ invitationId });
+    }
+  };
+
   const handleRemoveUser = (userId: number, userName: string) => {
     if (confirm(`Are you sure you want to remove ${userName} from the organization?`)) {
       removeUserMutation.mutate({ userId });
@@ -145,8 +227,17 @@ export default function TenantSettings() {
   };
 
   const handleManageBilling = () => {
-    toast.info("Redirecting to Stripe billing portal...");
-    // TODO: Create Stripe billing portal session
+    billingPortalMutation.mutate();
+  };
+
+  const handleCancelSubscription = () => {
+    if (confirm("Are you sure you want to cancel your subscription? You'll retain access until the end of your billing period.")) {
+      cancelSubscriptionMutation.mutate();
+    }
+  };
+
+  const handleReactivateSubscription = () => {
+    reactivateSubscriptionMutation.mutate();
   };
 
   const getPlanPrice = (plan: string | null) => {
@@ -422,6 +513,67 @@ export default function TenantSettings() {
               </Table>
             </CardContent>
           </Card>
+
+          {/* Pending Invitations */}
+          {user?.role === 'admin' && (pendingInvitations || []).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Pending Invitations
+                </CardTitle>
+                <CardDescription>Users who haven't signed in yet</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Invited</TableHead>
+                      <TableHead>Expires</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(pendingInvitations || []).map((invitation: any) => (
+                      <TableRow key={invitation.id}>
+                        <TableCell className="font-medium">{invitation.email}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="capitalize w-fit">
+                              {invitation.role}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground capitalize">
+                              {invitation.teamRole?.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {new Date(invitation.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString() : 'Never'}
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleRevokeInvitation(invitation.id, invitation.email)}
+                            disabled={revokeInvitationMutation.isPending}
+                            title="Revoke invitation"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Billing */}
@@ -460,11 +612,46 @@ export default function TenantSettings() {
                       Trial ends on {new Date(settings.trialEndsAt).toLocaleDateString()}
                     </p>
                   )}
-                  <div className="flex gap-4">
-                    <Button variant="outline" onClick={handleManageBilling}>
-                      Manage Billing
-                    </Button>
-                    <Button variant="outline">View Invoices</Button>
+                  {subscriptionStatus?.cancelAtPeriodEnd && (
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertCircle className="h-5 w-5 text-amber-600" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-800">Subscription canceling</p>
+                        <p className="text-xs text-amber-600">
+                          Your subscription will end on {subscriptionStatus.currentPeriodEnd ? new Date(subscriptionStatus.currentPeriodEnd).toLocaleDateString() : 'the end of the billing period'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-4">
+                    {settings?.stripeCustomerId && (
+                      <Button variant="outline" onClick={handleManageBilling} disabled={billingPortalMutation.isPending}>
+                        {billingPortalMutation.isPending ? "Opening..." : "Manage Billing"}
+                      </Button>
+                    )}
+                    {settings?.subscriptionTier === 'trial' && (
+                      <Button onClick={() => window.location.href = '/onboarding?step=2'}>
+                        Upgrade Plan
+                      </Button>
+                    )}
+                    {settings?.subscriptionStatus === 'active' && !subscriptionStatus?.cancelAtPeriodEnd && (
+                      <Button 
+                        variant="outline" 
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={handleCancelSubscription}
+                        disabled={cancelSubscriptionMutation.isPending}
+                      >
+                        {cancelSubscriptionMutation.isPending ? "Canceling..." : "Cancel Subscription"}
+                      </Button>
+                    )}
+                    {subscriptionStatus?.cancelAtPeriodEnd && (
+                      <Button 
+                        onClick={handleReactivateSubscription}
+                        disabled={reactivateSubscriptionMutation.isPending}
+                      >
+                        {reactivateSubscriptionMutation.isPending ? "Reactivating..." : "Reactivate Subscription"}
+                      </Button>
+                    )}
                   </div>
                 </>
               )}

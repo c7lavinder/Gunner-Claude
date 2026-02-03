@@ -11,8 +11,10 @@ import {
   users, 
   calls, 
   teamMembers,
-  trainingMaterials 
+  trainingMaterials,
+  pendingInvitations
 } from "../drizzle/schema";
+import { createCheckoutSession, createBillingPortalSession, getSubscription, cancelSubscription, reactivateSubscription } from "./stripe/checkout";
 
 // ============ TENANT QUERIES ============
 
@@ -286,7 +288,8 @@ export async function inviteUserToTenant(
   tenantId: number,
   email: string,
   role: 'admin' | 'user' = 'user',
-  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' = 'lead_manager'
+  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' = 'lead_manager',
+  invitedBy?: number
 ) {
   const db = await getDb();
   if (!db) return { success: false, error: 'Database not available' };
@@ -314,11 +317,36 @@ export async function inviteUserToTenant(
     return { success: true, userId: existingUser.id, message: 'Existing user added to organization' };
   }
 
-  // For new users, we'll create a placeholder that gets completed on first login
-  // In a real system, you'd send an invite email here
+  // Check if there's already a pending invitation for this email
+  const [existingInvite] = await db
+    .select()
+    .from(pendingInvitations)
+    .where(and(
+      eq(pendingInvitations.tenantId, tenantId),
+      eq(pendingInvitations.email, email.toLowerCase()),
+      eq(pendingInvitations.status, 'pending')
+    ));
+
+  if (existingInvite) {
+    return { success: false, error: 'An invitation is already pending for this email' };
+  }
+
+  // Create pending invitation
+  const inviteToken = crypto.randomUUID().replace(/-/g, '');
+  await db.insert(pendingInvitations).values({
+    tenantId,
+    email: email.toLowerCase(),
+    role,
+    teamRole,
+    invitedBy,
+    inviteToken,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    status: 'pending',
+  });
+
   return { 
     success: true, 
-    message: `Invitation ready for ${email}. They will be added when they sign in.`,
+    message: `Invitation sent to ${email}. They will be added when they sign in.`,
     pendingEmail: email,
     role,
     teamRole
@@ -379,4 +407,296 @@ export async function updateUserRole(
     .where(eq(users.id, userId));
 
   return { success: true, message: 'User role updated' };
+}
+
+
+// ============ PENDING INVITATION HANDLING ============
+
+/**
+ * Check for pending invitation when user logs in
+ * If found, automatically add them to the tenant
+ */
+export async function checkAndAcceptPendingInvitation(
+  userId: number,
+  email: string
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Find pending invitation for this email
+  const [invitation] = await db
+    .select()
+    .from(pendingInvitations)
+    .where(and(
+      eq(pendingInvitations.email, email.toLowerCase()),
+      eq(pendingInvitations.status, 'pending')
+    ))
+    .orderBy(desc(pendingInvitations.createdAt))
+    .limit(1);
+
+  if (!invitation) return null;
+
+  // Check if invitation has expired
+  if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+    await db
+      .update(pendingInvitations)
+      .set({ status: 'expired' })
+      .where(eq(pendingInvitations.id, invitation.id));
+    return null;
+  }
+
+  // Accept the invitation - update user with tenant info
+  await db
+    .update(users)
+    .set({
+      tenantId: invitation.tenantId,
+      role: invitation.role,
+      teamRole: invitation.teamRole,
+    })
+    .where(eq(users.id, userId));
+
+  // Mark invitation as accepted
+  await db
+    .update(pendingInvitations)
+    .set({
+      status: 'accepted',
+      acceptedAt: new Date(),
+      acceptedByUserId: userId,
+    })
+    .where(eq(pendingInvitations.id, invitation.id));
+
+  // Get tenant info for the response
+  const tenant = await getTenantById(invitation.tenantId);
+
+  return {
+    tenantId: invitation.tenantId,
+    tenantName: tenant?.name || 'Unknown',
+    role: invitation.role,
+    teamRole: invitation.teamRole,
+  };
+}
+
+/**
+ * Get pending invitations for a tenant
+ */
+export async function getPendingInvitations(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(pendingInvitations)
+    .where(and(
+      eq(pendingInvitations.tenantId, tenantId),
+      eq(pendingInvitations.status, 'pending')
+    ))
+    .orderBy(desc(pendingInvitations.createdAt));
+}
+
+/**
+ * Revoke a pending invitation
+ */
+export async function revokePendingInvitation(tenantId: number, invitationId: number) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+
+  // Verify invitation belongs to this tenant
+  const [invitation] = await db
+    .select()
+    .from(pendingInvitations)
+    .where(and(
+      eq(pendingInvitations.id, invitationId),
+      eq(pendingInvitations.tenantId, tenantId)
+    ));
+
+  if (!invitation) {
+    return { success: false, error: 'Invitation not found' };
+  }
+
+  await db
+    .update(pendingInvitations)
+    .set({ status: 'revoked' })
+    .where(eq(pendingInvitations.id, invitationId));
+
+  return { success: true, message: 'Invitation revoked' };
+}
+
+// ============ BILLING & SUBSCRIPTION MANAGEMENT ============
+
+/**
+ * Create a checkout session for subscription
+ */
+export async function createTenantCheckoutSession(params: {
+  planCode: string;
+  billingPeriod: 'monthly' | 'yearly';
+  userId: number;
+  userEmail: string;
+  userName: string;
+  tenantId?: number;
+  origin: string;
+}) {
+  const successUrl = `${params.origin}/onboarding?step=6&success=true`;
+  const cancelUrl = `${params.origin}/onboarding?step=2&canceled=true`;
+
+  return createCheckoutSession({
+    planCode: params.planCode,
+    billingPeriod: params.billingPeriod,
+    userId: params.userId,
+    userEmail: params.userEmail,
+    userName: params.userName,
+    tenantId: params.tenantId,
+    successUrl,
+    cancelUrl,
+  });
+}
+
+/**
+ * Create a billing portal session for managing subscription
+ */
+export async function createTenantBillingPortal(tenantId: number, returnUrl: string) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+
+  const [tenant] = await db
+    .select()
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+
+  if (!tenant?.stripeCustomerId) {
+    return { success: false, error: 'No billing information found. Please contact support.' };
+  }
+
+  const url = await createBillingPortalSession(tenant.stripeCustomerId, returnUrl);
+  return { success: true, url };
+}
+
+/**
+ * Get subscription status for a tenant
+ */
+export async function getTenantSubscriptionStatus(tenantId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [tenant] = await db
+    .select()
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+
+  if (!tenant) return null;
+
+  // If no Stripe subscription, return basic info
+  if (!tenant.stripeSubscriptionId) {
+    return {
+      tier: tenant.subscriptionTier,
+      status: tenant.subscriptionStatus,
+      trialEndsAt: tenant.trialEndsAt,
+      isTrialing: tenant.subscriptionTier === 'trial',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: null,
+    };
+  }
+
+  // Get live subscription data from Stripe
+  const subscription = await getSubscription(tenant.stripeSubscriptionId);
+  if (!subscription) {
+    return {
+      tier: tenant.subscriptionTier,
+      status: tenant.subscriptionStatus,
+      trialEndsAt: tenant.trialEndsAt,
+      isTrialing: tenant.subscriptionTier === 'trial',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: null,
+    };
+  }
+
+  // Cast to any to access Stripe subscription properties
+  const sub = subscription as any;
+  return {
+    tier: tenant.subscriptionTier,
+    status: sub.status,
+    trialEndsAt: tenant.trialEndsAt,
+    isTrialing: sub.status === 'trialing',
+    cancelAtPeriodEnd: sub.cancel_at_period_end || false,
+    currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
+    cancelAt: sub.cancel_at ? new Date(sub.cancel_at * 1000) : null,
+  };
+}
+
+/**
+ * Cancel tenant subscription (at period end)
+ */
+export async function cancelTenantSubscription(tenantId: number) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+
+  const [tenant] = await db
+    .select()
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+
+  if (!tenant?.stripeSubscriptionId) {
+    return { success: false, error: 'No active subscription found' };
+  }
+
+  try {
+    await cancelSubscription(tenant.stripeSubscriptionId);
+    return { success: true, message: 'Subscription will be canceled at the end of the billing period' };
+  } catch (error) {
+    console.error('[Tenant] Error canceling subscription:', error);
+    return { success: false, error: 'Failed to cancel subscription' };
+  }
+}
+
+/**
+ * Reactivate a canceled subscription
+ */
+export async function reactivateTenantSubscription(tenantId: number) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+
+  const [tenant] = await db
+    .select()
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+
+  if (!tenant?.stripeSubscriptionId) {
+    return { success: false, error: 'No subscription found' };
+  }
+
+  try {
+    await reactivateSubscription(tenant.stripeSubscriptionId);
+    return { success: true, message: 'Subscription reactivated' };
+  } catch (error) {
+    console.error('[Tenant] Error reactivating subscription:', error);
+    return { success: false, error: 'Failed to reactivate subscription' };
+  }
+}
+
+/**
+ * Update tenant with Stripe IDs after checkout
+ */
+export async function updateTenantStripeIds(
+  tenantId: number,
+  stripeCustomerId: string,
+  stripeSubscriptionId: string,
+  subscriptionTier: 'starter' | 'growth' | 'scale'
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Set max users based on tier
+  const maxUsers = subscriptionTier === 'starter' ? 3 : subscriptionTier === 'growth' ? 10 : 999;
+
+  await db
+    .update(tenants)
+    .set({
+      stripeCustomerId,
+      stripeSubscriptionId,
+      subscriptionTier,
+      subscriptionStatus: 'active',
+      maxUsers,
+    })
+    .where(eq(tenants.id, tenantId));
+
+  return getTenantById(tenantId);
 }

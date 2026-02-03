@@ -2368,6 +2368,98 @@ Create content that:
         }
         return updateUserRole(ctx.user.tenantId, input.userId, input.role, input.teamRole);
       }),
+
+    // Get pending invitations for tenant
+    getPendingInvitations: protectedProcedure.query(async ({ ctx }) => {
+      const { getPendingInvitations } = await import("./tenant");
+      if (!ctx.user?.tenantId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+      }
+      if (ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      return getPendingInvitations(ctx.user.tenantId);
+    }),
+
+    // Revoke a pending invitation
+    revokeInvitation: protectedProcedure
+      .input(z.object({ invitationId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { revokePendingInvitation } = await import("./tenant");
+        if (!ctx.user?.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+        }
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        return revokePendingInvitation(ctx.user.tenantId, input.invitationId);
+      }),
+
+    // Create checkout session for subscription
+    createCheckout: protectedProcedure
+      .input(z.object({
+        planCode: z.enum(['starter', 'growth', 'scale']),
+        billingPeriod: z.enum(['monthly', 'yearly']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { createTenantCheckoutSession } = await import("./tenant");
+        if (!ctx.user) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' });
+        }
+        const origin = ctx.req.headers.origin || 'http://localhost:3000';
+        return createTenantCheckoutSession({
+          planCode: input.planCode,
+          billingPeriod: input.billingPeriod,
+          userId: ctx.user.id,
+          userEmail: ctx.user.email || '',
+          userName: ctx.user.name || '',
+          tenantId: ctx.user.tenantId || undefined,
+          origin,
+        });
+      }),
+
+    // Get billing portal URL
+    getBillingPortal: protectedProcedure.mutation(async ({ ctx }) => {
+      const { createTenantBillingPortal } = await import("./tenant");
+      if (!ctx.user?.tenantId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+      }
+      const origin = ctx.req.headers.origin || 'http://localhost:3000';
+      return createTenantBillingPortal(ctx.user.tenantId, `${origin}/settings/billing`);
+    }),
+
+    // Get subscription status
+    getSubscriptionStatus: protectedProcedure.query(async ({ ctx }) => {
+      const { getTenantSubscriptionStatus } = await import("./tenant");
+      if (!ctx.user?.tenantId) {
+        return null;
+      }
+      return getTenantSubscriptionStatus(ctx.user.tenantId);
+    }),
+
+    // Cancel subscription
+    cancelSubscription: protectedProcedure.mutation(async ({ ctx }) => {
+      const { cancelTenantSubscription } = await import("./tenant");
+      if (!ctx.user?.tenantId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+      }
+      if (ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      return cancelTenantSubscription(ctx.user.tenantId);
+    }),
+
+    // Reactivate subscription
+    reactivateSubscription: protectedProcedure.mutation(async ({ ctx }) => {
+      const { reactivateTenantSubscription } = await import("./tenant");
+      if (!ctx.user?.tenantId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+      }
+      if (ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      return reactivateTenantSubscription(ctx.user.tenantId);
+    }),
   }),
 });
 

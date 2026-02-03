@@ -540,3 +540,25 @@
 - [x] Update analytics queries to filter by tenantId (getCallStats, getLeaderboardData)
 - [x] Update gamification queries to filter by tenantId (getGamificationLeaderboard)
 - [x] Ensure new records are automatically assigned correct tenantId (team members, training materials)
+
+## White-Label SaaS Platform - Phase 4
+
+### Checkout Flow Integration
+- [x] Add createCheckoutSession tRPC route
+- [x] Wire up onboarding to create checkout session
+- [x] Handle checkout success/cancel redirects
+- [x] Update tenant with Stripe IDs after checkout (via webhook)
+
+### Invite Acceptance Flow
+- [x] Store pending invitations in database (pending_invitations table)
+- [x] Check for pending invitations on user login (OAuth callback)
+- [x] Auto-assign user to tenant on first login if invited
+- [x] Show pending invitations in Company Settings Team tab
+- [x] Allow revoking pending invitations
+
+### Billing Management
+- [x] Add billing portal route for subscription management
+- [x] Add cancel subscription functionality (at period end)
+- [x] Add reactivate subscription functionality
+- [x] Show current subscription status in Company Settings
+- [x] Handle subscription changes via webhooks

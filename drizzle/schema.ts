@@ -985,3 +985,32 @@ export const subscriptionPlans = mysqlTable("subscription_plans", {
 
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 export type InsertSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
+
+
+// ============ PENDING INVITATIONS ============
+
+/**
+ * Pending Invitations - stores invitations for users who haven't signed up yet
+ * When a user signs in with a matching email, they're automatically added to the tenant
+ */
+export const pendingInvitations = mysqlTable("pending_invitations", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager"]).default("lead_manager").notNull(),
+  // Invitation metadata
+  invitedBy: int("invitedBy").references(() => users.id),
+  inviteToken: varchar("inviteToken", { length: 64 }), // For email invite links
+  expiresAt: timestamp("expiresAt"), // Optional expiration
+  // Status
+  status: mysqlEnum("status", ["pending", "accepted", "expired", "revoked"]).default("pending").notNull(),
+  acceptedAt: timestamp("acceptedAt"),
+  acceptedByUserId: int("acceptedByUserId").references(() => users.id),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PendingInvitation = typeof pendingInvitations.$inferSelect;
+export type InsertPendingInvitation = typeof pendingInvitations.$inferInsert;

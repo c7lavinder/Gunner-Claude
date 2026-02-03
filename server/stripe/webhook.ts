@@ -6,7 +6,10 @@
 import { Request, Response } from "express";
 import Stripe from "stripe";
 import { ENV } from "../_core/env";
-// Database operations will be added when tenant schema is in Drizzle
+import { updateTenantStripeIds } from "../tenant";
+import { getDb } from "../db";
+import { tenants } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 const stripe = new Stripe(ENV.stripeSecretKey || "", {
   apiVersion: "2026-01-28.clover",
@@ -89,20 +92,29 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   
   const userId = session.metadata?.user_id;
   const tenantId = session.metadata?.tenant_id;
-  const planCode = session.metadata?.plan_code;
+  const planCode = session.metadata?.plan_code as 'starter' | 'growth' | 'scale' | undefined;
   const customerId = session.customer as string;
   const subscriptionId = session.subscription as string;
 
-  if (!tenantId) {
-    console.log("[Stripe Webhook] No tenant_id in metadata, skipping");
+  if (!tenantId || !planCode) {
+    console.log("[Stripe Webhook] No tenant_id or plan_code in metadata, skipping");
     return;
   }
 
   // Update tenant with Stripe IDs
   console.log(`[Stripe Webhook] Updating tenant ${tenantId} with Stripe IDs`);
   
-  // Note: This would update the tenant record with Stripe customer/subscription IDs
-  // Implementation depends on having the tenants table in Drizzle schema
+  try {
+    await updateTenantStripeIds(
+      parseInt(tenantId),
+      customerId,
+      subscriptionId,
+      planCode
+    );
+    console.log(`[Stripe Webhook] Successfully updated tenant ${tenantId}`);
+  } catch (error) {
+    console.error(`[Stripe Webhook] Failed to update tenant ${tenantId}:`, error);
+  }
 }
 
 /**
@@ -124,20 +136,38 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const tenantId = subscription.metadata?.tenant_id;
   const status = subscription.status;
   
+  if (!tenantId) {
+    console.log("[Stripe Webhook] No tenant_id in subscription metadata, skipping");
+    return;
+  }
+  
   console.log(`[Stripe Webhook] Subscription updated for tenant ${tenantId}, status: ${status}`);
   
   // Map Stripe status to our status
   let subscriptionStatus: "active" | "past_due" | "canceled" | "paused" = "active";
   if (subscription.cancel_at_period_end) {
-    subscriptionStatus = "canceled";
+    // Don't change to canceled yet - they still have access until period end
+    subscriptionStatus = "active";
   } else if (status === "past_due") {
     subscriptionStatus = "past_due";
   } else if (status === "paused") {
     subscriptionStatus = "paused";
+  } else if (status === "canceled") {
+    subscriptionStatus = "canceled";
   }
   
   // Update tenant subscription status
-  // Note: Implementation depends on having the tenants table in Drizzle schema
+  try {
+    const db = await getDb();
+    if (db) {
+      await db.update(tenants)
+        .set({ subscriptionStatus })
+        .where(eq(tenants.id, parseInt(tenantId)));
+      console.log(`[Stripe Webhook] Updated tenant ${tenantId} status to ${subscriptionStatus}`);
+    }
+  } catch (error) {
+    console.error(`[Stripe Webhook] Failed to update tenant ${tenantId} status:`, error);
+  }
 }
 
 /**
@@ -147,10 +177,30 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   console.log("[Stripe Webhook] Processing customer.subscription.deleted");
   const tenantId = subscription.metadata?.tenant_id;
   
+  if (!tenantId) {
+    console.log("[Stripe Webhook] No tenant_id in subscription metadata, skipping");
+    return;
+  }
+  
   console.log(`[Stripe Webhook] Subscription deleted for tenant ${tenantId}`);
   
-  // Update tenant to canceled status
-  // Note: Implementation depends on having the tenants table in Drizzle schema
+  // Update tenant to canceled status and downgrade to trial
+  try {
+    const db = await getDb();
+    if (db) {
+      await db.update(tenants)
+        .set({ 
+          subscriptionStatus: 'canceled',
+          subscriptionTier: 'trial',
+          stripeSubscriptionId: null,
+          maxUsers: 3,
+        })
+        .where(eq(tenants.id, parseInt(tenantId)));
+      console.log(`[Stripe Webhook] Tenant ${tenantId} subscription canceled, downgraded to trial`);
+    }
+  } catch (error) {
+    console.error(`[Stripe Webhook] Failed to cancel tenant ${tenantId} subscription:`, error);
+  }
 }
 
 /**
