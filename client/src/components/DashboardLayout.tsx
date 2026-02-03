@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings, User, Target } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings, User } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -46,9 +46,8 @@ const getMenuItems = (teamRole: string | null | undefined) => {
   items.push({ icon: Users, label: "Team", path: "/team" });
   items.push({ icon: User, label: "My Profile", path: "/profile" });
   
-  // Team Management and KPI Dashboard are admin-only
+  // Team Management is admin-only (KPI Dashboard archived for future development)
   if (isAdmin) {
-    items.push({ icon: Target, label: "KPI Dashboard", path: "/kpi" });
     items.push({ icon: Settings, label: "Team Management", path: "/team-management" });
   }
   

@@ -1,0 +1,9 @@
+{
+  "query": "DELETE FROM campaign_kpis WHERE periodId IN (1, 2, 6);\nDELETE FROM team_member_kpis WHERE periodId IN (1, 2, 6);\nDELETE FROM kpi_deals WHERE periodId IN (1, 2, 6);\nDELETE FROM kpi_periods WHERE id IN (1, 2, 6);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute DELETE FROM campaign_kpis WHERE periodId IN (1, 2, 6);\nDELETE FROM team_member_kpis WHERE periodId IN (1, 2, 6);\nDELETE FROM kpi_deals WHERE periodId IN (1, 2, 6);\nDELETE FROM kpi_periods WHERE id IN (1, 2, 6);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 83
+}

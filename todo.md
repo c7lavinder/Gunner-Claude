@@ -415,3 +415,8 @@
 - [x] Update Inventory table display
 - [x] Update Add Deal dialog
 - [x] Update Edit Deal dialog
+
+
+## Archive KPI Dashboard
+- [x] Remove KPI Dashboard from sidebar navigation
+- [x] Keep code and database intact for future use
