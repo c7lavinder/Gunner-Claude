@@ -327,3 +327,6 @@
 ## Team Page Styling Improvements
 - [x] Change orange color to less bright/muted tone
 - [x] Change grid layout from 2 columns to 3 columns per row
+
+## Automatic XP Awards
+- [x] Award XP automatically when calls are graded (no manual button needed)

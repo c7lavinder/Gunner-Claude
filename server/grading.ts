@@ -523,6 +523,7 @@ Respond with JSON only:
 // ============ PROCESS CALL FUNCTION ============
 
 import { getCallById, updateCall, createCallGrade, getTeamMemberById, getGradingContext } from "./db";
+import { processCallViewRewards } from "./gamification";
 
 export async function processCall(callId: number): Promise<void> {
   const call = await getCallById(callId);
@@ -627,6 +628,19 @@ export async function processCall(callId: number): Promise<void> {
       classification: "conversation",
       callOutcome: gradeResult.callOutcome,
     });
+
+    // Step 7: Award XP automatically
+    if (call.teamMemberId) {
+      try {
+        const xpResult = await processCallViewRewards(call.teamMemberId, call.id);
+        if (xpResult.xpEarned > 0) {
+          console.log(`[ProcessCall] Awarded ${xpResult.xpEarned} XP to team member ${call.teamMemberId} for call ${callId}`);
+        }
+      } catch (xpError) {
+        console.error(`[ProcessCall] Failed to award XP for call ${callId}:`, xpError);
+        // Don't fail the whole process if XP award fails
+      }
+    }
 
     console.log(`[ProcessCall] Successfully processed call ${callId}`);
   } catch (error) {
