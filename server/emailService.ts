@@ -1,11 +1,18 @@
 import { notifyOwner } from "./_core/notification";
+import { getDb } from "./db";
+import { outreachHistory } from "../drizzle/schema";
 
 // Email templates for different notification types
 export type EmailType = 
   | "password_reset"
   | "team_invite"
   | "welcome"
-  | "churn_outreach";
+  | "churn_7_day"
+  | "churn_14_day"
+  | "churn_30_day";
+
+// Template type for outreach history
+export type OutreachTemplateType = "7_day" | "14_day" | "30_day" | "custom";
 
 interface EmailOptions {
   to: string;
@@ -62,11 +69,12 @@ They accepted their invitation and are now part of your team.
         `.trim()
       };
     
-    case "churn_outreach":
+    // 7-day inactivity - Gentle reminder
+    case "churn_7_day":
       return {
-        subject: `Re-engagement email sent to ${data.tenantName}`,
+        subject: `Re-engagement email sent to ${data.tenantName} (7-day gentle reminder)`,
         body: `
-Churn outreach email sent!
+Churn outreach email sent (7-day template)!
 
 Tenant: ${data.tenantName}
 Contact: ${data.contactEmail}
@@ -77,18 +85,93 @@ Message sent:
 ---
 Hi ${data.contactName},
 
-We noticed you haven't logged any calls in Gunner recently. Is everything okay?
+Just checking in! We noticed it's been about a week since your last call in Gunner.
 
-We'd love to help you get the most out of your AI call grading. Here are some quick wins:
+Quick reminder of what you can do:
+• Upload recent calls to get instant AI coaching feedback
+• Review your team's performance on the leaderboard
+• Check out new training materials in the Training section
 
-• Upload a few recent calls to see instant AI feedback
-• Check out the Training section for role-specific coaching
-• Invite your team members to start building your leaderboard
-
-Need help? Just reply to this email and we'll get you sorted.
+If you have any questions or need help getting started again, just reply to this email.
 
 Best,
 The Gunner Team
+---
+        `.trim()
+      };
+    
+    // 14-day inactivity - Urgent outreach
+    case "churn_14_day":
+      return {
+        subject: `URGENT: Re-engagement email sent to ${data.tenantName} (14-day follow-up)`,
+        body: `
+Churn outreach email sent (14-day template)!
+
+Tenant: ${data.tenantName}
+Contact: ${data.contactEmail}
+Days Inactive: ${data.daysInactive}
+Last Activity: ${data.lastActivity}
+
+Message sent:
+---
+Hi ${data.contactName},
+
+We miss you! It's been two weeks since we've seen any activity from ${data.tenantName} in Gunner.
+
+Is something not working for you? We'd love to help:
+
+• Having trouble with the GHL integration? We can help troubleshoot
+• Need custom grading criteria for your team? Let us know
+• Want a quick refresher on the platform? We can schedule a call
+
+Your success is our priority. Reply to this email and let's get you back on track.
+
+Best,
+The Gunner Team
+
+P.S. - Don't forget, your team's call data is waiting to be analyzed!
+---
+        `.trim()
+      };
+    
+    // 30-day inactivity - Win-back offer
+    case "churn_30_day":
+      return {
+        subject: `CRITICAL: Re-engagement email sent to ${data.tenantName} (30-day win-back)`,
+        body: `
+Churn outreach email sent (30-day win-back template)!
+
+Tenant: ${data.tenantName}
+Contact: ${data.contactEmail}
+Days Inactive: ${data.daysInactive}
+Last Activity: ${data.lastActivity}
+
+Message sent:
+---
+Hi ${data.contactName},
+
+It's been a month since we've heard from you, and we wanted to reach out personally.
+
+We understand that things get busy, and sometimes tools don't fit perfectly into your workflow. But before you go, we'd love one more chance to help.
+
+Here's what we can offer:
+• FREE 30-minute strategy call to optimize Gunner for your specific needs
+• Custom grading rubrics tailored to your sales process
+• Priority support for any technical issues
+
+We've also made several improvements recently:
+• Faster call processing
+• Enhanced AI coaching insights
+• Better team analytics
+
+Would you be open to a quick 15-minute call to discuss how we can better serve your team?
+
+Just reply "YES" and we'll set something up.
+
+Best regards,
+The Gunner Team
+
+P.S. - We truly believe Gunner can help your team close more deals. Let us prove it.
 ---
         `.trim()
       };
@@ -184,7 +267,102 @@ export async function sendWelcomeEmail(
 }
 
 /**
- * Send churn outreach email
+ * Determine the appropriate email template based on days inactive
+ */
+export function getOutreachTemplate(daysInactive: number): { type: EmailType; templateType: OutreachTemplateType } {
+  if (daysInactive >= 30) {
+    return { type: "churn_30_day", templateType: "30_day" };
+  } else if (daysInactive >= 14) {
+    return { type: "churn_14_day", templateType: "14_day" };
+  } else {
+    return { type: "churn_7_day", templateType: "7_day" };
+  }
+}
+
+/**
+ * Record outreach in history
+ */
+export async function recordOutreachHistory(
+  tenantId: number,
+  templateType: OutreachTemplateType,
+  recipientEmail: string,
+  recipientName: string | null,
+  daysInactive: number,
+  lastActivityDate: Date | null,
+  sentByUserId: number | null,
+  sentByName: string | null
+): Promise<boolean> {
+  try {
+    const db = await getDb();
+    if (!db) return false;
+
+    await db.insert(outreachHistory).values({
+      tenantId,
+      templateType,
+      recipientEmail,
+      recipientName,
+      daysInactive,
+      lastActivityDate,
+      sentByUserId,
+      sentByName,
+    });
+
+    return true;
+  } catch (error) {
+    console.error("[EmailService] Failed to record outreach history:", error);
+    return false;
+  }
+}
+
+/**
+ * Send tiered churn outreach email based on days inactive
+ * Automatically selects the appropriate template and records history
+ */
+export async function sendTieredChurnOutreachEmail(
+  tenantId: number,
+  tenantName: string,
+  contactName: string,
+  contactEmail: string,
+  daysInactive: number,
+  lastActivity: string,
+  lastActivityDate: Date | null,
+  sentByUserId: number | null,
+  sentByName: string | null
+): Promise<{ success: boolean; templateUsed: OutreachTemplateType }> {
+  const { type, templateType } = getOutreachTemplate(daysInactive);
+  
+  const success = await sendEmail({
+    to: contactEmail,
+    type,
+    data: {
+      tenantName,
+      contactName,
+      contactEmail,
+      daysInactive: daysInactive.toString(),
+      lastActivity
+    }
+  });
+
+  if (success) {
+    // Record in outreach history
+    await recordOutreachHistory(
+      tenantId,
+      templateType,
+      contactEmail,
+      contactName,
+      daysInactive,
+      lastActivityDate,
+      sentByUserId,
+      sentByName
+    );
+  }
+
+  return { success, templateUsed: templateType };
+}
+
+/**
+ * Legacy function for backwards compatibility
+ * Now uses tiered templates
  */
 export async function sendChurnOutreachEmail(
   tenantName: string,
@@ -193,9 +371,11 @@ export async function sendChurnOutreachEmail(
   daysInactive: number,
   lastActivity: string
 ): Promise<boolean> {
+  const { type } = getOutreachTemplate(daysInactive);
+  
   return sendEmail({
     to: contactEmail,
-    type: "churn_outreach",
+    type,
     data: {
       tenantName,
       contactName,

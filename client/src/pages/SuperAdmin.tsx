@@ -44,13 +44,14 @@ export default function SuperAdmin() {
   const { data: recentActivity, isLoading: activityLoading, refetch: refetchActivity } = trpc.tenant.getRecentActivity.useQuery();
   const { data: lowUsageTenants, isLoading: lowUsageLoading, refetch: refetchLowUsage } = trpc.tenant.getLowUsageTenants.useQuery();
   const { data: impersonationStatus } = trpc.tenant.getImpersonationStatus.useQuery();
+  const { data: outreachHistory, isLoading: outreachLoading, refetch: refetchOutreach } = trpc.tenant.getOutreachHistory.useQuery({});
 
   // Mutations
   const startImpersonation = trpc.tenant.startImpersonation.useMutation({
     onSuccess: () => {
       toast.success("Now viewing as tenant");
       refetchAuth();
-      setLocation("/");
+      setLocation("/dashboard");
     },
     onError: (error) => {
       toast.error(error.message || "Failed to start impersonation");
@@ -94,7 +95,7 @@ export default function SuperAdmin() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => setLocation("/")}>Back to Dashboard</Button>
+            <Button onClick={() => setLocation("/dashboard")}>Back to Dashboard</Button>
           </CardContent>
         </Card>
       </div>
@@ -142,6 +143,7 @@ export default function SuperAdmin() {
     refetchMetrics();
     refetchActivity();
     refetchLowUsage();
+    refetchOutreach();
   };
 
   const getActivityIcon = (type: string) => {
@@ -236,6 +238,7 @@ export default function SuperAdmin() {
           <TabsTrigger value="revenue">Revenue</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="churn-risk">Churn Risk</TabsTrigger>
+          <TabsTrigger value="outreach-history">Outreach History</TabsTrigger>
           <TabsTrigger value="alerts">Alerts</TabsTrigger>
         </TabsList>
 
@@ -671,6 +674,95 @@ export default function SuperAdmin() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="outreach-history" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                Outreach History
+              </CardTitle>
+              <CardDescription>
+                Track all re-engagement emails sent to tenants at risk of churning
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {outreachLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : !outreachHistory || outreachHistory.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No outreach emails sent yet</p>
+                  <p className="text-sm">Send re-engagement emails from the Churn Risk tab</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>Template</TableHead>
+                      <TableHead>Recipient</TableHead>
+                      <TableHead>Days Inactive</TableHead>
+                      <TableHead>Sent By</TableHead>
+                      <TableHead>Sent At</TableHead>
+                      <TableHead>Reactivated</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {outreachHistory.map((record) => (
+                      <TableRow key={record.id}>
+                        <TableCell className="font-medium">
+                          {record.tenantName || 'Unknown'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            record.templateType === '30_day' ? 'bg-red-100 text-red-700' :
+                            record.templateType === '14_day' ? 'bg-amber-100 text-amber-700' :
+                            'bg-blue-100 text-blue-700'
+                          }>
+                            {record.templateType === '7_day' ? '7-Day Gentle' :
+                             record.templateType === '14_day' ? '14-Day Urgent' :
+                             record.templateType === '30_day' ? '30-Day Win-back' :
+                             record.templateType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{record.recipientName || 'Unknown'}</p>
+                            <p className="text-sm text-muted-foreground">{record.recipientEmail}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono">{record.daysInactive} days</span>
+                        </TableCell>
+                        <TableCell>
+                          {record.sentByName || 'System'}
+                        </TableCell>
+                        <TableCell>
+                          {formatTimeAgo(record.createdAt)}
+                        </TableCell>
+                        <TableCell>
+                          {record.tenantReactivated === 'true' ? (
+                            <Badge className="bg-green-100 text-green-700">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Yes
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline">No</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="alerts" className="space-y-4">

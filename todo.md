@@ -719,3 +719,23 @@
 - [x] Create re-engagement email template
 - [ ] Track when outreach emails were sent
 - [ ] Add outreach history to tenant detail view
+
+
+## Production Readiness Improvements
+
+### Outreach History Tracking
+- [x] Add outreach_history table to database schema
+- [x] Track when outreach emails were sent
+- [x] Track which template was used (7-day, 14-day, 30-day)
+- [x] Display outreach history in super admin tenant view
+
+### Tiered Email Templates
+- [x] Create 7-day inactivity email template (gentle reminder)
+- [x] Create 14-day inactivity email template (urgent outreach)
+- [x] Create 30-day inactivity email template (win-back offer)
+- [x] Update churn outreach to auto-select template based on inactivity
+
+### Landing Page Route Change
+- [x] Move landing page from /landing to / (root route)
+- [x] Update all internal links to landing page
+- [x] Redirect /landing to / for backwards compatibility

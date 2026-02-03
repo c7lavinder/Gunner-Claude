@@ -1031,3 +1031,39 @@ export const pendingInvitations = mysqlTable("pending_invitations", {
 
 export type PendingInvitation = typeof pendingInvitations.$inferSelect;
 export type InsertPendingInvitation = typeof pendingInvitations.$inferInsert;
+
+
+// ============ OUTREACH HISTORY ============
+
+/**
+ * Outreach History - tracks churn prevention emails sent to tenants
+ * Used to prevent duplicate outreach and measure effectiveness
+ */
+export const outreachHistory = mysqlTable("outreach_history", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  // Email template used
+  templateType: mysqlEnum("templateType", ["7_day", "14_day", "30_day", "custom"]).notNull(),
+  // Recipient info
+  recipientEmail: varchar("recipientEmail", { length: 320 }).notNull(),
+  recipientName: varchar("recipientName", { length: 255 }),
+  // Context at time of sending
+  daysInactive: int("daysInactive").notNull(),
+  lastActivityDate: timestamp("lastActivityDate"),
+  // Who sent it
+  sentByUserId: int("sentByUserId").references(() => users.id),
+  sentByName: varchar("sentByName", { length: 255 }),
+  // Response tracking
+  emailOpened: mysqlEnum("emailOpened", ["true", "false"]).default("false"),
+  openedAt: timestamp("openedAt"),
+  // Re-engagement tracking
+  tenantReactivated: mysqlEnum("tenantReactivated", ["true", "false"]).default("false"),
+  reactivatedAt: timestamp("reactivatedAt"),
+  // Notes
+  notes: text("notes"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type OutreachHistory = typeof outreachHistory.$inferSelect;
+export type InsertOutreachHistory = typeof outreachHistory.$inferInsert;

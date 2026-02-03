@@ -33,7 +33,7 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string) => {
   const isLeadManager = teamRole === 'lead_manager';
   
   const items = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Phone, label: "Call History", path: "/calls" },
     { icon: BarChart3, label: "Analytics", path: "/analytics" },
     { icon: BookOpen, label: "Training", path: "/training" },

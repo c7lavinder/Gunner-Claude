@@ -27,12 +27,17 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
 // Public routes that don't need DashboardLayout
-const PUBLIC_ROUTES = ['/landing', '/login', '/signup', '/forgot-password', '/reset-password'];
+// Root (/) is now the landing page for unauthenticated users
+const PUBLIC_ROUTES = ['/', '/landing', '/login', '/signup', '/forgot-password', '/reset-password'];
 
 function PublicRouter() {
   return (
     <Switch>
-      <Route path="/landing" component={Landing} />
+      <Route path="/" component={Landing} />
+      {/* Redirect /landing to / for backwards compatibility */}
+      <Route path="/landing">
+        <Redirect to="/" />
+      </Route>
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/forgot-password" component={ForgotPassword} />
@@ -45,7 +50,7 @@ function PublicRouter() {
 function ProtectedRouter() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/dashboard" component={Home} />
       <Route path="/calls" component={CallInbox} />
       <Route path="/calls/:id" component={CallDetail} />
       <Route path="/team" component={TeamMembers} />
@@ -85,8 +90,9 @@ function ProtectedRouter() {
 function AppContent() {
   const [location] = useLocation();
   
-  // Check if current route is a public route
-  const isPublicRoute = PUBLIC_ROUTES.some(route => location.startsWith(route));
+  // Check if current route is a public route (exact match for root, prefix for others)
+  const isPublicRoute = location === '/' || 
+    PUBLIC_ROUTES.slice(1).some(route => location.startsWith(route));
   
   if (isPublicRoute) {
     return <PublicRouter />;

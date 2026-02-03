@@ -2586,12 +2586,12 @@ Create content that:
       }
     }),
 
-    // Super Admin: Send churn outreach email
+    // Super Admin: Send churn outreach email with tiered templates
     sendChurnOutreach: protectedProcedure
       .input(z.object({ tenantId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const { isPlatformOwner, getTenantById, getTenantUsers } = await import("./tenant");
-        const { sendChurnOutreachEmail } = await import("./emailService");
+        const { sendTieredChurnOutreachEmail } = await import("./emailService");
         
         if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
@@ -2618,6 +2618,7 @@ Create content that:
         
         let daysInactive = 0;
         let lastActivity = tenant.createdAt;
+        let lastActivityDate: Date | null = null;
         
         if (db) {
           const [latestCall] = await db
@@ -2629,25 +2630,79 @@ Create content that:
           
           if (latestCall?.createdAt) {
             lastActivity = latestCall.createdAt;
+            lastActivityDate = new Date(latestCall.createdAt);
           }
           
           daysInactive = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
         }
         
-        // Send the outreach email
-        const success = await sendChurnOutreachEmail(
+        // Send the tiered outreach email and record history
+        const result = await sendTieredChurnOutreachEmail(
+          input.tenantId,
           tenant.name,
           adminUser.name || 'there',
           adminUser.email,
           daysInactive,
-          new Date(lastActivity).toLocaleDateString()
+          new Date(lastActivity).toLocaleDateString(),
+          lastActivityDate,
+          ctx.user.id,
+          ctx.user.name || 'Platform Owner'
         );
         
-        if (!success) {
+        if (!result.success) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to send outreach email' });
         }
         
-        return { success: true, sentTo: adminUser.email };
+        return { 
+          success: true, 
+          sentTo: adminUser.email,
+          templateUsed: result.templateUsed
+        };
+      }),
+
+    // Get outreach history for a tenant
+    getOutreachHistory: protectedProcedure
+      .input(z.object({ tenantId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const { isPlatformOwner } = await import("./tenant");
+        
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        
+        const db = await import("./db").then(m => m.getDb());
+        const { outreachHistory, tenants } = await import("../drizzle/schema");
+        const { eq, desc } = await import("drizzle-orm");
+        
+        if (!db) {
+          return [];
+        }
+        
+        let query = db
+          .select({
+            id: outreachHistory.id,
+            tenantId: outreachHistory.tenantId,
+            templateType: outreachHistory.templateType,
+            recipientEmail: outreachHistory.recipientEmail,
+            recipientName: outreachHistory.recipientName,
+            daysInactive: outreachHistory.daysInactive,
+            lastActivityDate: outreachHistory.lastActivityDate,
+            sentByName: outreachHistory.sentByName,
+            tenantReactivated: outreachHistory.tenantReactivated,
+            reactivatedAt: outreachHistory.reactivatedAt,
+            createdAt: outreachHistory.createdAt,
+            tenantName: tenants.name,
+          })
+          .from(outreachHistory)
+          .leftJoin(tenants, eq(outreachHistory.tenantId, tenants.id))
+          .orderBy(desc(outreachHistory.createdAt));
+        
+        if (input.tenantId) {
+          query = query.where(eq(outreachHistory.tenantId, input.tenantId)) as typeof query;
+        }
+        
+        const history = await query.limit(100);
+        return history;
       }),
   }),
 });
