@@ -16,6 +16,7 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  profilePicture: text("profilePicture"), // S3 URL for profile picture
 });
 
 export type User = typeof users.$inferSelect;

@@ -107,6 +107,31 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    updateProfilePicture: protectedProcedure
+      .input(z.object({ imageBase64: z.string(), mimeType: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const { storagePut } = await import("./storage");
+        const { getDb } = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        
+        // Generate unique filename
+        const ext = input.mimeType.split('/')[1] || 'jpg';
+        const filename = `profile-pictures/${ctx.user!.id}-${Date.now()}.${ext}`;
+        
+        // Convert base64 to buffer
+        const buffer = Buffer.from(input.imageBase64, 'base64');
+        
+        // Upload to S3
+        const { url } = await storagePut(filename, buffer, input.mimeType);
+        
+        // Update user record
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        await db.update(users).set({ profilePicture: url }).where(eq(users.id, ctx.user!.id));
+        
+        return { url };
+      }),
   }),
 
   // ============ TEAM MEMBERS ============

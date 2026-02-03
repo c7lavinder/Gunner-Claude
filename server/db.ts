@@ -112,11 +112,22 @@ export async function createTeamMember(member: InsertTeamMember): Promise<TeamMe
   return result[0] || null;
 }
 
-export async function getTeamMembers(): Promise<TeamMember[]> {
+export async function getTeamMembers(): Promise<(TeamMember & { user?: { profilePicture: string | null } | null })[]> {
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select().from(teamMembers).where(eq(teamMembers.isActive, "true"));
+  const members = await db.select().from(teamMembers).where(eq(teamMembers.isActive, "true"));
+  
+  // Fetch user data for profile pictures
+  const membersWithUsers = await Promise.all(members.map(async (member) => {
+    if (member.userId) {
+      const [user] = await db.select({ profilePicture: users.profilePicture }).from(users).where(eq(users.id, member.userId));
+      return { ...member, user: user || null };
+    }
+    return { ...member, user: null };
+  }));
+  
+  return membersWithUsers;
 }
 
 export async function getTeamMemberById(id: number): Promise<TeamMember | null> {

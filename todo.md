@@ -314,3 +314,10 @@
 
 ## Badge Celebration Animation
 - [x] Add cannon-style confetti burst animation when user unlocks a new badge (Gunner themed)
+
+## Team Page Redesign
+- [x] Add profile picture upload functionality
+- [x] Merge Leaderboard into Team page
+- [x] Showcase each team member with stats, badges, XP level
+- [x] Remove standalone Leaderboard page (redirects to /team)
+- [x] Update sidebar navigation (removed Leaderboard menu item)
