@@ -1,0 +1,40 @@
+{
+  "query": "SHOW TABLES LIKE '%badge%'; SHOW TABLES LIKE '%xp%'; SHOW TABLES LIKE '%streak%'; SHOW TABLES LIKE '%deal%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SHOW TABLES LIKE '%badge%'; SHOW TABLES LIKE '%xp%'; SHOW TABLES LIKE '%streak%'; SHOW TABLES LIKE '%deal%';",
+  "rows": [
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "badge_progress"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "badges"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "user_badges"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "Tables_in_nusXfQu5XBTMz3NUCR6brb (%xp%)"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "user_xp"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "xp_transactions"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "Tables_in_nusXfQu5XBTMz3NUCR6brb (%streak%)"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "user_streaks"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "Tables_in_nusXfQu5XBTMz3NUCR6brb (%deal%)"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)": "deals"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_nusXfQu5XBTMz3NUCR6brb (%badge%)\nbadge_progress\nbadges\nuser_badges\nTables_in_nusXfQu5XBTMz3NUCR6brb (%xp%)\nuser_xp\nxp_transactions\nTables_in_nusXfQu5XBTMz3NUCR6brb (%streak%)\nuser_streaks\nTables_in_nusXfQu5XBTMz3NUCR6brb (%deal%)\ndeals\n",
+  "stderr": "",
+  "execution_time_ms": 111
+}

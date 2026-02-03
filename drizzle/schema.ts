@@ -463,3 +463,133 @@ export const brandProfile = mysqlTable("brand_profile", {
 
 export type BrandProfile = typeof brandProfile.$inferSelect;
 export type InsertBrandProfile = typeof brandProfile.$inferInsert;
+
+
+// ============ GAMIFICATION SYSTEM ============
+
+/**
+ * Badge definitions - stores all available badges
+ */
+export const badges = mysqlTable("badges", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull(), // e.g., "on_fire", "script_starter"
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  icon: varchar("icon", { length: 10 }), // Emoji icon
+  category: mysqlEnum("category", ["universal", "lead_manager", "acquisition_manager"]).notNull(),
+  tier: mysqlEnum("tier", ["bronze", "silver", "gold"]).notNull(),
+  target: int("target").notNull(), // Target count to earn this badge tier
+  criteriaType: varchar("criteriaType", { length: 50 }).notNull(), // Type of criteria
+  criteriaConfig: text("criteriaConfig"), // JSON config for criteria
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Badge = typeof badges.$inferSelect;
+export type InsertBadge = typeof badges.$inferInsert;
+
+/**
+ * User badges - tracks which badges users have earned
+ */
+export const userBadges = mysqlTable("user_badges", {
+  id: int("id").autoincrement().primaryKey(),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+  badgeId: int("badgeId").references(() => badges.id).notNull(),
+  earnedAt: timestamp("earnedAt").defaultNow().notNull(),
+});
+
+export type UserBadge = typeof userBadges.$inferSelect;
+export type InsertUserBadge = typeof userBadges.$inferInsert;
+
+/**
+ * Badge progress - tracks progress toward badges
+ */
+export const badgeProgress = mysqlTable("badge_progress", {
+  id: int("id").autoincrement().primaryKey(),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+  badgeCode: varchar("badgeCode", { length: 50 }).notNull(),
+  currentCount: int("currentCount").default(0).notNull(),
+  lastUpdated: timestamp("lastUpdated").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BadgeProgress = typeof badgeProgress.$inferSelect;
+export type InsertBadgeProgress = typeof badgeProgress.$inferInsert;
+
+/**
+ * User streaks - tracks hot streaks and consistency streaks
+ */
+export const userStreaks = mysqlTable("user_streaks", {
+  id: int("id").autoincrement().primaryKey(),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+  // Hot streak (consecutive C+ grades)
+  hotStreakCurrent: int("hotStreakCurrent").default(0).notNull(),
+  hotStreakBest: int("hotStreakBest").default(0).notNull(),
+  hotStreakLastCallId: int("hotStreakLastCallId"),
+  // Consistency streak (days with graded calls)
+  consistencyStreakCurrent: int("consistencyStreakCurrent").default(0).notNull(),
+  consistencyStreakBest: int("consistencyStreakBest").default(0).notNull(),
+  consistencyLastDate: varchar("consistencyLastDate", { length: 10 }), // YYYY-MM-DD format
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserStreak = typeof userStreaks.$inferSelect;
+export type InsertUserStreak = typeof userStreaks.$inferInsert;
+
+/**
+ * User XP - tracks total XP and level
+ */
+export const userXp = mysqlTable("user_xp", {
+  id: int("id").autoincrement().primaryKey(),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+  totalXp: int("totalXp").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserXp = typeof userXp.$inferSelect;
+export type InsertUserXp = typeof userXp.$inferInsert;
+
+/**
+ * XP transactions - history of XP earned
+ */
+export const xpTransactions = mysqlTable("xp_transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+  amount: int("amount").notNull(),
+  reason: varchar("reason", { length: 100 }).notNull(),
+  callId: int("callId").references(() => calls.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type XpTransaction = typeof xpTransactions.$inferSelect;
+export type InsertXpTransaction = typeof xpTransactions.$inferInsert;
+
+/**
+ * Deals - tracks closed deals from GHL opportunities for Closer badge
+ */
+export const deals = mysqlTable("deals", {
+  id: int("id").autoincrement().primaryKey(),
+  ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }).notNull().unique(),
+  ghlContactId: varchar("ghlContactId", { length: 255 }),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
+  callId: int("callId").references(() => calls.id), // The offer call that led to this deal
+  dealValue: int("dealValue"), // Optional: deal amount in cents
+  closedAt: timestamp("closedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Deal = typeof deals.$inferSelect;
+export type InsertDeal = typeof deals.$inferInsert;
+
+/**
+ * Reward views - tracks which calls have been viewed for XP rewards
+ * Prevents double-awarding XP when viewing the same call multiple times
+ */
+export const rewardViews = mysqlTable("reward_views", {
+  id: int("id").autoincrement().primaryKey(),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+  callId: int("callId").references(() => calls.id).notNull(),
+  xpAwarded: int("xpAwarded").default(0).notNull(),
+  viewedAt: timestamp("viewedAt").defaultNow().notNull(),
+});
+
+export type RewardView = typeof rewardViews.$inferSelect;
+export type InsertRewardView = typeof rewardViews.$inferInsert;

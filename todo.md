@@ -298,3 +298,16 @@
 
 ## Social Media Page Visibility
 - [x] Hide Social Media page from lead managers (only admins and acquisition managers can see it)
+
+
+## Gamification System
+- [ ] Database schema for badges, user_badges, badge_progress, user_streaks, user_xp, xp_transactions, deals, reward_views
+- [ ] Badge definitions: 3 universal, 6 LM-specific, 5 AM-specific
+- [ ] XP system with levels (Rookie → Closer → Veteran → Elite → Legend)
+- [ ] Streak tracking with weekend pause logic
+- [ ] GHL opportunity polling for Closer badge (dispo pipeline → new deal)
+- [ ] Backend API endpoints for gamification data
+- [ ] Dashboard gamification widgets (Level/XP, Hot Streak, Consistency, Badges)
+- [ ] Enhanced Leaderboard with badges, streaks, levels
+- [ ] Profile page with full badge collection
+- [ ] XP toast notifications on call grade view

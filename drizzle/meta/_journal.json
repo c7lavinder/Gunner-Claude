@@ -92,6 +92,13 @@
       "when": 1770075845764,
       "tag": "0012_goofy_greymalkin",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1770084664469,
+      "tag": "0013_boring_vindicator",
+      "breakpoints": true
     }
   ]
 }

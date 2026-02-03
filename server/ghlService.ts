@@ -580,6 +580,9 @@ export function startPolling(intervalMinutes: number = 30): void {
   
   // Do an initial poll
   pollForNewCalls().catch(err => console.error("[GHL] Initial poll error:", err));
+  
+  // Start opportunity polling for Closer badge
+  startOpportunityPolling();
 
   // Set up interval
   pollInterval = setInterval(() => {
@@ -627,6 +630,8 @@ export function startPolling(intervalMinutes: number = 30): void {
  * Stop automatic polling
  */
 export function stopPolling(): void {
+  // Stop opportunity polling
+  stopOpportunityPolling();
   if (pollInterval) {
     clearInterval(pollInterval);
     pollInterval = null;
@@ -666,4 +671,235 @@ export function getPollingStatus(): {
  */
 export function setLastPollTimestamp(timestamp: Date): void {
   lastPollTimestamp = timestamp;
+}
+
+
+// ============ OPPORTUNITY POLLING FOR CLOSER BADGE ============
+
+import { deals, calls } from "../drizzle/schema";
+import { getDb } from "./db";
+import { eq } from "drizzle-orm";
+import { updateBadgeProgress, awardBadge, ALL_BADGES } from "./gamification";
+
+// GHL Opportunity interface
+interface GHLOpportunity {
+  id: string;
+  name: string;
+  pipelineId: string;
+  pipelineStageId: string;
+  status: string;
+  contactId: string;
+  assignedTo?: string;
+  monetaryValue?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Track last opportunity poll
+let lastOpportunityPollTimestamp: Date | null = null;
+let opportunityPollInterval: ReturnType<typeof setInterval> | null = null;
+
+// Dispo Pipeline configuration
+const DISPO_PIPELINE_NAME = "dispo pipeline";
+const NEW_DEAL_STAGE_NAME = "new deal";
+
+/**
+ * Fetch opportunities from GHL
+ */
+async function fetchOpportunities(startDate?: Date): Promise<GHLOpportunity[]> {
+  try {
+    const url = new URL(`${GHL_API_BASE}/opportunities/search`);
+    url.searchParams.set("location_id", GHL_LOCATION_ID);
+    
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${GHL_API_KEY}`,
+        "Version": "2021-07-28",
+        "Content-Type": "application/json",
+      },
+    });
+    
+    if (!response.ok) {
+      console.error(`[GHL Opportunities] API error: ${response.status}`);
+      return [];
+    }
+    
+    const data = await response.json();
+    return data.opportunities || [];
+  } catch (error) {
+    console.error("[GHL Opportunities] Fetch error:", error);
+    return [];
+  }
+}
+
+/**
+ * Get pipelines to find the Dispo Pipeline ID
+ */
+async function getPipelines(): Promise<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>> {
+  try {
+    const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${GHL_LOCATION_ID}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${GHL_API_KEY}`,
+        "Version": "2021-07-28",
+        "Content-Type": "application/json",
+      },
+    });
+    
+    if (!response.ok) {
+      console.error(`[GHL Pipelines] API error: ${response.status}`);
+      return [];
+    }
+    
+    const data = await response.json();
+    return data.pipelines || [];
+  } catch (error) {
+    console.error("[GHL Pipelines] Fetch error:", error);
+    return [];
+  }
+}
+
+/**
+ * Process a new deal opportunity and credit the Closer badge
+ */
+async function processNewDeal(opportunity: GHLOpportunity): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  // Check if we've already processed this opportunity
+  const [existing] = await db.select().from(deals).where(eq(deals.ghlOpportunityId, opportunity.id));
+  if (existing) {
+    return false; // Already processed
+  }
+  
+  // Find the offer call that matches this contact
+  const [matchingCall] = await db
+    .select()
+    .from(calls)
+    .where(eq(calls.ghlContactId, opportunity.contactId));
+  
+  if (!matchingCall || !matchingCall.teamMemberId) {
+    console.log(`[GHL Opportunities] No matching call found for contact ${opportunity.contactId}`);
+    // Still record the deal even without a matching call
+    await db.insert(deals).values({
+      ghlOpportunityId: opportunity.id,
+      ghlContactId: opportunity.contactId,
+      dealValue: opportunity.monetaryValue ? opportunity.monetaryValue * 100 : null,
+    });
+    return false;
+  }
+  
+  // Record the deal with the team member
+  await db.insert(deals).values({
+    ghlOpportunityId: opportunity.id,
+    ghlContactId: opportunity.contactId,
+    teamMemberId: matchingCall.teamMemberId,
+    callId: matchingCall.id,
+    dealValue: opportunity.monetaryValue ? opportunity.monetaryValue * 100 : null,
+  });
+  
+  console.log(`[GHL Opportunities] New deal recorded for team member ${matchingCall.teamMemberId}`);
+  
+  // Update Closer badge progress
+  const newCount = await updateBadgeProgress(matchingCall.teamMemberId, "closer", 1);
+  
+  // Check if any tier was earned
+  const closerBadge = ALL_BADGES.find(b => b.code === "closer");
+  if (closerBadge) {
+    if (newCount >= closerBadge.tiers.gold.count) {
+      await awardBadge(matchingCall.teamMemberId, "closer", "gold");
+    } else if (newCount >= closerBadge.tiers.silver.count) {
+      await awardBadge(matchingCall.teamMemberId, "closer", "silver");
+    } else if (newCount >= closerBadge.tiers.bronze.count) {
+      await awardBadge(matchingCall.teamMemberId, "closer", "bronze");
+    }
+  }
+  
+  return true;
+}
+
+/**
+ * Poll for new opportunities in the Dispo Pipeline
+ */
+export async function pollOpportunities(): Promise<{ processed: number; errors: number }> {
+  const result = { processed: 0, errors: 0 };
+  
+  try {
+    // Get pipelines to find Dispo Pipeline
+    const pipelines = await getPipelines();
+    const dispoPipeline = pipelines.find(p => p.name.toLowerCase() === DISPO_PIPELINE_NAME);
+    
+    if (!dispoPipeline) {
+      console.log("[GHL Opportunities] Dispo pipeline not found");
+      return result;
+    }
+    
+    const newDealStage = dispoPipeline.stages.find(s => s.name.toLowerCase() === NEW_DEAL_STAGE_NAME);
+    if (!newDealStage) {
+      console.log("[GHL Opportunities] New Deal stage not found in Dispo pipeline");
+      return result;
+    }
+    
+    // Fetch opportunities
+    const opportunities = await fetchOpportunities(lastOpportunityPollTimestamp || undefined);
+    
+    // Filter to only Dispo Pipeline / New Deal stage
+    const newDeals = opportunities.filter(
+      opp => opp.pipelineId === dispoPipeline.id && opp.pipelineStageId === newDealStage.id
+    );
+    
+    console.log(`[GHL Opportunities] Found ${newDeals.length} opportunities in New Deal stage`);
+    
+    // Process each new deal
+    for (const opp of newDeals) {
+      try {
+        const processed = await processNewDeal(opp);
+        if (processed) {
+          result.processed++;
+        }
+      } catch (error) {
+        console.error(`[GHL Opportunities] Error processing opportunity ${opp.id}:`, error);
+        result.errors++;
+      }
+    }
+    
+    lastOpportunityPollTimestamp = new Date();
+    
+  } catch (error) {
+    console.error("[GHL Opportunities] Poll error:", error);
+    result.errors++;
+  }
+  
+  return result;
+}
+
+/**
+ * Start opportunity polling (every 5 minutes)
+ */
+export function startOpportunityPolling(): void {
+  if (opportunityPollInterval) {
+    return; // Already running
+  }
+  
+  console.log("[GHL Opportunities] Starting opportunity polling (every 5 minutes)");
+  
+  // Initial poll
+  pollOpportunities().catch(err => console.error("[GHL Opportunities] Initial poll error:", err));
+  
+  // Set up interval
+  opportunityPollInterval = setInterval(() => {
+    pollOpportunities().catch(err => console.error("[GHL Opportunities] Poll error:", err));
+  }, 5 * 60 * 1000); // 5 minutes
+}
+
+/**
+ * Stop opportunity polling
+ */
+export function stopOpportunityPolling(): void {
+  if (opportunityPollInterval) {
+    clearInterval(opportunityPollInterval);
+    opportunityPollInterval = null;
+    console.log("[GHL Opportunities] Polling stopped");
+  }
 }

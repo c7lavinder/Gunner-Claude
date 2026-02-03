@@ -1,0 +1,802 @@
+/**
+ * Gamification Service
+ * Handles badges, streaks, XP, and leveling
+ */
+
+import { getDb } from "./db";
+import { 
+  badges, userBadges, badgeProgress, userStreaks, userXp, xpTransactions, 
+  rewardViews, deals, calls, callGrades, teamMembers 
+} from "../drizzle/schema";
+import { eq, and, desc, gte, sql, inArray } from "drizzle-orm";
+
+// ============ BADGE DEFINITIONS ============
+
+export interface BadgeCriteria {
+  type: "consecutive_grade" | "criteria_score" | "call_outcome" | "weekly_volume" | "consistency_days" | "improvement" | "deals";
+  minGrade?: string;
+  criteriaName?: string;
+  minScore?: number;
+  maxScore?: number;
+  count: number;
+  weeklyCount?: number;
+}
+
+export interface BadgeDefinition {
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: "universal" | "lead_manager" | "acquisition_manager";
+  tiers: {
+    bronze: { count: number };
+    silver: { count: number };
+    gold: { count: number };
+  };
+  criteria: Omit<BadgeCriteria, "count">;
+}
+
+// Universal Badges (Both Roles)
+export const UNIVERSAL_BADGES: BadgeDefinition[] = [
+  {
+    code: "on_fire",
+    name: "On Fire",
+    description: "Consecutive calls graded C or better",
+    icon: "🔥",
+    category: "universal",
+    tiers: { bronze: { count: 5 }, silver: { count: 10 }, gold: { count: 20 } },
+    criteria: { type: "consecutive_grade", minGrade: "C" },
+  },
+  {
+    code: "comeback_kid",
+    name: "Comeback Kid",
+    description: "Improved grade by 2+ letters from previous call",
+    icon: "💪",
+    category: "universal",
+    tiers: { bronze: { count: 1 }, silver: { count: 5 }, gold: { count: 15 } },
+    criteria: { type: "improvement" },
+  },
+  {
+    code: "consistency_king",
+    name: "Consistency King",
+    description: "Consecutive days with at least one graded call",
+    icon: "📅",
+    category: "universal",
+    tiers: { bronze: { count: 20 }, silver: { count: 60 }, gold: { count: 180 } },
+    criteria: { type: "consistency_days" },
+  },
+];
+
+// Lead Manager Badges
+export const LEAD_MANAGER_BADGES: BadgeDefinition[] = [
+  {
+    code: "script_starter",
+    name: "Script Starter",
+    description: "Score 16+/20 on Introduction & Rapport + Setting Expectations",
+    icon: "📋",
+    category: "lead_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "criteria_score", criteriaName: "intro_combined", minScore: 16 },
+  },
+  {
+    code: "motivation_miner",
+    name: "Motivation Miner",
+    description: "Score 15+/20 on Motivation Extraction",
+    icon: "⛏️",
+    category: "lead_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "criteria_score", criteriaName: "Motivation Extraction", minScore: 15 },
+  },
+  {
+    code: "price_anchor_pro",
+    name: "Price Anchor Pro",
+    description: "Score 12+/15 on Price Discussion",
+    icon: "⚓",
+    category: "lead_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "criteria_score", criteriaName: "Price Discussion", minScore: 12 },
+  },
+  {
+    code: "appointment_machine",
+    name: "Appointment Machine",
+    description: "Appointments set",
+    icon: "📅",
+    category: "lead_manager",
+    tiers: { bronze: { count: 50 }, silver: { count: 250 }, gold: { count: 1500 } },
+    criteria: { type: "call_outcome", criteriaName: "appointment_set" },
+  },
+  {
+    code: "tone_master",
+    name: "Tone Master",
+    description: "Score 9+/10 on Tonality & Empathy",
+    icon: "🎭",
+    category: "lead_manager",
+    tiers: { bronze: { count: 50 }, silver: { count: 200 }, gold: { count: 1000 } },
+    criteria: { type: "criteria_score", criteriaName: "Tonality & Empathy", minScore: 9 },
+  },
+  {
+    code: "volume_dialer",
+    name: "Volume Dialer",
+    description: "Weeks with 100+ graded calls",
+    icon: "📞",
+    category: "lead_manager",
+    tiers: { bronze: { count: 10 }, silver: { count: 25 }, gold: { count: 50 } },
+    criteria: { type: "weekly_volume", weeklyCount: 100 },
+  },
+];
+
+// Acquisition Manager Badges
+export const ACQUISITION_MANAGER_BADGES: BadgeDefinition[] = [
+  {
+    code: "offer_architect",
+    name: "Offer Architect",
+    description: "Score 12+/15 on Offer Setup",
+    icon: "🏗️",
+    category: "acquisition_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "criteria_score", criteriaName: "Offer Setup", minScore: 12 },
+  },
+  {
+    code: "price_confidence",
+    name: "Price Confidence",
+    description: "Score 12+/15 on Price Delivery",
+    icon: "💰",
+    category: "acquisition_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "criteria_score", criteriaName: "Price Delivery", minScore: 12 },
+  },
+  {
+    code: "negotiator",
+    name: "Negotiator",
+    description: "Score 4+/5 on Closing Technique",
+    icon: "🤝",
+    category: "acquisition_manager",
+    tiers: { bronze: { count: 50 }, silver: { count: 200 }, gold: { count: 1000 } },
+    criteria: { type: "criteria_score", criteriaName: "Closing Technique", minScore: 4 },
+  },
+  {
+    code: "clear_answer",
+    name: "Clear Answer",
+    description: "Perfect 5/5 on Closing Technique",
+    icon: "✅",
+    category: "acquisition_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 750 } },
+    criteria: { type: "criteria_score", criteriaName: "Closing Technique", minScore: 5, maxScore: 5 },
+  },
+  {
+    code: "closer",
+    name: "Closer",
+    description: "Deals closed from GHL pipeline",
+    icon: "🎯",
+    category: "acquisition_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 75 }, gold: { count: 200 } },
+    criteria: { type: "deals" },
+  },
+];
+
+export const ALL_BADGES = [...UNIVERSAL_BADGES, ...LEAD_MANAGER_BADGES, ...ACQUISITION_MANAGER_BADGES];
+
+// ============ XP SYSTEM ============
+
+export const XP_REWARDS = {
+  GRADED_CALL: 10,
+  GRADE_A: 50,
+  GRADE_B: 30,
+  GRADE_C: 15,
+  GRADE_D: 5,
+  GRADE_F: 0,
+  IMPROVEMENT: 20,
+  BADGE_EARNED: 25,
+};
+
+export const LEVEL_THRESHOLDS = [
+  { level: 1, minXp: 0, title: "Rookie" },
+  { level: 2, minXp: 500, title: "Rookie" },
+  { level: 3, minXp: 1000, title: "Rookie" },
+  { level: 4, minXp: 1750, title: "Rookie" },
+  { level: 5, minXp: 2500, title: "Rookie" },
+  { level: 6, minXp: 4000, title: "Closer" },
+  { level: 7, minXp: 6000, title: "Closer" },
+  { level: 8, minXp: 9000, title: "Closer" },
+  { level: 9, minXp: 12000, title: "Closer" },
+  { level: 10, minXp: 15000, title: "Closer" },
+  { level: 11, minXp: 20000, title: "Veteran" },
+  { level: 12, minXp: 27000, title: "Veteran" },
+  { level: 13, minXp: 35000, title: "Veteran" },
+  { level: 14, minXp: 42000, title: "Veteran" },
+  { level: 15, minXp: 50000, title: "Veteran" },
+  { level: 16, minXp: 62500, title: "Elite" },
+  { level: 17, minXp: 77500, title: "Elite" },
+  { level: 18, minXp: 95000, title: "Elite" },
+  { level: 19, minXp: 110000, title: "Elite" },
+  { level: 20, minXp: 125000, title: "Elite" },
+  { level: 21, minXp: 150000, title: "Legend" },
+  { level: 22, minXp: 180000, title: "Legend" },
+  { level: 23, minXp: 220000, title: "Legend" },
+  { level: 24, minXp: 270000, title: "Legend" },
+  { level: 25, minXp: 350000, title: "Legend" },
+];
+
+export function getLevelFromXp(totalXp: number): { level: number; title: string; nextLevelXp: number; progress: number } {
+  let currentLevel = LEVEL_THRESHOLDS[0];
+  let nextLevel = LEVEL_THRESHOLDS[1];
+  
+  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+    if (totalXp >= LEVEL_THRESHOLDS[i].minXp) {
+      currentLevel = LEVEL_THRESHOLDS[i];
+      nextLevel = LEVEL_THRESHOLDS[i + 1] || LEVEL_THRESHOLDS[i];
+    }
+  }
+  
+  const xpInCurrentLevel = totalXp - currentLevel.minXp;
+  const xpNeededForNextLevel = nextLevel.minXp - currentLevel.minXp;
+  const progress = xpNeededForNextLevel > 0 ? Math.min(100, (xpInCurrentLevel / xpNeededForNextLevel) * 100) : 100;
+  
+  return {
+    level: currentLevel.level,
+    title: currentLevel.title,
+    nextLevelXp: nextLevel.minXp,
+    progress,
+  };
+}
+
+export function isWeekend(date: Date): boolean {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+// ============ DATABASE OPERATIONS ============
+
+/**
+ * Get or create user XP record
+ */
+export async function getUserXp(teamMemberId: number): Promise<{ totalXp: number; level: number; title: string; nextLevelXp: number; progress: number }> {
+  const db = await getDb();
+  if (!db) return { totalXp: 0, ...getLevelFromXp(0) };
+  const [existing] = await db.select().from(userXp).where(eq(userXp.teamMemberId, teamMemberId));
+  
+  if (!existing) {
+    await db.insert(userXp).values({ teamMemberId, totalXp: 0 });
+    return { totalXp: 0, ...getLevelFromXp(0) };
+  }
+  
+  return { totalXp: existing.totalXp, ...getLevelFromXp(existing.totalXp) };
+}
+
+/**
+ * Add XP to a user
+ */
+export async function addXp(teamMemberId: number, amount: number, reason: string, callId?: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  // Add transaction record
+  await db.insert(xpTransactions).values({
+    teamMemberId,
+    amount,
+    reason,
+    callId: callId || null,
+  });
+  
+  // Update total XP
+  const [existing] = await db.select().from(userXp).where(eq(userXp.teamMemberId, teamMemberId));
+  
+  if (existing) {
+    const newTotal = existing.totalXp + amount;
+    await db.update(userXp).set({ totalXp: newTotal }).where(eq(userXp.teamMemberId, teamMemberId));
+    return newTotal;
+  } else {
+    await db.insert(userXp).values({ teamMemberId, totalXp: amount });
+    return amount;
+  }
+}
+
+/**
+ * Get or create user streaks record
+ */
+export async function getUserStreaks(teamMemberId: number): Promise<{
+  hotStreakCurrent: number;
+  hotStreakBest: number;
+  consistencyStreakCurrent: number;
+  consistencyStreakBest: number;
+}> {
+  const db = await getDb();
+  if (!db) return { hotStreakCurrent: 0, hotStreakBest: 0, consistencyStreakCurrent: 0, consistencyStreakBest: 0 };
+  const [existing] = await db.select().from(userStreaks).where(eq(userStreaks.teamMemberId, teamMemberId));
+  
+  if (!existing) {
+    await db.insert(userStreaks).values({ teamMemberId });
+    return { hotStreakCurrent: 0, hotStreakBest: 0, consistencyStreakCurrent: 0, consistencyStreakBest: 0 };
+  }
+  
+  return {
+    hotStreakCurrent: existing.hotStreakCurrent,
+    hotStreakBest: existing.hotStreakBest,
+    consistencyStreakCurrent: existing.consistencyStreakCurrent,
+    consistencyStreakBest: existing.consistencyStreakBest,
+  };
+}
+
+/**
+ * Get CST date string (YYYY-MM-DD) for a given date
+ */
+function getCSTDateString(date: Date): string {
+  // CST is UTC-6
+  const cstOffset = -6 * 60 * 60 * 1000;
+  const cstDate = new Date(date.getTime() + cstOffset);
+  return cstDate.toISOString().split('T')[0];
+}
+
+/**
+ * Check if a date is a weekend in CST
+ */
+function isWeekendCST(date: Date): boolean {
+  const cstOffset = -6 * 60 * 60 * 1000;
+  const cstDate = new Date(date.getTime() + cstOffset);
+  const day = cstDate.getDay();
+  return day === 0 || day === 6;
+}
+
+/**
+ * Update streaks after a call is graded
+ */
+export async function updateStreaks(teamMemberId: number, grade: string, callId: number, callDate: Date): Promise<{
+  hotStreakUpdated: boolean;
+  consistencyUpdated: boolean;
+  streakBroken: boolean;
+}> {
+  const db = await getDb();
+  if (!db) return { hotStreakUpdated: false, consistencyUpdated: false, streakBroken: false };
+  
+  // Skip weekend days for streak calculations
+  if (isWeekendCST(callDate)) {
+    return { hotStreakUpdated: false, consistencyUpdated: false, streakBroken: false };
+  }
+  
+  const result = { hotStreakUpdated: false, consistencyUpdated: false, streakBroken: false };
+  const gradeValue: Record<string, number> = { A: 5, B: 4, C: 3, D: 2, F: 1 };
+  const isPassingGrade = gradeValue[grade] >= 3; // C or better
+  
+  const [existing] = await db.select().from(userStreaks).where(eq(userStreaks.teamMemberId, teamMemberId));
+  
+  if (!existing) {
+    // Create new streak record
+    await db.insert(userStreaks).values({
+      teamMemberId,
+      hotStreakCurrent: isPassingGrade ? 1 : 0,
+      hotStreakBest: isPassingGrade ? 1 : 0,
+      hotStreakLastCallId: callId,
+      consistencyStreakCurrent: 1,
+      consistencyStreakBest: 1,
+      consistencyLastDate: getCSTDateString(callDate),
+    });
+    result.hotStreakUpdated = isPassingGrade;
+    result.consistencyUpdated = true;
+    return result;
+  }
+  
+  // Update hot streak
+  let newHotStreak = existing.hotStreakCurrent;
+  if (isPassingGrade) {
+    newHotStreak = existing.hotStreakCurrent + 1;
+    result.hotStreakUpdated = true;
+  } else {
+    if (existing.hotStreakCurrent > 0) {
+      result.streakBroken = true;
+    }
+    newHotStreak = 0;
+  }
+  
+  // Update consistency streak
+  const todayCST = getCSTDateString(callDate);
+  let newConsistencyStreak = existing.consistencyStreakCurrent;
+  
+  if (existing.consistencyLastDate) {
+    const lastDate = new Date(existing.consistencyLastDate + 'T12:00:00Z');
+    
+    if (todayCST === existing.consistencyLastDate) {
+      // Same day, no change to consistency streak
+    } else {
+      // Check if this is the next weekday
+      const nextDay = new Date(lastDate);
+      do {
+        nextDay.setDate(nextDay.getDate() + 1);
+      } while (isWeekendCST(nextDay));
+      
+      const expectedDateCST = getCSTDateString(nextDay);
+      if (todayCST === expectedDateCST) {
+        newConsistencyStreak = existing.consistencyStreakCurrent + 1;
+        result.consistencyUpdated = true;
+      } else {
+        // Streak broken (missed a weekday)
+        newConsistencyStreak = 1;
+        result.consistencyUpdated = true;
+      }
+    }
+  } else {
+    newConsistencyStreak = 1;
+    result.consistencyUpdated = true;
+  }
+  
+  // Update database
+  await db.update(userStreaks).set({
+    hotStreakCurrent: newHotStreak,
+    hotStreakBest: Math.max(existing.hotStreakBest, newHotStreak),
+    hotStreakLastCallId: callId,
+    consistencyStreakCurrent: newConsistencyStreak,
+    consistencyStreakBest: Math.max(existing.consistencyStreakBest, newConsistencyStreak),
+    consistencyLastDate: todayCST,
+  }).where(eq(userStreaks.teamMemberId, teamMemberId));
+  
+  return result;
+}
+
+/**
+ * Get user's earned badges
+ */
+export async function getUserBadges(teamMemberId: number): Promise<Array<{
+  code: string;
+  name: string;
+  icon: string;
+  tier: string;
+  earnedAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  const earned = await db
+    .select({
+      badgeId: userBadges.badgeId,
+      earnedAt: userBadges.earnedAt,
+      code: badges.code,
+      name: badges.name,
+      icon: badges.icon,
+      tier: badges.tier,
+    })
+    .from(userBadges)
+    .innerJoin(badges, eq(userBadges.badgeId, badges.id))
+    .where(eq(userBadges.teamMemberId, teamMemberId))
+    .orderBy(desc(userBadges.earnedAt));
+  
+  return earned.map(b => ({
+    code: b.code,
+    name: b.name,
+    icon: b.icon || "🏆",
+    tier: b.tier,
+    earnedAt: b.earnedAt,
+  }));
+}
+
+/**
+ * Get badge progress for a user
+ */
+export async function getBadgeProgress(teamMemberId: number): Promise<Record<string, number>> {
+  const db = await getDb();
+  if (!db) return {};
+  const progress = await db.select().from(badgeProgress).where(eq(badgeProgress.teamMemberId, teamMemberId));
+  
+  const result: Record<string, number> = {};
+  for (const p of progress) {
+    result[p.badgeCode] = p.currentCount;
+  }
+  return result;
+}
+
+/**
+ * Update badge progress
+ */
+export async function updateBadgeProgress(teamMemberId: number, badgeCode: string, increment: number = 1): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [existing] = await db
+    .select()
+    .from(badgeProgress)
+    .where(and(eq(badgeProgress.teamMemberId, teamMemberId), eq(badgeProgress.badgeCode, badgeCode)));
+  
+  if (existing) {
+    const newCount = existing.currentCount + increment;
+    await db.update(badgeProgress)
+      .set({ currentCount: newCount })
+      .where(eq(badgeProgress.id, existing.id));
+    return newCount;
+  } else {
+    await db.insert(badgeProgress).values({ teamMemberId, badgeCode, currentCount: increment });
+    return increment;
+  }
+}
+
+/**
+ * Award a badge to a user
+ */
+export async function awardBadge(teamMemberId: number, badgeCode: string, tier: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  // Find the badge
+  const [badge] = await db
+    .select()
+    .from(badges)
+    .where(and(eq(badges.code, badgeCode), eq(badges.tier, tier as "bronze" | "silver" | "gold")));
+  
+  if (!badge) {
+    console.log(`Badge not found: ${badgeCode} ${tier}`);
+    return false;
+  }
+  
+  // Check if already earned
+  const [existing] = await db
+    .select()
+    .from(userBadges)
+    .where(and(eq(userBadges.teamMemberId, teamMemberId), eq(userBadges.badgeId, badge.id)));
+  
+  if (existing) {
+    return false; // Already earned
+  }
+  
+  // Award the badge
+  await db.insert(userBadges).values({ teamMemberId, badgeId: badge.id });
+  
+  // Award XP for earning a badge
+  await addXp(teamMemberId, XP_REWARDS.BADGE_EARNED, `Earned ${badge.name} (${tier})`);
+  
+  return true;
+}
+
+/**
+ * Check if a call has already been viewed for rewards
+ */
+export async function hasViewedForRewards(teamMemberId: number, callId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [existing] = await db
+    .select()
+    .from(rewardViews)
+    .where(and(eq(rewardViews.teamMemberId, teamMemberId), eq(rewardViews.callId, callId)));
+  
+  return !!existing;
+}
+
+/**
+ * Process rewards when viewing a graded call for the first time
+ */
+export async function processCallViewRewards(teamMemberId: number, callId: number): Promise<{
+  xpEarned: number;
+  badgesEarned: string[];
+  streakUpdated: boolean;
+}> {
+  const db = await getDb();
+  if (!db) return { xpEarned: 0, badgesEarned: [], streakUpdated: false };
+  const result = { xpEarned: 0, badgesEarned: [] as string[], streakUpdated: false };
+  
+  // Check if already viewed
+  if (await hasViewedForRewards(teamMemberId, callId)) {
+    return result;
+  }
+  
+  // Get call and grade info
+  const [call] = await db
+    .select({
+      id: calls.id,
+      teamMemberId: calls.teamMemberId,
+      callType: calls.callType,
+      callOutcome: calls.callOutcome,
+      createdAt: calls.createdAt,
+    })
+    .from(calls)
+    .where(eq(calls.id, callId));
+  
+  if (!call || call.teamMemberId !== teamMemberId) {
+    return result;
+  }
+  
+  const [grade] = await db
+    .select()
+    .from(callGrades)
+    .where(eq(callGrades.callId, callId));
+  
+  if (!grade || !grade.overallGrade) {
+    return result;
+  }
+  
+  // Calculate XP
+  let xp = XP_REWARDS.GRADED_CALL;
+  const gradeXp: Record<string, number> = {
+    A: XP_REWARDS.GRADE_A,
+    B: XP_REWARDS.GRADE_B,
+    C: XP_REWARDS.GRADE_C,
+    D: XP_REWARDS.GRADE_D,
+    F: XP_REWARDS.GRADE_F,
+  };
+  const gradeStr = grade.overallGrade;
+  xp += gradeXp[gradeStr] || 0;
+  
+  // Award XP
+  await addXp(teamMemberId, xp, `Graded call: ${gradeStr}`, callId);
+  result.xpEarned = xp;
+  
+  // Update streaks
+  const streakResult = await updateStreaks(teamMemberId, gradeStr, callId, call.createdAt);
+  result.streakUpdated = streakResult.hotStreakUpdated || streakResult.consistencyUpdated;
+  
+  // Record the view
+  await db.insert(rewardViews).values({ teamMemberId, callId, xpAwarded: xp });
+  
+  // Check for badge progress (simplified - full implementation would check all criteria)
+  // This is handled separately by evaluateBadges function
+  
+  return result;
+}
+
+/**
+ * Get gamification summary for a user
+ */
+export async function getGamificationSummary(teamMemberId: number): Promise<{
+  xp: { totalXp: number; level: number; title: string; nextLevelXp: number; progress: number };
+  streaks: { hotStreakCurrent: number; hotStreakBest: number; consistencyStreakCurrent: number; consistencyStreakBest: number };
+  badges: Array<{ code: string; name: string; icon: string; tier: string; earnedAt: Date }>;
+  badgeCount: number;
+}> {
+  const [xp, streaks, earnedBadges] = await Promise.all([
+    getUserXp(teamMemberId),
+    getUserStreaks(teamMemberId),
+    getUserBadges(teamMemberId),
+  ]);
+  
+  return {
+    xp,
+    streaks,
+    badges: earnedBadges,
+    badgeCount: earnedBadges.length,
+  };
+}
+
+/**
+ * Get leaderboard with gamification data
+ */
+export async function getGamificationLeaderboard(): Promise<Array<{
+  teamMemberId: number;
+  name: string;
+  teamRole: string;
+  level: number;
+  title: string;
+  totalXp: number;
+  hotStreak: number;
+  consistencyStreak: number;
+  badgeCount: number;
+  topBadges: Array<{ code: string; name: string; icon: string; tier: string }>;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // Get all active team members
+  const members = await db
+    .select()
+    .from(teamMembers)
+    .where(eq(teamMembers.isActive, "true"));
+  
+  const leaderboard = await Promise.all(members.map(async (member) => {
+    const [xpData, streakData, badgesData] = await Promise.all([
+      getUserXp(member.id),
+      getUserStreaks(member.id),
+      getUserBadges(member.id),
+    ]);
+    
+    return {
+      teamMemberId: member.id,
+      name: member.name,
+      teamRole: member.teamRole,
+      level: xpData.level,
+      title: xpData.title,
+      totalXp: xpData.totalXp,
+      hotStreak: streakData.hotStreakCurrent,
+      consistencyStreak: streakData.consistencyStreakCurrent,
+      badgeCount: badgesData.length,
+      topBadges: badgesData.slice(0, 3).map(b => ({
+        code: b.code,
+        name: b.name,
+        icon: b.icon,
+        tier: b.tier,
+      })),
+    };
+  }));
+  
+  // Sort by XP descending
+  return leaderboard.sort((a, b) => b.totalXp - a.totalXp);
+}
+
+/**
+ * Initialize badges in database (run once on startup)
+ */
+export async function initializeBadges(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  for (const badgeDef of ALL_BADGES) {
+    for (const [tier, config] of Object.entries(badgeDef.tiers) as Array<[string, { count: number }]>) {
+      const [existing] = await db
+        .select()
+        .from(badges)
+        .where(and(eq(badges.code, badgeDef.code), eq(badges.tier, tier as "bronze" | "silver" | "gold")));
+      
+      if (!existing) {
+        await db.insert(badges).values({
+          code: badgeDef.code,
+          name: badgeDef.name,
+          description: badgeDef.description,
+          icon: badgeDef.icon,
+          category: badgeDef.category,
+          tier: tier as "bronze" | "silver" | "gold",
+          target: config.count,
+          criteriaType: badgeDef.criteria.type,
+          criteriaConfig: JSON.stringify(badgeDef.criteria),
+        });
+      }
+    }
+  }
+  
+  console.log("[Gamification] Badges initialized");
+}
+
+/**
+ * Get all badge definitions with progress for a user
+ */
+export async function getAllBadgesWithProgress(teamMemberId: number, teamRole: string): Promise<Array<{
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  tiers: {
+    bronze: { target: number; earned: boolean; earnedAt?: Date };
+    silver: { target: number; earned: boolean; earnedAt?: Date };
+    gold: { target: number; earned: boolean; earnedAt?: Date };
+  };
+  currentProgress: number;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // Get relevant badges for this role
+  const relevantBadges = ALL_BADGES.filter(b => 
+    b.category === "universal" || 
+    (teamRole === "lead_manager" && b.category === "lead_manager") ||
+    (teamRole === "acquisition_manager" && b.category === "acquisition_manager")
+  );
+  
+  // Get earned badges
+  const earnedBadges = await db
+    .select({
+      code: badges.code,
+      tier: badges.tier,
+      earnedAt: userBadges.earnedAt,
+    })
+    .from(userBadges)
+    .innerJoin(badges, eq(userBadges.badgeId, badges.id))
+    .where(eq(userBadges.teamMemberId, teamMemberId));
+  
+  // Get progress
+  const progress = await getBadgeProgress(teamMemberId);
+  
+  // Build result
+  return relevantBadges.map(badgeDef => {
+    const earnedMap: Record<string, Date | undefined> = {};
+    for (const earned of earnedBadges) {
+      if (earned.code === badgeDef.code) {
+        earnedMap[earned.tier] = earned.earnedAt;
+      }
+    }
+    
+    return {
+      code: badgeDef.code,
+      name: badgeDef.name,
+      description: badgeDef.description,
+      icon: badgeDef.icon,
+      category: badgeDef.category,
+      tiers: {
+        bronze: { target: badgeDef.tiers.bronze.count, earned: !!earnedMap.bronze, earnedAt: earnedMap.bronze },
+        silver: { target: badgeDef.tiers.silver.count, earned: !!earnedMap.silver, earnedAt: earnedMap.silver },
+        gold: { target: badgeDef.tiers.gold.count, earned: !!earnedMap.gold, earnedAt: earnedMap.gold },
+      },
+      currentProgress: progress[badgeDef.code] || 0,
+    };
+  });
+}
