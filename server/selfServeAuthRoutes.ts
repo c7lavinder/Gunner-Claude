@@ -296,6 +296,11 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     const { code, error: oauthError, state } = req.query;
     const origin = getPublicOrigin(req);
     
+    console.log('[Auth] Google callback - detected origin:', origin);
+    console.log('[Auth] Google callback - x-forwarded-host:', req.headers['x-forwarded-host']);
+    console.log('[Auth] Google callback - referer:', req.headers.referer);
+    console.log('[Auth] Google callback - host:', req.get('host'));
+    
     if (oauthError) {
       console.error('[Auth] Google OAuth error:', oauthError);
       res.redirect(`/login?error=google_auth_failed`);

@@ -24,6 +24,10 @@ export async function exchangeCodeForTokens(code: string, redirectUri: string): 
     const clientId = getGoogleClientId();
     const clientSecret = getGoogleClientSecret();
     
+    console.log('[GoogleAuth] Token exchange - redirectUri:', redirectUri);
+    console.log('[GoogleAuth] Token exchange - clientId present:', !!clientId);
+    console.log('[GoogleAuth] Token exchange - clientSecret present:', !!clientSecret);
+    
     if (!clientId || !clientSecret) {
       console.error('[GoogleAuth] Missing Google OAuth credentials');
       return null;
@@ -46,10 +50,13 @@ export async function exchangeCodeForTokens(code: string, redirectUri: string): 
     if (!response.ok) {
       const error = await response.text();
       console.error('[GoogleAuth] Token exchange failed:', error);
+      console.error('[GoogleAuth] Token exchange - status:', response.status);
       return null;
     }
 
-    return await response.json();
+    const tokens = await response.json();
+    console.log('[GoogleAuth] Token exchange successful');
+    return tokens;
   } catch (error) {
     console.error('[GoogleAuth] Token exchange error:', error);
     return null;
