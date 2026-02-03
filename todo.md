@@ -353,3 +353,13 @@
 - [x] Admin-only access restriction
 - [x] Add market selection (Tennessee, Global) to campaign tracking
 - [x] Add contacts field to campaign tracking for answer/response rate
+
+## Inventory Tab (formerly Deals)
+- [x] Rename Deals tab to Inventory
+- [x] Add Status dropdown (For Sale, Assigned, Funded)
+- [x] Add Location dropdown (Nashville, Nash SW, Knoxville, Chattanooga, Global, NAH)
+- [x] Update Sources to match key (Cold Calls, SMS, Postcards, Form, PPL, PPC, JV, Referral)
+- [x] Add LM dropdown (Chris, Daniel)
+- [x] Add AM dropdown (Kyle)
+- [x] Add DM dropdown (Esteban, Steve)
+- [x] Add NAH? dropdown (Yes, No)

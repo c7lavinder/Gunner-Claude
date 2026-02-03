@@ -689,32 +689,45 @@ export const kpiDeals = mysqlTable("kpi_deals", {
   // Deal info
   propertyAddress: text("propertyAddress").notNull(),
   sellerName: varchar("sellerName", { length: 255 }),
-  // Team members involved
-  acquisitionManagerId: int("acquisitionManagerId").references(() => teamMembers.id),
-  leadManagerId: int("leadManagerId").references(() => teamMembers.id),
+  // Status: For Sale, Assigned, Funded
+  inventoryStatus: mysqlEnum("inventoryStatus", [
+    "for_sale",
+    "assigned",
+    "funded"
+  ]).default("for_sale"),
+  // Location: Nashville, Nash SW, Knoxville, Chattanooga, Global, NAH
+  location: mysqlEnum("location", [
+    "nashville",
+    "nash_sw",
+    "knoxville",
+    "chattanooga",
+    "global",
+    "nah"
+  ]),
   // Lead source
   leadSource: mysqlEnum("leadSource", [
     "cold_calls", 
     "sms", 
+    "postcards",
     "forms", 
     "ppl", 
-    "jv", 
     "ppc", 
-    "postcards", 
+    "jv", 
     "referrals"
   ]),
+  // Team members: LM (Chris, Daniel)
+  lmName: mysqlEnum("lmName", ["chris", "daniel"]),
+  // Team members: AM (Kyle)
+  amName: mysqlEnum("amName", ["kyle"]),
+  // Team members: DM (Esteban, Steve)
+  dmName: mysqlEnum("dmName", ["esteban", "steve"]),
+  // NAH? (Yes, No)
+  isNah: mysqlEnum("isNah", ["yes", "no"]).default("no"),
   // Deal financials
   contractPrice: int("contractPrice").default(0), // in cents
   estimatedArv: int("estimatedArv").default(0), // in cents
   estimatedRepairs: int("estimatedRepairs").default(0), // in cents
   assignmentFee: int("assignmentFee").default(0), // in cents
-  // Status
-  status: mysqlEnum("status", [
-    "under_contract",
-    "due_diligence",
-    "closed",
-    "fell_through"
-  ]).default("under_contract"),
   // Dates
   contractDate: timestamp("contractDate"),
   closingDate: timestamp("closingDate"),

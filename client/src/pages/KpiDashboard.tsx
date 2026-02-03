@@ -36,12 +36,42 @@ const ROLE_NAMES: Record<string, string> = {
   lg_sms: "Lead Gen (SMS)",
 };
 
-// Status colors
-const STATUS_COLORS: Record<string, string> = {
-  under_contract: "bg-blue-100 text-blue-800",
-  due_diligence: "bg-yellow-100 text-yellow-800",
-  closed: "bg-green-100 text-green-800",
-  fell_through: "bg-red-100 text-red-800",
+// Inventory Status display names and colors
+const INVENTORY_STATUS_NAMES: Record<string, string> = {
+  for_sale: "For Sale",
+  assigned: "Assigned",
+  funded: "Funded",
+};
+
+const INVENTORY_STATUS_COLORS: Record<string, string> = {
+  for_sale: "bg-blue-100 text-blue-800",
+  assigned: "bg-yellow-100 text-yellow-800",
+  funded: "bg-green-100 text-green-800",
+};
+
+// Location display names
+const LOCATION_NAMES: Record<string, string> = {
+  nashville: "Nashville",
+  nash_sw: "Nash SW",
+  knoxville: "Knoxville",
+  chattanooga: "Chattanooga",
+  global: "Global",
+  nah: "NAH",
+};
+
+// Team member display names
+const LM_NAMES: Record<string, string> = {
+  chris: "Chris",
+  daniel: "Daniel",
+};
+
+const AM_NAMES: Record<string, string> = {
+  kyle: "Kyle",
+};
+
+const DM_NAMES: Record<string, string> = {
+  esteban: "Esteban",
+  steve: "Steve",
 };
 
 function formatCurrency(value: number): string {
@@ -115,16 +145,21 @@ export default function KpiDashboard() {
     periodLabel: "",
   });
 
-  // New deal form state
+  // New inventory item form state
   const [newDeal, setNewDeal] = useState({
     propertyAddress: "",
     sellerName: "",
+    inventoryStatus: "for_sale" as string,
+    location: "" as string,
     leadSource: "" as string,
+    lmName: "" as string,
+    amName: "" as string,
+    dmName: "" as string,
+    isNah: "no" as string,
     contractPrice: "",
     estimatedArv: "",
     estimatedRepairs: "",
     assignmentFee: "",
-    status: "under_contract" as string,
     contractDate: "",
     notes: "",
   });
@@ -189,9 +224,10 @@ export default function KpiDashboard() {
       utils.kpi.getDeals.invalidate();
       setShowNewDealDialog(false);
       setNewDeal({
-        propertyAddress: "", sellerName: "", leadSource: "", contractPrice: "",
-        estimatedArv: "", estimatedRepairs: "", assignmentFee: "",
-        status: "under_contract", contractDate: "", notes: "",
+        propertyAddress: "", sellerName: "", inventoryStatus: "for_sale",
+        location: "", leadSource: "", lmName: "", amName: "", dmName: "",
+        isNah: "no", contractPrice: "", estimatedArv: "", estimatedRepairs: "",
+        assignmentFee: "", contractDate: "", notes: "",
       });
     },
     onError: (error) => toast.error(error.message),
@@ -265,12 +301,17 @@ export default function KpiDashboard() {
       periodId: selectedPeriodId ?? undefined,
       propertyAddress: newDeal.propertyAddress,
       sellerName: newDeal.sellerName || undefined,
+      inventoryStatus: newDeal.inventoryStatus as any || undefined,
+      location: newDeal.location as any || undefined,
       leadSource: newDeal.leadSource as any || undefined,
+      lmName: newDeal.lmName as any || undefined,
+      amName: newDeal.amName as any || undefined,
+      dmName: newDeal.dmName as any || undefined,
+      isNah: newDeal.isNah as any || undefined,
       contractPrice: newDeal.contractPrice ? parseFloat(newDeal.contractPrice) : undefined,
       estimatedArv: newDeal.estimatedArv ? parseFloat(newDeal.estimatedArv) : undefined,
       estimatedRepairs: newDeal.estimatedRepairs ? parseFloat(newDeal.estimatedRepairs) : undefined,
       assignmentFee: newDeal.assignmentFee ? parseFloat(newDeal.assignmentFee) : undefined,
-      status: newDeal.status as any || undefined,
       contractDate: newDeal.contractDate ? new Date(newDeal.contractDate) : undefined,
       notes: newDeal.notes || undefined,
     });
@@ -426,7 +467,7 @@ export default function KpiDashboard() {
           </TabsTrigger>
           <TabsTrigger value="deals">
             <Building className="h-4 w-4 mr-2" />
-            Deals
+            Inventory
           </TabsTrigger>
         </TabsList>
 
@@ -900,13 +941,13 @@ export default function KpiDashboard() {
           </Card>
         </TabsContent>
 
-        {/* Deals Tab */}
+        {/* Inventory Tab */}
         <TabsContent value="deals" className="space-y-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Deal Log</CardTitle>
-                <CardDescription>Track all deals under contract</CardDescription>
+                <CardTitle>Inventory</CardTitle>
+                <CardDescription>Track all properties in your pipeline</CardDescription>
               </div>
               <Dialog open={showNewDealDialog} onOpenChange={setShowNewDealDialog}>
                 <DialogTrigger asChild>
@@ -917,10 +958,10 @@ export default function KpiDashboard() {
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
-                    <DialogTitle>Add New Deal</DialogTitle>
+                    <DialogTitle>Add Inventory Item</DialogTitle>
                   </DialogHeader>
-                  <div className="grid grid-cols-2 gap-4 py-4">
-                    <div className="col-span-2 space-y-2">
+                  <div className="grid grid-cols-3 gap-4 py-4">
+                    <div className="col-span-3 space-y-2">
                       <Label>Property Address *</Label>
                       <Input
                         placeholder="123 Main St, City, State"
@@ -937,7 +978,39 @@ export default function KpiDashboard() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Lead Source</Label>
+                      <Label>Status</Label>
+                      <Select
+                        value={newDeal.inventoryStatus}
+                        onValueChange={(val) => setNewDeal({ ...newDeal, inventoryStatus: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(INVENTORY_STATUS_NAMES).map(([key, name]) => (
+                            <SelectItem key={key} value={key}>{name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Location</Label>
+                      <Select
+                        value={newDeal.location}
+                        onValueChange={(val) => setNewDeal({ ...newDeal, location: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select location" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(LOCATION_NAMES).map(([key, name]) => (
+                            <SelectItem key={key} value={key}>{name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Source</Label>
                       <Select
                         value={newDeal.leadSource}
                         onValueChange={(val) => setNewDeal({ ...newDeal, leadSource: val })}
@@ -949,6 +1022,69 @@ export default function KpiDashboard() {
                           {Object.entries(CHANNEL_NAMES).map(([key, name]) => (
                             <SelectItem key={key} value={key}>{name}</SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>LM</Label>
+                      <Select
+                        value={newDeal.lmName}
+                        onValueChange={(val) => setNewDeal({ ...newDeal, lmName: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select LM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(LM_NAMES).map(([key, name]) => (
+                            <SelectItem key={key} value={key}>{name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>AM</Label>
+                      <Select
+                        value={newDeal.amName}
+                        onValueChange={(val) => setNewDeal({ ...newDeal, amName: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select AM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(AM_NAMES).map(([key, name]) => (
+                            <SelectItem key={key} value={key}>{name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>DM</Label>
+                      <Select
+                        value={newDeal.dmName}
+                        onValueChange={(val) => setNewDeal({ ...newDeal, dmName: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select DM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(DM_NAMES).map(([key, name]) => (
+                            <SelectItem key={key} value={key}>{name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>NAH?</Label>
+                      <Select
+                        value={newDeal.isNah}
+                        onValueChange={(val) => setNewDeal({ ...newDeal, isNah: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes">Yes</SelectItem>
+                          <SelectItem value="no">No</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -989,23 +1125,6 @@ export default function KpiDashboard() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Status</Label>
-                      <Select
-                        value={newDeal.status}
-                        onValueChange={(val) => setNewDeal({ ...newDeal, status: val })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="under_contract">Under Contract</SelectItem>
-                          <SelectItem value="due_diligence">Due Diligence</SelectItem>
-                          <SelectItem value="closed">Closed</SelectItem>
-                          <SelectItem value="fell_through">Fell Through</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
                       <Label>Contract Date</Label>
                       <Input
                         type="date"
@@ -1013,7 +1132,7 @@ export default function KpiDashboard() {
                         onChange={(e) => setNewDeal({ ...newDeal, contractDate: e.target.value })}
                       />
                     </div>
-                    <div className="col-span-2 space-y-2">
+                    <div className="col-span-3 space-y-2">
                       <Label>Notes</Label>
                       <Input
                         placeholder="Optional notes"
@@ -1027,7 +1146,7 @@ export default function KpiDashboard() {
                       <Button variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button onClick={handleCreateDeal} disabled={createDealMutation.isPending}>
-                      Add Deal
+                      Add Item
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -1038,7 +1157,7 @@ export default function KpiDashboard() {
                 <div className="text-center py-8">Loading...</div>
               ) : deals?.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No deals yet. Click "Add Deal" to log your first deal.
+                  No inventory items yet. Click "Add Deal" to add your first property.
                 </div>
               ) : (
                 <Table>
@@ -1046,11 +1165,16 @@ export default function KpiDashboard() {
                     <TableRow>
                       <TableHead>Property</TableHead>
                       <TableHead>Seller</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Location</TableHead>
                       <TableHead>Source</TableHead>
+                      <TableHead>LM</TableHead>
+                      <TableHead>AM</TableHead>
+                      <TableHead>DM</TableHead>
+                      <TableHead>NAH?</TableHead>
                       <TableHead className="text-right">Contract</TableHead>
                       <TableHead className="text-right">ARV</TableHead>
                       <TableHead className="text-right">Assignment</TableHead>
-                      <TableHead>Status</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
@@ -1058,17 +1182,22 @@ export default function KpiDashboard() {
                   <TableBody>
                     {deals?.map((deal) => (
                       <TableRow key={deal.id}>
-                        <TableCell className="font-medium max-w-[200px] truncate">{deal.propertyAddress}</TableCell>
+                        <TableCell className="font-medium max-w-[150px] truncate">{deal.propertyAddress}</TableCell>
                         <TableCell>{deal.sellerName || "-"}</TableCell>
+                        <TableCell>
+                          <Badge className={INVENTORY_STATUS_COLORS[deal.inventoryStatus || "for_sale"]}>
+                            {deal.inventoryStatus ? INVENTORY_STATUS_NAMES[deal.inventoryStatus] : "For Sale"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{deal.location ? LOCATION_NAMES[deal.location] : "-"}</TableCell>
                         <TableCell>{deal.leadSource ? CHANNEL_NAMES[deal.leadSource] : "-"}</TableCell>
+                        <TableCell>{deal.lmName ? LM_NAMES[deal.lmName] : "-"}</TableCell>
+                        <TableCell>{deal.amName ? AM_NAMES[deal.amName] : "-"}</TableCell>
+                        <TableCell>{deal.dmName ? DM_NAMES[deal.dmName] : "-"}</TableCell>
+                        <TableCell>{deal.isNah === "yes" ? "Yes" : "No"}</TableCell>
                         <TableCell className="text-right">{deal.contractPrice ? formatCurrency(deal.contractPrice) : "-"}</TableCell>
                         <TableCell className="text-right">{deal.estimatedArv ? formatCurrency(deal.estimatedArv) : "-"}</TableCell>
                         <TableCell className="text-right">{deal.assignmentFee ? formatCurrency(deal.assignmentFee) : "-"}</TableCell>
-                        <TableCell>
-                          <Badge className={STATUS_COLORS[deal.status || "under_contract"]}>
-                            {deal.status?.replace("_", " ") || "Under Contract"}
-                          </Badge>
-                        </TableCell>
                         <TableCell>{deal.contractDate ? new Date(deal.contractDate).toLocaleDateString() : "-"}</TableCell>
                         <TableCell>
                           <Button
@@ -1076,7 +1205,7 @@ export default function KpiDashboard() {
                             size="sm"
                             className="text-red-600 hover:text-red-700"
                             onClick={() => {
-                              if (confirm("Delete this deal?")) {
+                              if (confirm("Delete this item?")) {
                                 deleteDealMutation.mutate({ id: deal.id });
                               }
                             }}
