@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Shield, UserCog, Link2, Unlink } from "lucide-react";
+import { Users, Shield, UserCog, Link2, Unlink, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -80,6 +80,22 @@ export default function TeamManagement() {
     onError: (error) => toast.error("Failed to remove assignment: " + error.message),
   });
 
+  const batchAwardXpMutation = trpc.gamification.batchAwardXp.useMutation({
+    onSuccess: (data) => {
+      if (data.processed === 0) {
+        toast.info("No new calls to process - all XP already awarded!");
+      } else {
+        toast.success(`Awarded ${data.totalXpAwarded.toLocaleString()} XP across ${data.processed} calls!`);
+        data.memberSummary.forEach(m => {
+          toast.info(`${m.name}: +${m.xpAwarded} XP (Level ${m.newLevel} - ${m.newTitle})`);
+        });
+      }
+      utils.gamification.getLeaderboard.invalidate();
+      utils.gamification.getSummary.invalidate();
+    },
+    onError: (error) => toast.error("Failed to award XP: " + error.message),
+  });
+
   const isLoading = membersLoading || usersLoading || assignmentsLoading;
 
   // Get acquisition managers for assignment dropdown
@@ -93,9 +109,19 @@ export default function TeamManagement() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Team Management</h1>
-        <p className="text-muted-foreground">Manage user roles and team assignments</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Team Management</h1>
+          <p className="text-muted-foreground">Manage user roles and team assignments</p>
+        </div>
+        <Button 
+          onClick={() => batchAwardXpMutation.mutate()}
+          disabled={batchAwardXpMutation.isPending}
+          className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+        >
+          <Zap className="h-4 w-4 mr-2" />
+          {batchAwardXpMutation.isPending ? "Awarding XP..." : "Award XP for All Calls"}
+        </Button>
       </div>
 
       {/* Users & Roles Section */}

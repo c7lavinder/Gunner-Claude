@@ -12,6 +12,7 @@ import {
   getGamificationLeaderboard,
   processCallViewRewards,
   initializeBadges,
+  batchAwardXpForCalls,
 } from "./gamification";
 import {
   getCalls,
@@ -1826,6 +1827,14 @@ Create content that:
       }
       await initializeBadges();
       return { success: true };
+    }),
+
+    // Batch award XP for all unprocessed calls (admin only)
+    batchAwardXp: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user?.teamRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      return batchAwardXpForCalls();
     }),
   }),
 });

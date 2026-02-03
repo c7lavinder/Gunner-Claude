@@ -1,0 +1,8 @@
+{
+  "query": "INSERT INTO xp_transactions (teamMemberId, amount, reason, callId, createdAt) VALUES (1, 100, 'Test', 30021, NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute INSERT INTO xp_transactions (teamMemberId, amount, reason, callId, createdAt) VALUES (1, 100, 'Test', 30021, NOW());",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1265 (01000) at line 1: Data truncated for column 'reason' at row 1"
+  ]
+}

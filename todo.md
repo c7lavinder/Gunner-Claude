@@ -321,3 +321,5 @@
 - [x] Showcase each team member with stats, badges, XP level
 - [x] Remove standalone Leaderboard page (redirects to /team)
 - [x] Update sidebar navigation (removed Leaderboard menu item)
+- [x] Batch XP award for all graded calls
+- [x] Fix database schema for user_streaks, reward_views, xp_transactions

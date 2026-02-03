@@ -1,0 +1,25 @@
+{
+  "query": "SELECT tm.name, COUNT(*) as transactions, SUM(xp.amount) as total_xp FROM xp_transactions xp JOIN team_members tm ON xp.teamMemberId = tm.id GROUP BY tm.name ORDER BY total_xp DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT tm.name, COUNT(*) as transactions, SUM(xp.amount) as total_xp FROM xp_transactions xp JOIN team_members tm ON xp.teamMemberId = tm.id GROUP BY tm.name ORDER BY total_xp DESC;",
+  "rows": [
+    {
+      "name": "Daniel Lozano",
+      "transactions": "22",
+      "total_xp": "295"
+    },
+    {
+      "name": "Kyle Barks",
+      "transactions": "9",
+      "total_xp": "125"
+    },
+    {
+      "name": "Chris Segura",
+      "transactions": "1",
+      "total_xp": "10"
+    }
+  ],
+  "messages": [],
+  "stdout": "name\ttransactions\ttotal_xp\nDaniel Lozano\t22\t295\nKyle Barks\t9\t125\nChris Segura\t1\t10\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

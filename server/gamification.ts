@@ -800,3 +800,135 @@ export async function getAllBadgesWithProgress(teamMemberId: number, teamRole: s
     };
   });
 }
+
+
+/**
+ * Batch award XP for all unprocessed graded calls
+ */
+export async function batchAwardXpForCalls(): Promise<{
+  processed: number;
+  totalXpAwarded: number;
+  memberSummary: Array<{ name: string; xpAwarded: number; callsProcessed: number; newLevel: number; newTitle: string }>;
+}> {
+  const db = await getDb();
+  if (!db) return { processed: 0, totalXpAwarded: 0, memberSummary: [] };
+  
+  // Get all graded calls that haven't been rewarded yet
+  const unprocessedCalls = await db
+    .select({
+      callId: calls.id,
+      teamMemberId: calls.teamMemberId,
+      teamMemberName: teamMembers.name,
+      overallScore: callGrades.overallScore,
+      overallGrade: callGrades.overallGrade,
+    })
+    .from(calls)
+    .innerJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
+    .innerJoin(callGrades, eq(calls.id, callGrades.callId))
+    .leftJoin(rewardViews, and(
+      eq(rewardViews.callId, calls.id),
+      eq(rewardViews.teamMemberId, calls.teamMemberId)
+    ))
+    .where(and(
+      eq(calls.status, "completed"),
+      eq(calls.classification, "conversation"),
+      sql`${rewardViews.id} IS NULL`
+    ));
+  
+  console.log(`[Gamification] Found ${unprocessedCalls.length} calls to process for XP rewards`);
+  
+  const memberTotals: Record<number, { name: string; xp: number; calls: number }> = {};
+  let totalXp = 0;
+  
+  for (const call of unprocessedCalls) {
+    // Skip if no team member ID
+    if (!call.teamMemberId) continue;
+    
+    // Calculate XP for this call
+    let xp = XP_REWARDS.GRADED_CALL;
+    const grade = call.overallGrade || "F";
+    const gradeXp: Record<string, number> = {
+      A: XP_REWARDS.GRADE_A,
+      B: XP_REWARDS.GRADE_B,
+      C: XP_REWARDS.GRADE_C,
+      D: XP_REWARDS.GRADE_D,
+      F: XP_REWARDS.GRADE_F,
+    };
+    xp += gradeXp[grade] || 0;
+    
+    const memberId = call.teamMemberId;
+    
+    // Record the reward view
+    await db.insert(rewardViews).values({
+      teamMemberId: memberId,
+      callId: call.callId,
+      xpAwarded: xp,
+      viewedAt: new Date(),
+    });
+    
+    // Record XP transaction
+    await db.insert(xpTransactions).values({
+      teamMemberId: memberId,
+      amount: xp,
+      reason: `Graded call (${grade})`,
+      callId: call.callId,
+      createdAt: new Date(),
+    });
+    
+    // Track totals
+    if (!memberTotals[memberId]) {
+      memberTotals[memberId] = { name: call.teamMemberName, xp: 0, calls: 0 };
+    }
+    memberTotals[memberId].xp += xp;
+    memberTotals[memberId].calls++;
+    totalXp += xp;
+  }
+  
+  // Update user_xp totals for each member
+  const memberSummary: Array<{ name: string; xpAwarded: number; callsProcessed: number; newLevel: number; newTitle: string }> = [];
+  
+  for (const [memberIdStr, data] of Object.entries(memberTotals)) {
+    const memberId = parseInt(memberIdStr);
+    
+    // Get current XP
+    const [existing] = await db
+      .select()
+      .from(userXp)
+      .where(eq(userXp.teamMemberId, memberId));
+    
+    const currentXp = existing?.totalXp || 0;
+    const newTotal = currentXp + data.xp;
+    const levelInfo = getLevelFromXp(newTotal);
+    
+    // Upsert user_xp (level/title are computed from totalXp, not stored)
+    if (existing) {
+      await db.update(userXp)
+        .set({ totalXp: newTotal, updatedAt: new Date() })
+        .where(eq(userXp.teamMemberId, memberId));
+    } else {
+      await db.insert(userXp).values({
+        teamMemberId: memberId,
+        totalXp: newTotal,
+        updatedAt: new Date(),
+      });
+    }
+    
+    memberSummary.push({
+      name: data.name,
+      xpAwarded: data.xp,
+      callsProcessed: data.calls,
+      newLevel: levelInfo.level,
+      newTitle: levelInfo.title,
+    });
+    
+    console.log(`[Gamification] ${data.name}: +${data.xp} XP from ${data.calls} calls → Total: ${newTotal} XP (Level ${levelInfo.level} - ${levelInfo.title})`);
+  }
+  
+  console.log(`[Gamification] Batch XP award complete: ${unprocessedCalls.length} calls, ${totalXp} XP total`);
+  
+  return {
+    processed: unprocessedCalls.length,
+    totalXpAwarded: totalXp,
+    memberSummary,
+  };
+}
