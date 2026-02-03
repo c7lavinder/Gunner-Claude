@@ -75,6 +75,60 @@ export async function getTenantBySlug(slug: string) {
 }
 
 /**
+ * Get recent platform activity (for super admin dashboard)
+ */
+export async function getRecentActivity() {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get recent tenant signups (last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const recentTenants = await db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      subscriptionTier: tenants.subscriptionTier,
+      subscriptionStatus: tenants.subscriptionStatus,
+      createdAt: tenants.createdAt,
+    })
+    .from(tenants)
+    .orderBy(desc(tenants.createdAt))
+    .limit(20);
+
+  // Format as activity items
+  const activities = recentTenants.map(tenant => {
+    let type: 'signup' | 'upgrade' | 'cancel' | 'trial_start' = 'signup';
+    let message = '';
+    
+    if (tenant.subscriptionTier === 'trial') {
+      type = 'trial_start';
+      message = `${tenant.name} started a free trial`;
+    } else if (tenant.subscriptionStatus === 'active') {
+      type = 'upgrade';
+      message = `${tenant.name} subscribed to ${tenant.subscriptionTier} plan`;
+    } else if (tenant.subscriptionStatus === 'canceled') {
+      type = 'cancel';
+      message = `${tenant.name} canceled their subscription`;
+    } else {
+      message = `${tenant.name} joined the platform`;
+    }
+
+    return {
+      id: tenant.id,
+      type,
+      message,
+      tenantName: tenant.name,
+      plan: tenant.subscriptionTier,
+      timestamp: tenant.createdAt,
+    };
+  });
+
+  return activities;
+}
+
+/**
  * Get platform metrics (for super admin dashboard)
  */
 export async function getPlatformMetrics() {

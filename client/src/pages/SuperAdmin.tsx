@@ -16,7 +16,12 @@ import {
   Search,
   Eye,
   ArrowLeft,
-  RefreshCw
+  RefreshCw,
+  Activity,
+  UserPlus,
+  CreditCard,
+  XCircle,
+  Clock
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -30,6 +35,7 @@ export default function SuperAdmin() {
   // Fetch real data from backend
   const { data: tenants, isLoading: tenantsLoading, refetch: refetchTenants } = trpc.tenant.list.useQuery();
   const { data: metrics, isLoading: metricsLoading, refetch: refetchMetrics } = trpc.tenant.getMetrics.useQuery();
+  const { data: recentActivity, isLoading: activityLoading, refetch: refetchActivity } = trpc.tenant.getRecentActivity.useQuery();
 
   // Check if user is super admin or platform owner
   const isPlatformOwner = user?.openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
@@ -92,6 +98,34 @@ export default function SuperAdmin() {
   const handleRefresh = () => {
     refetchTenants();
     refetchMetrics();
+    refetchActivity();
+  };
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'trial_start':
+        return <Clock className="h-4 w-4 text-blue-500" />;
+      case 'upgrade':
+        return <CreditCard className="h-4 w-4 text-green-500" />;
+      case 'cancel':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <UserPlus className="h-4 w-4 text-purple-500" />;
+    }
+  };
+
+  const formatTimeAgo = (date: Date | string) => {
+    const now = new Date();
+    const then = new Date(date);
+    const diffMs = now.getTime() - then.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return then.toLocaleDateString();
   };
 
   return (
@@ -118,6 +152,7 @@ export default function SuperAdmin() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tenants">Tenants</TabsTrigger>
           <TabsTrigger value="revenue">Revenue</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="alerts">Alerts</TabsTrigger>
         </TabsList>
 
@@ -360,6 +395,56 @@ export default function SuperAdmin() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="activity" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                Recent Activity
+              </CardTitle>
+              <CardDescription>Latest signups, upgrades, and cancellations</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activityLoading ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4">
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <div className="flex-1">
+                        <Skeleton className="h-4 w-3/4 mb-2" />
+                        <Skeleton className="h-3 w-1/4" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (recentActivity || []).length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No recent activity
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {(recentActivity || []).map((activity) => (
+                    <div key={activity.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                        {getActivityIcon(activity.type)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">{activity.message}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatTimeAgo(activity.timestamp)}
+                        </p>
+                      </div>
+                      {activity.plan && activity.plan !== 'trial' && (
+                        <Badge variant="outline" className="capitalize">{activity.plan}</Badge>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>

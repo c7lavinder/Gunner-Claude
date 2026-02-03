@@ -577,3 +577,22 @@
 - [x] Handle plan change in Stripe webhooks
 - [x] Update tenant limits when plan changes
 - [x] Show plan comparison in upgrade modal
+
+
+## White-Label SaaS Platform - Phase 6
+
+### Usage-Based Alerts
+- [x] Create usage alert component for dashboard
+- [x] Show warning when approaching team member limit (80%+)
+- [x] Show warning when approaching call grading limit (80%+)
+- [x] Add upgrade prompt when at limit
+- [x] Display alerts in Company Settings billing tab
+
+### Super Admin Dashboard Enhancement
+- [x] Create dedicated /admin route for platform owner (already exists)
+- [x] Display all tenants with status, plan, user count
+- [x] Show MRR/ARR metrics
+- [x] Add tenant detail view with usage stats
+- [x] Revenue breakdown by plan
+- [x] Add recent activity feed (new signups, upgrades, cancellations)
+- [x] Add alerts tab for past due and expiring trials

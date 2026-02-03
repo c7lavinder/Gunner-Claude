@@ -2245,6 +2245,15 @@ Create content that:
       return getPlatformMetrics();
     }),
 
+    // Super Admin: Get recent activity
+    getRecentActivity: protectedProcedure.query(async ({ ctx }) => {
+      const { isPlatformOwner, getRecentActivity } = await import("./tenant");
+      if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+      }
+      return getRecentActivity();
+    }),
+
     // Super Admin: Get tenant by ID
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))

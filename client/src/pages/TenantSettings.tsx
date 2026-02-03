@@ -271,13 +271,13 @@ export default function TenantSettings() {
     }
   };
 
-  const getPlanLimits = (plan: string | null) => {
+  const getPlanLimits = (plan: string | null): { users: number, calls: number, usersDisplay: string, callsDisplay: string } => {
     switch (plan) {
-      case "starter": return { users: 3, calls: 100 };
-      case "growth": return { users: 10, calls: 500 };
-      case "scale": return { users: "Unlimited", calls: "Unlimited" };
-      case "trial": return { users: 3, calls: 50 };
-      default: return { users: 0, calls: 0 };
+      case "starter": return { users: 3, calls: 100, usersDisplay: "3", callsDisplay: "100" };
+      case "growth": return { users: 10, calls: 500, usersDisplay: "10", callsDisplay: "500" };
+      case "scale": return { users: 999, calls: 999999, usersDisplay: "Unlimited", callsDisplay: "Unlimited" };
+      case "trial": return { users: 3, calls: 50, usersDisplay: "3", callsDisplay: "50" };
+      default: return { users: 0, calls: 0, usersDisplay: "0", callsDisplay: "0" };
     }
   };
 
@@ -806,19 +806,95 @@ export default function TenantSettings() {
                   <Skeleton className="h-6 w-full" />
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>Team Members</span>
-                    <span className="font-medium">
-                      {(teamMembers || []).length} / {getPlanLimits(settings?.subscriptionTier || null).users}
-                    </span>
+                <div className="space-y-6">
+                  {/* Team Members Usage */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Team Members</span>
+                      <span className="text-sm text-muted-foreground">
+                        {(teamMembers || []).length} / {getPlanLimits(settings?.subscriptionTier || null).usersDisplay}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all ${
+                          ((teamMembers || []).length / getPlanLimits(settings?.subscriptionTier || null).users) >= 1 
+                            ? 'bg-red-500' 
+                            : ((teamMembers || []).length / getPlanLimits(settings?.subscriptionTier || null).users) >= 0.8 
+                              ? 'bg-amber-500' 
+                              : 'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min(100, ((teamMembers || []).length / getPlanLimits(settings?.subscriptionTier || null).users) * 100)}%` }}
+                      />
+                    </div>
+                    {((teamMembers || []).length / getPlanLimits(settings?.subscriptionTier || null).users) >= 0.8 && (
+                      <div className={`flex items-center gap-2 text-sm ${
+                        ((teamMembers || []).length / getPlanLimits(settings?.subscriptionTier || null).users) >= 1 
+                          ? 'text-red-600' 
+                          : 'text-amber-600'
+                      }`}>
+                        <AlertCircle className="h-4 w-4" />
+                        {((teamMembers || []).length / getPlanLimits(settings?.subscriptionTier || null).users) >= 1 
+                          ? 'Team member limit reached. Upgrade to add more.' 
+                          : 'Approaching team member limit.'}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span>Calls Graded This Month</span>
-                    <span className="font-medium">
-                      {settings?.callCount || 0} / {getPlanLimits(settings?.subscriptionTier || null).calls}
-                    </span>
+
+                  {/* Calls Graded Usage */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Calls Graded This Month</span>
+                      <span className="text-sm text-muted-foreground">
+                        {settings?.callCount || 0} / {getPlanLimits(settings?.subscriptionTier || null).callsDisplay}
+                      </span>
+                    </div>
+                    {getPlanLimits(settings?.subscriptionTier || null).calls !== 999999 && (
+                      <>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all ${
+                              ((settings?.callCount || 0) / getPlanLimits(settings?.subscriptionTier || null).calls) >= 1 
+                                ? 'bg-red-500' 
+                                : ((settings?.callCount || 0) / getPlanLimits(settings?.subscriptionTier || null).calls) >= 0.8 
+                                  ? 'bg-amber-500' 
+                                  : 'bg-green-500'
+                            }`}
+                            style={{ width: `${Math.min(100, ((settings?.callCount || 0) / getPlanLimits(settings?.subscriptionTier || null).calls) * 100)}%` }}
+                          />
+                        </div>
+                        {((settings?.callCount || 0) / getPlanLimits(settings?.subscriptionTier || null).calls) >= 0.8 && (
+                          <div className={`flex items-center gap-2 text-sm ${
+                            ((settings?.callCount || 0) / getPlanLimits(settings?.subscriptionTier || null).calls) >= 1 
+                              ? 'text-red-600' 
+                              : 'text-amber-600'
+                          }`}>
+                            <AlertCircle className="h-4 w-4" />
+                            {((settings?.callCount || 0) / getPlanLimits(settings?.subscriptionTier || null).calls) >= 1 
+                              ? 'Call grading limit reached. Upgrade for more.' 
+                              : 'Approaching call grading limit.'}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
+
+                  {/* Upgrade prompt when at limit */}
+                  {(((teamMembers || []).length >= getPlanLimits(settings?.subscriptionTier || null).users) ||
+                    ((settings?.callCount || 0) >= getPlanLimits(settings?.subscriptionTier || null).calls && getPlanLimits(settings?.subscriptionTier || null).calls !== 999999)) && 
+                    settings?.subscriptionTier !== 'scale' && (
+                    <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">Need more capacity?</p>
+                          <p className="text-sm text-muted-foreground">Upgrade your plan to unlock higher limits.</p>
+                        </div>
+                        <Button size="sm" onClick={() => setShowUpgradeModal(true)}>
+                          <ArrowUp className="h-4 w-4 mr-1" /> Upgrade
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
