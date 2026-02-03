@@ -146,6 +146,9 @@ export default function KpiDashboard() {
   const [editingStaff, setEditingStaff] = useState<{ id: number; name: string; roleType: "lg_cold_caller" | "lg_sms" | "am" | "lm" } | null>(null);
   const [editingMarket, setEditingMarket] = useState<{ id: number; name: string } | null>(null);
   const [editingChannel, setEditingChannel] = useState<{ id: number; name: string; code: string } | null>(null);
+  const [editingDeal, setEditingDeal] = useState<any | null>(null);
+  const [editingTeamKpi, setEditingTeamKpi] = useState<any | null>(null);
+  const [editingCampaignKpi, setEditingCampaignKpi] = useState<any | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'staff' | 'market' | 'channel'; id: number; name: string } | null>(null);
 
   // New staff/market/channel form state
@@ -277,6 +280,15 @@ export default function KpiDashboard() {
     onSuccess: () => {
       toast.success("Deal deleted");
       utils.kpi.getDeals.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const updateDealMutation = trpc.kpi.updateDeal.useMutation({
+    onSuccess: () => {
+      toast.success("Deal updated");
+      utils.kpi.getDeals.invalidate();
+      setEditingDeal(null);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -793,6 +805,7 @@ export default function KpiDashboard() {
                         <TableHead className="text-right">Revenue</TableHead>
                         <TableHead className="text-right">Cost/Lead</TableHead>
                         <TableHead className="text-right">ROI</TableHead>
+                        <TableHead></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -821,6 +834,28 @@ export default function KpiDashboard() {
                               <span className={channel.roi > 0 ? "text-green-600" : "text-red-600"}>
                                 {formatPercent(channel.roi)}
                               </span>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingCampaignKpi({
+                                  id: channel.id,
+                                  market: channel.market,
+                                  channel: channel.channel,
+                                  spent: channel.spent.toString(),
+                                  volume: channel.volume.toString(),
+                                  contacts: channel.contacts.toString(),
+                                  leads: channel.leads.toString(),
+                                  offers: channel.offers.toString(),
+                                  contracts: channel.contracts.toString(),
+                                  dealsCount: channel.deals.toString(),
+                                  revenue: channel.revenue.toString(),
+                                  notes: channel.notes || "",
+                                })}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))
@@ -963,6 +998,7 @@ export default function KpiDashboard() {
                       <TableHead className="text-right">Metric 2</TableHead>
                       <TableHead className="text-right">Metric 3</TableHead>
                       <TableHead>Notes</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -983,6 +1019,23 @@ export default function KpiDashboard() {
                           <div className="font-medium">{item.kpi.metric3}</div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">{item.kpi.notes || "-"}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingTeamKpi({
+                              id: item.kpi.id,
+                              teamMemberId: item.kpi.teamMemberId.toString(),
+                              roleType: item.kpi.roleType,
+                              metric1: item.kpi.metric1.toString(),
+                              metric2: item.kpi.metric2.toString(),
+                              metric3: item.kpi.metric3.toString(),
+                              notes: item.kpi.notes || "",
+                            })}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1312,18 +1365,44 @@ export default function KpiDashboard() {
                         <TableCell className="text-right">{deal.assignmentFee ? formatCurrency(deal.assignmentFee) : "-"}</TableCell>
                         <TableCell>{deal.contractDate ? new Date(deal.contractDate).toLocaleDateString() : "-"}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => {
-                              if (confirm("Delete this item?")) {
-                                deleteDealMutation.mutate({ id: deal.id });
-                              }
-                            }}
-                          >
-                            Delete
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingDeal({
+                                id: deal.id,
+                                propertyAddress: deal.propertyAddress,
+                                sellerName: deal.sellerName || "",
+                                inventoryStatus: deal.inventoryStatus || "for_sale",
+                                location: deal.location || "",
+                                leadSource: deal.leadSource || "",
+                                lmName: deal.lmName || "",
+                                amName: deal.amName || "",
+                                dmName: deal.dmName || "",
+                                isNah: deal.isNah || "no",
+                                contractPrice: deal.contractPrice?.toString() || "",
+                                estimatedArv: deal.estimatedArv?.toString() || "",
+                                estimatedRepairs: deal.estimatedRepairs?.toString() || "",
+                                assignmentFee: deal.assignmentFee?.toString() || "",
+                                contractDate: deal.contractDate ? new Date(deal.contractDate).toISOString().split('T')[0] : "",
+                                notes: deal.notes || "",
+                              })}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => {
+                                if (confirm("Delete this item?")) {
+                                  deleteDealMutation.mutate({ id: deal.id });
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1922,6 +2001,430 @@ export default function KpiDashboard() {
                 setEditingChannel(null);
               }}
               disabled={updateChannelMutation.isPending}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Deal Dialog */}
+      <Dialog open={!!editingDeal} onOpenChange={(open) => !open && setEditingDeal(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Inventory Item</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-4 py-4">
+            <div className="col-span-3 space-y-2">
+              <Label>Property Address *</Label>
+              <Input
+                placeholder="123 Main St, City, State"
+                value={editingDeal?.propertyAddress || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, propertyAddress: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Seller Name</Label>
+              <Input
+                placeholder="John Doe"
+                value={editingDeal?.sellerName || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, sellerName: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={editingDeal?.inventoryStatus || "for_sale"}
+                onValueChange={(val) => setEditingDeal(editingDeal ? { ...editingDeal, inventoryStatus: val } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(INVENTORY_STATUS_NAMES).map(([key, name]) => (
+                    <SelectItem key={key} value={key}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Location</Label>
+              <Select
+                value={editingDeal?.location || ""}
+                onValueChange={(val) => setEditingDeal(editingDeal ? { ...editingDeal, location: val } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(LOCATION_NAMES).map(([key, name]) => (
+                    <SelectItem key={key} value={key}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Lead Source</Label>
+              <Select
+                value={editingDeal?.leadSource || ""}
+                onValueChange={(val) => setEditingDeal(editingDeal ? { ...editingDeal, leadSource: val } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(CHANNEL_NAMES).map(([key, name]) => (
+                    <SelectItem key={key} value={key}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>LM</Label>
+              <Select
+                value={editingDeal?.lmName || ""}
+                onValueChange={(val) => setEditingDeal(editingDeal ? { ...editingDeal, lmName: val } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select LM" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(LM_NAMES).map(([key, name]) => (
+                    <SelectItem key={key} value={key}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>AM</Label>
+              <Select
+                value={editingDeal?.amName || ""}
+                onValueChange={(val) => setEditingDeal(editingDeal ? { ...editingDeal, amName: val } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select AM" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(AM_NAMES).map(([key, name]) => (
+                    <SelectItem key={key} value={key}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>DM</Label>
+              <Select
+                value={editingDeal?.dmName || ""}
+                onValueChange={(val) => setEditingDeal(editingDeal ? { ...editingDeal, dmName: val } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select DM" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(DM_NAMES).map(([key, name]) => (
+                    <SelectItem key={key} value={key}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>NAH?</Label>
+              <Select
+                value={editingDeal?.isNah || "no"}
+                onValueChange={(val) => setEditingDeal(editingDeal ? { ...editingDeal, isNah: val } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="yes">Yes</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Contract Price</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingDeal?.contractPrice || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, contractPrice: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Estimated ARV</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingDeal?.estimatedArv || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, estimatedArv: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Estimated Repairs</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingDeal?.estimatedRepairs || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, estimatedRepairs: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Assignment Fee</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingDeal?.assignmentFee || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, assignmentFee: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Contract Date</Label>
+              <Input
+                type="date"
+                value={editingDeal?.contractDate || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, contractDate: e.target.value } : null)}
+              />
+            </div>
+            <div className="col-span-3 space-y-2">
+              <Label>Notes</Label>
+              <Input
+                placeholder="Optional notes"
+                value={editingDeal?.notes || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, notes: e.target.value } : null)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingDeal(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editingDeal || !editingDeal.propertyAddress?.trim()) {
+                  toast.error("Property address is required");
+                  return;
+                }
+                updateDealMutation.mutate({
+                  id: editingDeal.id,
+                  propertyAddress: editingDeal.propertyAddress,
+                  sellerName: editingDeal.sellerName || undefined,
+                  inventoryStatus: editingDeal.inventoryStatus as any || undefined,
+                  location: editingDeal.location as any || undefined,
+                  leadSource: editingDeal.leadSource as any || undefined,
+                  lmName: editingDeal.lmName as any || undefined,
+                  amName: editingDeal.amName as any || undefined,
+                  dmName: editingDeal.dmName as any || undefined,
+                  isNah: editingDeal.isNah as any || undefined,
+                  contractPrice: editingDeal.contractPrice ? parseFloat(editingDeal.contractPrice) : undefined,
+                  estimatedArv: editingDeal.estimatedArv ? parseFloat(editingDeal.estimatedArv) : undefined,
+                  estimatedRepairs: editingDeal.estimatedRepairs ? parseFloat(editingDeal.estimatedRepairs) : undefined,
+                  assignmentFee: editingDeal.assignmentFee ? parseFloat(editingDeal.assignmentFee) : undefined,
+                  contractDate: editingDeal.contractDate ? new Date(editingDeal.contractDate) : undefined,
+                  notes: editingDeal.notes || undefined,
+                });
+              }}
+              disabled={updateDealMutation.isPending}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Team KPI Dialog */}
+      <Dialog open={!!editingTeamKpi} onOpenChange={(open) => !open && setEditingTeamKpi(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Team KPI</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>{getMetricLabels(editingTeamKpi?.roleType || "am")[0]}</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={editingTeamKpi?.metric1 || ""}
+                  onChange={(e) => setEditingTeamKpi(editingTeamKpi ? { ...editingTeamKpi, metric1: e.target.value } : null)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{getMetricLabels(editingTeamKpi?.roleType || "am")[1]}</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={editingTeamKpi?.metric2 || ""}
+                  onChange={(e) => setEditingTeamKpi(editingTeamKpi ? { ...editingTeamKpi, metric2: e.target.value } : null)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{getMetricLabels(editingTeamKpi?.roleType || "am")[2]}</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={editingTeamKpi?.metric3 || ""}
+                  onChange={(e) => setEditingTeamKpi(editingTeamKpi ? { ...editingTeamKpi, metric3: e.target.value } : null)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Input
+                placeholder="Optional notes"
+                value={editingTeamKpi?.notes || ""}
+                onChange={(e) => setEditingTeamKpi(editingTeamKpi ? { ...editingTeamKpi, notes: e.target.value } : null)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingTeamKpi(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editingTeamKpi || !selectedPeriodId) return;
+                upsertTeamKpiMutation.mutate({
+                  teamMemberId: parseInt(editingTeamKpi.teamMemberId),
+                  periodId: selectedPeriodId,
+                  roleType: editingTeamKpi.roleType,
+                  metric1: parseFloat(editingTeamKpi.metric1) || 0,
+                  metric2: parseFloat(editingTeamKpi.metric2) || 0,
+                  metric3: parseFloat(editingTeamKpi.metric3) || 0,
+                  notes: editingTeamKpi.notes || undefined,
+                });
+                setEditingTeamKpi(null);
+              }}
+              disabled={upsertTeamKpiMutation.isPending}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Campaign KPI Dialog */}
+      <Dialog open={!!editingCampaignKpi} onOpenChange={(open) => !open && setEditingCampaignKpi(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Campaign Data</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Market</Label>
+              <Input
+                value={editingCampaignKpi?.market || ""}
+                disabled
+                className="bg-muted"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Channel</Label>
+              <Input
+                value={CHANNEL_NAMES[editingCampaignKpi?.channel] || editingCampaignKpi?.channel || ""}
+                disabled
+                className="bg-muted"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>$ Spent</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingCampaignKpi?.spent || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, spent: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Volume</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingCampaignKpi?.volume || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, volume: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Contacts</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingCampaignKpi?.contacts || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, contacts: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Leads</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingCampaignKpi?.leads || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, leads: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Offers</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingCampaignKpi?.offers || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, offers: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Contracts</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingCampaignKpi?.contracts || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, contracts: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Deals</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingCampaignKpi?.dealsCount || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, dealsCount: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Revenue</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingCampaignKpi?.revenue || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, revenue: e.target.value } : null)}
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label>Notes</Label>
+              <Input
+                placeholder="Optional notes"
+                value={editingCampaignKpi?.notes || ""}
+                onChange={(e) => setEditingCampaignKpi(editingCampaignKpi ? { ...editingCampaignKpi, notes: e.target.value } : null)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingCampaignKpi(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editingCampaignKpi || !selectedPeriodId) return;
+                upsertCampaignKpiMutation.mutate({
+                  periodId: selectedPeriodId,
+                  market: editingCampaignKpi.market as "tennessee" | "global",
+                  channel: editingCampaignKpi.channel as any,
+                  spent: parseFloat(editingCampaignKpi.spent) || 0,
+                  volume: parseFloat(editingCampaignKpi.volume) || 0,
+                  contacts: parseFloat(editingCampaignKpi.contacts) || 0,
+                  leads: parseFloat(editingCampaignKpi.leads) || 0,
+                  offers: parseFloat(editingCampaignKpi.offers) || 0,
+                  contracts: parseFloat(editingCampaignKpi.contracts) || 0,
+                  dealsCount: parseFloat(editingCampaignKpi.dealsCount) || 0,
+                  revenue: parseFloat(editingCampaignKpi.revenue) || 0,
+                  notes: editingCampaignKpi.notes || undefined,
+                });
+                setEditingCampaignKpi(null);
+              }}
+              disabled={upsertCampaignKpiMutation.isPending}
             >
               Save Changes
             </Button>

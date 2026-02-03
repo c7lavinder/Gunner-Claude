@@ -392,3 +392,12 @@
 - [x] Add edit dialog for renaming markets
 - [x] Add edit button to Channels management dialog
 - [x] Add edit dialog for renaming channels (name and code)
+
+
+## KPI Data Entry Edit Functionality
+- [x] Add edit button to campaign data table rows
+- [x] Create edit dialog for modifying campaign data entries
+- [x] Add edit button to inventory/deals table rows
+- [x] Create edit dialog for modifying inventory entries
+- [x] Add edit button to team KPI table rows
+- [x] Create edit dialog for modifying team KPI entries

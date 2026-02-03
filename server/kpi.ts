@@ -299,6 +299,7 @@ export async function getScoreboardData(periodId: number) {
     totals.revenue += c.revenue;
 
     return {
+      id: c.id,
       channel: c.channel,
       market: c.market,
       spent: c.spent,
@@ -309,6 +310,7 @@ export async function getScoreboardData(periodId: number) {
       contracts: c.contracts,
       deals: c.dealsCount,
       revenue: c.revenue,
+      notes: c.notes,
       // Calculated metrics
       contactRate: c.volume > 0 ? (c.contacts / c.volume) * 100 : 0, // Answer rate / Response rate
       costPerLead: c.leads > 0 ? c.spent / c.leads : 0,
