@@ -803,3 +803,7 @@
 - [x] Add friendly empty states for new tenants with no data (already existed in pages)
 - [x] Hide sidebar during onboarding flow to prevent navigation away
 - [x] Auto-redirect to onboarding if not completed
+
+
+## Bug Fix - Onboarding Redirect (Feb 3, 2026)
+- [x] Fix "Go to Dashboard" button to redirect to /dashboard instead of landing page

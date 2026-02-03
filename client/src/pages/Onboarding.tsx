@@ -154,7 +154,7 @@ export default function Onboarding() {
 
   const handleComplete = () => {
     toast.success("Welcome to Gunner! Your account is ready.");
-    setLocation("/");
+    setLocation("/dashboard");
   };
 
   const addTeamInvite = () => {
