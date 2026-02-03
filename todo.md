@@ -807,3 +807,8 @@
 
 ## Bug Fix - Onboarding Redirect (Feb 3, 2026)
 - [x] Fix "Go to Dashboard" button to redirect to /dashboard instead of landing page
+
+
+## Bug Fix - Google Sign-In Loop (Feb 3, 2026)
+- [x] Fix Google sign-in redirecting back to signup page instead of dashboard/onboarding
+- [x] Add auth check to Signup page to redirect logged-in users

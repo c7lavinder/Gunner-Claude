@@ -1,0 +1,15 @@
+{
+  "query": "SELECT u.id as userId, u.tenantId, t.name as tenantName \nFROM users u \nLEFT JOIN tenants t ON u.tenantId = t.id \nWHERE u.email = 'coreydenzel14@gmail.com'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT u.id as userId, u.tenantId, t.name as tenantName \nFROM users u \nLEFT JOIN tenants t ON u.tenantId = t.id \nWHERE u.email = 'coreydenzel14@gmail.com'",
+  "rows": [
+    {
+      "userId": "480066",
+      "tenantId": "60002",
+      "tenantName": "East TN Homes"
+    }
+  ],
+  "messages": [],
+  "stdout": "userId\ttenantId\ttenantName\n480066\t60002\tEast TN Homes\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

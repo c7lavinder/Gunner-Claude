@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useSearch } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -55,6 +57,24 @@ export default function Signup() {
   const searchParams = new URLSearchParams(searchString);
   const preselectedPlan = searchParams.get('plan') || 'growth';
   const googleDataParam = searchParams.get('google');
+  
+  // Check if user is already logged in
+  const { user, loading: authLoading } = useAuth();
+  const { data: tenantSettings } = trpc.tenant.getSettings.useQuery(undefined, {
+    enabled: !!user,
+  });
+  
+  // Redirect logged-in users to appropriate page
+  useEffect(() => {
+    if (!authLoading && user) {
+      // User is already logged in, redirect them
+      if (tenantSettings?.onboardingCompleted === 'true') {
+        setLocation('/dashboard');
+      } else {
+        setLocation('/onboarding');
+      }
+    }
+  }, [user, authLoading, tenantSettings, setLocation]);
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
