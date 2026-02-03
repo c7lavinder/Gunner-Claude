@@ -143,9 +143,9 @@ export default function KpiDashboard() {
   const [showAddStaffDialog, setShowAddStaffDialog] = useState(false);
   const [showAddMarketDialog, setShowAddMarketDialog] = useState(false);
   const [showAddChannelDialog, setShowAddChannelDialog] = useState(false);
-  const [editingStaff, setEditingStaff] = useState<{ id: number; name: string; roleType: string; active: boolean } | null>(null);
-  const [editingMarket, setEditingMarket] = useState<{ id: number; name: string; active: boolean } | null>(null);
-  const [editingChannel, setEditingChannel] = useState<{ id: number; name: string; key: string; active: boolean } | null>(null);
+  const [editingStaff, setEditingStaff] = useState<{ id: number; name: string; roleType: "lg_cold_caller" | "lg_sms" | "am" | "lm" } | null>(null);
+  const [editingMarket, setEditingMarket] = useState<{ id: number; name: string } | null>(null);
+  const [editingChannel, setEditingChannel] = useState<{ id: number; name: string; code: string } | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'staff' | 'market' | 'channel'; id: number; name: string } | null>(null);
 
   // New staff/market/channel form state
@@ -1385,6 +1385,13 @@ export default function KpiDashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setEditingStaff({ id: staff.id, name: staff.name, roleType: staff.roleType })}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => {
                               updateStaffMutation.mutate({
                                 id: staff.id,
@@ -1520,6 +1527,13 @@ export default function KpiDashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setEditingMarket({ id: market.id, name: market.name })}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => {
                               updateMarketMutation.mutate({
                                 id: market.id,
@@ -1638,6 +1652,13 @@ export default function KpiDashboard() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingChannel({ id: channel.id, name: channel.name, code: channel.code })}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1764,6 +1785,145 @@ export default function KpiDashboard() {
               }}
             >
               Delete Permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Staff Dialog */}
+      <Dialog open={!!editingStaff} onOpenChange={(open) => !open && setEditingStaff(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Staff Member</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input
+                placeholder="Enter staff name"
+                value={editingStaff?.name || ""}
+                onChange={(e) => setEditingStaff(editingStaff ? { ...editingStaff, name: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={editingStaff?.roleType || "lg_cold_caller"}
+                onValueChange={(val) => setEditingStaff(editingStaff ? { ...editingStaff, roleType: val as "lg_cold_caller" | "lg_sms" | "am" | "lm" } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lg_cold_caller">Lead Gen (Cold Caller)</SelectItem>
+                  <SelectItem value="lg_sms">Lead Gen (SMS)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingStaff(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editingStaff || !editingStaff.name.trim()) {
+                  toast.error("Please enter a name");
+                  return;
+                }
+                updateStaffMutation.mutate({
+                  id: editingStaff.id,
+                  name: editingStaff.name.trim(),
+                  roleType: editingStaff.roleType,
+                });
+                setEditingStaff(null);
+              }}
+              disabled={updateStaffMutation.isPending}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Market Dialog */}
+      <Dialog open={!!editingMarket} onOpenChange={(open) => !open && setEditingMarket(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Market</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Market Name</Label>
+              <Input
+                placeholder="e.g., Nashville, Atlanta"
+                value={editingMarket?.name || ""}
+                onChange={(e) => setEditingMarket(editingMarket ? { ...editingMarket, name: e.target.value } : null)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMarket(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editingMarket || !editingMarket.name.trim()) {
+                  toast.error("Please enter a market name");
+                  return;
+                }
+                updateMarketMutation.mutate({
+                  id: editingMarket.id,
+                  name: editingMarket.name.trim(),
+                });
+                setEditingMarket(null);
+              }}
+              disabled={updateMarketMutation.isPending}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Channel Dialog */}
+      <Dialog open={!!editingChannel} onOpenChange={(open) => !open && setEditingChannel(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Channel</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Channel Name</Label>
+              <Input
+                placeholder="e.g., Cold Calls, SMS"
+                value={editingChannel?.name || ""}
+                onChange={(e) => setEditingChannel(editingChannel ? { ...editingChannel, name: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Code (lowercase, no spaces)</Label>
+              <Input
+                placeholder="e.g., cold_calls, sms"
+                value={editingChannel?.code || ""}
+                onChange={(e) => setEditingChannel(editingChannel ? { ...editingChannel, code: e.target.value.toLowerCase().replace(/\s+/g, '_') } : null)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingChannel(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editingChannel || !editingChannel.name.trim() || !editingChannel.code.trim()) {
+                  toast.error("Please enter both name and code");
+                  return;
+                }
+                updateChannelMutation.mutate({
+                  id: editingChannel.id,
+                  name: editingChannel.name.trim(),
+                  code: editingChannel.code.trim(),
+                });
+                setEditingChannel(null);
+              }}
+              disabled={updateChannelMutation.isPending}
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

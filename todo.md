@@ -383,3 +383,12 @@
 - [x] Add "Manage Channels" button in Campaigns tab
 - [x] Inline add for new markets/channels
 - [x] Soft delete and hard delete options
+
+
+## Edit Functionality for Management Dialogs
+- [x] Add edit button to Staff management dialog
+- [x] Add edit dialog for renaming staff members
+- [x] Add edit button to Markets management dialog
+- [x] Add edit dialog for renaming markets
+- [x] Add edit button to Channels management dialog
+- [x] Add edit dialog for renaming channels (name and code)
