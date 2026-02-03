@@ -5,6 +5,7 @@ import { Route, Switch, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
+import { LoadingScreen } from "./components/LoadingScreen";
 import Home from "./pages/Home";
 import CallInbox from "./pages/CallInbox";
 import CallDetail from "./pages/CallDetail";
@@ -58,6 +59,7 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
+          <LoadingScreen />
           <DashboardLayout>
             <Router />
           </DashboardLayout>

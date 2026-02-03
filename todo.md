@@ -429,3 +429,9 @@
 - [x] Add full logo to sidebar header (expanded view)
 - [x] Add cannon icon to sidebar header (collapsed view)
 - [x] Add favicon using cannon icon
+
+
+## Loading Screen Animation
+- [x] Create LoadingScreen component with Gunner logo
+- [x] Add cannon firing animation effect
+- [x] Integrate loading screen into app initialization
