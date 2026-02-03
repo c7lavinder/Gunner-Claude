@@ -537,6 +537,6 @@
 - [x] Update calls queries to filter by tenantId
 - [x] Update team members queries to filter by tenantId
 - [x] Update training materials queries to filter by tenantId
-- [ ] Update analytics queries to filter by tenantId
-- [ ] Update gamification queries to filter by tenantId
-- [ ] Ensure new records are automatically assigned correct tenantId
+- [x] Update analytics queries to filter by tenantId (getCallStats, getLeaderboardData)
+- [x] Update gamification queries to filter by tenantId (getGamificationLeaderboard)
+- [x] Ensure new records are automatically assigned correct tenantId (team members, training materials)

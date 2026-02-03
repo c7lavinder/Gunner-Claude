@@ -319,7 +319,7 @@ export async function getCallsWithGrades(options: {
 
 // ============ LEADERBOARD FUNCTIONS ============
 
-export async function getLeaderboardData(): Promise<Array<{
+export async function getLeaderboardData(tenantId?: number): Promise<Array<{
   teamMember: TeamMember;
   totalCalls: number;
   gradedCalls: number;
@@ -333,16 +333,20 @@ export async function getLeaderboardData(): Promise<Array<{
   const db = await getDb();
   if (!db) return [];
 
-  const members = await getTeamMembers();
+  const members = await getTeamMembers(tenantId);
   
   const leaderboard = await Promise.all(
     members.map(async (member) => {
-      // Get all non-archived calls for this member
+      // Get all non-archived calls for this member (tenant-scoped)
+      const callConditions = [
+        eq(calls.teamMemberId, member.id),
+        eq(calls.isArchived, "false")
+      ];
+      if (tenantId) {
+        callConditions.push(eq(calls.tenantId, tenantId));
+      }
       const memberCalls = await db.select().from(calls)
-        .where(and(
-          eq(calls.teamMemberId, member.id),
-          eq(calls.isArchived, "false")
-        ));
+        .where(and(...callConditions));
       
       // Only count completed (graded) calls for leaderboard
       const gradedCalls = memberCalls.filter(c => c.status === "completed" && c.classification === "conversation");
@@ -397,6 +401,7 @@ export async function getLeaderboardData(): Promise<Array<{
 export async function getCallStats(options?: {
   dateRange?: "today" | "week" | "month" | "ytd" | "all";
   viewableTeamMemberIds?: number[] | 'all'; // Permission-based filtering
+  tenantId?: number; // Multi-tenant filtering
 }): Promise<{
   totalCalls: number;
   gradedCalls: number;
@@ -537,15 +542,22 @@ export async function getCallStats(options?: {
 
   // Get calls with optional date filter (exclude archived calls)
   let allCalls: Call[];
+  const baseConditions = [eq(calls.isArchived, "false")];
+  
+  // Add tenant filter if provided
+  if (options?.tenantId) {
+    baseConditions.push(eq(calls.tenantId, options.tenantId));
+  }
+  
   if (startDate) {
     allCalls = await db.select().from(calls).where(
       and(
         gte(calls.createdAt, startDate),
-        eq(calls.isArchived, "false")
+        ...baseConditions
       )
     );
   } else {
-    allCalls = await db.select().from(calls).where(eq(calls.isArchived, "false"));
+    allCalls = await db.select().from(calls).where(and(...baseConditions));
   }
   
   // Apply permission-based filtering if viewableTeamMemberIds is provided
@@ -606,8 +618,8 @@ export async function getCallStats(options?: {
     else gradeDistribution.F++;
   }
 
-  // Calculate team member scores
-  const members = await getTeamMembers();
+  // Calculate team member scores (tenant-scoped)
+  const members = await getTeamMembers(options?.tenantId);
   const teamMemberScores = members.map(member => {
     const memberCalls = gradedCalls.filter(c => c.teamMemberId === member.id);
     const memberGrades = grades.filter(g => memberCalls.some(c => c.id === g.callId));
@@ -641,8 +653,13 @@ export async function getCallStats(options?: {
     gradedCalls: number;
   }> = [];
   
-  // Get all calls and grades for trend calculation (ignore date filter for trends)
-  const allCallsForTrends = await db.select().from(calls);
+  // Get all calls and grades for trend calculation (ignore date filter for trends, but apply tenant filter)
+  let allCallsForTrends: Call[];
+  if (options?.tenantId) {
+    allCallsForTrends = await db.select().from(calls).where(eq(calls.tenantId, options.tenantId));
+  } else {
+    allCallsForTrends = await db.select().from(calls);
+  }
   const allGradesForTrends = await db.select().from(callGrades);
   
   for (let i = 11; i >= 0; i--) {

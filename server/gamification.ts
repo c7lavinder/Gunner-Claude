@@ -652,7 +652,7 @@ export async function getGamificationSummary(teamMemberId: number): Promise<{
 /**
  * Get leaderboard with gamification data
  */
-export async function getGamificationLeaderboard(): Promise<Array<{
+export async function getGamificationLeaderboard(tenantId?: number): Promise<Array<{
   teamMemberId: number;
   name: string;
   teamRole: string;
@@ -667,11 +667,15 @@ export async function getGamificationLeaderboard(): Promise<Array<{
   const db = await getDb();
   if (!db) return [];
   
-  // Get all active team members
+  // Get all active team members (tenant-scoped)
+  const memberConditions = [eq(teamMembers.isActive, "true")];
+  if (tenantId) {
+    memberConditions.push(eq(teamMembers.tenantId, tenantId));
+  }
   const members = await db
     .select()
     .from(teamMembers)
-    .where(eq(teamMembers.isActive, "true"));
+    .where(and(...memberConditions));
   
   const leaderboard = await Promise.all(members.map(async (member) => {
     const [xpData, streakData, badgesData] = await Promise.all([

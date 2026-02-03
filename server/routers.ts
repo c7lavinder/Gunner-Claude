@@ -137,8 +137,9 @@ export const appRouter = router({
 
   // ============ TEAM MEMBERS ============
   team: router({
-    list: protectedProcedure.query(async () => {
-      return await getTeamMembers();
+    list: protectedProcedure.query(async ({ ctx }) => {
+      // Pass tenant ID for multi-tenant filtering
+      return await getTeamMembers(ctx.user?.tenantId || undefined);
     }),
 
     getById: protectedProcedure
@@ -153,11 +154,13 @@ export const appRouter = router({
         teamRole: z.enum(["admin", "lead_manager", "acquisition_manager"]),
         ghlUserId: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Include tenantId when creating new team members
         return await createTeamMember({
           name: input.name,
           teamRole: input.teamRole,
           ghlUserId: input.ghlUserId,
+          tenantId: ctx.user?.tenantId || undefined,
         });
       }),
 
@@ -502,8 +505,9 @@ export const appRouter = router({
 
   // ============ LEADERBOARD ============
   leaderboard: router({
-    get: protectedProcedure.query(async () => {
-      return await getLeaderboardData();
+    get: protectedProcedure.query(async ({ ctx }) => {
+      // Pass tenant ID for multi-tenant filtering
+      return await getLeaderboardData(ctx.user?.tenantId || undefined);
     }),
   }),
 
@@ -527,10 +531,11 @@ export const appRouter = router({
         // Get viewable team member IDs based on permissions
         const viewableIds = await getViewableTeamMemberIds(permissionContext);
         
-        // Pass viewable IDs to getCallStats for filtering
+        // Pass viewable IDs and tenant ID to getCallStats for filtering
         return await getCallStats({
           ...input,
           viewableTeamMemberIds: viewableIds,
+          tenantId: ctx.user?.tenantId || undefined,
         });
       }),
   }),
@@ -565,8 +570,12 @@ export const appRouter = router({
         category: z.string().optional(),
         applicableTo: z.string().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getTrainingMaterials(input || {});
+      .query(async ({ ctx, input }) => {
+        // Pass tenant ID for multi-tenant filtering
+        return await getTrainingMaterials({
+          ...input,
+          tenantId: ctx.user?.tenantId || undefined,
+        });
       }),
 
     getById: protectedProcedure
@@ -591,7 +600,7 @@ export const appRouter = router({
         category: z.enum(["script", "objection_handling", "methodology", "best_practices", "examples", "other"]).optional(),
         applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         let extractedContent = input.content;
         
         // If file data is provided, parse the document to extract text
@@ -609,6 +618,7 @@ export const appRouter = router({
           }
         }
         
+        // Include tenantId when creating new training materials
         return await createTrainingMaterial({
           title: input.title,
           description: input.description,
@@ -618,6 +628,7 @@ export const appRouter = router({
           fileType: input.fileType,
           category: input.category || "other",
           applicableTo: input.applicableTo || "all",
+          tenantId: ctx.user?.tenantId || undefined,
         });
       }),
 
@@ -1820,9 +1831,9 @@ Create content that:
       return getAllBadgesWithProgress(teamMember.id, teamMember.teamRole);
     }),
 
-    // Get gamification leaderboard
-    getLeaderboard: protectedProcedure.query(async () => {
-      return getGamificationLeaderboard();
+    // Get gamification leaderboard (tenant-scoped)
+    getLeaderboard: protectedProcedure.query(async ({ ctx }) => {
+      return getGamificationLeaderboard(ctx.user?.tenantId || undefined);
     }),
 
     // Process rewards when viewing a call (awards XP and updates streaks)

@@ -82,3 +82,44 @@ describe('Tenant Invite/Remove Functions', () => {
     });
   });
 });
+
+describe('Analytics Tenant Scoping', () => {
+  describe('getCallStats function', () => {
+    it('should accept tenantId in options', async () => {
+      const { getCallStats } = await import('./db');
+      
+      expect(typeof getCallStats).toBe('function');
+      
+      // Function should accept tenantId in options
+      const result = await getCallStats({ tenantId: 1 });
+      expect(typeof result).toBe('object');
+      expect(typeof result.totalCalls).toBe('number');
+    });
+  });
+
+  describe('getLeaderboardData function', () => {
+    it('should accept tenantId parameter', async () => {
+      const { getLeaderboardData } = await import('./db');
+      
+      expect(typeof getLeaderboardData).toBe('function');
+      
+      // Function should accept tenantId parameter
+      const result = await getLeaderboardData(1);
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+});
+
+describe('Gamification Tenant Scoping', () => {
+  describe('getGamificationLeaderboard function', () => {
+    it('should accept tenantId parameter', async () => {
+      const { getGamificationLeaderboard } = await import('./gamification');
+      
+      expect(typeof getGamificationLeaderboard).toBe('function');
+      
+      // Function should accept tenantId parameter
+      const result = await getGamificationLeaderboard(1);
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+});
