@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { signUpWithEmail, signInWithEmail, getUserWithTenant, createSessionToken, requestPasswordReset, verifyResetToken, resetPassword } from "./selfServeAuth";
 import { createTenantCheckoutSession } from "./tenant";
+import { exchangeCodeForTokens, decodeIdToken, signInWithGoogle, completeGoogleSignup, getGoogleAuthUrl } from "./googleAuth";
 
 const router = Router();
 
@@ -235,6 +236,175 @@ router.post("/reset-password", async (req: Request, res: Response) => {
     res.json({ success: true, message: "Password has been reset successfully. You can now log in with your new password." });
   } catch (error) {
     console.error('[Auth] Reset password error:', error);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+// ============ GOOGLE OAUTH ROUTES ============
+
+// Get Google OAuth URL
+router.get("/google/url", (req: Request, res: Response) => {
+  try {
+    const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+    const redirectUri = `${origin}/api/auth/google/callback`;
+    const state = req.query.state as string || '';
+    
+    const url = getGoogleAuthUrl(redirectUri, state);
+    res.json({ url });
+  } catch (error) {
+    console.error('[Auth] Google URL error:', error);
+    res.status(500).json({ success: false, error: "Failed to generate Google auth URL" });
+  }
+});
+
+// Google OAuth callback
+router.get("/google/callback", async (req: Request, res: Response) => {
+  try {
+    const { code, error: oauthError, state } = req.query;
+    const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+    
+    if (oauthError) {
+      console.error('[Auth] Google OAuth error:', oauthError);
+      res.redirect(`/login?error=google_auth_failed`);
+      return;
+    }
+    
+    if (!code || typeof code !== 'string') {
+      res.redirect(`/login?error=missing_code`);
+      return;
+    }
+    
+    const redirectUri = `${origin}/api/auth/google/callback`;
+    
+    // Exchange code for tokens
+    const tokens = await exchangeCodeForTokens(code, redirectUri);
+    if (!tokens) {
+      res.redirect(`/login?error=token_exchange_failed`);
+      return;
+    }
+    
+    // Decode ID token to get user info
+    const userInfo = decodeIdToken(tokens.id_token);
+    if (!userInfo) {
+      res.redirect(`/login?error=invalid_token`);
+      return;
+    }
+    
+    // Sign in or check if new user
+    const result = await signInWithGoogle({
+      googleId: userInfo.sub,
+      email: userInfo.email,
+      name: userInfo.name,
+      picture: userInfo.picture,
+    });
+    
+    if (!result.success) {
+      res.redirect(`/login?error=${encodeURIComponent(result.error || 'unknown_error')}`);
+      return;
+    }
+    
+    if (result.isNewUser) {
+      // New user - redirect to signup with Google info
+      const googleData = encodeURIComponent(JSON.stringify({
+        googleId: userInfo.sub,
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
+      }));
+      res.redirect(`/signup?google=${googleData}`);
+      return;
+    }
+    
+    // Existing user - set cookie and redirect
+    res.cookie('auth_token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+    
+    // Redirect based on onboarding status
+    if (result.needsOnboarding) {
+      res.redirect('/onboarding');
+    } else {
+      res.redirect('/dashboard');
+    }
+  } catch (error) {
+    console.error('[Auth] Google callback error:', error);
+    res.redirect(`/login?error=callback_failed`);
+  }
+});
+
+// Complete Google signup with company info
+router.post("/google/complete-signup", async (req: Request, res: Response) => {
+  try {
+    const { googleId, email, name, picture, companyName, planId } = req.body;
+    
+    if (!googleId || !email || !name || !companyName || !planId) {
+      res.status(400).json({ success: false, error: "All fields are required" });
+      return;
+    }
+    
+    if (!['starter', 'growth', 'scale'].includes(planId)) {
+      res.status(400).json({ success: false, error: "Invalid plan selected" });
+      return;
+    }
+    
+    const result = await completeGoogleSignup({
+      googleId,
+      email,
+      name,
+      picture,
+      companyName,
+      planId,
+    });
+    
+    if (!result.success) {
+      res.status(400).json({ success: false, error: result.error });
+      return;
+    }
+    
+    // Set cookie for session
+    res.cookie('auth_token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+    
+    // Create checkout session for the selected plan
+    try {
+      const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+      const checkoutResult = await createTenantCheckoutSession({
+        planCode: planId,
+        billingPeriod: 'monthly',
+        userId: result.userId!,
+        userEmail: email,
+        userName: name,
+        tenantId: result.tenantId!,
+        origin,
+      });
+      
+      res.json({
+        success: true,
+        token: result.token,
+        userId: result.userId,
+        tenantId: result.tenantId,
+        onboardingComplete: false,
+        checkoutUrl: checkoutResult.url,
+      });
+    } catch (checkoutError) {
+      console.error('[Auth] Google signup checkout error:', checkoutError);
+      res.json({
+        success: true,
+        token: result.token,
+        userId: result.userId,
+        tenantId: result.tenantId,
+        onboardingComplete: false,
+      });
+    }
+  } catch (error) {
+    console.error('[Auth] Google complete signup error:', error);
     res.status(500).json({ success: false, error: "Internal server error" });
   }
 });

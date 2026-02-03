@@ -739,3 +739,20 @@
 - [x] Move landing page from /landing to / (root route)
 - [x] Update all internal links to landing page
 - [x] Redirect /landing to / for backwards compatibility
+
+
+## Google Sign-In Authentication
+
+- [ ] Set up Google OAuth credentials (Client ID and Secret)
+- [ ] Create Google OAuth backend routes
+- [ ] Add Google Sign-In button to login page
+- [ ] Handle Google callback and user creation/login
+- [ ] Test Google authentication flow
+
+
+## Google Sign-In Authentication
+- [x] Create Google OAuth backend handler
+- [x] Add Google OAuth routes to selfServeAuthRoutes
+- [x] Add Google Sign-In button to Login page
+- [x] Add Google Sign-Up flow to Signup page
+- [x] Configure Google OAuth credentials
