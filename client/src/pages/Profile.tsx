@@ -294,11 +294,18 @@ export default function Profile() {
                 <BadgeCard key={badge.code} badge={badge} />
               ))}
             </div>
-          ) : (
+          ) : earnedBadges.length === allBadges?.length ? (
             <Card className="bg-muted/30">
               <CardContent className="flex flex-col items-center justify-center py-8">
                 <CheckCircle className="h-12 w-12 text-green-500/50 mb-2" />
                 <p className="text-muted-foreground">All badges earned! You're a legend!</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="bg-muted/30">
+              <CardContent className="flex flex-col items-center justify-center py-8">
+                <Zap className="h-12 w-12 text-orange-500/50 mb-2" />
+                <p className="text-muted-foreground">Start making calls to unlock badges!</p>
               </CardContent>
             </Card>
           )}

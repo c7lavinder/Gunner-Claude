@@ -330,3 +330,6 @@
 
 ## Automatic XP Awards
 - [x] Award XP automatically when calls are graded (no manual button needed)
+
+## Bug Fixes
+- [x] Fix Profile "In Progress" section showing "All badges earned!" when user has zero badges

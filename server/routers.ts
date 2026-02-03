@@ -1800,7 +1800,23 @@ Create content that:
     // Get all badges with progress for current user
     getAllBadges: protectedProcedure.query(async ({ ctx }) => {
       const teamMember = await getTeamMemberByUserId(ctx.user.id);
-      if (!teamMember) return [];
+      if (!teamMember) {
+        // For users without team member link (like admins), show all universal badges with zero progress
+        const { ALL_BADGES } = await import("./gamification");
+        return ALL_BADGES.filter(b => b.category === "universal").map(badgeDef => ({
+          code: badgeDef.code,
+          name: badgeDef.name,
+          description: badgeDef.description,
+          icon: badgeDef.icon,
+          category: badgeDef.category,
+          tiers: {
+            bronze: { target: badgeDef.tiers.bronze.count, earned: false },
+            silver: { target: badgeDef.tiers.silver.count, earned: false },
+            gold: { target: badgeDef.tiers.gold.count, earned: false },
+          },
+          currentProgress: 0,
+        }));
+      }
       return getAllBadgesWithProgress(teamMember.id, teamMember.teamRole);
     }),
 
