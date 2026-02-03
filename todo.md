@@ -337,3 +337,5 @@
 ## Dashboard UI Improvements
 - [x] Remove Classification Breakdown section from dashboard
 - [x] Add sharp red accents and lines to dashboard
+- [x] Apply red accents to Analytics page
+- [x] Apply red accents to Call History page

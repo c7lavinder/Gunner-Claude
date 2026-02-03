@@ -32,17 +32,17 @@ function StatCard({
   variant?: "default" | "success" | "warning" | "danger";
 }) {
   const variantStyles = {
-    default: "",
-    success: "border-green-200 dark:border-green-900",
-    warning: "border-yellow-200 dark:border-yellow-900",
-    danger: "border-red-200 dark:border-red-900",
+    default: "border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow",
+    success: "border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow",
+    warning: "border-l-4 border-l-yellow-500 shadow-sm hover:shadow-md transition-shadow",
+    danger: "border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow",
   };
 
   const iconStyles = {
-    default: "text-muted-foreground",
+    default: "text-red-600",
     success: "text-green-500",
     warning: "text-yellow-500",
-    danger: "text-red-500",
+    danger: "text-red-600",
   };
 
   return (
@@ -174,7 +174,7 @@ export default function Analytics() {
       </div>
 
       {/* Team Leaderboard */}
-      <Card className="mb-6">
+      <Card className="mb-6 border-t-4 border-t-red-600 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
@@ -325,7 +325,7 @@ export default function Analytics() {
       {/* Analytics Insights Section */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Score Distribution */}
-        <Card>
+        <Card className="border-t-4 border-t-red-600 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-blue-500" />
@@ -372,7 +372,7 @@ export default function Analytics() {
         </Card>
 
         {/* Call Metrics */}
-        <Card>
+        <Card className="border-t-4 border-t-red-600 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-purple-500" />
@@ -416,7 +416,7 @@ export default function Analytics() {
       </div>
 
       {/* Team Member Scores Table */}
-      <Card>
+      <Card className="border-t-4 border-t-red-600 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5 text-indigo-500" />

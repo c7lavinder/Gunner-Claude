@@ -85,7 +85,7 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
   
   return (
     <Link href={`/calls/${call.id}`}>
-      <Card className="card-hover cursor-pointer">
+      <Card className="card-hover cursor-pointer border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -965,7 +965,7 @@ export default function CallInbox() {
                 <div className="space-y-4">
                   {adminCalls.map((item) => (
                     <Link key={item.id} href={`/calls/${item.id}`}>
-                      <Card className="card-hover cursor-pointer">
+                      <Card className="card-hover cursor-pointer border-l-4 border-l-red-600 shadow-sm hover:shadow-md transition-shadow">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
