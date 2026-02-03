@@ -141,9 +141,11 @@ export default function KpiDashboard() {
 
   // Campaign KPI form state
   const [campaignKpiForm, setCampaignKpiForm] = useState({
+    market: "global" as "tennessee" | "global",
     channel: "cold_calls" as string,
     spent: "",
     volume: "",
+    contacts: "",
     leads: "",
     offers: "",
     contracts: "",
@@ -297,9 +299,11 @@ export default function KpiDashboard() {
     }
     upsertCampaignKpiMutation.mutate({
       periodId: selectedPeriodId,
+      market: campaignKpiForm.market,
       channel: campaignKpiForm.channel as any,
       spent: parseFloat(campaignKpiForm.spent) || 0,
       volume: parseFloat(campaignKpiForm.volume) || 0,
+      contacts: parseFloat(campaignKpiForm.contacts) || 0,
       leads: parseFloat(campaignKpiForm.leads) || 0,
       offers: parseFloat(campaignKpiForm.offers) || 0,
       contracts: parseFloat(campaignKpiForm.contracts) || 0,
@@ -503,6 +507,21 @@ export default function KpiDashboard() {
                       </DialogHeader>
                       <div className="grid grid-cols-2 gap-4 py-4">
                         <div className="space-y-2">
+                          <Label>Market</Label>
+                          <Select
+                            value={campaignKpiForm.market}
+                            onValueChange={(val) => setCampaignKpiForm({ ...campaignKpiForm, market: val as "tennessee" | "global" })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="tennessee">Tennessee</SelectItem>
+                              <SelectItem value="global">Global</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
                           <Label>Channel</Label>
                           <Select
                             value={campaignKpiForm.channel}
@@ -528,12 +547,21 @@ export default function KpiDashboard() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Volume</Label>
+                          <Label>Volume (Sent/Made)</Label>
                           <Input
                             type="number"
                             placeholder="0"
                             value={campaignKpiForm.volume}
                             onChange={(e) => setCampaignKpiForm({ ...campaignKpiForm, volume: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Contacts (Answered/Responded)</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={campaignKpiForm.contacts}
+                            onChange={(e) => setCampaignKpiForm({ ...campaignKpiForm, contacts: e.target.value })}
                           />
                         </div>
                         <div className="space-y-2">
@@ -605,9 +633,12 @@ export default function KpiDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Market</TableHead>
                         <TableHead>Channel</TableHead>
                         <TableHead className="text-right">Spent</TableHead>
                         <TableHead className="text-right">Volume</TableHead>
+                        <TableHead className="text-right">Contacts</TableHead>
+                        <TableHead className="text-right">Contact %</TableHead>
                         <TableHead className="text-right">Leads</TableHead>
                         <TableHead className="text-right">Offers</TableHead>
                         <TableHead className="text-right">Contracts</TableHead>
@@ -620,16 +651,19 @@ export default function KpiDashboard() {
                     <TableBody>
                       {scoreboard?.channels.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                          <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
                             No campaign data for this period. Click "Add Campaign Data" to get started.
                           </TableCell>
                         </TableRow>
                       ) : (
-                        scoreboard?.channels.map((channel) => (
-                          <TableRow key={channel.channel}>
+                        scoreboard?.channels.map((channel, idx) => (
+                          <TableRow key={`${channel.market}-${channel.channel}-${idx}`}>
+                            <TableCell className="font-medium capitalize">{channel.market}</TableCell>
                             <TableCell className="font-medium">{CHANNEL_NAMES[channel.channel] || channel.channel}</TableCell>
                             <TableCell className="text-right">{formatCurrency(channel.spent)}</TableCell>
                             <TableCell className="text-right">{channel.volume}</TableCell>
+                            <TableCell className="text-right">{channel.contacts}</TableCell>
+                            <TableCell className="text-right">{formatPercent(channel.contactRate)}</TableCell>
                             <TableCell className="text-right">{channel.leads}</TableCell>
                             <TableCell className="text-right">{channel.offers}</TableCell>
                             <TableCell className="text-right">{channel.contracts}</TableCell>

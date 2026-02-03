@@ -651,6 +651,7 @@ export type InsertTeamMemberKpi = typeof teamMemberKpis.$inferInsert;
 export const campaignKpis = mysqlTable("campaign_kpis", {
   id: int("id").autoincrement().primaryKey(),
   periodId: int("periodId").references(() => kpiPeriods.id).notNull(),
+  market: mysqlEnum("market", ["tennessee", "global"]).default("global").notNull(),
   channel: mysqlEnum("channel", [
     "cold_calls", 
     "sms", 
@@ -664,6 +665,7 @@ export const campaignKpis = mysqlTable("campaign_kpis", {
   // Metrics
   spent: int("spent").default(0).notNull(), // in cents
   volume: int("volume").default(0).notNull(), // # sent (calls, sms, postcards, etc.)
+  contacts: int("contacts").default(0).notNull(), // # answered/responded (for answer rate/response rate)
   leads: int("leads").default(0).notNull(),
   offers: int("offers").default(0).notNull(),
   contracts: int("contracts").default(0).notNull(),

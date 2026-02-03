@@ -351,3 +351,5 @@
 - [x] Build Deal Log section
 - [x] Add data entry forms for daily/weekly input
 - [x] Admin-only access restriction
+- [x] Add market selection (Tennessee, Global) to campaign tracking
+- [x] Add contacts field to campaign tracking for answer/response rate

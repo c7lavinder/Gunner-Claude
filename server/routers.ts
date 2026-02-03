@@ -1941,9 +1941,11 @@ Create content that:
     upsertCampaignKpi: protectedProcedure
       .input(z.object({
         periodId: z.number(),
+        market: z.enum(["tennessee", "global"]),
         channel: z.enum(["cold_calls", "sms", "forms", "ppl", "jv", "ppc", "postcards", "referrals"]),
         spent: z.number(),
         volume: z.number(),
+        contacts: z.number(),
         leads: z.number(),
         offers: z.number(),
         contracts: z.number(),

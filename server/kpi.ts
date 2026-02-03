@@ -137,9 +137,11 @@ export async function getCampaignKpis(periodId: number) {
 
 export async function upsertCampaignKpi(data: {
   periodId: number;
+  market: "tennessee" | "global";
   channel: "cold_calls" | "sms" | "forms" | "ppl" | "jv" | "ppc" | "postcards" | "referrals";
   spent: number;
   volume: number;
+  contacts: number;
   leads: number;
   offers: number;
   contracts: number;
@@ -150,13 +152,14 @@ export async function upsertCampaignKpi(data: {
   const db = await getDb();
   if (!db) return null;
   
-  // Check if record exists
+  // Check if record exists (unique by period + market + channel)
   const [existing] = await db
     .select()
     .from(campaignKpis)
     .where(
       and(
         eq(campaignKpis.periodId, data.periodId),
+        eq(campaignKpis.market, data.market),
         eq(campaignKpis.channel, data.channel)
       )
     );
@@ -167,6 +170,7 @@ export async function upsertCampaignKpi(data: {
       .set({
         spent: data.spent,
         volume: data.volume,
+        contacts: data.contacts,
         leads: data.leads,
         offers: data.offers,
         contracts: data.contracts,
@@ -267,6 +271,7 @@ export async function getScoreboardData(periodId: number) {
   const totals = {
     spent: 0,
     volume: 0,
+    contacts: 0,
     leads: 0,
     offers: 0,
     contracts: 0,
@@ -277,6 +282,7 @@ export async function getScoreboardData(periodId: number) {
   const channelData = campaigns.map((c: CampaignKpi) => {
     totals.spent += c.spent;
     totals.volume += c.volume;
+    totals.contacts += c.contacts;
     totals.leads += c.leads;
     totals.offers += c.offers;
     totals.contracts += c.contracts;
@@ -285,14 +291,17 @@ export async function getScoreboardData(periodId: number) {
 
     return {
       channel: c.channel,
+      market: c.market,
       spent: c.spent,
       volume: c.volume,
+      contacts: c.contacts,
       leads: c.leads,
       offers: c.offers,
       contracts: c.contracts,
       deals: c.dealsCount,
       revenue: c.revenue,
       // Calculated metrics
+      contactRate: c.volume > 0 ? (c.contacts / c.volume) * 100 : 0, // Answer rate / Response rate
       costPerLead: c.leads > 0 ? c.spent / c.leads : 0,
       costPerOffer: c.offers > 0 ? c.spent / c.offers : 0,
       costPerContract: c.contracts > 0 ? c.spent / c.contracts : 0,
@@ -305,6 +314,7 @@ export async function getScoreboardData(periodId: number) {
     channels: channelData,
     totals: {
       ...totals,
+      contactRate: totals.volume > 0 ? (totals.contacts / totals.volume) * 100 : 0,
       costPerLead: totals.leads > 0 ? totals.spent / totals.leads : 0,
       costPerOffer: totals.offers > 0 ? totals.spent / totals.offers : 0,
       costPerContract: totals.contracts > 0 ? totals.spent / totals.contracts : 0,
