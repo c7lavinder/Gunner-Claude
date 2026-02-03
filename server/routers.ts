@@ -155,6 +155,17 @@ export const appRouter = router({
         ghlUserId: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check plan limits before adding team member
+        if (ctx.user?.tenantId) {
+          const { canAddUser } = await import("./planLimits");
+          const limitCheck = await canAddUser(ctx.user.tenantId);
+          if (!limitCheck.allowed) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: limitCheck.reason || 'Team member limit reached. Please upgrade your plan.',
+            });
+          }
+        }
         // Include tenantId when creating new team members
         return await createTeamMember({
           name: input.name,
@@ -2339,6 +2350,15 @@ Create content that:
         if (ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
+        // Check plan limits before inviting
+        const { canAddUser } = await import("./planLimits");
+        const limitCheck = await canAddUser(ctx.user.tenantId);
+        if (!limitCheck.allowed) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: limitCheck.reason || 'Team member limit reached. Please upgrade your plan.',
+          });
+        }
         return inviteUserToTenant(ctx.user.tenantId, input.email, input.role, input.teamRole);
       }),
 
@@ -2468,6 +2488,33 @@ Create content that:
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       return reactivateTenantSubscription(ctx.user.tenantId);
+    }),
+
+    // Get usage summary for current tenant
+    getUsageSummary: protectedProcedure.query(async ({ ctx }) => {
+      const { getTenantUsageSummary } = await import("./planLimits");
+      if (!ctx.user?.tenantId) {
+        return null;
+      }
+      return getTenantUsageSummary(ctx.user.tenantId);
+    }),
+
+    // Check if can add more users
+    canAddUser: protectedProcedure.query(async ({ ctx }) => {
+      const { canAddUser } = await import("./planLimits");
+      if (!ctx.user?.tenantId) {
+        return { allowed: false, reason: 'No tenant associated' };
+      }
+      return canAddUser(ctx.user.tenantId);
+    }),
+
+    // Check if can process more calls
+    canProcessCall: protectedProcedure.query(async ({ ctx }) => {
+      const { canProcessCall } = await import("./planLimits");
+      if (!ctx.user?.tenantId) {
+        return { allowed: false, reason: 'No tenant associated' };
+      }
+      return canProcessCall(ctx.user.tenantId);
     }),
   }),
 });

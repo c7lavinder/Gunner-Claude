@@ -524,6 +524,7 @@ Respond with JSON only:
 
 import { getCallById, updateCall, createCallGrade, getTeamMemberById, getGradingContext } from "./db";
 import { processCallViewRewards } from "./gamification";
+import { canProcessCall } from "./planLimits";
 
 export async function processCall(callId: number): Promise<void> {
   const call = await getCallById(callId);
@@ -536,6 +537,20 @@ export async function processCall(callId: number): Promise<void> {
     console.error(`[ProcessCall] Call ${callId} has no recording URL`);
     await updateCall(callId, { status: "failed" });
     return;
+  }
+
+  // Check plan limits before processing
+  if (call.tenantId) {
+    const limitCheck = await canProcessCall(call.tenantId);
+    if (!limitCheck.allowed) {
+      console.log(`[ProcessCall] Call ${callId} skipped - tenant ${call.tenantId} has reached call limit`);
+      await updateCall(callId, {
+        status: "skipped",
+        classification: "limit_reached",
+        classificationReason: limitCheck.reason || "Monthly call grading limit reached. Please upgrade your plan.",
+      });
+      return;
+    }
   }
 
   try {

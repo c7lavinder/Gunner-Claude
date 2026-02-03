@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch, Redirect, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
@@ -20,8 +20,25 @@ import Onboarding from "./pages/Onboarding";
 import Pricing from "./pages/Pricing";
 import SuperAdmin from "./pages/SuperAdmin";
 import TenantSettings from "./pages/TenantSettings";
+import Landing from "./pages/Landing";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 
-function Router() {
+// Public routes that don't need DashboardLayout
+const PUBLIC_ROUTES = ['/landing', '/login', '/signup', '/forgot-password'];
+
+function PublicRouter() {
+  return (
+    <Switch>
+      <Route path="/landing" component={Landing} />
+      <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
+function ProtectedRouter() {
   return (
     <Switch>
       <Route path="/" component={Home} />
@@ -61,6 +78,23 @@ function Router() {
   );
 }
 
+function AppContent() {
+  const [location] = useLocation();
+  
+  // Check if current route is a public route
+  const isPublicRoute = PUBLIC_ROUTES.some(route => location.startsWith(route));
+  
+  if (isPublicRoute) {
+    return <PublicRouter />;
+  }
+  
+  return (
+    <DashboardLayout>
+      <ProtectedRouter />
+    </DashboardLayout>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -68,9 +102,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <LoadingScreen />
-          <DashboardLayout>
-            <Router />
-          </DashboardLayout>
+          <AppContent />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

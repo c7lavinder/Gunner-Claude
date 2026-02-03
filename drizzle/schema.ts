@@ -53,7 +53,9 @@ export const users = mysqlTable("users", {
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
+  passwordHash: varchar("passwordHash", { length: 255 }), // For email/password auth
+  emailVerified: mysqlEnum("emailVerified", ["true", "false"]).default("false"), // Email verification status
+  loginMethod: varchar("loginMethod", { length: 64 }), // 'manus_oauth' or 'email_password'
   role: mysqlEnum("role", ["user", "admin", "super_admin"]).default("user").notNull(), // Added super_admin for platform owner
   // Team role for call coaching
   teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager"]).default("lead_manager"),
@@ -193,7 +195,7 @@ export const calls = mysqlTable("calls", {
   // Call outcome - what was achieved on this call
   callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_accepted", "offer_rejected", "follow_up", "disqualified"]).default("none"),
   // Call classification - determines if call should be graded
-  classification: mysqlEnum("classification", ["pending", "conversation", "voicemail", "no_answer", "callback_request", "wrong_number", "too_short", "admin_call"]).default("pending"),
+  classification: mysqlEnum("classification", ["pending", "conversation", "voicemail", "no_answer", "callback_request", "wrong_number", "too_short", "admin_call", "limit_reached"]).default("pending"),
   classificationReason: text("classificationReason"), // AI explanation for classification
   // Processing status
   status: mysqlEnum("status", ["pending", "transcribing", "classifying", "grading", "completed", "skipped", "failed"]).default("pending"),

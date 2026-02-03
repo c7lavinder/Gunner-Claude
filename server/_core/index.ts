@@ -12,6 +12,7 @@ import { seedTeamMembers } from "../db";
 import { startPolling } from "../ghlService";
 import { initializeBadges } from "../gamification";
 import { handleStripeWebhook } from "../stripe/webhook";
+import selfServeAuthRoutes from "../selfServeAuthRoutes";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -47,6 +48,9 @@ async function startServer() {
   
   // GoHighLevel webhook endpoint
   app.post("/api/webhook/ghl", handleGHLWebhook);
+  
+  // Self-serve auth routes (email/password)
+  app.use("/api/auth", selfServeAuthRoutes);
   
   // Seed team members on startup
   seedTeamMembers().catch(err => console.error("Failed to seed team members:", err));

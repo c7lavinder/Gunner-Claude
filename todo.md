@@ -601,3 +601,62 @@
 ## Bug Fixes
 
 - [x] Fix analytics page "Today" filter showing blank data (calls were missing tenantId)
+
+
+## White-Label Launch - Priority 1: Self-Serve Signup Flow
+
+### Landing Page
+- [x] Create public landing page at /landing
+- [x] Hero section with headline, subheadline, CTA button
+- [x] Features section showcasing AI grading, analytics, gamification
+- [x] Pricing table ($99 Starter / $249 Growth / $499 Scale)
+- [x] "Start Free Trial" CTA linking to signup
+- [x] Footer with links
+
+### Email/Password Authentication
+- [x] Create users table fields for email/password auth (passwordHash, emailVerified)
+- [x] Build signup page (/signup) with email, password, confirm password
+- [x] Build login page (/login) with email/password
+- [x] Implement password hashing with bcrypt
+- [x] Add JWT session management for email/password users
+- [x] Keep Manus OAuth as internal-only option (existing auth flow)
+
+### Signup Flow
+- [x] Signup form → Plan selection → Stripe checkout → Onboarding
+- [x] 14-day free trial (card optional for trial)
+- [x] Create tenant automatically on successful signup
+- [ ] Email verification (optional for MVP)
+
+## White-Label Launch - Priority 2: Onboarding Wizard
+
+- [x] Step 1: Company info (name, timezone)
+- [x] Step 2: Connect CRM (GHL now, others "coming soon")
+- [x] Step 3: Define team roles
+- [x] Step 4: Upload training materials (or skip)
+- [x] Step 5: Invite team members (email, assign roles)
+- [x] Step 6: Done → Redirect to Dashboard
+- [x] Progress indicator showing current step
+- [x] Allow skipping optional steps
+- [ ] Save progress so users can resume (optional enhancement)
+
+## White-Label Launch - Priority 3: Plan Limit Enforcement
+
+- [x] Define plan limits in config (Starter: 3 users/500 calls, Growth: 10/2000, Scale: unlimited)
+- [x] Track monthly call usage per tenant (getTenantUsage function)
+- [x] Show usage vs limit in Company Settings (getUsageSummary route)
+- [x] Block adding team members over limit (canAddUser check in team.create and tenant.inviteUser)
+- [x] Block call processing over monthly limit (canProcessCall check in grading.ts)
+- [x] Show upgrade prompts when approaching limits (already in TenantSettings billing tab)
+- [x] Reset call counts monthly (automatic - counts calls from start of month)
+
+## White-Label Launch - Priority 4: Enhanced Super Admin
+
+- [x] Create /super-admin route (super_admin role only) - already exists at /admin
+- [x] All tenants list with search/filter
+- [x] MRR / ARR / signups / churn metrics
+- [x] Failed payments flagged (past_due in Alerts tab)
+- [x] Trial expiring soon flagged (Alerts tab)
+- [x] Recent activity feed (Activity tab)
+- [x] Revenue breakdown by plan (Revenue tab)
+- [ ] Low usage flagged (churn risk) - enhancement
+- [ ] Support access to view any tenant's data - enhancement

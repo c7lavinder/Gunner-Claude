@@ -11,6 +11,7 @@ export interface SubscriptionPlan {
   priceMonthly: number; // in cents
   priceYearly: number; // in cents
   maxUsers: number;
+  maxCallsPerMonth: number; // -1 for unlimited
   maxCrmIntegrations: number;
   features: string[];
   popular?: boolean;
@@ -25,6 +26,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceMonthly: 9900, // $99
     priceYearly: 99000, // $990 (2 months free)
     maxUsers: 3,
+    maxCallsPerMonth: 500,
     maxCrmIntegrations: 1,
     features: [
       "AI call grading",
@@ -43,6 +45,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceMonthly: 24900, // $249
     priceYearly: 249000, // $2,490 (2 months free)
     maxUsers: 10,
+    maxCallsPerMonth: 2000,
     maxCrmIntegrations: 2,
     features: [
       "Everything in Starter",
@@ -63,6 +66,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceMonthly: 49900, // $499
     priceYearly: 499000, // $4,990 (2 months free)
     maxUsers: 999, // Unlimited
+    maxCallsPerMonth: -1, // Unlimited
     maxCrmIntegrations: 5,
     features: [
       "Everything in Growth",

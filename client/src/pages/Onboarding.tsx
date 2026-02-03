@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,74 +8,141 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Check, Building2, CreditCard, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft } from "lucide-react";
+import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 const STEPS = [
   { id: 1, title: "Company Info", icon: Building2, description: "Tell us about your business" },
-  { id: 2, title: "Choose Plan", icon: CreditCard, description: "Select your subscription" },
-  { id: 3, title: "Connect CRM", icon: Link2, description: "Integrate your CRM" },
+  { id: 2, title: "Connect CRM", icon: Link2, description: "Integrate your CRM" },
+  { id: 3, title: "Define Roles", icon: UserPlus, description: "Set up team roles" },
   { id: 4, title: "Training", icon: FileText, description: "Upload training materials" },
   { id: 5, title: "Invite Team", icon: Users, description: "Add team members" },
   { id: 6, title: "Launch", icon: Rocket, description: "You're ready to go!" },
 ];
 
-const PLANS = [
-  {
-    id: "starter",
-    name: "Starter",
-    price: 99,
-    period: "month",
-    description: "Perfect for small teams",
-    features: ["Up to 3 team members", "AI call grading", "Basic analytics", "1 CRM integration"],
-  },
-  {
-    id: "growth",
-    name: "Growth",
-    price: 249,
-    period: "month",
-    description: "For growing teams",
-    features: ["Up to 10 team members", "Advanced analytics", "Custom rubrics", "2 CRM integrations"],
-    popular: true,
-  },
-  {
-    id: "scale",
-    name: "Scale",
-    price: 499,
-    period: "month",
-    description: "Enterprise features",
-    features: ["Unlimited team members", "API access", "Custom branding", "5 CRM integrations"],
-  },
+const TIMEZONES = [
+  { value: "America/New_York", label: "Eastern Time (ET)" },
+  { value: "America/Chicago", label: "Central Time (CT)" },
+  { value: "America/Denver", label: "Mountain Time (MT)" },
+  { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
+  { value: "America/Phoenix", label: "Arizona (No DST)" },
+  { value: "America/Anchorage", label: "Alaska Time" },
+  { value: "Pacific/Honolulu", label: "Hawaii Time" },
+  { value: "UTC", label: "UTC" },
 ];
 
 const CRM_OPTIONS = [
-  { id: "ghl", name: "GoHighLevel", description: "Popular CRM for agencies" },
-  { id: "hubspot", name: "HubSpot", description: "Enterprise CRM platform" },
-  { id: "salesforce", name: "Salesforce", description: "World's #1 CRM" },
-  { id: "close", name: "Close", description: "Built for sales teams" },
-  { id: "pipedrive", name: "Pipedrive", description: "Sales-focused CRM" },
-  { id: "none", name: "Skip for now", description: "Connect later" },
+  { id: "ghl", name: "GoHighLevel", description: "Popular CRM for agencies", available: true },
+  { id: "hubspot", name: "HubSpot", description: "Enterprise CRM platform", available: false },
+  { id: "salesforce", name: "Salesforce", description: "World's #1 CRM", available: false },
+  { id: "close", name: "Close", description: "Built for sales teams", available: false },
+  { id: "pipedrive", name: "Pipedrive", description: "Sales-focused CRM", available: false },
+  { id: "none", name: "Skip for now", description: "Connect later", available: true },
+];
+
+const ROLE_TEMPLATES = [
+  { id: "lead_manager", name: "Lead Manager", description: "Handles qualification calls" },
+  { id: "acquisition_manager", name: "Acquisition Manager", description: "Handles offer/closing calls" },
+  { id: "cold_caller", name: "Cold Caller", description: "Outbound lead generation" },
+  { id: "appointment_setter", name: "Appointment Setter", description: "Books appointments" },
+  { id: "closer", name: "Closer", description: "Closes deals" },
 ];
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
-  const [currentStep, setCurrentStep] = useState(1);
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  
+  // Check for success/canceled from Stripe checkout
+  const checkoutSuccess = searchParams.get('success') === 'true';
+  const checkoutCanceled = searchParams.get('canceled') === 'true';
+  const stepParam = searchParams.get('step');
+  
+  const [currentStep, setCurrentStep] = useState(stepParam ? parseInt(stepParam) : 1);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     companyName: "",
     companySlug: "",
-    selectedPlan: "growth",
-    billingPeriod: "monthly" as "monthly" | "yearly",
+    timezone: "America/Chicago",
     selectedCrm: "",
+    ghlApiKey: "",
+    ghlLocationId: "",
+    selectedRoles: ["lead_manager", "acquisition_manager"] as string[],
     trainingMaterials: "",
-    teamEmails: "",
+    teamInvites: [
+      { email: "", role: "lead_manager" },
+    ],
   });
+
+  // Show toast on checkout result
+  useEffect(() => {
+    if (checkoutSuccess) {
+      toast.success("Payment successful! Let's finish setting up your account.");
+    } else if (checkoutCanceled) {
+      toast.info("Checkout was canceled. You can complete payment later from Settings.");
+    }
+  }, [checkoutSuccess, checkoutCanceled]);
+
+  const updateTenantMutation = trpc.tenant.updateSettings.useMutation();
+  const inviteUserMutation = trpc.tenant.inviteUser.useMutation();
+  const createTrainingMutation = trpc.training.create.useMutation();
 
   const progress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
-  const handleNext = () => {
-    if (currentStep < STEPS.length) {
-      setCurrentStep(currentStep + 1);
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .substring(0, 50);
+  };
+
+  const handleNext = async () => {
+    setSaving(true);
+    try {
+      // Save data for each step
+      if (currentStep === 1 && formData.companyName) {
+        await updateTenantMutation.mutateAsync({
+          name: formData.companyName,
+        });
+      }
+      
+      if (currentStep === 4 && formData.trainingMaterials.trim()) {
+        await createTrainingMutation.mutateAsync({
+          title: "Initial Training Materials",
+          content: formData.trainingMaterials,
+          category: "script",
+          applicableTo: "all",
+        });
+      }
+      
+      if (currentStep === 5) {
+        // Send invitations
+        const validInvites = formData.teamInvites.filter(i => i.email.trim());
+        for (const invite of validInvites) {
+          try {
+            await inviteUserMutation.mutateAsync({
+              email: invite.email,
+              role: invite.role as any,
+            });
+          } catch (e) {
+            console.error("Failed to invite:", invite.email, e);
+          }
+        }
+        if (validInvites.length > 0) {
+          toast.success(`Invited ${validInvites.length} team member(s)`);
+        }
+      }
+      
+      if (currentStep < STEPS.length) {
+        setCurrentStep(currentStep + 1);
+      }
+    } catch (error) {
+      console.error("Error saving:", error);
+      toast.error("Failed to save. Please try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -90,12 +157,35 @@ export default function Onboarding() {
     setLocation("/");
   };
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .substring(0, 50);
+  const addTeamInvite = () => {
+    setFormData({
+      ...formData,
+      teamInvites: [...formData.teamInvites, { email: "", role: "lead_manager" }],
+    });
+  };
+
+  const updateTeamInvite = (index: number, field: "email" | "role", value: string) => {
+    const newInvites = [...formData.teamInvites];
+    newInvites[index] = { ...newInvites[index], [field]: value };
+    setFormData({ ...formData, teamInvites: newInvites });
+  };
+
+  const removeTeamInvite = (index: number) => {
+    if (formData.teamInvites.length > 1) {
+      setFormData({
+        ...formData,
+        teamInvites: formData.teamInvites.filter((_, i) => i !== index),
+      });
+    }
+  };
+
+  const toggleRole = (roleId: string) => {
+    const current = formData.selectedRoles;
+    if (current.includes(roleId)) {
+      setFormData({ ...formData, selectedRoles: current.filter(r => r !== roleId) });
+    } else {
+      setFormData({ ...formData, selectedRoles: [...current, roleId] });
+    }
   };
 
   const renderStepContent = () => {
@@ -121,7 +211,7 @@ export default function Onboarding() {
             <div className="space-y-2">
               <Label htmlFor="companySlug">Your Gunner URL</Label>
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground text-sm">gunner.app/</span>
+                <span className="text-muted-foreground text-sm">app.getgunner.ai/</span>
                 <Input
                   id="companySlug"
                   placeholder="acme-real-estate"
@@ -132,70 +222,28 @@ export default function Onboarding() {
               </div>
               <p className="text-xs text-muted-foreground">This will be your team's unique URL</p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="timezone">Timezone</Label>
+              <Select
+                value={formData.timezone}
+                onValueChange={(value) => setFormData({ ...formData, timezone: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select timezone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((tz) => (
+                    <SelectItem key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         );
 
       case 2:
-        return (
-          <div className="space-y-6">
-            <div className="flex justify-center gap-4 mb-6">
-              <Button
-                variant={formData.billingPeriod === "monthly" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFormData({ ...formData, billingPeriod: "monthly" })}
-              >
-                Monthly
-              </Button>
-              <Button
-                variant={formData.billingPeriod === "yearly" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFormData({ ...formData, billingPeriod: "yearly" })}
-              >
-                Yearly <Badge variant="secondary" className="ml-2">Save 17%</Badge>
-              </Button>
-            </div>
-            <div className="grid md:grid-cols-3 gap-4">
-              {PLANS.map((plan) => (
-                <Card
-                  key={plan.id}
-                  className={`cursor-pointer transition-all hover:border-primary ${
-                    formData.selectedPlan === plan.id ? "border-primary ring-2 ring-primary/20" : ""
-                  } ${plan.popular ? "relative" : ""}`}
-                  onClick={() => setFormData({ ...formData, selectedPlan: plan.id })}
-                >
-                  {plan.popular && (
-                    <Badge className="absolute -top-2 left-1/2 -translate-x-1/2">Most Popular</Badge>
-                  )}
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">{plan.name}</CardTitle>
-                    <CardDescription>{plan.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="mb-4">
-                      <span className="text-3xl font-bold">
-                        ${formData.billingPeriod === "yearly" ? Math.round(plan.price * 0.83) : plan.price}
-                      </span>
-                      <span className="text-muted-foreground">/month</span>
-                    </div>
-                    <ul className="space-y-2 text-sm">
-                      {plan.features.map((feature, i) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <Check className="h-4 w-4 text-green-500" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            <p className="text-center text-sm text-muted-foreground">
-              14-day free trial included. Cancel anytime.
-            </p>
-          </div>
-        );
-
-      case 3:
         return (
           <div className="space-y-4">
             <p className="text-muted-foreground text-center mb-6">
@@ -205,21 +253,83 @@ export default function Onboarding() {
               {CRM_OPTIONS.map((crm) => (
                 <Card
                   key={crm.id}
-                  className={`cursor-pointer transition-all hover:border-primary ${
-                    formData.selectedCrm === crm.id ? "border-primary ring-2 ring-primary/20" : ""
-                  }`}
-                  onClick={() => setFormData({ ...formData, selectedCrm: crm.id })}
+                  className={`cursor-pointer transition-all ${
+                    crm.available ? "hover:border-primary" : "opacity-60"
+                  } ${formData.selectedCrm === crm.id ? "border-primary ring-2 ring-primary/20" : ""}`}
+                  onClick={() => crm.available && setFormData({ ...formData, selectedCrm: crm.id })}
                 >
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                       {formData.selectedCrm === crm.id && <Check className="h-4 w-4 text-green-500" />}
                       {crm.name}
+                      {!crm.available && <Badge variant="secondary" className="ml-auto">Coming Soon</Badge>}
                     </CardTitle>
                     <CardDescription className="text-sm">{crm.description}</CardDescription>
                   </CardHeader>
                 </Card>
               ))}
             </div>
+            
+            {formData.selectedCrm === "ghl" && (
+              <div className="mt-6 space-y-4 p-4 bg-muted/50 rounded-lg">
+                <h4 className="font-medium">GoHighLevel Connection</h4>
+                <div className="space-y-2">
+                  <Label htmlFor="ghlApiKey">API Key</Label>
+                  <Input
+                    id="ghlApiKey"
+                    type="password"
+                    placeholder="Enter your GHL API key"
+                    value={formData.ghlApiKey}
+                    onChange={(e) => setFormData({ ...formData, ghlApiKey: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Find this in GHL → Settings → Business Profile → API Keys
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ghlLocationId">Location ID</Label>
+                  <Input
+                    id="ghlLocationId"
+                    placeholder="Enter your GHL Location ID"
+                    value={formData.ghlLocationId}
+                    onChange={(e) => setFormData({ ...formData, ghlLocationId: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="space-y-6">
+            <p className="text-muted-foreground text-center">
+              Select the roles on your team. Each role gets customized grading criteria.
+            </p>
+            <div className="grid md:grid-cols-2 gap-4">
+              {ROLE_TEMPLATES.map((role) => (
+                <Card
+                  key={role.id}
+                  className={`cursor-pointer transition-all hover:border-primary ${
+                    formData.selectedRoles.includes(role.id) ? "border-primary ring-2 ring-primary/20" : ""
+                  }`}
+                  onClick={() => toggleRole(role.id)}
+                >
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      {formData.selectedRoles.includes(role.id) && (
+                        <Check className="h-4 w-4 text-green-500" />
+                      )}
+                      {role.name}
+                    </CardTitle>
+                    <CardDescription className="text-sm">{role.description}</CardDescription>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              You can customize roles and grading criteria later in Settings
+            </p>
           </div>
         );
 
@@ -239,10 +349,10 @@ export default function Onboarding() {
                 rows={8}
               />
               <p className="text-xs text-muted-foreground">
-                You can also upload files after setup from the Training page
+                You can also upload PDF/Word files after setup from the Training page
               </p>
             </div>
-            <Button variant="outline" className="w-full" onClick={handleNext}>
+            <Button variant="outline" className="w-full" onClick={() => setCurrentStep(currentStep + 1)}>
               Skip for now
             </Button>
           </div>
@@ -254,19 +364,50 @@ export default function Onboarding() {
             <p className="text-muted-foreground text-center">
               Invite your team members to start using Gunner. They'll receive an email invitation.
             </p>
-            <div className="space-y-2">
-              <Label>Team Email Addresses</Label>
-              <Textarea
-                placeholder="john@company.com&#10;jane@company.com&#10;mike@company.com"
-                value={formData.teamEmails}
-                onChange={(e) => setFormData({ ...formData, teamEmails: e.target.value })}
-                rows={6}
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter one email per line. You can add more team members later.
-              </p>
+            <div className="space-y-4">
+              {formData.teamInvites.map((invite, index) => (
+                <div key={index} className="flex gap-3 items-start">
+                  <div className="flex-1">
+                    <Input
+                      placeholder="team@company.com"
+                      type="email"
+                      value={invite.email}
+                      onChange={(e) => updateTeamInvite(index, "email", e.target.value)}
+                    />
+                  </div>
+                  <Select
+                    value={invite.role}
+                    onValueChange={(value) => updateTeamInvite(index, "role", value)}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLE_TEMPLATES.map((role) => (
+                        <SelectItem key={role.id} value={role.id}>
+                          {role.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {formData.teamInvites.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeTeamInvite(index)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      ×
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button variant="outline" className="w-full" onClick={addTeamInvite}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Another Team Member
+              </Button>
             </div>
-            <Button variant="outline" className="w-full" onClick={handleNext}>
+            <Button variant="outline" className="w-full" onClick={() => setCurrentStep(currentStep + 1)}>
               Skip for now
             </Button>
           </div>
@@ -287,10 +428,22 @@ export default function Onboarding() {
             <div className="bg-muted/50 rounded-lg p-4 text-left space-y-2">
               <p className="font-medium">What's next:</p>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• Your 14-day free trial has started</li>
-                <li>• Calls will be automatically synced from your CRM</li>
-                <li>• AI will grade calls and provide coaching feedback</li>
-                <li>• View team performance on your dashboard</li>
+                <li className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Your 14-day free trial has started
+                </li>
+                <li className="flex items-center gap-2">
+                  <Link2 className="h-4 w-4" />
+                  Calls will be automatically synced from your CRM
+                </li>
+                <li className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  AI will grade calls and provide coaching feedback
+                </li>
+                <li className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  View team performance on your dashboard
+                </li>
               </ul>
             </div>
           </div>
@@ -357,12 +510,13 @@ export default function Onboarding() {
 
         {/* Navigation */}
         <div className="flex justify-between mt-6">
-          <Button variant="outline" onClick={handleBack} disabled={currentStep === 1}>
+          <Button variant="outline" onClick={handleBack} disabled={currentStep === 1 || saving}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
           {currentStep < STEPS.length ? (
-            <Button onClick={handleNext}>
+            <Button onClick={handleNext} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Next
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
@@ -373,6 +527,11 @@ export default function Onboarding() {
             </Button>
           )}
         </div>
+        
+        {/* Time estimate */}
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          Setup takes about 5 minutes • You can skip steps and complete later
+        </p>
       </div>
     </div>
   );
