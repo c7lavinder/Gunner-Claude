@@ -686,3 +686,10 @@
 - [x] Display low-usage tenants in new "Churn Risk" tab in super admin
 - [x] Show days since last activity with color-coded severity
 - [x] Summary cards showing count by risk level (7-13, 14-30, 30+ days)
+
+
+## Landing Page Branding Update
+
+- [x] Update landing page colors to match Gunner logo theme (dark red/maroon)
+- [x] Add Gunner logo to landing page header and footer
+- [x] Replace blue accent colors with brand colors

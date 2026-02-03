@@ -108,10 +108,11 @@ export default function Landing() {
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">G</span>
-            </div>
-            <span className="font-bold text-xl">Gunner</span>
+            <img 
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/hcxNLsaLoctpplFC.png" 
+              alt="Gunner" 
+              className="h-10 w-auto"
+            />
           </div>
           <div className="flex items-center gap-4">
             <Link href="/login">
@@ -324,10 +325,11 @@ export default function Landing() {
         <div className="container">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">G</span>
-              </div>
-              <span className="font-bold text-xl">Gunner</span>
+              <img 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/hcxNLsaLoctpplFC.png" 
+                alt="Gunner" 
+                className="h-8 w-auto"
+              />
             </div>
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} Gunner. All rights reserved.

@@ -43,15 +43,16 @@
 }
 
 :root {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-600);
-  --sidebar-primary-foreground: var(--color-blue-50);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
+  /* Gunner brand colors - dark red/maroon cannon theme */
+  --primary: oklch(0.40 0.15 25); /* Dark maroon red #8B1A1A */
+  --primary-foreground: oklch(0.98 0 0); /* White text on primary */
+  --sidebar-primary: oklch(0.45 0.15 25); /* Slightly lighter maroon */
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --chart-1: oklch(0.65 0.12 25); /* Light maroon */
+  --chart-2: oklch(0.55 0.14 25); /* Medium maroon */
+  --chart-3: oklch(0.45 0.15 25); /* Dark maroon */
+  --chart-4: oklch(0.40 0.15 25); /* Darker maroon */
+  --chart-5: oklch(0.35 0.14 25); /* Darkest maroon */
   --radius: 0.65rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.235 0.015 65);
@@ -79,10 +80,11 @@
 }
 
 .dark {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-500);
-  --sidebar-primary-foreground: var(--color-blue-50);
+  /* Gunner brand colors - dark red/maroon cannon theme */
+  --primary: oklch(0.50 0.15 25); /* Slightly lighter maroon for dark mode */
+  --primary-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.55 0.14 25);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.85 0.005 65);
   --card: oklch(0.21 0.006 285.885);
@@ -100,11 +102,11 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.488 0.243 264.376);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
+  --chart-1: oklch(0.65 0.12 25);
+  --chart-2: oklch(0.55 0.14 25);
+  --chart-3: oklch(0.50 0.15 25);
+  --chart-4: oklch(0.45 0.15 25);
+  --chart-5: oklch(0.40 0.14 25);
   --sidebar: oklch(0.21 0.006 285.885);
   --sidebar-foreground: oklch(0.85 0.005 65);
   --sidebar-accent: oklch(0.274 0.006 286.033);
