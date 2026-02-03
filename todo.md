@@ -311,3 +311,6 @@
 - [x] Enhanced Leaderboard with badges, streaks, levels
 - [x] Profile page with full badge collection
 - [x] XP toast notifications on call grade view
+
+## Badge Celebration Animation
+- [x] Add cannon-style confetti burst animation when user unlocks a new badge (Gunner themed)

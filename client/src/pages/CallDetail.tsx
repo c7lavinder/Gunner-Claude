@@ -29,6 +29,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import { Zap } from "lucide-react";
+import { celebrateBadgeUnlock } from "@/lib/confetti";
 
 const FEEDBACK_TYPES = [
   { value: "score_too_high", label: "Score is too high" },
@@ -125,12 +126,17 @@ export default function CallDetail() {
   const processRewardsMutation = trpc.gamification.processCallView.useMutation({
     onSuccess: (data) => {
       if (data && data.xpEarned > 0) {
+        // Fire cannon confetti if badge was earned!
+        if (data.badgesEarned && data.badgesEarned.length > 0) {
+          celebrateBadgeUnlock();
+        }
+        
         toast.success(
           <div className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-yellow-500" />
             <span>+{data.xpEarned} XP earned!</span>
             {data.badgesEarned && data.badgesEarned.length > 0 && (
-              <span className="text-orange-500">🏆 New badge!</span>
+              <span className="text-orange-500">🏆 New badge unlocked!</span>
             )}
           </div>
         );
