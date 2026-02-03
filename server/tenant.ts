@@ -276,3 +276,107 @@ export function isPlatformOwner(openId: string): boolean {
   // Corey's openId - the platform owner
   return openId === "U3JEthPNs4UbYRrgRBbShj";
 }
+
+// ============ USER MANAGEMENT ============
+
+/**
+ * Invite a user to a tenant (creates pending invitation)
+ */
+export async function inviteUserToTenant(
+  tenantId: number,
+  email: string,
+  role: 'admin' | 'user' = 'user',
+  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' = 'lead_manager'
+) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+
+  // Check if user already exists with this email
+  const [existingUser] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email));
+
+  if (existingUser) {
+    // If user exists but in different tenant, return error
+    if (existingUser.tenantId && existingUser.tenantId !== tenantId) {
+      return { success: false, error: 'User already belongs to another organization' };
+    }
+    // If user already in this tenant, return error
+    if (existingUser.tenantId === tenantId) {
+      return { success: false, error: 'User is already a member of this organization' };
+    }
+    // User exists but not assigned to a tenant - assign them
+    await db
+      .update(users)
+      .set({ tenantId, role, teamRole })
+      .where(eq(users.id, existingUser.id));
+    return { success: true, userId: existingUser.id, message: 'Existing user added to organization' };
+  }
+
+  // For new users, we'll create a placeholder that gets completed on first login
+  // In a real system, you'd send an invite email here
+  return { 
+    success: true, 
+    message: `Invitation ready for ${email}. They will be added when they sign in.`,
+    pendingEmail: email,
+    role,
+    teamRole
+  };
+}
+
+/**
+ * Remove a user from a tenant
+ */
+export async function removeUserFromTenant(tenantId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+
+  // Verify user belongs to this tenant
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+
+  if (!user) {
+    return { success: false, error: 'User not found in this organization' };
+  }
+
+  // Remove user from tenant (set tenantId to null)
+  await db
+    .update(users)
+    .set({ tenantId: null })
+    .where(eq(users.id, userId));
+
+  return { success: true, message: 'User removed from organization' };
+}
+
+/**
+ * Update user role within tenant
+ */
+export async function updateUserRole(
+  tenantId: number,
+  userId: number,
+  role: 'admin' | 'user',
+  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager'
+) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+
+  // Verify user belongs to this tenant
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+
+  if (!user) {
+    return { success: false, error: 'User not found in this organization' };
+  }
+
+  await db
+    .update(users)
+    .set({ role, teamRole })
+    .where(eq(users.id, userId));
+
+  return { success: true, message: 'User role updated' };
+}

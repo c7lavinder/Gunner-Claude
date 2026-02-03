@@ -112,11 +112,16 @@ export async function createTeamMember(member: InsertTeamMember): Promise<TeamMe
   return result[0] || null;
 }
 
-export async function getTeamMembers(): Promise<(TeamMember & { user?: { profilePicture: string | null } | null })[]> {
+export async function getTeamMembers(tenantId?: number): Promise<(TeamMember & { user?: { profilePicture: string | null } | null })[]> {
   const db = await getDb();
   if (!db) return [];
 
-  const members = await db.select().from(teamMembers).where(eq(teamMembers.isActive, "true"));
+  const conditions = [eq(teamMembers.isActive, "true")];
+  if (tenantId) {
+    conditions.push(eq(teamMembers.tenantId, tenantId));
+  }
+
+  const members = await db.select().from(teamMembers).where(and(...conditions));
   
   // Fetch user data for profile pictures
   const membersWithUsers = await Promise.all(members.map(async (member) => {
@@ -202,6 +207,7 @@ export async function getCalls(options: {
   limit?: number;
   offset?: number;
   includeArchived?: boolean; // Default false - exclude archived calls
+  tenantId?: number; // For multi-tenant filtering
 }): Promise<Call[]> {
   const db = await getDb();
   if (!db) return [];
@@ -213,6 +219,11 @@ export async function getCalls(options: {
   // Exclude archived calls by default
   if (!options.includeArchived) {
     conditions.push(eq(calls.isArchived, "false"));
+  }
+  
+  // Filter by tenant if provided
+  if (options.tenantId) {
+    conditions.push(eq(calls.tenantId, options.tenantId));
   }
   
   if (options.teamMemberId) {
@@ -232,14 +243,24 @@ export async function getCalls(options: {
     .offset(options.offset || 0);
 }
 
-export async function getRecentCalls(limit: number = 20, includeArchived: boolean = false): Promise<Call[]> {
+export async function getRecentCalls(limit: number = 20, includeArchived: boolean = false, tenantId?: number): Promise<Call[]> {
   const db = await getDb();
   if (!db) return [];
 
-  let query = db.select().from(calls);
+  const conditions = [];
   
   if (!includeArchived) {
-    query = query.where(eq(calls.isArchived, "false")) as any;
+    conditions.push(eq(calls.isArchived, "false"));
+  }
+  
+  if (tenantId) {
+    conditions.push(eq(calls.tenantId, tenantId));
+  }
+
+  let query = db.select().from(calls);
+  
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
   }
 
   return await query
@@ -757,6 +778,7 @@ export async function getTrainingMaterials(options?: {
   category?: string;
   applicableTo?: string;
   activeOnly?: boolean;
+  tenantId?: number;
 }): Promise<TrainingMaterial[]> {
   const db = await getDb();
   if (!db) return [];
@@ -765,6 +787,9 @@ export async function getTrainingMaterials(options?: {
   
   if (options?.activeOnly !== false) {
     conditions.push(eq(trainingMaterials.isActive, "true"));
+  }
+  if (options?.tenantId) {
+    conditions.push(eq(trainingMaterials.tenantId, options.tenantId));
   }
   if (options?.category) {
     conditions.push(eq(trainingMaterials.category, options.category as any));

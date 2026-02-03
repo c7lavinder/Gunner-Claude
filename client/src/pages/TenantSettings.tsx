@@ -17,7 +17,9 @@ import {
   Plus,
   Edit,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Trash2,
+  UserMinus
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -30,6 +32,8 @@ export default function TenantSettings() {
   const [customDomain, setCustomDomain] = useState("");
   const [crmType, setCrmType] = useState<string>("none");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
+  const [inviteTeamRole, setInviteTeamRole] = useState<'admin' | 'acquisition_manager' | 'lead_manager'>('lead_manager');
 
   // Fetch tenant settings
   const { data: settings, isLoading: settingsLoading, refetch: refetchSettings } = trpc.tenant.getSettings.useQuery(
@@ -51,6 +55,52 @@ export default function TenantSettings() {
     },
     onError: (error) => {
       toast.error(error.message || "Failed to save settings");
+    },
+  });
+
+  // Invite user mutation
+  const inviteUserMutation = trpc.tenant.inviteUser.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message || "User invited successfully");
+        setInviteEmail("");
+        refetchTeam();
+      } else {
+        toast.error(data.error || "Failed to invite user");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to invite user");
+    },
+  });
+
+  // Remove user mutation
+  const removeUserMutation = trpc.tenant.removeUser.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message || "User removed successfully");
+        refetchTeam();
+      } else {
+        toast.error(data.error || "Failed to remove user");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to remove user");
+    },
+  });
+
+  // Update user role mutation
+  const updateUserRoleMutation = trpc.tenant.updateUserRole.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message || "User role updated");
+        refetchTeam();
+      } else {
+        toast.error(data.error || "Failed to update role");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to update role");
     },
   });
 
@@ -81,9 +131,17 @@ export default function TenantSettings() {
       toast.error("Please enter an email address");
       return;
     }
-    // TODO: Implement invite functionality
-    toast.success(`Invitation sent to ${inviteEmail}`);
-    setInviteEmail("");
+    inviteUserMutation.mutate({
+      email: inviteEmail,
+      role: inviteRole,
+      teamRole: inviteTeamRole,
+    });
+  };
+
+  const handleRemoveUser = (userId: number, userName: string) => {
+    if (confirm(`Are you sure you want to remove ${userName} from the organization?`)) {
+      removeUserMutation.mutate({ userId });
+    }
   };
 
   const handleManageBilling = () => {
@@ -250,28 +308,40 @@ export default function TenantSettings() {
               <CardDescription>Add new members to your organization</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-4">
                 <Input
                   placeholder="email@company.com"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  className="flex-1"
+                  className="flex-1 min-w-[200px]"
                 />
-                <Select defaultValue="member">
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
+                <Select value={inviteTeamRole} onValueChange={(v) => setInviteTeamRole(v as 'admin' | 'acquisition_manager' | 'lead_manager')}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Team Role" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
+                    <SelectItem value="lead_manager">Lead Manager</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button onClick={handleInviteTeamMember}>
+                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'user')}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="Access" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="user">User</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleInviteTeamMember} disabled={inviteUserMutation.isPending}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Invite
+                  {inviteUserMutation.isPending ? "Inviting..." : "Invite"}
                 </Button>
               </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Enter the email of the person you want to invite. They'll be added when they sign in.
+              </p>
             </CardContent>
           </Card>
 
@@ -314,17 +384,36 @@ export default function TenantSettings() {
                         <TableCell className="font-medium">{member.name}</TableCell>
                         <TableCell>{member.email}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="capitalize">
-                            {member.role}
-                          </Badge>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="capitalize w-fit">
+                              {member.role}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground capitalize">
+                              {member.teamRole?.replace('_', ' ')}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge className="bg-green-100 text-green-700">Active</Badge>
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon">
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" title="Edit role">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            {member.id !== user?.id && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleRemoveUser(member.id, member.name || 'this user')}
+                                disabled={removeUserMutation.isPending}
+                                title="Remove from organization"
+                              >
+                                <UserMinus className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

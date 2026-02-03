@@ -520,3 +520,23 @@
 ### Stripe Sandbox
 - [x] Provide claim link to user
 - [ ] Test checkout flow with test card
+
+
+## White-Label SaaS Platform - Phase 3
+
+### Invite/Remove User Functionality
+- [x] Add inviteUserToTenant function in tenant.ts
+- [x] Add removeUserFromTenant function in tenant.ts
+- [x] Add updateUserRole function in tenant.ts
+- [x] Add tRPC routes for invite, remove, update role
+- [x] Update TenantSettings Team tab with working invite form
+- [x] Update TenantSettings Team tab with working remove button
+- [ ] Add invite acceptance flow for new users
+
+### Tenant-Scoped Queries
+- [x] Update calls queries to filter by tenantId
+- [x] Update team members queries to filter by tenantId
+- [x] Update training materials queries to filter by tenantId
+- [ ] Update analytics queries to filter by tenantId
+- [ ] Update gamification queries to filter by tenantId
+- [ ] Ensure new records are automatically assigned correct tenantId

@@ -2303,6 +2303,60 @@ Create content that:
       const { getSubscriptionPlans } = await import("./tenant");
       return getSubscriptionPlans();
     }),
+
+    // Tenant Admin: Invite user to tenant
+    inviteUser: protectedProcedure
+      .input(z.object({
+        email: z.string().email(),
+        role: z.enum(['admin', 'user']).default('user'),
+        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager']).default('lead_manager'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { inviteUserToTenant } = await import("./tenant");
+        if (!ctx.user?.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+        }
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        return inviteUserToTenant(ctx.user.tenantId, input.email, input.role, input.teamRole);
+      }),
+
+    // Tenant Admin: Remove user from tenant
+    removeUser: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { removeUserFromTenant } = await import("./tenant");
+        if (!ctx.user?.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+        }
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        // Prevent removing yourself
+        if (input.userId === ctx.user.id) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot remove yourself from the organization' });
+        }
+        return removeUserFromTenant(ctx.user.tenantId, input.userId);
+      }),
+
+    // Tenant Admin: Update user role
+    updateUserRole: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        role: z.enum(['admin', 'user']),
+        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { updateUserRole } = await import("./tenant");
+        if (!ctx.user?.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+        }
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        return updateUserRole(ctx.user.tenantId, input.userId, input.role, input.teamRole);
+      }),
   }),
 });
 
