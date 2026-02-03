@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,25 +64,36 @@ export default function Onboarding() {
   const { user } = useAuth();
   const { data: tenantSettings, isLoading: tenantLoading } = trpc.tenant.getSettings.useQuery(
     undefined,
-    { enabled: !!user }
+    { 
+      enabled: !!user,
+      staleTime: Infinity, // Don't refetch - we only need initial value
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+    }
   );
   
-  // Initialize step from URL param, tenant settings, or default to 1
-  const [currentStep, setCurrentStep] = useState(1);
-  const [stepInitialized, setStepInitialized] = useState(false);
+  // Use ref to track if we've already initialized the step (survives re-renders)
+  const stepInitializedRef = useRef(false);
   
-  // Initialize step when tenant settings load
+  // Initialize step from URL param, tenant settings, or default to 1
+  const [currentStep, setCurrentStep] = useState(() => {
+    // Check URL param first
+    if (stepParam) {
+      return parseInt(stepParam);
+    }
+    return 1; // Default, will be updated by useEffect if tenant has saved step
+  });
+  
+  // Initialize step from tenant settings (only once)
   useEffect(() => {
-    if (!stepInitialized && !tenantLoading) {
-      if (stepParam) {
-        setCurrentStep(parseInt(stepParam));
-      } else if (tenantSettings?.onboardingStep && tenantSettings.onboardingStep > 1) {
-        // Resume from saved step (e.g., Google signup starts at step 2)
+    if (!stepInitializedRef.current && !tenantLoading && tenantSettings) {
+      stepInitializedRef.current = true;
+      // Only update if tenant has a saved step > 1 and no URL param
+      if (!stepParam && tenantSettings.onboardingStep && tenantSettings.onboardingStep > 1) {
         setCurrentStep(tenantSettings.onboardingStep);
       }
-      setStepInitialized(true);
     }
-  }, [tenantSettings, tenantLoading, stepParam, stepInitialized]);
+  }, [tenantSettings, tenantLoading, stepParam]);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     companyName: "",

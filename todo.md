@@ -818,3 +818,5 @@
 - [x] Fix onboarding restarting from Company Info after Google signup completes
 - [x] Google signup now starts at step 2 (Connect CRM) since company name is already provided
 - [x] Onboarding page now fetches tenant settings to resume from saved step
+- [x] Fix onboarding looping back to step 2 - use ref to prevent re-initialization on data refetch
+- [x] Disable tenant settings refetch during onboarding to prevent step reset

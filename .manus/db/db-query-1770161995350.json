@@ -1,0 +1,18 @@
+{
+  "query": "SELECT t.id, t.name, t.onboardingStep, t.onboardingCompleted, u.email, u.name as userName \nFROM tenants t \nJOIN users u ON u.tenantId = t.id \nWHERE u.email LIKE '%coreydenzel%' OR t.name LIKE '%Acme%'\nORDER BY t.id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT t.id, t.name, t.onboardingStep, t.onboardingCompleted, u.email, u.name as userName \nFROM tenants t \nJOIN users u ON u.tenantId = t.id \nWHERE u.email LIKE '%coreydenzel%' OR t.name LIKE '%Acme%'\nORDER BY t.id DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "60003",
+      "name": "East TN Homes",
+      "onboardingStep": "1",
+      "onboardingCompleted": "false",
+      "email": "coreydenzel14@gmail.com",
+      "userName": "Denzel Lavinder"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tonboardingStep\tonboardingCompleted\temail\tuserName\n60003\tEast TN Homes\t1\tfalse\tcoreydenzel14@gmail.com\tDenzel Lavinder\n",
+  "stderr": "",
+  "execution_time_ms": 1708
+}
