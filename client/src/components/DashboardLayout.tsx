@@ -182,29 +182,29 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
+          <SidebarHeader className="h-20 justify-center">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="h-10 w-10 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
                 aria-label="Toggle navigation"
               >
                 {isCollapsed ? (
                   <img 
-                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/jEHaMPpWmarLSeJu.png" 
+                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/ORoxztkyoTJEjMxT.png" 
                     alt="Gunner" 
-                    className="h-6 w-6 object-contain"
+                    className="h-8 w-8 object-contain"
                   />
                 ) : (
-                  <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                  <PanelLeft className="h-5 w-5 text-muted-foreground" />
                 )}
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <img 
-                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/hsWvcxbQeqFBiUwY.png" 
+                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/pEvSFVlapabhnbkw.png" 
                     alt="Gunner" 
-                    className="h-8 object-contain"
+                    className="h-12 object-contain"
                   />
                 </div>
               ) : null}
