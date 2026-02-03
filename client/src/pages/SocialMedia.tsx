@@ -259,6 +259,14 @@ export default function SocialMedia() {
 
   return (
     <div className="space-y-6">
+      {/* Page Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Social Media</h1>
+        <p className="text-muted-foreground mt-1">
+          Create and manage content for your brand and personal channels
+        </p>
+      </div>
+
       {/* Mode Toggle */}
       <div className="flex items-center gap-4">
         <Button

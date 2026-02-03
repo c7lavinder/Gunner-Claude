@@ -340,3 +340,4 @@
 - [x] Apply red accents to Analytics page
 - [x] Apply red accents to Call History page
 - [x] Remove red accents from Dashboard, Analytics, and Call History pages
+- [x] Add page title to Social Media page
