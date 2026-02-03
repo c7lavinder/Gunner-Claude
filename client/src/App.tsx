@@ -14,6 +14,7 @@ import Training from "./pages/Training";
 import SocialMedia from "./pages/SocialMedia";
 import TeamManagement from "./pages/TeamManagement";
 import Profile from "./pages/Profile";
+import KpiDashboard from "./pages/KpiDashboard";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/social" component={SocialMedia} />
       <Route path="/team-management" component={TeamManagement} />
       <Route path="/profile" component={Profile} />
+      <Route path="/kpi" component={KpiDashboard} />
       <Route path="/leaderboard">
         <Redirect to="/team" />
       </Route>

@@ -341,3 +341,13 @@
 - [x] Apply red accents to Call History page
 - [x] Remove red accents from Dashboard, Analytics, and Call History pages
 - [x] Add page title to Social Media page
+
+## Phase 2: KPI Tracking Module
+- [x] Design database schema for KPI tracking (team metrics, campaigns, deals)
+- [x] Create API endpoints for KPI data entry and retrieval
+- [x] Build KPI Dashboard page with scoreboard view
+- [x] Build Team Spotlight components (AM: calls/offers/contracts, LM: calls/conversations/apts, LG Cold Caller: time/conversations/leads, LG SMS: sent/responses/leads)
+- [x] Build Campaign Tracking section (CC, SMS, Forms, PPL, JV, PPC, Postcards, Referrals)
+- [x] Build Deal Log section
+- [x] Add data entry forms for daily/weekly input
+- [x] Admin-only access restriction

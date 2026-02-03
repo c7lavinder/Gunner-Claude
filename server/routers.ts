@@ -1853,6 +1853,212 @@ Create content that:
       return batchAwardXpForCalls();
     }),
   }),
+
+  // ============ KPI TRACKING ============
+  kpi: router({
+    // Get all periods
+    getPeriods: protectedProcedure
+      .input(z.object({
+        periodType: z.enum(["daily", "weekly", "monthly"]).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiPeriods } = await import("./kpi");
+        return getKpiPeriods(input?.periodType);
+      }),
+
+    // Get period by ID
+    getPeriodById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiPeriodById } = await import("./kpi");
+        return getKpiPeriodById(input.id);
+      }),
+
+    // Create a new period
+    createPeriod: protectedProcedure
+      .input(z.object({
+        periodType: z.enum(["daily", "weekly", "monthly"]),
+        periodStart: z.date(),
+        periodEnd: z.date(),
+        periodLabel: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { createKpiPeriod } = await import("./kpi");
+        return createKpiPeriod(input);
+      }),
+
+    // Get team member KPIs for a period
+    getTeamMemberKpis: protectedProcedure
+      .input(z.object({ periodId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getTeamMemberKpis } = await import("./kpi");
+        return getTeamMemberKpis(input.periodId);
+      }),
+
+    // Upsert team member KPI
+    upsertTeamMemberKpi: protectedProcedure
+      .input(z.object({
+        teamMemberId: z.number(),
+        periodId: z.number(),
+        roleType: z.enum(["am", "lm", "lg_cold_caller", "lg_sms"]),
+        metric1: z.number(),
+        metric2: z.number(),
+        metric3: z.number(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { upsertTeamMemberKpi } = await import("./kpi");
+        return upsertTeamMemberKpi(input);
+      }),
+
+    // Get campaign KPIs for a period
+    getCampaignKpis: protectedProcedure
+      .input(z.object({ periodId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getCampaignKpis } = await import("./kpi");
+        return getCampaignKpis(input.periodId);
+      }),
+
+    // Upsert campaign KPI
+    upsertCampaignKpi: protectedProcedure
+      .input(z.object({
+        periodId: z.number(),
+        channel: z.enum(["cold_calls", "sms", "forms", "ppl", "jv", "ppc", "postcards", "referrals"]),
+        spent: z.number(),
+        volume: z.number(),
+        leads: z.number(),
+        offers: z.number(),
+        contracts: z.number(),
+        dealsCount: z.number(),
+        revenue: z.number(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { upsertCampaignKpi } = await import("./kpi");
+        return upsertCampaignKpi(input);
+      }),
+
+    // Get deals
+    getDeals: protectedProcedure
+      .input(z.object({ periodId: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiDeals } = await import("./kpi");
+        return getKpiDeals(input?.periodId);
+      }),
+
+    // Get deal by ID
+    getDealById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiDealById } = await import("./kpi");
+        return getKpiDealById(input.id);
+      }),
+
+    // Create deal
+    createDeal: protectedProcedure
+      .input(z.object({
+        periodId: z.number().optional(),
+        propertyAddress: z.string(),
+        sellerName: z.string().optional(),
+        acquisitionManagerId: z.number().optional(),
+        leadManagerId: z.number().optional(),
+        leadSource: z.enum(["cold_calls", "sms", "forms", "ppl", "jv", "ppc", "postcards", "referrals"]).optional(),
+        contractPrice: z.number().optional(),
+        estimatedArv: z.number().optional(),
+        estimatedRepairs: z.number().optional(),
+        assignmentFee: z.number().optional(),
+        status: z.enum(["under_contract", "due_diligence", "closed", "fell_through"]).optional(),
+        contractDate: z.date().optional(),
+        closingDate: z.date().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { createKpiDeal } = await import("./kpi");
+        return createKpiDeal(input);
+      }),
+
+    // Update deal
+    updateDeal: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        periodId: z.number().optional(),
+        propertyAddress: z.string().optional(),
+        sellerName: z.string().optional(),
+        acquisitionManagerId: z.number().optional(),
+        leadManagerId: z.number().optional(),
+        leadSource: z.enum(["cold_calls", "sms", "forms", "ppl", "jv", "ppc", "postcards", "referrals"]).optional(),
+        contractPrice: z.number().optional(),
+        estimatedArv: z.number().optional(),
+        estimatedRepairs: z.number().optional(),
+        assignmentFee: z.number().optional(),
+        status: z.enum(["under_contract", "due_diligence", "closed", "fell_through"]).optional(),
+        contractDate: z.date().optional(),
+        closingDate: z.date().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { updateKpiDeal } = await import("./kpi");
+        const { id, ...data } = input;
+        await updateKpiDeal(id, data);
+        return { success: true };
+      }),
+
+    // Delete deal
+    deleteDeal: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { deleteKpiDeal } = await import("./kpi");
+        await deleteKpiDeal(input.id);
+        return { success: true };
+      }),
+
+    // Get scoreboard data (calculated metrics)
+    getScoreboard: protectedProcedure
+      .input(z.object({ periodId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getScoreboardData } = await import("./kpi");
+        return getScoreboardData(input.periodId);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

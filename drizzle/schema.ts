@@ -594,3 +594,165 @@ export const rewardViews = mysqlTable("reward_views", {
 
 export type RewardView = typeof rewardViews.$inferSelect;
 export type InsertRewardView = typeof rewardViews.$inferInsert;
+
+
+// ============ KPI TRACKING SYSTEM ============
+
+/**
+ * KPI Periods - tracks weekly/monthly periods for KPI data entry
+ */
+export const kpiPeriods = mysqlTable("kpi_periods", {
+  id: int("id").autoincrement().primaryKey(),
+  periodType: mysqlEnum("periodType", ["daily", "weekly", "monthly"]).notNull(),
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+  periodLabel: varchar("periodLabel", { length: 50 }).notNull(), // e.g., "Week 5 2026", "January 2026"
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type KpiPeriod = typeof kpiPeriods.$inferSelect;
+export type InsertKpiPeriod = typeof kpiPeriods.$inferInsert;
+
+/**
+ * Team Member KPIs - tracks the 3 key metrics per team member per period
+ * AM: calls, offers, contracts
+ * LM: calls, conversations, appointments
+ * LG Cold Caller: time on phones, conversations, leads
+ * LG SMS: sms sent, responses, leads
+ */
+export const teamMemberKpis = mysqlTable("team_member_kpis", {
+  id: int("id").autoincrement().primaryKey(),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+  periodId: int("periodId").references(() => kpiPeriods.id).notNull(),
+  // Role type determines which metrics are used
+  roleType: mysqlEnum("roleType", ["am", "lm", "lg_cold_caller", "lg_sms"]).notNull(),
+  // Metric 1 (calls for AM/LM, time for LG CC, sms sent for LG SMS)
+  metric1: int("metric1").default(0).notNull(),
+  metric1Label: varchar("metric1Label", { length: 50 }).default("Metric 1"),
+  // Metric 2 (offers for AM, conversations for LM/LG CC, responses for LG SMS)
+  metric2: int("metric2").default(0).notNull(),
+  metric2Label: varchar("metric2Label", { length: 50 }).default("Metric 2"),
+  // Metric 3 (contracts for AM, appointments for LM, leads for LG)
+  metric3: int("metric3").default(0).notNull(),
+  metric3Label: varchar("metric3Label", { length: 50 }).default("Metric 3"),
+  // Notes
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TeamMemberKpi = typeof teamMemberKpis.$inferSelect;
+export type InsertTeamMemberKpi = typeof teamMemberKpis.$inferInsert;
+
+/**
+ * Campaign KPIs - tracks lead gen channel performance
+ * Channels: CC (Cold Calls), SMS, Forms, PPL, JV, PPC, Postcards, Referrals
+ */
+export const campaignKpis = mysqlTable("campaign_kpis", {
+  id: int("id").autoincrement().primaryKey(),
+  periodId: int("periodId").references(() => kpiPeriods.id).notNull(),
+  channel: mysqlEnum("channel", [
+    "cold_calls", 
+    "sms", 
+    "forms", 
+    "ppl", 
+    "jv", 
+    "ppc", 
+    "postcards", 
+    "referrals"
+  ]).notNull(),
+  // Metrics
+  spent: int("spent").default(0).notNull(), // in cents
+  volume: int("volume").default(0).notNull(), // # sent (calls, sms, postcards, etc.)
+  leads: int("leads").default(0).notNull(),
+  offers: int("offers").default(0).notNull(),
+  contracts: int("contracts").default(0).notNull(),
+  dealsCount: int("dealsCount").default(0).notNull(),
+  revenue: int("revenue").default(0).notNull(), // in cents
+  // Notes
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CampaignKpi = typeof campaignKpis.$inferSelect;
+export type InsertCampaignKpi = typeof campaignKpis.$inferInsert;
+
+/**
+ * KPI Deals - tracks individual deals locked up
+ */
+export const kpiDeals = mysqlTable("kpi_deals", {
+  id: int("id").autoincrement().primaryKey(),
+  periodId: int("periodId").references(() => kpiPeriods.id),
+  // Deal info
+  propertyAddress: text("propertyAddress").notNull(),
+  sellerName: varchar("sellerName", { length: 255 }),
+  // Team members involved
+  acquisitionManagerId: int("acquisitionManagerId").references(() => teamMembers.id),
+  leadManagerId: int("leadManagerId").references(() => teamMembers.id),
+  // Lead source
+  leadSource: mysqlEnum("leadSource", [
+    "cold_calls", 
+    "sms", 
+    "forms", 
+    "ppl", 
+    "jv", 
+    "ppc", 
+    "postcards", 
+    "referrals"
+  ]),
+  // Deal financials
+  contractPrice: int("contractPrice").default(0), // in cents
+  estimatedArv: int("estimatedArv").default(0), // in cents
+  estimatedRepairs: int("estimatedRepairs").default(0), // in cents
+  assignmentFee: int("assignmentFee").default(0), // in cents
+  // Status
+  status: mysqlEnum("status", [
+    "under_contract",
+    "due_diligence",
+    "closed",
+    "fell_through"
+  ]).default("under_contract"),
+  // Dates
+  contractDate: timestamp("contractDate"),
+  closingDate: timestamp("closingDate"),
+  // Notes
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KpiDeal = typeof kpiDeals.$inferSelect;
+export type InsertKpiDeal = typeof kpiDeals.$inferInsert;
+
+/**
+ * KPI Goals - tracks goals for campaigns and team members
+ */
+export const kpiGoals = mysqlTable("kpi_goals", {
+  id: int("id").autoincrement().primaryKey(),
+  periodId: int("periodId").references(() => kpiPeriods.id),
+  // Goal type
+  goalType: mysqlEnum("goalType", ["campaign", "team_member"]).notNull(),
+  // For campaign goals
+  channel: mysqlEnum("channel", [
+    "cold_calls", 
+    "sms", 
+    "forms", 
+    "ppl", 
+    "jv", 
+    "ppc", 
+    "postcards", 
+    "referrals",
+    "total"
+  ]),
+  // For team member goals
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
+  // Goal metrics
+  metricName: varchar("metricName", { length: 100 }).notNull(), // e.g., "leads", "deals", "revenue"
+  targetValue: int("targetValue").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KpiGoal = typeof kpiGoals.$inferSelect;
+export type InsertKpiGoal = typeof kpiGoals.$inferInsert;
