@@ -1,0 +1,27 @@
+{
+  "query": "SELECT * FROM users WHERE email LIKE '%coreydenzel%' OR email LIKE '%denzel%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT * FROM users WHERE email LIKE '%coreydenzel%' OR email LIKE '%denzel%';",
+  "rows": [
+    {
+      "id": "420660",
+      "tenantId": "30002",
+      "openId": "google_108213238775694877546",
+      "name": "Denzel Lavinder",
+      "email": "coreydenzel14@gmail.com",
+      "loginMethod": "google",
+      "role": "admin",
+      "createdAt": "2026-02-03 20:07:21",
+      "updatedAt": "2026-02-03 22:07:22",
+      "lastSignedIn": "2026-02-03 22:07:22",
+      "teamRole": "admin",
+      "profilePicture": "https://lh3.googleusercontent.com/a/ACg8ocK_FMR74_B9spCchk9bj0r2Odo98LADJAAfl2reALt2Hwj1lEmd=s96-c",
+      "isTenantAdmin": "true",
+      "passwordHash": "$2b$12$rvKjDsUrj9DIBVqnDH9V/OlQ4kxz0xZzUfe2cH7wEkadBdmd97Wjm",
+      "emailVerified": "false"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\topenId\tname\temail\tloginMethod\trole\tcreatedAt\tupdatedAt\tlastSignedIn\tteamRole\tprofilePicture\tisTenantAdmin\tpasswordHash\temailVerified\n420660\t30002\tgoogle_108213238775694877546\tDenzel Lavinder\tcoreydenzel14@gmail.com\tgoogle\tadmin\t2026-02-03 20:07:21\t2026-02-03 22:07:22\t2026-02-03 22:07:22\tadmin\thttps://lh3.googleusercontent.com/a/ACg8ocK_FMR74_B9spCchk9bj0r2Odo98LADJAAfl2reALt2Hwj1lEmd=s96-c\ttrue\t$2b$12$rvKjDsUrj9DIBVqnDH9V/OlQ4kxz0xZzUfe2cH7wEkadBdmd97Wjm\tfalse\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

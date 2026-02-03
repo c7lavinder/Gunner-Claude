@@ -770,3 +770,10 @@
 - [x] Update context.ts to support both authentication methods
 - [x] Add unit tests for dual authentication context
 - [x] Verify onboarding flow works for new Google signups
+
+
+## Tenant Isolation Bug Fix
+- [x] Fix Google signup assigning users to wrong tenant (was already correct - users get their own tenant)
+- [x] Ensure new signups create their own tenant (verified working)
+- [x] Prevent new users from accessing other tenants' data (fixed getAllUsers and getTeamAssignments to filter by tenantId)
+- [ ] Remove test user from wrong tenant (not needed - user was on correct tenant)

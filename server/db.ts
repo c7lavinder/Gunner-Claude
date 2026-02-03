@@ -1584,10 +1584,14 @@ export async function getAllCallsForTraining(options?: {
 
 // ============ TEAM ASSIGNMENT FUNCTIONS ============
 
-export async function getTeamAssignments(): Promise<TeamAssignment[]> {
+export async function getTeamAssignments(tenantId?: number): Promise<TeamAssignment[]> {
   const db = await getDb();
   if (!db) return [];
 
+  // Filter by tenant if tenantId is provided
+  if (tenantId) {
+    return await db.select().from(teamAssignments).where(eq(teamAssignments.tenantId, tenantId));
+  }
   return await db.select().from(teamAssignments);
 }
 
@@ -1763,7 +1767,7 @@ export async function linkUserToTeamMember(userId: number, teamMemberId: number)
     .where(eq(teamMembers.id, teamMemberId));
 }
 
-export async function getAllUsers(): Promise<Array<{
+export async function getAllUsers(tenantId?: number): Promise<Array<{
   id: number;
   openId: string;
   name: string | null;
@@ -1777,9 +1781,15 @@ export async function getAllUsers(): Promise<Array<{
   const db = await getDb();
   if (!db) return [];
 
-  // Get all users and find their linked team member
-  const allUsers = await db.select().from(users).orderBy(desc(users.lastSignedIn));
-  const allTeamMembers = await db.select().from(teamMembers);
+  // Get users filtered by tenant if tenantId is provided
+  const allUsers = tenantId 
+    ? await db.select().from(users).where(eq(users.tenantId, tenantId)).orderBy(desc(users.lastSignedIn))
+    : await db.select().from(users).orderBy(desc(users.lastSignedIn));
+  
+  // Get team members filtered by tenant if tenantId is provided
+  const allTeamMembers = tenantId
+    ? await db.select().from(teamMembers).where(eq(teamMembers.tenantId, tenantId))
+    : await db.select().from(teamMembers);
   
   return allUsers.map(u => {
     const linkedMember = allTeamMembers.find(tm => tm.userId === u.id);

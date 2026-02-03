@@ -191,7 +191,8 @@ export const appRouter = router({
       if (ctx.user?.teamRole !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
-      return await getAllUsers();
+      // Filter by tenant to ensure tenant isolation
+      return await getAllUsers(ctx.user?.tenantId ?? undefined);
     }),
 
     // Admin: Get team assignments
@@ -199,7 +200,8 @@ export const appRouter = router({
       if (ctx.user?.teamRole !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
-      return await getTeamAssignments();
+      // Filter by tenant to ensure tenant isolation
+      return await getTeamAssignments(ctx.user?.tenantId ?? undefined);
     }),
 
     // Admin: Update team member role

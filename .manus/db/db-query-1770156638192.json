@@ -1,0 +1,21 @@
+{
+  "query": "SELECT u.id, u.name, u.email, u.openId, u.tenantId, u.role, u.isTenantAdmin, u.loginMethod, t.name as tenantName FROM users u LEFT JOIN tenants t ON u.tenantId = t.id WHERE u.email LIKE '%coreydenzel%' OR u.email LIKE '%denzel%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT u.id, u.name, u.email, u.openId, u.tenantId, u.role, u.isTenantAdmin, u.loginMethod, t.name as tenantName FROM users u LEFT JOIN tenants t ON u.tenantId = t.id WHERE u.email LIKE '%coreydenzel%' OR u.email LIKE '%denzel%';",
+  "rows": [
+    {
+      "id": "420660",
+      "name": "Denzel Lavinder",
+      "email": "coreydenzel14@gmail.com",
+      "openId": "google_108213238775694877546",
+      "tenantId": "30002",
+      "role": "admin",
+      "isTenantAdmin": "true",
+      "loginMethod": "google",
+      "tenantName": "Purple Doors"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\topenId\ttenantId\trole\tisTenantAdmin\tloginMethod\ttenantName\n420660\tDenzel Lavinder\tcoreydenzel14@gmail.com\tgoogle_108213238775694877546\t30002\tadmin\ttrue\tgoogle\tPurple Doors\n",
+  "stderr": "",
+  "execution_time_ms": 94
+}
