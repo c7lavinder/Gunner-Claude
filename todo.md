@@ -693,3 +693,6 @@
 - [x] Update landing page colors to match Gunner logo theme (dark red/maroon)
 - [x] Add Gunner logo to landing page header and footer
 - [x] Replace blue accent colors with brand colors
+
+- [x] Make logo bigger on landing page (h-14 header, h-12 footer)
+- [x] Use transparent background version of logo

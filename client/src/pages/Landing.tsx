@@ -109,9 +109,9 @@ export default function Landing() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <img 
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/hcxNLsaLoctpplFC.png" 
+              src="https://manus-storage-test.oss-cn-beijing.aliyuncs.com/user-file/a0e4e2cd-b4d4-4866-9c05-c8e0eb0f4f4a/gunner-logo-final.png" 
               alt="Gunner" 
-              className="h-10 w-auto"
+              className="h-14 w-auto"
             />
           </div>
           <div className="flex items-center gap-4">
@@ -326,9 +326,9 @@ export default function Landing() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/hcxNLsaLoctpplFC.png" 
+                src="https://manus-storage-test.oss-cn-beijing.aliyuncs.com/user-file/a0e4e2cd-b4d4-4866-9c05-c8e0eb0f4f4a/gunner-logo-final.png" 
                 alt="Gunner" 
-                className="h-8 w-auto"
+                className="h-12 w-auto"
               />
             </div>
             <p className="text-sm text-muted-foreground">
