@@ -323,3 +323,7 @@
 - [x] Update sidebar navigation (removed Leaderboard menu item)
 - [x] Batch XP award for all graded calls
 - [x] Fix database schema for user_streaks, reward_views, xp_transactions
+
+## Team Page Styling Improvements
+- [x] Change orange color to less bright/muted tone
+- [x] Change grid layout from 2 columns to 3 columns per row

@@ -172,7 +172,7 @@ function TeamMemberShowcase({
       rank === 3 ? "ring-amber-600" : ""
     }`}>
       {/* Header with gradient background */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-6 text-white">
+      <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-6 text-white">
         <div className="flex items-start gap-4">
           <div className="relative">
             {rank <= 3 && <RankBadge rank={rank} />}
@@ -181,13 +181,13 @@ function TeamMemberShowcase({
                 <div className={`cursor-pointer ${isCurrentUser ? 'hover:opacity-80' : ''}`}>
                   <Avatar className="h-20 w-20 border-4 border-white shadow-lg">
                     <AvatarImage src={member.user?.profilePicture || undefined} />
-                    <AvatarFallback className="text-2xl font-bold bg-white text-orange-600">
+                    <AvatarFallback className="text-2xl font-bold bg-white text-orange-700">
                       {member.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   {isCurrentUser && (
                     <div className="absolute bottom-0 right-0 bg-white rounded-full p-1 shadow">
-                      <Camera className="h-3 w-3 text-orange-600" />
+                      <Camera className="h-3 w-3 text-orange-700" />
                     </div>
                   )}
                 </div>
@@ -401,7 +401,7 @@ export default function TeamMembers() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Card key={i}>
               <CardContent className="p-6">
@@ -411,7 +411,7 @@ export default function TeamMembers() {
           ))}
         </div>
       ) : sortedMembers.length > 0 ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {sortedMembers.map((member, index) => {
             const isCurrentUser = member.userId === user?.id;
             return (
