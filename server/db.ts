@@ -446,13 +446,23 @@ export async function getCallStats(options?: {
     teamMemberTrends: [],
   };
 
-  // Calculate date range
+  // Calculate date range using CST timezone (Central Standard Time)
+  // This ensures date filtering matches the user's local time
   const now = new Date();
+  // Get current time in CST by adjusting for timezone offset
+  // CST is UTC-6, so we need to subtract 6 hours from UTC to get CST
+  const cstOffset = -6 * 60; // CST offset in minutes
+  const utcOffset = now.getTimezoneOffset(); // Server's offset in minutes
+  const cstNow = new Date(now.getTime() + (utcOffset - cstOffset) * 60 * 1000);
+  
   let startDate: Date | null = null;
   
   switch (options?.dateRange) {
     case "today":
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Start of today
+      // Start of today in CST, then convert back to UTC for comparison
+      const todayCST = new Date(cstNow.getFullYear(), cstNow.getMonth(), cstNow.getDate());
+      // Convert CST midnight back to UTC (add 6 hours)
+      startDate = new Date(todayCST.getTime() - (utcOffset - cstOffset) * 60 * 1000);
       break;
     case "week":
       startDate = new Date(now);
@@ -463,7 +473,7 @@ export async function getCallStats(options?: {
       startDate.setMonth(startDate.getMonth() - 1);
       break;
     case "ytd":
-      startDate = new Date(now.getFullYear(), 0, 1); // January 1st of current year
+      startDate = new Date(cstNow.getFullYear(), 0, 1); // January 1st of current year in CST
       break;
     case "all":
     default:
@@ -494,8 +504,11 @@ export async function getCallStats(options?: {
   const skippedCalls = allCalls.filter(c => c.status === "skipped");
   const pendingCalls = allCalls.filter(c => c.status === "pending" || c.status === "transcribing" || c.status === "classifying" || c.status === "grading");
 
-  // Only count grades from graded conversations
-  const grades = await db.select().from(callGrades);
+  // Only count grades from graded conversations within the date range
+  const gradedCallIds = gradedCalls.map(c => c.id);
+  const allGrades = await db.select().from(callGrades);
+  // Filter grades to only include grades for calls in the current date range
+  const grades = allGrades.filter(g => gradedCallIds.includes(g.callId));
   const totalScore = grades.reduce((sum, g) => sum + (parseFloat(g.overallScore || "0")), 0);
   const averageScore = grades.length > 0 ? totalScore / grades.length : 0;
 

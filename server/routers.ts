@@ -482,9 +482,11 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         // Get user's permission context for filtering
         const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+        const userRole = ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager' | undefined;
+        
         const permissionContext: UserPermissionContext = {
           teamMemberId: teamMember?.id,
-          teamRole: (ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager') || 'lead_manager',
+          teamRole: userRole || 'lead_manager',
           userId: ctx.user?.id,
         };
         

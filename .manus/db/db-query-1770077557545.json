@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, name, email, teamRole FROM users WHERE email = 'corey@newagainhouses.com';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, email, teamRole FROM users WHERE email = 'corey@newagainhouses.com';",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Corey Lavinder",
+      "email": "corey@newagainhouses.com",
+      "teamRole": "admin"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\tteamRole\n1\tCorey Lavinder\tcorey@newagainhouses.com\tadmin\n",
+  "stderr": "",
+  "execution_time_ms": 61
+}

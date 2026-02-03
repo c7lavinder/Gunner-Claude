@@ -284,3 +284,10 @@
 - [x] Training page: hide Generate AI Insights button for non-admins
 - [x] Build Team Management UI for admin on Team page
 - [x] Auto-generate AI insights every Monday at 6am
+
+
+## Analytics Bug Fix
+- [x] Fix analytics showing 0 for admin users - grades not filtered by date range
+- [x] Ensure admin sees all team data in analytics
+- [x] Fix Team Member Scores table not populating
+- [x] Fix date filter "Today" showing 0 when data exists (timezone fix for CST)
