@@ -242,12 +242,45 @@ router.post("/reset-password", async (req: Request, res: Response) => {
 
 // ============ GOOGLE OAUTH ROUTES ============
 
+// Helper to get the correct origin for redirects
+function getPublicOrigin(req: Request): string {
+  // Check for forwarded headers (used by proxies/load balancers)
+  const forwardedHost = req.headers['x-forwarded-host'] as string;
+  const forwardedProto = req.headers['x-forwarded-proto'] as string || 'https';
+  
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+  
+  // Check origin header
+  if (req.headers.origin) {
+    return req.headers.origin as string;
+  }
+  
+  // Check referer header
+  if (req.headers.referer) {
+    try {
+      const refererUrl = new URL(req.headers.referer as string);
+      return `${refererUrl.protocol}//${refererUrl.host}`;
+    } catch (e) {
+      // Invalid referer, continue
+    }
+  }
+  
+  // Fallback to host header with https
+  const host = req.get('host');
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
+  return `${protocol}://${host}`;
+}
+
 // Get Google OAuth URL
 router.get("/google/url", (req: Request, res: Response) => {
   try {
-    const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+    const origin = getPublicOrigin(req);
     const redirectUri = `${origin}/api/auth/google/callback`;
     const state = req.query.state as string || '';
+    
+    console.log('[Auth] Google OAuth URL requested, redirect_uri:', redirectUri);
     
     const url = getGoogleAuthUrl(redirectUri, state);
     res.json({ url });
@@ -261,7 +294,7 @@ router.get("/google/url", (req: Request, res: Response) => {
 router.get("/google/callback", async (req: Request, res: Response) => {
   try {
     const { code, error: oauthError, state } = req.query;
-    const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+    const origin = getPublicOrigin(req);
     
     if (oauthError) {
       console.error('[Auth] Google OAuth error:', oauthError);
