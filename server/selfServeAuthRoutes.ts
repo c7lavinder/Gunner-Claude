@@ -278,7 +278,10 @@ router.get("/google/url", (req: Request, res: Response) => {
   try {
     const origin = getPublicOrigin(req);
     const redirectUri = `${origin}/api/auth/google/callback`;
-    const state = req.query.state as string || '';
+    
+    // Encode the redirect_uri in state so we use the exact same one on callback
+    const stateData = JSON.stringify({ redirectUri, originalState: req.query.state || '' });
+    const state = Buffer.from(stateData).toString('base64url');
     
     console.log('[Auth] Google OAuth URL requested, redirect_uri:', redirectUri);
     
@@ -294,12 +297,19 @@ router.get("/google/url", (req: Request, res: Response) => {
 router.get("/google/callback", async (req: Request, res: Response) => {
   try {
     const { code, error: oauthError, state } = req.query;
-    const origin = getPublicOrigin(req);
     
-    console.log('[Auth] Google callback - detected origin:', origin);
-    console.log('[Auth] Google callback - x-forwarded-host:', req.headers['x-forwarded-host']);
-    console.log('[Auth] Google callback - referer:', req.headers.referer);
-    console.log('[Auth] Google callback - host:', req.get('host'));
+    // Decode state to get the original redirect_uri
+    let redirectUri: string;
+    try {
+      const stateData = JSON.parse(Buffer.from(state as string, 'base64url').toString());
+      redirectUri = stateData.redirectUri;
+      console.log('[Auth] Google callback - using redirect_uri from state:', redirectUri);
+    } catch (e) {
+      // Fallback to detecting origin if state is invalid
+      const origin = getPublicOrigin(req);
+      redirectUri = `${origin}/api/auth/google/callback`;
+      console.log('[Auth] Google callback - fallback redirect_uri:', redirectUri);
+    }
     
     if (oauthError) {
       console.error('[Auth] Google OAuth error:', oauthError);
@@ -311,8 +321,6 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       res.redirect(`/login?error=missing_code`);
       return;
     }
-    
-    const redirectUri = `${origin}/api/auth/google/callback`;
     
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code, redirectUri);
