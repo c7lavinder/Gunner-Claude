@@ -333,3 +333,6 @@
 
 ## Bug Fixes
 - [x] Fix Profile "In Progress" section showing "All badges earned!" when user has zero badges
+
+## Dashboard UI Improvements
+- [x] Remove Classification Breakdown section from dashboard

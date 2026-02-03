@@ -402,54 +402,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Classification Breakdown */}
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-3">Classification Breakdown</h4>
-                <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-                  <div className="flex items-center gap-2 p-3 rounded-lg border">
-                    <MessageSquare className="h-4 w-4 text-emerald-500" />
-                    <div>
-                      <p className="font-bold">{stats?.classificationBreakdown?.conversation ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Conversations</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 p-3 rounded-lg border">
-                    <VoicemailIcon className="h-4 w-4 text-purple-500" />
-                    <div>
-                      <p className="font-bold">{stats?.classificationBreakdown?.voicemail ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Voicemail</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 p-3 rounded-lg border">
-                    <PhoneMissed className="h-4 w-4 text-red-500" />
-                    <div>
-                      <p className="font-bold">{stats?.classificationBreakdown?.no_answer ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">No Answer</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 p-3 rounded-lg border">
-                    <Phone className="h-4 w-4 text-blue-500" />
-                    <div>
-                      <p className="font-bold">{stats?.classificationBreakdown?.callback_request ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Callback</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 p-3 rounded-lg border">
-                    <PhoneOff className="h-4 w-4 text-orange-500" />
-                    <div>
-                      <p className="font-bold">{stats?.classificationBreakdown?.wrong_number ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Wrong Number</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 p-3 rounded-lg border">
-                    <Clock className="h-4 w-4 text-gray-500" />
-                    <div>
-                      <p className="font-bold">{stats?.classificationBreakdown?.too_short ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Too Short</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
         </CardContent>
