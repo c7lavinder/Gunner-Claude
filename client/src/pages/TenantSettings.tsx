@@ -22,8 +22,12 @@ import {
   UserMinus,
   Clock,
   X,
-  AlertCircle
+  AlertCircle,
+  ArrowUp,
+  Check,
+  Sparkles
 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -37,6 +41,9 @@ export default function TenantSettings() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
   const [inviteTeamRole, setInviteTeamRole] = useState<'admin' | 'acquisition_manager' | 'lead_manager'>('lead_manager');
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'starter' | 'growth' | 'scale'>('growth');
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
 
   // Fetch tenant settings
   const { data: settings, isLoading: settingsLoading, refetch: refetchSettings } = trpc.tenant.getSettings.useQuery(
@@ -161,6 +168,20 @@ export default function TenantSettings() {
     },
     onError: (error) => {
       toast.error(error.message || "Failed to cancel subscription");
+    },
+  });
+
+  // Upgrade plan mutation
+  const upgradePlanMutation = trpc.tenant.createCheckout.useMutation({
+    onSuccess: (data) => {
+      if (data.url) {
+        toast.info("Redirecting to checkout...");
+        window.open(data.url, '_blank');
+        setShowUpgradeModal(false);
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to create checkout session");
     },
   });
 
@@ -629,10 +650,125 @@ export default function TenantSettings() {
                         {billingPortalMutation.isPending ? "Opening..." : "Manage Billing"}
                       </Button>
                     )}
-                    {settings?.subscriptionTier === 'trial' && (
-                      <Button onClick={() => window.location.href = '/onboarding?step=2'}>
-                        Upgrade Plan
-                      </Button>
+                    {(settings?.subscriptionTier === 'trial' || settings?.subscriptionTier === 'starter' || settings?.subscriptionTier === 'growth') && (
+                      <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
+                        <DialogTrigger asChild>
+                          <Button>
+                            <ArrowUp className="h-4 w-4 mr-2" />
+                            {settings?.subscriptionTier === 'trial' ? 'Upgrade Plan' : 'Change Plan'}
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl">
+                          <DialogHeader>
+                            <DialogTitle>Choose Your Plan</DialogTitle>
+                            <DialogDescription>
+                              Select a plan that fits your team's needs
+                            </DialogDescription>
+                          </DialogHeader>
+                          
+                          {/* Billing Period Toggle */}
+                          <div className="flex justify-center gap-4 mb-6">
+                            <Button 
+                              variant={billingPeriod === 'monthly' ? 'default' : 'outline'}
+                              onClick={() => setBillingPeriod('monthly')}
+                              size="sm"
+                            >
+                              Monthly
+                            </Button>
+                            <Button 
+                              variant={billingPeriod === 'yearly' ? 'default' : 'outline'}
+                              onClick={() => setBillingPeriod('yearly')}
+                              size="sm"
+                            >
+                              Yearly (2 months free)
+                            </Button>
+                          </div>
+
+                          {/* Plan Cards */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* Starter Plan */}
+                            <div 
+                              className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
+                                selectedPlan === 'starter' ? 'border-primary ring-2 ring-primary/20' : 'hover:border-muted-foreground/50'
+                              } ${settings?.subscriptionTier === 'starter' ? 'opacity-50' : ''}`}
+                              onClick={() => settings?.subscriptionTier !== 'starter' && setSelectedPlan('starter')}
+                            >
+                              {settings?.subscriptionTier === 'starter' && (
+                                <Badge className="absolute -top-2 -right-2 bg-green-500">Current</Badge>
+                              )}
+                              <h3 className="font-semibold text-lg">Starter</h3>
+                              <div className="text-2xl font-bold mt-2">
+                                ${billingPeriod === 'monthly' ? '99' : '990'}
+                                <span className="text-sm font-normal text-muted-foreground">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
+                              </div>
+                              <ul className="mt-4 space-y-2 text-sm">
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Up to 3 team members</li>
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> AI call grading</li>
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> 1 CRM integration</li>
+                              </ul>
+                            </div>
+
+                            {/* Growth Plan */}
+                            <div 
+                              className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
+                                selectedPlan === 'growth' ? 'border-primary ring-2 ring-primary/20' : 'hover:border-muted-foreground/50'
+                              } ${settings?.subscriptionTier === 'growth' ? 'opacity-50' : ''}`}
+                              onClick={() => settings?.subscriptionTier !== 'growth' && setSelectedPlan('growth')}
+                            >
+                              <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary">
+                                <Sparkles className="h-3 w-3 mr-1" /> Popular
+                              </Badge>
+                              {settings?.subscriptionTier === 'growth' && (
+                                <Badge className="absolute -top-2 -right-2 bg-green-500">Current</Badge>
+                              )}
+                              <h3 className="font-semibold text-lg">Growth</h3>
+                              <div className="text-2xl font-bold mt-2">
+                                ${billingPeriod === 'monthly' ? '249' : '2,490'}
+                                <span className="text-sm font-normal text-muted-foreground">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
+                              </div>
+                              <ul className="mt-4 space-y-2 text-sm">
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Up to 10 team members</li>
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Advanced analytics</li>
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> 2 CRM integrations</li>
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Custom rubrics</li>
+                              </ul>
+                            </div>
+
+                            {/* Scale Plan */}
+                            <div 
+                              className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
+                                selectedPlan === 'scale' ? 'border-primary ring-2 ring-primary/20' : 'hover:border-muted-foreground/50'
+                              } ${(settings?.subscriptionTier as string) === 'scale' ? 'opacity-50' : ''}`}
+                              onClick={() => (settings?.subscriptionTier as string) !== 'scale' && setSelectedPlan('scale')}
+                            >
+                              {(settings?.subscriptionTier as string) === 'scale' && (
+                                <Badge className="absolute -top-2 -right-2 bg-green-500">Current</Badge>
+                              )}
+                              <h3 className="font-semibold text-lg">Scale</h3>
+                              <div className="text-2xl font-bold mt-2">
+                                ${billingPeriod === 'monthly' ? '499' : '4,990'}
+                                <span className="text-sm font-normal text-muted-foreground">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
+                              </div>
+                              <ul className="mt-4 space-y-2 text-sm">
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Unlimited team members</li>
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> 5 CRM integrations</li>
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> API access</li>
+                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Custom branding</li>
+                              </ul>
+                            </div>
+                          </div>
+
+                          {/* Checkout Button */}
+                          <div className="flex justify-end mt-6">
+                            <Button 
+                              onClick={() => upgradePlanMutation.mutate({ planCode: selectedPlan, billingPeriod })}
+                              disabled={upgradePlanMutation.isPending || selectedPlan === settings?.subscriptionTier}
+                            >
+                              {upgradePlanMutation.isPending ? 'Processing...' : `Continue to Checkout`}
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                     )}
                     {settings?.subscriptionStatus === 'active' && !subscriptionStatus?.cancelAtPeriodEnd && (
                       <Button 

@@ -562,3 +562,18 @@
 - [x] Add reactivate subscription functionality
 - [x] Show current subscription status in Company Settings
 - [x] Handle subscription changes via webhooks
+
+
+## White-Label SaaS Platform - Phase 5
+
+### Email Notifications
+- [x] Create notification service for team invites
+- [x] Send notification when team member is invited
+- [x] Send notification when user accepts invite and joins team
+
+### Plan Upgrade Flow
+- [x] Add upgrade plan button to billing tab
+- [x] Create checkout session for plan upgrade
+- [x] Handle plan change in Stripe webhooks
+- [x] Update tenant limits when plan changes
+- [x] Show plan comparison in upgrade modal

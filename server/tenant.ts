@@ -15,6 +15,7 @@ import {
   pendingInvitations
 } from "../drizzle/schema";
 import { createCheckoutSession, createBillingPortalSession, getSubscription, cancelSubscription, reactivateSubscription } from "./stripe/checkout";
+import { notifyOwner } from "./_core/notification";
 
 // ============ TENANT QUERIES ============
 
@@ -344,6 +345,21 @@ export async function inviteUserToTenant(
     status: 'pending',
   });
 
+  // Get tenant name for notification
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  const tenantName = tenant?.name || 'your organization';
+
+  // Send notification to platform owner about new invite
+  try {
+    await notifyOwner({
+      title: `New Team Invite: ${email}`,
+      content: `A new team member (${email}) has been invited to ${tenantName} as ${teamRole.replace('_', ' ')}. They will be added when they sign in with their Manus account.`,
+    });
+  } catch (e) {
+    // Don't fail the invite if notification fails
+    console.warn('[Tenant] Failed to send invite notification:', e);
+  }
+
   return { 
     success: true, 
     message: `Invitation sent to ${email}. They will be added when they sign in.`,
@@ -467,6 +483,20 @@ export async function checkAndAcceptPendingInvitation(
 
   // Get tenant info for the response
   const tenant = await getTenantById(invitation.tenantId);
+
+  // Get user name for notification
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  const userName = user?.name || email;
+
+  // Send notification about accepted invite
+  try {
+    await notifyOwner({
+      title: `Team Member Joined: ${userName}`,
+      content: `${userName} (${email}) has accepted their invitation and joined ${tenant?.name || 'the organization'} as ${invitation.teamRole?.replace('_', ' ') || 'team member'}.`,
+    });
+  } catch (e) {
+    console.warn('[Tenant] Failed to send join notification:', e);
+  }
 
   return {
     tenantId: invitation.tenantId,
