@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Building2, 
   DollarSign, 
@@ -13,72 +14,12 @@ import {
   TrendingUp, 
   AlertTriangle, 
   Search,
-  MoreHorizontal,
   Eye,
-  ArrowLeft
+  ArrowLeft,
+  RefreshCw
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-
-// Mock data for demonstration
-const MOCK_TENANTS = [
-  {
-    id: 1,
-    name: "New Again Houses",
-    slug: "nah",
-    plan: "scale",
-    status: "active",
-    users: 8,
-    calls: 1250,
-    mrr: 499,
-    createdAt: "2024-01-15",
-  },
-  {
-    id: 2,
-    name: "Acme Real Estate",
-    slug: "acme",
-    plan: "growth",
-    status: "active",
-    users: 5,
-    calls: 450,
-    mrr: 249,
-    createdAt: "2024-02-01",
-  },
-  {
-    id: 3,
-    name: "Quick Flip Properties",
-    slug: "quickflip",
-    plan: "starter",
-    status: "trial",
-    users: 2,
-    calls: 85,
-    mrr: 0,
-    createdAt: "2024-02-10",
-  },
-  {
-    id: 4,
-    name: "Metro Investors",
-    slug: "metro",
-    plan: "growth",
-    status: "past_due",
-    users: 7,
-    calls: 320,
-    mrr: 249,
-    createdAt: "2024-01-20",
-  },
-];
-
-const MOCK_METRICS = {
-  totalMrr: 997,
-  totalArr: 11964,
-  totalTenants: 4,
-  activeTenants: 3,
-  trialTenants: 1,
-  churnedTenants: 0,
-  totalUsers: 22,
-  totalCalls: 2105,
-  avgCallsPerTenant: 526,
-};
 
 export default function SuperAdmin() {
   const [, setLocation] = useLocation();
@@ -86,8 +27,11 @@ export default function SuperAdmin() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Fetch real data from backend
+  const { data: tenants, isLoading: tenantsLoading, refetch: refetchTenants } = trpc.tenant.list.useQuery();
+  const { data: metrics, isLoading: metricsLoading, refetch: refetchMetrics } = trpc.tenant.getMetrics.useQuery();
+
   // Check if user is super admin or platform owner
-  // Platform owner is identified by OWNER_OPEN_ID env variable
   const isPlatformOwner = user?.openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
   const isSuperAdmin = user?.role === "super_admin" || isPlatformOwner;
   
@@ -98,7 +42,7 @@ export default function SuperAdmin() {
           <CardHeader>
             <CardTitle>Access Denied</CardTitle>
             <CardDescription>
-              You don't have permission to access the Super Admin dashboard.
+              You don't have permission to access the Platform Admin dashboard.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -109,13 +53,13 @@ export default function SuperAdmin() {
     );
   }
 
-  const filteredTenants = MOCK_TENANTS.filter(
+  const filteredTenants = (tenants || []).filter(
     (t) =>
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.slug.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string | null) => {
     switch (status) {
       case "active":
         return <Badge className="bg-green-100 text-green-700">Active</Badge>;
@@ -126,12 +70,14 @@ export default function SuperAdmin() {
       case "canceled":
         return <Badge className="bg-gray-100 text-gray-700">Canceled</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline">{status || "Unknown"}</Badge>;
     }
   };
 
-  const getPlanBadge = (plan: string) => {
+  const getPlanBadge = (plan: string | null) => {
     switch (plan) {
+      case "trial":
+        return <Badge className="bg-blue-100 text-blue-700">Trial</Badge>;
       case "starter":
         return <Badge variant="outline">Starter</Badge>;
       case "growth":
@@ -139,8 +85,13 @@ export default function SuperAdmin() {
       case "scale":
         return <Badge className="bg-amber-100 text-amber-700">Scale</Badge>;
       default:
-        return <Badge variant="outline">{plan}</Badge>;
+        return <Badge variant="outline">{plan || "None"}</Badge>;
     }
+  };
+
+  const handleRefresh = () => {
+    refetchTenants();
+    refetchMetrics();
   };
 
   return (
@@ -152,10 +103,14 @@ export default function SuperAdmin() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Super Admin Dashboard</h1>
+            <h1 className="text-2xl font-bold">Platform Admin Dashboard</h1>
             <p className="text-muted-foreground">Platform-wide metrics and tenant management</p>
           </div>
         </div>
+        <Button variant="outline" onClick={handleRefresh}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -172,37 +127,53 @@ export default function SuperAdmin() {
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Monthly Recurring Revenue</CardDescription>
-                <CardTitle className="text-3xl flex items-center gap-2">
-                  <DollarSign className="h-6 w-6 text-green-500" />
-                  ${MOCK_METRICS.totalMrr.toLocaleString()}
-                </CardTitle>
+                {metricsLoading ? (
+                  <Skeleton className="h-9 w-24" />
+                ) : (
+                  <CardTitle className="text-3xl flex items-center gap-2">
+                    <DollarSign className="h-6 w-6 text-green-500" />
+                    ${(metrics?.totalMrr || 0).toLocaleString()}
+                  </CardTitle>
+                )}
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Annual Recurring Revenue</CardDescription>
-                <CardTitle className="text-3xl flex items-center gap-2">
-                  <TrendingUp className="h-6 w-6 text-blue-500" />
-                  ${MOCK_METRICS.totalArr.toLocaleString()}
-                </CardTitle>
+                {metricsLoading ? (
+                  <Skeleton className="h-9 w-24" />
+                ) : (
+                  <CardTitle className="text-3xl flex items-center gap-2">
+                    <TrendingUp className="h-6 w-6 text-blue-500" />
+                    ${(metrics?.totalArr || 0).toLocaleString()}
+                  </CardTitle>
+                )}
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Total Tenants</CardDescription>
-                <CardTitle className="text-3xl flex items-center gap-2">
-                  <Building2 className="h-6 w-6 text-purple-500" />
-                  {MOCK_METRICS.totalTenants}
-                </CardTitle>
+                {metricsLoading ? (
+                  <Skeleton className="h-9 w-16" />
+                ) : (
+                  <CardTitle className="text-3xl flex items-center gap-2">
+                    <Building2 className="h-6 w-6 text-purple-500" />
+                    {metrics?.totalTenants || 0}
+                  </CardTitle>
+                )}
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Total Users</CardDescription>
-                <CardTitle className="text-3xl flex items-center gap-2">
-                  <Users className="h-6 w-6 text-amber-500" />
-                  {MOCK_METRICS.totalUsers}
-                </CardTitle>
+                {metricsLoading ? (
+                  <Skeleton className="h-9 w-16" />
+                ) : (
+                  <CardTitle className="text-3xl flex items-center gap-2">
+                    <Users className="h-6 w-6 text-amber-500" />
+                    {metrics?.totalUsers || 0}
+                  </CardTitle>
+                )}
               </CardHeader>
             </Card>
           </div>
@@ -214,20 +185,28 @@ export default function SuperAdmin() {
                 <CardTitle>Tenant Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>Active</span>
-                    <Badge className="bg-green-100 text-green-700">{MOCK_METRICS.activeTenants}</Badge>
+                {metricsLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-6 w-full" />
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span>Trial</span>
-                    <Badge className="bg-blue-100 text-blue-700">{MOCK_METRICS.trialTenants}</Badge>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span>Active</span>
+                      <Badge className="bg-green-100 text-green-700">{metrics?.activeTenants || 0}</Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Trial</span>
+                      <Badge className="bg-blue-100 text-blue-700">{metrics?.trialTenants || 0}</Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Churned</span>
+                      <Badge className="bg-gray-100 text-gray-700">{metrics?.churnedTenants || 0}</Badge>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span>Churned</span>
-                    <Badge className="bg-gray-100 text-gray-700">{MOCK_METRICS.churnedTenants}</Badge>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -236,16 +215,23 @@ export default function SuperAdmin() {
                 <CardTitle>Platform Usage</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>Total Calls Graded</span>
-                    <span className="font-bold">{MOCK_METRICS.totalCalls.toLocaleString()}</span>
+                {metricsLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-6 w-full" />
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span>Avg Calls per Tenant</span>
-                    <span className="font-bold">{MOCK_METRICS.avgCallsPerTenant}</span>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span>Total Calls Graded</span>
+                      <span className="font-bold">{(metrics?.totalCalls || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Avg Calls per Tenant</span>
+                      <span className="font-bold">{metrics?.avgCallsPerTenant || 0}</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -281,27 +267,59 @@ export default function SuperAdmin() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTenants.map((tenant) => (
-                  <TableRow key={tenant.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{tenant.name}</div>
-                        <div className="text-sm text-muted-foreground">{tenant.slug}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{getPlanBadge(tenant.plan)}</TableCell>
-                    <TableCell>{getStatusBadge(tenant.status)}</TableCell>
-                    <TableCell>{tenant.users}</TableCell>
-                    <TableCell>{tenant.calls.toLocaleString()}</TableCell>
-                    <TableCell>${tenant.mrr}</TableCell>
-                    <TableCell>{tenant.createdAt}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon">
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                {tenantsLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-10 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-6 w-8" /></TableCell>
+                      <TableCell><Skeleton className="h-6 w-12" /></TableCell>
+                      <TableCell><Skeleton className="h-6 w-12" /></TableCell>
+                      <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredTenants.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      No tenants found
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredTenants.map((tenant) => {
+                    const planPrices: Record<string, number> = {
+                      starter: 99,
+                      growth: 249,
+                      scale: 499,
+                    };
+                    const mrr = tenant.subscriptionStatus === 'active' 
+                      ? planPrices[tenant.subscriptionTier || 'starter'] || 0 
+                      : 0;
+                    
+                    return (
+                      <TableRow key={tenant.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{tenant.name}</div>
+                            <div className="text-sm text-muted-foreground">{tenant.slug}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{getPlanBadge(tenant.subscriptionTier)}</TableCell>
+                        <TableCell>{getStatusBadge(tenant.subscriptionStatus)}</TableCell>
+                        <TableCell>{tenant.userCount}</TableCell>
+                        <TableCell>{(tenant.callCount || 0).toLocaleString()}</TableCell>
+                        <TableCell>${mrr}</TableCell>
+                        <TableCell>{new Date(tenant.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </Card>
@@ -313,29 +331,37 @@ export default function SuperAdmin() {
               <CardTitle>Revenue by Plan</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <div className="font-medium">Starter ($99/mo)</div>
-                    <div className="text-sm text-muted-foreground">1 tenant</div>
-                  </div>
-                  <div className="text-xl font-bold">$0</div>
+              {tenantsLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-6 w-full" />
+                  <Skeleton className="h-6 w-full" />
+                  <Skeleton className="h-6 w-full" />
                 </div>
-                <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <div className="font-medium">Growth ($249/mo)</div>
-                    <div className="text-sm text-muted-foreground">2 tenants</div>
-                  </div>
-                  <div className="text-xl font-bold">$498</div>
+              ) : (
+                <div className="space-y-4">
+                  {['starter', 'growth', 'scale'].map((plan) => {
+                    const planPrices: Record<string, number> = {
+                      starter: 99,
+                      growth: 249,
+                      scale: 499,
+                    };
+                    const tenantsOnPlan = (tenants || []).filter(
+                      t => t.subscriptionTier === plan && t.subscriptionStatus === 'active'
+                    );
+                    const revenue = tenantsOnPlan.length * planPrices[plan];
+                    
+                    return (
+                      <div key={plan} className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          {getPlanBadge(plan)}
+                          <span className="text-muted-foreground">({tenantsOnPlan.length} tenants)</span>
+                        </div>
+                        <span className="font-bold">${revenue}/mo</span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <div className="font-medium">Scale ($499/mo)</div>
-                    <div className="text-sm text-muted-foreground">1 tenant</div>
-                  </div>
-                  <div className="text-xl font-bold">$499</div>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -349,26 +375,52 @@ export default function SuperAdmin() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start gap-4 p-4 bg-red-50 rounded-lg border border-red-200">
-                  <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
-                  <div>
-                    <div className="font-medium text-red-700">Payment Failed</div>
-                    <div className="text-sm text-red-600">
-                      Metro Investors - Last payment failed 3 days ago
-                    </div>
-                  </div>
+              {tenantsLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
                 </div>
-                <div className="flex items-start gap-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
-                  <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
-                  <div>
-                    <div className="font-medium text-amber-700">Trial Ending Soon</div>
-                    <div className="text-sm text-amber-600">
-                      Quick Flip Properties - Trial ends in 4 days
+              ) : (
+                <div className="space-y-4">
+                  {/* Past Due Tenants */}
+                  {(tenants || []).filter(t => t.subscriptionStatus === 'past_due').map((tenant) => (
+                    <div key={tenant.id} className="flex items-center justify-between p-4 border rounded-lg bg-red-50">
+                      <div>
+                        <div className="font-medium">{tenant.name}</div>
+                        <div className="text-sm text-red-600">Payment past due</div>
+                      </div>
+                      <Button size="sm" variant="outline">Contact</Button>
                     </div>
-                  </div>
+                  ))}
+                  
+                  {/* Trial Expiring Soon */}
+                  {(tenants || []).filter(t => {
+                    if (t.subscriptionTier !== 'trial' || !t.trialEndsAt) return false;
+                    const daysLeft = Math.ceil((new Date(t.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                    return daysLeft <= 3 && daysLeft > 0;
+                  }).map((tenant) => (
+                    <div key={tenant.id} className="flex items-center justify-between p-4 border rounded-lg bg-amber-50">
+                      <div>
+                        <div className="font-medium">{tenant.name}</div>
+                        <div className="text-sm text-amber-600">Trial expiring soon</div>
+                      </div>
+                      <Button size="sm" variant="outline">Reach Out</Button>
+                    </div>
+                  ))}
+
+                  {/* No alerts */}
+                  {(tenants || []).filter(t => t.subscriptionStatus === 'past_due').length === 0 &&
+                   (tenants || []).filter(t => {
+                    if (t.subscriptionTier !== 'trial' || !t.trialEndsAt) return false;
+                    const daysLeft = Math.ceil((new Date(t.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                    return daysLeft <= 3 && daysLeft > 0;
+                   }).length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No alerts at this time
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -493,3 +493,30 @@
 - [x] Associate existing calls with NAH tenant
 - [x] Associate existing training materials with NAH tenant
 - [x] Verify all data properly scoped
+
+
+## White-Label SaaS Platform - Phase 2
+
+### Backend tRPC Routes for Admin Dashboards
+- [x] Create tenant.list route for super admin
+- [x] Create tenant.getMetrics route for MRR/ARR stats
+- [x] Create tenant.getById route for tenant details
+- [x] Create tenantSettings.get route for tenant admin
+- [x] Create tenantSettings.update route for tenant admin
+- [ ] Create tenantSettings.inviteUser route
+- [ ] Create tenantSettings.removeUser route
+
+### Tenant-Scoped Query Middleware
+- [x] Create tenantContext middleware that extracts tenantId from user session
+- [ ] Update all existing queries to filter by tenantId
+- [x] Add tenantId to protectedProcedure context
+- [ ] Ensure new calls/users are automatically assigned to correct tenant
+
+### Connect Dashboards to Real Data
+- [x] Update SuperAdmin page to use real tRPC queries
+- [x] Update TenantSettings page to use real tRPC queries
+- [x] Remove mock data from both pages
+
+### Stripe Sandbox
+- [x] Provide claim link to user
+- [ ] Test checkout flow with test card

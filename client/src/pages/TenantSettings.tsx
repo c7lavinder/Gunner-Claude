@@ -1,12 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
@@ -15,48 +14,66 @@ import {
   Users, 
   Link2, 
   FileText, 
-  Settings,
   Plus,
-  Trash2,
   Edit,
-  Check,
-  X,
-  ExternalLink
+  ExternalLink,
+  RefreshCw
 } from "lucide-react";
 import { toast } from "sonner";
-
-// Mock data for demonstration
-const MOCK_TENANT = {
-  id: 1,
-  name: "New Again Houses",
-  slug: "nah",
-  domain: null,
-  plan: "scale",
-  status: "active",
-  trialEndsAt: null,
-  stripeCustomerId: "cus_xxx",
-  stripeSubscriptionId: "sub_xxx",
-};
-
-const MOCK_TEAM = [
-  { id: 1, name: "Corey Lavinder", email: "corey@newagainhouses.com", role: "admin", status: "active" },
-  { id: 2, name: "John Smith", email: "john@newagainhouses.com", role: "manager", status: "active" },
-  { id: 3, name: "Jane Doe", email: "jane@newagainhouses.com", role: "member", status: "active" },
-  { id: 4, name: "Mike Johnson", email: "mike@newagainhouses.com", role: "member", status: "pending" },
-];
-
-const MOCK_RUBRICS = [
-  { id: 1, name: "Cold Call Rubric", categories: 5, isDefault: true },
-  { id: 2, name: "Follow-up Call Rubric", categories: 4, isDefault: false },
-];
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function TenantSettings() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("general");
-  const [companyName, setCompanyName] = useState(MOCK_TENANT.name);
+  const [companyName, setCompanyName] = useState("");
+  const [customDomain, setCustomDomain] = useState("");
+  const [crmType, setCrmType] = useState<string>("none");
   const [inviteEmail, setInviteEmail] = useState("");
 
+  // Fetch tenant settings
+  const { data: settings, isLoading: settingsLoading, refetch: refetchSettings } = trpc.tenant.getSettings.useQuery(
+    undefined,
+    { enabled: !!user?.tenantId }
+  );
+
+  // Fetch team members
+  const { data: teamMembers, isLoading: teamLoading, refetch: refetchTeam } = trpc.tenant.getUsers.useQuery(
+    undefined,
+    { enabled: !!user?.tenantId }
+  );
+
+  // Update settings mutation
+  const updateSettingsMutation = trpc.tenant.updateSettings.useMutation({
+    onSuccess: () => {
+      toast.success("Settings saved successfully");
+      refetchSettings();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to save settings");
+    },
+  });
+
+  // Initialize form values when settings load
+  useEffect(() => {
+    if (settings) {
+      setCompanyName(settings.name || "");
+      setCustomDomain(settings.domain || "");
+      setCrmType(settings.crmType || "none");
+    }
+  }, [settings]);
+
   const handleSaveGeneral = () => {
-    toast.success("Company settings saved");
+    updateSettingsMutation.mutate({
+      name: companyName,
+      domain: customDomain || undefined,
+    });
+  };
+
+  const handleSaveCrm = () => {
+    updateSettingsMutation.mutate({
+      crmType: crmType as 'ghl' | 'hubspot' | 'salesforce' | 'close' | 'pipedrive' | 'none',
+    });
   };
 
   const handleInviteTeamMember = () => {
@@ -64,20 +81,67 @@ export default function TenantSettings() {
       toast.error("Please enter an email address");
       return;
     }
+    // TODO: Implement invite functionality
     toast.success(`Invitation sent to ${inviteEmail}`);
     setInviteEmail("");
   };
 
   const handleManageBilling = () => {
     toast.info("Redirecting to Stripe billing portal...");
-    // In production, this would create a Stripe billing portal session
+    // TODO: Create Stripe billing portal session
   };
+
+  const getPlanPrice = (plan: string | null) => {
+    switch (plan) {
+      case "starter": return "$99/month";
+      case "growth": return "$249/month";
+      case "scale": return "$499/month";
+      case "trial": return "Free trial";
+      default: return "N/A";
+    }
+  };
+
+  const getPlanLimits = (plan: string | null) => {
+    switch (plan) {
+      case "starter": return { users: 3, calls: 100 };
+      case "growth": return { users: 10, calls: 500 };
+      case "scale": return { users: "Unlimited", calls: "Unlimited" };
+      case "trial": return { users: 3, calls: 50 };
+      default: return { users: 0, calls: 0 };
+    }
+  };
+
+  if (!user?.tenantId) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>No Organization</CardTitle>
+            <CardDescription>
+              You're not associated with any organization yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => window.location.href = "/onboarding"}>
+              Create Organization
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Company Settings</h1>
-        <p className="text-muted-foreground">Manage your organization's settings and team</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Company Settings</h1>
+          <p className="text-muted-foreground">Manage your organization's settings and team</p>
+        </div>
+        <Button variant="outline" onClick={() => { refetchSettings(); refetchTeam(); }}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -112,24 +176,38 @@ export default function TenantSettings() {
               <CardDescription>Basic information about your organization</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="companyName">Company Name</Label>
-                <Input
-                  id="companyName"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Your Gunner URL</Label>
-                <div className="flex items-center gap-2">
-                  <Input value={`gunner.app/${MOCK_TENANT.slug}`} disabled />
-                  <Button variant="outline" size="icon">
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
+              {settingsLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
                 </div>
-              </div>
-              <Button onClick={handleSaveGeneral}>Save Changes</Button>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Company Name</Label>
+                    <Input
+                      id="companyName"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Your Gunner URL</Label>
+                    <div className="flex items-center gap-2">
+                      <Input value={`gunner.app/${settings?.slug || ''}`} disabled />
+                      <Button variant="outline" size="icon">
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={handleSaveGeneral}
+                    disabled={updateSettingsMutation.isPending}
+                  >
+                    {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -139,18 +217,26 @@ export default function TenantSettings() {
               <CardDescription>Use your own domain for Gunner (Scale plan only)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="customDomain">Custom Domain</Label>
-                <Input
-                  id="customDomain"
-                  placeholder="coaching.yourcompany.com"
-                  disabled={MOCK_TENANT.plan !== "scale"}
-                />
-              </div>
-              {MOCK_TENANT.plan !== "scale" && (
-                <p className="text-sm text-muted-foreground">
-                  Upgrade to Scale plan to use a custom domain
-                </p>
+              {settingsLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="customDomain">Custom Domain</Label>
+                    <Input
+                      id="customDomain"
+                      placeholder="coaching.yourcompany.com"
+                      value={customDomain}
+                      onChange={(e) => setCustomDomain(e.target.value)}
+                      disabled={settings?.subscriptionTier !== "scale"}
+                    />
+                  </div>
+                  {settings?.subscriptionTier !== "scale" && (
+                    <p className="text-sm text-muted-foreground">
+                      Upgrade to Scale plan to use a custom domain
+                    </p>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -206,29 +292,43 @@ export default function TenantSettings() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {MOCK_TEAM.map((member) => (
-                    <TableRow key={member.id}>
-                      <TableCell className="font-medium">{member.name}</TableCell>
-                      <TableCell>{member.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {member.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {member.status === "active" ? (
-                          <Badge className="bg-green-100 text-green-700">Active</Badge>
-                        ) : (
-                          <Badge className="bg-amber-100 text-amber-700">Pending</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon">
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                  {teamLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                        <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : (teamMembers || []).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No team members found
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    (teamMembers || []).map((member) => (
+                      <TableRow key={member.id}>
+                        <TableCell className="font-medium">{member.name}</TableCell>
+                        <TableCell>{member.email}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {member.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className="bg-green-100 text-green-700">Active</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -243,23 +343,42 @@ export default function TenantSettings() {
               <CardDescription>Your subscription details</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                <div>
-                  <div className="font-medium text-lg capitalize">{MOCK_TENANT.plan} Plan</div>
-                  <div className="text-sm text-muted-foreground">
-                    {MOCK_TENANT.plan === "starter" && "$99/month"}
-                    {MOCK_TENANT.plan === "growth" && "$249/month"}
-                    {MOCK_TENANT.plan === "scale" && "$499/month"}
+              {settingsLoading ? (
+                <Skeleton className="h-20 w-full" />
+              ) : (
+                <>
+                  <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                    <div>
+                      <div className="font-medium text-lg capitalize">{settings?.subscriptionTier || 'trial'} Plan</div>
+                      <div className="text-sm text-muted-foreground">
+                        {getPlanPrice(settings?.subscriptionTier || null)}
+                      </div>
+                    </div>
+                    <Badge className={
+                      settings?.subscriptionStatus === 'active' 
+                        ? "bg-green-100 text-green-700" 
+                        : settings?.subscriptionTier === 'trial'
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-gray-100 text-gray-700"
+                    }>
+                      {settings?.subscriptionStatus === 'active' ? 'Active' : 
+                       settings?.subscriptionTier === 'trial' ? 'Trial' : 
+                       settings?.subscriptionStatus || 'Unknown'}
+                    </Badge>
                   </div>
-                </div>
-                <Badge className="bg-green-100 text-green-700">Active</Badge>
-              </div>
-              <div className="flex gap-4">
-                <Button variant="outline" onClick={handleManageBilling}>
-                  Manage Billing
-                </Button>
-                <Button variant="outline">View Invoices</Button>
-              </div>
+                  {settings?.subscriptionTier === 'trial' && settings?.trialEndsAt && (
+                    <p className="text-sm text-amber-600">
+                      Trial ends on {new Date(settings.trialEndsAt).toLocaleDateString()}
+                    </p>
+                  )}
+                  <div className="flex gap-4">
+                    <Button variant="outline" onClick={handleManageBilling}>
+                      Manage Billing
+                    </Button>
+                    <Button variant="outline">View Invoices</Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -269,24 +388,27 @@ export default function TenantSettings() {
               <CardDescription>Your current usage this billing period</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span>Team Members</span>
-                  <span className="font-medium">
-                    {MOCK_TEAM.length} / {MOCK_TENANT.plan === "starter" ? 3 : MOCK_TENANT.plan === "growth" ? 10 : "Unlimited"}
-                  </span>
+              {settingsLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-6 w-full" />
+                  <Skeleton className="h-6 w-full" />
                 </div>
-                <div className="flex justify-between items-center">
-                  <span>Calls Graded (This Month)</span>
-                  <span className="font-medium">247</span>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span>Team Members</span>
+                    <span className="font-medium">
+                      {(teamMembers || []).length} / {getPlanLimits(settings?.subscriptionTier || null).users}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Calls Graded This Month</span>
+                    <span className="font-medium">
+                      {settings?.callCount || 0} / {getPlanLimits(settings?.subscriptionTier || null).calls}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span>CRM Integrations</span>
-                  <span className="font-medium">
-                    1 / {MOCK_TENANT.plan === "starter" ? 1 : MOCK_TENANT.plan === "growth" ? 2 : 5}
-                  </span>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -295,60 +417,52 @@ export default function TenantSettings() {
         <TabsContent value="integrations" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Connected CRM</CardTitle>
-              <CardDescription>Manage your CRM integration</CardDescription>
+              <CardTitle>CRM Integration</CardTitle>
+              <CardDescription>Connect your CRM to sync contacts and call data</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <Link2 className="h-5 w-5 text-primary" />
+              {settingsLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Select CRM</Label>
+                    <Select value={crmType} onValueChange={setCrmType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a CRM" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="ghl">GoHighLevel</SelectItem>
+                        <SelectItem value="hubspot">HubSpot</SelectItem>
+                        <SelectItem value="salesforce">Salesforce</SelectItem>
+                        <SelectItem value="close">Close.io</SelectItem>
+                        <SelectItem value="pipedrive">Pipedrive</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div>
-                    <div className="font-medium">GoHighLevel</div>
-                    <div className="text-sm text-muted-foreground">Connected</div>
-                  </div>
-                </div>
-                <Badge className="bg-green-100 text-green-700">Active</Badge>
-              </div>
-              <div className="space-y-2">
-                <Label>GHL Location ID</Label>
-                <Input value="abc123xyz" disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>Webhook URL</Label>
-                <Input value="https://gunner.app/api/webhook/ghl" disabled />
-                <p className="text-xs text-muted-foreground">
-                  Add this URL to your GHL workflow to automatically sync calls
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Sync Settings</CardTitle>
-              <CardDescription>Configure how calls are synced</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">Auto-sync new calls</div>
-                  <div className="text-sm text-muted-foreground">
-                    Automatically import and grade new calls
-                  </div>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">Sync call recordings</div>
-                  <div className="text-sm text-muted-foreground">
-                    Download and store call audio files
-                  </div>
-                </div>
-                <Switch defaultChecked />
-              </div>
+                  {crmType !== 'none' && (
+                    <div className="p-4 bg-muted/50 rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        {crmType === 'ghl' && "Connect your GoHighLevel account to sync contacts and call recordings."}
+                        {crmType === 'hubspot' && "Connect your HubSpot account to sync contacts and call data."}
+                        {crmType === 'salesforce' && "Connect your Salesforce account to sync leads and call activities."}
+                        {crmType === 'close' && "Connect your Close.io account to sync leads and call recordings."}
+                        {crmType === 'pipedrive' && "Connect your Pipedrive account to sync deals and call activities."}
+                      </p>
+                      <Button className="mt-4" variant="outline">
+                        Connect {crmType.toUpperCase()}
+                      </Button>
+                    </div>
+                  )}
+                  <Button 
+                    onClick={handleSaveCrm}
+                    disabled={updateSettingsMutation.isPending}
+                  >
+                    {updateSettingsMutation.isPending ? "Saving..." : "Save CRM Settings"}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -356,52 +470,17 @@ export default function TenantSettings() {
         {/* Grading Rubrics */}
         <TabsContent value="rubrics" className="space-y-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Grading Rubrics</CardTitle>
-                <CardDescription>Customize how calls are evaluated</CardDescription>
-              </div>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Rubric
-              </Button>
+            <CardHeader>
+              <CardTitle>Grading Rubrics</CardTitle>
+              <CardDescription>Customize how calls are evaluated</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Categories</TableHead>
-                    <TableHead>Default</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {MOCK_RUBRICS.map((rubric) => (
-                    <TableRow key={rubric.id}>
-                      <TableCell className="font-medium">{rubric.name}</TableCell>
-                      <TableCell>{rubric.categories}</TableCell>
-                      <TableCell>
-                        {rubric.isDefault ? (
-                          <Check className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <X className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <p className="text-muted-foreground mb-4">
+                Grading rubrics are managed in the Training section. Visit the Training page to create and edit rubrics.
+              </p>
+              <Button variant="outline" onClick={() => window.location.href = "/training"}>
+                Go to Training
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

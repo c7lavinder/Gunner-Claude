@@ -2213,6 +2213,97 @@ Create content that:
         return { success: true };
       }),
   }),
+
+  // ============ TENANT MANAGEMENT (Multi-Tenancy) ============
+  tenant: router({
+    // Super Admin: List all tenants
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const { isPlatformOwner, getAllTenants } = await import("./tenant");
+      if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+      }
+      return getAllTenants();
+    }),
+
+    // Super Admin: Get platform metrics
+    getMetrics: protectedProcedure.query(async ({ ctx }) => {
+      const { isPlatformOwner, getPlatformMetrics } = await import("./tenant");
+      if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+      }
+      return getPlatformMetrics();
+    }),
+
+    // Super Admin: Get tenant by ID
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { isPlatformOwner, getTenantById } = await import("./tenant");
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        return getTenantById(input.id);
+      }),
+
+    // Super Admin: Create new tenant
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        slug: z.string(),
+        subscriptionTier: z.enum(['trial', 'starter', 'growth', 'scale']).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { isPlatformOwner, createTenant } = await import("./tenant");
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        return createTenant(input);
+      }),
+
+    // Tenant Admin: Get own tenant settings
+    getSettings: protectedProcedure.query(async ({ ctx }) => {
+      const { getTenantSettings } = await import("./tenant");
+      if (!ctx.user?.tenantId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+      }
+      return getTenantSettings(ctx.user.tenantId);
+    }),
+
+    // Tenant Admin: Update own tenant settings
+    updateSettings: protectedProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        domain: z.string().optional(),
+        crmType: z.enum(['ghl', 'hubspot', 'salesforce', 'close', 'pipedrive', 'none']).optional(),
+        crmConfig: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { updateTenantSettings } = await import("./tenant");
+        if (!ctx.user?.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+        }
+        // Check if user is tenant admin
+        if (ctx.user.role !== 'admin' && ctx.user.isTenantAdmin !== 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant admin access required' });
+        }
+        return updateTenantSettings(ctx.user.tenantId, input);
+      }),
+
+    // Tenant Admin: Get users in tenant
+    getUsers: protectedProcedure.query(async ({ ctx }) => {
+      const { getTenantUsers } = await import("./tenant");
+      if (!ctx.user?.tenantId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+      }
+      return getTenantUsers(ctx.user.tenantId);
+    }),
+
+    // Get subscription plans
+    getPlans: publicProcedure.query(async () => {
+      const { getSubscriptionPlans } = await import("./tenant");
+      return getSubscriptionPlans();
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
