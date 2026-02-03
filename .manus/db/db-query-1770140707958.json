@@ -1,0 +1,90 @@
+{
+  "query": "SELECT id, tenantId, isArchived FROM calls WHERE createdAt >= '2026-02-03 06:00:00';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, tenantId, isArchived FROM calls WHERE createdAt >= '2026-02-03 06:00:00';",
+  "rows": [
+    {
+      "id": "240001",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240002",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240003",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240004",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240005",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240006",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240007",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240008",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240009",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240010",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240011",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240012",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240013",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240014",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240015",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    },
+    {
+      "id": "240016",
+      "tenantId": "NULL",
+      "isArchived": "false"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\tisArchived\n240001\tNULL\tfalse\n240002\tNULL\tfalse\n240003\tNULL\tfalse\n240004\tNULL\tfalse\n240005\tNULL\tfalse\n240006\tNULL\tfalse\n240007\tNULL\tfalse\n240008\tNULL\tfalse\n240009\tNULL\tfalse\n240010\tNULL\tfalse\n240011\tNULL\tfalse\n240012\tNULL\tfalse\n240013\tNULL\tfalse\n240014\tNULL\tfalse\n240015\tNULL\tfalse\n240016\tNULL\tfalse\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

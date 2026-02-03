@@ -134,6 +134,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
     let teamMemberId: number | undefined;
     let resolvedTeamMemberName: string | undefined = teamMemberName;
     let callType: "qualification" | "offer" = "qualification";
+    let tenantId: number | null = null;
     
     // First try to match by GHL User ID
     if (ghlUserId) {
@@ -142,6 +143,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
         teamMemberId = teamMember.id;
         resolvedTeamMemberName = teamMember.name;
         callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
+        tenantId = teamMember.tenantId;
         console.log(`[Webhook] Matched team member by GHL User ID: ${teamMember.name} (${ghlUserId})`);
       }
     }
@@ -152,6 +154,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
       if (teamMember) {
         teamMemberId = teamMember.id;
         callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
+        tenantId = teamMember.tenantId;
         console.log(`[Webhook] Matched team member by name: ${teamMember.name}`);
       }
     }
@@ -160,7 +163,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
     const timestampRaw = extractField<string>(payload, "timestamp", "createdAt", "created_at", "dateAdded", "date_added");
     const callTimestamp = timestampRaw ? new Date(timestampRaw) : new Date();
 
-    // Create the call record
+    // Create the call record with tenantId from team member
     const call = await createCall({
       ghlCallId,
       ghlContactId,
@@ -176,6 +179,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
       callType,
       status: "pending",
       callTimestamp,
+      tenantId, // Inherit tenantId from team member
     });
 
     if (!call) {

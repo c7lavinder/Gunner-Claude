@@ -596,3 +596,8 @@
 - [x] Revenue breakdown by plan
 - [x] Add recent activity feed (new signups, upgrades, cancellations)
 - [x] Add alerts tab for past due and expiring trials
+
+
+## Bug Fixes
+
+- [x] Fix analytics page "Today" filter showing blank data (calls were missing tenantId)

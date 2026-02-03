@@ -1,0 +1,15 @@
+{
+  "query": "SELECT \n  SUM(CASE WHEN teamMemberId IS NULL THEN 1 ELSE 0 END) as no_team_member,\n  SUM(CASE WHEN teamMemberId IS NOT NULL THEN 1 ELSE 0 END) as has_team_member,\n  SUM(CASE WHEN tenantId IS NULL THEN 1 ELSE 0 END) as null_tenant\nFROM calls;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT \n  SUM(CASE WHEN teamMemberId IS NULL THEN 1 ELSE 0 END) as no_team_member,\n  SUM(CASE WHEN teamMemberId IS NOT NULL THEN 1 ELSE 0 END) as has_team_member,\n  SUM(CASE WHEN tenantId IS NULL THEN 1 ELSE 0 END) as null_tenant\nFROM calls;",
+  "rows": [
+    {
+      "no_team_member": "0",
+      "has_team_member": "92",
+      "null_tenant": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "no_team_member\thas_team_member\tnull_tenant\n0\t92\t0\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

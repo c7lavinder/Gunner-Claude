@@ -1,0 +1,18 @@
+{
+  "query": "SELECT COALESCE(tenantId, 'NULL') as tenant, COUNT(*) as cnt FROM calls GROUP BY tenantId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COALESCE(tenantId, 'NULL') as tenant, COUNT(*) as cnt FROM calls GROUP BY tenantId;",
+  "rows": [
+    {
+      "tenant": "1",
+      "cnt": "73"
+    },
+    {
+      "tenant": "NULL",
+      "cnt": "16"
+    }
+  ],
+  "messages": [],
+  "stdout": "tenant\tcnt\n1\t73\nNULL\t16\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

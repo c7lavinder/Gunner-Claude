@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, name, tenantId, openId FROM users WHERE openId = 'U3JEthPNs4UbYRrgRBbShj';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, tenantId, openId FROM users WHERE openId = 'U3JEthPNs4UbYRrgRBbShj';",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Corey Lavinder",
+      "tenantId": "1",
+      "openId": "U3JEthPNs4UbYRrgRBbShj"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\ttenantId\topenId\n1\tCorey Lavinder\t1\tU3JEthPNs4UbYRrgRBbShj\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

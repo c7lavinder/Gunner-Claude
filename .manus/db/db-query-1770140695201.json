@@ -1,0 +1,16 @@
+{
+  "query": "SELECT \n  SUM(CASE WHEN tenantId = 1 AND createdAt >= '2026-02-03 06:00:00' THEN 1 ELSE 0 END) as tenant1_today,\n  SUM(CASE WHEN tenantId = 1 THEN 1 ELSE 0 END) as tenant1_total,\n  SUM(CASE WHEN createdAt >= '2026-02-03 06:00:00' THEN 1 ELSE 0 END) as all_today,\n  COUNT(*) as all_total\nFROM calls;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT \n  SUM(CASE WHEN tenantId = 1 AND createdAt >= '2026-02-03 06:00:00' THEN 1 ELSE 0 END) as tenant1_today,\n  SUM(CASE WHEN tenantId = 1 THEN 1 ELSE 0 END) as tenant1_total,\n  SUM(CASE WHEN createdAt >= '2026-02-03 06:00:00' THEN 1 ELSE 0 END) as all_today,\n  COUNT(*) as all_total\nFROM calls;",
+  "rows": [
+    {
+      "tenant1_today": "0",
+      "tenant1_total": "73",
+      "all_today": "16",
+      "all_total": "89"
+    }
+  ],
+  "messages": [],
+  "stdout": "tenant1_today\ttenant1_total\tall_today\tall_total\n0\t73\t16\t89\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

@@ -1,0 +1,14 @@
+{
+  "query": "SELECT IFNULL(tenantId, 'NULL_VALUE') as tenant_id_str, COUNT(*) as cnt FROM calls WHERE createdAt >= '2026-02-03 06:00:00' GROUP BY tenantId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT IFNULL(tenantId, 'NULL_VALUE') as tenant_id_str, COUNT(*) as cnt FROM calls WHERE createdAt >= '2026-02-03 06:00:00' GROUP BY tenantId;",
+  "rows": [
+    {
+      "tenant_id_str": "NULL_VALUE",
+      "cnt": "18"
+    }
+  ],
+  "messages": [],
+  "stdout": "tenant_id_str\tcnt\nNULL_VALUE\t18\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

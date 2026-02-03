@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COUNT(*) as today_calls FROM calls WHERE tenantId = 1 AND createdAt >= '2026-02-03 06:00:00';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COUNT(*) as today_calls FROM calls WHERE tenantId = 1 AND createdAt >= '2026-02-03 06:00:00';",
+  "rows": [
+    {
+      "today_calls": "19"
+    }
+  ],
+  "messages": [],
+  "stdout": "today_calls\n19\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

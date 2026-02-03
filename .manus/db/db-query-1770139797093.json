@@ -1,0 +1,70 @@
+{
+  "query": "SELECT id, createdAt, status, classification FROM calls WHERE createdAt >= '2026-02-03 06:00:00' ORDER BY createdAt DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, createdAt, status, classification FROM calls WHERE createdAt >= '2026-02-03 06:00:00' ORDER BY createdAt DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "240014",
+      "createdAt": "2026-02-03 17:18:05",
+      "status": "completed",
+      "classification": "conversation"
+    },
+    {
+      "id": "240013",
+      "createdAt": "2026-02-03 17:05:51",
+      "status": "completed",
+      "classification": "conversation"
+    },
+    {
+      "id": "240012",
+      "createdAt": "2026-02-03 16:47:53",
+      "status": "completed",
+      "classification": "conversation"
+    },
+    {
+      "id": "240011",
+      "createdAt": "2026-02-03 16:43:14",
+      "status": "completed",
+      "classification": "conversation"
+    },
+    {
+      "id": "240010",
+      "createdAt": "2026-02-03 16:41:37",
+      "status": "completed",
+      "classification": "conversation"
+    },
+    {
+      "id": "240009",
+      "createdAt": "2026-02-03 16:34:28",
+      "status": "skipped",
+      "classification": "too_short"
+    },
+    {
+      "id": "240008",
+      "createdAt": "2026-02-03 16:14:11",
+      "status": "skipped",
+      "classification": "too_short"
+    },
+    {
+      "id": "240007",
+      "createdAt": "2026-02-03 16:13:38",
+      "status": "skipped",
+      "classification": "too_short"
+    },
+    {
+      "id": "240006",
+      "createdAt": "2026-02-03 16:02:05",
+      "status": "completed",
+      "classification": "conversation"
+    },
+    {
+      "id": "240005",
+      "createdAt": "2026-02-03 15:51:15",
+      "status": "skipped",
+      "classification": "admin_call"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcreatedAt\tstatus\tclassification\n240014\t2026-02-03 17:18:05\tcompleted\tconversation\n240013\t2026-02-03 17:05:51\tcompleted\tconversation\n240012\t2026-02-03 16:47:53\tcompleted\tconversation\n240011\t2026-02-03 16:43:14\tcompleted\tconversation\n240010\t2026-02-03 16:41:37\tcompleted\tconversation\n240009\t2026-02-03 16:34:28\tskipped\ttoo_short\n240008\t2026-02-03 16:14:11\tskipped\ttoo_short\n240007\t2026-02-03 16:13:38\tskipped\ttoo_short\n240006\t2026-02-03 16:02:05\tcompleted\tconversation\n240005\t2026-02-03 15:51:15\tskipped\tadmin_call\n",
+  "stderr": "",
+  "execution_time_ms": 116
+}

@@ -326,7 +326,7 @@ export async function fetchGHLCalls(params: {
 /**
  * Match a GHL user ID to a team member
  */
-async function matchTeamMember(ghlUserId?: string, userName?: string): Promise<{ id: number; name: string; role: string } | null> {
+async function matchTeamMember(ghlUserId?: string, userName?: string): Promise<{ id: number; name: string; role: string; tenantId: number | null } | null> {
   if (!ghlUserId && !userName) return null;
 
   const teamMembers = await getTeamMembers();
@@ -334,7 +334,7 @@ async function matchTeamMember(ghlUserId?: string, userName?: string): Promise<{
   // First try to match by GHL User ID
   if (ghlUserId) {
     const byId = teamMembers.find(m => m.ghlUserId === ghlUserId);
-    if (byId) return { id: byId.id, name: byId.name, role: byId.teamRole || "lead_manager" };
+    if (byId) return { id: byId.id, name: byId.name, role: byId.teamRole || "lead_manager", tenantId: byId.tenantId };
   }
 
   // Fall back to name matching
@@ -343,7 +343,7 @@ async function matchTeamMember(ghlUserId?: string, userName?: string): Promise<{
       m.name.toLowerCase().includes(userName.toLowerCase()) ||
       userName.toLowerCase().includes(m.name.toLowerCase())
     );
-    if (byName) return { id: byName.id, name: byName.name, role: byName.teamRole || "lead_manager" };
+    if (byName) return { id: byName.id, name: byName.name, role: byName.teamRole || "lead_manager", tenantId: byName.tenantId };
   }
 
   return null;
@@ -382,7 +382,7 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
       return { success: false, reason: "Failed to upload recording to S3" };
     }
 
-    // Create the call record
+    // Create the call record with tenantId from team member
     const call = await createCall({
       ghlCallId: ghlCall.id,
       contactName: ghlCall.contactName,
@@ -395,6 +395,7 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
       callType: teamMember.role === "acquisition_manager" ? "offer" : "qualification",
       status: "pending",
       callTimestamp: new Date(ghlCall.dateAdded),
+      tenantId: teamMember.tenantId, // Inherit tenantId from team member
     });
 
     if (call) {

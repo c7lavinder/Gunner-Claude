@@ -1,0 +1,218 @@
+{
+  "query": "DESCRIBE calls;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute DESCRIBE calls;",
+  "rows": [
+    {
+      "Field": "id",
+      "Type": "int(11)",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": "NULL",
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "tenantId",
+      "Type": "int(11)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "ghlCallId",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "UNI",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "ghlContactId",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "ghlLocationId",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "contactName",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "contactPhone",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "propertyAddress",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "recordingUrl",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "duration",
+      "Type": "int(11)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "callDirection",
+      "Type": "enum('inbound','outbound')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "outbound",
+      "Extra": ""
+    },
+    {
+      "Field": "teamMemberId",
+      "Type": "int(11)",
+      "Null": "YES",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "teamMemberName",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "callType",
+      "Type": "enum('qualification','offer')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "qualification",
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "enum('pending','transcribing','classifying','grading','completed','skipped','failed')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "pending",
+      "Extra": ""
+    },
+    {
+      "Field": "transcript",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "callTimestamp",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "createdAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": ""
+    },
+    {
+      "Field": "updatedAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    },
+    {
+      "Field": "classification",
+      "Type": "enum('pending','conversation','voicemail','no_answer','callback_request','wrong_number','too_short','admin_call')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "pending",
+      "Extra": ""
+    },
+    {
+      "Field": "classificationReason",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "callOutcome",
+      "Type": "enum('none','appointment_set','offer_accepted','offer_rejected','follow_up','disqualified')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "none",
+      "Extra": ""
+    },
+    {
+      "Field": "transcriptUrl",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "isArchived",
+      "Type": "enum('true','false')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "false",
+      "Extra": ""
+    },
+    {
+      "Field": "archivedAt",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "tenantCallTypeId",
+      "Type": "int(11)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nid\tint(11)\tNO\tPRI\tNULL\tauto_increment\ntenantId\tint(11)\tYES\t\tNULL\t\nghlCallId\tvarchar(255)\tYES\tUNI\tNULL\t\nghlContactId\tvarchar(255)\tYES\t\tNULL\t\nghlLocationId\tvarchar(255)\tYES\t\tNULL\t\ncontactName\tvarchar(255)\tYES\t\tNULL\t\ncontactPhone\tvarchar(50)\tYES\t\tNULL\t\npropertyAddress\ttext\tYES\t\tNULL\t\nrecordingUrl\ttext\tYES\t\tNULL\t\nduration\tint(11)\tYES\t\tNULL\t\ncallDirection\tenum('inbound','outbound')\tYES\t\toutbound\t\nteamMemberId\tint(11)\tYES\tMUL\tNULL\t\nteamMemberName\tvarchar(255)\tYES\t\tNULL\t\ncallType\tenum('qualification','offer')\tYES\t\tqualification\t\nstatus\tenum('pending','transcribing','classifying','grading','completed','skipped','failed')\tYES\t\tpending\t\ntranscript\ttext\tYES\t\tNULL\t\ncallTimestamp\ttimestamp\tYES\t\tNULL\t\ncreatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t\nupdatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\tDEFAULT_GENERATED on update CURRENT_TIMESTAMP\nclassification\tenum('pending','conversation','voicemail','no_answer','callback_request','wrong_number','too_short','admin_call')\tYES\t\tpending\t\nclassificationReason\ttext\tYES\t\tNULL\t\ncallOutcome\tenum('none','appointment_set','offer_accepted','offer_rejected','follow_up','disqualified')\tYES\t\tnone\t\ntranscriptUrl\ttext\tYES\t\tNULL\t\nisArchived\tenum('true','false')\tYES\t\tfalse\t\narchivedAt\ttimestamp\tYES\t\tNULL\t\ntenantCallTypeId\tint(11)\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

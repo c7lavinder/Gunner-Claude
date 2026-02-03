@@ -1,0 +1,9 @@
+{
+  "query": "SELECT isArchived, COUNT(*) as cnt FROM calls WHERE tenantId = 1 AND createdAt >= '2026-02-03 06:00:00' GROUP BY isArchived;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT isArchived, COUNT(*) as cnt FROM calls WHERE tenantId = 1 AND createdAt >= '2026-02-03 06:00:00' GROUP BY isArchived;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 53
+}

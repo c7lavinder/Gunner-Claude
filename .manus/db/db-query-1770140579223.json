@@ -1,0 +1,138 @@
+{
+  "query": "SELECT id, createdAt, status, classification, teamMemberId, tenantId FROM calls WHERE createdAt >= '2026-02-03 00:00:00' ORDER BY createdAt DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, createdAt, status, classification, teamMemberId, tenantId FROM calls WHERE createdAt >= '2026-02-03 00:00:00' ORDER BY createdAt DESC LIMIT 20;",
+  "rows": [
+    {
+      "id": "240016",
+      "createdAt": "2026-02-03 17:35:27",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "2",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240015",
+      "createdAt": "2026-02-03 17:34:35",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240014",
+      "createdAt": "2026-02-03 17:18:05",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "2",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240013",
+      "createdAt": "2026-02-03 17:05:51",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240012",
+      "createdAt": "2026-02-03 16:47:53",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "2",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240011",
+      "createdAt": "2026-02-03 16:43:14",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240010",
+      "createdAt": "2026-02-03 16:41:37",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "2",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240009",
+      "createdAt": "2026-02-03 16:34:28",
+      "status": "skipped",
+      "classification": "too_short",
+      "teamMemberId": "2",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240008",
+      "createdAt": "2026-02-03 16:14:11",
+      "status": "skipped",
+      "classification": "too_short",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240007",
+      "createdAt": "2026-02-03 16:13:38",
+      "status": "skipped",
+      "classification": "too_short",
+      "teamMemberId": "2",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240006",
+      "createdAt": "2026-02-03 16:02:05",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "2",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240005",
+      "createdAt": "2026-02-03 15:51:15",
+      "status": "skipped",
+      "classification": "admin_call",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240004",
+      "createdAt": "2026-02-03 15:49:32",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240003",
+      "createdAt": "2026-02-03 15:48:36",
+      "status": "skipped",
+      "classification": "too_short",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240002",
+      "createdAt": "2026-02-03 15:48:01",
+      "status": "skipped",
+      "classification": "too_short",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240001",
+      "createdAt": "2026-02-03 15:47:30",
+      "status": "completed",
+      "classification": "conversation",
+      "teamMemberId": "1",
+      "tenantId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcreatedAt\tstatus\tclassification\tteamMemberId\ttenantId\n240016\t2026-02-03 17:35:27\tcompleted\tconversation\t2\tNULL\n240015\t2026-02-03 17:34:35\tcompleted\tconversation\t1\tNULL\n240014\t2026-02-03 17:18:05\tcompleted\tconversation\t2\tNULL\n240013\t2026-02-03 17:05:51\tcompleted\tconversation\t1\tNULL\n240012\t2026-02-03 16:47:53\tcompleted\tconversation\t2\tNULL\n240011\t2026-02-03 16:43:14\tcompleted\tconversation\t1\tNULL\n240010\t2026-02-03 16:41:37\tcompleted\tconversation\t2\tNULL\n240009\t2026-02-03 16:34:28\tskipped\ttoo_short\t2\tNULL\n240008\t2026-02-03 16:14:11\tskipped\ttoo_short\t1\tNULL\n240007\t2026-02-03 16:13:38\tskipped\ttoo_short\t2\tNULL\n240006\t2026-02-03 16:02:05\tcompleted\tconversation\t2\tNULL\n240005\t2026-02-03 15:51:15\tskipped\tadmin_call\t1\tNULL\n240004\t2026-02-03 15:49:32\tcompleted\tconversation\t1\tNULL\n240003\t2026-02-03 15:48:36\tskipped\ttoo_short\t1\tNULL\n240002\t2026-02-03 15:48:01\tskipped\ttoo_short\t1\tNULL\n240001\t2026-02-03 15:47:30\tcompleted\tconversation\t1\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

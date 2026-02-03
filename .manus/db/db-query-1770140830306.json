@@ -1,0 +1,25 @@
+{
+  "query": "SELECT id, name, IFNULL(tenantId, 'NULL') as tenant FROM team_members;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, IFNULL(tenantId, 'NULL') as tenant FROM team_members;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Chris Segura",
+      "tenant": "1"
+    },
+    {
+      "id": "2",
+      "name": "Daniel Lozano",
+      "tenant": "1"
+    },
+    {
+      "id": "3",
+      "name": "Kyle Barks",
+      "tenant": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\ttenant\n1\tChris Segura\t1\n2\tDaniel Lozano\t1\n3\tKyle Barks\t1\n",
+  "stderr": "",
+  "execution_time_ms": 60
+}

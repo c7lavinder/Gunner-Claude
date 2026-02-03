@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, createdAt, status, classification, tenantId FROM calls WHERE createdAt >= '2026-02-03 06:00:00' AND status = 'completed' AND classification = 'conversation' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, createdAt, status, classification, tenantId FROM calls WHERE createdAt >= '2026-02-03 06:00:00' AND status = 'completed' AND classification = 'conversation' LIMIT 5;",
+  "rows": [
+    {
+      "id": "240001",
+      "createdAt": "2026-02-03 15:47:30",
+      "status": "completed",
+      "classification": "conversation",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240004",
+      "createdAt": "2026-02-03 15:49:32",
+      "status": "completed",
+      "classification": "conversation",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240006",
+      "createdAt": "2026-02-03 16:02:05",
+      "status": "completed",
+      "classification": "conversation",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240010",
+      "createdAt": "2026-02-03 16:41:37",
+      "status": "completed",
+      "classification": "conversation",
+      "tenantId": "NULL"
+    },
+    {
+      "id": "240011",
+      "createdAt": "2026-02-03 16:43:14",
+      "status": "completed",
+      "classification": "conversation",
+      "tenantId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcreatedAt\tstatus\tclassification\ttenantId\n240001\t2026-02-03 15:47:30\tcompleted\tconversation\tNULL\n240004\t2026-02-03 15:49:32\tcompleted\tconversation\tNULL\n240006\t2026-02-03 16:02:05\tcompleted\tconversation\tNULL\n240010\t2026-02-03 16:41:37\tcompleted\tconversation\tNULL\n240011\t2026-02-03 16:43:14\tcompleted\tconversation\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 51
+}
