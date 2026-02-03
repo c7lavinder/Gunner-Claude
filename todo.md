@@ -401,3 +401,17 @@
 - [x] Create edit dialog for modifying inventory entries
 - [x] Add edit button to team KPI table rows
 - [x] Create edit dialog for modifying team KPI entries
+
+
+## Inventory Field Updates
+- [x] Remove Seller Name field from schema
+- [x] Remove ARV field from schema
+- [x] Remove NAH? field from schema
+- [x] Remove Contract Price field from schema
+- [x] Remove Repairs field from schema
+- [x] Add Revenue field to schema
+- [x] Add Assignment Fee field to schema
+- [x] Add Profit field (calculated or stored)
+- [x] Update Inventory table display
+- [x] Update Add Deal dialog
+- [x] Update Edit Deal dialog

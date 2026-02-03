@@ -167,18 +167,15 @@ export default function KpiDashboard() {
   // New inventory item form state
   const [newDeal, setNewDeal] = useState({
     propertyAddress: "",
-    sellerName: "",
     inventoryStatus: "for_sale" as string,
     location: "" as string,
     leadSource: "" as string,
     lmName: "" as string,
     amName: "" as string,
     dmName: "" as string,
-    isNah: "no" as string,
-    contractPrice: "",
-    estimatedArv: "",
-    estimatedRepairs: "",
+    revenue: "",
     assignmentFee: "",
+    profit: "",
     contractDate: "",
     notes: "",
   });
@@ -248,10 +245,10 @@ export default function KpiDashboard() {
       utils.kpi.getDeals.invalidate();
       setShowNewDealDialog(false);
       setNewDeal({
-        propertyAddress: "", sellerName: "", inventoryStatus: "for_sale",
+        propertyAddress: "", inventoryStatus: "for_sale",
         location: "", leadSource: "", lmName: "", amName: "", dmName: "",
-        isNah: "no", contractPrice: "", estimatedArv: "", estimatedRepairs: "",
-        assignmentFee: "", contractDate: "", notes: "",
+        revenue: "", assignmentFee: "", profit: "",
+        contractDate: "", notes: "",
       });
     },
     onError: (error) => toast.error(error.message),
@@ -408,18 +405,15 @@ export default function KpiDashboard() {
     createDealMutation.mutate({
       periodId: selectedPeriodId ?? undefined,
       propertyAddress: newDeal.propertyAddress,
-      sellerName: newDeal.sellerName || undefined,
       inventoryStatus: newDeal.inventoryStatus as any || undefined,
       location: newDeal.location as any || undefined,
       leadSource: newDeal.leadSource as any || undefined,
       lmName: newDeal.lmName as any || undefined,
       amName: newDeal.amName as any || undefined,
       dmName: newDeal.dmName as any || undefined,
-      isNah: newDeal.isNah as any || undefined,
-      contractPrice: newDeal.contractPrice ? parseFloat(newDeal.contractPrice) : undefined,
-      estimatedArv: newDeal.estimatedArv ? parseFloat(newDeal.estimatedArv) : undefined,
-      estimatedRepairs: newDeal.estimatedRepairs ? parseFloat(newDeal.estimatedRepairs) : undefined,
+      revenue: newDeal.revenue ? parseFloat(newDeal.revenue) : undefined,
       assignmentFee: newDeal.assignmentFee ? parseFloat(newDeal.assignmentFee) : undefined,
+      profit: newDeal.profit ? parseFloat(newDeal.profit) : undefined,
       contractDate: newDeal.contractDate ? new Date(newDeal.contractDate) : undefined,
       notes: newDeal.notes || undefined,
     });
@@ -1135,14 +1129,6 @@ export default function KpiDashboard() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Seller Name</Label>
-                      <Input
-                        placeholder="John Doe"
-                        value={newDeal.sellerName}
-                        onChange={(e) => setNewDeal({ ...newDeal, sellerName: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
                       <Label>Status</Label>
                       <Select
                         value={newDeal.inventoryStatus}
@@ -1239,45 +1225,12 @@ export default function KpiDashboard() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>NAH?</Label>
-                      <Select
-                        value={newDeal.isNah}
-                        onValueChange={(val) => setNewDeal({ ...newDeal, isNah: val })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="yes">Yes</SelectItem>
-                          <SelectItem value="no">No</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Contract Price</Label>
+                      <Label>Revenue</Label>
                       <Input
                         type="number"
                         placeholder="0"
-                        value={newDeal.contractPrice}
-                        onChange={(e) => setNewDeal({ ...newDeal, contractPrice: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Estimated ARV</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={newDeal.estimatedArv}
-                        onChange={(e) => setNewDeal({ ...newDeal, estimatedArv: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Estimated Repairs</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={newDeal.estimatedRepairs}
-                        onChange={(e) => setNewDeal({ ...newDeal, estimatedRepairs: e.target.value })}
+                        value={newDeal.revenue}
+                        onChange={(e) => setNewDeal({ ...newDeal, revenue: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1287,6 +1240,15 @@ export default function KpiDashboard() {
                         placeholder="0"
                         value={newDeal.assignmentFee}
                         onChange={(e) => setNewDeal({ ...newDeal, assignmentFee: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Profit</Label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={newDeal.profit}
+                        onChange={(e) => setNewDeal({ ...newDeal, profit: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1329,17 +1291,15 @@ export default function KpiDashboard() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Property</TableHead>
-                      <TableHead>Seller</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Location</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>LM</TableHead>
                       <TableHead>AM</TableHead>
                       <TableHead>DM</TableHead>
-                      <TableHead>NAH?</TableHead>
-                      <TableHead className="text-right">Contract</TableHead>
-                      <TableHead className="text-right">ARV</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
                       <TableHead className="text-right">Assignment</TableHead>
+                      <TableHead className="text-right">Profit</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
@@ -1348,7 +1308,6 @@ export default function KpiDashboard() {
                     {deals?.map((deal) => (
                       <TableRow key={deal.id}>
                         <TableCell className="font-medium max-w-[150px] truncate">{deal.propertyAddress}</TableCell>
-                        <TableCell>{deal.sellerName || "-"}</TableCell>
                         <TableCell>
                           <Badge className={INVENTORY_STATUS_COLORS[deal.inventoryStatus || "for_sale"]}>
                             {deal.inventoryStatus ? INVENTORY_STATUS_NAMES[deal.inventoryStatus] : "For Sale"}
@@ -1359,10 +1318,9 @@ export default function KpiDashboard() {
                         <TableCell>{deal.lmName ? LM_NAMES[deal.lmName] : "-"}</TableCell>
                         <TableCell>{deal.amName ? AM_NAMES[deal.amName] : "-"}</TableCell>
                         <TableCell>{deal.dmName ? DM_NAMES[deal.dmName] : "-"}</TableCell>
-                        <TableCell>{deal.isNah === "yes" ? "Yes" : "No"}</TableCell>
-                        <TableCell className="text-right">{deal.contractPrice ? formatCurrency(deal.contractPrice) : "-"}</TableCell>
-                        <TableCell className="text-right">{deal.estimatedArv ? formatCurrency(deal.estimatedArv) : "-"}</TableCell>
+                        <TableCell className="text-right">{deal.revenue ? formatCurrency(deal.revenue) : "-"}</TableCell>
                         <TableCell className="text-right">{deal.assignmentFee ? formatCurrency(deal.assignmentFee) : "-"}</TableCell>
+                        <TableCell className="text-right">{deal.profit ? formatCurrency(deal.profit) : "-"}</TableCell>
                         <TableCell>{deal.contractDate ? new Date(deal.contractDate).toLocaleDateString() : "-"}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
@@ -1372,18 +1330,15 @@ export default function KpiDashboard() {
                               onClick={() => setEditingDeal({
                                 id: deal.id,
                                 propertyAddress: deal.propertyAddress,
-                                sellerName: deal.sellerName || "",
                                 inventoryStatus: deal.inventoryStatus || "for_sale",
                                 location: deal.location || "",
                                 leadSource: deal.leadSource || "",
                                 lmName: deal.lmName || "",
                                 amName: deal.amName || "",
                                 dmName: deal.dmName || "",
-                                isNah: deal.isNah || "no",
-                                contractPrice: deal.contractPrice?.toString() || "",
-                                estimatedArv: deal.estimatedArv?.toString() || "",
-                                estimatedRepairs: deal.estimatedRepairs?.toString() || "",
+                                revenue: deal.revenue?.toString() || "",
                                 assignmentFee: deal.assignmentFee?.toString() || "",
+                                profit: deal.profit?.toString() || "",
                                 contractDate: deal.contractDate ? new Date(deal.contractDate).toISOString().split('T')[0] : "",
                                 notes: deal.notes || "",
                               })}
@@ -2024,14 +1979,6 @@ export default function KpiDashboard() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Seller Name</Label>
-              <Input
-                placeholder="John Doe"
-                value={editingDeal?.sellerName || ""}
-                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, sellerName: e.target.value } : null)}
-              />
-            </div>
-            <div className="space-y-2">
               <Label>Status</Label>
               <Select
                 value={editingDeal?.inventoryStatus || "for_sale"}
@@ -2128,45 +2075,12 @@ export default function KpiDashboard() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>NAH?</Label>
-              <Select
-                value={editingDeal?.isNah || "no"}
-                onValueChange={(val) => setEditingDeal(editingDeal ? { ...editingDeal, isNah: val } : null)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">Yes</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Contract Price</Label>
+              <Label>Revenue</Label>
               <Input
                 type="number"
                 placeholder="0"
-                value={editingDeal?.contractPrice || ""}
-                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, contractPrice: e.target.value } : null)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Estimated ARV</Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={editingDeal?.estimatedArv || ""}
-                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, estimatedArv: e.target.value } : null)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Estimated Repairs</Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={editingDeal?.estimatedRepairs || ""}
-                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, estimatedRepairs: e.target.value } : null)}
+                value={editingDeal?.revenue || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, revenue: e.target.value } : null)}
               />
             </div>
             <div className="space-y-2">
@@ -2176,6 +2090,15 @@ export default function KpiDashboard() {
                 placeholder="0"
                 value={editingDeal?.assignmentFee || ""}
                 onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, assignmentFee: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Profit</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editingDeal?.profit || ""}
+                onChange={(e) => setEditingDeal(editingDeal ? { ...editingDeal, profit: e.target.value } : null)}
               />
             </div>
             <div className="space-y-2">
@@ -2206,18 +2129,15 @@ export default function KpiDashboard() {
                 updateDealMutation.mutate({
                   id: editingDeal.id,
                   propertyAddress: editingDeal.propertyAddress,
-                  sellerName: editingDeal.sellerName || undefined,
                   inventoryStatus: editingDeal.inventoryStatus as any || undefined,
                   location: editingDeal.location as any || undefined,
                   leadSource: editingDeal.leadSource as any || undefined,
                   lmName: editingDeal.lmName as any || undefined,
                   amName: editingDeal.amName as any || undefined,
                   dmName: editingDeal.dmName as any || undefined,
-                  isNah: editingDeal.isNah as any || undefined,
-                  contractPrice: editingDeal.contractPrice ? parseFloat(editingDeal.contractPrice) : undefined,
-                  estimatedArv: editingDeal.estimatedArv ? parseFloat(editingDeal.estimatedArv) : undefined,
-                  estimatedRepairs: editingDeal.estimatedRepairs ? parseFloat(editingDeal.estimatedRepairs) : undefined,
+                  revenue: editingDeal.revenue ? parseFloat(editingDeal.revenue) : undefined,
                   assignmentFee: editingDeal.assignmentFee ? parseFloat(editingDeal.assignmentFee) : undefined,
+                  profit: editingDeal.profit ? parseFloat(editingDeal.profit) : undefined,
                   contractDate: editingDeal.contractDate ? new Date(editingDeal.contractDate) : undefined,
                   notes: editingDeal.notes || undefined,
                 });

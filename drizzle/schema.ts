@@ -688,7 +688,6 @@ export const kpiDeals = mysqlTable("kpi_deals", {
   periodId: int("periodId").references(() => kpiPeriods.id),
   // Deal info
   propertyAddress: text("propertyAddress").notNull(),
-  sellerName: varchar("sellerName", { length: 255 }),
   // Status: For Sale, Assigned, Funded
   inventoryStatus: mysqlEnum("inventoryStatus", [
     "for_sale",
@@ -721,13 +720,10 @@ export const kpiDeals = mysqlTable("kpi_deals", {
   amName: mysqlEnum("amName", ["kyle"]),
   // Team members: DM (Esteban, Steve)
   dmName: mysqlEnum("dmName", ["esteban", "steve"]),
-  // NAH? (Yes, No)
-  isNah: mysqlEnum("isNah", ["yes", "no"]).default("no"),
   // Deal financials
-  contractPrice: int("contractPrice").default(0), // in cents
-  estimatedArv: int("estimatedArv").default(0), // in cents
-  estimatedRepairs: int("estimatedRepairs").default(0), // in cents
+  revenue: int("revenue").default(0), // in cents
   assignmentFee: int("assignmentFee").default(0), // in cents
+  profit: int("profit").default(0), // in cents (calculated as revenue - costs)
   // Dates
   contractDate: timestamp("contractDate"),
   closingDate: timestamp("closingDate"),

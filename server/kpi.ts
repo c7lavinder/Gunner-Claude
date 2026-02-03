@@ -216,18 +216,15 @@ export async function getKpiDealById(id: number) {
 export async function createKpiDeal(data: {
   periodId?: number;
   propertyAddress: string;
-  sellerName?: string;
   inventoryStatus?: "for_sale" | "assigned" | "funded";
   location?: "nashville" | "nash_sw" | "knoxville" | "chattanooga" | "global" | "nah";
   leadSource?: "cold_calls" | "sms" | "postcards" | "forms" | "ppl" | "ppc" | "jv" | "referrals";
   lmName?: "chris" | "daniel";
   amName?: "kyle";
   dmName?: "esteban" | "steve";
-  isNah?: "yes" | "no";
-  contractPrice?: number;
-  estimatedArv?: number;
-  estimatedRepairs?: number;
+  revenue?: number;
   assignmentFee?: number;
+  profit?: number;
   contractDate?: Date;
   closingDate?: Date;
   notes?: string;
@@ -242,18 +239,15 @@ export async function createKpiDeal(data: {
 export async function updateKpiDeal(id: number, data: Partial<{
   periodId: number;
   propertyAddress: string;
-  sellerName: string;
   inventoryStatus: "for_sale" | "assigned" | "funded";
   location: "nashville" | "nash_sw" | "knoxville" | "chattanooga" | "global" | "nah";
   leadSource: "cold_calls" | "sms" | "postcards" | "forms" | "ppl" | "ppc" | "jv" | "referrals";
   lmName: "chris" | "daniel";
   amName: "kyle";
   dmName: "esteban" | "steve";
-  isNah: "yes" | "no";
-  contractPrice: number;
-  estimatedArv: number;
-  estimatedRepairs: number;
+  revenue: number;
   assignmentFee: number;
+  profit: number;
   contractDate: Date;
   closingDate: Date;
   notes: string;
