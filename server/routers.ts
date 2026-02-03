@@ -6,6 +6,14 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { parseDocument } from "./documentParser";
 import {
+  getGamificationSummary,
+  getUserBadges,
+  getAllBadgesWithProgress,
+  getGamificationLeaderboard,
+  processCallViewRewards,
+  initializeBadges,
+} from "./gamification";
+import {
   getCalls,
   getCallById,
   getCallsWithGrades,
@@ -1745,6 +1753,55 @@ Create content that:
         }
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate content" });
       }),
+  }),
+
+  // Gamification router
+  gamification: router({
+    // Get current user's gamification summary (XP, level, streaks, badges)
+    getSummary: protectedProcedure.query(async ({ ctx }) => {
+      const teamMember = await getTeamMemberByUserId(ctx.user.id);
+      if (!teamMember) {
+        return {
+          xp: { totalXp: 0, level: 1, title: "Rookie", nextLevelXp: 500, progress: 0 },
+          streaks: { hotStreakCurrent: 0, hotStreakBest: 0, consistencyStreakCurrent: 0, consistencyStreakBest: 0 },
+          badges: [],
+          badgeCount: 0,
+        };
+      }
+      return getGamificationSummary(teamMember.id);
+    }),
+
+    // Get all badges with progress for current user
+    getAllBadges: protectedProcedure.query(async ({ ctx }) => {
+      const teamMember = await getTeamMemberByUserId(ctx.user.id);
+      if (!teamMember) return [];
+      return getAllBadgesWithProgress(teamMember.id, teamMember.teamRole);
+    }),
+
+    // Get gamification leaderboard
+    getLeaderboard: protectedProcedure.query(async () => {
+      return getGamificationLeaderboard();
+    }),
+
+    // Process rewards when viewing a call (awards XP and updates streaks)
+    processCallView: protectedProcedure
+      .input(z.object({ callId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const teamMember = await getTeamMemberByUserId(ctx.user.id);
+        if (!teamMember) {
+          return { xpEarned: 0, badgesEarned: [], streakUpdated: false };
+        }
+        return processCallViewRewards(teamMember.id, input.callId);
+      }),
+
+    // Initialize badges (admin only, run once)
+    initBadges: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user?.teamRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      await initializeBadges();
+      return { success: true };
+    }),
   }),
 });
 
