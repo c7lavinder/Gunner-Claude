@@ -1692,12 +1692,16 @@ export async function getCallsWithPermissions(
   const db = await getDb();
   if (!db) return [];
 
+  // CRITICAL: Require tenantId for multi-tenant isolation - return empty if not provided
+  if (!permissionContext.tenantId) {
+    console.warn('[getCallsWithPermissions] No tenantId provided - returning empty for security');
+    return [];
+  }
+
   const conditions = [];
   
-  // CRITICAL: Always filter by tenant for multi-tenant isolation
-  if (permissionContext.tenantId) {
-    conditions.push(eq(calls.tenantId, permissionContext.tenantId));
-  }
+  // Always filter by tenant for multi-tenant isolation
+  conditions.push(eq(calls.tenantId, permissionContext.tenantId));
   
   // Exclude archived calls by default
   if (!options.includeArchived) {
