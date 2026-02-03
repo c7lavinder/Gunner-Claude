@@ -27,18 +27,29 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const getMenuItems = (isAdmin: boolean) => {
+const getMenuItems = (teamRole: string | null | undefined) => {
+  const isAdmin = teamRole === 'admin';
+  const isLeadManager = teamRole === 'lead_manager';
+  
   const items = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
     { icon: Phone, label: "Call History", path: "/calls" },
     { icon: BarChart3, label: "Analytics", path: "/analytics" },
     { icon: BookOpen, label: "Training", path: "/training" },
-    { icon: Share2, label: "Social Media", path: "/social" },
-    { icon: Users, label: "Team", path: "/team" },
   ];
+  
+  // Social Media is hidden from lead managers (only admins and acquisition managers can see it)
+  if (!isLeadManager) {
+    items.push({ icon: Share2, label: "Social Media", path: "/social" });
+  }
+  
+  items.push({ icon: Users, label: "Team", path: "/team" });
+  
+  // Team Management is admin-only
   if (isAdmin) {
     items.push({ icon: Settings, label: "Team Management", path: "/team-management" });
   }
+  
   return items;
 };
 
@@ -122,8 +133,7 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const isAdmin = user?.teamRole === 'admin';
-  const menuItems = getMenuItems(isAdmin);
+  const menuItems = getMenuItems(user?.teamRole);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

@@ -295,3 +295,6 @@
 ## Timezone Bug Fix
 - [x] Fix calls from today (CST) showing as yesterday - Tim Brice 8am call example
 - [x] Ensure all date filtering uses CST timezone consistently (midnight CST = 6:00 AM UTC)
+
+## Social Media Page Visibility
+- [x] Hide Social Media page from lead managers (only admins and acquisition managers can see it)
