@@ -812,3 +812,9 @@
 ## Bug Fix - Google Sign-In Loop (Feb 3, 2026)
 - [x] Fix Google sign-in redirecting back to signup page instead of dashboard/onboarding
 - [x] Add auth check to Signup page to redirect logged-in users
+
+
+## Bug Fix - Onboarding Restart (Feb 3, 2026)
+- [x] Fix onboarding restarting from Company Info after Google signup completes
+- [x] Google signup now starts at step 2 (Connect CRM) since company name is already provided
+- [x] Onboarding page now fetches tenant settings to resume from saved step

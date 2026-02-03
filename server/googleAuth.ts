@@ -276,7 +276,7 @@ export async function completeGoogleSignup(params: {
       subscriptionStatus: 'active',
       trialEndsAt,
       maxUsers: limits.maxUsers,
-      onboardingStep: 1,
+      onboardingStep: 2, // Start at step 2 since company name is already provided during signup
       onboardingCompleted: 'false',
       settings: JSON.stringify({ maxCallsPerMonth: limits.maxCallsPerMonth, selectedPlan: planId }),
     }).$returningId();

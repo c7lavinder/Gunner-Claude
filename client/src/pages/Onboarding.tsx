@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const STEPS = [
   { id: 1, title: "Company Info", icon: Building2, description: "Tell us about your business" },
@@ -59,7 +60,29 @@ export default function Onboarding() {
   const checkoutCanceled = searchParams.get('canceled') === 'true';
   const stepParam = searchParams.get('step');
   
-  const [currentStep, setCurrentStep] = useState(stepParam ? parseInt(stepParam) : 1);
+  // Fetch tenant settings to get saved onboarding step
+  const { user } = useAuth();
+  const { data: tenantSettings, isLoading: tenantLoading } = trpc.tenant.getSettings.useQuery(
+    undefined,
+    { enabled: !!user }
+  );
+  
+  // Initialize step from URL param, tenant settings, or default to 1
+  const [currentStep, setCurrentStep] = useState(1);
+  const [stepInitialized, setStepInitialized] = useState(false);
+  
+  // Initialize step when tenant settings load
+  useEffect(() => {
+    if (!stepInitialized && !tenantLoading) {
+      if (stepParam) {
+        setCurrentStep(parseInt(stepParam));
+      } else if (tenantSettings?.onboardingStep && tenantSettings.onboardingStep > 1) {
+        // Resume from saved step (e.g., Google signup starts at step 2)
+        setCurrentStep(tenantSettings.onboardingStep);
+      }
+      setStepInitialized(true);
+    }
+  }, [tenantSettings, tenantLoading, stepParam, stepInitialized]);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     companyName: "",
