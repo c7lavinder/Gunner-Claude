@@ -2066,6 +2066,158 @@ Create content that:
         const { getScoreboardData } = await import("./kpi");
         return getScoreboardData(input.periodId);
       }),
+
+    // ============ LEAD GEN STAFF ============
+    getLeadGenStaff: protectedProcedure
+      .input(z.object({ activeOnly: z.boolean().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getLeadGenStaff } = await import("./kpi");
+        return getLeadGenStaff(input?.activeOnly ?? true);
+      }),
+
+    createLeadGenStaff: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        roleType: z.enum(["lg_cold_caller", "lg_sms", "am", "lm"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { createLeadGenStaff } = await import("./kpi");
+        const id = await createLeadGenStaff(input);
+        return { id };
+      }),
+
+    updateLeadGenStaff: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        roleType: z.enum(["lg_cold_caller", "lg_sms", "am", "lm"]).optional(),
+        isActive: z.enum(["true", "false"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { updateLeadGenStaff } = await import("./kpi");
+        const { id, ...data } = input;
+        await updateLeadGenStaff(id, data);
+        return { success: true };
+      }),
+
+    deleteLeadGenStaff: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { deleteLeadGenStaff } = await import("./kpi");
+        await deleteLeadGenStaff(input.id);
+        return { success: true };
+      }),
+
+    // ============ KPI MARKETS ============
+    getMarkets: protectedProcedure
+      .input(z.object({ activeOnly: z.boolean().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiMarkets } = await import("./kpi");
+        return getKpiMarkets(input?.activeOnly ?? true);
+      }),
+
+    createMarket: protectedProcedure
+      .input(z.object({ name: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { createKpiMarket } = await import("./kpi");
+        const id = await createKpiMarket(input.name);
+        return { id };
+      }),
+
+    updateMarket: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        isActive: z.enum(["true", "false"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { updateKpiMarket } = await import("./kpi");
+        const { id, ...data } = input;
+        await updateKpiMarket(id, data);
+        return { success: true };
+      }),
+
+    deleteMarket: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { deleteKpiMarket } = await import("./kpi");
+        await deleteKpiMarket(input.id);
+        return { success: true };
+      }),
+
+    // ============ KPI CHANNELS ============
+    getChannels: protectedProcedure
+      .input(z.object({ activeOnly: z.boolean().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiChannels } = await import("./kpi");
+        return getKpiChannels(input?.activeOnly ?? true);
+      }),
+
+    createChannel: protectedProcedure
+      .input(z.object({ name: z.string(), code: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { createKpiChannel } = await import("./kpi");
+        const id = await createKpiChannel(input.name, input.code);
+        return { id };
+      }),
+
+    updateChannel: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        code: z.string().optional(),
+        isActive: z.enum(["true", "false"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { updateKpiChannel } = await import("./kpi");
+        const { id, ...data } = input;
+        await updateKpiChannel(id, data);
+        return { success: true };
+      }),
+
+    deleteChannel: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { deleteKpiChannel } = await import("./kpi");
+        await deleteKpiChannel(input.id);
+        return { success: true };
+      }),
   }),
 });
 

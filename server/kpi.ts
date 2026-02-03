@@ -6,6 +6,9 @@ import {
   kpiDeals, 
   kpiGoals,
   teamMembers,
+  leadGenStaff,
+  kpiMarkets,
+  kpiChannels,
   type CampaignKpi
 } from "../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
@@ -355,4 +358,125 @@ export async function upsertKpiGoal(data: {
   
   const [result] = await db.insert(kpiGoals).values(data);
   return result.insertId;
+}
+
+
+// ============ LEAD GEN STAFF ============
+
+export async function getLeadGenStaff(activeOnly: boolean = true) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  if (activeOnly) {
+    return db.select().from(leadGenStaff).where(eq(leadGenStaff.isActive, "true")).orderBy(leadGenStaff.name);
+  }
+  return db.select().from(leadGenStaff).orderBy(leadGenStaff.name);
+}
+
+export async function createLeadGenStaff(data: {
+  name: string;
+  roleType: "lg_cold_caller" | "lg_sms" | "am" | "lm";
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const [result] = await db.insert(leadGenStaff).values({
+    name: data.name,
+    roleType: data.roleType,
+    isActive: "true",
+  });
+  return result.insertId;
+}
+
+export async function updateLeadGenStaff(id: number, data: {
+  name?: string;
+  roleType?: "lg_cold_caller" | "lg_sms" | "am" | "lm";
+  isActive?: "true" | "false";
+  endDate?: Date | null;
+}) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(leadGenStaff).set(data).where(eq(leadGenStaff.id, id));
+  return true;
+}
+
+export async function deleteLeadGenStaff(id: number) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.delete(leadGenStaff).where(eq(leadGenStaff.id, id));
+  return true;
+}
+
+// ============ KPI MARKETS ============
+
+export async function getKpiMarkets(activeOnly: boolean = true) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  if (activeOnly) {
+    return db.select().from(kpiMarkets).where(eq(kpiMarkets.isActive, "true")).orderBy(kpiMarkets.name);
+  }
+  return db.select().from(kpiMarkets).orderBy(kpiMarkets.name);
+}
+
+export async function createKpiMarket(name: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const [result] = await db.insert(kpiMarkets).values({ name, isActive: "true" });
+  return result.insertId;
+}
+
+export async function updateKpiMarket(id: number, data: { name?: string; isActive?: "true" | "false" }) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(kpiMarkets).set(data).where(eq(kpiMarkets.id, id));
+  return true;
+}
+
+export async function deleteKpiMarket(id: number) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.delete(kpiMarkets).where(eq(kpiMarkets.id, id));
+  return true;
+}
+
+// ============ KPI CHANNELS ============
+
+export async function getKpiChannels(activeOnly: boolean = true) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  if (activeOnly) {
+    return db.select().from(kpiChannels).where(eq(kpiChannels.isActive, "true")).orderBy(kpiChannels.name);
+  }
+  return db.select().from(kpiChannels).orderBy(kpiChannels.name);
+}
+
+export async function createKpiChannel(name: string, code: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const [result] = await db.insert(kpiChannels).values({ name, code, isActive: "true" });
+  return result.insertId;
+}
+
+export async function updateKpiChannel(id: number, data: { name?: string; code?: string; isActive?: "true" | "false" }) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(kpiChannels).set(data).where(eq(kpiChannels.id, id));
+  return true;
+}
+
+export async function deleteKpiChannel(id: number) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.delete(kpiChannels).where(eq(kpiChannels.id, id));
+  return true;
 }

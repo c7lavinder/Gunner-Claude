@@ -363,3 +363,23 @@
 - [x] Add AM dropdown (Kyle)
 - [x] Add DM dropdown (Esteban, Steve)
 - [x] Add NAH? dropdown (Yes, No)
+
+## Lead Gen Staff Management
+- [x] Create lead_gen_staff database table (name, role, active status, start date)
+- [x] Create API endpoints for staff CRUD operations
+- [x] Update Team KPIs dropdown to include lead gen staff
+- [x] Add inline "+ Add New" option in team member dropdown
+- [x] Add "Manage Staff" button with dialog
+- [x] Soft delete (toggle Active/Inactive)
+- [x] Hard delete option with confirmation warning
+- [ ] Edit name/role functionality
+
+## Markets & Channels Management
+- [x] Create markets database table (name, active status)
+- [x] Create channels database table (name, active status)
+- [x] Create API endpoints for markets CRUD
+- [x] Create API endpoints for channels CRUD
+- [x] Add "Manage Markets" button in Campaigns tab
+- [x] Add "Manage Channels" button in Campaigns tab
+- [x] Inline add for new markets/channels
+- [x] Soft delete and hard delete options

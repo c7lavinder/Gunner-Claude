@@ -771,3 +771,52 @@ export const kpiGoals = mysqlTable("kpi_goals", {
 
 export type KpiGoal = typeof kpiGoals.$inferSelect;
 export type InsertKpiGoal = typeof kpiGoals.$inferInsert;
+
+
+/**
+ * Lead Gen Staff - tracks lead gen team members who don't need app access
+ * Used for KPI tracking only (Cold Callers, SMS team)
+ */
+export const leadGenStaff = mysqlTable("lead_gen_staff", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  roleType: mysqlEnum("roleType", ["lg_cold_caller", "lg_sms", "am", "lm"]).notNull(),
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
+  startDate: timestamp("startDate").defaultNow(),
+  endDate: timestamp("endDate"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LeadGenStaff = typeof leadGenStaff.$inferSelect;
+export type InsertLeadGenStaff = typeof leadGenStaff.$inferInsert;
+
+
+/**
+ * KPI Markets - configurable markets for campaign tracking
+ */
+export const kpiMarkets = mysqlTable("kpi_markets", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KpiMarket = typeof kpiMarkets.$inferSelect;
+export type InsertKpiMarket = typeof kpiMarkets.$inferInsert;
+
+/**
+ * KPI Channels - configurable lead gen channels for campaign tracking
+ */
+export const kpiChannels = mysqlTable("kpi_channels", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 50 }).notNull(), // short code like 'cold_calls', 'sms'
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KpiChannel = typeof kpiChannels.$inferSelect;
+export type InsertKpiChannel = typeof kpiChannels.$inferInsert;

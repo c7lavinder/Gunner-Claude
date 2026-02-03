@@ -13,7 +13,8 @@ import { toast } from "sonner";
 import { 
   DollarSign, TrendingUp, Users, Phone, MessageSquare, 
   Target, Calendar, Plus, Building, FileText, BarChart3,
-  ArrowUpRight, ArrowDownRight, Percent
+  ArrowUpRight, ArrowDownRight, Percent, Settings, Trash2,
+  UserPlus, MapPin, Layers, Edit, AlertTriangle, Check, X
 } from "lucide-react";
 
 // Channel display names
@@ -136,6 +137,21 @@ export default function KpiDashboard() {
   const [showNewDealDialog, setShowNewDealDialog] = useState(false);
   const [showTeamKpiDialog, setShowTeamKpiDialog] = useState(false);
   const [showCampaignKpiDialog, setShowCampaignKpiDialog] = useState(false);
+  const [showManageStaffDialog, setShowManageStaffDialog] = useState(false);
+  const [showManageMarketsDialog, setShowManageMarketsDialog] = useState(false);
+  const [showManageChannelsDialog, setShowManageChannelsDialog] = useState(false);
+  const [showAddStaffDialog, setShowAddStaffDialog] = useState(false);
+  const [showAddMarketDialog, setShowAddMarketDialog] = useState(false);
+  const [showAddChannelDialog, setShowAddChannelDialog] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<{ id: number; name: string; roleType: string; active: boolean } | null>(null);
+  const [editingMarket, setEditingMarket] = useState<{ id: number; name: string; active: boolean } | null>(null);
+  const [editingChannel, setEditingChannel] = useState<{ id: number; name: string; key: string; active: boolean } | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'staff' | 'market' | 'channel'; id: number; name: string } | null>(null);
+
+  // New staff/market/channel form state
+  const [newStaff, setNewStaff] = useState({ name: "", roleType: "lg_cold_caller" as "lg_cold_caller" | "lg_sms" | "am" | "lm" });
+  const [newMarket, setNewMarket] = useState({ name: "" });
+  const [newChannel, setNewChannel] = useState({ name: "", code: "" });
 
   // New period form state
   const [newPeriod, setNewPeriod] = useState({
@@ -205,6 +221,11 @@ export default function KpiDashboard() {
     { enabled: true }
   );
 
+  // Lead Gen Staff, Markets, Channels queries
+  const { data: leadGenStaff } = trpc.kpi.getLeadGenStaff.useQuery({ activeOnly: false });
+  const { data: markets } = trpc.kpi.getMarkets.useQuery({ activeOnly: false });
+  const { data: channels } = trpc.kpi.getChannels.useQuery({ activeOnly: false });
+
   // Mutations
   const utils = trpc.useUtils();
   
@@ -256,6 +277,81 @@ export default function KpiDashboard() {
     onSuccess: () => {
       toast.success("Deal deleted");
       utils.kpi.getDeals.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  // Lead Gen Staff mutations
+  const createStaffMutation = trpc.kpi.createLeadGenStaff.useMutation({
+    onSuccess: () => {
+      toast.success("Staff member added");
+      utils.kpi.getLeadGenStaff.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const updateStaffMutation = trpc.kpi.updateLeadGenStaff.useMutation({
+    onSuccess: () => {
+      toast.success("Staff member updated");
+      utils.kpi.getLeadGenStaff.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteStaffMutation = trpc.kpi.deleteLeadGenStaff.useMutation({
+    onSuccess: () => {
+      toast.success("Staff member deleted");
+      utils.kpi.getLeadGenStaff.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  // Markets mutations
+  const createMarketMutation = trpc.kpi.createMarket.useMutation({
+    onSuccess: () => {
+      toast.success("Market added");
+      utils.kpi.getMarkets.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const updateMarketMutation = trpc.kpi.updateMarket.useMutation({
+    onSuccess: () => {
+      toast.success("Market updated");
+      utils.kpi.getMarkets.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteMarketMutation = trpc.kpi.deleteMarket.useMutation({
+    onSuccess: () => {
+      toast.success("Market deleted");
+      utils.kpi.getMarkets.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  // Channels mutations
+  const createChannelMutation = trpc.kpi.createChannel.useMutation({
+    onSuccess: () => {
+      toast.success("Channel added");
+      utils.kpi.getChannels.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const updateChannelMutation = trpc.kpi.updateChannel.useMutation({
+    onSuccess: () => {
+      toast.success("Channel updated");
+      utils.kpi.getChannels.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteChannelMutation = trpc.kpi.deleteChannel.useMutation({
+    onSuccess: () => {
+      toast.success("Channel deleted");
+      utils.kpi.getChannels.invalidate();
     },
     onError: (error) => toast.error(error.message),
   });
@@ -535,7 +631,16 @@ export default function KpiDashboard() {
                     <CardTitle>Channel Performance</CardTitle>
                     <CardDescription>Breakdown by lead generation channel</CardDescription>
                   </div>
-                  <Dialog open={showCampaignKpiDialog} onOpenChange={setShowCampaignKpiDialog}>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowManageMarketsDialog(true)}>
+                      <MapPin className="h-4 w-4 mr-2" />
+                      Manage Markets
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowManageChannelsDialog(true)}>
+                      <Layers className="h-4 w-4 mr-2" />
+                      Manage Channels
+                    </Button>
+                    <Dialog open={showCampaignKpiDialog} onOpenChange={setShowCampaignKpiDialog}>
                     <DialogTrigger asChild>
                       <Button size="sm">
                         <Plus className="h-4 w-4 mr-2" />
@@ -669,6 +774,7 @@ export default function KpiDashboard() {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -735,7 +841,12 @@ export default function KpiDashboard() {
                 <CardTitle>Team Member KPIs</CardTitle>
                 <CardDescription>Track individual performance metrics</CardDescription>
               </div>
-              <Dialog open={showTeamKpiDialog} onOpenChange={setShowTeamKpiDialog}>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowManageStaffDialog(true)}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Manage Staff
+                </Button>
+                <Dialog open={showTeamKpiDialog} onOpenChange={setShowTeamKpiDialog}>
                 <DialogTrigger asChild>
                   <Button size="sm" disabled={!selectedPeriodId}>
                     <Plus className="h-4 w-4 mr-2" />
@@ -829,6 +940,7 @@ export default function KpiDashboard() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              </div>
             </CardHeader>
             <CardContent>
               {!selectedPeriodId ? (
@@ -1222,6 +1334,440 @@ export default function KpiDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Manage Staff Dialog */}
+      <Dialog open={showManageStaffDialog} onOpenChange={setShowManageStaffDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Manage Lead Gen Staff
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">Add and manage lead generation team members (Cold Callers, SMS)</p>
+              <Button size="sm" onClick={() => setShowAddStaffDialog(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Staff
+              </Button>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Start Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {leadGenStaff?.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      No lead gen staff added yet. Click "Add Staff" to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  leadGenStaff?.map((staff) => (
+                    <TableRow key={staff.id}>
+                      <TableCell className="font-medium">{staff.name}</TableCell>
+                      <TableCell>{ROLE_NAMES[staff.roleType] || staff.roleType}</TableCell>
+                      <TableCell>
+                        <Badge className={staff.isActive === "true" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                          {staff.isActive === "true" ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{staff.startDate ? new Date(staff.startDate).toLocaleDateString() : "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              updateStaffMutation.mutate({
+                                id: staff.id,
+                                isActive: staff.isActive === "true" ? "false" : "true",
+                              });
+                            }}
+                          >
+                            {staff.isActive === "true" ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => setDeleteConfirmation({ type: 'staff', id: staff.id, name: staff.name })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Staff Dialog */}
+      <Dialog open={showAddStaffDialog} onOpenChange={setShowAddStaffDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Lead Gen Staff</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input
+                placeholder="Enter staff name"
+                value={newStaff.name}
+                onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={newStaff.roleType}
+                onValueChange={(val) => setNewStaff({ ...newStaff, roleType: val as "lg_cold_caller" | "lg_sms" | "am" | "lm" })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lg_cold_caller">Lead Gen (Cold Caller)</SelectItem>
+                  <SelectItem value="lg_sms">Lead Gen (SMS)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              onClick={() => {
+                if (!newStaff.name.trim()) {
+                  toast.error("Please enter a name");
+                  return;
+                }
+                createStaffMutation.mutate({
+                  name: newStaff.name.trim(),
+                  roleType: newStaff.roleType,
+                });
+                setNewStaff({ name: "", roleType: "lg_cold_caller" });
+                setShowAddStaffDialog(false);
+              }}
+              disabled={createStaffMutation.isPending}
+            >
+              Add Staff
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Markets Dialog */}
+      <Dialog open={showManageMarketsDialog} onOpenChange={setShowManageMarketsDialog}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Manage Markets
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">Add and manage geographic markets</p>
+              <Button size="sm" onClick={() => setShowAddMarketDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Market
+              </Button>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Market Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {markets?.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                      No markets added yet. Click "Add Market" to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  markets?.map((market) => (
+                    <TableRow key={market.id}>
+                      <TableCell className="font-medium">{market.name}</TableCell>
+                      <TableCell>
+                        <Badge className={market.isActive === "true" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                          {market.isActive === "true" ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              updateMarketMutation.mutate({
+                                id: market.id,
+                                isActive: market.isActive === "true" ? "false" : "true",
+                              });
+                            }}
+                          >
+                            {market.isActive === "true" ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => setDeleteConfirmation({ type: 'market', id: market.id, name: market.name })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Market Dialog */}
+      <Dialog open={showAddMarketDialog} onOpenChange={setShowAddMarketDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Market</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Market Name</Label>
+              <Input
+                placeholder="e.g., Nashville, Atlanta"
+                value={newMarket.name}
+                onChange={(e) => setNewMarket({ ...newMarket, name: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              onClick={() => {
+                if (!newMarket.name.trim()) {
+                  toast.error("Please enter a market name");
+                  return;
+                }
+                createMarketMutation.mutate({
+                  name: newMarket.name.trim(),
+                });
+                setNewMarket({ name: "" });
+                setShowAddMarketDialog(false);
+              }}
+              disabled={createMarketMutation.isPending}
+            >
+              Add Market
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Channels Dialog */}
+      <Dialog open={showManageChannelsDialog} onOpenChange={setShowManageChannelsDialog}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Manage Channels
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">Add and manage lead generation channels</p>
+              <Button size="sm" onClick={() => setShowAddChannelDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Channel
+              </Button>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Channel Name</TableHead>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {channels?.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      No channels added yet. Click "Add Channel" to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  channels?.map((channel) => (
+                    <TableRow key={channel.id}>
+                      <TableCell className="font-medium">{channel.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{channel.code}</TableCell>
+                      <TableCell>
+                        <Badge className={channel.isActive === "true" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                          {channel.isActive === "true" ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              updateChannelMutation.mutate({
+                                id: channel.id,
+                                isActive: channel.isActive === "true" ? "false" : "true",
+                              });
+                            }}
+                          >
+                            {channel.isActive === "true" ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => setDeleteConfirmation({ type: 'channel', id: channel.id, name: channel.name })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Channel Dialog */}
+      <Dialog open={showAddChannelDialog} onOpenChange={setShowAddChannelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Channel</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Channel Name</Label>
+              <Input
+                placeholder="e.g., Cold Calls, SMS"
+                value={newChannel.name}
+                onChange={(e) => setNewChannel({ ...newChannel, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Code (lowercase, no spaces)</Label>
+              <Input
+                placeholder="e.g., cold_calls, sms"
+                value={newChannel.code}
+                onChange={(e) => setNewChannel({ ...newChannel, code: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              onClick={() => {
+                if (!newChannel.name.trim() || !newChannel.code.trim()) {
+                  toast.error("Please enter both name and code");
+                  return;
+                }
+                createChannelMutation.mutate({
+                  name: newChannel.name.trim(),
+                  code: newChannel.code.trim(),
+                });
+                setNewChannel({ name: "", code: "" });
+                setShowAddChannelDialog(false);
+              }}
+              disabled={createChannelMutation.isPending}
+            >
+              Add Channel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmation} onOpenChange={() => setDeleteConfirmation(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Confirm Permanent Delete
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Are you sure you want to permanently delete <strong>{deleteConfirmation?.name}</strong>?
+            </p>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800">
+                <strong>Warning:</strong> This action cannot be undone. All historical data associated with this {deleteConfirmation?.type} will be lost.
+              </p>
+              <p className="text-sm text-red-800 mt-2">
+                Consider using the toggle button to deactivate instead, which preserves historical data.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmation(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!deleteConfirmation) return;
+                if (deleteConfirmation.type === 'staff') {
+                  deleteStaffMutation.mutate({ id: deleteConfirmation.id });
+                } else if (deleteConfirmation.type === 'market') {
+                  deleteMarketMutation.mutate({ id: deleteConfirmation.id });
+                } else if (deleteConfirmation.type === 'channel') {
+                  deleteChannelMutation.mutate({ id: deleteConfirmation.id });
+                }
+                setDeleteConfirmation(null);
+              }}
+            >
+              Delete Permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
