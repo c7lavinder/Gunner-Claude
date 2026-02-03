@@ -339,3 +339,4 @@
 - [x] Add sharp red accents and lines to dashboard
 - [x] Apply red accents to Analytics page
 - [x] Apply red accents to Call History page
+- [x] Remove red accents from Dashboard, Analytics, and Call History pages
