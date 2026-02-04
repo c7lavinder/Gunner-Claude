@@ -786,11 +786,12 @@ export default function CallInbox() {
     { value: "outbound", label: "Outbound" },
   ];
 
-  // Separate graded calls from skipped/admin calls
+  // Separate graded calls from skipped/admin/failed calls
   const allGradedCalls = calls?.filter(c => c.status === "completed" && c.classification === "conversation") || [];
   const adminCalls = calls?.filter(c => c.classification === "admin_call") || [];
+  const failedCalls = calls?.filter(c => c.status === "failed") || [];
   const skippedCalls = calls?.filter(c => 
-    (c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call"))
+    (c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call")) && c.status !== "failed"
   ) || [];
 
   // Apply filters to graded calls
@@ -876,6 +877,10 @@ export default function CallInbox() {
               </TabsTrigger>
               <TabsTrigger value="skipped">
                 Skipped ({skippedCalls.length})
+              </TabsTrigger>
+              <TabsTrigger value="failed">
+                <XCircle className="h-4 w-4 mr-2" />
+                Failed ({failedCalls.length})
               </TabsTrigger>
               <TabsTrigger value="feedback">
                 <MessageSquare className="h-4 w-4 mr-2" />
@@ -1068,6 +1073,74 @@ export default function CallInbox() {
                     <h3 className="text-lg font-semibold mb-2">No skipped calls</h3>
                     <p className="text-muted-foreground text-center max-w-md">
                       Voicemails, no-answers, and brief callbacks will appear here.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="failed" className="space-y-4">
+              {failedCalls.length > 0 ? (
+                <div className="space-y-4">
+                  {failedCalls.map((item) => (
+                    <Card key={item.id} className="border-red-200 bg-red-50/30 dark:border-red-900 dark:bg-red-950/20">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold truncate">
+                                {item.contactName || item.contactPhone || "Unknown Contact"}
+                              </h3>
+                              <Badge variant="destructive" className="text-xs">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Failed
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                              {item.teamMemberName && (
+                                <span className="flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  {item.teamMemberName}
+                                </span>
+                              )}
+                              {item.duration && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
+                                </span>
+                              )}
+                              {item.createdAt && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                                </span>
+                              )}
+                            </div>
+                            {item.classificationReason && (
+                              <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                                <AlertTriangle className="h-3 w-3 inline mr-1" />
+                                {item.classificationReason}
+                              </p>
+                            )}
+                          </div>
+                          <Link href={`/calls/${item.id}`}>
+                            <Button variant="outline" size="sm">
+                              View Details
+                              <ArrowRight className="h-4 w-4 ml-1" />
+                            </Button>
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-16">
+                    <CheckCircle className="h-16 w-16 text-green-500/50 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No failed calls</h3>
+                    <p className="text-muted-foreground text-center max-w-md">
+                      All calls have been processed successfully. Failed transcriptions or grading attempts will appear here.
                     </p>
                   </CardContent>
                 </Card>
