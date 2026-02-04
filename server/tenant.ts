@@ -303,6 +303,21 @@ export async function getTenantSettings(tenantId: number) {
 }
 
 /**
+ * Complete onboarding - mark tenant as onboarded
+ */
+export async function completeOnboarding(tenantId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  await db
+    .update(tenants)
+    .set({ onboardingCompleted: 'true' })
+    .where(eq(tenants.id, tenantId));
+
+  return { success: true };
+}
+
+/**
  * Update tenant settings
  */
 export async function updateTenantSettings(

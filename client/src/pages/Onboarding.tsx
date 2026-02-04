@@ -121,6 +121,7 @@ export default function Onboarding() {
   const updateTenantMutation = trpc.tenant.updateSettings.useMutation();
   const inviteUserMutation = trpc.tenant.inviteUser.useMutation();
   const createTrainingMutation = trpc.training.create.useMutation();
+  const completeOnboardingMutation = trpc.tenant.completeOnboarding.useMutation();
 
   const progress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
@@ -186,9 +187,18 @@ export default function Onboarding() {
     }
   };
 
-  const handleComplete = () => {
-    toast.success("Welcome to Gunner! Your account is ready.");
-    setLocation("/dashboard");
+  const handleComplete = async () => {
+    try {
+      // Mark onboarding as complete in the database
+      await completeOnboardingMutation.mutateAsync();
+      toast.success("Welcome to Gunner! Your account is ready.");
+      setLocation("/dashboard");
+    } catch (error) {
+      console.error("Failed to complete onboarding:", error);
+      // Still redirect even if the mutation fails
+      toast.success("Welcome to Gunner! Your account is ready.");
+      setLocation("/dashboard");
+    }
   };
 
   const addTeamInvite = () => {

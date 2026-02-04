@@ -2337,6 +2337,16 @@ Create content that:
         return updateTenantSettings(ctx.user.tenantId, input);
       }),
 
+    // Complete onboarding - mark tenant as onboarded
+    completeOnboarding: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const { completeOnboarding } = await import("./tenant");
+        if (!ctx.user?.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+        }
+        return completeOnboarding(ctx.user.tenantId);
+      }),
+
     // Tenant Admin: Get users in tenant
     getUsers: protectedProcedure.query(async ({ ctx }) => {
       const { getTenantUsers } = await import("./tenant");
