@@ -1047,3 +1047,8 @@
 ## Stripe Checkout Integration
 - [x] Update seed default plans to include Stripe price IDs from products.ts
 - [x] Connect upgrade/billing flow to use Stripe price IDs from plans table
+
+## Stripe Products and Prices Setup
+- [x] Create Stripe products for each plan tier (Starter, Growth, Scale)
+- [x] Create monthly and yearly prices for each product
+- [x] Update database plans with Stripe price IDs

@@ -1,0 +1,30 @@
+{
+  "query": "SELECT * FROM subscription_plans LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT * FROM subscription_plans LIMIT 1;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Starter",
+      "code": "starter",
+      "description": "Perfect for small teams getting started with AI call coaching",
+      "priceMonthly": "9900",
+      "priceYearly": "99000",
+      "stripePriceIdMonthly": "NULL",
+      "stripePriceIdYearly": "NULL",
+      "maxUsers": "3",
+      "maxCrmIntegrations": "1",
+      "features": "[\"call_grading\", \"basic_analytics\", \"team_dashboard\"]",
+      "isActive": "true",
+      "sortOrder": "1",
+      "createdAt": "2026-02-03 08:42:11",
+      "updatedAt": "2026-02-03 08:42:11",
+      "trialDays": "14",
+      "maxCallsPerMonth": "500",
+      "isPopular": "false"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcode\tdescription\tpriceMonthly\tpriceYearly\tstripePriceIdMonthly\tstripePriceIdYearly\tmaxUsers\tmaxCrmIntegrations\tfeatures\tisActive\tsortOrder\tcreatedAt\tupdatedAt\ttrialDays\tmaxCallsPerMonth\tisPopular\n1\tStarter\tstarter\tPerfect for small teams getting started with AI call coaching\t9900\t99000\tNULL\tNULL\t3\t1\t[\"call_grading\", \"basic_analytics\", \"team_dashboard\"]\ttrue\t1\t2026-02-03 08:42:11\t2026-02-03 08:42:11\t14\t500\tfalse\n",
+  "stderr": "",
+  "execution_time_ms": 68
+}
