@@ -1020,3 +1020,4 @@
 - [ ] Add RESEND_API_KEY secret
 - [ ] Test email verification flow
 - [x] Fix Analytics page stat cards to match Dashboard styling
+- [x] Add tenant settings/delete functionality to Admin page

@@ -68,6 +68,8 @@ export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<number | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [defaultTab, setDefaultTab] = useState("overview");
 
   // Fetch admin stats
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = trpc.admin.getStats.useQuery();
@@ -362,12 +364,19 @@ export default function AdminDashboard() {
                         >
                           <UserCheck className="h-4 w-4" />
                         </Button>
-                        <Dialog>
+                        <Dialog open={dialogOpen && selectedTenant === tenant.id} onOpenChange={(open) => {
+                          setDialogOpen(open);
+                          if (!open) setSelectedTenant(null);
+                        }}>
                           <DialogTrigger asChild>
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={() => setSelectedTenant(tenant.id)}
+                              onClick={() => {
+                                setSelectedTenant(tenant.id);
+                                setDefaultTab("overview");
+                                setDialogOpen(true);
+                              }}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -379,7 +388,7 @@ export default function AdminDashboard() {
                                 Tenant details and management
                               </DialogDescription>
                             </DialogHeader>
-                            <Tabs defaultValue="overview">
+                            <Tabs value={defaultTab} onValueChange={setDefaultTab}>
                               <TabsList>
                                 <TabsTrigger value="overview">Overview</TabsTrigger>
                                 <TabsTrigger value="users">Users</TabsTrigger>
@@ -568,7 +577,15 @@ export default function AdminDashboard() {
                             </Tabs>
                           </DialogContent>
                         </Dialog>
-                        <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTenant(tenant.id);
+                            setDefaultTab("settings");
+                            setDialogOpen(true);
+                          }}
+                        >
                           <Settings className="h-4 w-4" />
                         </Button>
                       </div>
