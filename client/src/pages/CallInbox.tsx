@@ -912,10 +912,10 @@ export default function CallInbox() {
                   <span className="hidden sm:inline">Graded </span>({gradedCalls.length})
                 </TabsTrigger>
                 <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">
-                  N/A ({adminCalls.length})
+                  Admin ({adminCalls.length})
                 </TabsTrigger>
                 <TabsTrigger value="skipped" className="text-xs sm:text-sm px-2 sm:px-3">
-                  <span className="hidden sm:inline">Skipped </span>Skip ({skippedCalls.length})
+                  Skipped ({skippedCalls.length})
                 </TabsTrigger>
                 <TabsTrigger value="failed" className="text-xs sm:text-sm px-2 sm:px-3">
                   <XCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />

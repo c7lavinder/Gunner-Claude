@@ -1032,3 +1032,4 @@
 - [x] Implement audio chunking for long calls (split, transcribe chunks, combine transcript)
 - [x] Fix call type label to show 'Qualification' instead of 'Qual'
 - [x] Add Pending tab to Call History to show queued calls being processed
+- [x] Fix tab labels: change 'Skipped Skip' to 'Skipped' and 'N/A' to 'Admin'
