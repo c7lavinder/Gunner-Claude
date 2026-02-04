@@ -1,0 +1,39 @@
+{
+  "query": "SELECT * FROM calls WHERE id = 240026 LIMIT 1",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT * FROM calls WHERE id = 240026 LIMIT 1",
+  "rows": [
+    {
+      "id": "240026",
+      "tenantId": "1",
+      "ghlCallId": "uh6SmbqLGYVWy8tRXZIS",
+      "ghlContactId": "NULL",
+      "ghlLocationId": "NULL",
+      "contactName": "Pam Daly",
+      "contactPhone": "+16155691106",
+      "propertyAddress": "NULL",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/uh6SmbqLGYVWy8tRXZIS-1770146989994.mp3",
+      "duration": "1544",
+      "callDirection": "outbound",
+      "teamMemberId": "3",
+      "teamMemberName": "Kyle Barks",
+      "callType": "offer",
+      "status": "transcribing",
+      "transcript": "NULL",
+      "callTimestamp": "2026-02-03 19:01:10",
+      "createdAt": "2026-02-03 19:29:51",
+      "updatedAt": "2026-02-04 05:04:46",
+      "classification": "pending",
+      "classificationReason": "Failed to process audio: FFmpeg not available for audio compression",
+      "callOutcome": "none",
+      "transcriptUrl": "NULL",
+      "isArchived": "false",
+      "archivedAt": "NULL",
+      "tenantCallTypeId": "NULL",
+      "errorMessage": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\tghlCallId\tghlContactId\tghlLocationId\tcontactName\tcontactPhone\tpropertyAddress\trecordingUrl\tduration\tcallDirection\tteamMemberId\tteamMemberName\tcallType\tstatus\ttranscript\tcallTimestamp\tcreatedAt\tupdatedAt\tclassification\tclassificationReason\tcallOutcome\ttranscriptUrl\tisArchived\tarchivedAt\ttenantCallTypeId\terrorMessage\n240026\t1\tuh6SmbqLGYVWy8tRXZIS\tNULL\tNULL\tPam Daly\t+16155691106\tNULL\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/uh6SmbqLGYVWy8tRXZIS-1770146989994.mp3\t1544\toutbound\t3\tKyle Barks\toffer\ttranscribing\tNULL\t2026-02-03 19:01:10\t2026-02-03 19:29:51\t2026-02-04 05:04:46\tpending\tFailed to process audio: FFmpeg not available for audio compression\tnone\tNULL\tfalse\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

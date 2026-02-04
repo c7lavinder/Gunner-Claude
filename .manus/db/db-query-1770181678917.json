@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, contactName, duration, status, classificationReason FROM calls WHERE status = 'failed' ORDER BY createdAt DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, duration, status, classificationReason FROM calls WHERE status = 'failed' ORDER BY createdAt DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "240026",
+      "contactName": "Pam Daly",
+      "duration": "1544",
+      "status": "failed",
+      "classificationReason": "Failed to process audio: FFmpeg not available for audio compression"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tduration\tstatus\tclassificationReason\n240026\tPam Daly\t1544\tfailed\tFailed to process audio: FFmpeg not available for audio compression\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

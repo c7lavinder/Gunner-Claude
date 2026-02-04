@@ -27,9 +27,51 @@ export interface CompressionResult {
  */
 async function checkFfmpeg(): Promise<boolean> {
   return new Promise((resolve) => {
-    const proc = spawn("/usr/bin/ffmpeg", ["-version"]);
-    proc.on("error", () => resolve(false));
-    proc.on("close", (code) => resolve(code === 0));
+    let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        console.warn("[AudioCompression] FFmpeg check timed out");
+        resolve(false);
+      }
+    }, 5000);
+
+    try {
+      const proc = spawn("/usr/bin/ffmpeg", ["-version"], {
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 5000,
+      });
+
+      proc.on("error", (err) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          console.error("[AudioCompression] FFmpeg check error:", err.message);
+          resolve(false);
+        }
+      });
+
+      proc.on("close", (code) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          if (code === 0) {
+            console.log("[AudioCompression] FFmpeg is available");
+            resolve(true);
+          } else {
+            console.warn(`[AudioCompression] FFmpeg exited with code ${code}`);
+            resolve(false);
+          }
+        }
+      });
+    } catch (err) {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        console.error("[AudioCompression] FFmpeg spawn error:", err);
+        resolve(false);
+      }
+    }
   });
 }
 
@@ -167,12 +209,23 @@ export async function downloadAndCompressAudio(
 
     // Compress
     console.log(
-      `[AudioCompression] File is ${originalSizeMB.toFixed(2)}MB, compressing...`
+      `[AudioCompression] File is ${originalSizeMB.toFixed(2)}MB, attempting compression...`
     );
     const result = await compressAudio(audioBuffer, mimeType);
 
     if (!result.success || !result.compressedBuffer) {
-      return { error: result.error || "Compression failed" };
+      // Fallback: If compression failed, try sending the original file anyway
+      // Whisper API might handle it, or will give us a proper error message
+      console.warn(
+        `[AudioCompression] Compression failed (${result.error}), attempting to send original file to Whisper API`
+      );
+      return {
+        buffer: audioBuffer,
+        mimeType,
+        wasCompressed: false,
+        originalSizeMB,
+        finalSizeMB: originalSizeMB,
+      };
     }
 
     return {

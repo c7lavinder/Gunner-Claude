@@ -142,17 +142,28 @@ export async function transcribeAudio(
       baseUrl
     ).toString();
 
-    const response = await fetch(fullUrl, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${ENV.forgeApiKey}`,
-        "Accept-Encoding": "identity",
-      },
-      body: formData,
-    });
+    // Create abort controller with 5-minute timeout for long audio files
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 5 * 60 * 1000);
+    
+    let response;
+    try {
+      response = await fetch(fullUrl, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${ENV.forgeApiKey}`,
+          "Accept-Encoding": "identity",
+        },
+        body: formData,
+        signal: abortController.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
+      console.error(`[Transcription] API error: ${response.status} ${response.statusText}`, errorText);
       return {
         error: "Transcription service request failed",
         code: "TRANSCRIPTION_FAILED",

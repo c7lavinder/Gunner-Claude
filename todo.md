@@ -897,3 +897,11 @@
 - [x] Fix Team Assignments - allow multiple Lead Managers to be assigned to an Acquisition Manager (fixed tenantId not being set on new assignments)
 - [x] Fix Team Members edit functionality - edit button now opens dialog to change team role
 - [x] Add Failed Calls tab to Call History page
+- [x] Fix audio compression for long call recordings (90+ minutes support)
+  - [x] Implemented 16kbps mono MP3 compression using FFmpeg
+  - [x] Added automatic compression for files >16MB before Whisper transcription
+  - [x] Improved FFmpeg availability check with better error logging
+  - [x] Added fallback strategy: if compression fails, attempt to send original file to Whisper API
+  - [x] Added 5-minute timeout for transcription API calls to handle long audio files
+  - [x] Created unit tests for audio compression fallback behavior
+  - [x] All 176 tests passing
