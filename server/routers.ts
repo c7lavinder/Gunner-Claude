@@ -1255,14 +1255,16 @@ Keep it brief and actionable.`;
         checkRateLimit(ctx.user?.tenantId, "ai");
         trackUsage(ctx.user?.tenantId, "ai_chat");
         
-        // Clear existing AI-generated items
-        await clearAiGeneratedInsights();
+        const tenantId = ctx.user?.tenantId;
         
-        // Generate new insights from recent calls
-        const insights = await generateTeamInsights();
+        // Clear existing AI-generated items for this tenant
+        await clearAiGeneratedInsights(tenantId || undefined);
         
-        // Save to database
-        await saveGeneratedInsights(insights);
+        // Generate new insights from recent calls for this tenant
+        const insights = await generateTeamInsights(tenantId || undefined);
+        
+        // Save to database with tenant association
+        await saveGeneratedInsights(insights, tenantId || undefined);
         
         return {
           success: true,
@@ -1276,8 +1278,9 @@ Keep it brief and actionable.`;
       }),
 
     clearAiInsights: protectedProcedure
-      .mutation(async () => {
-        await clearAiGeneratedInsights();
+      .mutation(async ({ ctx }) => {
+        // CRITICAL: Only clear insights for this tenant
+        await clearAiGeneratedInsights(ctx.user?.tenantId || undefined);
         return { success: true };
       }),
   }),

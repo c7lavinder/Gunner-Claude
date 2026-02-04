@@ -40,14 +40,26 @@ interface InsightsResult {
 }
 
 /**
- * Get recent calls with grades for analysis
+ * Get recent calls with grades for analysis - filtered by tenant
  */
-async function getRecentCallsWithGrades(daysBack: number = 7): Promise<CallWithGrade[]> {
+async function getRecentCallsWithGrades(daysBack: number = 7, tenantId?: number): Promise<CallWithGrade[]> {
   const db = await getDb();
   if (!db) return [];
 
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+
+  const conditions = [
+    gte(calls.createdAt, cutoffDate),
+    eq(calls.status, "completed"),
+    eq(calls.isArchived, "false"), // Exclude archived calls
+    isNotNull(calls.transcript)
+  ];
+
+  // CRITICAL: Filter by tenant for multi-tenant isolation
+  if (tenantId) {
+    conditions.push(eq(calls.tenantId, tenantId));
+  }
 
   const recentCalls = await db
     .select({
@@ -59,14 +71,7 @@ async function getRecentCallsWithGrades(daysBack: number = 7): Promise<CallWithG
       createdAt: calls.createdAt,
     })
     .from(calls)
-    .where(
-      and(
-        gte(calls.createdAt, cutoffDate),
-        eq(calls.status, "completed"),
-        eq(calls.isArchived, "false"), // Exclude archived calls
-        isNotNull(calls.transcript)
-      )
-    )
+    .where(and(...conditions))
     .orderBy(desc(calls.createdAt))
     .limit(50);
 
@@ -97,10 +102,10 @@ async function getRecentCallsWithGrades(daysBack: number = 7): Promise<CallWithG
 }
 
 /**
- * Generate AI insights from recent calls
+ * Generate AI insights from recent calls - filtered by tenant
  */
-export async function generateTeamInsights(): Promise<InsightsResult> {
-  const recentCalls = await getRecentCallsWithGrades(7);
+export async function generateTeamInsights(tenantId?: number): Promise<InsightsResult> {
+  const recentCalls = await getRecentCallsWithGrades(7, tenantId);
 
   if (recentCalls.length === 0) {
     return { skills: [], issues: [], wins: [], agenda: [] };
@@ -316,7 +321,7 @@ Respond with a JSON object in this exact format:
         itemType: "issue" as const,
         title: i.title,
         description: i.description,
-        priority: i.priority,
+        priority: i.priority || "medium",
         teamMemberName: i.teamMemberName || undefined,
         sourceCallIds: i.sourceCallIds || [],
       })),
@@ -350,14 +355,21 @@ Respond with a JSON object in this exact format:
 }
 
 /**
- * Save generated insights to database
+ * Save generated insights to database - with tenant support
  */
-export async function saveGeneratedInsights(insights: InsightsResult): Promise<void> {
+export async function saveGeneratedInsights(insights: InsightsResult, tenantId?: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  // Get team member IDs for matching names
-  const members = await db.select().from(teamMembers);
+  // Get team member IDs for matching names (filtered by tenant)
+  const conditions = [];
+  if (tenantId) {
+    conditions.push(eq(teamMembers.tenantId, tenantId));
+  }
+  
+  const members = conditions.length > 0 
+    ? await db.select().from(teamMembers).where(and(...conditions))
+    : await db.select().from(teamMembers);
   const memberMap = new Map(members.map(m => [m.name, m.id]));
 
   const allInsights = [
@@ -371,6 +383,7 @@ export async function saveGeneratedInsights(insights: InsightsResult): Promise<v
     const teamMemberId = insight.teamMemberName ? memberMap.get(insight.teamMemberName) : null;
 
     await db.insert(teamTrainingItems).values({
+      tenantId: tenantId || null, // CRITICAL: Set tenantId for multi-tenant isolation
       itemType: insight.itemType,
       title: insight.title,
       description: insight.description,
@@ -386,13 +399,20 @@ export async function saveGeneratedInsights(insights: InsightsResult): Promise<v
 }
 
 /**
- * Clear old AI-generated insights before regenerating
+ * Clear old AI-generated insights before regenerating - filtered by tenant
  */
-export async function clearAiGeneratedInsights(): Promise<void> {
+export async function clearAiGeneratedInsights(tenantId?: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
+  const conditions = [eq(teamTrainingItems.isAiGenerated, "true")];
+  
+  // CRITICAL: Only clear insights for this tenant
+  if (tenantId) {
+    conditions.push(eq(teamTrainingItems.tenantId, tenantId));
+  }
+
   await db
     .delete(teamTrainingItems)
-    .where(eq(teamTrainingItems.isAiGenerated, "true"));
+    .where(and(...conditions));
 }
