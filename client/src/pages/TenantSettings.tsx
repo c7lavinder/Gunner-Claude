@@ -1197,7 +1197,17 @@ export default function TenantSettings() {
                                 const isPopular = plan.isPopular === 'true' || plan.isPopular === true;
                                 const maxUsers = plan.maxUsers || 0;
                                 const maxCalls = plan.maxCallsPerMonth || 0;
-                                const features = plan.features || [];
+                                // Parse features - may be JSON string or already an array
+                                let features: string[] = [];
+                                if (typeof plan.features === 'string') {
+                                  try {
+                                    features = JSON.parse(plan.features);
+                                  } catch {
+                                    features = [];
+                                  }
+                                } else if (Array.isArray(plan.features)) {
+                                  features = plan.features;
+                                }
                                 
                                 // Feature label mapping
                                  const featureLabels: Record<string, string> = {

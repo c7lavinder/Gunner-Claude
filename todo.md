@@ -1083,3 +1083,6 @@
 - [x] Update homepage to fetch plans from database instead of hardcoded values
 - [x] Update upgrade modal in TenantSettings to use database plans
 - [x] Ensure all pricing displays are consistent across the app
+
+## Bug Fix - TenantSettings Error
+- [x] Fix TypeError: is.slice(...).map is not a function in TenantSettings
