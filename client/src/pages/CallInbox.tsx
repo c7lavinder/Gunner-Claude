@@ -756,6 +756,15 @@ export default function CallInbox() {
   const { data: calls, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery({ limit: 50 });
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
   const updateStatusMutation = trpc.feedback.updateStatus.useMutation();
+  const reclassifyMutation = trpc.calls.reclassify.useMutation({
+    onSuccess: () => {
+      toast.success("Call reclassified - grading will begin shortly");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Failed to reclassify: ${error.message}`);
+    },
+  });
   const utils = trpc.useUtils();
 
   // Filter states
@@ -1105,7 +1114,28 @@ export default function CallInbox() {
                               </p>
                             )}
                           </div>
-                          <StatusBadge status="skipped" />
+                          <div className="flex items-center gap-2">
+                            <StatusBadge status="skipped" />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                reclassifyMutation.mutate({ 
+                                  callId: item.id, 
+                                  classification: "conversation",
+                                  reason: "Manually reclassified for grading"
+                                });
+                              }}
+                              disabled={reclassifyMutation.isPending}
+                            >
+                              {reclassifyMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4" />
+                              )}
+                              <span className="ml-1">Grade This Call</span>
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

@@ -1026,3 +1026,4 @@
 - [x] Add MP3 decoder to handle large MP3 files without FFmpeg
 - [x] Fix call classification to not skip long calls with rapport-building conversations
 - [x] Increase audio compression bitrate for better transcription quality
+- [x] Add "Grade This Call" button for skipped calls to reclassify and grade them
