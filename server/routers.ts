@@ -155,7 +155,7 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({
         name: z.string(),
-        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager"]),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator"]),
         ghlUserId: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -212,7 +212,7 @@ export const appRouter = router({
     updateRole: protectedProcedure
       .input(z.object({
         teamMemberId: z.number(),
-        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager"]),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator"]),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user?.teamRole !== 'admin') {
@@ -265,7 +265,7 @@ export const appRouter = router({
     updateUserRole: protectedProcedure
       .input(z.object({
         userId: z.number(),
-        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager"]),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator"]),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user?.teamRole !== 'admin') {
@@ -2467,7 +2467,7 @@ Create content that:
       .input(z.object({
         email: z.string().email(),
         role: z.enum(['admin', 'user']).default('user'),
-        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager']).default('lead_manager'),
+        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager', 'lead_generator']).default('lead_manager'),
       }))
       .mutation(async ({ ctx, input }) => {
         const { inviteUserToTenant } = await import("./tenant");
@@ -2512,7 +2512,7 @@ Create content that:
       .input(z.object({
         userId: z.number(),
         role: z.enum(['admin', 'user']),
-        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager']),
+        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager', 'lead_generator']),
       }))
       .mutation(async ({ ctx, input }) => {
         const { updateUserRole } = await import("./tenant");

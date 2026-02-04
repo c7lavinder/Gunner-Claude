@@ -597,6 +597,7 @@ export async function processCall(callId: number): Promise<void> {
       const teamMember = await getTeamMemberById(call.teamMemberId);
       if (teamMember) {
         teamMemberName = teamMember.name;
+        // Lead generators use the same grading as lead managers (qualification calls)
         callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
       }
     }

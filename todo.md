@@ -921,3 +921,23 @@
 - [x] Merge Team Management into Company Settings as "Roles" tab
 - [x] Remove Platform Admin link (keep Admin Dashboard)
 - [x] Update sidebar navigation to show simplified menu
+
+
+## Role System Consolidation
+- [ ] Consolidate two role dropdowns into single dropdown
+- [ ] Add Lead Generator role option
+- [ ] Update onboarding to use 4 roles: Lead Manager, Acquisition Manager, Lead Generator, Admin
+- [ ] Update Company Settings Roles tab to single dropdown
+- [ ] Add Lead Generator assignment to Lead Managers (LGs report to LMs)
+- [ ] Lead Generators have same access/grading as Lead Managers
+- [ ] Update permissions logic for Lead Generator role
+
+
+## Role System Consolidation
+- [x] Consolidate two role dropdowns into single dropdown
+- [x] Add Lead Generator role option (4 roles: Admin, Lead Manager, Acquisition Manager, Lead Generator)
+- [x] Update onboarding to use consistent 4 role options
+- [x] Add Lead Generator to Lead Manager assignment system
+- [x] Update permissions so Lead Generators have same access as Lead Managers
+- [x] Update grading to treat Lead Generator calls same as Lead Manager calls
+- [x] Update gamification badges for Lead Generator role

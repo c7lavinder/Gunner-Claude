@@ -434,7 +434,7 @@ export async function inviteUserToTenant(
   tenantId: number,
   email: string,
   role: 'admin' | 'user' = 'user',
-  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' = 'lead_manager',
+  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator' = 'lead_manager',
   invitedBy?: number
 ) {
   const db = await getDb();
@@ -557,7 +557,7 @@ export async function updateUserRole(
   tenantId: number,
   userId: number,
   role: 'admin' | 'user',
-  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager'
+  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator'
 ) {
   const db = await getDb();
   if (!db) return { success: false, error: 'Database not available' };

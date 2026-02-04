@@ -760,9 +760,10 @@ export async function getAllBadgesWithProgress(teamMemberId: number, teamRole: s
   if (!db) return [];
   
   // Get relevant badges for this role
+  // Lead generators use the same badges as lead managers
   const relevantBadges = ALL_BADGES.filter(b => 
     b.category === "universal" || 
-    (teamRole === "lead_manager" && b.category === "lead_manager") ||
+    ((teamRole === "lead_manager" || teamRole === "lead_generator") && b.category === "lead_manager") ||
     (teamRole === "acquisition_manager" && b.category === "acquisition_manager")
   );
   

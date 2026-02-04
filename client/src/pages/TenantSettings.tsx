@@ -44,7 +44,7 @@ export default function TenantSettings() {
   const [crmType, setCrmType] = useState<string>("none");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
-  const [inviteTeamRole, setInviteTeamRole] = useState<'admin' | 'acquisition_manager' | 'lead_manager'>('lead_manager');
+  const [inviteTeamRole, setInviteTeamRole] = useState<'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator'>('lead_manager');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'starter' | 'growth' | 'scale'>('growth');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
@@ -264,6 +264,10 @@ export default function TenantSettings() {
   const leadManagers = ghlTeamMembers?.filter(tm => {
     const linkedUser = allUsers?.find(u => u.teamMemberId === tm.id);
     return linkedUser?.teamRole === 'lead_manager';
+  }) || [];
+  const leadGenerators = ghlTeamMembers?.filter(tm => {
+    const linkedUser = allUsers?.find(u => u.teamMemberId === tm.id);
+    return linkedUser?.teamRole === 'lead_generator';
   }) || [];
 
   // Initialize form values when settings load
@@ -758,12 +762,12 @@ export default function TenantSettings() {
                             </Button>
                           )}
                           
-                          {/* Role Selection */}
+                          {/* Role Selection - Single consolidated dropdown */}
                           <Select
                             value={u.teamRole || 'lead_manager'}
                             onValueChange={(value) => updateTeamRoleMutation.mutate({ 
                               userId: u.id, 
-                              teamRole: value as 'admin' | 'acquisition_manager' | 'lead_manager'
+                              teamRole: value as 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator'
                             })}
                             disabled={u.id === user?.id}
                           >
@@ -774,6 +778,7 @@ export default function TenantSettings() {
                               <SelectItem value="admin">Admin</SelectItem>
                               <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
                               <SelectItem value="lead_manager">Lead Manager</SelectItem>
+                              <SelectItem value="lead_generator">Lead Generator</SelectItem>
                             </SelectContent>
                           </Select>
                           
@@ -781,11 +786,13 @@ export default function TenantSettings() {
                             admin: "bg-purple-100 text-purple-700",
                             acquisition_manager: "bg-blue-100 text-blue-700",
                             lead_manager: "bg-green-100 text-green-700",
+                            lead_generator: "bg-orange-100 text-orange-700",
                           }[u.teamRole || 'lead_manager']}>
                             {{
                               admin: "Admin",
                               acquisition_manager: "Acquisition Manager",
                               lead_manager: "Lead Manager",
+                              lead_generator: "Lead Generator",
                             }[u.teamRole || 'lead_manager']}
                           </Badge>
                         </div>
@@ -811,7 +818,7 @@ export default function TenantSettings() {
                 </div>
                 <div>
                   <CardTitle className="text-lg">Team Assignments</CardTitle>
-                  <CardDescription>Assign Lead Managers to Acquisition Managers</CardDescription>
+                  <CardDescription>Assign Lead Managers to Acquisition Managers, and Lead Generators to Lead Managers</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -907,6 +914,103 @@ export default function TenantSettings() {
                   })}
                 </div>
               )}
+              
+              {/* Lead Generator to Lead Manager Assignments */}
+              <div className="mt-8 pt-6 border-t">
+                <h4 className="text-sm font-medium mb-4">Lead Generator Assignments</h4>
+                {leadManagers.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 px-3 border rounded-md border-dashed">
+                    No Lead Managers available - assign the Lead Manager role to users first
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {leadManagers.map((lm) => {
+                      const lmUser = allUsers?.find(u => u.teamMemberId === lm.id);
+                      // For now, Lead Generators are assigned to Lead Managers via the same team_assignments table
+                      // We'll use leadManagerId to store Lead Generator ID and acquisitionManagerId to store Lead Manager ID
+                      const assignedLeadGens = teamAssignments?.filter(a => a.acquisitionManagerId === lm.id) || [];
+                      
+                      return (
+                        <div key={lm.id} className="p-4 rounded-lg border bg-card">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Badge className="bg-green-100 text-green-700">Lead Manager</Badge>
+                            <span className="font-medium">{lm.name}</span>
+                          </div>
+                          
+                          <div className="ml-4 space-y-2">
+                            <div className="text-sm text-muted-foreground mb-2">Lead Generators:</div>
+                            
+                            {/* Current assignments */}
+                            {assignedLeadGens.map((assignment) => {
+                              const lg = ghlTeamMembers?.find(tm => tm.id === assignment.leadManagerId);
+                              const lgUser = allUsers?.find(u => u.teamMemberId === assignment.leadManagerId);
+                              // Only show if this is actually a lead generator
+                              if (lgUser?.teamRole !== 'lead_generator') return null;
+                              return (
+                                <div key={assignment.id} className="flex items-center justify-between p-2 rounded bg-muted/50">
+                                  <span>{lg?.name || 'Unknown'}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeAssignmentMutation.mutate({ leadManagerId: assignment.leadManagerId })}
+                                    disabled={removeAssignmentMutation.isPending}
+                                  >
+                                    <Unlink className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                            
+                            {/* Add new Lead Generator assignment */}
+                            {(() => {
+                              const availableLeadGens = leadGenerators.filter(lg => {
+                                const notAssigned = !assignedLeadGens.some(a => a.leadManagerId === lg.id);
+                                return notAssigned;
+                              });
+                              
+                              if (availableLeadGens.length === 0) {
+                                return (
+                                  <div className="text-sm text-muted-foreground py-2 px-3 border rounded-md border-dashed">
+                                    {leadGenerators.length === 0 
+                                      ? "No Lead Generators available - assign the Lead Generator role to users first"
+                                      : "All Lead Generators have been assigned"}
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <Select
+                                  key={`lm-${lm.id}-${assignedLeadGens.length}`}
+                                  value=""
+                                  onValueChange={(value) => {
+                                    if (lm.id && value) {
+                                      assignManagerMutation.mutate({
+                                        leadManagerId: parseInt(value),
+                                        acquisitionManagerId: lm.id,
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="+ Add Lead Generator" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableLeadGens.map((lg) => (
+                                      <SelectItem key={lg.id} value={lg.id.toString()}>
+                                        {lg.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -945,6 +1049,7 @@ export default function TenantSettings() {
                                 admin: "Admin",
                                 acquisition_manager: "Acquisition Manager",
                                 lead_manager: "Lead Manager",
+                                lead_generator: "Lead Generator",
                               }[linkedUser.teamRole || 'lead_manager']}
                             </Badge>
                           ) : (

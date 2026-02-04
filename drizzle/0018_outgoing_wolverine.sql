@@ -1,0 +1,1 @@
+ALTER TABLE `pending_invitations` MODIFY COLUMN `teamRole` enum('admin','lead_manager','acquisition_manager','lead_generator') NOT NULL DEFAULT 'lead_manager';

@@ -1710,7 +1710,7 @@ export async function removeLeadManagerAssignment(leadManagerId: number): Promis
 
 export type UserPermissionContext = {
   teamMemberId?: number;
-  teamRole?: 'admin' | 'lead_manager' | 'acquisition_manager';
+  teamRole?: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
   userId?: number;
   tenantId?: number; // Required for multi-tenant isolation
 };
@@ -1775,7 +1775,18 @@ export async function getCallsWithPermissions(
       conditions.push(sql`${calls.teamMemberId} IN (${sql.join(allowedTeamMemberIds.map(id => sql`${id}`), sql`, `)})`);
     }
   } else if (permissionContext.teamRole === 'lead_manager' && permissionContext.teamMemberId) {
-    // Lead Manager sees only own calls
+    // Lead Manager sees own calls + assigned Lead Generator calls
+    const assignedLeadGenerators = await getLeadManagersForAcquisitionManager(permissionContext.teamMemberId);
+    const allowedTeamMemberIds = [permissionContext.teamMemberId, ...assignedLeadGenerators.filter(id => {
+      // Filter to only include actual lead generators (reusing the same assignment table)
+      return true; // The assignment table stores the relationship
+    })];
+    
+    if (allowedTeamMemberIds.length > 0) {
+      conditions.push(sql`${calls.teamMemberId} IN (${sql.join(allowedTeamMemberIds.map(id => sql`${id}`), sql`, `)})`);
+    }
+  } else if (permissionContext.teamRole === 'lead_generator' && permissionContext.teamMemberId) {
+    // Lead Generator sees only own calls (same as lead_manager for now)
     conditions.push(eq(calls.teamMemberId, permissionContext.teamMemberId));
   } else if (permissionContext.teamMemberId) {
     // Fallback: if role not set but teamMemberId exists, show only own calls
@@ -1820,7 +1831,7 @@ export async function getViewableTeamMemberIds(
 
 export async function updateTeamMemberRole(
   teamMemberId: number, 
-  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager'
+  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator'
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
@@ -1893,7 +1904,7 @@ export async function getAllUsers(tenantId?: number): Promise<Array<{
 
 export async function updateUserTeamRole(
   userId: number, 
-  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager'
+  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator'
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;

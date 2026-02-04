@@ -43,11 +43,10 @@ const CRM_OPTIONS = [
 ];
 
 const ROLE_TEMPLATES = [
-  { id: "lead_manager", name: "Lead Manager", description: "Handles qualification calls" },
+  { id: "admin", name: "Admin", description: "Full access to all features and settings" },
+  { id: "lead_manager", name: "Lead Manager", description: "Handles qualification calls, manages Lead Generators" },
   { id: "acquisition_manager", name: "Acquisition Manager", description: "Handles offer/closing calls" },
-  { id: "cold_caller", name: "Cold Caller", description: "Outbound lead generation" },
-  { id: "appointment_setter", name: "Appointment Setter", description: "Books appointments" },
-  { id: "closer", name: "Closer", description: "Closes deals" },
+  { id: "lead_generator", name: "Lead Generator", description: "Outbound lead generation (cold calling, SMS)" },
 ];
 
 export default function Onboarding() {

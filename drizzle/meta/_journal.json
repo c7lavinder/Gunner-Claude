@@ -120,6 +120,20 @@
       "when": 1770095006285,
       "tag": "0016_eager_strong_guy",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1770185670216,
+      "tag": "0017_abnormal_johnny_blaze",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1770186055297,
+      "tag": "0018_outgoing_wolverine",
+      "breakpoints": true
     }
   ]
 }

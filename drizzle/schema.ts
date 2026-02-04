@@ -57,8 +57,8 @@ export const users = mysqlTable("users", {
   emailVerified: mysqlEnum("emailVerified", ["true", "false"]).default("false"), // Email verification status
   loginMethod: varchar("loginMethod", { length: 64 }), // 'manus_oauth' or 'email_password'
   role: mysqlEnum("role", ["user", "admin", "super_admin"]).default("user").notNull(), // Added super_admin for platform owner
-  // Team role for call coaching
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager"]).default("lead_manager"),
+  // Team role for call coaching (consolidated - this is the single source of truth for roles)
+  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator"]).default("lead_manager"),
   // Is this user a tenant admin?
   isTenantAdmin: mysqlEnum("isTenantAdmin", ["true", "false"]).default("false"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -94,7 +94,7 @@ export const teamMembers = mysqlTable("team_members", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   name: varchar("name", { length: 255 }).notNull(),
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager"]).notNull(),
+  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator"]).notNull(),
   userId: int("userId").references(() => users.id),
   ghlUserId: varchar("ghlUserId", { length: 255 }), // GoHighLevel user ID for matching
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
@@ -1015,7 +1015,7 @@ export const pendingInvitations = mysqlTable("pending_invitations", {
   tenantId: int("tenantId").references(() => tenants.id).notNull(),
   email: varchar("email", { length: 320 }).notNull(),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager"]).default("lead_manager").notNull(),
+  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator"]).default("lead_manager").notNull(),
   // Invitation metadata
   invitedBy: int("invitedBy").references(() => users.id),
   inviteToken: varchar("inviteToken", { length: 64 }), // For email invite links
