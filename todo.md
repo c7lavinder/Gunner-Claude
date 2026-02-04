@@ -1022,3 +1022,4 @@
 - [x] Fix Analytics page stat cards to match Dashboard styling
 - [x] Add tenant settings/delete functionality to Admin page
 - [x] Extend session cookie expiration to 30 days
+- [x] Fix transcription failure for large audio files (30+ minute calls exceeding 25MB limit)

@@ -95,8 +95,8 @@ export async function transcribeAudio(
     let mimeType: string;
     try {
       // Import compression utility which handles download and compression
-      const { downloadAndCompressAudio } = await import("../audioCompression");
-      const audioResult = await downloadAndCompressAudio(options.audioUrl);
+      const { downloadAndCompressAudioJS } = await import("../audioCompressionJS");
+      const audioResult = await downloadAndCompressAudioJS(options.audioUrl);
       if ('error' in audioResult) {
         return { error: "Failed to process audio", code: "SERVICE_ERROR", details: audioResult.error };
       }
