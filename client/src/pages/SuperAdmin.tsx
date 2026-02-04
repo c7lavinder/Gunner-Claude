@@ -62,6 +62,8 @@ export default function SuperAdmin() {
     isPopular: false,
     isActive: true,
     sortOrder: 0,
+    stripePriceIdMonthly: "",
+    stripePriceIdYearly: "",
   });
   const [newFeature, setNewFeature] = useState("");
 
@@ -170,6 +172,8 @@ export default function SuperAdmin() {
       isPopular: false,
       isActive: true,
       sortOrder: 0,
+      stripePriceIdMonthly: "",
+      stripePriceIdYearly: "",
     });
     setNewFeature("");
   };
@@ -190,6 +194,8 @@ export default function SuperAdmin() {
       isPopular: plan.isPopular === "true",
       isActive: plan.isActive === "true",
       sortOrder: plan.sortOrder || 0,
+      stripePriceIdMonthly: plan.stripePriceIdMonthly || "",
+      stripePriceIdYearly: plan.stripePriceIdYearly || "",
     });
   };
 
@@ -1130,6 +1136,27 @@ export default function SuperAdmin() {
                       onChange={(e) => setPlanFormData(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
                       placeholder="0"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Stripe Monthly Price ID</label>
+                    <Input
+                      value={planFormData.stripePriceIdMonthly}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, stripePriceIdMonthly: e.target.value }))}
+                      placeholder="price_xxxxx"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">From Stripe Dashboard → Products</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Stripe Yearly Price ID</label>
+                    <Input
+                      value={planFormData.stripePriceIdYearly}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, stripePriceIdYearly: e.target.value }))}
+                      placeholder="price_xxxxx"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Optional - for annual billing</p>
                   </div>
                 </div>
 

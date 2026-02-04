@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, Phone, BarChart3, Trophy, Brain, Users, Zap, ArrowRight, Star } from "lucide-react";
@@ -101,6 +102,10 @@ const testimonials = [
 
 export default function Landing() {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  
+  // Fetch plans from database to get dynamic trial days
+  const { data: dbPlans } = trpc.tenant.getPlans.useQuery();
+  const trialDays = dbPlans?.[0]?.trialDays || 14; // Default to 14 if not loaded
 
   return (
     <div className="min-h-screen bg-background">
@@ -143,7 +148,7 @@ export default function Landing() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/signup">
                 <Button size="lg" className="gap-2">
-                  Start 14-Day Free Trial <ArrowRight className="h-4 w-4" />
+                  Start {trialDays}-Day Free Trial <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
               <Button size="lg" variant="outline">

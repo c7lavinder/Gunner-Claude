@@ -1037,3 +1037,9 @@
 - [x] Build backend procedures for plans CRUD operations
 - [x] Create Plans Management UI tab in Super Admin panel
 - [x] Update signup flow to use database-driven plans and trial periods
+- [ ] Update homepage CTA button to dynamically show trial period from database
+- [ ] Add Stripe price ID fields to plans schema and UI for automatic checkout sync
+
+## Homepage CTA and Stripe Integration
+- [x] Update homepage CTA button to dynamically show trial period from database
+- [x] Add Stripe price ID fields to plans schema and UI for automatic checkout sync
