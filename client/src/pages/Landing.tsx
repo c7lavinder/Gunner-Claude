@@ -39,53 +39,35 @@ const features = [
   }
 ];
 
-const plans = [
-  {
-    name: "Starter",
-    price: 99,
-    description: "Perfect for small teams getting started",
-    features: [
-      "Up to 3 team members",
-      "500 calls/month",
-      "AI call grading",
-      "Basic analytics",
-      "GoHighLevel integration",
-      "Email support"
-    ],
-    popular: false
-  },
-  {
-    name: "Growth",
-    price: 249,
-    description: "For growing teams that need more",
-    features: [
-      "Up to 10 team members",
-      "2,000 calls/month",
-      "AI call grading",
-      "Advanced analytics",
-      "Gamification & badges",
-      "Team leaderboards",
-      "Priority support"
-    ],
-    popular: true
-  },
-  {
-    name: "Scale",
-    price: 499,
-    description: "For large teams with high volume",
-    features: [
-      "Unlimited team members",
-      "Unlimited calls",
-      "AI call grading",
-      "Advanced analytics",
-      "Gamification & badges",
-      "Team leaderboards",
-      "Custom integrations",
-      "Dedicated support"
-    ],
-    popular: false
-  }
-];
+// Feature label mapping for display
+const featureLabels: Record<string, string> = {
+  call_grading: 'AI Call Grading',
+  advanced_analytics: 'Advanced Analytics',
+  basic_analytics: 'Basic Analytics',
+  team_dashboard: 'Team Dashboard',
+  custom_rubrics: 'Custom Rubrics',
+  training_materials: 'Training Materials',
+  api_access: 'API Access',
+  priority_support: 'Priority Support',
+  custom_branding: 'Custom Branding',
+  crm_integration: 'CRM Integration',
+  multiple_crm_integrations: 'Multiple CRM Integrations',
+  unlimited_users: 'Unlimited Users',
+  call_recording_storage: 'Call Recording Storage',
+  call_recording: 'Call Recording Storage',
+  coaching_insights: 'Coaching Insights',
+  team_leaderboards: 'Team Leaderboards',
+  leaderboards: 'Team Leaderboards',
+  export_reports: 'Export Reports',
+  white_label: 'White Label'
+};
+
+// Plan description mapping
+const planDescriptions: Record<string, string> = {
+  starter: 'Perfect for small teams getting started',
+  growth: 'For growing teams that need more',
+  scale: 'For large teams with high volume'
+};
 
 const testimonials = [
   {
@@ -103,9 +85,47 @@ const testimonials = [
 export default function Landing() {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   
-  // Fetch plans from database to get dynamic trial days
+  // Fetch plans from database
   const { data: dbPlans } = trpc.tenant.getPlans.useQuery();
   const trialDays = dbPlans?.[0]?.trialDays || 14; // Default to 14 if not loaded
+  
+  // Transform database plans into display format
+  const plans = (dbPlans || [])
+    .filter((p: any) => p.isActive === 'true' || p.isActive === true)
+    .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0))
+    .map((plan: any) => {
+      const maxUsers = plan.maxUsers || 0;
+      const maxCalls = plan.maxCallsPerMonth || 0;
+      // Parse features - may be JSON string or already an array
+      let featuresArray: string[] = [];
+      if (typeof plan.features === 'string') {
+        try {
+          featuresArray = JSON.parse(plan.features);
+        } catch {
+          featuresArray = [];
+        }
+      } else if (Array.isArray(plan.features)) {
+        featuresArray = plan.features;
+      }
+      const features = featuresArray.map((f: string) => featureLabels[f] || f);
+      
+      // Add user/call limits to features
+      const displayFeatures = [
+        maxUsers >= 999 ? 'Unlimited team members' : `Up to ${maxUsers} team members`,
+        maxCalls < 0 || maxCalls >= 999999 ? 'Unlimited calls/month' : `${maxCalls.toLocaleString()} calls/month`,
+        ...features.slice(0, 6)
+      ];
+      
+      return {
+        name: plan.name,
+        code: plan.code,
+        price: Math.round((plan.priceMonthly || 0) / 100),
+        yearlyPrice: Math.round((plan.priceYearly || 0) / 100),
+        description: planDescriptions[plan.code] || plan.description || '',
+        features: displayFeatures,
+        popular: plan.isPopular === 'true' || plan.isPopular === true
+      };
+    });
 
   return (
     <div className="min-h-screen bg-background">
@@ -245,16 +265,16 @@ export default function Landing() {
                 <CardContent className="text-center">
                   <div className="mb-6">
                     <span className="text-4xl font-bold">
-                      ${billingPeriod === 'yearly' ? Math.round(plan.price * 0.8) : plan.price}
+                      ${billingPeriod === 'yearly' ? Math.round((plan.yearlyPrice || plan.price * 10) / 12) : plan.price}
                     </span>
                     <span className="text-muted-foreground">/month</span>
                     {billingPeriod === 'yearly' && (
                       <p className="text-sm text-muted-foreground">
-                        billed annually
+                        billed annually (${(plan.yearlyPrice || plan.price * 10).toLocaleString()}/yr)
                       </p>
                     )}
                   </div>
-                  <Link href={`/signup?plan=${plan.name.toLowerCase()}`}>
+                  <Link href={`/signup?plan=${plan.code || plan.name.toLowerCase()}`}>
                     <Button 
                       className="w-full mb-6" 
                       variant={plan.popular ? 'default' : 'outline'}

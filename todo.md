@@ -1078,3 +1078,8 @@
 - [x] Display human-readable feature names on public pricing page
 - [x] Add tooltip descriptions for each feature on pricing page
 - [x] Add icons next to each feature for visual enhancement
+
+## Dynamic Plan Pricing Fix
+- [x] Update homepage to fetch plans from database instead of hardcoded values
+- [x] Update upgrade modal in TenantSettings to use database plans
+- [x] Ensure all pricing displays are consistent across the app

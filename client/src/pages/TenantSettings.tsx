@@ -74,6 +74,9 @@ export default function TenantSettings() {
     { enabled: !!user?.tenantId }
   );
 
+  // Fetch subscription plans from database
+  const { data: dbPlans } = trpc.tenant.getPlans.useQuery();
+
   // Update settings mutation
   const updateSettingsMutation = trpc.tenant.updateSettings.useMutation({
     onSuccess: () => {
@@ -347,24 +350,30 @@ export default function TenantSettings() {
     reactivateSubscriptionMutation.mutate();
   };
 
-  const getPlanPrice = (plan: string | null) => {
-    switch (plan) {
-      case "starter": return "$99/month";
-      case "growth": return "$249/month";
-      case "scale": return "$499/month";
-      case "trial": return "Free trial";
-      default: return "N/A";
+  const getPlanPrice = (planCode: string | null) => {
+    if (planCode === 'trial') return 'Free trial';
+    const plan = dbPlans?.find((p: any) => p.code === planCode);
+    if (plan) {
+      const price = Math.round((plan.priceMonthly || 0) / 100);
+      return `$${price}/month`;
     }
+    return 'N/A';
   };
 
-  const getPlanLimits = (plan: string | null): { users: number, calls: number, usersDisplay: string, callsDisplay: string } => {
-    switch (plan) {
-      case "starter": return { users: 3, calls: 100, usersDisplay: "3", callsDisplay: "100" };
-      case "growth": return { users: 10, calls: 500, usersDisplay: "10", callsDisplay: "500" };
-      case "scale": return { users: 999, calls: 999999, usersDisplay: "Unlimited", callsDisplay: "Unlimited" };
-      case "trial": return { users: 3, calls: 50, usersDisplay: "3", callsDisplay: "50" };
-      default: return { users: 0, calls: 0, usersDisplay: "0", callsDisplay: "0" };
+  const getPlanLimits = (planCode: string | null): { users: number, calls: number, usersDisplay: string, callsDisplay: string } => {
+    if (planCode === 'trial') return { users: 3, calls: 50, usersDisplay: '3', callsDisplay: '50' };
+    const plan = dbPlans?.find((p: any) => p.code === planCode);
+    if (plan) {
+      const maxUsers = plan.maxUsers || 0;
+      const maxCalls = plan.maxCallsPerMonth || 0;
+      return {
+        users: maxUsers,
+        calls: maxCalls,
+        usersDisplay: maxUsers >= 999 ? 'Unlimited' : String(maxUsers),
+        callsDisplay: maxCalls < 0 || maxCalls >= 999999 ? 'Unlimited' : String(maxCalls)
+      };
     }
+    return { users: 0, calls: 0, usersDisplay: '0', callsDisplay: '0' };
   };
 
   if (!user?.tenantId) {
@@ -1179,76 +1188,78 @@ export default function TenantSettings() {
 
                           {/* Plan Cards */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {/* Starter Plan */}
-                            <div 
-                              className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
-                                selectedPlan === 'starter' ? 'border-primary ring-2 ring-primary/20' : 'hover:border-muted-foreground/50'
-                              } ${settings?.subscriptionTier === 'starter' ? 'opacity-50' : ''}`}
-                              onClick={() => settings?.subscriptionTier !== 'starter' && setSelectedPlan('starter')}
-                            >
-                              {settings?.subscriptionTier === 'starter' && (
-                                <Badge className="absolute -top-2 -right-2 bg-green-500">Current</Badge>
-                              )}
-                              <h3 className="font-semibold text-lg">Starter</h3>
-                              <div className="text-2xl font-bold mt-2">
-                                ${billingPeriod === 'monthly' ? '99' : '990'}
-                                <span className="text-sm font-normal text-muted-foreground">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
-                              </div>
-                              <ul className="mt-4 space-y-2 text-sm">
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Up to 3 team members</li>
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> AI call grading</li>
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> 1 CRM integration</li>
-                              </ul>
-                            </div>
-
-                            {/* Growth Plan */}
-                            <div 
-                              className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
-                                selectedPlan === 'growth' ? 'border-primary ring-2 ring-primary/20' : 'hover:border-muted-foreground/50'
-                              } ${settings?.subscriptionTier === 'growth' ? 'opacity-50' : ''}`}
-                              onClick={() => settings?.subscriptionTier !== 'growth' && setSelectedPlan('growth')}
-                            >
-                              <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary">
-                                <Sparkles className="h-3 w-3 mr-1" /> Popular
-                              </Badge>
-                              {settings?.subscriptionTier === 'growth' && (
-                                <Badge className="absolute -top-2 -right-2 bg-green-500">Current</Badge>
-                              )}
-                              <h3 className="font-semibold text-lg">Growth</h3>
-                              <div className="text-2xl font-bold mt-2">
-                                ${billingPeriod === 'monthly' ? '249' : '2,490'}
-                                <span className="text-sm font-normal text-muted-foreground">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
-                              </div>
-                              <ul className="mt-4 space-y-2 text-sm">
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Up to 10 team members</li>
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Advanced analytics</li>
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> 2 CRM integrations</li>
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Custom rubrics</li>
-                              </ul>
-                            </div>
-
-                            {/* Scale Plan */}
-                            <div 
-                              className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
-                                selectedPlan === 'scale' ? 'border-primary ring-2 ring-primary/20' : 'hover:border-muted-foreground/50'
-                              } ${(settings?.subscriptionTier as string) === 'scale' ? 'opacity-50' : ''}`}
-                              onClick={() => (settings?.subscriptionTier as string) !== 'scale' && setSelectedPlan('scale')}
-                            >
-                              {(settings?.subscriptionTier as string) === 'scale' && (
-                                <Badge className="absolute -top-2 -right-2 bg-green-500">Current</Badge>
-                              )}
-                              <h3 className="font-semibold text-lg">Scale</h3>
-                              <div className="text-2xl font-bold mt-2">
-                                ${billingPeriod === 'monthly' ? '499' : '4,990'}
-                                <span className="text-sm font-normal text-muted-foreground">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
-                              </div>
-                              <ul className="mt-4 space-y-2 text-sm">
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Unlimited team members</li>
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> 5 CRM integrations</li>
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> API access</li>
-                                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Custom branding</li>
-                              </ul>
-                            </div>
+                            {dbPlans?.filter((p: any) => p.isActive === 'true' || p.isActive === true)
+                              .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0))
+                              .map((plan: any) => {
+                                const monthlyPrice = Math.round((plan.priceMonthly || 0) / 100);
+                                const yearlyPrice = Math.round((plan.priceYearly || 0) / 100);
+                                const isCurrentPlan = settings?.subscriptionTier === plan.code;
+                                const isPopular = plan.isPopular === 'true' || plan.isPopular === true;
+                                const maxUsers = plan.maxUsers || 0;
+                                const maxCalls = plan.maxCallsPerMonth || 0;
+                                const features = plan.features || [];
+                                
+                                // Feature label mapping
+                                 const featureLabels: Record<string, string> = {
+                                   call_grading: 'AI Call Grading',
+                                   advanced_analytics: 'Advanced Analytics',
+                                   basic_analytics: 'Basic Analytics',
+                                   team_dashboard: 'Team Dashboard',
+                                   custom_rubrics: 'Custom Rubrics',
+                                   training_materials: 'Training Materials',
+                                   api_access: 'API Access',
+                                   priority_support: 'Priority Support',
+                                   custom_branding: 'Custom Branding',
+                                   crm_integration: 'CRM Integration',
+                                   multiple_crm_integrations: 'Multiple CRM Integrations',
+                                   unlimited_users: 'Unlimited Users',
+                                   call_recording_storage: 'Call Recording Storage',
+                                   call_recording: 'Call Recording Storage',
+                                   coaching_insights: 'Coaching Insights',
+                                   team_leaderboards: 'Team Leaderboards',
+                                   leaderboards: 'Team Leaderboards',
+                                   export_reports: 'Export Reports',
+                                   white_label: 'White Label'
+                                 };
+                                
+                                return (
+                                  <div 
+                                    key={plan.code}
+                                    className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
+                                      selectedPlan === plan.code ? 'border-primary ring-2 ring-primary/20' : 'hover:border-muted-foreground/50'
+                                    } ${isCurrentPlan ? 'opacity-50' : ''}`}
+                                    onClick={() => !isCurrentPlan && setSelectedPlan(plan.code)}
+                                  >
+                                    {isPopular && (
+                                      <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary">
+                                        <Sparkles className="h-3 w-3 mr-1" /> Popular
+                                      </Badge>
+                                    )}
+                                    {isCurrentPlan && (
+                                      <Badge className="absolute -top-2 -right-2 bg-green-500">Current</Badge>
+                                    )}
+                                    <h3 className="font-semibold text-lg">{plan.name}</h3>
+                                    <div className="text-2xl font-bold mt-2">
+                                      ${billingPeriod === 'monthly' ? monthlyPrice.toLocaleString() : yearlyPrice.toLocaleString()}
+                                      <span className="text-sm font-normal text-muted-foreground">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {maxUsers >= 999 ? 'Unlimited' : `Up to ${maxUsers}`} team members
+                                    </p>
+                                    <ul className="mt-4 space-y-2 text-sm max-h-32 overflow-y-auto">
+                                      {features.slice(0, 4).map((feature: string) => (
+                                        <li key={feature} className="flex items-center gap-2">
+                                          <Check className="h-4 w-4 text-green-500 flex-shrink-0" /> 
+                                          {featureLabels[feature] || feature}
+                                        </li>
+                                      ))}
+                                      {features.length > 4 && (
+                                        <li className="text-muted-foreground text-xs">+{features.length - 4} more features</li>
+                                      )}
+                                    </ul>
+                                  </div>
+                                );
+                              })}
                           </div>
 
                           {/* Checkout/Change Plan Button */}
