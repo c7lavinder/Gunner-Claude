@@ -27,7 +27,7 @@ export interface CompressionResult {
  */
 async function checkFfmpeg(): Promise<boolean> {
   return new Promise((resolve) => {
-    const proc = spawn("ffmpeg", ["-version"]);
+    const proc = spawn("/usr/bin/ffmpeg", ["-version"]);
     proc.on("error", () => resolve(false));
     proc.on("close", (code) => resolve(code === 0));
   });
@@ -75,7 +75,7 @@ export async function compressAudio(
 
     // Compress with FFmpeg
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn("ffmpeg", [
+      const proc = spawn("/usr/bin/ffmpeg", [
         "-i", inputPath,
         "-ac", "1",                    // Mono
         "-ar", SAMPLE_RATE.toString(), // 16kHz sample rate
