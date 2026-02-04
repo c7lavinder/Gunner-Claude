@@ -123,18 +123,26 @@ export async function signInWithGoogle(params: {
   error?: string 
 }> {
   const { googleId, email, name, picture } = params;
+  console.log('[GoogleAuth] signInWithGoogle called for email:', email);
+  
   const db = await getDb();
-  if (!db) return { success: false, error: "Database not available" };
+  if (!db) {
+    console.error('[GoogleAuth] Database not available');
+    return { success: false, error: "Database not available" };
+  }
 
   const openId = generateGoogleOpenId(googleId);
+  console.log('[GoogleAuth] Generated openId:', openId);
 
   try {
     // First, check if user exists with this Google ID
+    console.log('[GoogleAuth] Checking for existing user with openId...');
     let [existingUser] = await db.select().from(users).where(
       eq(users.openId, openId)
     ).limit(1);
 
     if (existingUser) {
+      console.log('[GoogleAuth] Found existing user by openId:', existingUser.id);
       // User exists - update last sign in and return
       await db.update(users)
         .set({ 
@@ -167,11 +175,13 @@ export async function signInWithGoogle(params: {
     }
 
     // Check if there's an existing user with this email (from email/password signup)
+    console.log('[GoogleAuth] Checking for existing user by email:', email);
     const [emailUser] = await db.select().from(users).where(
       eq(users.email, email)
     ).limit(1);
 
     if (emailUser) {
+      console.log('[GoogleAuth] Found existing user by email:', emailUser.id);
       // Link Google to existing account
       await db.update(users)
         .set({ 
@@ -205,6 +215,7 @@ export async function signInWithGoogle(params: {
     }
 
     // Check if there's a pending invitation for this email
+    console.log('[GoogleAuth] Checking for pending invitation for email:', email.toLowerCase());
     const [invitation] = await db
       .select()
       .from(pendingInvitations)
@@ -215,15 +226,19 @@ export async function signInWithGoogle(params: {
       .orderBy(desc(pendingInvitations.createdAt))
       .limit(1);
 
+    console.log('[GoogleAuth] Pending invitation found:', invitation ? `ID ${invitation.id}, tenantId ${invitation.tenantId}` : 'NONE');
+
     if (invitation) {
       // Check if invitation has expired
       if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        console.log('[GoogleAuth] Invitation expired, marking as expired');
         await db
           .update(pendingInvitations)
           .set({ status: 'expired' })
           .where(eq(pendingInvitations.id, invitation.id));
         // Continue to new user flow
       } else {
+        console.log('[GoogleAuth] Valid invitation found! Creating user and accepting invitation...');
         // Accept the invitation - create user with tenant info
         const [newUser] = await db.insert(users).values({
           tenantId: invitation.tenantId,
@@ -238,6 +253,8 @@ export async function signInWithGoogle(params: {
           profilePicture: picture,
         }).$returningId();
 
+        console.log('[GoogleAuth] User created with ID:', newUser.id);
+
         // Mark invitation as accepted
         await db
           .update(pendingInvitations)
@@ -247,8 +264,10 @@ export async function signInWithGoogle(params: {
             acceptedByUserId: newUser.id,
           })
           .where(eq(pendingInvitations.id, invitation.id));
+        console.log('[GoogleAuth] Invitation marked as accepted');
 
         const token = createSessionToken(newUser.id, invitation.tenantId);
+        console.log('[GoogleAuth] Session token created, returning success (isNewUser=false)');
 
         // Get tenant info for onboarding check
         const [tenant] = await db.select().from(tenants).where(eq(tenants.id, invitation.tenantId));
@@ -274,6 +293,7 @@ export async function signInWithGoogle(params: {
 
     // New user - they need to complete signup with company info
     // For now, return that they need to complete registration
+    console.log('[GoogleAuth] No existing user or invitation found - treating as NEW USER');
     return {
       success: true,
       isNewUser: true,

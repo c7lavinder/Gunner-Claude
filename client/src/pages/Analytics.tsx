@@ -66,7 +66,7 @@ function StatCard({
 }
 
 export default function Analytics() {
-  const [dateRange, setDateRange] = useState<DateRange>("today");
+  const [dateRange, setDateRange] = useState<DateRange>("week");
   
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
   const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery();

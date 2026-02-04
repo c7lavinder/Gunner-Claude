@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Phone, TrendingUp, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,7 +55,10 @@ const dateRangeLabels: Record<DateRange, string> = {
 };
 
 export default function Home() {
-  const [dateRange, setDateRange] = useState<DateRange>("today");
+  const [dateRange, setDateRange] = useState<DateRange>("week");
+  const { user } = useAuth();
+  
+  const firstName = user?.name?.split(' ')[0] || 'there';
   
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
   const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ limit: 5 });
@@ -66,9 +70,9 @@ export default function Home() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome back, {firstName}!</h1>
           <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
-            Welcome to Gunner - Your AI-powered call coaching platform
+            Here's how your team is performing
           </p>
         </div>
         <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
@@ -262,7 +266,8 @@ export default function Home() {
             ) : (
               <div className="text-center py-6 text-muted-foreground">
                 <Phone className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No calls yet</p>
+                <p className="text-sm font-medium">No calls yet</p>
+                <p className="text-xs mt-1">Upload your first call recording to get started</p>
               </div>
             )}
           </CardContent>
@@ -348,7 +353,8 @@ export default function Home() {
             ) : (
               <div className="text-center py-6 text-muted-foreground">
                 <Award className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No data yet</p>
+                <p className="text-sm font-medium">No leaderboard data yet</p>
+                <p className="text-xs mt-1">Team rankings appear after calls are graded</p>
               </div>
             )}
           </CardContent>

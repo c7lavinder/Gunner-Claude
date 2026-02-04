@@ -994,3 +994,9 @@
 - [x] Fix broken Gunner logo on onboarding page (was already working)
 - [x] Fix "Failed to save" error on signup flow (unable to reproduce - may be fixed)
 - [x] Fix Google OAuth for invited team members (now checks pending invitations)
+- [x] Fix Team page truncated names to show full names
+- [x] Add personalized welcome message on Dashboard
+- [x] Smarter Dashboard stats default when no data today
+- [x] Add AI Coach example prompts
+- [x] Smarter Analytics default date range
+- [x] Add empty state guidance messages

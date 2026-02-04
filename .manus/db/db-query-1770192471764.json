@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE users SET passwordHash = 'b6774466b25e24cca228992b86f33f34:4c67a53a98eccc7a43d30b53a9cf2d7eb84f0f628e64d19c18f386419c4d9214457ca9979c8df3ad095c2d822a1092f4f4359069c8aa85a304589cde47d8031b', loginMethod = 'email_password' WHERE email = 'corey@newagainhouses.com';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute UPDATE users SET passwordHash = 'b6774466b25e24cca228992b86f33f34:4c67a53a98eccc7a43d30b53a9cf2d7eb84f0f628e64d19c18f386419c4d9214457ca9979c8df3ad095c2d822a1092f4f4359069c8aa85a304589cde47d8031b', loginMethod = 'email_password' WHERE email = 'corey@newagainhouses.com';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 59
+}

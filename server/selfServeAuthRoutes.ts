@@ -337,6 +337,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     }
     
     // Sign in or check if new user
+    console.log('[Auth] Calling signInWithGoogle for:', userInfo.email);
     const result = await signInWithGoogle({
       googleId: userInfo.sub,
       email: userInfo.email,
@@ -344,13 +345,17 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       picture: userInfo.picture,
     });
     
+    console.log('[Auth] signInWithGoogle result:', { success: result.success, isNewUser: result.isNewUser, needsOnboarding: result.needsOnboarding, hasToken: !!result.token });
+    
     if (!result.success) {
+      console.log('[Auth] Sign in failed, redirecting to login with error:', result.error);
       res.redirect(`/login?error=${encodeURIComponent(result.error || 'unknown_error')}`);
       return;
     }
     
     if (result.isNewUser) {
       // New user - redirect to signup with Google info
+      console.log('[Auth] NEW USER detected - redirecting to /signup');
       const googleData = encodeURIComponent(JSON.stringify({
         googleId: userInfo.sub,
         email: userInfo.email,
@@ -360,6 +365,8 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       res.redirect(`/signup?google=${googleData}`);
       return;
     }
+    
+    console.log('[Auth] EXISTING USER - setting cookie and redirecting to dashboard');
     
     // Existing user - set cookie and redirect
     res.cookie('auth_token', result.token, {

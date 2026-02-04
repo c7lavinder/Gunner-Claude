@@ -355,9 +355,26 @@ function AICoachQA() {
               <p className="text-sm text-muted-foreground mb-3">
                 Ask for coaching tips
               </p>
-              <div className="space-y-1.5 text-xs text-muted-foreground/70">
-                <p className="italic">"How do I handle price objections?"</p>
-                <p className="italic">"Best way to set the anchor?"</p>
+              <div className="flex flex-col gap-2 w-full max-w-[220px]">
+                {[
+                  "How do I handle price objections?",
+                  "Best way to set the anchor?",
+                  "Tips for building rapport quickly",
+                  "How to close for commitment?"
+                ].map((prompt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setQuestion(prompt);
+                      setConversation([{ role: "user", content: prompt }]);
+                      setIsAsking(true);
+                      askCoachMutation.mutate({ question: prompt });
+                    }}
+                    className="text-xs text-left px-3 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    {prompt}
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
