@@ -845,3 +845,27 @@
   - [x] Verified leaderboard already has tenant filtering
   - [x] Verified team members already has tenant filtering
 - [x] Add automated tenant isolation tests (18 tests in tenantIsolation.test.ts)
+
+## Security & Admin Enhancements (Feb 3, 2026)
+- [x] Add tenant ownership verification to update/delete operations
+  - [x] Created tenantOwnership.ts helper with verifyTenantOwnership function
+  - [x] Training materials: update, delete
+  - [x] AI feedback: updateStatus
+  - [x] Grading rules: update, delete
+  - [x] Team training items: update, delete, complete
+  - [x] Brand assets: update, delete
+  - [x] Social posts: update, delete
+  - [x] Content ideas: update, delete
+- [x] Implement rate limiting per tenant
+  - [x] Created rateLimit.ts with sliding window rate limiting
+  - [x] Defined tiers: default (100/min), ai (20/min), contentGeneration (10/min), grading (30/min), auth (10/15min)
+  - [x] Applied to: coach.askQuestion, meetingCoach.chat, teamTraining.generateInsights
+  - [x] Applied to: socialPosts.generateContent, contentIdeas.generateIdeas
+  - [x] Applied to: brandProfile.extractFromWebsite, contentGeneration.generateBrandContent, contentGeneration.generateCreatorContent
+- [x] Create admin dashboard for tenant management
+  - [x] Created AdminDashboard.tsx with stats cards (tenants, users, calls, MRR)
+  - [x] Created adminRouter.ts with super admin procedures
+  - [x] Added tenant list with search, status badges, tier badges
+  - [x] Added tenant detail modal with overview, users, and settings tabs
+  - [x] Added ability to update subscription tier, status, and max users
+  - [x] Route available at /admin-dashboard (super_admin only)

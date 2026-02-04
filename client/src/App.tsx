@@ -20,6 +20,7 @@ import Onboarding from "./pages/Onboarding";
 import Pricing from "./pages/Pricing";
 import SuperAdmin from "./pages/SuperAdmin";
 import TenantSettings from "./pages/TenantSettings";
+import AdminDashboard from "./pages/AdminDashboard";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -63,6 +64,7 @@ function ProtectedRouter() {
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/admin" component={SuperAdmin} />
+      <Route path="/admin-dashboard" component={AdminDashboard} />
       <Route path="/settings" component={TenantSettings} />
       <Route path="/leaderboard">
         <Redirect to="/team" />

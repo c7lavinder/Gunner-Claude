@@ -97,9 +97,13 @@ import { generateTeamInsights, saveGeneratedInsights, clearAiGeneratedInsights }
 import { pollForNewCalls, getPollingStatus, startPolling, stopPolling } from "./ghlService";
 import { storagePut } from "./storage";
 import { runArchivalJob, getArchivalStats, archiveCall } from "./archival";
+import { verifyTenantOwnership } from "./tenantOwnership";
+import { checkRateLimit } from "./rateLimit";
+import { adminRouter } from "./adminRouter";
 
 export const appRouter = router({
   system: systemRouter,
+  admin: adminRouter,
   
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -666,7 +670,9 @@ export const appRouter = router({
         applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
         isActive: z.enum(["true", "false"]).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before updating
+        await verifyTenantOwnership("trainingMaterial", input.id, ctx.user?.tenantId);
         const { id, ...updates } = input;
         await updateTrainingMaterial(id, updates);
         return { success: true };
@@ -674,7 +680,9 @@ export const appRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before deleting
+        await verifyTenantOwnership("trainingMaterial", input.id, ctx.user?.tenantId);
         await deleteTrainingMaterial(input.id);
         return { success: true };
       }),
@@ -749,7 +757,9 @@ export const appRouter = router({
         id: z.number(),
         status: z.enum(["pending", "reviewed", "incorporated", "dismissed"]),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before updating
+        await verifyTenantOwnership("aiFeedback", input.id, ctx.user?.tenantId);
         await updateAIFeedback(input.id, { status: input.status });
         return { success: true };
       }),
@@ -799,7 +809,9 @@ export const appRouter = router({
         applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
         isActive: z.enum(["true", "false"]).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before updating
+        await verifyTenantOwnership("gradingRule", input.id, ctx.user?.tenantId);
         const { id, ...updates } = input;
         await updateGradingRule(id, updates);
         return { success: true };
@@ -807,7 +819,9 @@ export const appRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before deleting
+        await verifyTenantOwnership("gradingRule", input.id, ctx.user?.tenantId);
         await deleteGradingRule(input.id);
         return { success: true };
       }),
@@ -818,6 +832,9 @@ export const appRouter = router({
     askQuestion: protectedProcedure
       .input(z.object({ question: z.string() }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limit AI operations
+        checkRateLimit(ctx.user?.tenantId, "ai");
+        
         // Get training materials and recent successful calls for context (filtered by tenant)
         const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
         const recentCalls = await getCallsWithGrades({ limit: 20, tenantId: ctx.user?.tenantId || undefined });
@@ -930,6 +947,9 @@ Format: Start with brief encouragement, then give your one tip in 1-2 sentences.
         })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limit AI operations
+        checkRateLimit(ctx.user?.tenantId, "ai");
+        
         // Get training materials (filtered by tenant)
         const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
         const trainingContext = trainingMaterials
@@ -1168,7 +1188,8 @@ Keep it brief and actionable.`;
         teamMemberName: z.string().optional(),
         meetingDate: z.date().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Include tenantId when creating
         return await createTeamTrainingItem({
           itemType: input.itemType,
           title: input.title,
@@ -1181,6 +1202,7 @@ Keep it brief and actionable.`;
           teamMemberName: input.teamMemberName,
           meetingDate: input.meetingDate,
           status: "active",
+          tenantId: ctx.user?.tenantId || undefined,
         });
       }),
 
@@ -1195,7 +1217,9 @@ Keep it brief and actionable.`;
         status: z.enum(["active", "in_progress", "completed", "archived"]).optional(),
         meetingDate: z.date().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before updating
+        await verifyTenantOwnership("teamTrainingItem", input.id, ctx.user?.tenantId);
         const { id, ...updates } = input;
         await updateTeamTrainingItem(id, updates);
         return { success: true };
@@ -1203,14 +1227,18 @@ Keep it brief and actionable.`;
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before deleting
+        await verifyTenantOwnership("teamTrainingItem", input.id, ctx.user?.tenantId);
         await deleteTeamTrainingItem(input.id);
         return { success: true };
       }),
 
     complete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before completing
+        await verifyTenantOwnership("teamTrainingItem", input.id, ctx.user?.tenantId);
         await updateTeamTrainingItem(input.id, { 
           status: "completed",
           completedAt: new Date(),
@@ -1220,7 +1248,10 @@ Keep it brief and actionable.`;
 
     // AI-generated insights
     generateInsights: protectedProcedure
-      .mutation(async () => {
+      .mutation(async ({ ctx }) => {
+        // Rate limit AI operations
+        checkRateLimit(ctx.user?.tenantId, "ai");
+        
         // Clear existing AI-generated items
         await clearAiGeneratedInsights();
         
@@ -1297,7 +1328,9 @@ Keep it brief and actionable.`;
         metadata: z.string().optional(),
         isActive: z.enum(["true", "false"]).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before updating
+        await verifyTenantOwnership("brandAsset", input.id, ctx.user?.tenantId);
         const { id, ...updates } = input;
         await updateBrandAsset(id, updates);
         return { success: true };
@@ -1305,7 +1338,9 @@ Keep it brief and actionable.`;
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before deleting
+        await verifyTenantOwnership("brandAsset", input.id, ctx.user?.tenantId);
         await deleteBrandAsset(input.id);
         return { success: true };
       }),
@@ -1377,7 +1412,9 @@ Keep it brief and actionable.`;
         status: z.enum(["draft", "scheduled", "published", "failed"]).optional(),
         scheduledAt: z.date().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before updating
+        await verifyTenantOwnership("socialPost", input.id, ctx.user?.tenantId);
         const { id, ...updates } = input;
         await updateSocialPost(id, updates);
         return { success: true };
@@ -1385,7 +1422,9 @@ Keep it brief and actionable.`;
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before deleting
+        await verifyTenantOwnership("socialPost", input.id, ctx.user?.tenantId);
         await deleteSocialPost(input.id);
         return { success: true };
       }),
@@ -1398,7 +1437,10 @@ Keep it brief and actionable.`;
         tone: z.string().optional(),
         additionalContext: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Rate limit content generation
+        checkRateLimit(ctx.user?.tenantId, "contentGeneration");
+        
         // Get brand assets for context
         const assets = await getBrandAssets({ activeOnly: true });
         const brandContext = assets.map(a => `${a.name}: ${a.description || ""}`).join("\n");
@@ -1505,7 +1547,9 @@ Provide the content in JSON format with fields: title (optional for non-blog), c
         targetPlatform: z.enum(["x_twitter", "blog", "meta", "any"]).optional(),
         status: z.enum(["new", "in_progress", "used", "archived"]).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before updating
+        await verifyTenantOwnership("contentIdea", input.id, ctx.user?.tenantId);
         const { id, ...updates } = input;
         await updateContentIdea(id, updates);
         return { success: true };
@@ -1513,7 +1557,9 @@ Provide the content in JSON format with fields: title (optional for non-blog), c
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Verify tenant ownership before deleting
+        await verifyTenantOwnership("contentIdea", input.id, ctx.user?.tenantId);
         await deleteContentIdea(input.id);
         return { success: true };
       }),
@@ -1524,7 +1570,10 @@ Provide the content in JSON format with fields: title (optional for non-blog), c
         targetPlatform: z.enum(["x_twitter", "blog", "meta", "any"]).optional(),
         category: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Rate limit content generation
+        checkRateLimit(ctx.user?.tenantId, "contentGeneration");
+        
         const response = await invokeLLM({
           messages: [
             {
@@ -1628,7 +1677,10 @@ Provide ${input.count} unique content ideas in JSON format.`,
 
     extractFromWebsite: protectedProcedure
       .input(z.object({ url: z.string() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Rate limit AI operations
+        checkRateLimit(ctx.user?.tenantId, "ai");
+        
         // Use LLM to analyze website and extract branding info
         const response = await invokeLLM({
           messages: [
@@ -1703,6 +1755,9 @@ Provide ${input.count} unique content ideas in JSON format.`,
         contentType: z.enum(["problem_solved", "success_story", "market_insight", "tips"]),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limit content generation
+        checkRateLimit(ctx.user?.tenantId, "contentGeneration");
+        
         const tenantId = ctx.user?.tenantId || undefined;
         const [calls, kpis, brandProfileData] = await Promise.all([
           getCallsForContentGeneration(10, tenantId),
@@ -1779,6 +1834,9 @@ Create content that:
         style: z.enum(["crazy_story", "property_walkthrough", "day_in_life", "tips_tricks"]),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limit content generation
+        checkRateLimit(ctx.user?.tenantId, "contentGeneration");
+        
         const tenantId = ctx.user?.tenantId || undefined;
         const [stories, brandProfileData] = await Promise.all([
           getInterestingCallStories(10, tenantId),
