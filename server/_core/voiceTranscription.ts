@@ -94,19 +94,7 @@ export async function transcribeAudio(
     let audioBuffer: Buffer;
     let mimeType: string;
     try {
-      const response = await fetch(options.audioUrl);
-      if (!response.ok) {
-        return {
-          error: "Failed to download audio file",
-          code: "INVALID_FORMAT",
-          details: `HTTP ${response.status}: ${response.statusText}`
-        };
-      }
-      
-      audioBuffer = Buffer.from(await response.arrayBuffer());
-      mimeType = response.headers.get('content-type') || 'audio/mpeg';
-      
-      // Import compression utility
+      // Import compression utility which handles download and compression
       const { downloadAndCompressAudio } = await import("../audioCompression");
       const audioResult = await downloadAndCompressAudio(options.audioUrl);
       if ('error' in audioResult) {

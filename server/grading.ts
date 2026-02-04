@@ -659,7 +659,8 @@ export async function processCall(callId: number): Promise<void> {
 
     console.log(`[ProcessCall] Successfully processed call ${callId}`);
   } catch (error) {
-    console.error(`[ProcessCall] Error processing call ${callId}:`, error);
-    await updateCall(callId, { status: "failed" });
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[ProcessCall] Error processing call ${callId}:`, errorMsg);
+    await updateCall(callId, { status: "failed", classificationReason: errorMsg });
   }
 }
