@@ -1013,3 +1013,9 @@
 - [x] Display profile picture in sidebar avatar
 - [x] Display profile picture on team members page
 - [x] Add image cropping/preview before upload (basic preview on hover)
+
+## Email Service Integration
+- [x] Install Resend package
+- [x] Update emailService.ts to use Resend
+- [ ] Add RESEND_API_KEY secret
+- [ ] Test email verification flow

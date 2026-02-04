@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock Resend
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(() => ({
+    emails: {
+      send: vi.fn().mockResolvedValue({ data: { id: "test-email-id" }, error: null }),
+    },
+  })),
+}));
+
 // Mock the notification module
 vi.mock("./_core/notification", () => ({
   notifyOwner: vi.fn().mockResolvedValue(true),
@@ -50,23 +59,18 @@ describe("Email Service", () => {
   });
 
   describe("sendEmail", () => {
-    it("should send password reset email", async () => {
+    it("should send password reset email via Resend", async () => {
       const result = await sendPasswordResetEmail(
         "test@example.com",
         "token123",
         "https://example.com"
       );
       
+      // With Resend configured, it should return true (email sent)
       expect(result).toBe(true);
-      expect(notifyOwner).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining("Password Reset Request"),
-          content: expect.stringContaining("token123"),
-        })
-      );
     });
 
-    it("should send team invite email", async () => {
+    it("should send team invite email via Resend", async () => {
       const result = await sendTeamInviteEmail(
         "new@example.com",
         "John Doe",
@@ -76,15 +80,9 @@ describe("Email Service", () => {
       );
       
       expect(result).toBe(true);
-      expect(notifyOwner).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining("invited"),
-          content: expect.stringContaining("Test Company"),
-        })
-      );
     });
 
-    it("should send welcome email", async () => {
+    it("should send welcome email via Resend", async () => {
       const result = await sendWelcomeEmail(
         "Jane Doe",
         "jane@example.com",
@@ -93,15 +91,9 @@ describe("Email Service", () => {
       );
       
       expect(result).toBe(true);
-      expect(notifyOwner).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining("joined"),
-          content: expect.stringContaining("Jane Doe"),
-        })
-      );
     });
 
-    it("should send churn outreach email with correct template", async () => {
+    it("should send churn outreach email via notifyOwner (internal notification)", async () => {
       const result = await sendChurnOutreachEmail(
         "Test Tenant",
         "John",
@@ -111,7 +103,7 @@ describe("Email Service", () => {
       );
       
       expect(result).toBe(true);
-      // 15 days should use 14-day template
+      // Churn emails still go through notifyOwner
       expect(notifyOwner).toHaveBeenCalledWith(
         expect.objectContaining({
           title: expect.stringContaining("URGENT"),

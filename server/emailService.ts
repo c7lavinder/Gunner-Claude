@@ -1,6 +1,13 @@
+import { Resend } from 'resend';
 import { notifyOwner } from "./_core/notification";
 import { getDb } from "./db";
 import { outreachHistory } from "../drizzle/schema";
+
+// Initialize Resend client
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// Email sender configuration
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Gunner <noreply@getgunner.ai>';
 
 // Email templates for different notification types
 export type EmailType = 
@@ -22,87 +29,111 @@ interface EmailOptions {
 }
 
 // Generate email content based on type
-function generateEmailContent(type: EmailType, data: Record<string, string>): { subject: string; body: string } {
+function generateEmailContent(type: EmailType, data: Record<string, string>): { subject: string; html: string; text: string } {
   switch (type) {
     case "password_reset":
       return {
-        subject: `Password Reset Request for ${data.email}`,
-        body: `
-A password reset was requested for ${data.email}.
-
-Reset Link: ${data.resetLink}
-
-This link expires in 1 hour.
-
-If you didn't request this, please ignore this email.
-        `.trim()
+        subject: `Reset your Gunner password`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #8B1A1A;">Password Reset Request</h2>
+            <p>We received a request to reset your password for <strong>${data.email}</strong>.</p>
+            <p style="margin: 24px 0;">
+              <a href="${data.resetLink}" style="background-color: #8B1A1A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Reset Password
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">This link expires in 1 hour.</p>
+            <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+          </div>
+        `,
+        text: `Password Reset Request\n\nWe received a request to reset your password for ${data.email}.\n\nReset Link: ${data.resetLink}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, please ignore this email.`
       };
     
     case "email_verification":
       return {
         subject: `Verify your email for Gunner`,
-        body: `
-Welcome to Gunner! Please verify your email address.
-
-Email: ${data.email}
-Name: ${data.name}
-Company: ${data.companyName}
-
-Verification Link: ${data.verificationLink}
-
-This link expires in 24 hours.
-
-If you didn't create this account, please ignore this email.
-        `.trim()
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #8B1A1A;">Welcome to Gunner! 🎯</h2>
+            <p>Hi ${data.name},</p>
+            <p>Thanks for signing up! Please verify your email address to get started with ${data.companyName}.</p>
+            <p style="margin: 24px 0;">
+              <a href="${data.verificationLink}" style="background-color: #8B1A1A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Verify Email Address
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">This link expires in 24 hours.</p>
+            <p style="color: #666; font-size: 14px;">If you didn't create this account, please ignore this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+          </div>
+        `,
+        text: `Welcome to Gunner!\n\nHi ${data.name},\n\nThanks for signing up! Please verify your email address.\n\nVerification Link: ${data.verificationLink}\n\nThis link expires in 24 hours.\n\nIf you didn't create this account, please ignore this email.`
       };
     
     case "team_invite":
       return {
-        subject: `${data.inviterName} invited ${data.email} to join ${data.tenantName}`,
-        body: `
-New team invitation sent!
-
-Invited: ${data.email}
-Role: ${data.role}
-Company: ${data.tenantName}
-Invited by: ${data.inviterName}
-
-Login Link: ${data.loginLink}
-
-The user will be automatically added to your team when they sign in.
-        `.trim()
+        subject: `You've been invited to join ${data.tenantName} on Gunner`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #8B1A1A;">You're Invited! 🎯</h2>
+            <p><strong>${data.inviterName}</strong> has invited you to join <strong>${data.tenantName}</strong> on Gunner.</p>
+            <p>You'll be joining as: <strong>${data.role}</strong></p>
+            <p style="margin: 24px 0;">
+              <a href="${data.loginLink}" style="background-color: #8B1A1A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Accept Invitation
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">Sign in with Google or create an account using this email address (${data.email}) to join the team.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+          </div>
+        `,
+        text: `You're Invited!\n\n${data.inviterName} has invited you to join ${data.tenantName} on Gunner.\n\nRole: ${data.role}\n\nLogin Link: ${data.loginLink}\n\nSign in with Google or create an account using this email address (${data.email}) to join the team.`
       };
     
     case "welcome":
       return {
-        subject: `${data.userName} joined ${data.tenantName}`,
-        body: `
-New team member joined!
-
-Name: ${data.userName}
-Email: ${data.email}
-Company: ${data.tenantName}
-Role: ${data.role}
-
-They accepted their invitation and are now part of your team.
-        `.trim()
+        subject: `Welcome to ${data.tenantName}!`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #8B1A1A;">Welcome Aboard! 🎯</h2>
+            <p>Hi ${data.userName},</p>
+            <p>You've successfully joined <strong>${data.tenantName}</strong> on Gunner!</p>
+            <p>Your role: <strong>${data.role}</strong></p>
+            <p>Start uploading calls to get AI-powered coaching feedback and climb the leaderboard.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+          </div>
+        `,
+        text: `Welcome Aboard!\n\nHi ${data.userName},\n\nYou've successfully joined ${data.tenantName} on Gunner!\n\nYour role: ${data.role}\n\nStart uploading calls to get AI-powered coaching feedback and climb the leaderboard.`
       };
     
-    // 7-day inactivity - Gentle reminder
+    // Churn emails - these still go to owner as notifications
     case "churn_7_day":
+    case "churn_14_day":
+    case "churn_30_day":
+      return generateChurnEmailContent(type, data);
+    
+    default:
       return {
-        subject: `Re-engagement email sent to ${data.tenantName} (7-day gentle reminder)`,
-        body: `
-Churn outreach email sent (7-day template)!
+        subject: "Gunner Notification",
+        html: `<pre>${JSON.stringify(data, null, 2)}</pre>`,
+        text: JSON.stringify(data, null, 2)
+      };
+  }
+}
 
-Tenant: ${data.tenantName}
-Contact: ${data.contactEmail}
-Days Inactive: ${data.daysInactive}
-Last Activity: ${data.lastActivity}
-
-Message sent:
----
-Hi ${data.contactName},
+// Generate churn email content (sent to users, notification to owner)
+function generateChurnEmailContent(type: EmailType, data: Record<string, string>): { subject: string; html: string; text: string } {
+  const templates: Record<string, { subject: string; userSubject: string; body: string }> = {
+    churn_7_day: {
+      subject: `Re-engagement email sent to ${data.tenantName} (7-day gentle reminder)`,
+      userSubject: `We miss you at Gunner! 🎯`,
+      body: `Hi ${data.contactName},
 
 Just checking in! We noticed it's been about a week since your last call in Gunner.
 
@@ -114,26 +145,12 @@ Quick reminder of what you can do:
 If you have any questions or need help getting started again, just reply to this email.
 
 Best,
-The Gunner Team
----
-        `.trim()
-      };
-    
-    // 14-day inactivity - Urgent outreach
-    case "churn_14_day":
-      return {
-        subject: `URGENT: Re-engagement email sent to ${data.tenantName} (14-day follow-up)`,
-        body: `
-Churn outreach email sent (14-day template)!
-
-Tenant: ${data.tenantName}
-Contact: ${data.contactEmail}
-Days Inactive: ${data.daysInactive}
-Last Activity: ${data.lastActivity}
-
-Message sent:
----
-Hi ${data.contactName},
+The Gunner Team`
+    },
+    churn_14_day: {
+      subject: `URGENT: Re-engagement email sent to ${data.tenantName} (14-day follow-up)`,
+      userSubject: `We'd love to help you succeed with Gunner`,
+      body: `Hi ${data.contactName},
 
 We miss you! It's been two weeks since we've seen any activity from ${data.tenantName} in Gunner.
 
@@ -148,26 +165,12 @@ Your success is our priority. Reply to this email and let's get you back on trac
 Best,
 The Gunner Team
 
-P.S. - Don't forget, your team's call data is waiting to be analyzed!
----
-        `.trim()
-      };
-    
-    // 30-day inactivity - Win-back offer
-    case "churn_30_day":
-      return {
-        subject: `CRITICAL: Re-engagement email sent to ${data.tenantName} (30-day win-back)`,
-        body: `
-Churn outreach email sent (30-day win-back template)!
-
-Tenant: ${data.tenantName}
-Contact: ${data.contactEmail}
-Days Inactive: ${data.daysInactive}
-Last Activity: ${data.lastActivity}
-
-Message sent:
----
-Hi ${data.contactName},
+P.S. - Don't forget, your team's call data is waiting to be analyzed!`
+    },
+    churn_30_day: {
+      subject: `CRITICAL: Re-engagement email sent to ${data.tenantName} (30-day win-back)`,
+      userSubject: `One more chance to help your team win`,
+      body: `Hi ${data.contactName},
 
 It's been a month since we've heard from you, and we wanted to reach out personally.
 
@@ -178,11 +181,6 @@ Here's what we can offer:
 • Custom grading rubrics tailored to your sales process
 • Priority support for any technical issues
 
-We've also made several improvements recently:
-• Faster call processing
-• Enhanced AI coaching insights
-• Better team analytics
-
 Would you be open to a quick 15-minute call to discuss how we can better serve your team?
 
 Just reply "YES" and we'll set something up.
@@ -190,33 +188,80 @@ Just reply "YES" and we'll set something up.
 Best regards,
 The Gunner Team
 
-P.S. - We truly believe Gunner can help your team close more deals. Let us prove it.
----
-        `.trim()
-      };
-    
-    default:
-      return {
-        subject: "Gunner Notification",
-        body: JSON.stringify(data, null, 2)
-      };
-  }
+P.S. - We truly believe Gunner can help your team close more deals. Let us prove it.`
+    }
+  };
+
+  const template = templates[type] || templates.churn_7_day;
+  
+  return {
+    subject: template.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${template.body}</pre>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+        <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+      </div>
+    `,
+    text: template.body
+  };
 }
 
 /**
- * Send an email notification. Currently uses the owner notification system
- * to alert the platform owner. In production, this would integrate with
- * SendGrid, Postmark, or similar transactional email service.
+ * Send an email using Resend. Falls back to owner notification if Resend is not configured.
  */
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
-  const { subject, body } = generateEmailContent(options.type, options.data);
+  const { subject, html, text } = generateEmailContent(options.type, options.data);
   
-  // For now, send as owner notification
-  // In production, replace with actual email service
-  return notifyOwner({
-    title: subject,
-    content: body
-  });
+  // Churn emails always notify owner (they're internal notifications about outreach)
+  const isChurnEmail = options.type.startsWith('churn_');
+  
+  if (isChurnEmail) {
+    // Notify owner about the outreach
+    return notifyOwner({
+      title: subject,
+      content: text
+    });
+  }
+  
+  // For user-facing emails, use Resend if configured
+  if (resend) {
+    try {
+      const { error } = await resend.emails.send({
+        from: FROM_EMAIL,
+        to: options.to,
+        subject,
+        html,
+        text,
+      });
+      
+      if (error) {
+        console.error('[EmailService] Resend error:', error);
+        // Fall back to owner notification
+        return notifyOwner({
+          title: `[EMAIL FAILED] ${subject}`,
+          content: `Failed to send to: ${options.to}\nError: ${error.message}\n\n${text}`
+        });
+      }
+      
+      console.log(`[EmailService] Email sent successfully to ${options.to}`);
+      return true;
+    } catch (err) {
+      console.error('[EmailService] Failed to send email:', err);
+      // Fall back to owner notification
+      return notifyOwner({
+        title: `[EMAIL FAILED] ${subject}`,
+        content: `Failed to send to: ${options.to}\nError: ${err}\n\n${text}`
+      });
+    }
+  } else {
+    // No Resend configured - notify owner instead
+    console.warn('[EmailService] Resend not configured, sending to owner instead');
+    return notifyOwner({
+      title: `[NO EMAIL SERVICE] ${subject}`,
+      content: `Would send to: ${options.to}\n\n${text}`
+    });
+  }
 }
 
 /**
