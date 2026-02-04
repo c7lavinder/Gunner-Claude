@@ -1162,28 +1162,41 @@ export default function SuperAdmin() {
 
                 <div>
                   <label className="text-sm font-medium">Features</label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      value={newFeature}
-                      onChange={(e) => setNewFeature(e.target.value)}
-                      placeholder="Add a feature"
-                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addFeature())}
-                    />
-                    <Button type="button" onClick={addFeature} variant="outline">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {planFormData.features.map((feature, idx) => (
-                      <Badge key={idx} variant="secondary" className="pr-1">
-                        {feature}
-                        <button
-                          onClick={() => removeFeature(idx)}
-                          className="ml-1 hover:text-red-500"
-                        >
-                          <XCircle className="h-3 w-3" />
-                        </button>
-                      </Badge>
+                  <p className="text-xs text-muted-foreground mt-1">Select the features included in this plan</p>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    {[
+                      { id: 'call_grading', label: 'AI Call Grading' },
+                      { id: 'advanced_analytics', label: 'Advanced Analytics' },
+                      { id: 'team_dashboard', label: 'Team Dashboard' },
+                      { id: 'custom_rubrics', label: 'Custom Rubrics' },
+                      { id: 'training_materials', label: 'Training Materials' },
+                      { id: 'api_access', label: 'API Access' },
+                      { id: 'priority_support', label: 'Priority Support' },
+                      { id: 'custom_branding', label: 'Custom Branding' },
+                      { id: 'crm_integration', label: 'CRM Integration' },
+                      { id: 'multi_crm', label: 'Multiple CRM Integrations' },
+                      { id: 'unlimited_users', label: 'Unlimited Users' },
+                      { id: 'call_recording', label: 'Call Recording Storage' },
+                      { id: 'coaching_insights', label: 'Coaching Insights' },
+                      { id: 'leaderboards', label: 'Team Leaderboards' },
+                      { id: 'export_reports', label: 'Export Reports' },
+                      { id: 'white_label', label: 'White Label' },
+                    ].map((feature) => (
+                      <label key={feature.id} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={planFormData.features.includes(feature.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setPlanFormData(prev => ({ ...prev, features: [...prev.features, feature.id] }));
+                            } else {
+                              setPlanFormData(prev => ({ ...prev, features: prev.features.filter(f => f !== feature.id) }));
+                            }
+                          }}
+                          className="rounded"
+                        />
+                        <span className="text-sm">{feature.label}</span>
+                      </label>
                     ))}
                   </div>
                 </div>

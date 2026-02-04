@@ -1067,3 +1067,6 @@
 - [x] Create plan selection dialog with pricing comparison
 - [x] Handle proration and billing cycle changes
 - [x] Show confirmation before plan change
+
+## Plan Editor Features UI
+- [x] Change Features textarea to checkbox list with all available features

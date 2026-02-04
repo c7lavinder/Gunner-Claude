@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -1000,14 +1001,41 @@ export default function AdminDashboard() {
                   {/* Features */}
                   <div className="space-y-4 border-t pt-4">
                     <h3 className="font-medium">Features</h3>
-                    <div className="space-y-2">
-                      <Label htmlFor="features">Feature List (one per line)</Label>
-                      <Textarea
-                        id="features"
-                        value={editingPlan.features.join("\n")}
-                        onChange={(e) => setEditingPlan({ ...editingPlan, features: e.target.value.split("\n").filter(f => f.trim()) })}
-                        rows={6}
-                      />
+                    <p className="text-sm text-muted-foreground">Select the features included in this plan</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: 'call_grading', label: 'AI Call Grading' },
+                        { id: 'advanced_analytics', label: 'Advanced Analytics' },
+                        { id: 'team_dashboard', label: 'Team Dashboard' },
+                        { id: 'custom_rubrics', label: 'Custom Rubrics' },
+                        { id: 'training_materials', label: 'Training Materials' },
+                        { id: 'api_access', label: 'API Access' },
+                        { id: 'priority_support', label: 'Priority Support' },
+                        { id: 'custom_branding', label: 'Custom Branding' },
+                        { id: 'crm_integration', label: 'CRM Integration' },
+                        { id: 'multi_crm', label: 'Multiple CRM Integrations' },
+                        { id: 'unlimited_users', label: 'Unlimited Users' },
+                        { id: 'call_recording', label: 'Call Recording Storage' },
+                        { id: 'coaching_insights', label: 'Coaching Insights' },
+                        { id: 'leaderboards', label: 'Team Leaderboards' },
+                        { id: 'export_reports', label: 'Export Reports' },
+                        { id: 'white_label', label: 'White Label' },
+                      ].map((feature) => (
+                        <div key={feature.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={feature.id}
+                            checked={editingPlan.features.includes(feature.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setEditingPlan({ ...editingPlan, features: [...editingPlan.features, feature.id] });
+                              } else {
+                                setEditingPlan({ ...editingPlan, features: editingPlan.features.filter(f => f !== feature.id) });
+                              }
+                            }}
+                          />
+                          <Label htmlFor={feature.id} className="text-sm font-normal cursor-pointer">{feature.label}</Label>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
