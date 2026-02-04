@@ -14,7 +14,7 @@ import {
   trainingMaterials,
   pendingInvitations
 } from "../drizzle/schema";
-import { createCheckoutSession, createBillingPortalSession, getSubscription, cancelSubscription, reactivateSubscription } from "./stripe/checkout";
+import { createCheckoutSession, createBillingPortalSession, getSubscription, cancelSubscription, reactivateSubscription, updateSubscription } from "./stripe/checkout";
 import { notifyOwner } from "./_core/notification";
 import { sendTeamInviteEmail, sendWelcomeEmail } from "./emailService";
 
@@ -896,4 +896,76 @@ export async function updateTenantStripeIds(
     .where(eq(tenants.id, tenantId));
 
   return getTenantById(tenantId);
+}
+
+
+/**
+ * Change tenant subscription plan (upgrade/downgrade)
+ */
+export async function changeTenantSubscription(
+  tenantId: number,
+  newPlanCode: 'starter' | 'growth' | 'scale',
+  billingPeriod: 'monthly' | 'yearly'
+) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+
+  const [tenant] = await db
+    .select()
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+
+  if (!tenant) {
+    return { success: false, error: 'Tenant not found' };
+  }
+
+  if (!tenant.stripeSubscriptionId) {
+    return { success: false, error: 'No active subscription found. Please subscribe first.' };
+  }
+
+  // Don't allow changing to the same plan
+  if (tenant.subscriptionTier === newPlanCode) {
+    return { success: false, error: 'You are already on this plan' };
+  }
+
+  try {
+    // Update subscription in Stripe
+    const updatedSubscription = await updateSubscription(
+      tenant.stripeSubscriptionId,
+      newPlanCode,
+      billingPeriod
+    );
+
+    // Determine max users based on new tier
+    const maxUsers = newPlanCode === 'starter' ? 3 : newPlanCode === 'growth' ? 10 : 999;
+
+    // Update tenant in database
+    await db
+      .update(tenants)
+      .set({
+        subscriptionTier: newPlanCode,
+        maxUsers,
+      })
+      .where(eq(tenants.id, tenantId));
+
+    // Determine if this was an upgrade or downgrade
+    const tierOrder = { starter: 1, growth: 2, scale: 3 };
+    const oldTierOrder = tierOrder[tenant.subscriptionTier as keyof typeof tierOrder] || 0;
+    const newTierOrder = tierOrder[newPlanCode];
+    const isUpgrade = newTierOrder > oldTierOrder;
+
+    return { 
+      success: true, 
+      message: isUpgrade 
+        ? `Successfully upgraded to ${newPlanCode} plan! Your new features are now available.`
+        : `Successfully changed to ${newPlanCode} plan. Changes take effect immediately.`,
+      subscription: {
+        tier: newPlanCode,
+        status: updatedSubscription.status,
+      }
+    };
+  } catch (error: any) {
+    console.error('[Tenant] Error changing subscription:', error);
+    return { success: false, error: error.message || 'Failed to change subscription' };
+  }
 }

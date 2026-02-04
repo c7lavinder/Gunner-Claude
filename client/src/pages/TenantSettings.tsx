@@ -176,7 +176,7 @@ export default function TenantSettings() {
     },
   });
 
-  // Upgrade plan mutation
+  // Upgrade plan mutation (for trial users - creates new checkout)
   const upgradePlanMutation = trpc.tenant.createCheckout.useMutation({
     onSuccess: (data) => {
       if (data.url) {
@@ -187,6 +187,23 @@ export default function TenantSettings() {
     },
     onError: (error) => {
       toast.error(error.message || "Failed to create checkout session");
+    },
+  });
+
+  // Change subscription mutation (for existing subscribers - updates plan directly)
+  const changeSubscriptionMutation = trpc.tenant.changeSubscription.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message || "Plan changed successfully!");
+        setShowUpgradeModal(false);
+        refetchSettings();
+        refetchSubscription();
+      } else {
+        toast.error(data.error || "Failed to change plan");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to change subscription");
     },
   });
 
@@ -1126,7 +1143,7 @@ export default function TenantSettings() {
                         {billingPortalMutation.isPending ? "Opening..." : "Manage Billing"}
                       </Button>
                     )}
-                    {(settings?.subscriptionTier === 'trial' || settings?.subscriptionTier === 'starter' || settings?.subscriptionTier === 'growth') && (
+                    {(settings?.subscriptionTier === 'trial' || settings?.subscriptionTier === 'starter' || settings?.subscriptionTier === 'growth' || (settings?.subscriptionTier as string) === 'scale') && (
                       <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
                         <DialogTrigger asChild>
                           <Button>
@@ -1234,13 +1251,35 @@ export default function TenantSettings() {
                             </div>
                           </div>
 
-                          {/* Checkout Button */}
-                          <div className="flex justify-end mt-6">
+                          {/* Checkout/Change Plan Button */}
+                          <div className="flex flex-col items-end gap-2 mt-6">
+                            {settings?.subscriptionStatus === 'active' && settings?.stripeSubscriptionId && (
+                              <p className="text-xs text-muted-foreground">
+                                Your billing will be prorated automatically
+                              </p>
+                            )}
                             <Button 
-                              onClick={() => upgradePlanMutation.mutate({ planCode: selectedPlan, billingPeriod })}
-                              disabled={upgradePlanMutation.isPending || selectedPlan === settings?.subscriptionTier}
+                              onClick={() => {
+                                // If user has active subscription, change it directly
+                                // Otherwise, go through checkout for new subscription
+                                if (settings?.subscriptionStatus === 'active' && settings?.stripeSubscriptionId) {
+                                  changeSubscriptionMutation.mutate({ planCode: selectedPlan, billingPeriod });
+                                } else {
+                                  upgradePlanMutation.mutate({ planCode: selectedPlan, billingPeriod });
+                                }
+                              }}
+                              disabled={
+                                upgradePlanMutation.isPending || 
+                                changeSubscriptionMutation.isPending || 
+                                selectedPlan === settings?.subscriptionTier
+                              }
                             >
-                              {upgradePlanMutation.isPending ? 'Processing...' : `Continue to Checkout`}
+                              {(upgradePlanMutation.isPending || changeSubscriptionMutation.isPending) 
+                                ? 'Processing...' 
+                                : settings?.subscriptionStatus === 'active' && settings?.stripeSubscriptionId
+                                  ? 'Change Plan'
+                                  : 'Continue to Checkout'
+                              }
                             </Button>
                           </div>
                         </DialogContent>

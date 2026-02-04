@@ -2617,6 +2617,23 @@ Create content that:
       return reactivateTenantSubscription(ctx.user.tenantId);
     }),
 
+    // Change subscription plan (upgrade/downgrade)
+    changeSubscription: protectedProcedure
+      .input(z.object({
+        planCode: z.enum(['starter', 'growth', 'scale']),
+        billingPeriod: z.enum(['monthly', 'yearly']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { changeTenantSubscription } = await import("./tenant");
+        if (!ctx.user?.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
+        }
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        return changeTenantSubscription(ctx.user.tenantId, input.planCode, input.billingPeriod);
+      }),
+
     // Get usage summary for current tenant
     getUsageSummary: protectedProcedure.query(async ({ ctx }) => {
       const { getTenantUsageSummary } = await import("./planLimits");

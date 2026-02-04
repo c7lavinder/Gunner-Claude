@@ -1059,3 +1059,11 @@
 - [x] Allow editing plans (name, price, trial days, limits, features)
 - [x] Allow adding Stripe price IDs to plans
 - [x] Add Seed Default Plans button
+
+## Subscription Management (Customer)
+- [x] Add backend endpoint to get available plans for upgrade/downgrade
+- [x] Add backend endpoint to change subscription plan via Stripe
+- [x] Add "Change Plan" button to Billing page
+- [x] Create plan selection dialog with pricing comparison
+- [x] Handle proration and billing cycle changes
+- [x] Show confirmation before plan change

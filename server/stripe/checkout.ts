@@ -214,4 +214,52 @@ export async function reactivateSubscription(subscriptionId: string): Promise<St
   });
 }
 
+/**
+ * Update subscription to a different plan (upgrade/downgrade)
+ * Uses proration to handle billing changes
+ */
+export async function updateSubscription(
+  subscriptionId: string,
+  newPlanCode: string,
+  billingPeriod: "monthly" | "yearly"
+): Promise<Stripe.Subscription> {
+  const plan = await getPlanFromDatabase(newPlanCode);
+  if (!plan) {
+    throw new Error(`Invalid plan code: ${newPlanCode}`);
+  }
+
+  const isYearly = billingPeriod === "yearly";
+  const stripePriceId = isYearly ? plan.stripePriceIdYearly : plan.stripePriceIdMonthly;
+
+  if (!stripePriceId) {
+    throw new Error(`No Stripe price ID configured for ${newPlanCode} (${billingPeriod})`);
+  }
+
+  // Get the current subscription to find the item ID
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const subscriptionItemId = subscription.items.data[0]?.id;
+
+  if (!subscriptionItemId) {
+    throw new Error("No subscription item found");
+  }
+
+  // Update the subscription with the new price
+  // Stripe automatically handles proration
+  const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
+    items: [
+      {
+        id: subscriptionItemId,
+        price: stripePriceId,
+      },
+    ],
+    proration_behavior: "create_prorations",
+    metadata: {
+      plan_code: newPlanCode,
+      billing_period: billingPeriod,
+    },
+  });
+
+  return updatedSubscription;
+}
+
 export { stripe };
