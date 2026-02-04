@@ -6,6 +6,9 @@
 import Stripe from "stripe";
 import { ENV } from "../_core/env";
 import { SUBSCRIPTION_PLANS, TRIAL_DAYS } from "./products";
+import { getDb } from "../db";
+import { subscriptionPlans } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 // Initialize Stripe with secret key
 const stripe = new Stripe(ENV.stripeSecretKey || "", {
@@ -29,35 +32,85 @@ export interface CheckoutResult {
 }
 
 /**
+ * Get plan from database, fallback to static config
+ */
+async function getPlanFromDatabase(planCode: string) {
+  try {
+    const db = await getDb();
+    if (db) {
+      const [dbPlan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.code, planCode));
+      
+      if (dbPlan) {
+        return {
+          name: dbPlan.name,
+          code: dbPlan.code,
+          description: dbPlan.description || "",
+          priceMonthly: dbPlan.priceMonthly,
+          priceYearly: dbPlan.priceYearly || dbPlan.priceMonthly * 10,
+          trialDays: dbPlan.trialDays,
+          stripePriceIdMonthly: dbPlan.stripePriceIdMonthly,
+          stripePriceIdYearly: dbPlan.stripePriceIdYearly,
+        };
+      }
+    }
+  } catch (error) {
+    console.error("[Checkout] Error fetching plan from database:", error);
+  }
+  
+  // Fallback to static config
+  const staticPlan = SUBSCRIPTION_PLANS.find((p) => p.code === planCode);
+  if (staticPlan) {
+    return {
+      name: staticPlan.name,
+      code: staticPlan.code,
+      description: staticPlan.description,
+      priceMonthly: staticPlan.priceMonthly,
+      priceYearly: staticPlan.priceYearly,
+      trialDays: TRIAL_DAYS,
+      stripePriceIdMonthly: null,
+      stripePriceIdYearly: null,
+    };
+  }
+  
+  return null;
+}
+
+/**
  * Create a Stripe Checkout Session for subscription
  */
 export async function createCheckoutSession(
   params: CreateCheckoutParams
 ): Promise<CheckoutResult> {
-  const plan = SUBSCRIPTION_PLANS.find((p) => p.code === params.planCode);
+  const plan = await getPlanFromDatabase(params.planCode);
   if (!plan) {
     throw new Error(`Invalid plan code: ${params.planCode}`);
   }
 
-  const price = params.billingPeriod === "yearly" ? plan.priceYearly : plan.priceMonthly;
-  const interval = params.billingPeriod === "yearly" ? "year" : "month";
-
-  // Create the checkout session
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    payment_method_types: ["card"],
-    customer_email: params.userEmail,
-    client_reference_id: params.userId.toString(),
-    allow_promotion_codes: true,
-    subscription_data: {
-      trial_period_days: TRIAL_DAYS,
-      metadata: {
-        plan_code: params.planCode,
-        user_id: params.userId.toString(),
-        tenant_id: params.tenantId?.toString() || "",
+  const isYearly = params.billingPeriod === "yearly";
+  const stripePriceId = isYearly ? plan.stripePriceIdYearly : plan.stripePriceIdMonthly;
+  
+  // Build line items - use Stripe price ID if available, otherwise create price_data
+  let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[];
+  
+  if (stripePriceId) {
+    // Use existing Stripe price ID from database
+    console.log(`[Checkout] Using Stripe price ID: ${stripePriceId}`);
+    lineItems = [
+      {
+        price: stripePriceId,
+        quantity: 1,
       },
-    },
-    line_items: [
+    ];
+  } else {
+    // Create price dynamically (fallback for when no Stripe price ID is set)
+    console.log(`[Checkout] No Stripe price ID found, creating dynamic price`);
+    const price = isYearly ? plan.priceYearly : plan.priceMonthly;
+    const interval = isYearly ? "year" : "month";
+    
+    lineItems = [
       {
         price_data: {
           currency: "usd",
@@ -75,7 +128,25 @@ export async function createCheckoutSession(
         },
         quantity: 1,
       },
-    ],
+    ];
+  }
+
+  // Create the checkout session
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    payment_method_types: ["card"],
+    customer_email: params.userEmail,
+    client_reference_id: params.userId.toString(),
+    allow_promotion_codes: true,
+    subscription_data: {
+      trial_period_days: plan.trialDays,
+      metadata: {
+        plan_code: params.planCode,
+        user_id: params.userId.toString(),
+        tenant_id: params.tenantId?.toString() || "",
+      },
+    },
+    line_items: lineItems,
     metadata: {
       user_id: params.userId.toString(),
       customer_email: params.userEmail,

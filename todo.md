@@ -1043,3 +1043,7 @@
 ## Homepage CTA and Stripe Integration
 - [x] Update homepage CTA button to dynamically show trial period from database
 - [x] Add Stripe price ID fields to plans schema and UI for automatic checkout sync
+
+## Stripe Checkout Integration
+- [x] Update seed default plans to include Stripe price IDs from products.ts
+- [x] Connect upgrade/billing flow to use Stripe price IDs from plans table

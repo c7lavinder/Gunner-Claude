@@ -493,6 +493,8 @@ export const adminRouter = router({
         maxUsers: 3,
         maxCallsPerMonth: 500,
         maxCrmIntegrations: 1,
+        stripePriceIdMonthly: "", // Add your Stripe price ID here
+        stripePriceIdYearly: "", // Add your Stripe price ID here
         features: JSON.stringify([
           "AI call grading",
           "Basic analytics dashboard",
@@ -515,6 +517,8 @@ export const adminRouter = router({
         maxUsers: 10,
         maxCallsPerMonth: 2000,
         maxCrmIntegrations: 2,
+        stripePriceIdMonthly: "", // Add your Stripe price ID here
+        stripePriceIdYearly: "", // Add your Stripe price ID here
         features: JSON.stringify([
           "Everything in Starter",
           "Advanced analytics & trends",
@@ -538,6 +542,8 @@ export const adminRouter = router({
         maxUsers: 999,
         maxCallsPerMonth: -1,
         maxCrmIntegrations: 5,
+        stripePriceIdMonthly: "", // Add your Stripe price ID here
+        stripePriceIdYearly: "", // Add your Stripe price ID here
         features: JSON.stringify([
           "Everything in Growth",
           "Unlimited team members",
