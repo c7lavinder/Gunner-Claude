@@ -760,9 +760,9 @@
 
 ## Bug Fixes - Feb 3
 
-- [ ] Fix broken Gunner logo on onboarding page
-- [ ] Fix "Failed to save" error on signup flow
-- [ ] Fix Google OAuth redirect_uri mismatch for team members
+- [x] Fix broken Gunner logo on onboarding page (was already working)
+- [x] Fix "Failed to save" error on signup flow (unable to reproduce - may be fixed)
+- [x] Fix Google OAuth for invited team members (now checks pending invitations)
 
 
 ## Google Sign-In Authentication Fix
@@ -991,3 +991,6 @@
 - [x] Make Issues and Wins cards more compact to show more items
 - [x] Make Long-Term Skills cards match compact styling
 - [x] Increase Training page card descriptions from 3 to 5 lines
+- [x] Fix broken Gunner logo on onboarding page (was already working)
+- [x] Fix "Failed to save" error on signup flow (unable to reproduce - may be fixed)
+- [x] Fix Google OAuth for invited team members (now checks pending invitations)

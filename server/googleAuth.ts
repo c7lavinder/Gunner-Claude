@@ -1,6 +1,6 @@
 import { getDb } from "./db";
-import { users, tenants } from "../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { users, tenants, pendingInvitations } from "../drizzle/schema";
+import { eq, and, desc } from "drizzle-orm";
 import * as crypto from "crypto";
 import { createSessionToken, getUserWithTenant } from "./selfServeAuth";
 import { ENV } from "./_core/env";
@@ -202,6 +202,74 @@ export async function signInWithGoogle(params: {
         isNewUser: false,
         needsOnboarding,
       };
+    }
+
+    // Check if there's a pending invitation for this email
+    const [invitation] = await db
+      .select()
+      .from(pendingInvitations)
+      .where(and(
+        eq(pendingInvitations.email, email.toLowerCase()),
+        eq(pendingInvitations.status, 'pending')
+      ))
+      .orderBy(desc(pendingInvitations.createdAt))
+      .limit(1);
+
+    if (invitation) {
+      // Check if invitation has expired
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        await db
+          .update(pendingInvitations)
+          .set({ status: 'expired' })
+          .where(eq(pendingInvitations.id, invitation.id));
+        // Continue to new user flow
+      } else {
+        // Accept the invitation - create user with tenant info
+        const [newUser] = await db.insert(users).values({
+          tenantId: invitation.tenantId,
+          openId,
+          name,
+          email,
+          loginMethod: 'google',
+          emailVerified: 'true',
+          role: invitation.role || 'user',
+          teamRole: invitation.teamRole,
+          isTenantAdmin: 'false',
+          profilePicture: picture,
+        }).$returningId();
+
+        // Mark invitation as accepted
+        await db
+          .update(pendingInvitations)
+          .set({
+            status: 'accepted',
+            acceptedAt: new Date(),
+            acceptedByUserId: newUser.id,
+          })
+          .where(eq(pendingInvitations.id, invitation.id));
+
+        const token = createSessionToken(newUser.id, invitation.tenantId);
+
+        // Get tenant info for onboarding check
+        const [tenant] = await db.select().from(tenants).where(eq(tenants.id, invitation.tenantId));
+        const needsOnboarding = tenant?.onboardingCompleted !== 'true';
+
+        return {
+          success: true,
+          token,
+          user: {
+            id: newUser.id,
+            name,
+            email,
+            tenantId: invitation.tenantId,
+            role: invitation.role || 'user',
+            teamRole: invitation.teamRole,
+            isTenantAdmin: false,
+          },
+          isNewUser: false, // Not a "new user" in the signup sense - they're joining existing tenant
+          needsOnboarding: false, // Team members don't need onboarding
+        };
+      }
     }
 
     // New user - they need to complete signup with company info
