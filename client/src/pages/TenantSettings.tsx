@@ -44,6 +44,7 @@ export default function TenantSettings() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'starter' | 'growth' | 'scale'>('growth');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [editingMember, setEditingMember] = useState<{ id: number; name: string; teamRole: string | null } | null>(null);
 
   // Fetch tenant settings
   const { data: settings, isLoading: settingsLoading, refetch: refetchSettings } = trpc.tenant.getSettings.useQuery(
@@ -510,7 +511,16 @@ export default function TenantSettings() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" title="Edit role">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              title="Edit role"
+                              onClick={() => setEditingMember({ 
+                                id: member.id, 
+                                name: member.name || '', 
+                                teamRole: member.teamRole || null 
+                              })}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             {member.id !== user?.id && (
@@ -973,6 +983,52 @@ export default function TenantSettings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={!!editingMember} onOpenChange={(open) => !open && setEditingMember(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Team Member</DialogTitle>
+            <DialogDescription>Update role for {editingMember?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Team Role</Label>
+              <Select 
+                value={editingMember?.teamRole || ''} 
+                onValueChange={(value) => setEditingMember(prev => prev ? { ...prev, teamRole: value } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
+                  <SelectItem value="lead_manager">Lead Manager</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingMember(null)}>Cancel</Button>
+              <Button 
+                onClick={() => {
+                  if (editingMember) {
+                    updateUserRoleMutation.mutate({ 
+                      userId: editingMember.id, 
+                      role: 'user',
+                      teamRole: editingMember.teamRole as 'admin' | 'acquisition_manager' | 'lead_manager' 
+                    });
+                    setEditingMember(null);
+                  }
+                }}
+                disabled={updateUserRoleMutation.isPending}
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

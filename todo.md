@@ -895,3 +895,4 @@
   - [x] End Impersonation button to return to admin view
   - [x] Added padding to DashboardLayout when impersonating
 - [x] Fix Team Assignments - allow multiple Lead Managers to be assigned to an Acquisition Manager (fixed tenantId not being set on new assignments)
+- [x] Fix Team Members edit functionality - edit button now opens dialog to change team role
