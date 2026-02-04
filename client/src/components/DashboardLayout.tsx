@@ -153,7 +153,7 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <div className={isImpersonating ? "pt-12" : ""}>
+      <div className={`flex min-h-svh w-full ${isImpersonating ? "pt-12" : ""}`}>
         <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
           {children}
         </DashboardLayoutContent>
