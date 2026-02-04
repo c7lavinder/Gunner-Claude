@@ -824,3 +824,11 @@
 - [x] Added completeOnboarding mutation to tenant router and tenant.ts
 - [x] Added cache invalidation for tenant.getSettings after completing onboarding to prevent stale data redirect
 - [x] Add loading state to Go to Dashboard button on Step 6
+
+## CRITICAL BUG - Data Isolation (Feb 3, 2026)
+- [x] Fix tenant isolation - test accounts seeing main account's calls and data
+- [x] Fixed withGrades endpoint to pass tenantId
+- [x] Fixed getById endpoint to verify tenant ownership
+- [x] Fixed getTeamTrainingItems to filter by tenantId
+- [x] Fixed getActiveTrainingItems to filter by tenantId
+- [x] Fixed teamTraining.list and teamTraining.getActive to pass tenantId

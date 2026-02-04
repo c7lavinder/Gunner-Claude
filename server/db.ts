@@ -1015,11 +1015,17 @@ export async function getTeamTrainingItems(options?: {
   status?: "active" | "in_progress" | "completed" | "archived";
   teamMemberId?: number;
   meetingDate?: Date;
+  tenantId?: number; // For multi-tenant filtering
 }): Promise<TeamTrainingItem[]> {
   const db = await getDb();
   if (!db) return [];
 
   const conditions = [];
+  
+  // CRITICAL: Filter by tenant for multi-tenant isolation
+  if (options?.tenantId) {
+    conditions.push(eq(teamTrainingItems.tenantId, options.tenantId));
+  }
   
   if (options?.itemType) {
     conditions.push(eq(teamTrainingItems.itemType, options.itemType));
@@ -1062,7 +1068,7 @@ export async function deleteTeamTrainingItem(id: number): Promise<void> {
   await db.delete(teamTrainingItems).where(eq(teamTrainingItems.id, id));
 }
 
-export async function getActiveTrainingItems(): Promise<{
+export async function getActiveTrainingItems(tenantId?: number): Promise<{
   skills: TeamTrainingItem[];
   issues: TeamTrainingItem[];
   wins: TeamTrainingItem[];
@@ -1071,12 +1077,15 @@ export async function getActiveTrainingItems(): Promise<{
   const db = await getDb();
   if (!db) return { skills: [], issues: [], wins: [], agenda: [] };
 
+  const conditions = [eq(teamTrainingItems.status, "active")];
+  
+  // CRITICAL: Filter by tenant for multi-tenant isolation
+  if (tenantId) {
+    conditions.push(eq(teamTrainingItems.tenantId, tenantId));
+  }
+
   const activeItems = await db.select().from(teamTrainingItems)
-    .where(
-      and(
-        eq(teamTrainingItems.status, "active"),
-      )
-    )
+    .where(and(...conditions))
     .orderBy(teamTrainingItems.sortOrder);
 
   return {

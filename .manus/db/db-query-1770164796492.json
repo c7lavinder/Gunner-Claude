@@ -1,0 +1,15 @@
+{
+  "query": "SELECT t.id, t.name, u.email FROM tenants t LEFT JOIN users u ON u.tenantId = t.id WHERE t.name LIKE '%corey%' OR u.email LIKE '%coreydenzel14%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT t.id, t.name, u.email FROM tenants t LEFT JOIN users u ON u.tenantId = t.id WHERE t.name LIKE '%corey%' OR u.email LIKE '%coreydenzel14%';",
+  "rows": [
+    {
+      "id": "60004",
+      "name": "Nash Homes",
+      "email": "coreydenzel14@gmail.com"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\n60004\tNash Homes\tcoreydenzel14@gmail.com\n",
+  "stderr": "",
+  "execution_time_ms": 51
+}

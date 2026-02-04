@@ -318,9 +318,13 @@ export const appRouter = router({
 
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const call = await getCallById(input.id);
         if (!call) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
+        }
+        // CRITICAL: Verify tenant ownership for multi-tenant isolation
+        if (call.tenantId && ctx.user?.tenantId && call.tenantId !== ctx.user.tenantId) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
         }
         return call;
@@ -332,8 +336,12 @@ export const appRouter = router({
         limit: z.number().optional(),
         offset: z.number().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getCallsWithGrades(input || {});
+      .query(async ({ ctx, input }) => {
+        // CRITICAL: Include tenantId for multi-tenant isolation
+        return await getCallsWithGrades({ 
+          ...input, 
+          tenantId: ctx.user?.tenantId || undefined 
+        });
       }),
 
     getGrade: protectedProcedure
@@ -1114,12 +1122,17 @@ Keep it brief and actionable.`;
         status: z.enum(["active", "in_progress", "completed", "archived"]).optional(),
         teamMemberId: z.number().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getTeamTrainingItems(input || {});
+      .query(async ({ ctx, input }) => {
+        // CRITICAL: Include tenantId for multi-tenant isolation
+        return await getTeamTrainingItems({
+          ...input,
+          tenantId: ctx.user?.tenantId || undefined,
+        });
       }),
 
-    getActive: protectedProcedure.query(async () => {
-      return await getActiveTrainingItems();
+    getActive: protectedProcedure.query(async ({ ctx }) => {
+      // CRITICAL: Include tenantId for multi-tenant isolation
+      return await getActiveTrainingItems(ctx.user?.tenantId || undefined);
     }),
 
     getById: protectedProcedure
