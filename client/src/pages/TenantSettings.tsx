@@ -43,7 +43,6 @@ export default function TenantSettings() {
   const [customDomain, setCustomDomain] = useState("");
   const [crmType, setCrmType] = useState<string>("none");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
   const [inviteTeamRole, setInviteTeamRole] = useState<'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator'>('lead_manager');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'starter' | 'growth' | 'scale'>('growth');
@@ -297,9 +296,11 @@ export default function TenantSettings() {
       toast.error("Please enter an email address");
       return;
     }
+    // Derive system role from team role - admins get admin access, others get user access
+    const systemRole = inviteTeamRole === 'admin' ? 'admin' : 'user';
     inviteUserMutation.mutate({
       email: inviteEmail,
-      role: inviteRole,
+      role: systemRole,
       teamRole: inviteTeamRole,
     });
   };
@@ -503,23 +504,15 @@ export default function TenantSettings() {
                   onChange={(e) => setInviteEmail(e.target.value)}
                   className="flex-1 min-w-[200px]"
                 />
-                <Select value={inviteTeamRole} onValueChange={(v) => setInviteTeamRole(v as 'admin' | 'acquisition_manager' | 'lead_manager')}>
-                  <SelectTrigger className="w-44">
-                    <SelectValue placeholder="Team Role" />
+                <Select value={inviteTeamRole} onValueChange={(v) => setInviteTeamRole(v as 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator')}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Role" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
                     <SelectItem value="lead_manager">Lead Manager</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'user')}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue placeholder="Access" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
+                    <SelectItem value="lead_generator">Lead Generator</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button onClick={handleInviteTeamMember} disabled={inviteUserMutation.isPending}>
