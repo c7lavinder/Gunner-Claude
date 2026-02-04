@@ -108,7 +108,7 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
                 {call.callType === "offer" ? (
                   <Badge variant="secondary" className="text-[10px] sm:text-xs">Offer</Badge>
                 ) : (
-                  <Badge variant="outline" className="text-[10px] sm:text-xs">Qual</Badge>
+                  <Badge variant="outline" className="text-[10px] sm:text-xs">Qualification</Badge>
                 )}
               </div>
               
