@@ -823,3 +823,4 @@
 - [x] Fix onboarding loop after clicking Go to Dashboard - now sets onboardingCompleted='true' before redirecting
 - [x] Added completeOnboarding mutation to tenant router and tenant.ts
 - [x] Added cache invalidation for tenant.getSettings after completing onboarding to prevent stale data redirect
+- [x] Add loading state to Go to Dashboard button on Step 6

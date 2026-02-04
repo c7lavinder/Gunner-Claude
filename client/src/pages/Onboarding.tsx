@@ -95,6 +95,7 @@ export default function Onboarding() {
     }
   }, [tenantSettings, tenantLoading, stepParam]);
   const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [formData, setFormData] = useState({
     companyName: "",
     companySlug: "",
@@ -190,6 +191,7 @@ export default function Onboarding() {
   const utils = trpc.useUtils();
   
   const handleComplete = async () => {
+    setCompleting(true);
     try {
       // Mark onboarding as complete in the database
       await completeOnboardingMutation.mutateAsync();
@@ -203,6 +205,8 @@ export default function Onboarding() {
       await utils.tenant.getSettings.invalidate();
       toast.success("Welcome to Gunner! Your account is ready.");
       setLocation("/dashboard");
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -570,9 +574,10 @@ export default function Onboarding() {
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           ) : (
-            <Button onClick={handleComplete}>
-              Go to Dashboard
-              <Rocket className="h-4 w-4 ml-2" />
+            <Button onClick={handleComplete} disabled={completing}>
+              {completing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {completing ? "Setting up..." : "Go to Dashboard"}
+              {!completing && <Rocket className="h-4 w-4 ml-2" />}
             </Button>
           )}
         </div>
