@@ -16,51 +16,33 @@ const dateRangeLabels: Record<DateRange, string> = {
   all: "All Time",
 };
 
+// Compact stat card matching Dashboard style
 function StatCard({ 
   title, 
   value, 
-  description, 
   icon: Icon, 
-  loading,
-  variant = "default"
+  loading 
 }: { 
   title: string; 
   value: string | number; 
-  description?: string; 
   icon: React.ElementType;
   loading?: boolean;
-  variant?: "default" | "success" | "warning" | "danger";
 }) {
-  const variantStyles = {
-    default: "",
-    success: "border-green-200 dark:border-green-900",
-    warning: "border-yellow-200 dark:border-yellow-900",
-    danger: "border-red-200 dark:border-red-900",
-  };
-
-  const iconStyles = {
-    default: "text-muted-foreground",
-    success: "text-green-500",
-    warning: "text-yellow-500",
-    danger: "text-red-500",
-  };
-
   return (
-    <Card className={variantStyles[variant]}>
-      <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2 p-3 sm:p-6">
-        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className={`h-3 w-3 sm:h-4 sm:w-4 ${iconStyles[variant]}`} />
-      </CardHeader>
-      <CardContent className="pt-0 p-3 sm:p-6">
-        {loading ? (
-          <Skeleton className="h-6 sm:h-8 w-16 sm:w-20" />
-        ) : (
-          <div className="text-xl sm:text-2xl font-bold">{value}</div>
-        )}
-        {description && (
-          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 hidden sm:block">{description}</p>
-        )}
-      </CardContent>
+    <Card className="p-3 sm:p-4">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="p-1.5 sm:p-2 rounded-lg bg-muted shrink-0">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0">
+          {loading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div className="text-xl sm:text-2xl font-bold truncate">{value}</div>
+          )}
+          <p className="text-xs text-muted-foreground truncate">{title}</p>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -137,39 +119,32 @@ export default function Analytics() {
         <StatCard
           title="Calls Made"
           value={stats?.totalCalls ?? 0}
-          description={dateRangeLabels[dateRange]}
           icon={Phone}
           loading={statsLoading}
         />
         <StatCard
           title="Conversations"
           value={stats?.gradedCalls ?? 0}
-          description="Actual conversations"
           icon={MessageSquare}
           loading={statsLoading}
         />
         <StatCard
           title="Appointments Set"
           value={stats?.appointmentsSet ?? 0}
-          description={dateRangeLabels[dateRange]}
           icon={Calendar}
           loading={statsLoading}
         />
         <StatCard
           title="Offers Accepted"
           value={stats?.offersAccepted ?? 0}
-          description={dateRangeLabels[dateRange]}
           icon={CheckCircle2}
           loading={statsLoading}
         />
         <StatCard
           title="Average Score"
           value={stats?.averageScore ? `${Math.round(stats.averageScore)}%` : "N/A"}
-          description="Team average"
           icon={TrendingUp}
           loading={statsLoading}
-          variant={stats?.averageScore && stats.averageScore >= 80 ? "success" : 
-                   stats?.averageScore && stats.averageScore >= 60 ? "warning" : "default"}
         />
       </div>
 

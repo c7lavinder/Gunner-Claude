@@ -1019,3 +1019,4 @@
 - [x] Update emailService.ts to use Resend
 - [ ] Add RESEND_API_KEY secret
 - [ ] Test email verification flow
+- [x] Fix Analytics page stat cards to match Dashboard styling
