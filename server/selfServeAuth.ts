@@ -203,8 +203,8 @@ export async function getUserWithTenant(userId: number) {
 
 // ============ PASSWORD RESET FUNCTIONS ============
 
-import { passwordResetTokens } from "../drizzle/schema";
-import { sendPasswordResetEmail } from "./emailService";
+import { passwordResetTokens, emailVerificationTokens } from "../drizzle/schema";
+import { sendPasswordResetEmail, sendEmailVerificationEmail } from "./emailService";
 
 // Generate a secure reset token
 function generateResetToken(): string {
@@ -281,6 +281,116 @@ export async function verifyResetToken(token: string): Promise<{ valid: boolean;
   }
 
   return { valid: true, userId: resetToken.userId };
+}
+
+// ============ EMAIL VERIFICATION FUNCTIONS ============
+
+// Generate a secure verification token
+function generateVerificationToken(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+// Create verification token and send email
+export async function createEmailVerification(userId: number, email: string, name: string, companyName: string): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Database not available" };
+
+  // Generate token
+  const token = generateVerificationToken();
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 24); // Token expires in 24 hours
+
+  try {
+    // Delete any existing tokens for this user
+    await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.userId, userId));
+
+    // Create new token
+    await db.insert(emailVerificationTokens).values({
+      userId,
+      token,
+      expiresAt,
+    });
+
+    // Send verification email
+    const baseUrl = process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai';
+    await sendEmailVerificationEmail(email, name, companyName, token, baseUrl);
+
+    console.log(`[EmailVerification] Token created for user ${userId}, email: ${email}`);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('[EmailVerification] Error creating token:', error);
+    return { success: false, error: "Failed to create verification token" };
+  }
+}
+
+// Verify email token
+export async function verifyEmailToken(token: string): Promise<{ success: boolean; userId?: number; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Database not available" };
+
+  const [verificationToken] = await db.select()
+    .from(emailVerificationTokens)
+    .where(eq(emailVerificationTokens.token, token))
+    .limit(1);
+
+  if (!verificationToken) {
+    return { success: false, error: "Invalid or expired verification link" };
+  }
+
+  if (verificationToken.usedAt) {
+    return { success: false, error: "This verification link has already been used" };
+  }
+
+  if (new Date() > verificationToken.expiresAt) {
+    return { success: false, error: "This verification link has expired" };
+  }
+
+  try {
+    // Mark email as verified
+    await db.update(users)
+      .set({ emailVerified: 'true' })
+      .where(eq(users.id, verificationToken.userId));
+
+    // Mark token as used
+    await db.update(emailVerificationTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(emailVerificationTokens.token, token));
+
+    console.log(`[EmailVerification] Email verified for user ${verificationToken.userId}`);
+
+    return { success: true, userId: verificationToken.userId };
+  } catch (error) {
+    console.error('[EmailVerification] Error verifying email:', error);
+    return { success: false, error: "Failed to verify email" };
+  }
+}
+
+// Resend verification email
+export async function resendVerificationEmail(userId: number): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Database not available" };
+
+  // Get user info
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) {
+    return { success: false, error: "User not found" };
+  }
+
+  if (user.emailVerified === 'true') {
+    return { success: false, error: "Email already verified" };
+  }
+
+  // Get tenant info for company name
+  let companyName = 'Your Company';
+  if (user.tenantId) {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, user.tenantId)).limit(1);
+    if (tenant) {
+      companyName = tenant.name;
+    }
+  }
+
+  return createEmailVerification(userId, user.email || '', user.name || '', companyName);
 }
 
 // Complete password reset

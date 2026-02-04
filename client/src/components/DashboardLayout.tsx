@@ -119,6 +119,15 @@ export default function DashboardLayout({
     );
   }
 
+  // Check if email is verified - redirect to verification pending page
+  // Skip for users who signed up with Google OAuth (they're already verified)
+  const isEmailPasswordUser = user?.loginMethod === 'email_password';
+  const isEmailVerified = user?.emailVerified === 'true';
+  
+  if (isEmailPasswordUser && !isEmailVerified) {
+    return <Redirect to="/verification-pending" />;
+  }
+
   // Check if onboarding is not completed - redirect to onboarding
   // Skip redirect if already on onboarding or pricing pages
   const isOnboardingRoute = location === '/onboarding' || location === '/pricing';

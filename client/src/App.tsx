@@ -26,11 +26,13 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
+import VerificationPending from "./pages/VerificationPending";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 
 // Public routes that don't need DashboardLayout
 // Root (/) is now the landing page for unauthenticated users
-const PUBLIC_ROUTES = ['/', '/landing', '/login', '/signup', '/forgot-password', '/reset-password'];
+const PUBLIC_ROUTES = ['/', '/landing', '/login', '/signup', '/forgot-password', '/reset-password', '/verify-email', '/verification-pending'];
 
 function PublicRouter() {
   return (
@@ -44,6 +46,8 @@ function PublicRouter() {
       <Route path="/signup" component={Signup} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/verify-email" component={VerifyEmail} />
+      <Route path="/verification-pending" component={VerificationPending} />
       <Route component={NotFound} />
     </Switch>
   );

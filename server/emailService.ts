@@ -5,6 +5,7 @@ import { outreachHistory } from "../drizzle/schema";
 // Email templates for different notification types
 export type EmailType = 
   | "password_reset"
+  | "email_verification"
   | "team_invite"
   | "welcome"
   | "churn_7_day"
@@ -34,6 +35,24 @@ Reset Link: ${data.resetLink}
 This link expires in 1 hour.
 
 If you didn't request this, please ignore this email.
+        `.trim()
+      };
+    
+    case "email_verification":
+      return {
+        subject: `Verify your email for Gunner`,
+        body: `
+Welcome to Gunner! Please verify your email address.
+
+Email: ${data.email}
+Name: ${data.name}
+Company: ${data.companyName}
+
+Verification Link: ${data.verificationLink}
+
+This link expires in 24 hours.
+
+If you didn't create this account, please ignore this email.
         `.trim()
       };
     
@@ -216,6 +235,30 @@ export async function sendPasswordResetEmail(
     data: {
       email,
       resetLink
+    }
+  });
+}
+
+/**
+ * Send email verification email
+ */
+export async function sendEmailVerificationEmail(
+  email: string,
+  name: string,
+  companyName: string,
+  verificationToken: string,
+  baseUrl: string
+): Promise<boolean> {
+  const verificationLink = `${baseUrl}/verify-email?token=${verificationToken}`;
+  
+  return sendEmail({
+    to: email,
+    type: "email_verification",
+    data: {
+      email,
+      name,
+      companyName,
+      verificationLink
     }
   });
 }

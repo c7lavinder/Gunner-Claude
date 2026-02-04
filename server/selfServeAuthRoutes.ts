@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { signUpWithEmail, signInWithEmail, getUserWithTenant, createSessionToken, requestPasswordReset, verifyResetToken, resetPassword } from "./selfServeAuth";
+import { signUpWithEmail, signInWithEmail, getUserWithTenant, createSessionToken, requestPasswordReset, verifyResetToken, resetPassword, createEmailVerification, verifyEmailToken, resendVerificationEmail } from "./selfServeAuth";
 import { createTenantCheckoutSession } from "./tenant";
 import { exchangeCodeForTokens, decodeIdToken, signInWithGoogle, completeGoogleSignup, getGoogleAuthUrl } from "./googleAuth";
 
@@ -35,6 +35,9 @@ router.post("/signup", async (req: Request, res: Response) => {
       res.status(400).json({ success: false, error: result.error });
       return;
     }
+
+    // Send verification email
+    await createEmailVerification(result.userId!, email, name, companyName);
 
     // Create session token
     const token = createSessionToken(result.userId!, result.tenantId!);
@@ -236,6 +239,64 @@ router.post("/reset-password", async (req: Request, res: Response) => {
     res.json({ success: true, message: "Password has been reset successfully. You can now log in with your new password." });
   } catch (error) {
     console.error('[Auth] Reset password error:', error);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+// ============ EMAIL VERIFICATION ROUTES ============
+
+// Verify email with token
+router.get("/verify-email", async (req: Request, res: Response) => {
+  try {
+    const token = req.query.token as string;
+
+    if (!token) {
+      res.status(400).json({ success: false, error: "Token is required" });
+      return;
+    }
+
+    const result = await verifyEmailToken(token);
+    
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.json({ success: true, message: "Email verified successfully!" });
+  } catch (error) {
+    console.error('[Auth] Verify email error:', error);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+// Resend verification email
+router.post("/resend-verification", async (req: Request, res: Response) => {
+  try {
+    const token = req.cookies?.auth_token || req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      res.status(401).json({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    const { verifySessionToken } = await import("./selfServeAuth");
+    const decoded = verifySessionToken(token);
+    
+    if (!decoded) {
+      res.status(401).json({ success: false, error: "Invalid token" });
+      return;
+    }
+
+    const result = await resendVerificationEmail(decoded.userId);
+    
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.json({ success: true, message: "Verification email sent!" });
+  } catch (error) {
+    console.error('[Auth] Resend verification error:', error);
     res.status(500).json({ success: false, error: "Internal server error" });
   }
 });

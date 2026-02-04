@@ -1000,3 +1000,9 @@
 - [x] Add AI Coach example prompts
 - [x] Smarter Analytics default date range
 - [x] Add empty state guidance messages
+- [ ] Add email verification for new user signups
+  - [ ] Add emailVerified and verificationToken fields to users table
+  - [ ] Create verification token generation and email sending
+  - [ ] Create /verify-email endpoint
+  - [ ] Build verification pending and success UI pages
+  - [ ] Block unverified users from accessing protected routes

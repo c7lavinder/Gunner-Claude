@@ -134,6 +134,13 @@
       "when": 1770186055297,
       "tag": "0018_outgoing_wolverine",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1770193873775,
+      "tag": "0019_fair_green_goblin",
+      "breakpoints": true
     }
   ]
 }
