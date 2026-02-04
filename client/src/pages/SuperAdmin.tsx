@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1162,43 +1163,52 @@ export default function SuperAdmin() {
 
                 <div>
                   <label className="text-sm font-medium">Features</label>
-                  <p className="text-xs text-muted-foreground mt-1">Select the features included in this plan</p>
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    {[
-                      { id: 'call_grading', label: 'AI Call Grading' },
-                      { id: 'advanced_analytics', label: 'Advanced Analytics' },
-                      { id: 'team_dashboard', label: 'Team Dashboard' },
-                      { id: 'custom_rubrics', label: 'Custom Rubrics' },
-                      { id: 'training_materials', label: 'Training Materials' },
-                      { id: 'api_access', label: 'API Access' },
-                      { id: 'priority_support', label: 'Priority Support' },
-                      { id: 'custom_branding', label: 'Custom Branding' },
-                      { id: 'crm_integration', label: 'CRM Integration' },
-                      { id: 'multi_crm', label: 'Multiple CRM Integrations' },
-                      { id: 'unlimited_users', label: 'Unlimited Users' },
-                      { id: 'call_recording', label: 'Call Recording Storage' },
-                      { id: 'coaching_insights', label: 'Coaching Insights' },
-                      { id: 'leaderboards', label: 'Team Leaderboards' },
-                      { id: 'export_reports', label: 'Export Reports' },
-                      { id: 'white_label', label: 'White Label' },
-                    ].map((feature) => (
-                      <label key={feature.id} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={planFormData.features.includes(feature.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setPlanFormData(prev => ({ ...prev, features: [...prev.features, feature.id] }));
-                            } else {
-                              setPlanFormData(prev => ({ ...prev, features: prev.features.filter(f => f !== feature.id) }));
-                            }
-                          }}
-                          className="rounded"
-                        />
-                        <span className="text-sm">{feature.label}</span>
-                      </label>
-                    ))}
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Select the features included in this plan. Hover over each feature for details.</p>
+                  <TooltipProvider>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      {[
+                        { id: 'call_grading', label: 'AI Call Grading', description: 'Automatically analyze and score sales calls using AI. Provides instant feedback on pitch quality, objection handling, and closing techniques.' },
+                        { id: 'advanced_analytics', label: 'Advanced Analytics', description: 'Deep dive into call performance metrics, trends over time, and team comparisons. Includes conversion rate tracking and revenue attribution.' },
+                        { id: 'team_dashboard', label: 'Team Dashboard', description: 'Centralized view of all team members\' performance. Track individual progress, identify top performers, and spot coaching opportunities.' },
+                        { id: 'custom_rubrics', label: 'Custom Rubrics', description: 'Create your own scoring criteria tailored to your sales process. Define what matters most for your team\'s success.' },
+                        { id: 'training_materials', label: 'Training Materials', description: 'Access to curated sales training content, best practice guides, and example calls from top performers.' },
+                        { id: 'api_access', label: 'API Access', description: 'Programmatic access to call data and analytics. Build custom integrations or export data to your own systems.' },
+                        { id: 'priority_support', label: 'Priority Support', description: 'Skip the queue with dedicated support channels. Get faster response times and access to senior support specialists.' },
+                        { id: 'custom_branding', label: 'Custom Branding', description: 'White-label the platform with your company logo, colors, and domain. Perfect for agencies and enterprises.' },
+                        { id: 'crm_integration', label: 'CRM Integration', description: 'Connect with GoHighLevel to automatically sync contacts, calls, and deal data. Streamline your workflow.' },
+                        { id: 'multi_crm', label: 'Multiple CRM Integrations', description: 'Connect multiple CRM instances or different CRM platforms. Ideal for agencies managing multiple client accounts.' },
+                        { id: 'unlimited_users', label: 'Unlimited Users', description: 'No cap on team size. Add as many sales reps, managers, and admins as you need without per-seat charges.' },
+                        { id: 'call_recording', label: 'Call Recording Storage', description: 'Store and access call recordings for review and training. Includes searchable transcripts and highlight clips.' },
+                        { id: 'coaching_insights', label: 'Coaching Insights', description: 'AI-powered recommendations for improving each rep\'s performance. Personalized coaching tips based on call analysis.' },
+                        { id: 'leaderboards', label: 'Team Leaderboards', description: 'Gamify performance with competitive rankings. Track daily, weekly, and monthly leaders across key metrics.' },
+                        { id: 'export_reports', label: 'Export Reports', description: 'Download detailed reports in PDF or CSV format. Share insights with stakeholders or archive for compliance.' },
+                        { id: 'white_label', label: 'White Label', description: 'Fully rebrand the entire platform as your own. Remove all Gunner branding for a seamless client experience.' },
+                      ].map((feature) => (
+                        <Tooltip key={feature.id}>
+                          <TooltipTrigger asChild>
+                            <label className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-2 rounded-md transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={planFormData.features.includes(feature.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setPlanFormData(prev => ({ ...prev, features: [...prev.features, feature.id] }));
+                                  } else {
+                                    setPlanFormData(prev => ({ ...prev, features: prev.features.filter(f => f !== feature.id) }));
+                                  }
+                                }}
+                                className="rounded"
+                              />
+                              <span className="text-sm">{feature.label}</span>
+                            </label>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <p className="text-sm">{feature.description}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </TooltipProvider>
                 </div>
 
                 <div className="flex gap-4">

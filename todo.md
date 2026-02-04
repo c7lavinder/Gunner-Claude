@@ -1070,3 +1070,6 @@
 
 ## Plan Editor Features UI
 - [x] Change Features textarea to checkbox list with all available features
+
+## Feature Descriptions/Tooltips
+- [x] Add tooltips with descriptions for each feature in the plan editor
