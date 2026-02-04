@@ -281,4 +281,59 @@ export const adminRouter = router({
     .query(async ({ input }) => {
       return getTenantUsage(input.tenantId);
     }),
+
+  // Start impersonating a tenant
+  startImpersonation: superAdminProcedure
+    .input(z.object({ tenantId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+      // Get the tenant to impersonate
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, input.tenantId));
+
+      if (!tenant) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+      }
+
+      // Get the first admin user of the tenant (or any user)
+      const [targetUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.tenantId, input.tenantId))
+        .orderBy(desc(users.isTenantAdmin))
+        .limit(1);
+
+      if (!targetUser) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No users found in this tenant' });
+      }
+
+      // Return the impersonation data - the client will store this
+      return {
+        success: true,
+        impersonation: {
+          originalUserId: ctx.user!.id,
+          originalTenantId: ctx.user!.tenantId,
+          targetUserId: targetUser.id,
+          targetTenantId: tenant.id,
+          targetTenantName: tenant.name,
+          targetUserName: targetUser.name,
+          targetUserEmail: targetUser.email,
+        },
+      };
+    }),
+
+  // Get impersonation status (check if currently impersonating)
+  getImpersonationStatus: protectedProcedure.query(async ({ ctx }) => {
+    // This will be handled client-side via localStorage
+    // Just return the current user info
+    return {
+      userId: ctx.user?.id,
+      tenantId: ctx.user?.tenantId,
+      role: ctx.user?.role,
+    };
+  }),
 });

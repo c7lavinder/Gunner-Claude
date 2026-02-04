@@ -26,6 +26,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import { ImpersonationBanner } from "./components/ImpersonationBanner";
 
 // Public routes that don't need DashboardLayout
 // Root (/) is now the landing page for unauthenticated users
@@ -114,6 +115,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <LoadingScreen />
+          <ImpersonationBanner />
           <AppContent />
         </TooltipProvider>
       </ThemeProvider>

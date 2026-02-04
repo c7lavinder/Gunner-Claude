@@ -22,6 +22,10 @@ export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
   let user: User | null = null;
+  let isImpersonating = false;
+
+  // Check for impersonation header (super admin viewing as another tenant)
+  const impersonationHeader = opts.req.headers['x-impersonate-user-id'] as string | undefined;
 
   // First, try self-serve auth (auth_token cookie) - for email/password and Google OAuth users
   try {
@@ -48,6 +52,29 @@ export async function createContext(
     } catch (error) {
       // Authentication is optional for public procedures.
       user = null;
+    }
+  }
+
+  // Handle impersonation - only super_admin can impersonate
+  if (user && user.role === 'super_admin' && impersonationHeader) {
+    try {
+      const targetUserId = parseInt(impersonationHeader, 10);
+      if (!isNaN(targetUserId)) {
+        const impersonatedUser = await getUserById(targetUserId);
+        if (impersonatedUser) {
+          // Store original admin info and switch to impersonated user
+          isImpersonating = true;
+          user = {
+            ...impersonatedUser,
+            // Keep a reference to original admin for audit purposes
+            // @ts-ignore - adding custom property for impersonation tracking
+            _originalAdminId: user.id,
+          };
+        }
+      }
+    } catch (error) {
+      // Impersonation failed, continue with original user
+      console.error('[Impersonation] Failed to impersonate user:', error);
     }
   }
 

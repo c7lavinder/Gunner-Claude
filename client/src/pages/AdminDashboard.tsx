@@ -57,11 +57,15 @@ import {
   Trash2,
   Activity,
   Zap,
+  UserCheck,
+  LogOut,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
+  const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<number | null>(null);
 
@@ -104,6 +108,39 @@ export default function AdminDashboard() {
       toast.error(error.message);
     },
   });
+
+  // Start impersonation mutation
+  const startImpersonation = trpc.admin.startImpersonation.useMutation({
+    onSuccess: (data) => {
+      // Store impersonation data in localStorage
+      localStorage.setItem('gunner_impersonation', JSON.stringify(data.impersonation));
+      toast.success(`Now viewing as ${data.impersonation.targetTenantName}`);
+      // Refresh auth and redirect to dashboard
+      refresh();
+      setLocation('/dashboard');
+    },
+    onError: (error: { message: string }) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Handle stop impersonation
+  const handleStopImpersonation = () => {
+    localStorage.removeItem('gunner_impersonation');
+    toast.success('Impersonation ended');
+    refresh();
+    window.location.reload();
+  };
+
+  // Check if currently impersonating
+  const impersonationData = (() => {
+    try {
+      const data = localStorage.getItem('gunner_impersonation');
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  })();
 
   // Check if user is super admin
   if (user?.role !== "super_admin") {
@@ -158,6 +195,32 @@ export default function AdminDashboard() {
 
   return (
     <div className="container py-8 space-y-8">
+      {/* Impersonation Banner */}
+      {impersonationData && (
+        <div className="bg-amber-100 border border-amber-300 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <UserCheck className="h-5 w-5 text-amber-600" />
+            <div>
+              <p className="font-medium text-amber-800">
+                Currently viewing as: {impersonationData.targetTenantName}
+              </p>
+              <p className="text-sm text-amber-600">
+                User: {impersonationData.targetUserName} ({impersonationData.targetUserEmail})
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleStopImpersonation}
+            className="border-amber-300 text-amber-800 hover:bg-amber-200"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            End Impersonation
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -290,6 +353,15 @@ export default function AdminDashboard() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startImpersonation.mutate({ tenantId: tenant.id })}
+                          disabled={startImpersonation.isPending}
+                          title="View as this tenant"
+                        >
+                          <UserCheck className="h-4 w-4" />
+                        </Button>
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button 

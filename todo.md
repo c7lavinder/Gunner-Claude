@@ -878,3 +878,19 @@
   - [x] Added usage tracking to all rate-limited endpoints (AI chat, content generation)
   - [x] Added getUsageAnalytics and getTenantUsage endpoints to adminRouter
   - [x] Added Usage Analytics section to AdminDashboard with table view
+
+## Tenant Impersonation Feature (Feb 3, 2026)
+- [x] Add impersonation backend - session management and endpoints
+  - [x] Added startImpersonation endpoint to adminRouter
+  - [x] Server context checks X-Impersonate-User-Id header
+  - [x] Validates super_admin role before allowing impersonation
+- [x] Add impersonation UI to admin dashboard
+  - [x] Added impersonation button (UserCheck icon) per tenant row
+  - [x] Stores impersonation data in localStorage
+  - [x] Added X-Impersonate-User-Id header to trpc client
+- [x] Add impersonation indicator bar for active sessions
+  - [x] Created ImpersonationBanner component
+  - [x] Fixed amber banner at top of screen during impersonation
+  - [x] Shows target tenant name and user info
+  - [x] End Impersonation button to return to admin view
+  - [x] Added padding to DashboardLayout when impersonating

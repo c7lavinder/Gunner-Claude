@@ -27,6 +27,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
+import { useImpersonation } from "./ImpersonationBanner";
 
 const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string) => {
   const isAdmin = teamRole === 'admin';
@@ -84,6 +85,7 @@ export default function DashboardLayout({
   });
   const { loading, user } = useAuth();
   const [location] = useLocation();
+  const { isImpersonating } = useImpersonation();
   
   // Fetch tenant settings to check onboarding status
   const { data: tenantSettings, isLoading: tenantLoading } = trpc.tenant.getSettings.useQuery(
@@ -151,9 +153,11 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
-        {children}
-      </DashboardLayoutContent>
+      <div className={isImpersonating ? "pt-12" : ""}>
+        <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+          {children}
+        </DashboardLayoutContent>
+      </div>
     </SidebarProvider>
   );
 }

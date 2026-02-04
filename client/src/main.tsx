@@ -37,14 +37,39 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+// Helper to get impersonation data from localStorage
+const getImpersonationUserId = (): string | null => {
+  try {
+    const data = localStorage.getItem('gunner_impersonation');
+    if (data) {
+      const parsed = JSON.parse(data);
+      return parsed.targetUserId?.toString() || null;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return null;
+};
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        const impersonateUserId = getImpersonationUserId();
+        const headers: Record<string, string> = {
+          ...(init?.headers as Record<string, string> || {}),
+        };
+        
+        // Add impersonation header if active
+        if (impersonateUserId) {
+          headers['X-Impersonate-User-Id'] = impersonateUserId;
+        }
+        
         return globalThis.fetch(input, {
           ...(init ?? {}),
+          headers,
           credentials: "include",
         });
       },
