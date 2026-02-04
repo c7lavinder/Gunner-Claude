@@ -14,7 +14,7 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 
 const MAX_FILE_SIZE_MB = 24; // Leave buffer under 25MB limit
-const TARGET_BITRATE = 64; // 64kbps for speech - better transcription quality
+const TARGET_BITRATE = 96; // 96kbps for speech - high quality transcription
 const TARGET_SAMPLE_RATE = 16000; // 16kHz for speech
 const FFMPEG_PATH = "/usr/bin/ffmpeg";
 

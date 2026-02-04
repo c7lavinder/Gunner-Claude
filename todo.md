@@ -1028,3 +1028,4 @@
 - [x] Increase audio compression bitrate for better transcription quality
 - [x] Add "Grade This Call" button for skipped calls to reclassify and grade them
 - [x] Replace Offers Accepted stat with count of completed offer calls by acquisitions managers
+- [x] Increase compression bitrate to 96kbps for better transcription quality on long calls
