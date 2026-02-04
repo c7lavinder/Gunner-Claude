@@ -312,16 +312,14 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
-                  </span>
-                </div>
-              </div>
+          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-9 w-9 rounded-lg" />
+              <img 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/pEvSFVlapabhnbkw.png" 
+                alt="Gunner" 
+                className="h-8 object-contain"
+              />
             </div>
           </div>
         )}

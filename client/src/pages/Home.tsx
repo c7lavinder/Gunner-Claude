@@ -9,35 +9,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 type DateRange = "today" | "week" | "month" | "ytd" | "all";
 
+// Compact stat card for mobile - icon + number + label in minimal space
 function StatCard({ 
   title, 
   value, 
-  description, 
   icon: Icon, 
   loading 
 }: { 
   title: string; 
   value: string | number; 
-  description?: string; 
   icon: React.ElementType;
   loading?: boolean;
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <Skeleton className="h-8 w-20" />
-        ) : (
-          <div className="text-2xl font-bold">{value}</div>
-        )}
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
-      </CardContent>
+    <Card className="p-3 sm:p-4">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="p-1.5 sm:p-2 rounded-lg bg-muted shrink-0">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0">
+          {loading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div className="text-xl sm:text-2xl font-bold truncate">{value}</div>
+          )}
+          <p className="text-xs text-muted-foreground truncate">{title}</p>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -64,16 +62,17 @@ export default function Home() {
   const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
             Welcome to Gunner - Your AI-powered call coaching platform
           </p>
         </div>
         <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Select period" />
           </SelectTrigger>
           <SelectContent>
@@ -86,180 +85,168 @@ export default function Home() {
         </Select>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      {/* Stats Grid - 2 columns on mobile, 5 on desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
         <StatCard
           title="Calls Made"
           value={stats?.totalCalls ?? 0}
-          description={dateRangeLabels[dateRange]}
           icon={Phone}
           loading={statsLoading}
         />
         <StatCard
           title="Conversations"
           value={stats?.gradedCalls ?? 0}
-          description="Actual conversations"
           icon={MessageSquare}
           loading={statsLoading}
         />
         <StatCard
-          title="Appointments Set"
+          title="Appointments"
           value={stats?.appointmentsSet ?? 0}
-          description={dateRangeLabels[dateRange]}
           icon={Calendar}
           loading={statsLoading}
         />
         <StatCard
-          title="Offers Accepted"
+          title="Offers"
           value={stats?.offersAccepted ?? 0}
-          description={dateRangeLabels[dateRange]}
           icon={CheckCircle2}
           loading={statsLoading}
         />
         <StatCard
-          title="Average Score"
+          title="Avg Score"
           value={stats?.averageScore ? `${Math.round(stats.averageScore)}%` : "N/A"}
-          description="Team average"
           icon={TrendingUp}
           loading={statsLoading}
         />
       </div>
 
-      {/* Gamification Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Level & XP */}
-        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 ">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-orange-700">Level & XP</CardTitle>
-            <Trophy className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            {gamificationLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-orange-900">
-                  Lvl {gamification?.xp.level ?? 1} - {gamification?.xp.title ?? "Rookie"}
-                </div>
-                <div className="mt-2 h-2 bg-orange-200 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-orange-500 transition-all duration-500" 
-                    style={{ width: `${gamification?.xp.progress ?? 0}%` }}
-                  />
-                </div>
-                <p className="text-xs text-orange-600 mt-1">
-                  {gamification?.xp.totalXp?.toLocaleString() ?? 0} / {gamification?.xp.nextLevelXp?.toLocaleString() ?? 500} XP
-                </p>
-              </>
-            )}
-          </CardContent>
+      {/* Gamification Stats - 2x2 grid on mobile, 4 columns on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        {/* Level & XP - Compact */}
+        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 p-3 sm:p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Trophy className="h-4 w-4 text-orange-500 shrink-0" />
+            <span className="text-xs font-medium text-orange-700">Level & XP</span>
+          </div>
+          {gamificationLoading ? (
+            <Skeleton className="h-6 w-16" />
+          ) : (
+            <>
+              <div className="text-lg sm:text-xl font-bold text-orange-900">
+                Lvl {gamification?.xp.level ?? 1}
+              </div>
+              <div className="mt-1.5 h-1.5 bg-orange-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-orange-500 transition-all duration-500" 
+                  style={{ width: `${gamification?.xp.progress ?? 0}%` }}
+                />
+              </div>
+              <p className="text-[10px] sm:text-xs text-orange-600 mt-1 truncate">
+                {gamification?.xp.title ?? "Rookie"}
+              </p>
+            </>
+          )}
         </Card>
 
-        {/* Hot Streak */}
-        <Card className="bg-gradient-to-br from-red-50 to-orange-50 ">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-red-700">Hot Streak</CardTitle>
-            <Flame className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            {gamificationLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-red-900">
-                  {gamification?.streaks.hotStreakCurrent ?? 0} 🔥
-                </div>
-                <p className="text-xs text-red-600 mt-1">
-                  Consecutive C+ grades (Best: {gamification?.streaks.hotStreakBest ?? 0})
-                </p>
-              </>
-            )}
-          </CardContent>
+        {/* Hot Streak - Compact */}
+        <Card className="bg-gradient-to-br from-red-50 to-orange-50 p-3 sm:p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Flame className="h-4 w-4 text-red-500 shrink-0" />
+            <span className="text-xs font-medium text-red-700">Hot Streak</span>
+          </div>
+          {gamificationLoading ? (
+            <Skeleton className="h-6 w-16" />
+          ) : (
+            <>
+              <div className="text-lg sm:text-xl font-bold text-red-900">
+                {gamification?.streaks.hotStreakCurrent ?? 0} 🔥
+              </div>
+              <p className="text-[10px] sm:text-xs text-red-600 mt-1">
+                Best: {gamification?.streaks.hotStreakBest ?? 0}
+              </p>
+            </>
+          )}
         </Card>
 
-        {/* Consistency Streak */}
-        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 ">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Consistency</CardTitle>
-            <Target className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            {gamificationLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-blue-900">
-                  {gamification?.streaks.consistencyStreakCurrent ?? 0} days
-                </div>
-                <p className="text-xs text-blue-600 mt-1">
-                  Days with graded calls (Best: {gamification?.streaks.consistencyStreakBest ?? 0})
-                </p>
-              </>
-            )}
-          </CardContent>
+        {/* Consistency Streak - Compact */}
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="h-4 w-4 text-blue-500 shrink-0" />
+            <span className="text-xs font-medium text-blue-700">Consistency</span>
+          </div>
+          {gamificationLoading ? (
+            <Skeleton className="h-6 w-16" />
+          ) : (
+            <>
+              <div className="text-lg sm:text-xl font-bold text-blue-900">
+                {gamification?.streaks.consistencyStreakCurrent ?? 0} days
+              </div>
+              <p className="text-[10px] sm:text-xs text-blue-600 mt-1">
+                Best: {gamification?.streaks.consistencyStreakBest ?? 0}
+              </p>
+            </>
+          )}
         </Card>
 
-        {/* Badges */}
-        <Card className="bg-gradient-to-br from-purple-50 to-pink-50 ">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700">Badges</CardTitle>
-            <Award className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            {gamificationLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-purple-900">
-                  {gamification?.badgeCount ?? 0} earned
-                </div>
-                <div className="flex gap-1 mt-2">
-                  {gamification?.badges.slice(0, 3).map((badge: { code: string; icon: string }, i: number) => (
-                    <span key={i} className="text-lg" title={badge.code}>{badge.icon}</span>
-                  ))}
-                  {(gamification?.badgeCount ?? 0) > 3 && (
-                    <span className="text-xs text-purple-600">+{(gamification?.badgeCount ?? 0) - 3} more</span>
-                  )}
-                </div>
-              </>
-            )}
-          </CardContent>
+        {/* Badges - Compact */}
+        <Card className="bg-gradient-to-br from-purple-50 to-pink-50 p-3 sm:p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Award className="h-4 w-4 text-purple-500 shrink-0" />
+            <span className="text-xs font-medium text-purple-700">Badges</span>
+          </div>
+          {gamificationLoading ? (
+            <Skeleton className="h-6 w-16" />
+          ) : (
+            <>
+              <div className="text-lg sm:text-xl font-bold text-purple-900">
+                {gamification?.badgeCount ?? 0}
+              </div>
+              <div className="flex gap-0.5 mt-1">
+                {gamification?.badges.slice(0, 3).map((badge: { code: string; icon: string }, i: number) => (
+                  <span key={i} className="text-sm" title={badge.code}>{badge.icon}</span>
+                ))}
+                {(gamification?.badgeCount ?? 0) > 3 && (
+                  <span className="text-[10px] text-purple-600">+{(gamification?.badgeCount ?? 0) - 3}</span>
+                )}
+              </div>
+            </>
+          )}
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* Recent Calls & Leaderboard - Stack on mobile */}
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Recent Calls */}
-        <Card className="">
-          <CardHeader className="flex flex-row items-center justify-between ">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6 pb-2 sm:pb-2">
             <div>
-              <CardTitle>Recent Calls</CardTitle>
-              <CardDescription>Latest graded calls from your team</CardDescription>
+              <CardTitle className="text-base sm:text-lg">Recent Calls</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Latest graded calls</CardDescription>
             </div>
             <Link href="/calls">
-              <Button variant="outline" size="sm">View All</Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm">View All</Button>
             </Link>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6 pt-2 sm:pt-2">
             {callsLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-16 w-full" />
+                  <Skeleton key={i} className="h-14 w-full" />
                 ))}
               </div>
             ) : recentCalls && recentCalls.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {recentCalls.map((call) => (
                   <Link key={call.id} href={`/calls/${call.id}`}>
-                    <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer">
+                    <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">
-                          {call.contactName || call.contactPhone || "Unknown Contact"}
+                        <p className="font-medium text-sm truncate">
+                          {call.contactName || call.contactPhone || "Unknown"}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          {call.teamMemberName || "Unassigned"} • {call.callType === "offer" ? "Offer Call" : "Qualification"}
+                        <p className="text-xs text-muted-foreground truncate">
+                          {call.teamMemberName || "Unassigned"}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 shrink-0">
                         {call.grade ? (
                           <GradeBadge grade={call.grade.overallGrade || "?"} />
                         ) : (
@@ -273,135 +260,138 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Phone className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No calls yet</p>
-                <p className="text-sm">Calls will appear here once received via webhook</p>
+              <div className="text-center py-6 text-muted-foreground">
+                <Phone className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No calls yet</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Leaderboard Preview */}
-        <Card className="">
-          <CardHeader className="flex flex-row items-center justify-between ">
+        {/* Leaderboard Preview - Horizontal top 3 on mobile */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6 pb-2 sm:pb-2">
             <div>
-              <CardTitle>Team Leaderboard</CardTitle>
-              <CardDescription>Top performers this period</CardDescription>
+              <CardTitle className="text-base sm:text-lg">Team Leaderboard</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Top performers</CardDescription>
             </div>
             <Link href="/analytics">
-              <Button variant="outline" size="sm">View Full</Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm">View Full</Button>
             </Link>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6 pt-2 sm:pt-2">
             {leaderboardLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-14 w-full" />
+                  <Skeleton key={i} className="h-12 w-full" />
                 ))}
               </div>
             ) : leaderboard && leaderboard.length > 0 ? (
-              <div className="space-y-3">
-                {leaderboard.slice(0, 3).map((entry, index) => (
-                  <div 
-                    key={entry.teamMember.id} 
-                    className="flex items-center gap-4 p-3 rounded-lg border"
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                      index === 0 ? "bg-yellow-500 text-white" :
-                      index === 1 ? "bg-gray-400 text-white" :
-                      "bg-amber-700 text-white"
-                    }`}>
-                      {index + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium">{entry.teamMember.name}</p>
-                      <p className="text-sm text-muted-foreground capitalize">
-                        {entry.teamMember.teamRole?.replace("_", " ")}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-lg">
+              <>
+                {/* Mobile: Horizontal podium for top 3 */}
+                <div className="flex gap-2 sm:hidden">
+                  {leaderboard.slice(0, 3).map((entry, index) => (
+                    <div 
+                      key={entry.teamMember.id} 
+                      className={`flex-1 p-2 rounded-lg border text-center ${
+                        index === 0 ? "bg-yellow-50 border-yellow-200" :
+                        index === 1 ? "bg-gray-50 border-gray-200" :
+                        "bg-amber-50 border-amber-200"
+                      }`}
+                    >
+                      <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center font-bold text-xs ${
+                        index === 0 ? "bg-yellow-500 text-white" :
+                        index === 1 ? "bg-gray-400 text-white" :
+                        "bg-amber-700 text-white"
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <p className="font-medium text-xs mt-1 truncate">{entry.teamMember.name.split(' ')[0]}</p>
+                      <p className="font-bold text-sm">
                         {entry.averageScore ? `${Math.round(entry.averageScore)}%` : "N/A"}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {entry.totalCalls} calls
-                      </p>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {/* Desktop: Vertical list */}
+                <div className="hidden sm:block space-y-2">
+                  {leaderboard.slice(0, 3).map((entry, index) => (
+                    <div 
+                      key={entry.teamMember.id} 
+                      className="flex items-center gap-3 p-3 rounded-lg border"
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        index === 0 ? "bg-yellow-500 text-white" :
+                        index === 1 ? "bg-gray-400 text-white" :
+                        "bg-amber-700 text-white"
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">{entry.teamMember.name}</p>
+                        <p className="text-sm text-muted-foreground capitalize">
+                          {entry.teamMember.teamRole?.replace("_", " ")}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-lg">
+                          {entry.averageScore ? `${Math.round(entry.averageScore)}%` : "N/A"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {entry.totalCalls} calls
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Award className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No data yet</p>
-                <p className="text-sm">Rankings will appear after calls are graded</p>
+              <div className="text-center py-6 text-muted-foreground">
+                <Award className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No data yet</p>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Call Processing Status */}
+      {/* Call Processing Status - Horizontal row on mobile */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
-            Call Processing Status
+        <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-2">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
+            Call Processing
           </CardTitle>
-          <CardDescription>
-            Overview of call queue and processing results
-          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6 pt-2 sm:pt-2">
           {statsLoading ? (
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-4 gap-2">
               {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-20 w-full" />
+                <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Processing Status Row */}
-              <div className="grid gap-4 md:grid-cols-4">
-                <div className="flex items-center gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-                  <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900">
-                    <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{stats?.pendingCalls ?? 0}</p>
-                    <p className="text-sm text-blue-600 dark:text-blue-400">Queued</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800">
-                  <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
-                    <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{stats?.gradedCalls ?? 0}</p>
-                    <p className="text-sm text-emerald-600 dark:text-emerald-400">Scored</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
-                  <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900">
-                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{stats?.skippedCalls ?? 0}</p>
-                    <p className="text-sm text-amber-600 dark:text-amber-400">Skipped</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-                  <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-800">
-                    <Phone className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{stats?.totalCalls ?? 0}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
-                  </div>
-                </div>
+            <div className="grid grid-cols-4 gap-2 sm:gap-4">
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 mb-1" />
+                <p className="text-lg sm:text-2xl font-bold text-blue-700 dark:text-blue-300">{stats?.pendingCalls ?? 0}</p>
+                <p className="text-[10px] sm:text-sm text-blue-600 dark:text-blue-400">Queued</p>
               </div>
-
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800">
+                <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 dark:text-emerald-400 mb-1" />
+                <p className="text-lg sm:text-2xl font-bold text-emerald-700 dark:text-emerald-300">{stats?.gradedCalls ?? 0}</p>
+                <p className="text-[10px] sm:text-sm text-emerald-600 dark:text-emerald-400">Scored</p>
+              </div>
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+                <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-400 mb-1" />
+                <p className="text-lg sm:text-2xl font-bold text-amber-700 dark:text-amber-300">{stats?.skippedCalls ?? 0}</p>
+                <p className="text-[10px] sm:text-sm text-amber-600 dark:text-amber-400">Skipped</p>
+              </div>
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600 dark:text-gray-400 mb-1" />
+                <p className="text-lg sm:text-2xl font-bold text-gray-700 dark:text-gray-300">{stats?.totalCalls ?? 0}</p>
+                <p className="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400">Total</p>
+              </div>
             </div>
           )}
         </CardContent>

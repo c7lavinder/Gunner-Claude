@@ -47,18 +47,18 @@ function StatCard({
 
   return (
     <Card className={variantStyles[variant]}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className={`h-4 w-4 ${iconStyles[variant]}`} />
+      <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2 p-3 sm:p-6">
+        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <Icon className={`h-3 w-3 sm:h-4 sm:w-4 ${iconStyles[variant]}`} />
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0 p-3 sm:p-6">
         {loading ? (
-          <Skeleton className="h-8 w-20" />
+          <Skeleton className="h-6 sm:h-8 w-16 sm:w-20" />
         ) : (
-          <div className="text-2xl font-bold">{value}</div>
+          <div className="text-xl sm:text-2xl font-bold">{value}</div>
         )}
         {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 hidden sm:block">{description}</p>
         )}
       </CardContent>
     </Card>
@@ -110,11 +110,11 @@ export default function Analytics() {
     : 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
             Team performance metrics and insights
           </p>
         </div>
@@ -133,7 +133,7 @@ export default function Analytics() {
       </div>
 
       {/* Stats Grid - Same as Dashboard */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard
           title="Calls Made"
           value={stats?.totalCalls ?? 0}
@@ -174,19 +174,19 @@ export default function Analytics() {
       </div>
 
       {/* Team Leaderboard */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-yellow-500" />
+      <Card className="mb-4 sm:mb-6">
+        <CardHeader className="pb-3 sm:pb-6">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500" />
             Team Leaderboard
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             Performance rankings by role
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           <Tabs defaultValue="lead_managers" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6">
               <TabsTrigger value="lead_managers">Lead Managers</TabsTrigger>
               <TabsTrigger value="acquisition_managers">Acquisition Managers</TabsTrigger>
             </TabsList>
@@ -200,16 +200,16 @@ export default function Analytics() {
                   ))}
                 </div>
               ) : leadManagers.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
+                  <table className="w-full min-w-[500px]">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Rank</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Name</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Total Calls</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Conversations</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Appts Set</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">A-B Calls</th>
+                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Rank</th>
+                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Name</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Calls</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Conv</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Appts</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">A-B</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -217,8 +217,8 @@ export default function Analytics() {
                         .sort((a, b) => b.appointmentsSet - a.appointmentsSet)
                         .map((entry, index) => (
                         <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-4 px-4">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                          <td className="py-2 sm:py-4 px-2 sm:px-4">
+                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
                               index === 0 ? "bg-yellow-500 text-white" :
                               index === 1 ? "bg-gray-400 text-white" :
                               "bg-amber-700 text-white"
@@ -226,21 +226,21 @@ export default function Analytics() {
                               {index + 1}
                             </div>
                           </td>
-                          <td className="py-4 px-4">
-                            <p className="font-medium">{entry.teamMember.name}</p>
-                            <p className="text-sm text-muted-foreground">Lead Manager</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4">
+                            <p className="font-medium text-sm sm:text-base">{entry.teamMember.name}</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Lead Manager</p>
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <p className="text-lg font-bold">{entry.totalCalls}</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold">{entry.totalCalls}</p>
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <p className="text-lg font-bold">{entry.gradedCalls}</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold">{entry.gradedCalls}</p>
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <p className="text-lg font-bold text-blue-600">{entry.appointmentsSet}</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold text-blue-600">{entry.appointmentsSet}</p>
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <p className="text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
                           </td>
                         </tr>
                       ))}
@@ -264,16 +264,16 @@ export default function Analytics() {
                   ))}
                 </div>
               ) : acquisitionManagers.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
+                  <table className="w-full min-w-[500px]">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Rank</th>
-                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Name</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Total Calls</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Conversations</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">Offers Accepted</th>
-                        <th className="text-center py-3 px-4 font-medium text-muted-foreground">A-B Calls</th>
+                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Rank</th>
+                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Name</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Calls</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Conv</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Offers</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">A-B</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -281,8 +281,8 @@ export default function Analytics() {
                         .sort((a, b) => b.offersAccepted - a.offersAccepted)
                         .map((entry, index) => (
                         <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-4 px-4">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                          <td className="py-2 sm:py-4 px-2 sm:px-4">
+                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
                               index === 0 ? "bg-yellow-500 text-white" :
                               index === 1 ? "bg-gray-400 text-white" :
                               "bg-amber-700 text-white"
@@ -290,21 +290,21 @@ export default function Analytics() {
                               {index + 1}
                             </div>
                           </td>
-                          <td className="py-4 px-4">
-                            <p className="font-medium">{entry.teamMember.name}</p>
-                            <p className="text-sm text-muted-foreground">Acquisition Manager</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4">
+                            <p className="font-medium text-sm sm:text-base">{entry.teamMember.name}</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Acquisition Manager</p>
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <p className="text-lg font-bold">{entry.totalCalls}</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold">{entry.totalCalls}</p>
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <p className="text-lg font-bold">{entry.gradedCalls}</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold">{entry.gradedCalls}</p>
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <p className="text-lg font-bold text-green-600">{entry.offersAccepted}</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold text-green-600">{entry.offersAccepted}</p>
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            <p className="text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
                           </td>
                         </tr>
                       ))}

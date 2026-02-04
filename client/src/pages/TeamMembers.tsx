@@ -178,16 +178,16 @@ function TeamMemberShowcase({
       rank === 2 ? "ring-gray-400" : 
       rank === 3 ? "ring-amber-600" : ""
     }`}>
-      <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-6 text-white">
-        <div className="flex items-start gap-4">
-          <div className="relative">
+      <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-3 sm:p-6 text-white">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div className="relative shrink-0">
             {rank <= 3 && <RankBadge rank={rank} />}
             <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
               <DialogTrigger asChild>
                 <div className={`cursor-pointer ${isCurrentUser ? 'hover:opacity-80' : ''}`}>
-                  <Avatar className="h-20 w-20 border-4 border-white shadow-lg">
+                  <Avatar className="h-14 w-14 sm:h-20 sm:w-20 border-2 sm:border-4 border-white shadow-lg">
                     <AvatarImage src={member.user?.profilePicture || undefined} />
-                    <AvatarFallback className="text-2xl font-bold bg-white text-orange-700">
+                    <AvatarFallback className="text-xl sm:text-2xl font-bold bg-white text-orange-700">
                       {member.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
@@ -218,54 +218,56 @@ function TeamMemberShowcase({
             </Dialog>
           </div>
           
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-2xl font-bold">{member.name}</h3>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-lg sm:text-2xl font-bold truncate">{member.name}</h3>
               {hotStreak > 0 && (
-                <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-xs sm:text-sm bg-white/20 px-1.5 sm:px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Flame className="h-3 w-3" /> {hotStreak}
                 </span>
               )}
             </div>
-            <Badge className="bg-white/20 text-white border-0 mt-1">
+            <Badge className="bg-white/20 text-white border-0 mt-1 text-xs">
               {roleLabels[member.teamRole] || member.teamRole}
             </Badge>
-            <BadgeDisplay badges={badges} />
+            <div className="hidden sm:block">
+              <BadgeDisplay badges={badges} />
+            </div>
           </div>
           
-          <div className="text-right">
-            <p className="text-3xl font-bold">Lvl {level}</p>
-            <p className="text-sm opacity-90">{title}</p>
-            <p className="text-xs opacity-75">{xp.toLocaleString()} XP</p>
+          <div className="text-right shrink-0">
+            <p className="text-xl sm:text-3xl font-bold">Lvl {level}</p>
+            <p className="text-xs sm:text-sm opacity-90 hidden sm:block">{title}</p>
+            <p className="text-[10px] sm:text-xs opacity-75">{xp.toLocaleString()} XP</p>
           </div>
         </div>
       </div>
       
-      <CardContent className="p-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <p className="text-2xl font-bold">{totalCalls}</p>
-            <p className="text-xs text-muted-foreground">Total Calls</p>
+      <CardContent className="p-3 sm:p-6">
+        <div className="grid grid-cols-4 gap-2 sm:gap-4">
+          <div className="text-center p-2 sm:p-3 bg-muted/50 rounded-lg">
+            <p className="text-lg sm:text-2xl font-bold">{totalCalls}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Calls</p>
           </div>
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <p className="text-2xl font-bold">
+          <div className="text-center p-2 sm:p-3 bg-muted/50 rounded-lg">
+            <p className="text-lg sm:text-2xl font-bold">
               {avgScore ? `${Math.round(avgScore)}%` : "N/A"}
             </p>
-            <p className="text-xs text-muted-foreground">Avg Score</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Score</p>
           </div>
-          <div className="text-center p-3 bg-emerald-50 dark:bg-emerald-950 rounded-lg">
-            <p className="text-2xl font-bold text-emerald-600">{gradeDistribution.A + gradeDistribution.B}</p>
-            <p className="text-xs text-muted-foreground">A & B Grades</p>
+          <div className="text-center p-2 sm:p-3 bg-emerald-50 dark:bg-emerald-950 rounded-lg">
+            <p className="text-lg sm:text-2xl font-bold text-emerald-600">{gradeDistribution.A + gradeDistribution.B}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">A&B</p>
           </div>
-          <div className="text-center p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
-            <p className="text-2xl font-bold text-orange-600">{badges.length}</p>
-            <p className="text-xs text-muted-foreground">Badges</p>
+          <div className="text-center p-2 sm:p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
+            <p className="text-lg sm:text-2xl font-bold text-orange-600">{badges.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Badges</p>
           </div>
         </div>
         
         {totalCalls > 0 && (
-          <div className="mt-4">
-            <div className="flex h-3 rounded-full overflow-hidden">
+          <div className="mt-3 sm:mt-4">
+            <div className="flex h-2 sm:h-3 rounded-full overflow-hidden">
               {gradeDistribution.A > 0 && (
                 <div 
                   className="bg-emerald-500" 
@@ -302,14 +304,14 @@ function TeamMemberShowcase({
                 />
               )}
             </div>
-            <div className="flex justify-between mt-1 text-xs text-muted-foreground">
-              <span>Grade Distribution</span>
-              <div className="flex gap-2">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span>A</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500"></span>B</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500"></span>C</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span>D</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span>F</span>
+            <div className="flex justify-between mt-1 text-[10px] sm:text-xs text-muted-foreground">
+              <span className="hidden sm:inline">Grade Distribution</span>
+              <div className="flex gap-1 sm:gap-2">
+                <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500"></span>A</span>
+                <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-teal-500"></span>B</span>
+                <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-yellow-500"></span>C</span>
+                <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-orange-500"></span>D</span>
+                <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500"></span>F</span>
               </div>
             </div>
           </div>
@@ -688,7 +690,7 @@ function TeamMembersContent() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Card key={i}>
               <CardContent className="p-6">
@@ -698,7 +700,7 @@ function TeamMembersContent() {
           ))}
         </div>
       ) : sortedMembers.length > 0 ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {sortedMembers.map((member, index) => {
             const isCurrentUser = member.userId === user?.id;
             return (
@@ -771,12 +773,12 @@ function TeamMembersContent() {
 
 export default function TeamMembers() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Users className="h-8 w-8" /> Team
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Users className="h-6 w-6 sm:h-8 sm:w-8" /> Team
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
           Meet your team and track achievements
         </p>
       </div>

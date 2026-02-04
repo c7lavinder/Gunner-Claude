@@ -374,42 +374,45 @@ export default function TenantSettings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Company Settings</h1>
-          <p className="text-muted-foreground">Manage your organization's settings and team</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Company Settings</h1>
+          <p className="text-sm text-muted-foreground hidden sm:block">Manage your organization's settings and team</p>
         </div>
-        <Button variant="outline" onClick={() => { refetchSettings(); refetchTeam(); }}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
+        <Button variant="outline" size="sm" onClick={() => { refetchSettings(); refetchTeam(); }}>
+          <RefreshCw className="h-4 w-4" />
+          <span className="hidden sm:inline ml-2">Refresh</span>
         </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-6 w-full max-w-3xl">
-          <TabsTrigger value="general" className="flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            <span className="hidden sm:inline">General</span>
-          </TabsTrigger>
-          <TabsTrigger value="team" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Team</span>
-          </TabsTrigger>
-          <TabsTrigger value="roles" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Roles</span>
-          </TabsTrigger>
-          <TabsTrigger value="billing" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            <span className="hidden sm:inline">Billing</span>
-          </TabsTrigger>
-          <TabsTrigger value="integrations" className="flex items-center gap-2">
-            <Link2 className="h-4 w-4" />
-            <span className="hidden sm:inline">CRM</span>
-          </TabsTrigger>
-          <TabsTrigger value="rubrics" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Rubrics</span>
-          </TabsTrigger>
-        </TabsList>
+        {/* Mobile: Horizontal scroll tabs with text labels */}
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="w-max sm:w-full sm:max-w-3xl sm:grid sm:grid-cols-6">
+            <TabsTrigger value="general" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+              <Building2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span>General</span>
+            </TabsTrigger>
+            <TabsTrigger value="team" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span>Team</span>
+            </TabsTrigger>
+            <TabsTrigger value="roles" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+              <Shield className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span>Roles</span>
+            </TabsTrigger>
+            <TabsTrigger value="billing" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+              <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span>Billing</span>
+            </TabsTrigger>
+            <TabsTrigger value="integrations" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+              <Link2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span>CRM</span>
+            </TabsTrigger>
+            <TabsTrigger value="rubrics" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span>Rubrics</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* General Settings */}
         <TabsContent value="general" className="space-y-6">

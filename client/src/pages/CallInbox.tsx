@@ -86,32 +86,33 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
   return (
     <Link href={`/calls/${call.id}`}>
       <Card className="card-hover cursor-pointer">
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-4">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex items-start justify-between gap-2 sm:gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold truncate">
+              <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                <h3 className="font-semibold text-sm sm:text-base truncate">
                   {call.contactName || call.contactPhone || "Unknown Contact"}
                 </h3>
+                {/* Hide direction badge on mobile */}
                 {call.callDirection === "inbound" ? (
-                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                  <Badge variant="outline" className="hidden sm:flex text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
                     <PhoneIncoming className="h-3 w-3 mr-1" />
                     Inbound
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
+                  <Badge variant="outline" className="hidden sm:flex text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
                     <PhoneOutgoing className="h-3 w-3 mr-1" />
                     Outbound
                   </Badge>
                 )}
                 {call.callType === "offer" ? (
-                  <Badge variant="secondary" className="text-xs">Offer</Badge>
+                  <Badge variant="secondary" className="text-[10px] sm:text-xs">Offer</Badge>
                 ) : (
-                  <Badge variant="outline" className="text-xs">Qualification</Badge>
+                  <Badge variant="outline" className="text-[10px] sm:text-xs">Qual</Badge>
                 )}
               </div>
               
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-muted-foreground">
                 {call.teamMemberName && (
                   <span className="flex items-center gap-1">
                     <User className="h-3 w-3" />
@@ -124,24 +125,25 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
                     {Math.floor(call.duration / 60)}:{(call.duration % 60).toString().padStart(2, "0")}
                   </span>
                 )}
-                <span className="flex items-center gap-1">
+                <span className="hidden sm:flex items-center gap-1">
                   <Phone className="h-3 w-3" />
                   {timeAgo}
                 </span>
+                <span className="sm:hidden text-[10px]">{timeAgo}</span>
               </div>
 
               {call.propertyAddress && (
-                <p className="text-sm text-muted-foreground mt-1 truncate">
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1 truncate hidden sm:block">
                   {call.propertyAddress}
                 </p>
               )}
             </div>
 
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-col items-end gap-1 sm:gap-2 shrink-0">
               {call.status === "completed" && grade ? (
                 <>
                   <GradeBadge grade={grade.overallGrade || "?"} />
-                  <span className="text-sm font-medium">
+                  <span className="text-xs sm:text-sm font-medium">
                     {grade.overallScore ? `${Math.round(parseFloat(grade.overallScore))}%` : ""}
                   </span>
                 </>
@@ -152,7 +154,7 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
           </div>
 
           {grade?.summary && (
-            <p className="text-sm text-muted-foreground mt-3 line-clamp-2 border-t pt-3">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-2 sm:mt-3 line-clamp-2 border-t pt-2 sm:pt-3">
               {grade.summary}
             </p>
           )}
@@ -840,98 +842,124 @@ export default function CallInbox() {
     setSelectedDirections([]);
   };
 
+  const [showFilters, setShowFilters] = useState(false);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Call History</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Call History</h1>
+          <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
             Review calls, provide feedback, and get coaching advice
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <GHLSyncStatus onSyncComplete={handleRefresh} />
           <ManualUploadDialog onSuccess={handleRefresh} />
           <Button 
             variant="outline" 
+            size="sm"
             onClick={handleRefresh}
             disabled={isRefetching}
+            className="h-8 sm:h-9"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
-            Refresh
+            <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline ml-2">Refresh</span>
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Main Content - Calls and Feedback */}
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="calls">
-                <Phone className="h-4 w-4 mr-2" />
-                Graded Calls ({gradedCalls.length}{allGradedCalls.length !== gradedCalls.length ? `/${allGradedCalls.length}` : ""})
-              </TabsTrigger>
-              <TabsTrigger value="admin">
-                N/A ({adminCalls.length})
-              </TabsTrigger>
-              <TabsTrigger value="skipped">
-                Skipped ({skippedCalls.length})
-              </TabsTrigger>
-              <TabsTrigger value="failed">
-                <XCircle className="h-4 w-4 mr-2" />
-                Failed ({failedCalls.length})
-              </TabsTrigger>
-              <TabsTrigger value="feedback">
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Feedback ({pendingFeedback.length} pending)
-              </TabsTrigger>
-            </TabsList>
+            {/* Mobile: Horizontal scroll tabs */}
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <TabsList className="mb-4 w-max sm:w-auto">
+                <TabsTrigger value="calls" className="text-xs sm:text-sm px-2 sm:px-3">
+                  <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Graded </span>({gradedCalls.length})
+                </TabsTrigger>
+                <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">
+                  N/A ({adminCalls.length})
+                </TabsTrigger>
+                <TabsTrigger value="skipped" className="text-xs sm:text-sm px-2 sm:px-3">
+                  <span className="hidden sm:inline">Skipped </span>Skip ({skippedCalls.length})
+                </TabsTrigger>
+                <TabsTrigger value="failed" className="text-xs sm:text-sm px-2 sm:px-3">
+                  <XCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  ({failedCalls.length})
+                </TabsTrigger>
+                <TabsTrigger value="feedback" className="text-xs sm:text-sm px-2 sm:px-3">
+                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  ({pendingFeedback.length})
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* Filters - shown only on calls tab */}
             {activeTab === "calls" && (
-              <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-muted/30 rounded-lg border">
-                <div className="flex items-center gap-1 text-sm text-muted-foreground mr-2">
-                  <Filter className="h-4 w-4" />
-                  <span>Filters:</span>
+              <div className="mb-4">
+                {/* Mobile: Collapsible filter button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="sm:hidden w-full justify-between mb-2"
+                  onClick={() => setShowFilters(!showFilters)}
+                >
+                  <span className="flex items-center gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filters {hasActiveFilters && `(${selectedTeamMembers.length + selectedCallTypes.length + selectedScoreRanges.length + selectedDirections.length})`}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                </Button>
+                
+                {/* Filter content - always visible on desktop, collapsible on mobile */}
+                <div className={`${showFilters ? 'block' : 'hidden'} sm:block`}>
+                  <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/30 rounded-lg border">
+                    <div className="hidden sm:flex items-center gap-1 text-sm text-muted-foreground mr-2">
+                      <Filter className="h-4 w-4" />
+                      <span>Filters:</span>
+                    </div>
+                    <MultiSelectFilter
+                      label="Team Member"
+                      options={teamMemberOptions}
+                      selected={selectedTeamMembers}
+                      onChange={setSelectedTeamMembers}
+                      icon={User}
+                    />
+                    <MultiSelectFilter
+                      label="Call Type"
+                      options={callTypeOptions}
+                      selected={selectedCallTypes}
+                      onChange={setSelectedCallTypes}
+                      icon={Phone}
+                    />
+                    <MultiSelectFilter
+                      label="Score"
+                      options={scoreRangeOptions}
+                      selected={selectedScoreRanges}
+                      onChange={setSelectedScoreRanges}
+                    />
+                    <MultiSelectFilter
+                      label="Direction"
+                      options={directionOptions}
+                      selected={selectedDirections}
+                      onChange={setSelectedDirections}
+                    />
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-muted-foreground hover:text-foreground"
+                        onClick={clearAllFilters}
+                      >
+                        <X className="h-3.5 w-3.5 mr-1" />
+                        Clear all
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <MultiSelectFilter
-                  label="Team Member"
-                  options={teamMemberOptions}
-                  selected={selectedTeamMembers}
-                  onChange={setSelectedTeamMembers}
-                  icon={User}
-                />
-                <MultiSelectFilter
-                  label="Call Type"
-                  options={callTypeOptions}
-                  selected={selectedCallTypes}
-                  onChange={setSelectedCallTypes}
-                  icon={Phone}
-                />
-                <MultiSelectFilter
-                  label="Score"
-                  options={scoreRangeOptions}
-                  selected={selectedScoreRanges}
-                  onChange={setSelectedScoreRanges}
-                />
-                <MultiSelectFilter
-                  label="Direction"
-                  options={directionOptions}
-                  selected={selectedDirections}
-                  onChange={setSelectedDirections}
-                />
-                {hasActiveFilters && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-muted-foreground hover:text-foreground"
-                    onClick={clearAllFilters}
-                  >
-                    <X className="h-3.5 w-3.5 mr-1" />
-                    Clear all
-                  </Button>
-                )}
               </div>
             )}
 

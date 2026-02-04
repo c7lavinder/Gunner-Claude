@@ -941,3 +941,47 @@
 - [x] Update permissions so Lead Generators have same access as Lead Managers
 - [x] Update grading to treat Lead Generator calls same as Lead Manager calls
 - [x] Update gamification badges for Lead Generator role
+
+
+## Mobile Viewing Improvements
+### Global Issues
+- [ ] Header bar: Show icon only on mobile, hide text label (use tooltip on desktop)
+- [ ] Sidebar: Consider swipe-to-close gesture
+
+### Dashboard (/dashboard)
+- [ ] Stat cards: 2-column grid on mobile (icon + number + label)
+- [ ] Gamification cards: 2x2 grid on mobile
+- [ ] Recent Calls: Tighter vertical padding
+- [ ] Team Leaderboard: Horizontal layout for top 3 ranks
+- [ ] Call Processing Status: Horizontal row or 2x2 grid
+
+### Call History (/calls)
+- [ ] Filter row: Collapse into single "Filters" button with bottom sheet
+- [ ] Tab bar: Ensure readable on mobile (icons + labels or horizontal scroll)
+- [ ] Action buttons: Stack vertically or collapse into overflow menu
+
+### Analytics (/analytics)
+- [ ] Stat cards: 2-column grid on mobile
+- [ ] Tables: Add horizontal scroll wrapper for Team Leaderboard, Call Metrics, Team Member Scores
+- [ ] Score Trends chart: Check axis labels at 375px
+
+### Team (/team)
+- [ ] Team member cards: Compact 2-column grid or horizontal carousel
+
+### Settings (/settings)
+- [ ] Tab icons: Add text labels below icons on mobile
+
+
+## Mobile Viewing Improvements (Feb 4, 2025)
+- [x] Header bar: Hide "Toggle sidebar" text on mobile, show only hamburger icon
+- [x] Dashboard: 2-column grid for stat cards on mobile
+- [x] Dashboard: Compact gamification cards (2-column grid)
+- [x] Dashboard: Horizontal scroll for leaderboard on mobile
+- [x] Dashboard: Smaller processing status cards
+- [x] Team: Compact card design with smaller avatars and badges
+- [x] Call History: Collapsible filters on mobile
+- [x] Call History: Horizontal scroll tabs
+- [x] Call History: Compact call cards with smaller text
+- [x] Analytics: 2-column stat cards on mobile
+- [x] Analytics: Horizontal scroll for leaderboard tables
+- [x] Settings: Show text labels with icons on all tabs (horizontal scroll)
