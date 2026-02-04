@@ -9,6 +9,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import { tenants, users, calls, callGrades } from "../drizzle/schema";
 import { eq, like, sql, count, desc, and, isNotNull } from "drizzle-orm";
+import { getAllTenantsUsage, getTenantUsage } from "./rateLimit";
 
 // Super admin check middleware
 const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -220,5 +221,64 @@ export const adminRouter = router({
         .where(eq(tenants.id, tenantId));
 
       return { success: true };
+    }),
+
+  // Delete tenant and all associated data
+  deleteTenant: superAdminProcedure
+    .input(z.object({ tenantId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+      // First verify tenant exists
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, input.tenantId));
+
+      if (!tenant) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+      }
+
+      // Delete all associated users first (foreign key constraint)
+      await db.delete(users).where(eq(users.tenantId, input.tenantId));
+
+      // Delete the tenant
+      await db.delete(tenants).where(eq(tenants.id, input.tenantId));
+
+      return { success: true, deletedTenant: tenant.name };
+    }),
+
+  // Get API usage analytics for all tenants
+  getUsageAnalytics: superAdminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+    // Get usage data from in-memory store
+    const usageData = getAllTenantsUsage();
+
+    // Get tenant names for the usage data
+    const tenantIds = usageData.map(u => u.tenantId);
+    if (tenantIds.length === 0) return [];
+
+    const tenantNames = await db
+      .select({ id: tenants.id, name: tenants.name })
+      .from(tenants);
+
+    const tenantNameMap = new Map(tenantNames.map(t => [t.id, t.name]));
+
+    return usageData.map(u => ({
+      tenantId: u.tenantId,
+      tenantName: tenantNameMap.get(u.tenantId) || 'Unknown',
+      usage: u.usage,
+      totalRequests: Object.values(u.usage).reduce((sum, count) => sum + count, 0),
+    })).sort((a, b) => b.totalRequests - a.totalRequests);
+  }),
+
+  // Get usage for a specific tenant
+  getTenantUsage: superAdminProcedure
+    .input(z.object({ tenantId: z.number() }))
+    .query(async ({ input }) => {
+      return getTenantUsage(input.tenantId);
     }),
 });

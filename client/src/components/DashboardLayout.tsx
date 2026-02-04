@@ -28,9 +28,10 @@ import { useLocation, Redirect } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const getMenuItems = (teamRole: string | null | undefined, openId?: string) => {
+const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string) => {
   const isAdmin = teamRole === 'admin';
   const isPlatformOwner = openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
+  const isSuperAdmin = userRole === 'super_admin';
   const isLeadManager = teamRole === 'lead_manager';
   
   const items = [
@@ -57,6 +58,11 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string) => {
   // Platform Admin is only for platform owner
   if (isPlatformOwner) {
     items.push({ icon: Shield, label: "Platform Admin", path: "/admin" });
+  }
+  
+  // Admin Dashboard is for super_admin users
+  if (isSuperAdmin) {
+    items.push({ icon: Shield, label: "Admin Dashboard", path: "/admin-dashboard" });
   }
   
   return items;
@@ -167,7 +173,7 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const menuItems = getMenuItems(user?.teamRole, user?.openId);
+  const menuItems = getMenuItems(user?.teamRole, user?.openId, user?.role);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

@@ -869,3 +869,12 @@
   - [x] Added tenant detail modal with overview, users, and settings tabs
   - [x] Added ability to update subscription tier, status, and max users
   - [x] Route available at /admin-dashboard (super_admin only)
+
+## Admin Enhancements Phase 2 (Feb 3, 2026)
+- [x] Add admin navigation link in sidebar for super_admin users
+- [x] Add tenant deletion capability to admin dashboard
+- [x] Add usage analytics tracking per tenant
+  - [x] Added trackUsage function to rateLimit.ts
+  - [x] Added usage tracking to all rate-limited endpoints (AI chat, content generation)
+  - [x] Added getUsageAnalytics and getTenantUsage endpoints to adminRouter
+  - [x] Added Usage Analytics section to AdminDashboard with table view

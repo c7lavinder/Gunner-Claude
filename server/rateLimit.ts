@@ -155,3 +155,79 @@ export function cleanupExpiredEntries(): void {
 
 // Run cleanup every 5 minutes
 setInterval(cleanupExpiredEntries, 5 * 60 * 1000);
+
+// ============ USAGE ANALYTICS TRACKING ============
+
+// Store for tracking cumulative usage per tenant per category
+interface UsageEntry {
+  count: number;
+  lastUpdated: number;
+}
+
+// Map: tenantId -> category -> usage entry
+const usageStore = new Map<number, Map<string, UsageEntry>>();
+
+/**
+ * Track API usage for analytics
+ */
+export function trackUsage(
+  tenantId: number | null | undefined,
+  category: string
+): void {
+  if (!tenantId) return;
+
+  let tenantUsage = usageStore.get(tenantId);
+  if (!tenantUsage) {
+    tenantUsage = new Map();
+    usageStore.set(tenantId, tenantUsage);
+  }
+
+  const entry = tenantUsage.get(category);
+  if (entry) {
+    entry.count++;
+    entry.lastUpdated = Date.now();
+  } else {
+    tenantUsage.set(category, {
+      count: 1,
+      lastUpdated: Date.now(),
+    });
+  }
+}
+
+/**
+ * Get usage statistics for a tenant
+ */
+export function getTenantUsage(tenantId: number): Record<string, number> {
+  const tenantUsage = usageStore.get(tenantId);
+  if (!tenantUsage) return {};
+
+  const result: Record<string, number> = {};
+  tenantUsage.forEach((entry, category) => {
+    result[category] = entry.count;
+  });
+  return result;
+}
+
+/**
+ * Get usage statistics for all tenants (for admin dashboard)
+ */
+export function getAllTenantsUsage(): Array<{ tenantId: number; usage: Record<string, number> }> {
+  const result: Array<{ tenantId: number; usage: Record<string, number> }> = [];
+  
+  usageStore.forEach((tenantUsage, tenantId) => {
+    const usage: Record<string, number> = {};
+    tenantUsage.forEach((entry, category) => {
+      usage[category] = entry.count;
+    });
+    result.push({ tenantId, usage });
+  });
+  
+  return result;
+}
+
+/**
+ * Reset usage for a tenant (useful for billing cycles)
+ */
+export function resetTenantUsage(tenantId: number): void {
+  usageStore.delete(tenantId);
+}

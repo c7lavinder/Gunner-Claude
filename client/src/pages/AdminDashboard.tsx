@@ -23,6 +23,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -43,6 +54,9 @@ import {
   CheckCircle,
   Clock,
   XCircle,
+  Trash2,
+  Activity,
+  Zap,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -59,16 +73,31 @@ export default function AdminDashboard() {
     search: searchTerm || undefined,
   });
 
-  // Fetch tenant details when selected
-  const { data: tenantDetails } = trpc.admin.getTenantDetails.useQuery(
+  // Fetch tenant details
+  const { data: tenantDetails, isLoading: detailsLoading } = trpc.admin.getTenantDetails.useQuery(
     { tenantId: selectedTenant! },
     { enabled: !!selectedTenant }
   );
+
+  // Usage analytics query
+  const { data: usageAnalytics, refetch: refetchUsage } = trpc.admin.getUsageAnalytics.useQuery();
 
   // Update tenant mutation
   const updateTenant = trpc.admin.updateTenant.useMutation({
     onSuccess: () => {
       toast.success("Tenant updated successfully");
+      refetchTenants();
+    },
+    onError: (error: { message: string }) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Delete tenant mutation
+  const deleteTenant = trpc.admin.deleteTenant.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Tenant "${data.deletedTenant}" deleted successfully`);
+      setSelectedTenant(null);
       refetchTenants();
     },
     onError: (error: { message: string }) => {
@@ -426,6 +455,42 @@ export default function AdminDashboard() {
                                       className="mt-1"
                                     />
                                   </div>
+                                  
+                                  {/* Danger Zone */}
+                                  <div className="pt-6 border-t border-destructive/20">
+                                    <h4 className="text-sm font-medium text-destructive mb-2">Danger Zone</h4>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" size="sm" className="w-full">
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Delete Tenant
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            This will permanently delete <strong>{tenant.name}</strong> and all associated data including:
+                                            <ul className="list-disc list-inside mt-2 space-y-1">
+                                              <li>All users ({tenant.userCount} users)</li>
+                                              <li>All calls and grades ({tenant.callCount} calls)</li>
+                                              <li>All training materials and settings</li>
+                                            </ul>
+                                            <p className="mt-2 text-destructive font-medium">This action cannot be undone.</p>
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => deleteTenant.mutate({ tenantId: tenant.id })}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          >
+                                            {deleteTenant.isPending ? "Deleting..." : "Delete Tenant"}
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
                                 </div>
                               </TabsContent>
                             </Tabs>
@@ -435,6 +500,63 @@ export default function AdminDashboard() {
                           <Settings className="h-4 w-4" />
                         </Button>
                       </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Usage Analytics */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                API Usage Analytics
+              </CardTitle>
+              <CardDescription>Track API usage per tenant (since server start)</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => refetchUsage()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!usageAnalytics || usageAnalytics.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Zap className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No usage data yet. Usage tracking starts when tenants make API calls.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>AI Chat</TableHead>
+                  <TableHead>Content Gen</TableHead>
+                  <TableHead>Total Requests</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {usageAnalytics.map((item: { tenantId: number; tenantName: string; usage: Record<string, number>; totalRequests: number }) => (
+                  <TableRow key={item.tenantId}>
+                    <TableCell>
+                      <div className="font-medium">{item.tenantName}</div>
+                      <div className="text-xs text-muted-foreground">ID: {item.tenantId}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{item.usage.ai_chat || 0}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{item.usage.content_generation || 0}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{item.totalRequests}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}

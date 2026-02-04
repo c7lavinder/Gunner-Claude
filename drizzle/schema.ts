@@ -1067,3 +1067,30 @@ export const outreachHistory = mysqlTable("outreach_history", {
 
 export type OutreachHistory = typeof outreachHistory.$inferSelect;
 export type InsertOutreachHistory = typeof outreachHistory.$inferInsert;
+
+
+/**
+ * API Usage Tracking - tracks API calls per tenant for rate limiting and analytics
+ */
+export const apiUsage = mysqlTable("api_usage", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  // Usage category
+  category: mysqlEnum("category", [
+    "ai_chat",           // AI coach chat requests
+    "ai_insights",       // AI-generated insights
+    "content_generation", // Social media content generation
+    "grading",           // Call grading operations
+    "api_calls",         // General API calls
+  ]).notNull(),
+  // Usage count for this period
+  count: int("count").default(0).notNull(),
+  // Period tracking (hourly buckets)
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ApiUsage = typeof apiUsage.$inferSelect;
+export type InsertApiUsage = typeof apiUsage.$inferInsert;

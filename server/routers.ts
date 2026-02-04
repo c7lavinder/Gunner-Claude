@@ -98,7 +98,7 @@ import { pollForNewCalls, getPollingStatus, startPolling, stopPolling } from "./
 import { storagePut } from "./storage";
 import { runArchivalJob, getArchivalStats, archiveCall } from "./archival";
 import { verifyTenantOwnership } from "./tenantOwnership";
-import { checkRateLimit } from "./rateLimit";
+import { checkRateLimit, trackUsage } from "./rateLimit";
 import { adminRouter } from "./adminRouter";
 
 export const appRouter = router({
@@ -834,6 +834,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // Rate limit AI operations
         checkRateLimit(ctx.user?.tenantId, "ai");
+        trackUsage(ctx.user?.tenantId, "ai_chat");
         
         // Get training materials and recent successful calls for context (filtered by tenant)
         const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
@@ -949,6 +950,7 @@ Format: Start with brief encouragement, then give your one tip in 1-2 sentences.
       .mutation(async ({ ctx, input }) => {
         // Rate limit AI operations
         checkRateLimit(ctx.user?.tenantId, "ai");
+        trackUsage(ctx.user?.tenantId, "ai_chat");
         
         // Get training materials (filtered by tenant)
         const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
@@ -1251,6 +1253,7 @@ Keep it brief and actionable.`;
       .mutation(async ({ ctx }) => {
         // Rate limit AI operations
         checkRateLimit(ctx.user?.tenantId, "ai");
+        trackUsage(ctx.user?.tenantId, "ai_chat");
         
         // Clear existing AI-generated items
         await clearAiGeneratedInsights();
@@ -1440,6 +1443,7 @@ Keep it brief and actionable.`;
       .mutation(async ({ ctx, input }) => {
         // Rate limit content generation
         checkRateLimit(ctx.user?.tenantId, "contentGeneration");
+        trackUsage(ctx.user?.tenantId, "content_generation");
         
         // Get brand assets for context
         const assets = await getBrandAssets({ activeOnly: true });
@@ -1573,6 +1577,7 @@ Provide the content in JSON format with fields: title (optional for non-blog), c
       .mutation(async ({ ctx, input }) => {
         // Rate limit content generation
         checkRateLimit(ctx.user?.tenantId, "contentGeneration");
+        trackUsage(ctx.user?.tenantId, "content_generation");
         
         const response = await invokeLLM({
           messages: [
@@ -1680,6 +1685,7 @@ Provide ${input.count} unique content ideas in JSON format.`,
       .mutation(async ({ ctx, input }) => {
         // Rate limit AI operations
         checkRateLimit(ctx.user?.tenantId, "ai");
+        trackUsage(ctx.user?.tenantId, "ai_chat");
         
         // Use LLM to analyze website and extract branding info
         const response = await invokeLLM({
@@ -1757,6 +1763,7 @@ Provide ${input.count} unique content ideas in JSON format.`,
       .mutation(async ({ ctx, input }) => {
         // Rate limit content generation
         checkRateLimit(ctx.user?.tenantId, "contentGeneration");
+        trackUsage(ctx.user?.tenantId, "content_generation");
         
         const tenantId = ctx.user?.tenantId || undefined;
         const [calls, kpis, brandProfileData] = await Promise.all([
@@ -1836,6 +1843,7 @@ Create content that:
       .mutation(async ({ ctx, input }) => {
         // Rate limit content generation
         checkRateLimit(ctx.user?.tenantId, "contentGeneration");
+        trackUsage(ctx.user?.tenantId, "content_generation");
         
         const tenantId = ctx.user?.tenantId || undefined;
         const [stories, brandProfileData] = await Promise.all([
