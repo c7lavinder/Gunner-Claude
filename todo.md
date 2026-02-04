@@ -832,3 +832,16 @@
 - [x] Fixed getTeamTrainingItems to filter by tenantId
 - [x] Fixed getActiveTrainingItems to filter by tenantId
 - [x] Fixed teamTraining.list and teamTraining.getActive to pass tenantId
+
+## Data Isolation Hardening (Feb 3, 2026)
+- [x] Delete test tenant data (deleted tenants 60005 and 30001)
+- [x] Audit all endpoints for tenant isolation issues
+  - [x] Fixed grading rules (getGradingRules, createGradingRule)
+  - [x] Fixed AI feedback (getAIFeedback)
+  - [x] Fixed brand assets (getBrandAssets)
+  - [x] Fixed content ideas (getContentIdeas)
+  - [x] Verified social posts already has tenant filtering
+  - [x] Verified training materials already has tenant filtering
+  - [x] Verified leaderboard already has tenant filtering
+  - [x] Verified team members already has tenant filtering
+- [x] Add automated tenant isolation tests (18 tests in tenantIsolation.test.ts)

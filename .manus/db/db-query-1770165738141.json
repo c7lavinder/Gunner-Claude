@@ -1,0 +1,45 @@
+{
+  "query": "SELECT t.id, t.name, u.email FROM tenants t LEFT JOIN users u ON u.tenantId = t.id ORDER BY t.id DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT t.id, t.name, u.email FROM tenants t LEFT JOIN users u ON u.tenantId = t.id ORDER BY t.id DESC;",
+  "rows": [
+    {
+      "id": "60005",
+      "name": "Test Homes",
+      "email": "test123@example.com"
+    },
+    {
+      "id": "30001",
+      "name": "Test Company",
+      "email": "testuser@gunnertest.com"
+    },
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "email": "c.segura9393@gmail.com"
+    },
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "email": "alvarez.lozano@hotmail.com"
+    },
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "email": "xhakalavinder@gmail.com"
+    },
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "email": "kbarks@newagainhouses.com"
+    },
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "email": "corey@newagainhouses.com"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\n60005\tTest Homes\ttest123@example.com\n30001\tTest Company\ttestuser@gunnertest.com\n1\tNew Again Houses\tc.segura9393@gmail.com\n1\tNew Again Houses\talvarez.lozano@hotmail.com\n1\tNew Again Houses\txhakalavinder@gmail.com\n1\tNew Again Houses\tkbarks@newagainhouses.com\n1\tNew Again Houses\tcorey@newagainhouses.com\n",
+  "stderr": "",
+  "execution_time_ms": 70
+}

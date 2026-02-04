@@ -867,11 +867,17 @@ export async function getAIFeedback(options?: {
   callId?: number;
   status?: string;
   limit?: number;
+  tenantId?: number; // For multi-tenant filtering
 }): Promise<AIFeedback[]> {
   const db = await getDb();
   if (!db) return [];
 
   const conditions = [];
+  
+  // CRITICAL: Filter by tenant for multi-tenant isolation
+  if (options?.tenantId) {
+    conditions.push(eq(aiFeedback.tenantId, options.tenantId));
+  }
   
   if (options?.callId) {
     conditions.push(eq(aiFeedback.callId, options.callId));
@@ -928,11 +934,17 @@ export async function createGradingRule(rule: InsertGradingRule): Promise<Gradin
 export async function getGradingRules(options?: {
   applicableTo?: string;
   activeOnly?: boolean;
+  tenantId?: number; // For multi-tenant filtering
 }): Promise<GradingRule[]> {
   const db = await getDb();
   if (!db) return [];
 
   const conditions = [];
+  
+  // CRITICAL: Filter by tenant for multi-tenant isolation
+  if (options?.tenantId) {
+    conditions.push(eq(gradingRules.tenantId, options.tenantId));
+  }
   
   if (options?.activeOnly !== false) {
     conditions.push(eq(gradingRules.isActive, "true"));
@@ -1128,11 +1140,17 @@ export async function createBrandAsset(asset: InsertBrandAsset): Promise<BrandAs
 export async function getBrandAssets(options?: {
   assetType?: string;
   activeOnly?: boolean;
+  tenantId?: number; // For multi-tenant filtering
 }): Promise<BrandAsset[]> {
   const db = await getDb();
   if (!db) return [];
 
   const conditions = [];
+  
+  // CRITICAL: Filter by tenant for multi-tenant isolation
+  if (options?.tenantId) {
+    conditions.push(eq(brandAssets.tenantId, options.tenantId));
+  }
   
   if (options?.activeOnly !== false) {
     conditions.push(eq(brandAssets.isActive, "true"));
@@ -1292,11 +1310,17 @@ export async function createContentIdea(idea: InsertContentIdea): Promise<Conten
 export async function getContentIdeas(options?: {
   status?: string;
   targetPlatform?: string;
+  tenantId?: number; // For multi-tenant filtering
 }): Promise<ContentIdea[]> {
   const db = await getDb();
   if (!db) return [];
 
   const conditions = [];
+  
+  // CRITICAL: Filter by tenant for multi-tenant isolation
+  if (options?.tenantId) {
+    conditions.push(eq(contentIdeas.tenantId, options.tenantId));
+  }
   
   if (options?.status) {
     conditions.push(eq(contentIdeas.status, options.status as any));

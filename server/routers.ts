@@ -688,8 +688,12 @@ export const appRouter = router({
         status: z.string().optional(),
         limit: z.number().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getAIFeedback(input || {});
+      .query(async ({ ctx, input }) => {
+        // CRITICAL: Include tenantId for multi-tenant isolation
+        return await getAIFeedback({
+          ...input,
+          tenantId: ctx.user?.tenantId || undefined,
+        });
       }),
 
     getById: protectedProcedure
@@ -757,8 +761,12 @@ export const appRouter = router({
       .input(z.object({
         applicableTo: z.string().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getGradingRules(input || {});
+      .query(async ({ ctx, input }) => {
+        // CRITICAL: Include tenantId for multi-tenant isolation
+        return await getGradingRules({
+          ...input,
+          tenantId: ctx.user?.tenantId || undefined,
+        });
       }),
 
     create: protectedProcedure
@@ -769,13 +777,15 @@ export const appRouter = router({
         priority: z.number().optional(),
         applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // CRITICAL: Include tenantId for multi-tenant isolation
         return await createGradingRule({
           title: input.title,
           description: input.description,
           ruleText: input.ruleText,
           priority: input.priority || 0,
           applicableTo: input.applicableTo || "all",
+          tenantId: ctx.user?.tenantId || undefined,
         });
       }),
 
@@ -1244,8 +1254,12 @@ Keep it brief and actionable.`;
       .input(z.object({
         assetType: z.string().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getBrandAssets(input || {});
+      .query(async ({ ctx, input }) => {
+        // CRITICAL: Include tenantId for multi-tenant isolation
+        return await getBrandAssets({
+          ...input,
+          tenantId: ctx.user?.tenantId || undefined,
+        });
       }),
 
     getById: protectedProcedure
@@ -1453,8 +1467,12 @@ Provide the content in JSON format with fields: title (optional for non-blog), c
         status: z.string().optional(),
         targetPlatform: z.string().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await getContentIdeas(input || {});
+      .query(async ({ ctx, input }) => {
+        // CRITICAL: Include tenantId for multi-tenant isolation
+        return await getContentIdeas({
+          ...input,
+          tenantId: ctx.user?.tenantId || undefined,
+        });
       }),
 
     getById: protectedProcedure
