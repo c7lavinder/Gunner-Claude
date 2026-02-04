@@ -814,10 +814,11 @@ export default function CallInbox() {
     { value: "outbound", label: "Outbound" },
   ];
 
-  // Separate graded calls from skipped/admin/failed calls
+  // Separate graded calls from skipped/admin/failed/pending calls
   const allGradedCalls = calls?.filter(c => c.status === "completed" && c.classification === "conversation") || [];
   const adminCalls = calls?.filter(c => c.classification === "admin_call") || [];
   const failedCalls = calls?.filter(c => c.status === "failed") || [];
+  const pendingCalls = calls?.filter(c => c.status === "pending" || c.status === "transcribing" || c.status === "grading") || [];
   const skippedCalls = calls?.filter(c => 
     (c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call")) && c.status !== "failed"
   ) || [];
@@ -902,6 +903,10 @@ export default function CallInbox() {
             {/* Mobile: Horizontal scroll tabs */}
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
               <TabsList className="mb-4 w-max sm:w-auto">
+                <TabsTrigger value="pending" className="text-xs sm:text-sm px-2 sm:px-3">
+                  <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Pending </span>({pendingCalls.length})
+                </TabsTrigger>
                 <TabsTrigger value="calls" className="text-xs sm:text-sm px-2 sm:px-3">
                   <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   <span className="hidden sm:inline">Graded </span>({gradedCalls.length})
@@ -988,6 +993,61 @@ export default function CallInbox() {
                 </div>
               </div>
             )}
+
+            <TabsContent value="pending" className="space-y-4">
+              {pendingCalls.length > 0 ? (
+                <div className="space-y-4">
+                  {pendingCalls.map((item) => (
+                    <Card key={item.id} className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold truncate">
+                                {item.contactName || item.contactPhone || "Unknown Contact"}
+                              </h3>
+                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                {item.status === "pending" ? "Queued" : item.status === "transcribing" ? "Transcribing" : "Grading"}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                              {item.teamMemberName && (
+                                <span className="flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  {item.teamMemberName}
+                                </span>
+                              )}
+                              {item.duration && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
+                                </span>
+                              )}
+                              {item.createdAt && (
+                                <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center">
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-16">
+                    <CheckCircle className="h-16 w-16 text-green-500/50 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No calls in queue</h3>
+                    <p className="text-muted-foreground text-center max-w-md">
+                      All calls have been processed. New calls will appear here when they're being transcribed or graded.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
 
             <TabsContent value="calls" className="space-y-4">
               {isLoading ? (

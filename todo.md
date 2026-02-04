@@ -1031,3 +1031,4 @@
 - [x] Increase compression bitrate to 96kbps for better transcription quality on long calls
 - [x] Implement audio chunking for long calls (split, transcribe chunks, combine transcript)
 - [x] Fix call type label to show 'Qualification' instead of 'Qual'
+- [x] Add Pending tab to Call History to show queued calls being processed
