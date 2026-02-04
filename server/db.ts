@@ -331,7 +331,7 @@ export async function getLeaderboardData(tenantId?: number): Promise<Array<{
   skippedCalls: number;
   averageScore: number;
   appointmentsSet: number;
-  offersAccepted: number;
+  offerCallsCompleted: number;
   abScoredCalls: number;
   gradeDistribution: { A: number; B: number; C: number; D: number; F: number };
 }>> {
@@ -357,9 +357,9 @@ export async function getLeaderboardData(tenantId?: number): Promise<Array<{
       const gradedCalls = memberCalls.filter(c => c.status === "completed" && c.classification === "conversation");
       const skippedCalls = memberCalls.filter(c => c.status === "skipped");
       
-      // Count appointments and offers
+      // Count appointments and offer calls completed
       const appointmentsSet = memberCalls.filter(c => c.callOutcome === "appointment_set").length;
-      const offersAccepted = memberCalls.filter(c => c.callOutcome === "offer_accepted").length;
+      const offerCallsCompleted = gradedCalls.filter(c => c.callType === "offer").length;
       
       const grades = await Promise.all(
         gradedCalls.map(async (call) => {
@@ -391,7 +391,7 @@ export async function getLeaderboardData(tenantId?: number): Promise<Array<{
         skippedCalls: skippedCalls.length,
         averageScore: validGrades.length > 0 ? totalScore / validGrades.length : 0,
         appointmentsSet,
-        offersAccepted,
+        offerCallsCompleted,
         abScoredCalls,
         gradeDistribution,
       };
@@ -418,7 +418,7 @@ export async function getCallStats(options?: {
   gradedToday: number;
   skippedToday: number;
   appointmentsSet: number;
-  offersAccepted: number;
+  offerCallsCompleted: number;
   classificationBreakdown: {
     conversation: number;
     voicemail: number;
@@ -472,7 +472,7 @@ export async function getCallStats(options?: {
     gradedToday: 0,
     skippedToday: 0,
     appointmentsSet: 0,
-    offersAccepted: 0,
+    offerCallsCompleted: 0,
     classificationBreakdown: {
       conversation: 0,
       voicemail: 0,
@@ -604,7 +604,8 @@ export async function getCallStats(options?: {
 
   // Count outcomes
   const appointmentsSet = allCalls.filter(c => c.callOutcome === "appointment_set").length;
-  const offersAccepted = allCalls.filter(c => c.callOutcome === "offer_accepted").length;
+  // Count completed offer calls (calls by acquisition managers)
+  const offerCallsCompleted = gradedCalls.filter(c => c.callType === "offer").length;
 
   // Calculate average call duration for graded calls
   const gradedCallDurations = gradedCalls.filter(c => c.duration).map(c => c.duration || 0);
@@ -751,7 +752,7 @@ export async function getCallStats(options?: {
     gradedToday,
     skippedToday,
     appointmentsSet,
-    offersAccepted,
+    offerCallsCompleted,
     classificationBreakdown,
     averageCallDuration,
     gradeDistribution,

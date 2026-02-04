@@ -135,8 +135,8 @@ export default function Analytics() {
           loading={statsLoading}
         />
         <StatCard
-          title="Offers Accepted"
-          value={stats?.offersAccepted ?? 0}
+          title="Offer Calls"
+          value={stats?.offerCallsCompleted ?? 0}
           icon={CheckCircle2}
           loading={statsLoading}
         />
@@ -253,7 +253,7 @@ export default function Analytics() {
                     </thead>
                     <tbody>
                       {acquisitionManagers
-                        .sort((a, b) => b.offersAccepted - a.offersAccepted)
+                        .sort((a, b) => b.offerCallsCompleted - a.offerCallsCompleted)
                         .map((entry, index) => (
                         <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
                           <td className="py-2 sm:py-4 px-2 sm:px-4">
@@ -276,7 +276,7 @@ export default function Analytics() {
                             <p className="text-sm sm:text-lg font-bold">{entry.gradedCalls}</p>
                           </td>
                           <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold text-green-600">{entry.offersAccepted}</p>
+                            <p className="text-sm sm:text-lg font-bold text-green-600">{entry.offerCallsCompleted}</p>
                           </td>
                           <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
                             <p className="text-sm sm:text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>

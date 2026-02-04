@@ -110,8 +110,8 @@ export default function Home() {
           loading={statsLoading}
         />
         <StatCard
-          title="Offers"
-          value={stats?.offersAccepted ?? 0}
+          title="Offer Calls"
+          value={stats?.offerCallsCompleted ?? 0}
           icon={CheckCircle2}
           loading={statsLoading}
         />
