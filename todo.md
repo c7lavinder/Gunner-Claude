@@ -1021,3 +1021,4 @@
 - [ ] Test email verification flow
 - [x] Fix Analytics page stat cards to match Dashboard styling
 - [x] Add tenant settings/delete functionality to Admin page
+- [x] Extend session cookie expiration to 30 days

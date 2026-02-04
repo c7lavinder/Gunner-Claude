@@ -28,7 +28,7 @@ export function createSessionToken(userId: number, tenantId: number | null): str
   return jwt.sign(
     { userId, tenantId, type: 'session' },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: '30d' }
   );
 }
 
