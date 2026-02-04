@@ -1024,3 +1024,5 @@
 - [x] Extend session cookie expiration to 30 days
 - [x] Fix transcription failure for large audio files (30+ minute calls exceeding 25MB limit)
 - [x] Add MP3 decoder to handle large MP3 files without FFmpeg
+- [x] Fix call classification to not skip long calls with rapport-building conversations
+- [x] Increase audio compression bitrate for better transcription quality

@@ -434,30 +434,35 @@ export async function classifyCall(
           content: `You are a call classification system for a real estate investment company.
 Analyze the transcript and classify the call into one of these categories:
 
-1. "conversation" - A real sales conversation with substantive discussion about selling a property. This includes:
-   - Discussion of property details, condition, or location
-   - Discussion of seller's situation or motivation
-   - Price discussion or negotiation
+1. "conversation" - A real sales conversation. This is the DEFAULT for any call with back-and-forth dialogue. Includes:
+   - ANY discussion about property, real estate, or selling
+   - Rapport-building conversations that lead to business discussion
+   - Price discussion, negotiation, or making offers
    - Qualification questions about the property or seller
-   - Objection handling related to selling
+   - Objection handling
+   - Calls that result in appointments, contracts, or next steps
+   - Long calls (10+ minutes) with substantive dialogue - these are almost always real conversations
    
-2. "admin_call" - An administrative or non-sales call. This includes:
-   - Scheduling or rescheduling appointments (without sales discussion)
-   - Follow-up calls just to confirm times/dates
-   - Calls about paperwork, contracts, or closing logistics
-   - Calls to title companies, inspectors, or other vendors
+2. "admin_call" - ONLY for purely administrative calls with NO sales content:
+   - Scheduling calls with NO property/price discussion at all
+   - Calls about paperwork logistics only
+   - Calls to vendors (title companies, inspectors)
    - Internal team calls
-   - Calls where the main purpose is NOT qualifying or making an offer
    
-3. "voicemail" - The rep left a voicemail message (one-sided, no response from other party)
+3. "voicemail" - The rep left a voicemail message (one-sided, no response)
 
-4. "no_answer" - Call went unanswered, straight to voicemail, or disconnected quickly
+4. "no_answer" - Call went unanswered or disconnected quickly
 
-5. "callback_request" - Very brief call where someone just said "call me back", "not a good time", "I'm busy", etc. with no substantive conversation
+5. "callback_request" - Very brief call (under 2 minutes) where someone just said "call me back" with no conversation
 
-6. "wrong_number" - Wrong number, disconnected number, or person says they don't own the property
+6. "wrong_number" - ONLY if the person explicitly says "wrong number" or "I don't own this property"
 
-IMPORTANT: If the call is primarily about scheduling, confirming appointments, or administrative matters WITHOUT substantive sales discussion (qualification, motivation, price), classify it as "admin_call".
+IMPORTANT RULES:
+- When in doubt, classify as "conversation" - it's better to grade a call than miss one
+- Rapport-building (talking about personal topics, sports, movies, family) is a SALES TECHNIQUE, not a wrong number
+- Long calls with back-and-forth dialogue are almost always real conversations, even if they discuss non-business topics
+- Only use "wrong_number" if explicitly stated - don't infer it from confusing content
+- If the transcript seems garbled or unclear, default to "conversation"
 
 Respond with JSON only:
 {
