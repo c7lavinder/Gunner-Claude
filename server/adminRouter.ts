@@ -12,8 +12,14 @@ import { eq, like, sql, count, desc, and, isNotNull } from "drizzle-orm";
 import { getAllTenantsUsage, getTenantUsage } from "./rateLimit";
 
 // Super admin check middleware
+// Platform owner's openId for fallback access
+const PLATFORM_OWNER_OPEN_ID = "U3JEthPNs4UbYRrgRBbShj";
+
 const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user?.role !== "super_admin") {
+  const isSuperAdmin = ctx.user?.role === "super_admin";
+  const isPlatformOwner = ctx.user?.openId === PLATFORM_OWNER_OPEN_ID;
+  
+  if (!isSuperAdmin && !isPlatformOwner) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Access denied. Super admin privileges required.",
