@@ -1073,3 +1073,8 @@
 
 ## Feature Descriptions/Tooltips
 - [x] Add tooltips with descriptions for each feature in the plan editor
+
+## Pricing Page Improvements
+- [x] Display human-readable feature names on public pricing page
+- [x] Add tooltip descriptions for each feature on pricing page
+- [x] Add icons next to each feature for visual enhancement
