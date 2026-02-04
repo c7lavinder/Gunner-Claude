@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, duration, status, errorMessage FROM calls WHERE id = 240026;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, duration, status, errorMessage FROM calls WHERE id = 240026;",
+  "rows": [
+    {
+      "id": "240026",
+      "duration": "1544",
+      "status": "failed",
+      "errorMessage": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tduration\tstatus\terrorMessage\n240026\t1544\tfailed\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

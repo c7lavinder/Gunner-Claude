@@ -106,14 +106,16 @@ export async function transcribeAudio(
       audioBuffer = Buffer.from(await response.arrayBuffer());
       mimeType = response.headers.get('content-type') || 'audio/mpeg';
       
-      // Check file size (16MB limit)
-      const sizeMB = audioBuffer.length / (1024 * 1024);
-      if (sizeMB > 16) {
-        return {
-          error: "Audio file exceeds maximum size limit",
-          code: "FILE_TOO_LARGE",
-          details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 16MB`
-        };
+      // Import compression utility
+      const { downloadAndCompressAudio } = await import("../audioCompression");
+      const audioResult = await downloadAndCompressAudio(options.audioUrl);
+      if ('error' in audioResult) {
+        return { error: "Failed to process audio", code: "SERVICE_ERROR", details: audioResult.error };
+      }
+      audioBuffer = audioResult.buffer;
+      mimeType = audioResult.mimeType;
+      if (audioResult.wasCompressed) {
+        console.log(`[Transcription] Compressed from ${audioResult.originalSizeMB.toFixed(2)}MB to ${audioResult.finalSizeMB.toFixed(2)}MB`);
       }
     } catch (error) {
       return {
