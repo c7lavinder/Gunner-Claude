@@ -282,33 +282,51 @@ export default function TeamManagement() {
                       })}
                       
                       {/* Add new assignment */}
-                      <Select
-                        onValueChange={(value) => {
-                          if (am.teamMemberId) {
-                            assignManagerMutation.mutate({
-                              leadManagerId: parseInt(value),
-                              acquisitionManagerId: am.teamMemberId,
-                            });
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="+ Add Lead Manager" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {teamMembers?.filter(tm => {
-                            // Only show team members who are lead managers and not already assigned
-                            const linkedUser = users?.find(u => u.teamMemberId === tm.id);
-                            const isLeadManager = linkedUser?.teamRole === 'lead_manager';
-                            const notAssigned = !assignedLeadManagers.some(a => a.leadManagerId === tm.id);
-                            return isLeadManager && notAssigned;
-                          }).map((tm) => (
-                            <SelectItem key={tm.id} value={tm.id.toString()}>
-                              {tm.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {(() => {
+                        const availableLeadManagers = teamMembers?.filter(tm => {
+                          // Only show team members who are lead managers and not already assigned
+                          const linkedUser = users?.find(u => u.teamMemberId === tm.id);
+                          const isLeadManager = linkedUser?.teamRole === 'lead_manager';
+                          const notAssigned = !assignedLeadManagers.some(a => a.leadManagerId === tm.id);
+                          return isLeadManager && notAssigned;
+                        }) || [];
+                        
+                        if (availableLeadManagers.length === 0) {
+                          return (
+                            <div className="text-sm text-muted-foreground py-2 px-3 border rounded-md border-dashed">
+                              {leadManagers.length === 0 
+                                ? "No Lead Managers available - assign the Lead Manager role to users first"
+                                : "All Lead Managers have been assigned"}
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <Select
+                            key={`am-${am.teamMemberId}-${assignedLeadManagers.length}`}
+                            value=""
+                            onValueChange={(value) => {
+                              if (am.teamMemberId && value) {
+                                assignManagerMutation.mutate({
+                                  leadManagerId: parseInt(value),
+                                  acquisitionManagerId: am.teamMemberId,
+                                });
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="+ Add Lead Manager" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableLeadManagers.map((tm) => (
+                                <SelectItem key={tm.id} value={tm.id.toString()}>
+                                  {tm.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
