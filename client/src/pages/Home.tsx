@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Phone, TrendingUp, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -14,20 +14,15 @@ function StatCard({
   title, 
   value, 
   icon: Icon, 
-  loading,
-  onClick
+  loading 
 }: { 
   title: string; 
   value: string | number; 
   icon: React.ElementType;
   loading?: boolean;
-  onClick?: () => void;
 }) {
   return (
-    <Card 
-      className={`p-3 sm:p-4 ${onClick ? 'cursor-pointer hover:bg-accent/50 transition-colors' : ''}`}
-      onClick={onClick}
-    >
+    <Card className="p-3 sm:p-4">
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="p-1.5 sm:p-2 rounded-lg bg-muted shrink-0">
           <Icon className="h-4 w-4 text-muted-foreground" />
@@ -60,7 +55,6 @@ const dateRangeLabels: Record<DateRange, string> = {
 
 export default function Home() {
   const [dateRange, setDateRange] = useState<DateRange>("today");
-  const [, navigate] = useLocation();
   
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
   const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ limit: 5 });
@@ -98,28 +92,24 @@ export default function Home() {
           value={stats?.totalCalls ?? 0}
           icon={Phone}
           loading={statsLoading}
-          onClick={() => navigate('/calls?filter=all')}
         />
         <StatCard
           title="Conversations"
           value={stats?.gradedCalls ?? 0}
           icon={MessageSquare}
           loading={statsLoading}
-          onClick={() => navigate('/calls?filter=graded')}
         />
         <StatCard
           title="Appointments"
           value={stats?.appointmentsSet ?? 0}
           icon={Calendar}
           loading={statsLoading}
-          onClick={() => navigate('/calls?filter=appointments')}
         />
         <StatCard
           title="Offers"
           value={stats?.offersAccepted ?? 0}
           icon={CheckCircle2}
           loading={statsLoading}
-          onClick={() => navigate('/calls?filter=offers')}
         />
         <StatCard
           title="Avg Score"
@@ -382,34 +372,22 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-4 gap-2 sm:gap-4">
-              <div 
-                className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
-                onClick={() => navigate('/calls?filter=pending')}
-              >
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
                 <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 mb-1" />
                 <p className="text-lg sm:text-2xl font-bold text-blue-700 dark:text-blue-300">{stats?.pendingCalls ?? 0}</p>
                 <p className="text-[10px] sm:text-sm text-blue-600 dark:text-blue-400">Queued</p>
               </div>
-              <div 
-                className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors"
-                onClick={() => navigate('/calls?filter=graded')}
-              >
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800">
                 <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 dark:text-emerald-400 mb-1" />
                 <p className="text-lg sm:text-2xl font-bold text-emerald-700 dark:text-emerald-300">{stats?.gradedCalls ?? 0}</p>
                 <p className="text-[10px] sm:text-sm text-emerald-600 dark:text-emerald-400">Scored</p>
               </div>
-              <div 
-                className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors"
-                onClick={() => navigate('/calls?filter=skipped')}
-              >
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
                 <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-400 mb-1" />
                 <p className="text-lg sm:text-2xl font-bold text-amber-700 dark:text-amber-300">{stats?.skippedCalls ?? 0}</p>
                 <p className="text-[10px] sm:text-sm text-amber-600 dark:text-amber-400">Skipped</p>
               </div>
-              <div 
-                className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                onClick={() => navigate('/calls?filter=all')}
-              >
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
                 <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600 dark:text-gray-400 mb-1" />
                 <p className="text-lg sm:text-2xl font-bold text-gray-700 dark:text-gray-300">{stats?.totalCalls ?? 0}</p>
                 <p className="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400">Total</p>

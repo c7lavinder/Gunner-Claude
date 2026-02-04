@@ -32,7 +32,7 @@ import {
   ChevronDown,
   X
 } from "lucide-react";
-import { Link, useSearch } from "wouter";
+import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -52,7 +52,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -735,20 +735,7 @@ function MultiSelectFilter({
 }
 
 export default function CallInbox() {
-  const searchString = useSearch();
-  const urlParams = new URLSearchParams(searchString);
-  const filterParam = urlParams.get('filter');
-  
-  // Determine initial tab based on URL filter parameter
-  const getInitialTab = () => {
-    if (filterParam === 'pending') return 'calls'; // Show pending in a special way
-    if (filterParam === 'graded' || filterParam === 'appointments' || filterParam === 'offers') return 'calls';
-    if (filterParam === 'skipped') return 'skipped';
-    if (filterParam === 'failed') return 'failed';
-    return 'calls';
-  };
-  
-  const [activeTab, setActiveTab] = useState(getInitialTab);
+  const [activeTab, setActiveTab] = useState("calls");
   const { data: calls, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery({ limit: 50 });
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
   const updateStatusMutation = trpc.feedback.updateStatus.useMutation();
@@ -808,29 +795,10 @@ export default function CallInbox() {
   const skippedCalls = calls?.filter(c => 
     (c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call")) && c.status !== "failed"
   ) || [];
-  const pendingCalls = calls?.filter(c => c.status === "pending" || c.status === "transcribing" || c.status === "grading") || [];
-  
-  // Filter for appointments (calls where appointment was set)
-  const appointmentCalls = allGradedCalls.filter(c => {
-    const grade = c.grade as Record<string, unknown> | null;
-    return grade?.appointmentSet === true || grade?.appointmentSet === 'true';
-  });
-  // Filter for offers (calls where offer was accepted)
-  const offerCalls = allGradedCalls.filter(c => {
-    const grade = c.grade as Record<string, unknown> | null;
-    return grade?.offerAccepted === true || grade?.offerAccepted === 'true';
-  });
 
   // Apply filters to graded calls
   const gradedCalls = useMemo(() => {
-    // Apply URL filter first
     let filtered = allGradedCalls;
-    
-    if (filterParam === 'appointments') {
-      filtered = appointmentCalls;
-    } else if (filterParam === 'offers') {
-      filtered = offerCalls;
-    }
 
     // Filter by team member
     if (selectedTeamMembers.length > 0) {
@@ -861,7 +829,7 @@ export default function CallInbox() {
     }
 
     return filtered;
-  }, [allGradedCalls, appointmentCalls, offerCalls, filterParam, selectedTeamMembers, selectedCallTypes, selectedScoreRanges, selectedDirections]);
+  }, [allGradedCalls, selectedTeamMembers, selectedCallTypes, selectedScoreRanges, selectedDirections]);
 
   // Check if any filters are active
   const hasActiveFilters = selectedTeamMembers.length > 0 || selectedCallTypes.length > 0 || 
@@ -911,10 +879,6 @@ export default function CallInbox() {
                 <TabsTrigger value="calls" className="text-xs sm:text-sm px-2 sm:px-3">
                   <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   <span className="hidden sm:inline">Graded </span>({gradedCalls.length})
-                </TabsTrigger>
-                <TabsTrigger value="pending" className="text-xs sm:text-sm px-2 sm:px-3">
-                  <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">Queued </span>({pendingCalls.length})
                 </TabsTrigger>
                 <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">
                   N/A ({adminCalls.length})
@@ -1023,59 +987,6 @@ export default function CallInbox() {
                     <h3 className="text-lg font-semibold mb-2">No graded calls yet</h3>
                     <p className="text-muted-foreground text-center max-w-md">
                       Calls will appear here once they're received and graded via the GoHighLevel webhook.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="pending" className="space-y-4">
-              {pendingCalls.length > 0 ? (
-                <div className="space-y-4">
-                  {pendingCalls.map((item) => (
-                    <Card key={item.id} className="border-blue-200 bg-blue-50/30">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold truncate">
-                                {item.contactName || item.contactPhone || "Unknown Contact"}
-                              </h3>
-                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                                <Clock className="h-3 w-3 mr-1 animate-pulse" />
-                                {item.status === 'pending' ? 'Queued' : item.status === 'transcribing' ? 'Transcribing' : 'Grading'}
-                              </Badge>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                              {item.teamMemberName && (
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  {item.teamMemberName}
-                                </span>
-                              )}
-                              {item.duration && (
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
-                                </span>
-                              )}
-                              {item.createdAt && (
-                                <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
-                    <CheckCircle className="h-16 w-16 text-green-500/50 mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No calls in queue</h3>
-                    <p className="text-muted-foreground text-center max-w-md">
-                      All calls have been processed. New calls will appear here while being transcribed and graded.
                     </p>
                   </CardContent>
                 </Card>
