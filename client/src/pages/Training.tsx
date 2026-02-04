@@ -226,7 +226,7 @@ function TeamItemCard({ item, onComplete, onDelete, showPriority = true, isAdmin
   const isAiGenerated = item.isAiGenerated === "true";
 
   return (
-    <div className={`flex items-center gap-2 py-2 px-3 rounded-md border bg-card ${isAiGenerated ? "border-l-2 border-l-purple-500" : ""}`}>
+    <div className={`flex items-start gap-2 py-2 px-3 rounded-md border bg-card ${isAiGenerated ? "border-l-2 border-l-purple-500" : ""}`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <h4 className="font-medium text-sm truncate max-w-[200px] sm:max-w-none">{item.title}</h4>
@@ -234,7 +234,7 @@ function TeamItemCard({ item, onComplete, onDelete, showPriority = true, isAdmin
           {showPriority && item.priority && <Badge variant="secondary" className={`${priorityColors[item.priority]} text-white text-[10px] px-1.5 py-0`}>{priorityLabels[item.priority]}</Badge>}
           {item.teamMemberName && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{item.teamMemberName}</Badge>}
         </div>
-        {item.description && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description}</p>}
+        {item.description && <p className="text-xs text-muted-foreground line-clamp-3 mt-0.5">{item.description}</p>}
       </div>
       {isAdmin && (
         <div className="flex items-center gap-0.5 shrink-0">
