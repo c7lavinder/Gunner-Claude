@@ -2,7 +2,12 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { Award, Trophy, Flame, Target, Zap, Lock, CheckCircle } from "lucide-react";
+import { Award, Trophy, Flame, Target, Zap, Lock, CheckCircle, Camera, Loader2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 
 
 // Tier badge colors
@@ -110,8 +115,53 @@ function BadgeCard({ badge }: { badge: BadgeData }) {
 }
 
 export default function Profile() {
+  const { user, refresh } = useAuth();
   const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
   const { data: allBadges, isLoading: badgesLoading } = trpc.gamification.getAllBadges.useQuery();
+  const uploadMutation = trpc.auth.updateProfilePicture.useMutation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        await uploadMutation.mutateAsync({
+          imageBase64: base64,
+          mimeType: file.type,
+        });
+        toast.success('Profile picture updated!');
+        refresh(); // Refresh user data to show new picture
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      toast.error('Failed to upload profile picture');
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   // Separate earned and in-progress badges
   const earnedBadges = allBadges?.filter((b: BadgeData) => 
@@ -123,11 +173,57 @@ export default function Profile() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
-        <p className="text-muted-foreground mt-1">
-          Track your progress, achievements, and badges
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
+          <p className="text-muted-foreground mt-1">
+            Track your progress, achievements, and badges
+          </p>
+        </div>
+        
+        {/* Profile Picture Upload */}
+        <div className="flex flex-col items-center gap-2">
+          <div className="relative group">
+            <Avatar className="h-24 w-24 border-2">
+              {user?.profilePicture && (
+                <AvatarImage src={user.profilePicture} alt={user?.name || 'Profile'} />
+              )}
+              <AvatarFallback className="text-2xl font-medium bg-primary/10">
+                {user?.name?.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            >
+              {isUploading ? (
+                <Loader2 className="h-6 w-6 text-white animate-spin" />
+              ) : (
+                <Camera className="h-6 w-6 text-white" />
+              )}
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+          >
+            {isUploading ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...</>
+            ) : (
+              <><Camera className="h-4 w-4 mr-2" /> Change Photo</>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* XP & Level Card */}

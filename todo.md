@@ -1006,3 +1006,10 @@
   - [ ] Create /verify-email endpoint
   - [ ] Build verification pending and success UI pages
   - [ ] Block unverified users from accessing protected routes
+
+## Profile Picture Upload
+- [x] Create backend endpoint for profile picture upload
+- [x] Add profile picture UI to profile/team page
+- [x] Display profile picture in sidebar avatar
+- [x] Display profile picture on team members page
+- [x] Add image cropping/preview before upload (basic preview on hover)
