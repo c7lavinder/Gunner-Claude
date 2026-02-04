@@ -985,3 +985,8 @@
 - [x] Analytics: 2-column stat cards on mobile
 - [x] Analytics: Horizontal scroll for leaderboard tables
 - [x] Settings: Show text labels with icons on all tabs (horizontal scroll)
+
+
+## Training Page UI Improvements
+- [x] Make Issues and Wins cards more compact to show more items
+- [x] Make Long-Term Skills cards match compact styling

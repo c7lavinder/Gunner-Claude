@@ -226,21 +226,20 @@ function TeamItemCard({ item, onComplete, onDelete, showPriority = true, isAdmin
   const isAiGenerated = item.isAiGenerated === "true";
 
   return (
-    <div className={`flex items-start gap-3 p-4 rounded-lg border bg-card ${isAiGenerated ? "border-l-4 border-l-purple-500" : ""}`}>
+    <div className={`flex items-center gap-2 py-2 px-3 rounded-md border bg-card ${isAiGenerated ? "border-l-2 border-l-purple-500" : ""}`}>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <h4 className="font-medium">{item.title}</h4>
-          {isAiGenerated && <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-xs"><Bot className="h-3 w-3 mr-1" />AI Generated</Badge>}
-          {showPriority && item.priority && <Badge variant="secondary" className={`${priorityColors[item.priority]} text-white text-xs`}>{priorityLabels[item.priority]}</Badge>}
-          {item.teamMemberName && <Badge variant="outline" className="text-xs">{item.teamMemberName}</Badge>}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <h4 className="font-medium text-sm truncate max-w-[200px] sm:max-w-none">{item.title}</h4>
+          {isAiGenerated && <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0"><Bot className="h-2.5 w-2.5 mr-0.5" />AI</Badge>}
+          {showPriority && item.priority && <Badge variant="secondary" className={`${priorityColors[item.priority]} text-white text-[10px] px-1.5 py-0`}>{priorityLabels[item.priority]}</Badge>}
+          {item.teamMemberName && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{item.teamMemberName}</Badge>}
         </div>
-        {item.description && <p className="text-sm text-muted-foreground mb-2">{item.description}</p>}
-        {item.targetBehavior && <div className="text-sm bg-muted/50 p-2 rounded mt-2"><span className="font-medium text-xs text-muted-foreground">Target: </span>{item.targetBehavior}</div>}
+        {item.description && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description}</p>}
       </div>
       {isAdmin && (
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => completeMutation.mutate({ id: item.id })} disabled={completeMutation.isPending}><Check className="h-4 w-4" /></Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => deleteMutation.mutate({ id: item.id })} disabled={deleteMutation.isPending}><Trash2 className="h-4 w-4" /></Button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <Button size="icon" variant="ghost" className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => completeMutation.mutate({ id: item.id })} disabled={completeMutation.isPending}><Check className="h-3.5 w-3.5" /></Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => deleteMutation.mutate({ id: item.id })} disabled={deleteMutation.isPending}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>
       )}
     </div>
@@ -281,7 +280,7 @@ function TeamSkillsSection() {
       </CardHeader>
       <CardContent>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}</div> : items && items.length > 0 ? (
-          <div className="space-y-3">{items.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}</div>
+          <div className="space-y-1.5">{items.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}</div>
         ) : <div className="text-center py-8 text-muted-foreground"><Target className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No skills being tracked</p></div>}
       </CardContent>
     </Card>
@@ -309,7 +308,7 @@ function TeamIssuesSection() {
       </CardHeader>
       <CardContent>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}</div> : sortedItems && sortedItems.length > 0 ? (
-          <div className="space-y-3">{sortedItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}</div>
+          <div className="space-y-1.5">{sortedItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}</div>
         ) : <div className="text-center py-8 text-muted-foreground"><AlertTriangle className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No issues to address</p></div>}
       </CardContent>
     </Card>
@@ -333,7 +332,7 @@ function TeamWinsSection() {
       </CardHeader>
       <CardContent>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : items && items.length > 0 ? (
-          <div className="space-y-3">{items.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} showPriority={false} isAdmin={isAdmin} />)}</div>
+          <div className="space-y-1.5">{items.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} showPriority={false} isAdmin={isAdmin} />)}</div>
         ) : <div className="text-center py-8 text-muted-foreground"><Trophy className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No wins recorded yet</p></div>}
       </CardContent>
     </Card>
@@ -531,19 +530,19 @@ function TeamAgendaSection() {
           </div>
       </CardHeader>
       <CardContent>
-        {isLoading ? <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : sortedItems && sortedItems.length > 0 ? (
-          <div className="space-y-2">
+        {isLoading ? <div className="space-y-1.5">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div> : sortedItems && sortedItems.length > 0 ? (
+          <div className="space-y-1.5">
             {sortedItems.map((item, index) => (
-              <div key={item.id} className={`flex items-center gap-3 p-3 rounded-lg border bg-card ${item.isAiGenerated === "true" ? "border-l-4 border-l-purple-500" : ""}`}>
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-bold text-sm">{index + 1}</div>
+              <div key={item.id} className={`flex items-center gap-2 py-2 px-3 rounded-md border bg-card ${item.isAiGenerated === "true" ? "border-l-2 border-l-purple-500" : ""}`}>
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-600 font-bold text-xs shrink-0">{index + 1}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium">{item.title}</h4>
-                    {item.isAiGenerated === "true" && <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-xs"><Bot className="h-3 w-3 mr-1" />AI</Badge>}
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="font-medium text-sm truncate">{item.title}</h4>
+                    {item.isAiGenerated === "true" && <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0"><Bot className="h-2.5 w-2.5 mr-0.5" />AI</Badge>}
                   </div>
-                  {item.description && <p className="text-sm text-muted-foreground">{item.description}</p>}
+                  {item.description && <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>}
                 </div>
-                <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => completeMutation.mutate({ id: item.id })} disabled={completeMutation.isPending}><Check className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50 shrink-0" onClick={() => completeMutation.mutate({ id: item.id })} disabled={completeMutation.isPending}><Check className="h-3.5 w-3.5" /></Button>
               </div>
             ))}
           </div>
