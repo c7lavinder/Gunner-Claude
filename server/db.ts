@@ -1672,19 +1672,29 @@ export async function getLeadManagersForAcquisitionManager(acquisitionManagerId:
 
 export async function assignLeadManagerToAcquisitionManager(
   leadManagerId: number, 
-  acquisitionManagerId: number
+  acquisitionManagerId: number,
+  tenantId?: number
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  // Remove existing assignment for this lead manager
-  await db.delete(teamAssignments)
-    .where(eq(teamAssignments.leadManagerId, leadManagerId));
+  // Remove existing assignment for this lead manager (within the same tenant)
+  if (tenantId) {
+    await db.delete(teamAssignments)
+      .where(and(
+        eq(teamAssignments.leadManagerId, leadManagerId),
+        eq(teamAssignments.tenantId, tenantId)
+      ));
+  } else {
+    await db.delete(teamAssignments)
+      .where(eq(teamAssignments.leadManagerId, leadManagerId));
+  }
   
-  // Create new assignment
+  // Create new assignment with tenantId
   await db.insert(teamAssignments).values({
     leadManagerId,
     acquisitionManagerId,
+    tenantId: tenantId ?? null,
   });
 }
 

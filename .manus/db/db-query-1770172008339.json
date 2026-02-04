@@ -1,0 +1,26 @@
+{
+  "query": "SELECT * FROM team_assignments;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT * FROM team_assignments;",
+  "rows": [
+    {
+      "id": "60012",
+      "tenantId": "NULL",
+      "leadManagerId": "1",
+      "acquisitionManagerId": "3",
+      "createdAt": "2026-02-04 02:25:20",
+      "updatedAt": "2026-02-04 02:25:20"
+    },
+    {
+      "id": "60013",
+      "tenantId": "NULL",
+      "leadManagerId": "2",
+      "acquisitionManagerId": "3",
+      "createdAt": "2026-02-04 02:25:21",
+      "updatedAt": "2026-02-04 02:25:21"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\tleadManagerId\tacquisitionManagerId\tcreatedAt\tupdatedAt\n60012\tNULL\t1\t3\t2026-02-04 02:25:20\t2026-02-04 02:25:20\n60013\tNULL\t2\t3\t2026-02-04 02:25:21\t2026-02-04 02:25:21\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

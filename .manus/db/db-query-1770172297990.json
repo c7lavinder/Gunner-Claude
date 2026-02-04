@@ -1,0 +1,30 @@
+{
+  "query": "SELECT ta.*, tm.name as lm_name, tm.tenantId as lm_tenantId FROM team_assignments ta LEFT JOIN team_members tm ON ta.leadManagerId = tm.id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT ta.*, tm.name as lm_name, tm.tenantId as lm_tenantId FROM team_assignments ta LEFT JOIN team_members tm ON ta.leadManagerId = tm.id;",
+  "rows": [
+    {
+      "id": "60015",
+      "tenantId": "1",
+      "leadManagerId": "1",
+      "acquisitionManagerId": "3",
+      "createdAt": "2026-02-04 02:29:00",
+      "updatedAt": "2026-02-04 02:31:32",
+      "lm_name": "Chris Segura",
+      "lm_tenantId": "1"
+    },
+    {
+      "id": "60016",
+      "tenantId": "1",
+      "leadManagerId": "2",
+      "acquisitionManagerId": "3",
+      "createdAt": "2026-02-04 02:29:06",
+      "updatedAt": "2026-02-04 02:31:32",
+      "lm_name": "Daniel Lozano",
+      "lm_tenantId": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\tleadManagerId\tacquisitionManagerId\tcreatedAt\tupdatedAt\tlm_name\tlm_tenantId\n60015\t1\t1\t3\t2026-02-04 02:29:00\t2026-02-04 02:31:32\tChris Segura\t1\n60016\t1\t2\t3\t2026-02-04 02:29:06\t2026-02-04 02:31:32\tDaniel Lozano\t1\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

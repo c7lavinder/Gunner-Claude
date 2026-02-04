@@ -894,4 +894,4 @@
   - [x] Shows target tenant name and user info
   - [x] End Impersonation button to return to admin view
   - [x] Added padding to DashboardLayout when impersonating
-- [x] Fix Team Assignments - allow multiple Lead Managers to be assigned to an Acquisition Manager (currently only allows one selection then disappears)
+- [x] Fix Team Assignments - allow multiple Lead Managers to be assigned to an Acquisition Manager (fixed tenantId not being set on new assignments)

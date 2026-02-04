@@ -246,7 +246,7 @@ export const appRouter = router({
         if (ctx.user?.teamRole !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
-        await assignLeadManagerToAcquisitionManager(input.leadManagerId, input.acquisitionManagerId);
+        await assignLeadManagerToAcquisitionManager(input.leadManagerId, input.acquisitionManagerId, ctx.user?.tenantId ?? undefined);
         return { success: true };
       }),
 
