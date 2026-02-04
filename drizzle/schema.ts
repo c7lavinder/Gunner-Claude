@@ -1000,14 +1000,19 @@ export const subscriptionPlans = mysqlTable("subscription_plans", {
   // Pricing
   priceMonthly: int("priceMonthly").notNull(), // in cents (e.g., 9900 = $99)
   priceYearly: int("priceYearly"), // in cents (optional annual discount)
+  // Trial configuration
+  trialDays: int("trialDays").notNull().default(14),
   // Stripe Price IDs
   stripePriceIdMonthly: varchar("stripePriceIdMonthly", { length: 255 }),
   stripePriceIdYearly: varchar("stripePriceIdYearly", { length: 255 }),
   // Limits
   maxUsers: int("maxUsers").notNull(), // 3, 10, 999 (unlimited)
+  maxCallsPerMonth: int("maxCallsPerMonth").notNull().default(500), // -1 for unlimited
   maxCrmIntegrations: int("maxCrmIntegrations").default(1),
   // Features (JSON array of feature codes)
   features: text("features"),
+  // Display options
+  isPopular: mysqlEnum("isPopular", ["true", "false"]).default("false"),
   // Status
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
   sortOrder: int("sortOrder").default(0),
@@ -1109,3 +1114,19 @@ export const apiUsage = mysqlTable("api_usage", {
 
 export type ApiUsage = typeof apiUsage.$inferSelect;
 export type InsertApiUsage = typeof apiUsage.$inferInsert;
+
+
+/**
+ * Platform Settings - global settings managed by super admin
+ * Includes default trial days and other platform-wide configurations
+ */
+export const platformSettings = mysqlTable("platform_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value").notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PlatformSetting = typeof platformSettings.$inferSelect;
+export type InsertPlatformSetting = typeof platformSettings.$inferInsert;

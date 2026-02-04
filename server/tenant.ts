@@ -355,11 +355,21 @@ export async function createTenant(data: {
   subscriptionTier?: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
+  planCode?: string;
 }) {
   const db = await getDb();
   if (!db) return null;
 
   const subscriptionTierValue = (data.subscriptionTier || 'trial') as 'trial' | 'starter' | 'growth' | 'scale';
+  
+  // Get trial days from database plan or default to 14
+  let trialDays = 14;
+  if (data.planCode) {
+    const [dbPlan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.code, data.planCode)).limit(1);
+    if (dbPlan?.trialDays) {
+      trialDays = dbPlan.trialDays;
+    }
+  }
   
   const [newTenant] = await db
     .insert(tenants)
@@ -369,7 +379,7 @@ export async function createTenant(data: {
       subscriptionTier: subscriptionTierValue,
       stripeCustomerId: data.stripeCustomerId,
       stripeSubscriptionId: data.stripeSubscriptionId,
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+      trialEndsAt: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000),
     })
     .$returningId();
 

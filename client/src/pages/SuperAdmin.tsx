@@ -24,7 +24,14 @@ import {
   Clock,
   Mail,
   LogOut,
-  CheckCircle
+  CheckCircle,
+  Settings,
+  Plus,
+  Pencil,
+  Trash2,
+  Star,
+  Check,
+  Loader2
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -37,6 +44,26 @@ export default function SuperAdmin() {
   const [activeTab, setActiveTab] = useState("overview");
   const [sendingOutreach, setSendingOutreach] = useState<number | null>(null);
   const [outreachSent, setOutreachSent] = useState<Set<number>>(new Set());
+  
+  // Plans management state
+  const [editingPlan, setEditingPlan] = useState<number | null>(null);
+  const [showNewPlanForm, setShowNewPlanForm] = useState(false);
+  const [planFormData, setPlanFormData] = useState({
+    name: "",
+    code: "",
+    description: "",
+    priceMonthly: 0,
+    priceYearly: 0,
+    trialDays: 14,
+    maxUsers: 3,
+    maxCallsPerMonth: 500,
+    maxCrmIntegrations: 1,
+    features: [] as string[],
+    isPopular: false,
+    isActive: true,
+    sortOrder: 0,
+  });
+  const [newFeature, setNewFeature] = useState("");
 
   // Fetch real data from backend
   const { data: tenants, isLoading: tenantsLoading, refetch: refetchTenants } = trpc.tenant.list.useQuery();
@@ -45,6 +72,9 @@ export default function SuperAdmin() {
   const { data: lowUsageTenants, isLoading: lowUsageLoading, refetch: refetchLowUsage } = trpc.tenant.getLowUsageTenants.useQuery();
   const { data: impersonationStatus } = trpc.tenant.getImpersonationStatus.useQuery();
   const { data: outreachHistory, isLoading: outreachLoading, refetch: refetchOutreach } = trpc.tenant.getOutreachHistory.useQuery({});
+  
+  // Plans queries
+  const { data: plans, isLoading: plansLoading, refetch: refetchPlans } = trpc.admin.getPlans.useQuery();
 
   // Mutations
   const startImpersonation = trpc.tenant.startImpersonation.useMutation({
@@ -79,6 +109,114 @@ export default function SuperAdmin() {
       setSendingOutreach(null);
     }
   });
+
+  // Plans mutations
+  const createPlan = trpc.admin.createPlan.useMutation({
+    onSuccess: () => {
+      toast.success("Plan created successfully");
+      refetchPlans();
+      setShowNewPlanForm(false);
+      resetPlanForm();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to create plan");
+    }
+  });
+
+  const updatePlan = trpc.admin.updatePlan.useMutation({
+    onSuccess: () => {
+      toast.success("Plan updated successfully");
+      refetchPlans();
+      setEditingPlan(null);
+      resetPlanForm();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to update plan");
+    }
+  });
+
+  const deletePlan = trpc.admin.deletePlan.useMutation({
+    onSuccess: () => {
+      toast.success("Plan deleted successfully");
+      refetchPlans();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to delete plan");
+    }
+  });
+
+  const seedDefaultPlans = trpc.admin.seedDefaultPlans.useMutation({
+    onSuccess: () => {
+      toast.success("Default plans seeded successfully");
+      refetchPlans();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to seed default plans");
+    }
+  });
+
+  const resetPlanForm = () => {
+    setPlanFormData({
+      name: "",
+      code: "",
+      description: "",
+      priceMonthly: 0,
+      priceYearly: 0,
+      trialDays: 14,
+      maxUsers: 3,
+      maxCallsPerMonth: 500,
+      maxCrmIntegrations: 1,
+      features: [],
+      isPopular: false,
+      isActive: true,
+      sortOrder: 0,
+    });
+    setNewFeature("");
+  };
+
+  const handleEditPlan = (plan: NonNullable<typeof plans>[0]) => {
+    setEditingPlan(plan.id);
+    setPlanFormData({
+      name: plan.name,
+      code: plan.code,
+      description: plan.description || "",
+      priceMonthly: plan.priceMonthly,
+      priceYearly: plan.priceYearly || 0,
+      trialDays: plan.trialDays || 14,
+      maxUsers: plan.maxUsers,
+      maxCallsPerMonth: plan.maxCallsPerMonth || 500,
+      maxCrmIntegrations: plan.maxCrmIntegrations || 1,
+      features: plan.features || [],
+      isPopular: plan.isPopular === "true",
+      isActive: plan.isActive === "true",
+      sortOrder: plan.sortOrder || 0,
+    });
+  };
+
+  const handleSavePlan = () => {
+    if (editingPlan) {
+      updatePlan.mutate({ id: editingPlan, ...planFormData });
+    } else {
+      createPlan.mutate(planFormData);
+    }
+  };
+
+  const addFeature = () => {
+    if (newFeature.trim()) {
+      setPlanFormData(prev => ({
+        ...prev,
+        features: [...prev.features, newFeature.trim()]
+      }));
+      setNewFeature("");
+    }
+  };
+
+  const removeFeature = (index: number) => {
+    setPlanFormData(prev => ({
+      ...prev,
+      features: prev.features.filter((_, i) => i !== index)
+    }));
+  };
 
   // Check if user is super admin or platform owner
   const isPlatformOwner = user?.openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
@@ -240,6 +378,7 @@ export default function SuperAdmin() {
           <TabsTrigger value="churn-risk">Churn Risk</TabsTrigger>
           <TabsTrigger value="outreach-history">Outreach History</TabsTrigger>
           <TabsTrigger value="alerts">Alerts</TabsTrigger>
+          <TabsTrigger value="plans">Plans</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -763,6 +902,310 @@ export default function SuperAdmin() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Plans Management Tab */}
+        <TabsContent value="plans" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    Subscription Plans
+                  </CardTitle>
+                  <CardDescription>
+                    Manage pricing plans, trial periods, and features
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  {(!plans || plans.length === 0) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => seedDefaultPlans.mutate()}
+                      disabled={seedDefaultPlans.isPending}
+                    >
+                      {seedDefaultPlans.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : null}
+                      Seed Default Plans
+                    </Button>
+                  )}
+                  <Button onClick={() => { resetPlanForm(); setShowNewPlanForm(true); }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Plan
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {plansLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-24 w-full" />
+                  ))}
+                </div>
+              ) : !plans || plans.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Settings className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No plans configured</p>
+                  <p className="text-sm">Click "Seed Default Plans" to create starter, growth, and scale plans</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {plans.map((plan) => (
+                    <div
+                      key={plan.id}
+                      className={`border rounded-lg p-4 ${plan.isActive === "false" ? "opacity-50 bg-gray-50" : ""} ${plan.isPopular === "true" ? "border-primary ring-1 ring-primary" : ""}`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold">{plan.name}</h3>
+                            {plan.isPopular === "true" && (
+                              <Badge className="bg-primary text-primary-foreground">
+                                <Star className="h-3 w-3 mr-1" />
+                                Popular
+                              </Badge>
+                            )}
+                            {plan.isActive === "false" && (
+                              <Badge variant="outline" className="text-gray-500">Inactive</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+                          
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Monthly Price</p>
+                              <p className="font-semibold">${(plan.priceMonthly / 100).toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Yearly Price</p>
+                              <p className="font-semibold">${((plan.priceYearly || 0) / 100).toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Trial Days</p>
+                              <p className="font-semibold">{plan.trialDays || 14} days</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Max Users</p>
+                              <p className="font-semibold">{plan.maxUsers >= 999 ? "Unlimited" : plan.maxUsers}</p>
+                            </div>
+                          </div>
+                          
+                          {plan.features && plan.features.length > 0 && (
+                            <div className="mt-4">
+                              <p className="text-xs text-muted-foreground mb-2">Features</p>
+                              <div className="flex flex-wrap gap-1">
+                                {plan.features.map((feature: string, idx: number) => (
+                                  <Badge key={idx} variant="secondary" className="text-xs">
+                                    <Check className="h-3 w-3 mr-1" />
+                                    {feature}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex gap-2 ml-4">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditPlan(plan)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete the ${plan.name} plan?`)) {
+                                deletePlan.mutate({ id: plan.id });
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Plan Edit/Create Form */}
+          {(showNewPlanForm || editingPlan) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{editingPlan ? "Edit Plan" : "Create New Plan"}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Plan Name</label>
+                    <Input
+                      value={planFormData.name}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., Starter"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Plan Code</label>
+                    <Input
+                      value={planFormData.code}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, code: e.target.value.toLowerCase() }))}
+                      placeholder="e.g., starter"
+                      disabled={!!editingPlan}
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium">Description</label>
+                  <Input
+                    value={planFormData.description}
+                    onChange={(e) => setPlanFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Brief description of the plan"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Monthly Price ($)</label>
+                    <Input
+                      type="number"
+                      value={planFormData.priceMonthly / 100}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, priceMonthly: Math.round(parseFloat(e.target.value) * 100) }))}
+                      placeholder="99.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Yearly Price ($)</label>
+                    <Input
+                      type="number"
+                      value={planFormData.priceYearly / 100}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, priceYearly: Math.round(parseFloat(e.target.value) * 100) }))}
+                      placeholder="990.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Trial Days</label>
+                    <Input
+                      type="number"
+                      value={planFormData.trialDays}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, trialDays: parseInt(e.target.value) || 0 }))}
+                      placeholder="14"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Max Users</label>
+                    <Input
+                      type="number"
+                      value={planFormData.maxUsers}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, maxUsers: parseInt(e.target.value) || 1 }))}
+                      placeholder="3"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Max Calls/Month (-1 for unlimited)</label>
+                    <Input
+                      type="number"
+                      value={planFormData.maxCallsPerMonth}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, maxCallsPerMonth: parseInt(e.target.value) }))}
+                      placeholder="500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Sort Order</label>
+                    <Input
+                      type="number"
+                      value={planFormData.sortOrder}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Features</label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      value={newFeature}
+                      onChange={(e) => setNewFeature(e.target.value)}
+                      placeholder="Add a feature"
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addFeature())}
+                    />
+                    <Button type="button" onClick={addFeature} variant="outline">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {planFormData.features.map((feature, idx) => (
+                      <Badge key={idx} variant="secondary" className="pr-1">
+                        {feature}
+                        <button
+                          onClick={() => removeFeature(idx)}
+                          className="ml-1 hover:text-red-500"
+                        >
+                          <XCircle className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={planFormData.isPopular}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, isPopular: e.target.checked }))}
+                      className="rounded"
+                    />
+                    <span className="text-sm">Mark as Popular</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={planFormData.isActive}
+                      onChange={(e) => setPlanFormData(prev => ({ ...prev, isActive: e.target.checked }))}
+                      className="rounded"
+                    />
+                    <span className="text-sm">Active</span>
+                  </label>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    onClick={handleSavePlan}
+                    disabled={createPlan.isPending || updatePlan.isPending}
+                  >
+                    {(createPlan.isPending || updatePlan.isPending) && (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    )}
+                    {editingPlan ? "Update Plan" : "Create Plan"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowNewPlanForm(false);
+                      setEditingPlan(null);
+                      resetPlanForm();
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="alerts" className="space-y-4">

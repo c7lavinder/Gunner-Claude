@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `platform_settings` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`key` varchar(100) NOT NULL,\n\t`value` text NOT NULL,\n\t`description` text,\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `platform_settings_id` PRIMARY KEY(`id`),\n\tCONSTRAINT `platform_settings_key_unique` UNIQUE(`key`)\n);\n\nALTER TABLE `subscription_plans` ADD COLUMN IF NOT EXISTS `trialDays` int DEFAULT 14 NOT NULL;\nALTER TABLE `subscription_plans` ADD COLUMN IF NOT EXISTS `maxCallsPerMonth` int DEFAULT 500 NOT NULL;\nALTER TABLE `subscription_plans` ADD COLUMN IF NOT EXISTS `isPopular` enum('true','false') DEFAULT 'false';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute CREATE TABLE IF NOT EXISTS `platform_settings` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`key` varchar(100) NOT NULL,\n\t`value` text NOT NULL,\n\t`description` text,\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `platform_settings_id` PRIMARY KEY(`id`),\n\tCONSTRAINT `platform_settings_key_unique` UNIQUE(`key`)\n);\n\nALTER TABLE `subscription_plans` ADD COLUMN IF NOT EXISTS `trialDays` int DEFAULT 14 NOT NULL;\nALTER TABLE `subscription_plans` ADD COLUMN IF NOT EXISTS `maxCallsPerMonth` int DEFAULT 500 NOT NULL;\nALTER TABLE `subscription_plans` ADD COLUMN IF NOT EXISTS `isPopular` enum('true','false') DEFAULT 'false';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2944
+}

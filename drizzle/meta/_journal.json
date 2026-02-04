@@ -141,6 +141,13 @@
       "when": 1770193873775,
       "tag": "0019_fair_green_goblin",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1770236146454,
+      "tag": "0020_bitter_molten_man",
+      "breakpoints": true
     }
   ]
 }

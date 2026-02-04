@@ -1033,3 +1033,7 @@
 - [x] Fix call type label to show 'Qualification' instead of 'Qual'
 - [x] Add Pending tab to Call History to show queued calls being processed
 - [x] Fix tab labels: change 'Skipped Skip' to 'Skipped' and 'N/A' to 'Admin'
+- [x] Create plans database schema with trial days, pricing, features
+- [x] Build backend procedures for plans CRUD operations
+- [x] Create Plans Management UI tab in Super Admin panel
+- [x] Update signup flow to use database-driven plans and trial periods

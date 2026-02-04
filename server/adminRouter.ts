@@ -7,7 +7,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
-import { tenants, users, calls, callGrades } from "../drizzle/schema";
+import { tenants, users, calls, callGrades, subscriptionPlans, platformSettings } from "../drizzle/schema";
 import { eq, like, sql, count, desc, and, isNotNull } from "drizzle-orm";
 import { getAllTenantsUsage, getTenantUsage } from "./rateLimit";
 
@@ -336,4 +336,287 @@ export const adminRouter = router({
       role: ctx.user?.role,
     };
   }),
+
+  // ============ SUBSCRIPTION PLANS MANAGEMENT ============
+
+  // Get all subscription plans
+  getPlans: superAdminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+    const plans = await db
+      .select()
+      .from(subscriptionPlans)
+      .orderBy(subscriptionPlans.sortOrder);
+
+    return plans.map(plan => ({
+      ...plan,
+      features: plan.features ? JSON.parse(plan.features) : [],
+    }));
+  }),
+
+  // Create a new subscription plan
+  createPlan: superAdminProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      code: z.string().min(1),
+      description: z.string().optional(),
+      priceMonthly: z.number().min(0),
+      priceYearly: z.number().min(0).optional(),
+      trialDays: z.number().min(0).default(14),
+      maxUsers: z.number().min(1),
+      maxCallsPerMonth: z.number(), // -1 for unlimited
+      maxCrmIntegrations: z.number().min(0).default(1),
+      features: z.array(z.string()).default([]),
+      isPopular: z.boolean().default(false),
+      isActive: z.boolean().default(true),
+      sortOrder: z.number().default(0),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+      // Check if code already exists
+      const [existing] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.code, input.code));
+
+      if (existing) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'A plan with this code already exists' });
+      }
+
+      const [result] = await db.insert(subscriptionPlans).values({
+        name: input.name,
+        code: input.code,
+        description: input.description,
+        priceMonthly: input.priceMonthly,
+        priceYearly: input.priceYearly || Math.round(input.priceMonthly * 10), // Default: 2 months free
+        trialDays: input.trialDays,
+        maxUsers: input.maxUsers,
+        maxCallsPerMonth: input.maxCallsPerMonth,
+        maxCrmIntegrations: input.maxCrmIntegrations,
+        features: JSON.stringify(input.features),
+        isPopular: input.isPopular ? "true" : "false",
+        isActive: input.isActive ? "true" : "false",
+        sortOrder: input.sortOrder,
+      });
+
+      return { success: true, planId: result.insertId };
+    }),
+
+  // Update an existing subscription plan
+  updatePlan: superAdminProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(1).optional(),
+      description: z.string().optional(),
+      priceMonthly: z.number().min(0).optional(),
+      priceYearly: z.number().min(0).optional(),
+      trialDays: z.number().min(0).optional(),
+      maxUsers: z.number().min(1).optional(),
+      maxCallsPerMonth: z.number().optional(),
+      maxCrmIntegrations: z.number().min(0).optional(),
+      features: z.array(z.string()).optional(),
+      isPopular: z.boolean().optional(),
+      isActive: z.boolean().optional(),
+      sortOrder: z.number().optional(),
+      stripePriceIdMonthly: z.string().optional(),
+      stripePriceIdYearly: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+      const { id, features, isPopular, isActive, ...rest } = input;
+
+      const updateData: Record<string, unknown> = { ...rest };
+      if (features !== undefined) updateData.features = JSON.stringify(features);
+      if (isPopular !== undefined) updateData.isPopular = isPopular ? "true" : "false";
+      if (isActive !== undefined) updateData.isActive = isActive ? "true" : "false";
+
+      await db
+        .update(subscriptionPlans)
+        .set(updateData)
+        .where(eq(subscriptionPlans.id, id));
+
+      return { success: true };
+    }),
+
+  // Delete a subscription plan
+  deletePlan: superAdminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+      // Check if any tenants are using this plan
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.id, input.id));
+
+      if (!plan) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Plan not found' });
+      }
+
+      const [tenantCount] = await db
+        .select({ count: count() })
+        .from(tenants)
+        .where(eq(tenants.subscriptionTier, plan.code as "trial" | "starter" | "growth" | "scale"));
+
+      if (tenantCount && tenantCount.count > 0) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `Cannot delete plan. ${tenantCount.count} tenant(s) are currently using this plan.`,
+        });
+      }
+
+      await db.delete(subscriptionPlans).where(eq(subscriptionPlans.id, input.id));
+
+      return { success: true };
+    }),
+
+  // Seed default plans (for initial setup)
+  seedDefaultPlans: superAdminProcedure.mutation(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+    const defaultPlans = [
+      {
+        name: "Starter",
+        code: "starter",
+        description: "Perfect for small teams getting started with AI call coaching",
+        priceMonthly: 9900,
+        priceYearly: 99000,
+        trialDays: 14,
+        maxUsers: 3,
+        maxCallsPerMonth: 500,
+        maxCrmIntegrations: 1,
+        features: JSON.stringify([
+          "AI call grading",
+          "Basic analytics dashboard",
+          "Team leaderboard",
+          "Up to 3 team members",
+          "1 CRM integration",
+          "Email support",
+        ]),
+        isPopular: "false" as const,
+        isActive: "true" as const,
+        sortOrder: 1,
+      },
+      {
+        name: "Growth",
+        code: "growth",
+        description: "For growing teams that need more users and advanced features",
+        priceMonthly: 24900,
+        priceYearly: 249000,
+        trialDays: 14,
+        maxUsers: 10,
+        maxCallsPerMonth: 2000,
+        maxCrmIntegrations: 2,
+        features: JSON.stringify([
+          "Everything in Starter",
+          "Advanced analytics & trends",
+          "Custom grading rubrics",
+          "Training materials upload",
+          "Up to 10 team members",
+          "2 CRM integrations",
+          "Priority email support",
+        ]),
+        isPopular: "true" as const,
+        isActive: "true" as const,
+        sortOrder: 2,
+      },
+      {
+        name: "Scale",
+        code: "scale",
+        description: "Enterprise-grade features for large organizations",
+        priceMonthly: 49900,
+        priceYearly: 499000,
+        trialDays: 14,
+        maxUsers: 999,
+        maxCallsPerMonth: -1,
+        maxCrmIntegrations: 5,
+        features: JSON.stringify([
+          "Everything in Growth",
+          "Unlimited team members",
+          "5 CRM integrations",
+          "API access",
+          "Custom branding",
+          "Dedicated account manager",
+          "Phone support",
+          "SLA guarantee",
+        ]),
+        isPopular: "false" as const,
+        isActive: "true" as const,
+        sortOrder: 3,
+      },
+    ];
+
+    for (const plan of defaultPlans) {
+      // Check if plan already exists
+      const [existing] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.code, plan.code));
+
+      if (!existing) {
+        await db.insert(subscriptionPlans).values(plan);
+      }
+    }
+
+    return { success: true, message: "Default plans seeded successfully" };
+  }),
+
+  // ============ PLATFORM SETTINGS ============
+
+  // Get platform settings
+  getPlatformSettings: superAdminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+    const settings = await db.select().from(platformSettings);
+    
+    // Convert to key-value object
+    const settingsMap: Record<string, string> = {};
+    for (const setting of settings) {
+      settingsMap[setting.key] = setting.value;
+    }
+
+    return settingsMap;
+  }),
+
+  // Update platform setting
+  updatePlatformSetting: superAdminProcedure
+    .input(z.object({
+      key: z.string(),
+      value: z.string(),
+      description: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+      // Upsert the setting
+      const [existing] = await db
+        .select()
+        .from(platformSettings)
+        .where(eq(platformSettings.key, input.key));
+
+      if (existing) {
+        await db
+          .update(platformSettings)
+          .set({ value: input.value, description: input.description })
+          .where(eq(platformSettings.key, input.key));
+      } else {
+        await db.insert(platformSettings).values({
+          key: input.key,
+          value: input.value,
+          description: input.description,
+        });
+      }
+
+      return { success: true };
+    }),
 });

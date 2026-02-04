@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { users, tenants } from "../drizzle/schema";
+import { users, tenants, subscriptionPlans } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
@@ -73,18 +73,25 @@ export async function signUpWithEmail(params: {
     .replace(/^-|-$/g, '')
     + '-' + crypto.randomBytes(4).toString('hex');
 
-  // Set plan limits
-  const planLimits = {
-    starter: { maxUsers: 3, maxCallsPerMonth: 500 },
-    growth: { maxUsers: 10, maxCallsPerMonth: 2000 },
-    scale: { maxUsers: 999, maxCallsPerMonth: 999999 },
+  // Get plan from database
+  const [dbPlan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.code, planId)).limit(1);
+  
+  // Fallback to default limits if plan not found in database
+  const defaultLimits = {
+    starter: { maxUsers: 3, maxCallsPerMonth: 500, trialDays: 14 },
+    growth: { maxUsers: 10, maxCallsPerMonth: 2000, trialDays: 14 },
+    scale: { maxUsers: 999, maxCallsPerMonth: 999999, trialDays: 14 },
   };
 
-  const limits = planLimits[planId];
+  const limits = dbPlan ? {
+    maxUsers: dbPlan.maxUsers,
+    maxCallsPerMonth: dbPlan.maxCallsPerMonth || defaultLimits[planId].maxCallsPerMonth,
+    trialDays: dbPlan.trialDays || 14
+  } : defaultLimits[planId];
 
-  // Calculate trial end date (14 days from now)
+  // Calculate trial end date using database-driven trial days
   const trialEndsAt = new Date();
-  trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+  trialEndsAt.setDate(trialEndsAt.getDate() + limits.trialDays);
 
   try {
     // Create tenant first
