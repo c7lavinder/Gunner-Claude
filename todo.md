@@ -990,3 +990,4 @@
 ## Training Page UI Improvements
 - [x] Make Issues and Wins cards more compact to show more items
 - [x] Make Long-Term Skills cards match compact styling
+- [x] Increase Training page card descriptions from 3 to 5 lines

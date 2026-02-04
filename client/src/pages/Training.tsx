@@ -234,7 +234,7 @@ function TeamItemCard({ item, onComplete, onDelete, showPriority = true, isAdmin
           {showPriority && item.priority && <Badge variant="secondary" className={`${priorityColors[item.priority]} text-white text-[10px] px-1.5 py-0`}>{priorityLabels[item.priority]}</Badge>}
           {item.teamMemberName && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{item.teamMemberName}</Badge>}
         </div>
-        {item.description && <p className="text-xs text-muted-foreground line-clamp-3 mt-0.5">{item.description}</p>}
+        {item.description && <p className="text-xs text-muted-foreground line-clamp-5 mt-0.5">{item.description}</p>}
       </div>
       {isAdmin && (
         <div className="flex items-center gap-0.5 shrink-0">
