@@ -187,15 +187,20 @@ export default function Onboarding() {
     }
   };
 
+  const utils = trpc.useUtils();
+  
   const handleComplete = async () => {
     try {
       // Mark onboarding as complete in the database
       await completeOnboardingMutation.mutateAsync();
+      // Invalidate tenant settings cache so DashboardLayout sees the updated value
+      await utils.tenant.getSettings.invalidate();
       toast.success("Welcome to Gunner! Your account is ready.");
       setLocation("/dashboard");
     } catch (error) {
       console.error("Failed to complete onboarding:", error);
-      // Still redirect even if the mutation fails
+      // Still redirect even if the mutation fails - invalidate cache anyway
+      await utils.tenant.getSettings.invalidate();
       toast.success("Welcome to Gunner! Your account is ready.");
       setLocation("/dashboard");
     }

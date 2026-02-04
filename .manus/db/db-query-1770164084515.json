@@ -1,0 +1,28 @@
+{
+  "query": "SELECT id, name, onboardingStep, onboardingCompleted FROM tenants ORDER BY id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, onboardingStep, onboardingCompleted FROM tenants ORDER BY id DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "60004",
+      "name": "Nash Homes",
+      "onboardingStep": "2",
+      "onboardingCompleted": "true"
+    },
+    {
+      "id": "30001",
+      "name": "Test Company",
+      "onboardingStep": "1",
+      "onboardingCompleted": "false"
+    },
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "onboardingStep": "1",
+      "onboardingCompleted": "true"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tonboardingStep\tonboardingCompleted\n60004\tNash Homes\t2\ttrue\n30001\tTest Company\t1\tfalse\n1\tNew Again Houses\t1\ttrue\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}
