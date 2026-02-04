@@ -905,3 +905,19 @@
   - [x] Added 5-minute timeout for transcription API calls to handle long audio files
   - [x] Created unit tests for audio compression fallback behavior
   - [x] All 176 tests passing
+
+
+## Sidebar Navigation Consolidation (Feb 4, 2026)
+- [ ] Hide Social Media from sidebar (keep code for future)
+- [ ] Merge My Profile into Team page as a tab
+- [ ] Merge Team Management into Company Settings as a tab
+- [ ] Remove Platform Admin link (keep Admin Dashboard only)
+- [ ] Test consolidated navigation
+
+
+## Sidebar Navigation Consolidation
+- [x] Hide Social Media tab (keep code for later)
+- [x] Merge My Profile into Team page as a tab
+- [x] Merge Team Management into Company Settings as "Roles" tab
+- [x] Remove Platform Admin link (keep Admin Dashboard)
+- [x] Update sidebar navigation to show simplified menu

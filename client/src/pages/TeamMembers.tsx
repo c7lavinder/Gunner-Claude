@@ -7,18 +7,26 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { 
   Users, UserPlus, Trophy, Medal, Flame, Zap, Target, 
-  TrendingUp, Camera, Upload, Award, Star
+  TrendingUp, Camera, Upload, Award, Star, Lock, CheckCircle, User
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 
-// Tier badge colors
+// Tier badge colors for team display
 const tierColors: Record<string, string> = {
   bronze: "bg-amber-700 text-amber-100",
   silver: "bg-gray-400 text-gray-900",
   gold: "bg-yellow-500 text-yellow-900",
+};
+
+// Tier badge colors for profile display
+const profileTierColors: Record<string, { bg: string; border: string; text: string }> = {
+  bronze: { bg: "bg-amber-100", border: "border-amber-700", text: "text-amber-800" },
+  silver: { bg: "bg-gray-100", border: "border-gray-400", text: "text-gray-700" },
+  gold: { bg: "bg-yellow-100", border: "border-yellow-500", text: "text-yellow-800" },
 };
 
 const roleColors: Record<string, string> = {
@@ -101,7 +109,6 @@ function ProfilePictureUpload({ currentPicture, onUpload }: { currentPicture?: s
     reader.onload = (event) => {
       const base64 = event.target?.result as string;
       setPreview(base64);
-      // Extract base64 data without the data URL prefix
       const base64Data = base64.split(',')[1];
       onUpload(base64Data, file.type);
     };
@@ -171,7 +178,6 @@ function TeamMemberShowcase({
       rank === 2 ? "ring-gray-400" : 
       rank === 3 ? "ring-amber-600" : ""
     }`}>
-      {/* Header with gradient background */}
       <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-6 text-white">
         <div className="flex items-start gap-4">
           <div className="relative">
@@ -235,7 +241,6 @@ function TeamMemberShowcase({
         </div>
       </div>
       
-      {/* Stats section */}
       <CardContent className="p-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="text-center p-3 bg-muted/50 rounded-lg">
@@ -258,7 +263,6 @@ function TeamMemberShowcase({
           </div>
         </div>
         
-        {/* Grade distribution bar */}
         {totalCalls > 0 && (
           <div className="mt-4">
             <div className="flex h-3 rounded-full overflow-hidden">
@@ -315,7 +319,300 @@ function TeamMemberShowcase({
   );
 }
 
-export default function TeamMembers() {
+// Profile Badge Card Component
+interface BadgeTier {
+  target: number;
+  earned: boolean;
+  earnedAt?: Date | string;
+}
+
+interface BadgeData {
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  tiers: {
+    bronze: BadgeTier;
+    silver: BadgeTier;
+    gold: BadgeTier;
+  };
+  currentProgress: number;
+}
+
+function ProfileBadgeCard({ badge }: { badge: BadgeData }) {
+  const tiers = ["bronze", "silver", "gold"] as const;
+  let highestEarnedTier: string | null = null;
+  let nextTargetTier: typeof tiers[number] | null = null;
+  let nextTarget = 0;
+  
+  for (const tier of tiers) {
+    if (badge.tiers[tier].earned) {
+      highestEarnedTier = tier;
+    } else if (!nextTargetTier) {
+      nextTargetTier = tier;
+      nextTarget = badge.tiers[tier].target;
+    }
+  }
+  
+  const isEarned = highestEarnedTier !== null;
+  const tierStyle = highestEarnedTier ? profileTierColors[highestEarnedTier] : profileTierColors.bronze;
+  const progressPercent = nextTarget > 0 ? Math.min((badge.currentProgress / nextTarget) * 100, 100) : 100;
+
+  return (
+    <Card className={`relative overflow-hidden transition-all ${
+      isEarned 
+        ? `${tierStyle.bg} ${tierStyle.border} border-2` 
+        : "bg-muted/30 border-dashed opacity-70"
+    }`}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div className={`text-3xl ${!isEarned && "grayscale opacity-50"}`}>
+            {badge.icon}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h4 className={`font-semibold ${isEarned ? tierStyle.text : "text-muted-foreground"}`}>
+                {badge.name}
+              </h4>
+              {isEarned ? (
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              ) : (
+                <Lock className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">{badge.description}</p>
+            
+            {nextTargetTier && (
+              <div className="mt-2">
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Progress to {nextTargetTier}</span>
+                  <span>{badge.currentProgress} / {nextTarget}</span>
+                </div>
+                <Progress value={progressPercent} className="h-1.5" />
+              </div>
+            )}
+            
+            {isEarned && (
+              <div className="flex gap-1 mt-2">
+                {tiers.map(tier => (
+                  badge.tiers[tier].earned && (
+                    <span 
+                      key={tier}
+                      className={`text-xs px-2 py-0.5 rounded-full ${profileTierColors[tier].bg} ${profileTierColors[tier].text} border ${profileTierColors[tier].border}`}
+                    >
+                      {tier}
+                    </span>
+                  )
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// My Profile Tab Content
+function MyProfileContent() {
+  const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
+  const { data: allBadges, isLoading: badgesLoading } = trpc.gamification.getAllBadges.useQuery();
+
+  const earnedBadges = allBadges?.filter((b: BadgeData) => 
+    b.tiers.bronze.earned || b.tiers.silver.earned || b.tiers.gold.earned
+  ) || [];
+  const inProgressBadges = allBadges?.filter((b: BadgeData) => 
+    !b.tiers.bronze.earned && !b.tiers.silver.earned && !b.tiers.gold.earned
+  ) || [];
+
+  return (
+    <div className="space-y-6">
+      {/* XP & Level Card */}
+      <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-orange-800">
+            <Trophy className="h-5 w-5" />
+            Level & Experience
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {gamificationLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-4xl font-bold text-orange-900">
+                    Level {gamification?.xp.level ?? 1}
+                  </p>
+                  <p className="text-lg text-orange-700">{gamification?.xp.title ?? "Rookie"}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-orange-800">
+                    {gamification?.xp.totalXp?.toLocaleString() ?? 0} XP
+                  </p>
+                  <p className="text-sm text-orange-600">
+                    {((gamification?.xp.nextLevelXp ?? 500) - (gamification?.xp.totalXp ?? 0)).toLocaleString()} XP to next level
+                  </p>
+                </div>
+              </div>
+              <div>
+                <div className="h-4 bg-orange-200 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-500" 
+                    style={{ width: `${gamification?.xp.progress ?? 0}%` }}
+                  />
+                </div>
+                <p className="text-xs text-orange-600 mt-1 text-right">
+                  {gamification?.xp.progress ?? 0}% to Level {(gamification?.xp.level ?? 1) + 1}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Streaks */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="bg-gradient-to-br from-red-50 to-orange-50 border-red-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-red-800 text-lg">
+              <Flame className="h-5 w-5" />
+              Hot Streak
+            </CardTitle>
+            <CardDescription>Consecutive C+ or better grades</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {gamificationLoading ? (
+              <Skeleton className="h-16 w-full" />
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-4xl font-bold text-red-900">
+                    {gamification?.streaks.hotStreakCurrent ?? 0} 🔥
+                  </p>
+                  <p className="text-sm text-red-600">Current streak</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-red-700">
+                    {gamification?.streaks.hotStreakBest ?? 0}
+                  </p>
+                  <p className="text-sm text-red-600">Best ever</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-blue-800 text-lg">
+              <Target className="h-5 w-5" />
+              Consistency Streak
+            </CardTitle>
+            <CardDescription>Days with at least one graded call</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {gamificationLoading ? (
+              <Skeleton className="h-16 w-full" />
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-4xl font-bold text-blue-900">
+                    {gamification?.streaks.consistencyStreakCurrent ?? 0} days
+                  </p>
+                  <p className="text-sm text-blue-600">Current streak</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-blue-700">
+                    {gamification?.streaks.consistencyStreakBest ?? 0}
+                  </p>
+                  <p className="text-sm text-blue-600">Best ever</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Badges Section */}
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Award className="h-5 w-5 text-purple-600" />
+            Earned Badges ({earnedBadges.length})
+          </h2>
+          {badgesLoading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-4">
+                    <Skeleton className="h-20 w-full" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : earnedBadges.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {earnedBadges.map((badge: BadgeData) => (
+                <ProfileBadgeCard key={badge.code} badge={badge} />
+              ))}
+            </div>
+          ) : (
+            <Card className="bg-muted/30">
+              <CardContent className="flex flex-col items-center justify-center py-8">
+                <Award className="h-12 w-12 text-muted-foreground/50 mb-2" />
+                <p className="text-muted-foreground">No badges earned yet. Keep grinding!</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <div>
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-orange-600" />
+            In Progress ({inProgressBadges.length})
+          </h2>
+          {badgesLoading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-4">
+                    <Skeleton className="h-20 w-full" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : inProgressBadges.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {inProgressBadges.map((badge: BadgeData) => (
+                <ProfileBadgeCard key={badge.code} badge={badge} />
+              ))}
+            </div>
+          ) : earnedBadges.length === allBadges?.length ? (
+            <Card className="bg-muted/30">
+              <CardContent className="flex flex-col items-center justify-center py-8">
+                <CheckCircle className="h-12 w-12 text-green-500/50 mb-2" />
+                <p className="text-muted-foreground">All badges earned! You're a legend!</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="bg-muted/30">
+              <CardContent className="flex flex-col items-center justify-center py-8">
+                <Zap className="h-12 w-12 text-orange-500/50 mb-2" />
+                <p className="text-muted-foreground">Start making calls to unlock badges!</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Team Members Tab Content
+function TeamMembersContent() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
   
@@ -346,7 +643,6 @@ export default function TeamMembers() {
 
   const isLoading = membersLoading || scoreLoading || gamificationLoading;
 
-  // Create maps for quick lookup
   const scoreMap = new Map();
   if (scoreLeaderboard) {
     scoreLeaderboard.forEach((entry) => {
@@ -371,7 +667,6 @@ export default function TeamMembers() {
     });
   }
   
-  // Sort team members by XP for ranking
   const sortedMembers = teamMembers?.slice().sort((a, b) => {
     const aXp = gamificationMap.get(a.id)?.xp || 0;
     const bXp = gamificationMap.get(b.id)?.xp || 0;
@@ -380,16 +675,8 @@ export default function TeamMembers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="h-8 w-8" /> Team
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Meet your team and track their achievements
-          </p>
-        </div>
-        {(!teamMembers || teamMembers.length === 0) && (
+      {(!teamMembers || teamMembers.length === 0) && (
+        <div className="flex justify-end">
           <Button 
             onClick={() => seedMutation.mutate()}
             disabled={seedMutation.isPending}
@@ -397,8 +684,8 @@ export default function TeamMembers() {
             <UserPlus className="h-4 w-4 mr-2" />
             Initialize Team
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -478,6 +765,42 @@ export default function TeamMembers() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+export default function TeamMembers() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Users className="h-8 w-8" /> Team
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Meet your team and track achievements
+        </p>
+      </div>
+
+      <Tabs defaultValue="team" className="w-full">
+        <TabsList>
+          <TabsTrigger value="team" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Team Members
+          </TabsTrigger>
+          <TabsTrigger value="profile" className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            My Profile
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="team" className="mt-6">
+          <TeamMembersContent />
+        </TabsContent>
+        
+        <TabsContent value="profile" className="mt-6">
+          <MyProfileContent />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

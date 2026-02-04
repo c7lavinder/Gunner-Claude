@@ -22,7 +22,7 @@ import {
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Share2, Settings, User, Building2, Shield } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Building2, Shield } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -31,9 +31,7 @@ import { useImpersonation } from "./ImpersonationBanner";
 
 const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string) => {
   const isAdmin = teamRole === 'admin';
-  const isPlatformOwner = openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
   const isSuperAdmin = userRole === 'super_admin';
-  const isLeadManager = teamRole === 'lead_manager';
   
   const items = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -42,28 +40,22 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
     { icon: BookOpen, label: "Training", path: "/training" },
   ];
   
-  // Social Media is hidden from lead managers (only admins and acquisition managers can see it)
-  if (!isLeadManager) {
-    items.push({ icon: Share2, label: "Social Media", path: "/social" });
-  }
+  // Social Media is temporarily hidden (coming soon)
+  // if (!isLeadManager) {
+  //   items.push({ icon: Share2, label: "Social Media", path: "/social" });
+  // }
   
+  // Team page now includes My Profile tab
   items.push({ icon: Users, label: "Team", path: "/team" });
-  items.push({ icon: User, label: "My Profile", path: "/profile" });
   
-  // Team Management and Company Settings are admin-only
+  // Company Settings (includes Team Management) is admin-only
   if (isAdmin) {
-    items.push({ icon: Settings, label: "Team Management", path: "/team-management" });
-    items.push({ icon: Building2, label: "Company Settings", path: "/settings" });
+    items.push({ icon: Building2, label: "Settings", path: "/settings" });
   }
   
-  // Platform Admin is only for platform owner
-  if (isPlatformOwner) {
-    items.push({ icon: Shield, label: "Platform Admin", path: "/admin" });
-  }
-  
-  // Admin Dashboard is for super_admin users
+  // Admin Dashboard is for super_admin users (platform owner)
   if (isSuperAdmin) {
-    items.push({ icon: Shield, label: "Admin Dashboard", path: "/admin-dashboard" });
+    items.push({ icon: Shield, label: "Admin", path: "/admin-dashboard" });
   }
   
   return items;
