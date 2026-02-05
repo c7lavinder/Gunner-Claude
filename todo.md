@@ -1164,3 +1164,4 @@
 - [ ] Fix calls stuck in 'Transcribing' status for hours - longer calls (12-30 min) not completing
 - [x] Fix stuck transcription calls - increased timeouts and added Reset Stuck Calls button
 - [x] Add ffmpeg-static package for production audio chunking support
+- [x] Fix 'Could not determine audio duration' - use ffmpeg instead of ffprobe for duration detection

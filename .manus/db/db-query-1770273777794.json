@@ -1,0 +1,34 @@
+{
+  "query": "SELECT id, contactName, duration, status, recordingUrl, classificationReason FROM calls WHERE status = 'failed' AND classificationReason LIKE '%Could not determine%' ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, duration, status, recordingUrl, classificationReason FROM calls WHERE status = 'failed' AND classificationReason LIKE '%Could not determine%' ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "420008",
+      "contactName": "Jamey Durham",
+      "duration": "725",
+      "status": "failed",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/iejiPM8jlQeTJ5KpWjhI-1770234643037.mp3",
+      "classificationReason": "Failed to process audio file: Could not determine audio duration"
+    },
+    {
+      "id": "420002",
+      "contactName": "Jamey Durham",
+      "duration": "982",
+      "status": "failed",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/0NoeQZfVhQSPxuotzwhd-1770229523115.mp3",
+      "classificationReason": "Failed to process audio file: Could not determine audio duration"
+    },
+    {
+      "id": "330003",
+      "contactName": "Jennifer Mcgrath",
+      "duration": "1834",
+      "status": "failed",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/RlWanrLJKbIUe33k6sus-1770219857018.mp3",
+      "classificationReason": "Failed to process audio file: Could not determine audio duration"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tduration\tstatus\trecordingUrl\tclassificationReason\n420008\tJamey Durham\t725\tfailed\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/iejiPM8jlQeTJ5KpWjhI-1770234643037.mp3\tFailed to process audio file: Could not determine audio duration\n420002\tJamey Durham\t982\tfailed\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/0NoeQZfVhQSPxuotzwhd-1770229523115.mp3\tFailed to process audio file: Could not determine audio duration\n330003\tJennifer Mcgrath\t1834\tfailed\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/RlWanrLJKbIUe33k6sus-1770219857018.mp3\tFailed to process audio file: Could not determine audio duration\n",
+  "stderr": "",
+  "execution_time_ms": 378
+}

@@ -103,28 +103,40 @@ async function checkFfmpeg(): Promise<boolean> {
 }
 
 /**
- * Get audio duration using FFprobe
+ * Get audio duration using FFmpeg (not ffprobe, since ffprobe may not be available)
+ * Uses ffmpeg -i to read the file metadata and extract duration from stderr
  */
 async function getAudioDuration(filePath: string): Promise<number | null> {
   return new Promise((resolve) => {
-    const proc = spawn("ffprobe", [
-      "-v", "error",
-      "-show_entries", "format=duration",
-      "-of", "default=noprint_wrappers=1:nokey=1",
-      filePath,
-    ]);
+    // Use ffmpeg -i which outputs duration to stderr
+    const proc = spawn(FFMPEG_PATH, [
+      "-i", filePath,
+      "-f", "null",
+      "-"
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    let output = "";
-    proc.stdout.on("data", (data) => {
-      output += data.toString();
+    let stderr = "";
+    proc.stderr?.on("data", (data) => {
+      stderr += data.toString();
     });
 
-    proc.on("error", () => resolve(null));
-    proc.on("close", (code) => {
-      if (code === 0) {
-        const duration = parseFloat(output.trim());
-        resolve(isNaN(duration) ? null : duration);
+    proc.on("error", (err) => {
+      console.error('[AudioChunking] FFmpeg error getting duration:', err);
+      resolve(null);
+    });
+    
+    proc.on("close", () => {
+      // Parse duration from ffmpeg output: "Duration: 00:16:19.59"
+      const durationMatch = stderr.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+      if (durationMatch) {
+        const hours = parseInt(durationMatch[1], 10);
+        const minutes = parseInt(durationMatch[2], 10);
+        const seconds = parseFloat(durationMatch[3]);
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+        console.log(`[AudioChunking] Detected duration: ${totalSeconds.toFixed(1)}s`);
+        resolve(totalSeconds);
       } else {
+        console.error('[AudioChunking] Could not parse duration from ffmpeg output');
         resolve(null);
       }
     });
