@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,10 +36,21 @@ const FEATURES_BY_TIER: Record<string, string[]> = {
 
 export default function Paywall() {
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
   const { user } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<string>("growth");
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
   const [loading, setLoading] = useState(false);
+
+  // Show toast on checkout canceled
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get('checkout') === 'canceled') {
+      toast.info("Checkout was canceled. You can try again when you're ready.");
+      // Clean up URL
+      window.history.replaceState({}, '', '/paywall');
+    }
+  }, [searchString]);
 
   // Fetch plans from database
   const { data: plans, isLoading: plansLoading } = trpc.admin.getPlans.useQuery();

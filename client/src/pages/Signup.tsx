@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -23,28 +22,6 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
-const plans = [
-  {
-    id: 'starter',
-    name: "Starter",
-    price: 99,
-    description: "Up to 3 team members, 500 calls/month"
-  },
-  {
-    id: 'growth',
-    name: "Growth",
-    price: 249,
-    description: "Up to 10 team members, 2,000 calls/month",
-    popular: true
-  },
-  {
-    id: 'scale',
-    name: "Scale",
-    price: 499,
-    description: "Unlimited team members and calls"
-  }
-];
-
 interface GoogleUserData {
   googleId: string;
   email: string;
@@ -56,7 +33,6 @@ export default function Signup() {
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
-  const preselectedPlan = searchParams.get('plan') || 'growth';
   const googleDataParam = searchParams.get('google');
   
   // Check if user is already logged in
@@ -68,7 +44,6 @@ export default function Signup() {
   // Redirect logged-in users to appropriate page
   useEffect(() => {
     if (!authLoading && user) {
-      // User is already logged in, redirect them
       if (tenantSettings?.onboardingCompleted === 'true') {
         setLocation('/dashboard');
       } else {
@@ -77,7 +52,6 @@ export default function Signup() {
     }
   }, [user, authLoading, tenantSettings, setLocation]);
 
-  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   
@@ -90,7 +64,6 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState(preselectedPlan);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Validation
@@ -104,9 +77,6 @@ export default function Signup() {
         setGoogleUser(googleData);
         setEmail(googleData.email);
         setName(googleData.name);
-        // Skip to company info step for Google users
-        setStep(1);
-        // Clear the URL params
         window.history.replaceState({}, '', '/signup');
         toast.success("Google account connected! Please complete your registration.");
       } catch (e) {
@@ -115,7 +85,7 @@ export default function Signup() {
     }
   }, [googleDataParam]);
 
-  const validateStep1 = () => {
+  const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
     if (!email) {
@@ -153,23 +123,14 @@ export default function Signup() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleStep1Submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validateStep1()) {
-      setStep(2);
-    }
-  };
-
   const handleGoogleSignUp = async () => {
     setGoogleLoading(true);
     
     try {
-      // Get the Google OAuth URL from our backend
       const response = await fetch('/api/auth/google/url');
       const data = await response.json();
       
       if (data.url) {
-        // Redirect to Google OAuth
         window.location.href = data.url;
       } else {
         toast.error("Failed to initialize Google sign-up");
@@ -181,12 +142,16 @@ export default function Signup() {
     }
   };
 
-  const handleSignup = async () => {
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
     setLoading(true);
     
     try {
-      // Different endpoint for Google vs email signup
       if (googleUser) {
+        // Google signup - no plan selection, go straight to onboarding
         const response = await fetch('/api/auth/google/complete-signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -196,7 +161,6 @@ export default function Signup() {
             name,
             picture: googleUser.picture,
             companyName,
-            planId: selectedPlan,
           }),
         });
 
@@ -204,22 +168,13 @@ export default function Signup() {
 
         if (data.success) {
           localStorage.setItem('authToken', data.token);
-          
-          if (data.checkoutUrl) {
-            toast.success("Account created! Redirecting to payment...");
-            window.open(data.checkoutUrl, '_blank');
-            setTimeout(() => {
-              setLocation('/onboarding');
-            }, 1000);
-          } else {
-            toast.success("Account created! Let's set up your workspace.");
-            setLocation('/onboarding');
-          }
+          toast.success("Account created! Let's set up your workspace.");
+          setLocation('/onboarding');
         } else {
           toast.error(data.error || "Failed to create account");
         }
       } else {
-        // Regular email signup
+        // Email signup - no plan selection, go straight to onboarding
         const response = await fetch('/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -228,7 +183,6 @@ export default function Signup() {
             password,
             name,
             companyName,
-            planId: selectedPlan,
           }),
         });
 
@@ -236,17 +190,8 @@ export default function Signup() {
 
         if (data.success) {
           localStorage.setItem('authToken', data.token);
-          
-          if (data.checkoutUrl) {
-            toast.success("Account created! Redirecting to payment...");
-            window.open(data.checkoutUrl, '_blank');
-            setTimeout(() => {
-              setLocation('/onboarding');
-            }, 1000);
-          } else {
-            toast.success("Account created! Let's set up your workspace.");
-            setLocation('/onboarding');
-          }
+          toast.success("Account created! Let's set up your workspace.");
+          setLocation('/onboarding');
         } else {
           toast.error(data.error || "Failed to create account");
         }
@@ -274,278 +219,177 @@ export default function Signup() {
 
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-lg">
-          {/* Progress Steps */}
-          <div className="flex items-center justify-center gap-4 mb-8">
-            <div className={`flex items-center gap-2 ${step >= 1 ? 'text-primary' : 'text-muted-foreground'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted'
-              }`}>
-                {step > 1 ? <Check className="h-4 w-4" /> : '1'}
-              </div>
-              <span className="text-sm font-medium hidden sm:inline">Account</span>
-            </div>
-            <div className="w-12 h-px bg-border" />
-            <div className={`flex items-center gap-2 ${step >= 2 ? 'text-primary' : 'text-muted-foreground'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted'
-              }`}>
-                {step > 2 ? <Check className="h-4 w-4" /> : '2'}
-              </div>
-              <span className="text-sm font-medium hidden sm:inline">Plan</span>
-            </div>
-            <div className="w-12 h-px bg-border" />
-            <div className={`flex items-center gap-2 ${step >= 3 ? 'text-primary' : 'text-muted-foreground'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step >= 3 ? 'bg-primary text-primary-foreground' : 'bg-muted'
-              }`}>
-                3
-              </div>
-              <span className="text-sm font-medium hidden sm:inline">Payment</span>
-            </div>
-          </div>
+        <div className="w-full max-w-md">
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Create your account</CardTitle>
+              <CardDescription>
+                Get started with your 3-day free trial
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Google Sign-Up Button (only show if not already using Google) */}
+              {!googleUser && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-3 h-11"
+                    onClick={handleGoogleSignUp}
+                    disabled={googleLoading || loading}
+                  >
+                    {googleLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <GoogleIcon className="h-5 w-5" />
+                    )}
+                    Continue with Google
+                  </Button>
 
-          {/* Step 1: Account Details */}
-          {step === 1 && (
-            <Card>
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl">Create your account</CardTitle>
-                <CardDescription>
-                  Start your 3-day free trial. Card required after onboarding.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Google Sign-Up Button (only show if not already using Google) */}
+                  {/* Divider */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Or continue with email
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Google User Badge */}
+              {googleUser && (
+                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                  {googleUser.picture && (
+                    <img 
+                      src={googleUser.picture} 
+                      alt={googleUser.name} 
+                      className="w-10 h-10 rounded-full"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">{googleUser.name}</p>
+                    <p className="text-sm text-muted-foreground">{googleUser.email}</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-green-600">
+                    <Check className="h-4 w-4" />
+                    <span className="text-sm">Connected</span>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleSignup} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Your Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="John Smith"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={loading || !!googleUser}
+                  />
+                  {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="companyName">Company Name</Label>
+                  <Input
+                    id="companyName"
+                    placeholder="Acme Real Estate"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    disabled={loading}
+                  />
+                  {errors.companyName && <p className="text-sm text-destructive">{errors.companyName}</p>}
+                </div>
+                
+                {/* Only show email/password fields for non-Google users */}
                 {!googleUser && (
                   <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full gap-3 h-11"
-                      onClick={handleGoogleSignUp}
-                      disabled={googleLoading || loading}
-                    >
-                      {googleLoading ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <GoogleIcon className="h-5 w-5" />
-                      )}
-                      Continue with Google
-                    </Button>
-
-                    {/* Divider */}
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                      </div>
-                      <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-background px-2 text-muted-foreground">
-                          Or continue with email
-                        </span>
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="john@company.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        disabled={loading}
+                      />
+                      {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={loading}
+                      />
+                      {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirm Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        disabled={loading}
+                      />
+                      {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword}</p>}
                     </div>
                   </>
                 )}
 
-                {/* Google User Badge */}
-                {googleUser && (
-                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                    {googleUser.picture && (
-                      <img 
-                        src={googleUser.picture} 
-                        alt={googleUser.name} 
-                        className="w-10 h-10 rounded-full"
-                      />
-                    )}
-                    <div className="flex-1">
-                      <p className="font-medium">{googleUser.name}</p>
-                      <p className="text-sm text-muted-foreground">{googleUser.email}</p>
-                    </div>
-                    <div className="flex items-center gap-1 text-green-600">
-                      <Check className="h-4 w-4" />
-                      <span className="text-sm">Google connected</span>
-                    </div>
-                  </div>
-                )}
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="terms"
+                    checked={agreedToTerms}
+                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+                    disabled={loading}
+                  />
+                  <Label htmlFor="terms" className="text-sm leading-tight cursor-pointer">
+                    I agree to the{" "}
+                    <Link href="/terms" className="text-primary hover:underline">
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link href="/privacy" className="text-primary hover:underline">
+                      Privacy Policy
+                    </Link>
+                  </Label>
+                </div>
+                {errors.terms && <p className="text-sm text-destructive">{errors.terms}</p>}
 
-                <form onSubmit={handleStep1Submit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Your Name</Label>
-                    <Input
-                      id="name"
-                      placeholder="John Smith"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      disabled={loading}
-                    />
-                    {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="companyName">Company Name</Label>
-                    <Input
-                      id="companyName"
-                      placeholder="Acme Real Estate"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      disabled={loading}
-                    />
-                    {errors.companyName && <p className="text-sm text-destructive">{errors.companyName}</p>}
-                  </div>
-                  
-                  {/* Only show email/password fields for non-Google users */}
-                  {!googleUser && (
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? (
                     <>
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="john@company.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          disabled={loading}
-                        />
-                        {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
-                        <Input
-                          id="password"
-                          type="password"
-                          placeholder="••••••••"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          disabled={loading}
-                        />
-                        {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="confirmPassword">Confirm Password</Label>
-                        <Input
-                          id="confirmPassword"
-                          type="password"
-                          placeholder="••••••••"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          disabled={loading}
-                        />
-                        {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword}</p>}
-                      </div>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating account...
                     </>
+                  ) : (
+                    "Create Account"
                   )}
-                  
-                  {/* Legal Agreement Checkbox */}
-                  <div className="flex items-start space-x-3">
-                    <Checkbox
-                      id="terms"
-                      checked={agreedToTerms}
-                      onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
-                      disabled={loading}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <label
-                        htmlFor="terms"
-                        className="text-sm text-muted-foreground leading-relaxed cursor-pointer"
-                      >
-                        I agree to the{" "}
-                        <Link href="/terms" className="text-primary hover:underline" target="_blank">
-                          Terms of Service
-                        </Link>{" "}
-                        and{" "}
-                        <Link href="/privacy" className="text-primary hover:underline" target="_blank">
-                          Privacy Policy
-                        </Link>
-                      </label>
-                      {errors.terms && <p className="text-sm text-destructive">{errors.terms}</p>}
-                    </div>
-                  </div>
-                  
-                  <Button type="submit" className="w-full" disabled={loading || googleLoading}>
-                    Continue
-                  </Button>
-                </form>
-                
-                <div className="text-center text-sm text-muted-foreground">
-                  Already have an account?{" "}
-                  <Link href="/login" className="text-primary hover:underline">
-                    Sign in
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </Button>
+              </form>
 
-          {/* Step 2: Plan Selection */}
-          {step === 2 && (
-            <Card>
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl">Choose your plan</CardTitle>
-                <CardDescription>
-                  All plans include a 14-day free trial. You can change plans anytime.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan} className="space-y-4">
-                  {plans.map((plan) => (
-                    <div key={plan.id}>
-                      <RadioGroupItem
-                        value={plan.id}
-                        id={plan.id}
-                        className="peer sr-only"
-                      />
-                      <Label
-                        htmlFor={plan.id}
-                        className={`flex items-center justify-between p-4 rounded-lg border-2 cursor-pointer transition-colors ${
-                          selectedPlan === plan.id 
-                            ? 'border-primary bg-primary/5' 
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{plan.name}</span>
-                            {plan.popular && (
-                              <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">
-                                Popular
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">{plan.description}</p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-2xl font-bold">${plan.price}</span>
-                          <span className="text-muted-foreground">/mo</span>
-                        </div>
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-                
-                <div className="flex gap-4 mt-6">
-                  <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
-                    Back
-                  </Button>
-                  <Button onClick={handleSignup} disabled={loading} className="flex-1">
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating account...
-                      </>
-                    ) : (
-                      'Start Free Trial'
-                    )}
-                  </Button>
-                </div>
-                
-                <p className="text-center text-sm text-muted-foreground mt-4">
-                  You'll be asked for payment details after your trial ends.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+              <p className="text-center text-sm text-muted-foreground">
+                Already have an account?{" "}
+                <Link href="/login" className="text-primary hover:underline">
+                  Sign in
+                </Link>
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

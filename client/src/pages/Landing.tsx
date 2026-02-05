@@ -176,7 +176,7 @@ export default function Landing() {
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mt-4">
-              3-day free trial • Card required to start • Cancel anytime
+              3-day free trial • No credit card required to start
             </p>
           </div>
         </div>
@@ -274,7 +274,7 @@ export default function Landing() {
                       </p>
                     )}
                   </div>
-                  <Link href={`/signup?plan=${plan.code || plan.name.toLowerCase()}`}>
+                  <Link href="/signup">
                     <Button 
                       className="w-full mb-6" 
                       variant={plan.popular ? 'default' : 'outline'}

@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useSearch } from "wouter";
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Phone, TrendingUp, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +59,17 @@ const dateRangeLabels: Record<DateRange, string> = {
 export default function Home() {
   const [dateRange, setDateRange] = useState<DateRange>("week");
   const { user } = useAuth();
+  const searchString = useSearch();
+  
+  // Show toast on checkout success
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get('checkout') === 'success') {
+      toast.success("Welcome to Gunner! Your subscription is now active.");
+      // Clean up URL
+      window.history.replaceState({}, '', '/dashboard');
+    }
+  }, [searchString]);
   
   const firstName = user?.name?.split(' ')[0] || 'there';
   

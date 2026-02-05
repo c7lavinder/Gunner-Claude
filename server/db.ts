@@ -43,6 +43,22 @@ export async function upsertUser(user: InsertUser): Promise<{ id: number; openId
   }
 
   try {
+    // IMPORTANT: Check if user with this email already exists (prevents duplicates from different auth methods)
+    if (user.email) {
+      const [existingByEmail] = await db.select().from(users).where(eq(users.email, user.email)).limit(1);
+      if (existingByEmail && existingByEmail.openId !== user.openId) {
+        // User exists with different openId - just update lastSignedIn and return existing user
+        // DO NOT change their openId or role - preserve their existing account
+        console.log(`[Database] Found existing user by email ${user.email} with openId ${existingByEmail.openId}, keeping existing account`);
+        await db.update(users)
+          .set({ 
+            lastSignedIn: new Date(),
+          })
+          .where(eq(users.id, existingByEmail.id));
+        return { id: existingByEmail.id, openId: existingByEmail.openId, email: existingByEmail.email };
+      }
+    }
+
     const values: InsertUser = {
       openId: user.openId,
     };

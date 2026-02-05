@@ -1151,3 +1151,8 @@
 - [x] Configure DNS records for Loops email sending (MX, SPF, DKIM) in Squarespace
 - [x] Publish transactional emails in Loops.so (Day 1, Day 2, Password Reset)
 - [x] Activate welcome email loop (triggered on contact added)
+- [x] Fix super admin account bypassing paywall (corey@newagainhouses.com blocked)
+- [x] Fix sign in → onboarding → paywall → dashboard sequence (onboarding restarts after paywall)
+- [x] Fix login flow loop: paywall → onboarding → paywall → onboarding
+- [x] Update signup flow and landing page links: Account → Onboarding → Plan/Payment
+- [ ] Fix signup page still showing Account/Plan/Payment steps

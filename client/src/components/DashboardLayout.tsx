@@ -128,33 +128,56 @@ export default function DashboardLayout({
     return <Redirect to="/verification-pending" />;
   }
 
-  // Check if onboarding is not completed - redirect to onboarding
-  // Skip redirect if already on onboarding, pricing, or paywall pages
-  const isOnboardingRoute = location === '/onboarding' || location === '/pricing' || location === '/paywall';
-  const onboardingCompleted = tenantSettings?.onboardingCompleted === 'true';
+  // Route detection
+  const isOnboardingRoute = location === '/onboarding';
+  const isPaywallRoute = location === '/paywall';
+  const isPricingRoute = location === '/pricing';
   
-  if (!isOnboardingRoute && !onboardingCompleted && tenantSettings) {
-    return <Redirect to="/onboarding" />;
-  }
-
-  // PAYWALL CHECK: After onboarding, user MUST have entered card to access dashboard
-  // Check if user has an active subscription or is in trial with card on file
+  // State checks
+  const onboardingCompleted = tenantSettings?.onboardingCompleted === 'true';
   const hasActiveSubscription = tenantSettings?.stripeSubscriptionId && 
     (tenantSettings?.subscriptionStatus === 'active' || tenantSettings?.subscriptionStatus === 'past_due');
-  const isPaywallRoute = location === '/paywall';
+  const isSuperAdmin = user?.role === 'super_admin';
   
-  // If onboarding is complete but no subscription, redirect to paywall
-  if (onboardingCompleted && !hasActiveSubscription && !isOnboardingRoute && !isPaywallRoute && tenantSettings) {
-    return <Redirect to="/paywall" />;
-  }
-
-  // If on onboarding or paywall page, render without sidebar
-  if ((isOnboardingRoute && !onboardingCompleted) || (isPaywallRoute && !hasActiveSubscription)) {
+  // DEBUG: Log flow check values
+  console.log('[Flow Debug]', {
+    location,
+    userRole: user?.role,
+    isSuperAdmin,
+    onboardingCompleted,
+    hasActiveSubscription,
+    stripeSubscriptionId: tenantSettings?.stripeSubscriptionId,
+    subscriptionStatus: tenantSettings?.subscriptionStatus,
+  });
+  
+  // FLOW LOGIC:
+  // 1. If on onboarding page, always render it (let the page handle its own logic)
+  if (isOnboardingRoute) {
     return (
       <div className="min-h-screen bg-background">
         {children}
       </div>
     );
+  }
+  
+  // 2. If on paywall page, always render it (let the page handle its own logic)
+  if (isPaywallRoute || isPricingRoute) {
+    return (
+      <div className="min-h-screen bg-background">
+        {children}
+      </div>
+    );
+  }
+  
+  // 3. If onboarding NOT completed, redirect to onboarding
+  if (!onboardingCompleted && tenantSettings) {
+    return <Redirect to="/onboarding" />;
+  }
+  
+  // 4. If onboarding completed but no subscription, redirect to paywall
+  // Super admins bypass this check
+  if (onboardingCompleted && !hasActiveSubscription && tenantSettings && !isSuperAdmin) {
+    return <Redirect to="/paywall" />;
   }
 
   return (

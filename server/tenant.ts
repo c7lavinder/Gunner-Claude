@@ -758,8 +758,8 @@ export async function createTenantCheckoutSession(params: {
   tenantId?: number;
   origin: string;
 }) {
-  const successUrl = `${params.origin}/onboarding?step=6&success=true`;
-  const cancelUrl = `${params.origin}/onboarding?step=2&canceled=true`;
+  const successUrl = `${params.origin}/dashboard?checkout=success`;
+  const cancelUrl = `${params.origin}/paywall?checkout=canceled`;
 
   return createCheckoutSession({
     planCode: params.planCode,

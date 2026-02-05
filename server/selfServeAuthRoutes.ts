@@ -8,27 +8,21 @@ const router = Router();
 // Sign up with email/password
 router.post("/signup", async (req: Request, res: Response) => {
   try {
-    const { email, password, name, companyName, planId } = req.body;
+    const { email, password, name, companyName } = req.body;
 
-    // Validate required fields
-    if (!email || !password || !name || !companyName || !planId) {
+    // Validate required fields (planId no longer required - user selects plan at paywall after onboarding)
+    if (!email || !password || !name || !companyName) {
       res.status(400).json({ success: false, error: "All fields are required" });
       return;
     }
 
-    // Validate plan
-    if (!['starter', 'growth', 'scale'].includes(planId)) {
-      res.status(400).json({ success: false, error: "Invalid plan selected" });
-      return;
-    }
-
-    // Create account
+    // Create account with default 'growth' plan (will be updated when user selects plan at paywall)
     const result = await signUpWithEmail({
       email,
       password,
       name,
       companyName,
-      planId,
+      planId: 'growth', // Default plan, user will select actual plan at paywall
     });
 
     if (!result.success) {
@@ -50,39 +44,14 @@ router.post("/signup", async (req: Request, res: Response) => {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
-    // Create checkout session for the selected plan
-    try {
-      const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
-      const checkoutResult = await createTenantCheckoutSession({
-        planCode: planId,
-        billingPeriod: 'monthly',
-        userId: result.userId!,
-        userEmail: email,
-        userName: name,
-        tenantId: result.tenantId!,
-        origin,
-      });
-
-      res.json({
-        success: true,
-        token,
-        userId: result.userId,
-        tenantId: result.tenantId,
-        onboardingComplete: false,
-        checkoutUrl: checkoutResult.url,
-      });
-    } catch (checkoutError) {
-      // If checkout fails, still return success but without checkout URL
-      // User can complete checkout later from billing settings
-      console.error('[Auth] Checkout session error:', checkoutError);
-      res.json({
-        success: true,
-        token,
-        userId: result.userId,
-        tenantId: result.tenantId,
-        onboardingComplete: false,
-      });
-    }
+    // No checkout session - user will go to onboarding first, then paywall
+    res.json({
+      success: true,
+      token,
+      userId: result.userId,
+      tenantId: result.tenantId,
+      onboardingComplete: false,
+    });
   } catch (error) {
     console.error('[Auth] Signup error:', error);
     res.status(500).json({ success: false, error: "Internal server error" });
@@ -452,15 +421,11 @@ router.get("/google/callback", async (req: Request, res: Response) => {
 // Complete Google signup with company info
 router.post("/google/complete-signup", async (req: Request, res: Response) => {
   try {
-    const { googleId, email, name, picture, companyName, planId } = req.body;
+    const { googleId, email, name, picture, companyName } = req.body;
     
-    if (!googleId || !email || !name || !companyName || !planId) {
+    // planId no longer required - user selects plan at paywall after onboarding
+    if (!googleId || !email || !name || !companyName) {
       res.status(400).json({ success: false, error: "All fields are required" });
-      return;
-    }
-    
-    if (!['starter', 'growth', 'scale'].includes(planId)) {
-      res.status(400).json({ success: false, error: "Invalid plan selected" });
       return;
     }
     
@@ -470,7 +435,7 @@ router.post("/google/complete-signup", async (req: Request, res: Response) => {
       name,
       picture,
       companyName,
-      planId,
+      planId: 'growth', // Default plan, user will select actual plan at paywall
     });
     
     if (!result.success) {
@@ -486,37 +451,14 @@ router.post("/google/complete-signup", async (req: Request, res: Response) => {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
     
-    // Create checkout session for the selected plan
-    try {
-      const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
-      const checkoutResult = await createTenantCheckoutSession({
-        planCode: planId,
-        billingPeriod: 'monthly',
-        userId: result.userId!,
-        userEmail: email,
-        userName: name,
-        tenantId: result.tenantId!,
-        origin,
-      });
-      
-      res.json({
-        success: true,
-        token: result.token,
-        userId: result.userId,
-        tenantId: result.tenantId,
-        onboardingComplete: false,
-        checkoutUrl: checkoutResult.url,
-      });
-    } catch (checkoutError) {
-      console.error('[Auth] Google signup checkout error:', checkoutError);
-      res.json({
-        success: true,
-        token: result.token,
-        userId: result.userId,
-        tenantId: result.tenantId,
-        onboardingComplete: false,
-      });
-    }
+    // No checkout session - user will go to onboarding first, then paywall
+    res.json({
+      success: true,
+      token: result.token,
+      userId: result.userId,
+      tenantId: result.tenantId,
+      onboardingComplete: false,
+    });
   } catch (error) {
     console.error('[Auth] Google complete signup error:', error);
     res.status(500).json({ success: false, error: "Internal server error" });
