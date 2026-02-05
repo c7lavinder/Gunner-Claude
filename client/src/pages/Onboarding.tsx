@@ -196,14 +196,15 @@ export default function Onboarding() {
       await completeOnboardingMutation.mutateAsync();
       // Invalidate tenant settings cache so DashboardLayout sees the updated value
       await utils.tenant.getSettings.invalidate();
-      toast.success("Welcome to Gunner! Your account is ready.");
-      setLocation("/dashboard");
+      // Redirect to paywall - user must enter card before accessing dashboard
+      toast.success("Almost there! Start your free trial to access your dashboard.");
+      setLocation("/paywall");
     } catch (error) {
       console.error("Failed to complete onboarding:", error);
       // Still redirect even if the mutation fails - invalidate cache anyway
       await utils.tenant.getSettings.invalidate();
-      toast.success("Welcome to Gunner! Your account is ready.");
-      setLocation("/dashboard");
+      toast.success("Almost there! Start your free trial to access your dashboard.");
+      setLocation("/paywall");
     } finally {
       setCompleting(false);
     }
@@ -472,29 +473,29 @@ export default function Onboarding() {
               <Rocket className="h-10 w-10 text-green-600" />
             </div>
             <div>
-              <h3 className="text-2xl font-bold mb-2">You're All Set!</h3>
+              <h3 className="text-2xl font-bold mb-2">Ready to Launch!</h3>
               <p className="text-muted-foreground">
-                Welcome to Gunner, {formData.companyName || "your team"}! Your AI call coaching platform is ready.
+                {formData.companyName || "Your team"} is set up and ready to go. One last step to unlock your dashboard.
               </p>
             </div>
             <div className="bg-muted/50 rounded-lg p-4 text-left space-y-2">
-              <p className="font-medium">What's next:</p>
+              <p className="font-medium">What happens next:</p>
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
-                  Your 14-day free trial has started
+                  Start your 3-day free trial (cancel anytime)
                 </li>
                 <li className="flex items-center gap-2">
                   <Link2 className="h-4 w-4" />
-                  Calls will be automatically synced from your CRM
+                  Calls will sync automatically from your CRM
                 </li>
                 <li className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  AI will grade calls and provide coaching feedback
+                  AI grades every call with coaching feedback
                 </li>
                 <li className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  View team performance on your dashboard
+                  Track team performance on your dashboard
                 </li>
               </ul>
             </div>
@@ -575,7 +576,7 @@ export default function Onboarding() {
           ) : (
             <Button onClick={handleComplete} disabled={completing}>
               {completing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {completing ? "Setting up..." : "Go to Dashboard"}
+              {completing ? "Setting up..." : "Start Free Trial"}
               {!completing && <Rocket className="h-4 w-4 ml-2" />}
             </Button>
           )}

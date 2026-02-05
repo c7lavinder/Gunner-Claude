@@ -8,8 +8,9 @@ import Stripe from "stripe";
 import { ENV } from "../_core/env";
 import { updateTenantStripeIds } from "../tenant";
 import { getDb } from "../db";
-import { tenants } from "../../drizzle/schema";
+import { tenants, users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { sendPaymentFailedEmail, sendPaymentFailedFinalEmail } from "../emailService";
 
 const stripe = new Stripe(ENV.stripeSecretKey || "", {
   apiVersion: "2026-01-28.clover",
@@ -209,14 +210,115 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
   console.log("[Stripe Webhook] Processing invoice.paid");
   console.log(`[Stripe Webhook] Invoice ${invoice.id} paid, amount: ${invoice.amount_paid}`);
+  
+  // If subscription was past_due, restore to active
+  const subscriptionId = (invoice as any).subscription as string;
+  if (subscriptionId) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const tenantId = subscription.metadata?.tenant_id;
+      
+      if (tenantId) {
+        const db = await getDb();
+        if (db) {
+          await db.update(tenants)
+            .set({ subscriptionStatus: 'active' })
+            .where(eq(tenants.id, parseInt(tenantId)));
+          console.log(`[Stripe Webhook] Restored tenant ${tenantId} to active status after payment`);
+        }
+      }
+    } catch (error) {
+      console.error("[Stripe Webhook] Error restoring tenant status:", error);
+    }
+  }
 }
 
 /**
  * Handle invoice.payment_failed - payment failed
+ * Sends dunning emails and updates tenant status
  */
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
   console.log("[Stripe Webhook] Processing invoice.payment_failed");
   console.log(`[Stripe Webhook] Invoice ${invoice.id} payment failed`);
   
-  // Could send notification to tenant admin about failed payment
+  const subscriptionId = (invoice as any).subscription as string;
+  if (!subscriptionId) {
+    console.log("[Stripe Webhook] No subscription ID in invoice, skipping");
+    return;
+  }
+  
+  try {
+    // Get subscription to find tenant
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const tenantId = subscription.metadata?.tenant_id;
+    
+    if (!tenantId) {
+      console.log("[Stripe Webhook] No tenant_id in subscription metadata, skipping");
+      return;
+    }
+    
+    const db = await getDb();
+    if (!db) return;
+    
+    // Get tenant and admin user info
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, parseInt(tenantId)));
+    if (!tenant) {
+      console.log(`[Stripe Webhook] Tenant ${tenantId} not found`);
+      return;
+    }
+    
+    // Find admin user for this tenant
+    const [adminUser] = await db.select().from(users).where(eq(users.tenantId, parseInt(tenantId)));
+    if (!adminUser || !adminUser.email) {
+      console.log(`[Stripe Webhook] No admin user or email found for tenant ${tenantId}`);
+      return;
+    }
+    
+    const adminEmail = adminUser.email;
+    const adminName = adminUser.name || 'User';
+    
+    // Get attempt count from invoice
+    const attemptCount = invoice.attempt_count || 1;
+    const amount = `$${((invoice.amount_due || 0) / 100).toFixed(2)}`;
+    const billingLink = `https://getgunner.ai/settings?tab=billing`;
+    
+    console.log(`[Stripe Webhook] Payment attempt ${attemptCount} failed for tenant ${tenantId}`);
+    
+    // Update tenant status to past_due
+    await db.update(tenants)
+      .set({ subscriptionStatus: 'past_due' })
+      .where(eq(tenants.id, parseInt(tenantId)));
+    
+    // Send appropriate dunning email based on attempt count
+    if (attemptCount >= 4) {
+      // Final attempt failed - suspend subscription
+      console.log(`[Stripe Webhook] Final payment attempt failed, suspending tenant ${tenantId}`);
+      
+      await db.update(tenants)
+        .set({ subscriptionStatus: 'canceled' })
+        .where(eq(tenants.id, parseInt(tenantId)));
+      
+      await sendPaymentFailedFinalEmail(
+        adminEmail,
+        adminName,
+        tenant.name,
+        billingLink
+      );
+    } else {
+      // Send payment failed email with retry info
+      await sendPaymentFailedEmail(
+        adminEmail,
+        adminName,
+        tenant.name,
+        amount,
+        attemptCount,
+        billingLink
+      );
+    }
+    
+    console.log(`[Stripe Webhook] Dunning email sent to ${adminEmail}`);
+    
+  } catch (error) {
+    console.error("[Stripe Webhook] Error handling payment failure:", error);
+  }
 }

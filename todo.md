@@ -1086,3 +1086,29 @@
 
 ## Bug Fix - TenantSettings Error
 - [x] Fix TypeError: is.slice(...).map is not a function in TenantSettings
+
+## LAUNCH BLOCKERS (Priority Order)
+
+### 1. Paywall Enforcement
+- [x] Block dashboard access until card is entered
+- [x] Redirect users to paywall after completing onboarding step 6
+- [x] Create paywall page with plan selection and Stripe checkout
+- [x] Track subscription status in tenant record
+- [x] Allow trial users (card entered) to access dashboard
+### 2. Email/Password Authentication
+- [x] Add email/password signup alongside Google OAuth
+- [x] Implement login with email/password
+- [x] Implement password reset flow
+- [x] Add email verification for new signups
+
+### 3. Legal Pages
+- [x] Create Terms of Service page
+- [x] Create Privacy Policy page
+- [x] Add checkbox at signup agreeing to both
+- [ ] Block signup without legal agreement
+
+### 4. Failed Payment Handling
+- [x] Handle Stripe webhook for failed payments
+- [x] Implement payment retry logic (Stripe handles automatically)
+- [x] Send dunning emails (payment failed, retry scheduled, account suspended)
+- [x] Suspend dashboard access after payment failures

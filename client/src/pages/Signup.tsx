@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 
@@ -90,6 +91,7 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [selectedPlan, setSelectedPlan] = useState(preselectedPlan);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -141,6 +143,10 @@ export default function Signup() {
     
     if (!companyName) {
       newErrors.companyName = "Company name is required";
+    }
+    
+    if (!agreedToTerms) {
+      newErrors.terms = "You must agree to the Terms of Service and Privacy Policy";
     }
     
     setErrors(newErrors);
@@ -430,6 +436,32 @@ export default function Signup() {
                       </div>
                     </>
                   )}
+                  
+                  {/* Legal Agreement Checkbox */}
+                  <div className="flex items-start space-x-3">
+                    <Checkbox
+                      id="terms"
+                      checked={agreedToTerms}
+                      onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                      disabled={loading}
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <label
+                        htmlFor="terms"
+                        className="text-sm text-muted-foreground leading-relaxed cursor-pointer"
+                      >
+                        I agree to the{" "}
+                        <Link href="/terms" className="text-primary hover:underline" target="_blank">
+                          Terms of Service
+                        </Link>{" "}
+                        and{" "}
+                        <Link href="/privacy" className="text-primary hover:underline" target="_blank">
+                          Privacy Policy
+                        </Link>
+                      </label>
+                      {errors.terms && <p className="text-sm text-destructive">{errors.terms}</p>}
+                    </div>
+                  </div>
                   
                   <Button type="submit" className="w-full" disabled={loading || googleLoading}>
                     Continue

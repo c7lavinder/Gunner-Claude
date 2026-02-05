@@ -28,11 +28,14 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import VerificationPending from "./pages/VerificationPending";
+import Paywall from "./pages/Paywall";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 
 // Public routes that don't need DashboardLayout
 // Root (/) is now the landing page for unauthenticated users
-const PUBLIC_ROUTES = ['/', '/landing', '/login', '/signup', '/forgot-password', '/reset-password', '/verify-email', '/verification-pending'];
+const PUBLIC_ROUTES = ['/', '/landing', '/login', '/signup', '/forgot-password', '/reset-password', '/verify-email', '/verification-pending', '/terms', '/privacy'];
 
 function PublicRouter() {
   return (
@@ -48,6 +51,8 @@ function PublicRouter() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/verify-email" component={VerifyEmail} />
       <Route path="/verification-pending" component={VerificationPending} />
+      <Route path="/terms" component={TermsOfService} />
+      <Route path="/privacy" component={PrivacyPolicy} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -68,6 +73,7 @@ function ProtectedRouter() {
       <Route path="/kpi" component={KpiDashboard} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/pricing" component={Pricing} />
+      <Route path="/paywall" component={Paywall} />
       <Route path="/admin" component={SuperAdmin} />
       <Route path="/admin-dashboard" component={AdminDashboard} />
       <Route path="/settings" component={TenantSettings} />

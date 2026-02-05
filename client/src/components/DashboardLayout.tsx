@@ -129,16 +129,27 @@ export default function DashboardLayout({
   }
 
   // Check if onboarding is not completed - redirect to onboarding
-  // Skip redirect if already on onboarding or pricing pages
-  const isOnboardingRoute = location === '/onboarding' || location === '/pricing';
+  // Skip redirect if already on onboarding, pricing, or paywall pages
+  const isOnboardingRoute = location === '/onboarding' || location === '/pricing' || location === '/paywall';
   const onboardingCompleted = tenantSettings?.onboardingCompleted === 'true';
   
   if (!isOnboardingRoute && !onboardingCompleted && tenantSettings) {
     return <Redirect to="/onboarding" />;
   }
 
-  // If on onboarding page and not completed, render without sidebar
-  if (isOnboardingRoute && !onboardingCompleted) {
+  // PAYWALL CHECK: After onboarding, user MUST have entered card to access dashboard
+  // Check if user has an active subscription or is in trial with card on file
+  const hasActiveSubscription = tenantSettings?.stripeSubscriptionId && 
+    (tenantSettings?.subscriptionStatus === 'active' || tenantSettings?.subscriptionStatus === 'past_due');
+  const isPaywallRoute = location === '/paywall';
+  
+  // If onboarding is complete but no subscription, redirect to paywall
+  if (onboardingCompleted && !hasActiveSubscription && !isOnboardingRoute && !isPaywallRoute && tenantSettings) {
+    return <Redirect to="/paywall" />;
+  }
+
+  // If on onboarding or paywall page, render without sidebar
+  if ((isOnboardingRoute && !onboardingCompleted) || (isPaywallRoute && !hasActiveSubscription)) {
     return (
       <div className="min-h-screen bg-background">
         {children}

@@ -17,7 +17,10 @@ export type EmailType =
   | "welcome"
   | "churn_7_day"
   | "churn_14_day"
-  | "churn_30_day";
+  | "churn_30_day"
+  | "payment_failed"
+  | "payment_failed_final"
+  | "trial_ending";
 
 // Template type for outreach history
 export type OutreachTemplateType = "7_day" | "14_day" | "30_day" | "custom";
@@ -110,6 +113,80 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
           </div>
         `,
         text: `Welcome Aboard!\n\nHi ${data.userName},\n\nYou've successfully joined ${data.tenantName} on Gunner!\n\nYour role: ${data.role}\n\nStart uploading calls to get AI-powered coaching feedback and climb the leaderboard.`
+      };
+    
+    case "payment_failed":
+      return {
+        subject: `Action Required: Payment failed for ${data.tenantName}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #8B1A1A;">⚠️ Payment Failed</h2>
+            <p>Hi ${data.userName},</p>
+            <p>We were unable to process your payment for <strong>${data.tenantName}</strong>'s Gunner subscription.</p>
+            <p><strong>Amount:</strong> ${data.amount}</p>
+            <p><strong>Attempt:</strong> ${data.attemptNumber} of 4</p>
+            <p>Please update your payment method to avoid service interruption:</p>
+            <p style="margin: 24px 0;">
+              <a href="${data.billingLink}" style="background-color: #8B1A1A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Update Payment Method
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">We'll automatically retry in a few days. If you have questions, reply to this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+          </div>
+        `,
+        text: `Payment Failed\n\nHi ${data.userName},\n\nWe were unable to process your payment for ${data.tenantName}'s Gunner subscription.\n\nAmount: ${data.amount}\nAttempt: ${data.attemptNumber} of 4\n\nPlease update your payment method: ${data.billingLink}\n\nWe'll automatically retry in a few days.`
+      };
+    
+    case "payment_failed_final":
+      return {
+        subject: `URGENT: Your ${data.tenantName} subscription has been suspended`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #8B1A1A;">🚨 Subscription Suspended</h2>
+            <p>Hi ${data.userName},</p>
+            <p>After multiple payment attempts, we've had to suspend your <strong>${data.tenantName}</strong> Gunner subscription.</p>
+            <p><strong>What this means:</strong></p>
+            <ul>
+              <li>Your team can no longer access the dashboard</li>
+              <li>Call grading has been paused</li>
+              <li>Your data is safe and will be restored when you reactivate</li>
+            </ul>
+            <p>To restore access immediately:</p>
+            <p style="margin: 24px 0;">
+              <a href="${data.billingLink}" style="background-color: #8B1A1A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Reactivate Subscription
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">Need help? Reply to this email and we'll assist you.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+          </div>
+        `,
+        text: `Subscription Suspended\n\nHi ${data.userName},\n\nAfter multiple payment attempts, we've had to suspend your ${data.tenantName} Gunner subscription.\n\nYour team can no longer access the dashboard. Your data is safe and will be restored when you reactivate.\n\nReactivate: ${data.billingLink}`
+      };
+    
+    case "trial_ending":
+      return {
+        subject: `Your Gunner trial ends tomorrow!`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #8B1A1A;">⏰ Trial Ending Soon</h2>
+            <p>Hi ${data.userName},</p>
+            <p>Your 3-day free trial for <strong>${data.tenantName}</strong> ends tomorrow.</p>
+            <p><strong>What happens next:</strong></p>
+            <ul>
+              <li>Your card will be charged ${data.amount} for your ${data.planName} plan</li>
+              <li>Your team will continue to have full access</li>
+              <li>You can cancel anytime from the Billing settings</li>
+            </ul>
+            <p>Questions about your subscription? Reply to this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+          </div>
+        `,
+        text: `Trial Ending Soon\n\nHi ${data.userName},\n\nYour 3-day free trial for ${data.tenantName} ends tomorrow.\n\nYour card will be charged ${data.amount} for your ${data.planName} plan. You can cancel anytime from the Billing settings.`
       };
     
     // Churn emails - these still go to owner as notifications
@@ -470,6 +547,72 @@ export async function sendChurnOutreachEmail(
       contactEmail,
       daysInactive: daysInactive.toString(),
       lastActivity
+    }
+  });
+}
+
+/**
+ * Send payment failed email to tenant admin
+ */
+export async function sendPaymentFailedEmail(
+  email: string,
+  userName: string,
+  tenantName: string,
+  amount: string,
+  attemptNumber: number,
+  billingLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "payment_failed",
+    data: {
+      userName,
+      tenantName,
+      amount,
+      attemptNumber: attemptNumber.toString(),
+      billingLink
+    }
+  });
+}
+
+/**
+ * Send final payment failed email (subscription suspended)
+ */
+export async function sendPaymentFailedFinalEmail(
+  email: string,
+  userName: string,
+  tenantName: string,
+  billingLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "payment_failed_final",
+    data: {
+      userName,
+      tenantName,
+      billingLink
+    }
+  });
+}
+
+/**
+ * Send trial ending reminder email
+ */
+export async function sendTrialEndingEmail(
+  email: string,
+  userName: string,
+  tenantName: string,
+  planName: string,
+  amount: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "trial_ending",
+    data: {
+      userName,
+      tenantName,
+      planName,
+      amount
     }
   });
 }
