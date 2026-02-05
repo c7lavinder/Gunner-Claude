@@ -1163,3 +1163,4 @@
 - [x] Fix inconsistency: billing page shows 'Calls Graded' but admin panel shows 'Max Calls/Month' - make consistent
 - [ ] Fix calls stuck in 'Transcribing' status for hours - longer calls (12-30 min) not completing
 - [x] Fix stuck transcription calls - increased timeouts and added Reset Stuck Calls button
+- [x] Add ffmpeg-static package for production audio chunking support

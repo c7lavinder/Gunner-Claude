@@ -12,7 +12,37 @@ import { randomUUID } from "crypto";
 
 // Whisper API limit is 25MB, but we use duration-based chunking for reliability
 const MAX_CHUNK_DURATION_SECONDS = 900; // 15 minutes per chunk
-const FFMPEG_PATH = "/usr/bin/ffmpeg";
+
+// Use ffmpeg-static for bundled FFmpeg binary (works in production)
+let FFMPEG_PATH = '/usr/bin/ffmpeg'; // Default fallback
+
+// Try to load ffmpeg-static at runtime
+async function getFfmpegPath(): Promise<string> {
+  try {
+    // Dynamic import for ESM compatibility
+    const ffmpegStatic = await import('ffmpeg-static');
+    const path = ffmpegStatic.default || ffmpegStatic;
+    if (path && typeof path === 'string') {
+      console.log('[AudioChunking] Using ffmpeg-static:', path);
+      return path;
+    }
+  } catch (e) {
+    console.log('[AudioChunking] ffmpeg-static not available, using system FFmpeg');
+  }
+  return '/usr/bin/ffmpeg';
+}
+
+// Initialize FFmpeg path
+let ffmpegPathPromise: Promise<string> | null = null;
+function ensureFfmpegPath(): Promise<string> {
+  if (!ffmpegPathPromise) {
+    ffmpegPathPromise = getFfmpegPath().then(path => {
+      FFMPEG_PATH = path;
+      return path;
+    });
+  }
+  return ffmpegPathPromise;
+}
 
 export interface AudioChunk {
   buffer: Buffer;
@@ -133,11 +163,14 @@ export async function splitAudioIntoChunks(
   audioBuffer: Buffer,
   mimeType: string
 ): Promise<ChunkingResult> {
+  // Ensure FFmpeg path is loaded (uses ffmpeg-static if available)
+  await ensureFfmpegPath();
   const hasFfmpeg = await checkFfmpeg();
   
   if (!hasFfmpeg) {
     // Without FFmpeg, we can't split - return original as single chunk
     // This will work for files under 25MB
+    console.warn('[AudioChunking] FFmpeg not available - cannot split long audio files. Long calls may fail.');
     const sizeMB = audioBuffer.length / (1024 * 1024);
     if (sizeMB > 25) {
       return {

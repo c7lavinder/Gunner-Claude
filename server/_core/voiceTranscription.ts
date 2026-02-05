@@ -99,6 +99,22 @@ async function transcribeBuffer(
       body: formData,
       signal: abortController.signal,
     });
+  } catch (fetchError) {
+    clearTimeout(timeoutId);
+    if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+      console.error('[Transcription] Request timed out after 10 minutes');
+      return {
+        error: "Transcription request timed out",
+        code: "SERVICE_ERROR",
+        details: "The transcription API took longer than 10 minutes to respond. The audio file may be too long or the service is overloaded."
+      };
+    }
+    console.error('[Transcription] Fetch error:', fetchError);
+    return {
+      error: "Transcription request failed",
+      code: "SERVICE_ERROR",
+      details: fetchError instanceof Error ? fetchError.message : "Unknown fetch error"
+    };
   } finally {
     clearTimeout(timeoutId);
   }
