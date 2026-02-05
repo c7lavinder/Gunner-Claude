@@ -904,3 +904,71 @@ export function stopOpportunityPolling(): void {
     console.log("[GHL Opportunities] Polling stopped");
   }
 }
+
+
+/**
+ * Re-sync a call's recording from GHL
+ * Fetches a fresh recording from GHL and updates the database
+ */
+export async function resyncCallRecording(callId: number): Promise<{
+  success: boolean;
+  message: string;
+  newRecordingUrl?: string;
+}> {
+  try {
+    // Get the call from database
+    const call = await getCallById(callId);
+    if (!call) {
+      return { success: false, message: "Call not found" };
+    }
+
+    // Check if we have a GHL call ID
+    if (!call.ghlCallId) {
+      return { success: false, message: "Call does not have a GHL call ID - cannot re-sync" };
+    }
+
+    console.log(`[GHL Resync] Re-syncing recording for call ${callId} (GHL ID: ${call.ghlCallId})`);
+
+    // Fetch fresh recording from GHL
+    const recordingBuffer = await fetchCallRecording(call.ghlCallId);
+    
+    if (!recordingBuffer) {
+      return { 
+        success: false, 
+        message: "Recording no longer available from GHL - the file may have been deleted or expired" 
+      };
+    }
+
+    // Upload to S3
+    const newRecordingUrl = await uploadRecordingToS3(recordingBuffer, call.ghlCallId);
+    if (!newRecordingUrl) {
+      return { success: false, message: "Failed to upload recording to S3" };
+    }
+
+    // Update the call with new recording URL and reset status
+    await updateCall(callId, {
+      recordingUrl: newRecordingUrl,
+      status: "pending",
+      classification: "pending", // Reset classification to re-evaluate
+    });
+
+    console.log(`[GHL Resync] Successfully re-synced call ${callId} with new recording URL: ${newRecordingUrl}`);
+
+    // Start processing the call again
+    processCall(callId).catch(err => {
+      console.error(`[GHL Resync] Error processing call ${callId}:`, err);
+    });
+
+    return { 
+      success: true, 
+      message: "Recording re-synced successfully, call is now being processed",
+      newRecordingUrl 
+    };
+  } catch (error) {
+    console.error(`[GHL Resync] Error re-syncing call ${callId}:`, error);
+    return { 
+      success: false, 
+      message: error instanceof Error ? error.message : "Unknown error during re-sync" 
+    };
+  }
+}

@@ -14,35 +14,46 @@ import { splitWavIntoChunks, isWavFile } from "./wavChunking";
 // Whisper API limit is 25MB, but we use duration-based chunking for reliability
 const MAX_CHUNK_DURATION_SECONDS = 900; // 15 minutes per chunk
 
-// Use ffmpeg-static for bundled FFmpeg binary (works in production)
-let FFMPEG_PATH = '/usr/bin/ffmpeg'; // Default fallback
+// Prefer system FFmpeg over ffmpeg-static (bundled binary has issues in some environments)
+let FFMPEG_PATH = '/usr/bin/ffmpeg';
 
-// Try to load ffmpeg-static at runtime
+// Check if system FFmpeg is available, fallback to ffmpeg-static
 async function getFfmpegPath(): Promise<string> {
+  const { existsSync } = await import('fs');
+  const { execSync } = await import('child_process');
+  
+  // First, try system FFmpeg
   try {
-    // Dynamic import for ESM compatibility
-    const ffmpegStatic = await import('ffmpeg-static');
-    const path = ffmpegStatic.default || ffmpegStatic;
-    if (path && typeof path === 'string') {
-      // Verify the binary exists and is executable
-      const { existsSync, chmodSync } = await import('fs');
-      if (existsSync(path)) {
-        try {
-          // Ensure the binary is executable
-          chmodSync(path, 0o755);
-          console.log('[AudioChunking] Using ffmpeg-static:', path);
-          return path;
-        } catch (chmodErr) {
-          console.warn('[AudioChunking] Could not chmod ffmpeg-static, trying anyway:', path);
-          return path;
-        }
-      } else {
-        console.warn('[AudioChunking] ffmpeg-static path does not exist:', path);
-      }
+    if (existsSync('/usr/bin/ffmpeg')) {
+      // Verify it works
+      execSync('/usr/bin/ffmpeg -version', { stdio: 'ignore', timeout: 3000 });
+      console.log('[AudioChunking] Using system FFmpeg: /usr/bin/ffmpeg');
+      return '/usr/bin/ffmpeg';
     }
   } catch (e) {
-    console.log('[AudioChunking] ffmpeg-static not available, using system FFmpeg');
+    console.log('[AudioChunking] System FFmpeg not working, trying ffmpeg-static');
   }
+  
+  // Fallback to ffmpeg-static
+  try {
+    const ffmpegStatic = await import('ffmpeg-static');
+    const path = ffmpegStatic.default || ffmpegStatic;
+    if (path && typeof path === 'string' && existsSync(path)) {
+      const { chmodSync } = await import('fs');
+      try {
+        chmodSync(path, 0o755);
+      } catch (e) {
+        // Ignore chmod errors
+      }
+      console.log('[AudioChunking] Using ffmpeg-static:', path);
+      return path;
+    }
+  } catch (e) {
+    console.log('[AudioChunking] ffmpeg-static not available');
+  }
+  
+  // Last resort
+  console.warn('[AudioChunking] No FFmpeg found, using default path');
   return '/usr/bin/ffmpeg';
 }
 
@@ -207,21 +218,19 @@ export async function splitAudioIntoChunks(
   audioBuffer: Buffer,
   mimeType: string
 ): Promise<ChunkingResult> {
-  // Ensure FFmpeg path is loaded (uses ffmpeg-static if available)
+  // FIRST: Check if it's a WAV file (many GHL recordings are WAV despite .mp3 extension)
+  // Pure JS WAV chunking is more reliable than FFmpeg for WAV files
+  if (isWavFile(audioBuffer)) {
+    console.log('[AudioChunking] Detected WAV file (by magic bytes), using pure JS chunking');
+    return splitWavIntoChunks(audioBuffer);
+  }
+  
+  // Ensure FFmpeg path is loaded (uses system FFmpeg if available)
   await ensureFfmpegPath();
   const hasFfmpeg = await checkFfmpeg();
   
   if (!hasFfmpeg) {
-    // FFmpeg not available - try pure JavaScript WAV chunking
-    console.log('[AudioChunking] FFmpeg not available, trying pure JS WAV chunking');
-    
-    // Check if it's a WAV file (many GHL recordings are WAV despite .mp3 extension)
-    if (isWavFile(audioBuffer)) {
-      console.log('[AudioChunking] Detected WAV file, using pure JS chunking');
-      return splitWavIntoChunks(audioBuffer);
-    }
-    
-    // Not a WAV file and no FFmpeg - can only handle small files
+    // FFmpeg not available and not a WAV file - can only handle small files
     const sizeMB = audioBuffer.length / (1024 * 1024);
     console.warn(`[AudioChunking] Not a WAV file and no FFmpeg. File size: ${sizeMB.toFixed(1)}MB`);
     

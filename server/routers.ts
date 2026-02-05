@@ -94,7 +94,7 @@ import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
 import { processCall } from "./grading";
 import { invokeLLM } from "./_core/llm";
 import { generateTeamInsights, saveGeneratedInsights, clearAiGeneratedInsights } from "./insights";
-import { pollForNewCalls, getPollingStatus, startPolling, stopPolling } from "./ghlService";
+import { pollForNewCalls, getPollingStatus, startPolling, stopPolling, resyncCallRecording } from "./ghlService";
 import { storagePut } from "./storage";
 import { runArchivalJob, getArchivalStats, archiveCall } from "./archival";
 import { verifyTenantOwnership } from "./tenantOwnership";
@@ -562,6 +562,13 @@ export const appRouter = router({
       stopPolling();
       return { success: true, message: "Auto-sync stopped" };
     }),
+
+    // Re-sync a call's recording from GHL
+    resyncRecording: protectedProcedure
+      .input(z.object({ callId: z.number() }))
+      .mutation(async ({ input }) => {
+        return await resyncCallRecording(input.callId);
+      }),
   }),
 
   // ============ LEADERBOARD ============

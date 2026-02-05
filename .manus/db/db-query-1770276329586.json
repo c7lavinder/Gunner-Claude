@@ -1,0 +1,20 @@
+{
+  "query": "SELECT id, ghlCallId, ghlContactId, ghlLocationId, contactName, duration, recordingUrl, status FROM calls WHERE status = 'failed' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, ghlCallId, ghlContactId, ghlLocationId, contactName, duration, recordingUrl, status FROM calls WHERE status = 'failed' LIMIT 5;",
+  "rows": [
+    {
+      "id": "420002",
+      "ghlCallId": "0NoeQZfVhQSPxuotzwhd",
+      "ghlContactId": "NULL",
+      "ghlLocationId": "NULL",
+      "contactName": "Jamey Durham",
+      "duration": "982",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/0NoeQZfVhQSPxuotzwhd-1770229523115.mp3",
+      "status": "failed"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tghlCallId\tghlContactId\tghlLocationId\tcontactName\tduration\trecordingUrl\tstatus\n420002\t0NoeQZfVhQSPxuotzwhd\tNULL\tNULL\tJamey Durham\t982\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/ghl-recordings/0NoeQZfVhQSPxuotzwhd-1770229523115.mp3\tfailed\n",
+  "stderr": "",
+  "execution_time_ms": 357
+}

@@ -1167,3 +1167,11 @@
 - [x] Fix 'Could not determine audio duration' - use ffmpeg instead of ffprobe for duration detection
 - [x] Fix 'Failed to extract chunk 1' error - added chmod and better error logging
 - [x] Implement pure JavaScript WAV chunking without FFmpeg dependency
+
+
+## Call Re-sync and Audio Chunking Fixes
+- [x] Add resyncCallRecording function to GHL service
+- [x] Add ghlSync.resyncRecording tRPC endpoint
+- [x] Fix audio chunking to detect WAV files by magic bytes before trying FFmpeg
+- [x] Prioritize pure JS WAV chunking for WAV files (more reliable than FFmpeg)
+- [x] Successfully process Jamey Durham 16:22 call that was previously failing
