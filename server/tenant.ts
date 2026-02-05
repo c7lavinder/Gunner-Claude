@@ -17,6 +17,7 @@ import {
 import { createCheckoutSession, createBillingPortalSession, getSubscription, cancelSubscription, reactivateSubscription, updateSubscription } from "./stripe/checkout";
 import { notifyOwner } from "./_core/notification";
 import { sendTeamInviteEmail, sendWelcomeEmail } from "./emailService";
+import { onUserSignup, onUserConverted } from "./loops";
 
 // ============ TENANT QUERIES ============
 
@@ -305,7 +306,7 @@ export async function getTenantSettings(tenantId: number) {
 /**
  * Complete onboarding - mark tenant as onboarded
  */
-export async function completeOnboarding(tenantId: number) {
+export async function completeOnboarding(tenantId: number, userId?: number) {
   const db = await getDb();
   if (!db) return null;
 
@@ -313,6 +314,31 @@ export async function completeOnboarding(tenantId: number) {
     .update(tenants)
     .set({ onboardingCompleted: 'true' })
     .where(eq(tenants.id, tenantId));
+
+  // Get tenant and user info for Loops
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  
+  if (userId) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (user && tenant && user.email) {
+      // Add user to Loops for email automation
+      try {
+        await onUserSignup({
+          email: user.email,
+          firstName: user.name?.split(' ')[0],
+          lastName: user.name?.split(' ').slice(1).join(' '),
+          userId: user.id.toString(),
+          tenantId: tenant.id.toString(),
+          tenantName: tenant.name,
+          trialEndsAt: tenant.trialEndsAt || undefined,
+        });
+        console.log(`[Loops] Added user ${user.email} to email automation`);
+      } catch (error) {
+        console.error('[Loops] Failed to add user to email automation:', error);
+        // Don't fail onboarding if Loops fails
+      }
+    }
+  }
 
   return { success: true };
 }

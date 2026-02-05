@@ -13,6 +13,7 @@ import { startPolling } from "../ghlService";
 import { initializeBadges } from "../gamification";
 import { handleStripeWebhook } from "../stripe/webhook";
 import selfServeAuthRoutes from "../selfServeAuthRoutes";
+import { runEmailSequenceJobs } from "../emailSequenceJobs";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -87,6 +88,29 @@ async function startServer() {
     setTimeout(() => {
       startPolling(30);
     }, 10000);
+    
+    // Start email sequence job - runs every hour
+    // Initial run after 30 seconds, then every hour
+    setTimeout(async () => {
+      console.log('[EmailSequence] Running initial email sequence check...');
+      try {
+        const result = await runEmailSequenceJobs();
+        console.log(`[EmailSequence] Initial run complete: ${result.emailsSent} emails sent, ${result.processed} tenants processed`);
+      } catch (error) {
+        console.error('[EmailSequence] Initial run error:', error);
+      }
+      
+      // Schedule hourly runs
+      setInterval(async () => {
+        console.log('[EmailSequence] Running hourly email sequence check...');
+        try {
+          const result = await runEmailSequenceJobs();
+          console.log(`[EmailSequence] Hourly run complete: ${result.emailsSent} emails sent, ${result.processed} tenants processed`);
+        } catch (error) {
+          console.error('[EmailSequence] Hourly run error:', error);
+        }
+      }, 60 * 60 * 1000); // Every hour
+    }, 30000);
   });
 }
 

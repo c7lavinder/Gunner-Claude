@@ -1130,3 +1130,21 @@ export const platformSettings = mysqlTable("platform_settings", {
 
 export type PlatformSetting = typeof platformSettings.$inferSelect;
 export type InsertPlatformSetting = typeof platformSettings.$inferInsert;
+
+
+/**
+ * Email Sent Tracking - tracks which automated emails have been sent to users
+ * Prevents duplicate emails and provides audit trail
+ */
+export const emailsSent = mysqlTable("emails_sent", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").references(() => users.id).notNull(),
+  emailId: varchar("emailId", { length: 100 }).notNull(), // e.g., "day1_first_call", "day7_week_recap"
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+  // Optional metadata
+  loopsEventId: varchar("loopsEventId", { length: 255 }), // Response from Loops API
+  status: mysqlEnum("status", ["sent", "failed", "bounced"]).default("sent"),
+});
+
+export type EmailSent = typeof emailsSent.$inferSelect;
+export type InsertEmailSent = typeof emailsSent.$inferInsert;

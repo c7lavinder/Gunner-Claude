@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `emails_sent` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `userId` int NOT NULL,\n  `emailId` varchar(100) NOT NULL,\n  `sentAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `loopsEventId` varchar(255),\n  `status` enum('sent', 'failed', 'bounced') DEFAULT 'sent',\n  CONSTRAINT `emails_sent_id` PRIMARY KEY(`id`),\n  CONSTRAINT `emails_sent_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE NO ACTION ON UPDATE NO ACTION\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute CREATE TABLE IF NOT EXISTS `emails_sent` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `userId` int NOT NULL,\n  `emailId` varchar(100) NOT NULL,\n  `sentAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `loopsEventId` varchar(255),\n  `status` enum('sent', 'failed', 'bounced') DEFAULT 'sent',\n  CONSTRAINT `emails_sent_id` PRIMARY KEY(`id`),\n  CONSTRAINT `emails_sent_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE NO ACTION ON UPDATE NO ACTION\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 602
+}

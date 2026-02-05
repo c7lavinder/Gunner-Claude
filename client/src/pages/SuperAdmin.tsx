@@ -158,6 +158,19 @@ export default function SuperAdmin() {
     }
   });
 
+  // Email sequence mutation
+  const triggerEmailSequence = trpc.tenant.triggerEmailSequence.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Email sequence processed: ${data.usersProcessed} users, ${data.emailsSent} emails sent`);
+      if (data.details.length > 0) {
+        console.log('Email sequence details:', data.details);
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to trigger email sequence");
+    }
+  });
+
   const resetPlanForm = () => {
     setPlanFormData({
       name: "",
@@ -386,6 +399,7 @@ export default function SuperAdmin() {
           <TabsTrigger value="outreach-history">Outreach History</TabsTrigger>
           <TabsTrigger value="alerts">Alerts</TabsTrigger>
           <TabsTrigger value="plans">Plans</TabsTrigger>
+          <TabsTrigger value="emails">Emails</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -1313,6 +1327,114 @@ export default function SuperAdmin() {
                   )}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="emails" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5" />
+                    Email Sequence Management
+                  </CardTitle>
+                  <CardDescription>
+                    Manage automated email sequences for trial conversion and engagement
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => triggerEmailSequence.mutate()}
+                  disabled={triggerEmailSequence.isPending}
+                >
+                  {triggerEmailSequence.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4 mr-2" />
+                  )}
+                  Run Email Sequence Now
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Email Sequence Info */}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card className="bg-muted/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">Time-Based Emails</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm space-y-2">
+                      <div className="flex justify-between">
+                        <span>Day 0</span>
+                        <span className="text-muted-foreground">Welcome Email</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Day 1</span>
+                        <span className="text-muted-foreground">Check-in</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Day 2</span>
+                        <span className="text-muted-foreground">Trial Ending (trial users)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Day 3</span>
+                        <span className="text-muted-foreground">Final Reminder (trial users)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Day 4</span>
+                        <span className="text-muted-foreground">Paid Welcome (converted)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Day 7</span>
+                        <span className="text-muted-foreground">Week 1 Recap</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Day 10</span>
+                        <span className="text-muted-foreground">Feature Spotlight</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Day 14</span>
+                        <span className="text-muted-foreground">Two-Week Check-in</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-muted/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">Trigger-Based Emails</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm space-y-2">
+                      <div className="flex justify-between">
+                        <span>No Calls 48h</span>
+                        <span className="text-muted-foreground">Re-engagement prompt</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Power User</span>
+                        <span className="text-muted-foreground">10+ calls in first week</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Payment Failed</span>
+                        <span className="text-muted-foreground">Dunning sequence</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-amber-800">Automated Daily Processing</p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        The email sequence runs automatically every day at 9 AM CST. Use the "Run Email Sequence Now" 
+                        button to manually trigger processing for testing or to catch up after maintenance.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

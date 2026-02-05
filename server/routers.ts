@@ -2444,7 +2444,7 @@ Create content that:
         if (!ctx.user?.tenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
         }
-        return completeOnboarding(ctx.user.tenantId);
+        return completeOnboarding(ctx.user.tenantId, ctx.user.id);
       }),
 
     // Tenant Admin: Get users in tenant
@@ -2792,6 +2792,26 @@ Create content that:
           success: true, 
           sentTo: adminUser.email,
           templateUsed: result.templateUsed
+        };
+      }),
+
+    // Trigger email sequence jobs (Super Admin only)
+    triggerEmailSequence: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const { isPlatformOwner } = await import("./tenant");
+        
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        
+        const { runEmailSequenceJob } = await import("./emailSequenceJob");
+        const result = await runEmailSequenceJob();
+        
+        return {
+          success: true,
+          usersProcessed: result.usersProcessed,
+          emailsSent: result.emailsSent,
+          details: result.details
         };
       }),
 

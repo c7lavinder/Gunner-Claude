@@ -1115,22 +1115,38 @@
 
 ## 14-Day Email Sequence
 ### Trial Period (Days 0-3)
-- [ ] Day 0: Welcome email (immediately after signup)
-- [ ] Day 1: First call check-in (24 hours after signup)
-- [ ] Day 2: Trial ending reminder (48 hours after signup)
-- [ ] Day 3: Final reminder (morning of last trial day)
+- [x] Day 0: Welcome email (immediately after signup)
+- [x] Day 1: First call check-in (24 hours after signup)
+- [x] Day 2: Trial ending reminder (48 hours after signup)
+- [x] Day 3: Final reminder (morning of last trial day)
 
 ### Post-Conversion (Days 4-14)
-- [ ] Day 4: Welcome to Gunner (first day as paying customer)
-- [ ] Day 7: Week 1 recap with stats
-- [ ] Day 10: Feature spotlight (Coaching Clips)
-- [ ] Day 14: Two-week check-in with feedback request
+- [x] Day 4: Welcome to Gunner (first day as paying customer)
+- [x] Day 7: Week 1 recap with stats
+- [x] Day 10: Feature spotlight (Coaching Clips)
+- [x] Day 14: Two-week check-in with feedback request
 
 ### Engagement Triggers
-- [ ] No calls graded after 48 hours trigger
-- [ ] Power user recognition (10+ calls in first week)
+- [x] No calls graded after 48 hours trigger
+- [x] Power user recognition (10+ calls in first week)
 
 ### Infrastructure
-- [ ] Create scheduled job for daily email checks
-- [ ] Track email send history to avoid duplicates
-- [ ] Add user stats queries for email personalization
+- [x] Create scheduled job for daily email checks
+- [x] Track email send history to avoid duplicates
+- [x] Add user stats queries for email personalization
+
+## Email Sequence Cron Job
+- [x] Add daily cron job to run email sequence (hourly checks built into server)
+- [x] Add manual trigger button to admin panel (Emails tab in SuperAdmin)
+
+## Loops.so Email Automation Integration
+- [x] Create Loops.so account and connect API
+- [x] Add custom contact properties (tenantId, tenantName, planType, trialEndsAt)
+- [x] Integrate Loops API into Gunner signup flow
+- [x] Create email sequence job with event-based triggers
+- [x] Add emails_sent tracking table to prevent duplicates
+- [x] Create email templates for all 14-day sequence emails
+- [x] Add manual trigger button in SuperAdmin panel
+- [x] Write vitest tests for email sequence job
+- [ ] Configure DNS records for Loops email sending (MX and DKIM)
+- [ ] Create event-triggered loops in Loops.so dashboard for each email type

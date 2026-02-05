@@ -10,7 +10,8 @@ import {
   brandAssets, socialPosts, contentIdeas, brandProfile,
   InsertBrandAsset, InsertSocialPost, InsertContentIdea,
   BrandAsset, SocialPost, ContentIdea, BrandProfile, InsertBrandProfile,
-  teamAssignments, TeamAssignment, InsertTeamAssignment
+  teamAssignments, TeamAssignment, InsertTeamAssignment,
+  emailsSent, InsertEmailSent, EmailSent, tenants
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1913,4 +1914,107 @@ export async function updateUserTeamRole(
   await db.update(users)
     .set({ teamRole })
     .where(eq(users.id, userId));
+}
+
+
+// ============ EMAIL SENT TRACKING ============
+
+export async function getEmailSentRecord(userId: number, emailId: string): Promise<EmailSent | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select()
+    .from(emailsSent)
+    .where(and(eq(emailsSent.userId, userId), eq(emailsSent.emailId, emailId)))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+export async function recordEmailSent(userId: number, emailId: string, loopsEventId?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.insert(emailsSent).values({
+    userId,
+    emailId,
+    loopsEventId,
+    status: "sent",
+  });
+}
+
+export async function getEmailsSentToUser(userId: number): Promise<EmailSent[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(emailsSent)
+    .where(eq(emailsSent.userId, userId))
+    .orderBy(desc(emailsSent.sentAt));
+}
+
+// ============ EMAIL SEQUENCE JOB HELPERS ============
+
+interface UserForEmailSequence {
+  id: number;
+  email: string;
+  name: string | null;
+  createdAt: Date;
+  tenantId: number;
+  tenantName: string;
+  callsGraded: number;
+  isSubscribed: boolean;
+  trialEndsAt: Date | null;
+  planType: string | null;
+}
+
+export async function getUsersForEmailSequence(): Promise<UserForEmailSequence[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get all users with their tenant info
+  const usersWithTenants = await db.select({
+    id: users.id,
+    email: users.email,
+    name: users.name,
+    createdAt: users.createdAt,
+    tenantId: users.tenantId,
+    tenantName: tenants.name,
+    trialEndsAt: tenants.trialEndsAt,
+    subscriptionTier: tenants.subscriptionTier,
+    subscriptionStatus: tenants.subscriptionStatus,
+  })
+  .from(users)
+  .leftJoin(tenants, eq(users.tenantId, tenants.id))
+  .where(sql`${users.email} IS NOT NULL AND ${users.tenantId} IS NOT NULL`);
+
+  // Get call counts for each user's tenant
+  const result: UserForEmailSequence[] = [];
+  
+  for (const user of usersWithTenants) {
+    if (!user.email || !user.tenantId) continue;
+
+    // Count graded calls for this tenant
+    const callCountResult = await db.select({ count: sql<number>`COUNT(*)` })
+      .from(calls)
+      .where(sql`${calls.tenantId} = ${user.tenantId} AND ${calls.status} = 'graded'`);
+    
+    const callsGraded = callCountResult[0]?.count || 0;
+    const isSubscribed = user.subscriptionTier !== "trial" && user.subscriptionStatus === "active";
+    
+    result.push({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+      tenantId: user.tenantId,
+      tenantName: user.tenantName || "Unknown",
+      callsGraded,
+      isSubscribed,
+      trialEndsAt: user.trialEndsAt,
+      planType: user.subscriptionTier,
+    });
+  }
+
+  return result;
 }
