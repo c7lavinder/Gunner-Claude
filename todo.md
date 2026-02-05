@@ -1213,3 +1213,9 @@
 - [x] Implement evaluateBadgesForCall function to check and award badges after each call
 - [x] Add batchEvaluateBadges function to catch up on existing calls
 - [x] Add "Evaluate Badges" button in Settings > Roles & Assignments
+
+
+## Automatic Badge Evaluation
+- [ ] Fix badge_progress table schema mismatch
+- [ ] Make badges evaluate automatically when calls are graded (like XP)
+- [ ] Remove need for manual "Evaluate Badges" button

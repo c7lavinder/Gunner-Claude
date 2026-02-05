@@ -1,0 +1,42 @@
+{
+  "query": "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'badge_progress';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'badge_progress';",
+  "rows": [
+    {
+      "column_name": "id",
+      "data_type": "int"
+    },
+    {
+      "column_name": "tenantId",
+      "data_type": "int"
+    },
+    {
+      "column_name": "teamMemberId",
+      "data_type": "int"
+    },
+    {
+      "column_name": "badgeCode",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "currentCount",
+      "data_type": "int"
+    },
+    {
+      "column_name": "currentStreak",
+      "data_type": "int"
+    },
+    {
+      "column_name": "weekStart",
+      "data_type": "timestamp"
+    },
+    {
+      "column_name": "updatedAt",
+      "data_type": "timestamp"
+    }
+  ],
+  "messages": [],
+  "stdout": "column_name\tdata_type\nid\tint\ntenantId\tint\nteamMemberId\tint\nbadgeCode\tvarchar\ncurrentCount\tint\ncurrentStreak\tint\nweekStart\ttimestamp\nupdatedAt\ttimestamp\n",
+  "stderr": "",
+  "execution_time_ms": 347
+}

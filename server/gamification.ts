@@ -476,7 +476,7 @@ export async function getBadgeProgress(teamMemberId: number): Promise<Record<str
   
   const result: Record<string, number> = {};
   for (const p of progress) {
-    result[p.badgeCode] = p.currentCount;
+    result[p.badgeCode] = p.currentCount ?? 0;
   }
   return result;
 }
@@ -493,7 +493,7 @@ export async function updateBadgeProgress(teamMemberId: number, badgeCode: strin
     .where(and(eq(badgeProgress.teamMemberId, teamMemberId), eq(badgeProgress.badgeCode, badgeCode)));
   
   if (existing) {
-    const newCount = existing.currentCount + increment;
+    const newCount = (existing.currentCount ?? 0) + increment;
     await db.update(badgeProgress)
       .set({ currentCount: newCount })
       .where(eq(badgeProgress.id, existing.id));

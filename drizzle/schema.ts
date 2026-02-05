@@ -668,9 +668,11 @@ export const badgeProgress = mysqlTable("badge_progress", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
-  badgeCode: varchar("badgeCode", { length: 50 }).notNull(),
-  currentCount: int("currentCount").default(0).notNull(),
-  lastUpdated: timestamp("lastUpdated").defaultNow().onUpdateNow().notNull(),
+  badgeCode: varchar("badgeCode", { length: 64 }).notNull(),
+  currentCount: int("currentCount").default(0),
+  currentStreak: int("currentStreak").default(0),
+  weekStart: timestamp("weekStart"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type BadgeProgress = typeof badgeProgress.$inferSelect;
