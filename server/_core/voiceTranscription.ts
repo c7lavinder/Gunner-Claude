@@ -84,9 +84,9 @@ async function transcribeBuffer(
   const baseUrl = ENV.forgeApiUrl.endsWith("/") ? ENV.forgeApiUrl : `${ENV.forgeApiUrl}/`;
   const fullUrl = new URL("v1/audio/transcriptions", baseUrl).toString();
 
-  // Create abort controller with 5-minute timeout
+  // Create abort controller with 10-minute timeout for long audio chunks
   const abortController = new AbortController();
-  const timeoutId = setTimeout(() => abortController.abort(), 5 * 60 * 1000);
+  const timeoutId = setTimeout(() => abortController.abort(), 10 * 60 * 1000);
   
   let response;
   try {
@@ -134,9 +134,27 @@ export async function transcribeAudio(
   options: TranscribeOptions
 ): Promise<TranscriptionResponse | TranscriptionError> {
   try {
-    // Download audio from URL
+    // Download audio from URL with timeout (10 minutes for large files)
     console.log(`[Transcription] Downloading audio from ${options.audioUrl}`);
-    const response = await fetch(options.audioUrl);
+    const downloadController = new AbortController();
+    const downloadTimeout = setTimeout(() => downloadController.abort(), 10 * 60 * 1000);
+    
+    let response;
+    try {
+      response = await fetch(options.audioUrl, { signal: downloadController.signal });
+    } catch (downloadError) {
+      clearTimeout(downloadTimeout);
+      if (downloadError instanceof Error && downloadError.name === 'AbortError') {
+        return {
+          error: "Audio download timed out",
+          code: "SERVICE_ERROR",
+          details: "Download took longer than 10 minutes"
+        };
+      }
+      throw downloadError;
+    } finally {
+      clearTimeout(downloadTimeout);
+    }
     if (!response.ok) {
       return {
         error: "Failed to download audio file",

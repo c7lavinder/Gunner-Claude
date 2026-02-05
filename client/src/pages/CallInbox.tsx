@@ -765,6 +765,19 @@ export default function CallInbox() {
       toast.error(`Failed to reclassify: ${error.message}`);
     },
   });
+  const resetStuckMutation = trpc.calls.resetStuck.useMutation({
+    onSuccess: (result) => {
+      if (result.resetCount > 0) {
+        toast.success(`Reset ${result.resetCount} stuck call(s) - they will be reprocessed`);
+      } else {
+        toast.info("No stuck calls found");
+      }
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Failed to reset stuck calls: ${error.message}`);
+    },
+  });
   const utils = trpc.useUtils();
 
   // Filter states
@@ -995,6 +1008,32 @@ export default function CallInbox() {
             )}
 
             <TabsContent value="pending" className="space-y-4">
+              {/* Show Reset Stuck button if there are calls stuck for more than 1 hour */}
+              {pendingCalls.some(c => 
+                (c.status === 'transcribing' || c.status === 'grading') && 
+                c.updatedAt && 
+                new Date(c.updatedAt) < new Date(Date.now() - 60 * 60 * 1000)
+              ) && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  <span className="text-sm text-amber-800 dark:text-amber-200 flex-1">
+                    Some calls have been processing for over an hour and may be stuck.
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resetStuckMutation.mutate()}
+                    disabled={resetStuckMutation.isPending}
+                    className="border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900"
+                  >
+                    {resetStuckMutation.isPending ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Resetting...</>
+                    ) : (
+                      <><RefreshCw className="h-4 w-4 mr-2" />Reset Stuck Calls</>
+                    )}
+                  </Button>
+                </div>
+              )}
               {pendingCalls.length > 0 ? (
                 <div className="space-y-4">
                   {pendingCalls.map((item) => (

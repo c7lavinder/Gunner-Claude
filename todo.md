@@ -1161,3 +1161,5 @@
 - [x] Fix paywall loop after successful Stripe payment - should redirect to dashboard
 - [x] Fix paywall redirect loop using sessionStorage to persist checkout success state
 - [x] Fix inconsistency: billing page shows 'Calls Graded' but admin panel shows 'Max Calls/Month' - make consistent
+- [ ] Fix calls stuck in 'Transcribing' status for hours - longer calls (12-30 min) not completing
+- [x] Fix stuck transcription calls - increased timeouts and added Reset Stuck Calls button

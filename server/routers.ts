@@ -407,6 +407,40 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // Reset stuck calls (transcribing/grading for more than 1 hour)
+    resetStuck: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        // Only admins can reset stuck calls
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        
+        // Get all calls for this tenant and filter for stuck ones
+        const allCalls = await getCalls({ tenantId: ctx.user?.tenantId ?? undefined });
+        const stuckCalls = allCalls.filter(call => 
+          (call.status === 'transcribing' || call.status === 'grading' || call.status === 'classifying') &&
+          call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+        );
+
+        let resetCount = 0;
+        for (const call of stuckCalls) {
+          await updateCall(call.id, { 
+            status: 'pending',
+            classificationReason: 'Reset from stuck state - will retry processing'
+          });
+          // Trigger reprocessing
+          processCall(call.id).catch(err => {
+            console.error(`[ResetStuck] Error reprocessing call ${call.id}:`, err);
+          });
+          resetCount++;
+        }
+
+        console.log(`[ResetStuck] Reset ${resetCount} stuck calls`);
+        return { success: true, resetCount };
+      }),
+
     // Manual call upload with audio file
     uploadManual: protectedProcedure
       .input(z.object({
