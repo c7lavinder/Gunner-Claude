@@ -439,7 +439,7 @@ export default function TenantSettings() {
               <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Rubrics</span>
             </TabsTrigger>
-            {user?.role === 'admin' && (
+            {(user?.role === 'admin' || user?.role === 'super_admin') && (
               <TabsTrigger value="impersonate" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
                 <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span>View As</span>
@@ -1518,7 +1518,7 @@ export default function TenantSettings() {
         </TabsContent>
 
         {/* View As / Impersonation (Admin Only) */}
-        {user?.role === 'admin' && (
+        {(user?.role === 'admin' || user?.role === 'super_admin') && (
           <TabsContent value="impersonate" className="space-y-6">
             <Card>
               <CardHeader>
