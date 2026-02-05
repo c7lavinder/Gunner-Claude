@@ -1,0 +1,22 @@
+{
+  "query": "SELECT u.id as userId, u.email, u.name, t.id as tenantId, t.name as tenantName, t.subscriptionTier, t.subscriptionStatus, t.stripeSubscriptionId, t.stripeCustomerId, t.onboardingCompleted \nFROM users u \nJOIN tenants t ON u.tenantId = t.id \nWHERE u.email LIKE '%coreydenzel%' OR u.name LIKE '%coreydenzel%' OR u.email LIKE '%corey%denzel%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT u.id as userId, u.email, u.name, t.id as tenantId, t.name as tenantName, t.subscriptionTier, t.subscriptionStatus, t.stripeSubscriptionId, t.stripeCustomerId, t.onboardingCompleted \nFROM users u \nJOIN tenants t ON u.tenantId = t.id \nWHERE u.email LIKE '%coreydenzel%' OR u.name LIKE '%coreydenzel%' OR u.email LIKE '%corey%denzel%';",
+  "rows": [
+    {
+      "userId": "600058",
+      "email": "coreydenzel14@gmail.com",
+      "name": "Corey Lavinder",
+      "tenantId": "150005",
+      "tenantName": "Nash ",
+      "subscriptionTier": "trial",
+      "subscriptionStatus": "active",
+      "stripeSubscriptionId": "NULL",
+      "stripeCustomerId": "NULL",
+      "onboardingCompleted": "true"
+    }
+  ],
+  "messages": [],
+  "stdout": "userId\temail\tname\ttenantId\ttenantName\tsubscriptionTier\tsubscriptionStatus\tstripeSubscriptionId\tstripeCustomerId\tonboardingCompleted\n600058\tcoreydenzel14@gmail.com\tCorey Lavinder\t150005\tNash \ttrial\tactive\tNULL\tNULL\ttrue\n",
+  "stderr": "",
+  "execution_time_ms": 351
+}

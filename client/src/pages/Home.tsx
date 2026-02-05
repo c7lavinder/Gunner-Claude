@@ -61,13 +61,17 @@ export default function Home() {
   const { user } = useAuth();
   const searchString = useSearch();
   
-  // Show toast on checkout success
+  // Show toast on checkout success and clean up URL
   useEffect(() => {
     const params = new URLSearchParams(searchString);
     if (params.get('checkout') === 'success') {
-      toast.success("Welcome to Gunner! Your subscription is now active.");
-      // Clean up URL
-      window.history.replaceState({}, '', '/dashboard');
+      toast.success("Welcome to Gunner! Your subscription is now active.", {
+        duration: 5000,
+      });
+      // Clean up URL after a short delay to allow the page to render
+      setTimeout(() => {
+        window.history.replaceState({}, '', '/dashboard');
+      }, 100);
     }
   }, [searchString]);
   

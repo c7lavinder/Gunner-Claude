@@ -24,7 +24,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
 import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Building2, Shield } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
-import { useLocation, Redirect } from "wouter";
+import { useLocation, Redirect, useSearch } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { useImpersonation } from "./ImpersonationBanner";
@@ -77,7 +77,12 @@ export default function DashboardLayout({
   });
   const { loading, user } = useAuth();
   const [location] = useLocation();
+  const searchString = useSearch();
   const { isImpersonating } = useImpersonation();
+  
+  // Check if user just completed checkout (Stripe redirects with ?checkout=success)
+  const searchParams = new URLSearchParams(searchString);
+  const justCompletedCheckout = searchParams.get('checkout') === 'success';
   
   // Fetch tenant settings to check onboarding status
   const { data: tenantSettings, isLoading: tenantLoading } = trpc.tenant.getSettings.useQuery(
@@ -146,6 +151,7 @@ export default function DashboardLayout({
     isSuperAdmin,
     onboardingCompleted,
     hasActiveSubscription,
+    justCompletedCheckout,
     stripeSubscriptionId: tenantSettings?.stripeSubscriptionId,
     subscriptionStatus: tenantSettings?.subscriptionStatus,
   });
@@ -176,7 +182,8 @@ export default function DashboardLayout({
   
   // 4. If onboarding completed but no subscription, redirect to paywall
   // Super admins bypass this check
-  if (onboardingCompleted && !hasActiveSubscription && tenantSettings && !isSuperAdmin) {
+  // Also bypass if user just completed checkout (webhook may not have processed yet)
+  if (onboardingCompleted && !hasActiveSubscription && tenantSettings && !isSuperAdmin && !justCompletedCheckout) {
     return <Redirect to="/paywall" />;
   }
 

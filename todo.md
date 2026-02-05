@@ -1158,3 +1158,4 @@
 - [ ] Fix signup page still showing Account/Plan/Payment steps
 - [x] Fix paywall to show plan selection with correct pricing
 - [x] Fix paywall using admin.getPlans (super admin only) - changed to tenant.getPlans (public)
+- [x] Fix paywall loop after successful Stripe payment - should redirect to dashboard
