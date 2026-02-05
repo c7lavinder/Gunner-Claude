@@ -519,9 +519,36 @@ export const appRouter = router({
         const shouldGrade = input.classification === "conversation";
         const newStatus = shouldGrade ? "completed" : "skipped";
 
+        let classificationReason = input.reason || `Manually reclassified to ${input.classification.replace(/_/g, " ")}`;
+        
+        // For admin calls, generate a summary if we have a transcript
+        if (input.classification === "admin_call" && call.transcript && !input.reason) {
+          try {
+            const { invokeLLM } = await import("./_core/llm");
+            const response = await invokeLLM({
+              messages: [
+                {
+                  role: "system",
+                  content: "You are summarizing a real estate administrative call. Provide a brief 1-2 sentence summary of what the call was about. Focus on the main purpose: document signing, technical help, scheduling, follow-up, etc.",
+                },
+                {
+                  role: "user",
+                  content: `Summarize this call:\n\n${call.transcript.substring(0, 3000)}`,
+                },
+              ],
+            });
+            const summary = response.choices[0]?.message?.content;
+            if (summary && typeof summary === 'string') {
+              classificationReason = summary.trim();
+            }
+          } catch (err) {
+            console.error("[Reclassify] Error generating summary:", err);
+          }
+        }
+
         await updateCall(input.callId, {
           classification: input.classification,
-          classificationReason: input.reason || `Manually reclassified to ${input.classification.replace(/_/g, " ")}`,
+          classificationReason,
           status: newStatus,
         });
 

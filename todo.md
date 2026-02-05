@@ -1183,3 +1183,11 @@
 - [x] Add detection for: follow-up calls after offer was already made
 - [x] Classify these as admin_call instead of conversation to avoid incorrect grading
 - [ ] Test with Jamey Durham call example (user can reclassify and reprocess)
+
+
+## Admin Call Summaries
+- [x] Add AI-generated summary for admin calls explaining what the call was about
+- [x] Generate summary when call is classified as admin_call
+- [x] Generate summary when call is manually reclassified to admin_call
+- [x] Store summary in classificationReason field
+- [x] Display summary in the call list for admin calls

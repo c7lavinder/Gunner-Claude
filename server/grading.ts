@@ -406,6 +406,7 @@ export interface ClassificationResult {
   classification: CallClassification;
   reason: string;
   shouldGrade: boolean;
+  summary?: string; // For admin_call: brief description of what the call was about
 }
 
 /**
@@ -472,7 +473,8 @@ Respond with JSON only:
 {
   "classification": "conversation" | "admin_call" | "voicemail" | "no_answer" | "callback_request" | "wrong_number",
   "reason": "Brief explanation of why this classification was chosen",
-  "shouldGrade": true/false (only true for "conversation")
+  "shouldGrade": true/false (only true for "conversation"),
+  "summary": "For admin_call only: A 1-2 sentence summary of what the call was about (e.g., 'Helped seller sign purchase agreement via DocuSign. Resolved email access issues.'). For other classifications, leave empty string."
 }`,
         },
         {
@@ -494,8 +496,9 @@ Respond with JSON only:
               },
               reason: { type: "string" },
               shouldGrade: { type: "boolean" },
+              summary: { type: "string" },
             },
-            required: ["classification", "reason", "shouldGrade"],
+            required: ["classification", "reason", "shouldGrade", "summary"],
             additionalProperties: false,
           },
         },
@@ -517,6 +520,7 @@ Respond with JSON only:
       classification: parsed.classification,
       reason: parsed.reason,
       shouldGrade: parsed.shouldGrade,
+      summary: parsed.summary || undefined,
     };
   } catch (error) {
     console.error("[Classification] Error classifying call:", error);
@@ -591,7 +595,12 @@ export async function processCall(callId: number): Promise<void> {
     // If not a real conversation, skip grading
     if (!classificationResult.shouldGrade) {
       console.log(`[ProcessCall] Call ${callId} classified as ${classificationResult.classification}, skipping grading`);
-      await updateCall(callId, { status: "skipped" });
+      // For admin calls, save the summary as the classificationReason for display
+      const updateData: any = { status: "skipped" };
+      if (classificationResult.classification === "admin_call" && classificationResult.summary) {
+        updateData.classificationReason = classificationResult.summary;
+      }
+      await updateCall(callId, updateData);
       return;
     }
 
