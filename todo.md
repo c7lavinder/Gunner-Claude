@@ -1157,3 +1157,4 @@
 - [x] Update signup flow and landing page links: Account → Onboarding → Plan/Payment
 - [ ] Fix signup page still showing Account/Plan/Payment steps
 - [x] Fix paywall to show plan selection with correct pricing
+- [x] Fix paywall using admin.getPlans (super admin only) - changed to tenant.getPlans (public)

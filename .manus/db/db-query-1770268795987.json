@@ -1,0 +1,136 @@
+{
+  "query": "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE();",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE();",
+  "rows": [
+    {
+      "table_name": "__drizzle_migrations"
+    },
+    {
+      "table_name": "users"
+    },
+    {
+      "table_name": "call_grades"
+    },
+    {
+      "table_name": "calls"
+    },
+    {
+      "table_name": "performance_metrics"
+    },
+    {
+      "table_name": "team_members"
+    },
+    {
+      "table_name": "ai_feedback"
+    },
+    {
+      "table_name": "grading_rules"
+    },
+    {
+      "table_name": "training_materials"
+    },
+    {
+      "table_name": "team_training_items"
+    },
+    {
+      "table_name": "brand_assets"
+    },
+    {
+      "table_name": "content_ideas"
+    },
+    {
+      "table_name": "social_posts"
+    },
+    {
+      "table_name": "brand_profile"
+    },
+    {
+      "table_name": "team_assignments"
+    },
+    {
+      "table_name": "badge_progress"
+    },
+    {
+      "table_name": "badges"
+    },
+    {
+      "table_name": "deals"
+    },
+    {
+      "table_name": "reward_views"
+    },
+    {
+      "table_name": "user_badges"
+    },
+    {
+      "table_name": "user_xp"
+    },
+    {
+      "table_name": "xp_transactions"
+    },
+    {
+      "table_name": "user_streaks"
+    },
+    {
+      "table_name": "kpi_periods"
+    },
+    {
+      "table_name": "team_member_kpis"
+    },
+    {
+      "table_name": "campaign_kpis"
+    },
+    {
+      "table_name": "kpi_deals"
+    },
+    {
+      "table_name": "kpi_goals"
+    },
+    {
+      "table_name": "lead_gen_staff"
+    },
+    {
+      "table_name": "kpi_markets"
+    },
+    {
+      "table_name": "kpi_channels"
+    },
+    {
+      "table_name": "tenants"
+    },
+    {
+      "table_name": "tenant_roles"
+    },
+    {
+      "table_name": "tenant_rubrics"
+    },
+    {
+      "table_name": "tenant_call_types"
+    },
+    {
+      "table_name": "subscription_plans"
+    },
+    {
+      "table_name": "pending_invitations"
+    },
+    {
+      "table_name": "password_reset_tokens"
+    },
+    {
+      "table_name": "outreach_history"
+    },
+    {
+      "table_name": "email_verification_tokens"
+    },
+    {
+      "table_name": "platform_settings"
+    },
+    {
+      "table_name": "emails_sent"
+    }
+  ],
+  "messages": [],
+  "stdout": "table_name\n__drizzle_migrations\nusers\ncall_grades\ncalls\nperformance_metrics\nteam_members\nai_feedback\ngrading_rules\ntraining_materials\nteam_training_items\nbrand_assets\ncontent_ideas\nsocial_posts\nbrand_profile\nteam_assignments\nbadge_progress\nbadges\ndeals\nreward_views\nuser_badges\nuser_xp\nxp_transactions\nuser_streaks\nkpi_periods\nteam_member_kpis\ncampaign_kpis\nkpi_deals\nkpi_goals\nlead_gen_staff\nkpi_markets\nkpi_channels\ntenants\ntenant_roles\ntenant_rubrics\ntenant_call_types\nsubscription_plans\npending_invitations\npassword_reset_tokens\noutreach_history\nemail_verification_tokens\nplatform_settings\nemails_sent\n",
+  "stderr": "",
+  "execution_time_ms": 351
+}

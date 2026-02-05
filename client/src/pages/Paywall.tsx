@@ -53,7 +53,7 @@ export default function Paywall() {
   }, [searchString]);
 
   // Fetch plans from database
-  const { data: plans, isLoading: plansLoading } = trpc.admin.getPlans.useQuery();
+  const { data: plans, isLoading: plansLoading } = trpc.tenant.getPlans.useQuery();
 
   const createCheckoutMutation = trpc.tenant.createCheckout.useMutation();
 
