@@ -376,7 +376,7 @@ export default function Pricing() {
         <div className="text-center mt-16 text-muted-foreground">
           <p className="mb-4">Trusted by 100+ sales teams</p>
           <p className="text-sm">
-            14-day free trial • No credit card required • Cancel anytime
+            3-day free trial • Card required to start • Cancel anytime
           </p>
         </div>
       </div>

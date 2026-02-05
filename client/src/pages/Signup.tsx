@@ -311,7 +311,7 @@ export default function Signup() {
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl">Create your account</CardTitle>
                 <CardDescription>
-                  Start your 14-day free trial. No credit card required yet.
+                  Start your 3-day free trial. Card required after onboarding.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">

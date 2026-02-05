@@ -176,7 +176,7 @@ export default function Landing() {
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mt-4">
-              No credit card required for trial • Cancel anytime
+              3-day free trial • Card required to start • Cancel anytime
             </p>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function Landing() {
               Simple, Transparent Pricing
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-              Choose the plan that fits your team. All plans include a 14-day free trial.
+              Choose the plan that fits your team. All plans include a 3-day free trial.
             </p>
             <div className="inline-flex items-center gap-4 p-1 bg-muted rounded-lg">
               <button
@@ -334,7 +334,7 @@ export default function Landing() {
               Ready to Transform Your Sales Team?
             </h2>
             <p className="text-xl text-muted-foreground mb-8">
-              Start your 14-day free trial today. No credit card required.
+              Start your 3-day free trial today. Enter card to unlock dashboard.
             </p>
             <Link href="/signup">
               <Button size="lg" className="gap-2">
