@@ -946,7 +946,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-muted-foreground">Use 999 for unlimited</p>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="maxCallsPerMonth">Max Calls/Month</Label>
+                        <Label htmlFor="maxCallsPerMonth">Max Graded Calls/Month</Label>
                         <Input
                           id="maxCallsPerMonth"
                           type="number"

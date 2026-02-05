@@ -1160,3 +1160,4 @@
 - [x] Fix paywall using admin.getPlans (super admin only) - changed to tenant.getPlans (public)
 - [x] Fix paywall loop after successful Stripe payment - should redirect to dashboard
 - [x] Fix paywall redirect loop using sessionStorage to persist checkout success state
+- [x] Fix inconsistency: billing page shows 'Calls Graded' but admin panel shows 'Max Calls/Month' - make consistent

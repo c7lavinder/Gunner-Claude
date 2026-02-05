@@ -1135,7 +1135,7 @@ export default function SuperAdmin() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium">Max Calls/Month (-1 for unlimited)</label>
+                    <label className="text-sm font-medium">Max Graded Calls/Month (-1 for unlimited)</label>
                     <Input
                       type="number"
                       value={planFormData.maxCallsPerMonth}

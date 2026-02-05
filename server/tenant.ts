@@ -3,7 +3,7 @@
  * Handles multi-tenancy operations for the white-label SaaS platform
  */
 
-import { eq, sql, and, desc, count } from "drizzle-orm";
+import { eq, sql, and, desc, count, gte } from "drizzle-orm";
 import { getDb } from "./db";
 import { 
   tenants, 
@@ -289,11 +289,22 @@ export async function getTenantSettings(tenantId: number) {
     .from(users)
     .where(eq(users.tenantId, tenantId));
 
-  // Get call count for this tenant
+  // Get graded call count for this tenant (only completed calls with conversation classification)
+  // This is what counts against the plan limit
+  const currentMonth = new Date();
+  const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+  
   const [callResult] = await db
     .select({ count: count() })
     .from(calls)
-    .where(eq(calls.tenantId, tenantId));
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, 'completed'),
+        eq(calls.classification, 'conversation'),
+        gte(calls.createdAt, firstDayOfMonth)
+      )
+    );
   const callCount = callResult?.count || 0;
 
   return {
