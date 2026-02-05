@@ -81,8 +81,27 @@ export default function DashboardLayout({
   const { isImpersonating } = useImpersonation();
   
   // Check if user just completed checkout (Stripe redirects with ?checkout=success)
+  // Use sessionStorage to persist this across re-renders after URL cleanup
   const searchParams = new URLSearchParams(searchString);
-  const justCompletedCheckout = searchParams.get('checkout') === 'success';
+  const checkoutFromUrl = searchParams.get('checkout') === 'success';
+  
+  // Store checkout success in sessionStorage so it persists after URL cleanup
+  const [justCompletedCheckout, setJustCompletedCheckout] = useState(() => {
+    if (checkoutFromUrl) return true;
+    return sessionStorage.getItem('checkout_success') === 'true';
+  });
+  
+  // When checkout=success is in URL, save to sessionStorage
+  useEffect(() => {
+    if (checkoutFromUrl) {
+      sessionStorage.setItem('checkout_success', 'true');
+      setJustCompletedCheckout(true);
+      // Clear after 60 seconds (enough time for webhook to process)
+      setTimeout(() => {
+        sessionStorage.removeItem('checkout_success');
+      }, 60000);
+    }
+  }, [checkoutFromUrl]);
   
   // Fetch tenant settings to check onboarding status
   const { data: tenantSettings, isLoading: tenantLoading } = trpc.tenant.getSettings.useQuery(
