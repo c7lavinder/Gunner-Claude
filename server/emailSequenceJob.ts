@@ -12,6 +12,8 @@ import {
   onNoCallsAfter48Hours,
   onPowerUser,
   onTrialEndingSoon,
+  sendTransactionalEmail,
+  TRANSACTIONAL_EMAIL_IDS,
 } from "./loops";
 
 // Track which emails have been sent to avoid duplicates
@@ -73,12 +75,11 @@ async function processUserForEmails(user: UserForEmail): Promise<string[]> {
   // Day 1: First call check-in (if no calls graded)
   if (daysSinceSignup === 1 && user.callsGraded === 0) {
     if (!(await hasEmailBeenSent(user.id, 'day1_first_call'))) {
-      await sendEvent({
+      await sendTransactionalEmail({
         email: user.email,
-        eventName: 'day1_first_call',
-        eventProperties: {
+        transactionalId: TRANSACTIONAL_EMAIL_IDS.DAY1_FIRST_CALL,
+        dataVariables: {
           firstName,
-          callsGraded: user.callsGraded,
         },
       });
       await recordEmailSent(user.id, 'day1_first_call');
@@ -89,12 +90,11 @@ async function processUserForEmails(user: UserForEmail): Promise<string[]> {
   // Day 2: Trial ending reminder
   if (daysSinceSignup === 2 && !user.isSubscribed) {
     if (!(await hasEmailBeenSent(user.id, 'day2_trial_reminder'))) {
-      await sendEvent({
+      await sendTransactionalEmail({
         email: user.email,
-        eventName: 'day2_trial_reminder',
-        eventProperties: {
+        transactionalId: TRANSACTIONAL_EMAIL_IDS.DAY2_TRIAL_ENDING,
+        dataVariables: {
           firstName,
-          callsGraded: user.callsGraded,
         },
       });
       await recordEmailSent(user.id, 'day2_trial_reminder');

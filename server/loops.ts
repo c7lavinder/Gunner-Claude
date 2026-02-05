@@ -238,6 +238,16 @@ export async function onSubscriptionCancelled(email: string) {
 }
 
 // ============================================
+// Transactional Email IDs (from Loops.so dashboard)
+// ============================================
+
+export const TRANSACTIONAL_EMAIL_IDS = {
+  DAY1_FIRST_CALL: "cml8sv6ga0f910iyk2wssbsro",
+  DAY2_TRIAL_ENDING: "cml8unlpd0v4t0ivj5ti636og",
+  PASSWORD_RESET: "cml8rnl030005018lu5bprcb7",
+} as const;
+
+// ============================================
 // Transactional Email Sending
 // ============================================
 

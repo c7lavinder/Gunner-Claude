@@ -1148,5 +1148,6 @@
 - [x] Create email templates for all 14-day sequence emails
 - [x] Add manual trigger button in SuperAdmin panel
 - [x] Write vitest tests for email sequence job
-- [ ] Configure DNS records for Loops email sending (MX and DKIM)
-- [ ] Create event-triggered loops in Loops.so dashboard for each email type
+- [x] Configure DNS records for Loops email sending (MX, SPF, DKIM) in Squarespace
+- [x] Publish transactional emails in Loops.so (Day 1, Day 2, Password Reset)
+- [x] Activate welcome email loop (triggered on contact added)
