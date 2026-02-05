@@ -9,6 +9,7 @@ import { promises as fs } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { splitWavIntoChunks, isWavFile } from "./wavChunking";
 
 // Whisper API limit is 25MB, but we use duration-based chunking for reliability
 const MAX_CHUNK_DURATION_SECONDS = 900; // 15 minutes per chunk
@@ -211,14 +212,23 @@ export async function splitAudioIntoChunks(
   const hasFfmpeg = await checkFfmpeg();
   
   if (!hasFfmpeg) {
-    // Without FFmpeg, we can't split - return original as single chunk
-    // This will work for files under 25MB
-    console.warn('[AudioChunking] FFmpeg not available - cannot split long audio files. Long calls may fail.');
+    // FFmpeg not available - try pure JavaScript WAV chunking
+    console.log('[AudioChunking] FFmpeg not available, trying pure JS WAV chunking');
+    
+    // Check if it's a WAV file (many GHL recordings are WAV despite .mp3 extension)
+    if (isWavFile(audioBuffer)) {
+      console.log('[AudioChunking] Detected WAV file, using pure JS chunking');
+      return splitWavIntoChunks(audioBuffer);
+    }
+    
+    // Not a WAV file and no FFmpeg - can only handle small files
     const sizeMB = audioBuffer.length / (1024 * 1024);
+    console.warn(`[AudioChunking] Not a WAV file and no FFmpeg. File size: ${sizeMB.toFixed(1)}MB`);
+    
     if (sizeMB > 25) {
       return {
         success: false,
-        error: `File is ${sizeMB.toFixed(1)}MB. FFmpeg is required to split large audio files for transcription.`,
+        error: `File is ${sizeMB.toFixed(1)}MB and not a WAV file. FFmpeg is required to split large non-WAV audio files.`,
       };
     }
     
