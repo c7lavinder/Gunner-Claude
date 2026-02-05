@@ -23,8 +23,21 @@ async function getFfmpegPath(): Promise<string> {
     const ffmpegStatic = await import('ffmpeg-static');
     const path = ffmpegStatic.default || ffmpegStatic;
     if (path && typeof path === 'string') {
-      console.log('[AudioChunking] Using ffmpeg-static:', path);
-      return path;
+      // Verify the binary exists and is executable
+      const { existsSync, chmodSync } = await import('fs');
+      if (existsSync(path)) {
+        try {
+          // Ensure the binary is executable
+          chmodSync(path, 0o755);
+          console.log('[AudioChunking] Using ffmpeg-static:', path);
+          return path;
+        } catch (chmodErr) {
+          console.warn('[AudioChunking] Could not chmod ffmpeg-static, trying anyway:', path);
+          return path;
+        }
+      } else {
+        console.warn('[AudioChunking] ffmpeg-static path does not exist:', path);
+      }
     }
   } catch (e) {
     console.log('[AudioChunking] ffmpeg-static not available, using system FFmpeg');
@@ -153,6 +166,10 @@ async function extractChunk(
   duration: number
 ): Promise<boolean> {
   return new Promise((resolve) => {
+    console.log(`[AudioChunking] Extracting chunk: ${inputPath} -> ${outputPath} (start: ${startTime}s, duration: ${duration}s)`);
+    console.log(`[AudioChunking] Using FFmpeg path: ${FFMPEG_PATH}`);
+    
+    let stderr = '';
     const proc = spawn(FFMPEG_PATH, [
       "-i", inputPath,
       "-ss", startTime.toString(),
@@ -160,10 +177,24 @@ async function extractChunk(
       "-c", "copy", // Copy without re-encoding to preserve quality
       "-y",
       outputPath,
-    ]);
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    proc.on("error", () => resolve(false));
-    proc.on("close", (code) => resolve(code === 0));
+    proc.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on("error", (err) => {
+      console.error(`[AudioChunking] FFmpeg spawn error:`, err.message);
+      resolve(false);
+    });
+    
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        console.error(`[AudioChunking] FFmpeg exited with code ${code}`);
+        console.error(`[AudioChunking] FFmpeg stderr:`, stderr.substring(0, 1000));
+      }
+      resolve(code === 0);
+    });
   });
 }
 
