@@ -434,20 +434,23 @@ export async function classifyCall(
           content: `You are a call classification system for a real estate investment company.
 Analyze the transcript and classify the call into one of these categories:
 
-1. "conversation" - A real sales conversation. This is the DEFAULT for any call with back-and-forth dialogue. Includes:
-   - ANY discussion about property, real estate, or selling
-   - Rapport-building conversations that lead to business discussion
-   - Price discussion, negotiation, or making offers
-   - Qualification questions about the property or seller
-   - Objection handling
-   - Calls that result in appointments, contracts, or next steps
-   - Long calls (10+ minutes) with substantive dialogue - these are almost always real conversations
+1. "conversation" - A SALES conversation where the rep is actively selling. This includes:
+   - Initial qualification calls - asking about property, situation, motivation, timeline
+   - Offer presentation calls - presenting an offer price for the FIRST TIME
+   - Negotiation calls - discussing price, terms, counteroffers
+   - Objection handling - addressing concerns about the offer or process
+   - Appointment setting calls - scheduling meetings to discuss the property
    
-2. "admin_call" - ONLY for purely administrative calls with NO sales content:
-   - Scheduling calls with NO property/price discussion at all
-   - Calls about paperwork logistics only
-   - Calls to vendors (title companies, inspectors)
+2. "admin_call" - Post-sale or administrative calls with NO active selling:
+   - POST-OFFER calls: Walking someone through signing documents AFTER an offer was already accepted
+   - Document/paperwork calls: Helping with e-signatures, DocuSign, purchase agreements, contracts
+   - Technical support: Helping someone access emails, open documents, use platforms
+   - Follow-up calls: Checking on status after offer was made, answering questions about closing
+   - Scheduling logistics: Coordinating inspection times, closing dates, move-out dates
+   - Vendor calls: Title companies, inspectors, attorneys
    - Internal team calls
+   
+   KEY INDICATOR: If the call is about SIGNING or REVIEWING a purchase agreement that was already presented, it's admin_call, NOT conversation.
    
 3. "voicemail" - The rep left a voicemail message (one-sided, no response)
 
@@ -458,11 +461,12 @@ Analyze the transcript and classify the call into one of these categories:
 6. "wrong_number" - ONLY if the person explicitly says "wrong number" or "I don't own this property"
 
 IMPORTANT RULES:
-- When in doubt, classify as "conversation" - it's better to grade a call than miss one
-- Rapport-building (talking about personal topics, sports, movies, family) is a SALES TECHNIQUE, not a wrong number
-- Long calls with back-and-forth dialogue are almost always real conversations, even if they discuss non-business topics
-- Only use "wrong_number" if explicitly stated - don't infer it from confusing content
-- If the transcript seems garbled or unclear, default to "conversation"
+- If the call mentions "purchase agreement", "sign", "DocuSign", "e-signature", "contract to sign" - and the rep is HELPING them sign (not presenting an offer), it's admin_call
+- If the call is troubleshooting email/technical issues related to receiving documents, it's admin_call
+- If the offer price is being PRESENTED for the first time, it's conversation
+- If the offer was already made and they're just reviewing/signing paperwork, it's admin_call
+- Rapport-building (talking about personal topics) is a SALES TECHNIQUE when part of a sales call
+- Only use "wrong_number" if explicitly stated
 
 Respond with JSON only:
 {

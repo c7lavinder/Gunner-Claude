@@ -1175,3 +1175,11 @@
 - [x] Fix audio chunking to detect WAV files by magic bytes before trying FFmpeg
 - [x] Prioritize pure JS WAV chunking for WAV files (more reliable than FFmpeg)
 - [x] Successfully process Jamey Durham 16:22 call that was previously failing
+
+
+## Improve AI Classification for Post-Offer Calls
+- [x] Update classification prompt to detect post-offer administrative calls
+- [x] Add detection for: paperwork signing, document walkthroughs, technical help with agreements
+- [x] Add detection for: follow-up calls after offer was already made
+- [x] Classify these as admin_call instead of conversation to avoid incorrect grading
+- [ ] Test with Jamey Durham call example (user can reclassify and reprocess)
