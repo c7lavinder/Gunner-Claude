@@ -13,6 +13,7 @@ import {
   processCallViewRewards,
   initializeBadges,
   batchAwardXpForCalls,
+  batchEvaluateBadges,
 } from "./gamification";
 import {
   getCalls,
@@ -2049,6 +2050,14 @@ Create content that:
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       return batchAwardXpForCalls();
+    }),
+    
+    // Batch evaluate badges for all team members
+    batchEvaluateBadges: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user?.teamRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      return batchEvaluateBadges();
     }),
   }),
 

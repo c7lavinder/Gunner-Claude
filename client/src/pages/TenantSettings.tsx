@@ -31,7 +31,8 @@ import {
   Unlink,
   Zap,
   Eye,
-  LogOut
+  LogOut,
+  Award
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -279,6 +280,20 @@ export default function TenantSettings() {
       }
     },
     onError: (error) => toast.error("Failed to award XP: " + error.message),
+  });
+
+  const batchEvaluateBadgesMutation = trpc.gamification.batchEvaluateBadges.useMutation({
+    onSuccess: (data) => {
+      if (data.badgesAwarded === 0) {
+        toast.info("No new badges to award - all badges already evaluated!");
+      } else {
+        toast.success(`Awarded ${data.badgesAwarded} badges across ${data.processed} calls!`);
+        data.memberSummary.forEach(m => {
+          toast.info(`${m.name}: ${m.badgesEarned.join(", ")}`);
+        });
+      }
+    },
+    onError: (error) => toast.error("Failed to evaluate badges: " + error.message),
   });
 
   // Team Management helper data
@@ -723,14 +738,25 @@ export default function TenantSettings() {
               <h2 className="text-lg font-semibold">Roles & Assignments</h2>
               <p className="text-sm text-muted-foreground">Manage user roles and team assignments</p>
             </div>
-            <Button 
-              onClick={() => batchAwardXpMutation.mutate()}
-              disabled={batchAwardXpMutation.isPending}
-              className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
-            >
-              <Zap className="h-4 w-4 mr-2" />
-              {batchAwardXpMutation.isPending ? "Awarding XP..." : "Award XP for All Calls"}
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => batchAwardXpMutation.mutate()}
+                disabled={batchAwardXpMutation.isPending}
+                className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                {batchAwardXpMutation.isPending ? "Awarding XP..." : "Award XP for All Calls"}
+              </Button>
+              <Button 
+                onClick={() => batchEvaluateBadgesMutation.mutate()}
+                disabled={batchEvaluateBadgesMutation.isPending}
+                variant="outline"
+                className="border-purple-300 text-purple-600 hover:bg-purple-50"
+              >
+                <Award className="h-4 w-4 mr-2" />
+                {batchEvaluateBadgesMutation.isPending ? "Evaluating..." : "Evaluate Badges"}
+              </Button>
+            </div>
           </div>
 
           {/* Users & Roles Section */}

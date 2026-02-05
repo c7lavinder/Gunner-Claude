@@ -1,0 +1,16 @@
+{
+  "query": "SELECT tm.id as teamMemberId, tm.name, \n       (SELECT COUNT(*) FROM calls c WHERE c.teamMemberId = tm.id AND c.status = 'completed') as graded_calls,\n       (SELECT COUNT(*) FROM user_badges ub WHERE ub.teamMemberId = tm.id) as badge_count\nFROM team_members tm \nWHERE tm.name LIKE '%Kyle%'\nLIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT tm.id as teamMemberId, tm.name, \n       (SELECT COUNT(*) FROM calls c WHERE c.teamMemberId = tm.id AND c.status = 'completed') as graded_calls,\n       (SELECT COUNT(*) FROM user_badges ub WHERE ub.teamMemberId = tm.id) as badge_count\nFROM team_members tm \nWHERE tm.name LIKE '%Kyle%'\nLIMIT 5;",
+  "rows": [
+    {
+      "teamMemberId": "3",
+      "name": "Kyle Barks",
+      "graded_calls": "17",
+      "badge_count": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "teamMemberId\tname\tgraded_calls\tbadge_count\n3\tKyle Barks\t17\t0\n",
+  "stderr": "",
+  "execution_time_ms": 382
+}

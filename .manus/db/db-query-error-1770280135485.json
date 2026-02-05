@@ -1,0 +1,8 @@
+{
+  "query": "SELECT u.id, u.name, u.email, \n       (SELECT COUNT(*) FROM calls c WHERE c.userId = u.id AND c.status = 'completed') as graded_calls,\n       (SELECT COUNT(*) FROM user_badges ub WHERE ub.userId = u.id) as badge_count\nFROM users u \nWHERE u.name LIKE '%Kyle%' OR u.email LIKE '%kyle%'\nLIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT u.id, u.name, u.email, \n       (SELECT COUNT(*) FROM calls c WHERE c.userId = u.id AND c.status = 'completed') as graded_calls,\n       (SELECT COUNT(*) FROM user_badges ub WHERE ub.userId = u.id) as badge_count\nFROM users u \nWHERE u.name LIKE '%Kyle%' OR u.email LIKE '%kyle%'\nLIMIT 5;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'c.userid' in 'where clause'"
+  ]
+}

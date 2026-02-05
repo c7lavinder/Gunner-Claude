@@ -620,8 +620,9 @@ export async function processCallViewRewards(teamMemberId: number, callId: numbe
   // Record the view
   await db.insert(rewardViews).values({ teamMemberId, callId, xpAwarded: xp });
   
-  // Check for badge progress (simplified - full implementation would check all criteria)
-  // This is handled separately by evaluateBadges function
+  // Check for badge progress and award badges
+  const badgesEarned = await evaluateBadgesForCall(teamMemberId, callId);
+  result.badgesEarned = badgesEarned;
   
   return result;
 }
@@ -934,6 +935,327 @@ export async function batchAwardXpForCalls(): Promise<{
   return {
     processed: unprocessedCalls.length,
     totalXpAwarded: totalXp,
+    memberSummary,
+  };
+}
+
+
+/**
+ * Evaluate and award badges for a team member after a call is graded
+ * This checks all badge criteria and awards badges when thresholds are met
+ */
+export async function evaluateBadgesForCall(teamMemberId: number, callId: number): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const badgesAwarded: string[] = [];
+  
+  // Get team member info
+  const [teamMember] = await db.select().from(teamMembers).where(eq(teamMembers.id, teamMemberId));
+  if (!teamMember) return [];
+  
+  // Get the call and its grade
+  const [call] = await db
+    .select({
+      id: calls.id,
+      callOutcome: calls.callOutcome,
+      createdAt: calls.createdAt,
+    })
+    .from(calls)
+    .where(eq(calls.id, callId));
+  
+  if (!call) return [];
+  
+  const [grade] = await db
+    .select()
+    .from(callGrades)
+    .where(eq(callGrades.callId, callId));
+  
+  if (!grade) return [];
+  
+  // Parse criteria scores
+  let criteriaScores: Record<string, number> = {};
+  try {
+    criteriaScores = typeof grade.criteriaScores === 'string' 
+      ? JSON.parse(grade.criteriaScores) 
+      : (grade.criteriaScores as Record<string, number>) || {};
+  } catch {
+    criteriaScores = {};
+  }
+  
+  // Get relevant badges for this role
+  const relevantBadges = ALL_BADGES.filter(b => 
+    b.category === "universal" || 
+    ((teamMember.teamRole === "lead_manager" || teamMember.teamRole === "lead_generator") && b.category === "lead_manager") ||
+    (teamMember.teamRole === "acquisition_manager" && b.category === "acquisition_manager")
+  );
+  
+  // Check each badge type
+  for (const badgeDef of relevantBadges) {
+    let shouldIncrement = false;
+    
+    switch (badgeDef.criteria.type) {
+      case "consecutive_grade": {
+        // "On Fire" - consecutive C+ grades
+        const minGrade = badgeDef.criteria.minGrade || "C";
+        const gradeOrder = ["F", "D", "C", "B", "A"];
+        const gradeIndex = gradeOrder.indexOf(grade.overallGrade || "F");
+        const minIndex = gradeOrder.indexOf(minGrade);
+        if (gradeIndex >= minIndex) {
+          shouldIncrement = true;
+        }
+        break;
+      }
+      
+      case "criteria_score": {
+        // Check specific criteria score
+        const criteriaName = badgeDef.criteria.criteriaName;
+        const minScore = badgeDef.criteria.minScore || 0;
+        const maxScore = badgeDef.criteria.maxScore;
+        
+        if (criteriaName) {
+          // Handle combined criteria (intro_combined = Introduction & Rapport + Setting Expectations)
+          let score = 0;
+          if (criteriaName === "intro_combined") {
+            score = (criteriaScores["Introduction & Rapport"] || 0) + (criteriaScores["Setting Expectations"] || 0);
+          } else {
+            score = criteriaScores[criteriaName] || 0;
+          }
+          
+          if (score >= minScore && (maxScore === undefined || score <= maxScore)) {
+            shouldIncrement = true;
+          }
+        }
+        break;
+      }
+      
+      case "call_outcome": {
+        // Check call outcome (appointment_set, etc.)
+        const targetOutcome = badgeDef.criteria.criteriaName;
+        if (call.callOutcome === targetOutcome) {
+          shouldIncrement = true;
+        }
+        break;
+      }
+      
+      case "improvement": {
+        // "Comeback Kid" - improved by 2+ letter grades
+        // Get previous call's grade
+        const previousCalls = await db
+          .select({
+            overallGrade: callGrades.overallGrade,
+          })
+          .from(calls)
+          .innerJoin(callGrades, eq(calls.id, callGrades.callId))
+          .where(and(
+            eq(calls.teamMemberId, teamMemberId),
+            eq(calls.status, "completed"),
+            sql`${calls.id} < ${callId}`
+          ))
+          .orderBy(desc(calls.id))
+          .limit(1);
+        
+        if (previousCalls.length > 0) {
+          const gradeOrder = ["F", "D", "C", "B", "A"];
+          const prevIndex = gradeOrder.indexOf(previousCalls[0].overallGrade || "F");
+          const currIndex = gradeOrder.indexOf(grade.overallGrade || "F");
+          if (currIndex - prevIndex >= 2) {
+            shouldIncrement = true;
+          }
+        }
+        break;
+      }
+      
+      // Note: consistency_days, weekly_volume, and deals are handled by other processes
+      // (updateStreaks for consistency, weekly job for volume, GHL sync for deals)
+    }
+    
+    if (shouldIncrement) {
+      const newCount = await updateBadgeProgress(teamMemberId, badgeDef.code, 1);
+      
+      // Check if any tier threshold was crossed
+      for (const [tier, config] of Object.entries(badgeDef.tiers) as Array<[string, { count: number }]>) {
+        if (newCount >= config.count) {
+          const awarded = await awardBadge(teamMemberId, badgeDef.code, tier);
+          if (awarded) {
+            badgesAwarded.push(`${badgeDef.name} (${tier})`);
+            console.log(`[Gamification] Awarded ${badgeDef.name} (${tier}) to team member ${teamMemberId}`);
+          }
+        }
+      }
+    }
+  }
+  
+  return badgesAwarded;
+}
+
+/**
+ * Batch evaluate badges for all team members based on their call history
+ * This can be run to catch up on badge progress for existing calls
+ */
+export async function batchEvaluateBadges(): Promise<{
+  processed: number;
+  badgesAwarded: number;
+  memberSummary: Array<{ name: string; badgesEarned: string[] }>;
+}> {
+  const db = await getDb();
+  if (!db) return { processed: 0, badgesAwarded: 0, memberSummary: [] };
+  
+  console.log("[Gamification] Starting batch badge evaluation...");
+  
+  // Get all team members
+  const allMembers = await db.select().from(teamMembers).where(eq(teamMembers.isActive, "true"));
+  
+  const memberSummary: Array<{ name: string; badgesEarned: string[] }> = [];
+  let totalBadges = 0;
+  let totalCalls = 0;
+  
+  for (const member of allMembers) {
+    const badgesEarned: string[] = [];
+    
+    // Get all graded calls for this member
+    const memberCalls = await db
+      .select({
+        callId: calls.id,
+        callOutcome: calls.callOutcome,
+        overallGrade: callGrades.overallGrade,
+        criteriaScores: callGrades.criteriaScores,
+        createdAt: calls.createdAt,
+      })
+      .from(calls)
+      .innerJoin(callGrades, eq(calls.id, callGrades.callId))
+      .where(and(
+        eq(calls.teamMemberId, member.id),
+        eq(calls.status, "completed"),
+        eq(calls.classification, "conversation")
+      ))
+      .orderBy(calls.createdAt);
+    
+    console.log(`[Gamification] Processing ${memberCalls.length} calls for ${member.name}`);
+    
+    // Get relevant badges for this role
+    const relevantBadges = ALL_BADGES.filter(b => 
+      b.category === "universal" || 
+      ((member.teamRole === "lead_manager" || member.teamRole === "lead_generator") && b.category === "lead_manager") ||
+      (member.teamRole === "acquisition_manager" && b.category === "acquisition_manager")
+    );
+    
+    // Reset progress for this member (we'll recalculate from scratch)
+    await db.delete(badgeProgress).where(eq(badgeProgress.teamMemberId, member.id));
+    
+    // Track consecutive grades for "On Fire" badge
+    let consecutiveGoodGrades = 0;
+    let previousGrade: string | null = null;
+    
+    for (const call of memberCalls) {
+      totalCalls++;
+      
+      // Parse criteria scores
+      let criteriaScores: Record<string, number> = {};
+      try {
+        criteriaScores = typeof call.criteriaScores === 'string' 
+          ? JSON.parse(call.criteriaScores) 
+          : (call.criteriaScores as Record<string, number>) || {};
+      } catch {
+        criteriaScores = {};
+      }
+      
+      // Check each badge type
+      for (const badgeDef of relevantBadges) {
+        let shouldIncrement = false;
+        
+        switch (badgeDef.criteria.type) {
+          case "consecutive_grade": {
+            const minGrade = badgeDef.criteria.minGrade || "C";
+            const gradeOrder = ["F", "D", "C", "B", "A"];
+            const gradeIndex = gradeOrder.indexOf(call.overallGrade || "F");
+            const minIndex = gradeOrder.indexOf(minGrade);
+            if (gradeIndex >= minIndex) {
+              consecutiveGoodGrades++;
+              shouldIncrement = true;
+            } else {
+              consecutiveGoodGrades = 0;
+            }
+            break;
+          }
+          
+          case "criteria_score": {
+            const criteriaName = badgeDef.criteria.criteriaName;
+            const minScore = badgeDef.criteria.minScore || 0;
+            const maxScore = badgeDef.criteria.maxScore;
+            
+            if (criteriaName) {
+              let score = 0;
+              if (criteriaName === "intro_combined") {
+                score = (criteriaScores["Introduction & Rapport"] || 0) + (criteriaScores["Setting Expectations"] || 0);
+              } else {
+                score = criteriaScores[criteriaName] || 0;
+              }
+              
+              if (score >= minScore && (maxScore === undefined || score <= maxScore)) {
+                shouldIncrement = true;
+              }
+            }
+            break;
+          }
+          
+          case "call_outcome": {
+            const targetOutcome = badgeDef.criteria.criteriaName;
+            if (call.callOutcome === targetOutcome) {
+              shouldIncrement = true;
+            }
+            break;
+          }
+          
+          case "improvement": {
+            if (previousGrade) {
+              const gradeOrder = ["F", "D", "C", "B", "A"];
+              const prevIndex = gradeOrder.indexOf(previousGrade);
+              const currIndex = gradeOrder.indexOf(call.overallGrade || "F");
+              if (currIndex - prevIndex >= 2) {
+                shouldIncrement = true;
+              }
+            }
+            break;
+          }
+        }
+        
+        if (shouldIncrement) {
+          await updateBadgeProgress(member.id, badgeDef.code, 1);
+        }
+      }
+      
+      previousGrade = call.overallGrade;
+    }
+    
+    // Now check badge thresholds and award badges
+    const progress = await getBadgeProgress(member.id);
+    
+    for (const badgeDef of relevantBadges) {
+      const currentProgress = progress[badgeDef.code] || 0;
+      
+      for (const [tier, config] of Object.entries(badgeDef.tiers) as Array<[string, { count: number }]>) {
+        if (currentProgress >= config.count) {
+          const awarded = await awardBadge(member.id, badgeDef.code, tier);
+          if (awarded) {
+            badgesEarned.push(`${badgeDef.name} (${tier})`);
+            totalBadges++;
+          }
+        }
+      }
+    }
+    
+    if (badgesEarned.length > 0) {
+      memberSummary.push({ name: member.name, badgesEarned });
+      console.log(`[Gamification] ${member.name} earned: ${badgesEarned.join(", ")}`);
+    }
+  }
+  
+  console.log(`[Gamification] Batch badge evaluation complete: ${totalCalls} calls processed, ${totalBadges} badges awarded`);
+  
+  return {
+    processed: totalCalls,
+    badgesAwarded: totalBadges,
     memberSummary,
   };
 }

@@ -1199,3 +1199,17 @@
 - [x] Implement impersonation start/stop functionality
 - [x] Show impersonation banner when viewing as another user
 - [x] Restrict impersonation to admin users only
+
+
+## Badge Bug Fix
+- [ ] Investigate why Kyle Barks shows 0 badges despite having graded calls
+- [ ] Check badge calculation logic
+- [ ] Fix badge awarding/display issues
+
+
+## Badge Bug Fix
+- [x] Investigate why Kyle Barks shows 0 badges despite having graded calls
+- [x] Check badge calculation logic - found badges were never being evaluated after grading
+- [x] Implement evaluateBadgesForCall function to check and award badges after each call
+- [x] Add batchEvaluateBadges function to catch up on existing calls
+- [x] Add "Evaluate Badges" button in Settings > Roles & Assignments
