@@ -10,6 +10,7 @@ import { getDb } from "./db";
 import { tenants, users, calls, callGrades, subscriptionPlans, platformSettings } from "../drizzle/schema";
 import { eq, like, sql, count, desc, and, isNotNull } from "drizzle-orm";
 import { getAllTenantsUsage, getTenantUsage } from "./rateLimit";
+import { runEmailSequenceJobs } from "./emailSequenceJobs";
 
 // Super admin check middleware
 // Platform owner's openId for fallback access
@@ -631,4 +632,12 @@ export const adminRouter = router({
 
       return { success: true };
     }),
+
+  // ============ EMAIL SEQUENCE JOBS ============
+
+  // Manually trigger email sequence jobs (for testing or catch-up)
+  runEmailSequence: superAdminProcedure.mutation(async () => {
+    const result = await runEmailSequenceJobs();
+    return result;
+  }),
 });

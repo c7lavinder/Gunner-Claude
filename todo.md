@@ -1112,3 +1112,25 @@
 - [x] Implement payment retry logic (Stripe handles automatically)
 - [x] Send dunning emails (payment failed, retry scheduled, account suspended)
 - [x] Suspend dashboard access after payment failures
+
+## 14-Day Email Sequence
+### Trial Period (Days 0-3)
+- [ ] Day 0: Welcome email (immediately after signup)
+- [ ] Day 1: First call check-in (24 hours after signup)
+- [ ] Day 2: Trial ending reminder (48 hours after signup)
+- [ ] Day 3: Final reminder (morning of last trial day)
+
+### Post-Conversion (Days 4-14)
+- [ ] Day 4: Welcome to Gunner (first day as paying customer)
+- [ ] Day 7: Week 1 recap with stats
+- [ ] Day 10: Feature spotlight (Coaching Clips)
+- [ ] Day 14: Two-week check-in with feedback request
+
+### Engagement Triggers
+- [ ] No calls graded after 48 hours trigger
+- [ ] Power user recognition (10+ calls in first week)
+
+### Infrastructure
+- [ ] Create scheduled job for daily email checks
+- [ ] Track email send history to avoid duplicates
+- [ ] Add user stats queries for email personalization

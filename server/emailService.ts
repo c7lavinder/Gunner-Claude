@@ -20,7 +20,19 @@ export type EmailType =
   | "churn_30_day"
   | "payment_failed"
   | "payment_failed_final"
-  | "trial_ending";
+  | "trial_ending"
+  // 14-day email sequence
+  | "sequence_day0_welcome"
+  | "sequence_day1_checkin"
+  | "sequence_day2_trial_ending"
+  | "sequence_day3_final_reminder"
+  | "sequence_day4_paid_welcome"
+  | "sequence_day7_week1_recap"
+  | "sequence_day10_feature_spotlight"
+  | "sequence_day14_checkin"
+  // Engagement triggers
+  | "trigger_no_calls_48h"
+  | "trigger_power_user";
 
 // Template type for outreach history
 export type OutreachTemplateType = "7_day" | "14_day" | "30_day" | "custom";
@@ -187,6 +199,328 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
           </div>
         `,
         text: `Trial Ending Soon\n\nHi ${data.userName},\n\nYour 3-day free trial for ${data.tenantName} ends tomorrow.\n\nYour card will be charged ${data.amount} for your ${data.planName} plan. You can cancel anytime from the Billing settings.`
+      };
+    
+    // 14-DAY EMAIL SEQUENCE - Real Estate Wholesaler focused
+    case "sequence_day0_welcome":
+      return {
+        subject: `You're in — let's grade your first call`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <h1 style="color: #8B1A1A; font-size: 28px; margin: 0 0 16px;">Welcome to Gunner 🎯</h1>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">You just took the first step toward never missing a coachable moment again.</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Your 3-day trial is active. Here's how to get value fast:</p>
+              <div style="background: #f8f8f8; border-left: 4px solid #8B1A1A; padding: 16px 20px; margin: 24px 0;">
+                <p style="margin: 0 0 12px; color: #333;"><strong>Step 1:</strong> Connect your GHL or upload your first acquisition call</p>
+                <p style="margin: 0 0 12px; color: #333;"><strong>Step 2:</strong> Watch the AI grade it in real-time</p>
+                <p style="margin: 0; color: #333;"><strong>Step 3:</strong> See exactly where your rep built rapport, handled objections, and where they left money on the table</p>
+              </div>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">Grade Your First Call →</a>
+              </p>
+              <p style="color: #666; font-size: 15px; line-height: 1.6;">Most wholesalers find insights in their very first call that would've taken hours to catch manually — like a missed motivation trigger or a weak anchor price.</p>
+              <p style="color: #666; font-size: 15px;">Questions? Just reply to this email.</p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Welcome to Gunner!\n\nYou just took the first step toward never missing a coachable moment again.\n\nYour 3-day trial is active. Here's how to get value fast:\n\nStep 1: Connect your GHL or upload your first acquisition call\nStep 2: Watch the AI grade it in real-time\nStep 3: See exactly where your rep built rapport, handled objections, and where they left money on the table\n\nGrade Your First Call: ${data.dashboardLink}\n\nQuestions? Just reply to this email.`
+      };
+    
+    case "sequence_day1_checkin":
+      return {
+        subject: `Did you catch it?`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Quick check — have you graded your first call yet?</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>If yes:</strong> You've already seen something your team missed. That's the point.</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>If not:</strong> It takes 2 minutes. Seriously.</p>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">Grade a Call Now →</a>
+              </p>
+              <p style="color: #666; font-size: 15px; line-height: 1.6;">The wholesalers who get the most from Gunner grade at least 5 calls in their first week. That's 5 chances to catch a missed follow-up, a weak close, or a rep who's burning leads.</p>
+              <p style="color: #666; font-size: 15px;">Start with one.</p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Hey ${data.firstName},\n\nQuick check — have you graded your first call yet?\n\nIf yes: You've already seen something your team missed. That's the point.\n\nIf not: It takes 2 minutes. Seriously.\n\nGrade a Call Now: ${data.dashboardLink}\n\nThe wholesalers who get the most from Gunner grade at least 5 calls in their first week. Start with one.`
+      };
+    
+    case "sequence_day2_trial_ending":
+      return {
+        subject: `Your trial ends tomorrow`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Your Gunner trial ends in <strong>24 hours</strong>.</p>
+              <div style="background: #f8f8f8; border-radius: 8px; padding: 20px; margin: 24px 0;">
+                <p style="color: #333; font-size: 15px; margin: 0 0 8px;"><strong>📊 Your trial stats:</strong></p>
+                <p style="color: #666; font-size: 15px; margin: 0 0 4px;">• Calls graded: <strong>${data.callsGraded}</strong></p>
+                <p style="color: #666; font-size: 15px; margin: 0 0 4px;">• Insights flagged: <strong>${data.insightsCount}</strong></p>
+                <p style="color: #666; font-size: 15px; margin: 0;">• Coaching moments caught: <strong>${data.coachingMoments}</strong></p>
+              </div>
+              ${data.callsGraded !== '0' ? `<p style="color: #333; font-size: 16px; line-height: 1.6;">You've already seen what Gunner can do. Imagine that across every acquisition call, every disposition call, every week. No more wondering if your reps are saying the right things to motivated sellers.</p>` : `<p style="color: #333; font-size: 16px; line-height: 1.6;">You haven't graded a call yet — try one before your trial ends. Upload your newest rep's last acquisition call. That's where the gold is.</p><p style="text-align: center; margin: 24px 0;"><a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Grade Your First Call →</a></p>`}
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Your card on file will be charged tomorrow unless you cancel. No hard feelings if it's not the right time — but if your team is making calls to motivated sellers, Gunner should be grading them.</p>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">Keep My Account Active →</a>
+              </p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Hey ${data.firstName},\n\nYour Gunner trial ends in 24 hours.\n\nYour trial stats:\n• Calls graded: ${data.callsGraded}\n• Insights flagged: ${data.insightsCount}\n• Coaching moments caught: ${data.coachingMoments}\n\nYour card on file will be charged tomorrow unless you cancel.\n\nKeep My Account Active: ${data.dashboardLink}`
+      };
+    
+    case "sequence_day3_final_reminder":
+      return {
+        subject: `Trial ends tonight`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>Last call</strong> — your Gunner trial ends at midnight.</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">After today:</p>
+              <ul style="color: #333; font-size: 16px; line-height: 1.8;">
+                <li>Your dashboard stays active (you're a paying customer now)</li>
+                <li>All your graded calls and insights are saved</li>
+                <li>Your team keeps getting better, automatically</li>
+              </ul>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">If you're not ready, you can cancel anytime from your account settings. No hassle.</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">But if your reps are on the phone with motivated sellers, and you want to know what's actually being said — stay with us.</p>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">View My Dashboard →</a>
+              </p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Hey ${data.firstName},\n\nLast call — your Gunner trial ends at midnight.\n\nAfter today:\n• Your dashboard stays active\n• All your graded calls and insights are saved\n• Your team keeps getting better, automatically\n\nIf you're not ready, cancel anytime. No hassle.\n\nView My Dashboard: ${data.dashboardLink}`
+      };
+    
+    case "sequence_day4_paid_welcome":
+      return {
+        subject: `You're officially in 🎯`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <h1 style="color: #8B1A1A; font-size: 28px; margin: 0 0 16px;">Welcome to Gunner — for real this time.</h1>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Your trial converted, which means you're serious about making your acquisitions team better. We're here for it.</p>
+              <div style="background: #f8f8f8; border-left: 4px solid #8B1A1A; padding: 16px 20px; margin: 24px 0;">
+                <p style="color: #333; font-size: 15px; margin: 0 0 8px;"><strong>What to do this week:</strong></p>
+                <p style="color: #666; font-size: 15px; margin: 0 0 8px;">1. <strong>Grade 5+ calls</strong> — Build the habit, spot the patterns</p>
+                <p style="color: #666; font-size: 15px; margin: 0 0 8px;">2. <strong>Invite your team</strong> — Every rep should see their own grades</p>
+                <p style="color: #666; font-size: 15px; margin: 0;">3. <strong>Check the dashboard daily</strong> — Watch the trends, not just individual calls</p>
+              </div>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">Go to Dashboard →</a>
+              </p>
+              <p style="color: #666; font-size: 15px; line-height: 1.6;"><strong>Pro tip:</strong> The best wholesaling teams review calls every morning for 10 minutes. Try it — you'll catch issues before they cost you deals.</p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Welcome to Gunner — for real this time.\n\nHey ${data.firstName},\n\nYour trial converted, which means you're serious about making your acquisitions team better.\n\nWhat to do this week:\n1. Grade 5+ calls — Build the habit, spot the patterns\n2. Invite your team — Every rep should see their own grades\n3. Check the dashboard daily — Watch the trends\n\nGo to Dashboard: ${data.dashboardLink}\n\nPro tip: The best wholesaling teams review calls every morning for 10 minutes.`
+      };
+    
+    case "sequence_day7_week1_recap":
+      return {
+        subject: `Your first week in Gunner`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">You've been on Gunner for a week. Here's the snapshot:</p>
+              <div style="background: linear-gradient(135deg, #8B1A1A 0%, #6B1515 100%); border-radius: 8px; padding: 24px; margin: 24px 0; color: white;">
+                <p style="font-size: 18px; margin: 0 0 16px; font-weight: bold;">📊 Your Week 1 Stats</p>
+                <p style="font-size: 15px; margin: 0 0 8px;">Calls graded: <strong>${data.callsGradedWeek1}</strong></p>
+                <p style="font-size: 15px; margin: 0 0 8px;">Top insight: <strong>${data.topInsight}</strong></p>
+                <p style="font-size: 15px; margin: 0;">Team member with most improvement: <strong>${data.topImprover}</strong></p>
+              </div>
+              ${parseInt(data.callsGradedWeek1) >= 5 ? `<p style="color: #333; font-size: 16px; line-height: 1.6;">You're using Gunner the right way. Keep it up — the patterns get clearer over time. You'll start seeing which reps consistently miss motivation triggers, who's weak on price anchoring, and who's leaving deals on the table.</p>` : `<p style="color: #333; font-size: 16px; line-height: 1.6;">Looks like call volume was light this week. The more calls you grade, the more patterns you'll see. Try to hit 10 next week — that's when the real insights start showing up.</p>`}
+              <div style="background: #f8f8f8; border-left: 4px solid #8B1A1A; padding: 16px 20px; margin: 24px 0;">
+                <p style="color: #333; font-size: 15px; margin: 0 0 8px;"><strong>Quick wins for Week 2:</strong></p>
+                <p style="color: #666; font-size: 15px; margin: 0 0 8px;">• Set a goal: Grade every acquisition call over 5 minutes</p>
+                <p style="color: #666; font-size: 15px; margin: 0 0 8px;">• Review the "Missed Opportunities" — these are deals that slipped</p>
+                <p style="color: #666; font-size: 15px; margin: 0;">• Share one graded call with your team for coaching</p>
+              </div>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">View Full Dashboard →</a>
+              </p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Hey ${data.firstName},\n\nYou've been on Gunner for a week. Here's the snapshot:\n\nYour Week 1 Stats:\n• Calls graded: ${data.callsGradedWeek1}\n• Top insight: ${data.topInsight}\n• Top improver: ${data.topImprover}\n\nQuick wins for Week 2:\n• Grade every acquisition call over 5 minutes\n• Review the Missed Opportunities\n• Share one graded call with your team\n\nView Full Dashboard: ${data.dashboardLink}`
+      };
+    
+    case "sequence_day10_feature_spotlight":
+      return {
+        subject: `Are you using this?`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Most Gunner users miss this feature at first:</p>
+              <div style="background: #f8f8f8; border-radius: 8px; padding: 24px; margin: 24px 0; text-align: center;">
+                <h2 style="color: #8B1A1A; margin: 0 0 12px;">🎬 Coaching Clips</h2>
+                <p style="color: #666; font-size: 15px; margin: 0;">Jump straight to the moments that matter</p>
+              </div>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Every time Gunner grades a call, it flags specific moments worth reviewing — objection handling, price anchoring, rapport builders, motivation triggers, red flags.</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Instead of listening to full 30-minute acquisition calls, you can:</p>
+              <ul style="color: #333; font-size: 16px; line-height: 1.8;">
+                <li>Jump straight to the 30-second clip that matters</li>
+                <li>Share clips with reps for targeted coaching</li>
+                <li>Build a library of "how it's done" moments from your best closers</li>
+              </ul>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">Check Your Coaching Clips →</a>
+              </p>
+              <p style="color: #666; font-size: 15px; line-height: 1.6;">This is where training gets specific. Generic advice doesn't stick. Real examples from real calls with real motivated sellers do.</p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Hey ${data.firstName},\n\nMost Gunner users miss this feature at first:\n\nCoaching Clips\n\nEvery time Gunner grades a call, it flags specific moments worth reviewing — objection handling, price anchoring, rapport builders, red flags.\n\nInstead of listening to full calls, you can:\n• Jump straight to the 30-second clip that matters\n• Share clips with reps for targeted coaching\n• Build a library of "how it's done" moments\n\nCheck Your Coaching Clips: ${data.dashboardLink}`
+      };
+    
+    case "sequence_day14_checkin":
+      return {
+        subject: `How's it going?`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">You've been on Gunner for two weeks. Quick gut check:</p>
+              <h2 style="color: #8B1A1A; font-size: 22px; margin: 24px 0 16px;">Is your team getting better?</h2>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>If yes</strong> — keep going. The data compounds. Week 4 is when most teams see noticeable improvement in call quality scores and conversion rates.</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>If not sure</strong> — reply to this email. Tell me what's working and what's not. I read every response and we'll make it right.</p>
+              <div style="background: linear-gradient(135deg, #8B1A1A 0%, #6B1515 100%); border-radius: 8px; padding: 24px; margin: 24px 0; color: white;">
+                <p style="font-size: 18px; margin: 0 0 16px; font-weight: bold;">📊 Your stats so far</p>
+                <p style="font-size: 15px; margin: 0 0 8px;">Total calls graded: <strong>${data.totalCalls}</strong></p>
+                <p style="font-size: 15px; margin: 0 0 8px;">Average call score: <strong>${data.avgScore}</strong></p>
+                <p style="font-size: 15px; margin: 0;">Most common issue flagged: <strong>${data.commonIssue}</strong></p>
+              </div>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">View Dashboard →</a>
+              </p>
+              <p style="color: #666; font-size: 15px; line-height: 1.6;">You're investing in your team. We're here to make sure it pays off in closed deals.</p>
+              <p style="color: #666; font-size: 14px; line-height: 1.6; margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee;"><strong>P.S.</strong> If Gunner has helped your team close more deals, we'd love a quick testimonial. Just reply with a sentence or two and we'll feature you (with permission).</p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Hey ${data.firstName},\n\nYou've been on Gunner for two weeks. Quick gut check:\n\nIs your team getting better?\n\nIf yes — keep going. Week 4 is when most teams see noticeable improvement.\n\nIf not sure — reply to this email. I read every response.\n\nYour stats so far:\n• Total calls graded: ${data.totalCalls}\n• Average call score: ${data.avgScore}\n• Most common issue: ${data.commonIssue}\n\nView Dashboard: ${data.dashboardLink}\n\nP.S. If Gunner has helped your team, we'd love a quick testimonial.`
+      };
+    
+    // ENGAGEMENT TRIGGERS
+    case "trigger_no_calls_48h":
+      return {
+        subject: `Need help getting started?`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Noticed you haven't graded a call yet. Totally normal — sometimes the setup takes a minute.</p>
+              <h3 style="color: #8B1A1A; font-size: 18px; margin: 24px 0 16px;">Stuck on something?</h3>
+              <ul style="color: #333; font-size: 16px; line-height: 2;">
+                <li><strong>Connecting GHL:</strong> It takes 60 seconds — just click Connect CRM in settings</li>
+                <li><strong>Uploading manually:</strong> Drag and drop any call recording</li>
+                <li><strong>Not sure what to grade first:</strong> Start with your newest rep's last acquisition call. That's where the gold is.</li>
+              </ul>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">Grade Your First Call →</a>
+              </p>
+              <p style="color: #666; font-size: 15px; line-height: 1.6;">Reply to this email if you're stuck. We'll get you unstuck fast.</p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Hey ${data.firstName},\n\nNoticed you haven't graded a call yet. Totally normal — sometimes the setup takes a minute.\n\nStuck on something?\n• Connecting GHL: It takes 60 seconds\n• Uploading manually: Drag and drop any call recording\n• Not sure what to grade first: Start with your newest rep's last acquisition call\n\nGrade Your First Call: ${data.dashboardLink}\n\nReply to this email if you're stuck. We'll get you unstuck fast.`
+      };
+    
+    case "trigger_power_user":
+      return {
+        subject: `You're a power user 🚀`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
+            <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
+              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+            </div>
+            <div style="padding: 32px 24px;">
+              <div style="background: linear-gradient(135deg, #8B1A1A 0%, #6B1515 100%); border-radius: 8px; padding: 24px; margin: 0 0 24px; color: white; text-align: center;">
+                <p style="font-size: 48px; margin: 0;">🚀</p>
+                <h2 style="margin: 12px 0 0; font-size: 24px;">Power User Status Unlocked</h2>
+              </div>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>10+ calls graded in your first week.</strong> You're in the top 5% of Gunner users.</p>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">At this pace, you're going to have serious data on your acquisitions team within a month. Here's how to make the most of it:</p>
+              <div style="background: #f8f8f8; border-left: 4px solid #8B1A1A; padding: 16px 20px; margin: 24px 0;">
+                <p style="color: #333; font-size: 15px; margin: 0 0 12px;"><strong>1. Compare reps:</strong> Who's improving? Who's stuck? Who's burning leads?</p>
+                <p style="color: #333; font-size: 15px; margin: 0 0 12px;"><strong>2. Track over time:</strong> Are scores trending up week over week?</p>
+                <p style="color: #333; font-size: 15px; margin: 0;"><strong>3. Share the wins:</strong> When a rep nails a call with a motivated seller, show the team. Recognition drives repetition.</p>
+              </div>
+              <p style="color: #333; font-size: 16px; line-height: 1.6;">You're building a coaching machine. Keep going.</p>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="${data.dashboardLink}" style="background-color: #8B1A1A; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">View Team Leaderboard →</a>
+              </p>
+            </div>
+            <div style="background: #f8f8f8; padding: 20px 24px; text-align: center; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">© Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
+            </div>
+          </div>
+        `,
+        text: `Hey ${data.firstName},\n\n10+ calls graded in your first week. You're in the top 5% of Gunner users.\n\nAt this pace, you're going to have serious data on your acquisitions team within a month.\n\nHow to make the most of it:\n1. Compare reps: Who's improving? Who's stuck?\n2. Track over time: Are scores trending up?\n3. Share the wins: Recognition drives repetition.\n\nYou're building a coaching machine. Keep going.\n\nView Team Leaderboard: ${data.dashboardLink}`
       };
     
     // Churn emails - these still go to owner as notifications
@@ -614,5 +948,186 @@ export async function sendTrialEndingEmail(
       planName,
       amount
     }
+  });
+}
+
+
+// ============================================
+// 14-DAY EMAIL SEQUENCE HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Send Day 0 Welcome email (immediately after signup/trial start)
+ */
+export async function sendSequenceDay0Welcome(
+  email: string,
+  dashboardLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "sequence_day0_welcome",
+    data: { dashboardLink }
+  });
+}
+
+/**
+ * Send Day 1 Check-in email (24 hours after signup)
+ */
+export async function sendSequenceDay1Checkin(
+  email: string,
+  firstName: string,
+  dashboardLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "sequence_day1_checkin",
+    data: { firstName, dashboardLink }
+  });
+}
+
+/**
+ * Send Day 2 Trial Ending email (48 hours after signup)
+ */
+export async function sendSequenceDay2TrialEnding(
+  email: string,
+  firstName: string,
+  dashboardLink: string,
+  callsGraded: number,
+  insightsCount: number,
+  coachingMoments: number
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "sequence_day2_trial_ending",
+    data: {
+      firstName,
+      dashboardLink,
+      callsGraded: callsGraded.toString(),
+      insightsCount: insightsCount.toString(),
+      coachingMoments: coachingMoments.toString()
+    }
+  });
+}
+
+/**
+ * Send Day 3 Final Reminder email (morning of last trial day)
+ */
+export async function sendSequenceDay3FinalReminder(
+  email: string,
+  firstName: string,
+  dashboardLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "sequence_day3_final_reminder",
+    data: { firstName, dashboardLink }
+  });
+}
+
+/**
+ * Send Day 4 Paid Welcome email (first day as paying customer)
+ */
+export async function sendSequenceDay4PaidWelcome(
+  email: string,
+  firstName: string,
+  dashboardLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "sequence_day4_paid_welcome",
+    data: { firstName, dashboardLink }
+  });
+}
+
+/**
+ * Send Day 7 Week 1 Recap email
+ */
+export async function sendSequenceDay7Week1Recap(
+  email: string,
+  firstName: string,
+  dashboardLink: string,
+  callsGradedWeek1: number,
+  topInsight: string,
+  topImprover: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "sequence_day7_week1_recap",
+    data: {
+      firstName,
+      dashboardLink,
+      callsGradedWeek1: callsGradedWeek1.toString(),
+      topInsight: topInsight || "Building your baseline",
+      topImprover: topImprover || "Data still collecting"
+    }
+  });
+}
+
+/**
+ * Send Day 10 Feature Spotlight email
+ */
+export async function sendSequenceDay10FeatureSpotlight(
+  email: string,
+  firstName: string,
+  dashboardLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "sequence_day10_feature_spotlight",
+    data: { firstName, dashboardLink }
+  });
+}
+
+/**
+ * Send Day 14 Two-Week Check-in email
+ */
+export async function sendSequenceDay14Checkin(
+  email: string,
+  firstName: string,
+  dashboardLink: string,
+  totalCalls: number,
+  avgScore: number,
+  commonIssue: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "sequence_day14_checkin",
+    data: {
+      firstName,
+      dashboardLink,
+      totalCalls: totalCalls.toString(),
+      avgScore: avgScore.toFixed(1),
+      commonIssue: commonIssue || "Still analyzing patterns"
+    }
+  });
+}
+
+/**
+ * Send No Calls 48h Trigger email
+ */
+export async function sendTriggerNoCalls48h(
+  email: string,
+  firstName: string,
+  dashboardLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "trigger_no_calls_48h",
+    data: { firstName, dashboardLink }
+  });
+}
+
+/**
+ * Send Power User Trigger email (10+ calls in first week)
+ */
+export async function sendTriggerPowerUser(
+  email: string,
+  firstName: string,
+  dashboardLink: string
+): Promise<boolean> {
+  return sendEmail({
+    to: email,
+    type: "trigger_power_user",
+    data: { firstName, dashboardLink }
   });
 }
