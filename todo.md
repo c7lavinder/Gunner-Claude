@@ -1191,3 +1191,11 @@
 - [x] Generate summary when call is manually reclassified to admin_call
 - [x] Store summary in classificationReason field
 - [x] Display summary in the call list for admin calls
+
+
+## Admin Impersonation Feature
+- [x] Add impersonation UI to admin settings page
+- [x] Show list of team members with "View As" button
+- [x] Implement impersonation start/stop functionality
+- [x] Show impersonation banner when viewing as another user
+- [x] Restrict impersonation to admin users only

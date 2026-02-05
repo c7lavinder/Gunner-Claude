@@ -29,7 +29,9 @@ import {
   UserCog,
   Shield,
   Unlink,
-  Zap
+  Zap,
+  Eye,
+  LogOut
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -412,7 +414,7 @@ export default function TenantSettings() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* Mobile: Horizontal scroll tabs with text labels */}
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="w-max sm:w-full sm:max-w-3xl sm:grid sm:grid-cols-6">
+          <TabsList className="w-max sm:w-full sm:max-w-4xl sm:grid sm:grid-cols-7">
             <TabsTrigger value="general" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
               <Building2 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>General</span>
@@ -437,6 +439,12 @@ export default function TenantSettings() {
               <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Rubrics</span>
             </TabsTrigger>
+            {user?.role === 'admin' && (
+              <TabsTrigger value="impersonate" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+                <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>View As</span>
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -1508,6 +1516,97 @@ export default function TenantSettings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* View As / Impersonation (Admin Only) */}
+        {user?.role === 'admin' && (
+          <TabsContent value="impersonate" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Eye className="h-5 w-5" />
+                  View As Team Member
+                </CardTitle>
+                <CardDescription>
+                  View the app as any team member to see what they see. This is useful for troubleshooting and understanding their experience.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {teamLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : teamMembers && teamMembers.length > 0 ? (
+                  <div className="space-y-2">
+                    {teamMembers
+                      .filter((member: any) => member.id !== user?.id) // Don't show current user
+                      .map((member: any) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                              <span className="text-sm font-medium text-primary">
+                                {member.name?.charAt(0)?.toUpperCase() || member.email?.charAt(0)?.toUpperCase() || '?'}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-medium">{member.name || 'Unnamed User'}</p>
+                              <p className="text-sm text-muted-foreground">{member.email}</p>
+                            </div>
+                            <Badge variant="outline" className="ml-2">
+                              {member.teamRole?.replace(/_/g, ' ') || member.role || 'user'}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Store impersonation in localStorage and reload
+                              localStorage.setItem('impersonateUserId', member.id.toString());
+                              localStorage.setItem('impersonateUserName', member.name || member.email || 'User');
+                              toast.success(`Viewing as ${member.name || member.email}`);
+                              window.location.href = '/dashboard';
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View As
+                          </Button>
+                        </div>
+                      ))}
+                    {teamMembers.filter((m: any) => m.id !== user?.id).length === 0 && (
+                      <p className="text-muted-foreground text-center py-8">
+                        No other team members to view as. Invite team members first.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">
+                    No team members found. Invite team members to use this feature.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-amber-800">About View As</p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      When viewing as another user, you'll see the app exactly as they see it, including their calls, stats, and permissions. 
+                      A banner will appear at the top of the screen to remind you that you're viewing as someone else. 
+                      Click "Stop Viewing" in the banner to return to your own view.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Edit Member Dialog */}

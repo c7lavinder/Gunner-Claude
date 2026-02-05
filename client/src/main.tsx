@@ -40,6 +40,11 @@ queryClient.getMutationCache().subscribe(event => {
 // Helper to get impersonation data from localStorage
 const getImpersonationUserId = (): string | null => {
   try {
+    // Check simple key first (used by settings page)
+    const simpleId = localStorage.getItem('impersonateUserId');
+    if (simpleId) return simpleId;
+    
+    // Check structured data (used by impersonation banner)
     const data = localStorage.getItem('gunner_impersonation');
     if (data) {
       const parsed = JSON.parse(data);
