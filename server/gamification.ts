@@ -174,7 +174,56 @@ export const ACQUISITION_MANAGER_BADGES: BadgeDefinition[] = [
   },
 ];
 
-export const ALL_BADGES = [...UNIVERSAL_BADGES, ...LEAD_MANAGER_BADGES, ...ACQUISITION_MANAGER_BADGES];
+// Lead Generator Badges
+export const LEAD_GENERATOR_BADGES: BadgeDefinition[] = [
+  {
+    code: "conversation_starter",
+    name: "Conversation Starter",
+    description: "Successful cold call conversations (graded C or better)",
+    icon: "💬",
+    category: "lead_manager", // Using lead_manager category for now
+    tiers: { bronze: { count: 50 }, silver: { count: 200 }, gold: { count: 1000 } },
+    criteria: { type: "consecutive_grade", minGrade: "C" },
+  },
+  {
+    code: "appointment_setter",
+    name: "Appointment Setter",
+    description: "Appointments successfully booked",
+    icon: "📅",
+    category: "lead_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "call_outcome", criteriaName: "appointment_set" },
+  },
+  {
+    code: "objection_handler",
+    name: "Objection Handler",
+    description: "Score 12+/15 on Objection Handling",
+    icon: "🛡️",
+    category: "lead_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "criteria_score", criteriaName: "Objection Handling", minScore: 12 },
+  },
+  {
+    code: "qualification_pro",
+    name: "Qualification Pro",
+    description: "Score 20+/25 on Qualification Questions",
+    icon: "🎯",
+    category: "lead_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "criteria_score", criteriaName: "Qualification Questions", minScore: 20 },
+  },
+  {
+    code: "cold_call_warrior",
+    name: "Cold Call Warrior",
+    description: "Weeks with 200+ graded cold calls",
+    icon: "⚔️",
+    category: "lead_manager",
+    tiers: { bronze: { count: 5 }, silver: { count: 15 }, gold: { count: 30 } },
+    criteria: { type: "weekly_volume", weeklyCount: 200 },
+  },
+];
+
+export const ALL_BADGES = [...UNIVERSAL_BADGES, ...LEAD_MANAGER_BADGES, ...ACQUISITION_MANAGER_BADGES, ...LEAD_GENERATOR_BADGES];
 
 // ============ XP SYSTEM ============
 

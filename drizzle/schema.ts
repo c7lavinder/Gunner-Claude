@@ -203,11 +203,17 @@ export type InsertTenantCallType = typeof tenantCallTypes.$inferInsert;
  */
 export const calls = mysqlTable("calls", {
   id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
+  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenanc  // Call source - where the call data came from
+  callSource: mysqlEnum("callSource", ["ghl", "batchdialer"]).default("ghl"),
   // GHL webhook data (kept for backwards compatibility, works with any CRM)
   ghlCallId: varchar("ghlCallId", { length: 255 }).unique(),
   ghlContactId: varchar("ghlContactId", { length: 255 }),
   ghlLocationId: varchar("ghlLocationId", { length: 255 }),
+  // BatchDialer data
+  batchDialerCallId: int("batchDialerCallId").unique(),
+  batchDialerCampaignId: int("batchDialerCampaignId"),
+  batchDialerCampaignName: varchar("batchDialerCampaignName", { length: 255 }),
+  batchDialerAgentName: varchar("batchDialerAgentName", { length: 255 }),
   // Call metadata
   contactName: varchar("contactName", { length: 255 }),
   contactPhone: varchar("contactPhone", { length: 50 }),

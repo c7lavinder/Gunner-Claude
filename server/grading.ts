@@ -141,6 +141,59 @@ export const ACQUISITION_MANAGER_RUBRIC = {
   ],
 };
 
+export const LEAD_GENERATOR_RUBRIC = {
+  name: "Lead Generator Cold Call Rubric",
+  description: "For Lead Generators - Cold calling for appointment setting",
+  criteria: [
+    {
+      name: "Introduction & Permission",
+      maxPoints: 15,
+      description: "Professional greeting, stated name and company, asked permission to continue",
+      keyPhrases: ["My name is", "calling from", "Do you have a quick minute?", "Is this a good time?"],
+    },
+    {
+      name: "Qualification Questions",
+      maxPoints: 25,
+      description: "Asked about ownership, timeline, property condition, motivation - gathered key info",
+      keyPhrases: ["Do you own", "looking to sell", "condition of the property", "Why are you selling?", "timeline"],
+    },
+    {
+      name: "Value Proposition",
+      maxPoints: 20,
+      description: "Explained cash offer benefits: no repairs, no commissions, quick close, as-is purchase",
+      keyPhrases: ["cash offer", "as-is", "no repairs", "no commissions", "quick close", "no closing costs"],
+    },
+    {
+      name: "Objection Handling",
+      maxPoints: 15,
+      description: "Addressed concerns appropriately, didn't get defensive, acknowledged and redirected",
+      keyPhrases: ["I understand", "That makes sense", "Many people feel that way", "Let me explain"],
+    },
+    {
+      name: "Appointment Setting",
+      maxPoints: 15,
+      description: "Confirmed interest, proposed specific time, provided next steps, got commitment",
+      keyPhrases: ["schedule a time", "meet with", "walk through", "available", "Does that work?"],
+    },
+    {
+      name: "Professional Tone",
+      maxPoints: 10,
+      description: "Friendly but professional, respectful, not pushy, good pacing",
+      keyPhrases: [],
+    },
+  ],
+  redFlags: [
+    "Talking too fast or rushing",
+    "Being pushy or aggressive",
+    "Not asking permission to continue",
+    "Skipping qualification questions",
+    "Not explaining value proposition",
+    "Getting defensive with objections",
+    "Not attempting to set appointment",
+    "Unprofessional language or tone",
+  ],
+};
+
 // ============ GRADING FUNCTION ============
 
 // Must match the callOutcome enum in drizzle/schema.ts
@@ -180,7 +233,7 @@ function getGradeFromScore(score: number): "A" | "B" | "C" | "D" | "F" {
 
 export async function gradeCall(
   transcript: string,
-  callType: "qualification" | "offer",
+  callType: "qualification" | "offer" | "lead_generation",
   teamMemberName: string,
   context?: {
     trainingMaterials?: { title: string; content: string | null; category: string | null }[];
@@ -188,7 +241,7 @@ export async function gradeCall(
     recentFeedback?: { feedbackType: string | null; explanation: string | null; correctBehavior: string | null }[];
   }
 ): Promise<GradingResult> {
-  const rubric = callType === "qualification" ? LEAD_MANAGER_RUBRIC : ACQUISITION_MANAGER_RUBRIC;
+  const rubric = callType === "lead_generation" ? LEAD_GENERATOR_RUBRIC : (callType === "qualification" ? LEAD_MANAGER_RUBRIC : ACQUISITION_MANAGER_RUBRIC);
 
   // Build training materials context
   let trainingContext = "";

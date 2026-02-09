@@ -1225,3 +1225,91 @@
 - [x] Find where issue descriptions are being truncated with "..."
 - [x] Increase character limit to show full descriptions (line-clamp-5 → line-clamp-10)
 - [x] Test that all issue text displays completely
+
+
+## BatchDialer Integration & Lead Generator Role
+- [ ] Read cold calling script PDF to understand grading criteria
+- [ ] Research BatchDialer API documentation
+- [ ] Add BatchDialer API key to environment variables
+- [ ] Create BatchDialer service for API calls
+- [ ] Implement call fetching and polling (every 30 minutes)
+- [ ] Download and process call recordings
+- [ ] Map BatchDialer agents to Gunner team members
+
+### Lead Generator Role & Authentication
+- [ ] Add "lead_generator" role to user schema
+- [ ] Create Lead Generator user accounts
+- [ ] Build Lead Generator login and dashboard
+- [ ] Set up role-based permissions (view own calls only)
+- [ ] Add Lead Generator to team management UI
+
+### Lead Generator Grading Rubric
+- [ ] Define grading criteria based on cold calling script
+- [ ] Create Lead Generator rubric in grading system
+- [ ] Build coaching feedback for lead gen calls
+- [ ] Add lead tracking (leads sent to acquisition team)
+
+### Lead Generator Gamification
+- [ ] Design Lead Generator-specific badges (6-8 badges with tiers)
+- [ ] Define XP rewards for lead gen activities
+- [ ] Add lead gen metrics to leaderboard
+- [ ] Create lead gen profile/rewards page
+
+
+## BatchDialer Integration & Lead Generator Role
+
+### Database & API Setup
+- [x] Store BatchDialer API key securely (BATCHDIALER_API_KEY)
+- [x] Create BatchDialer service with API client (batchDialerService.ts)
+- [x] Add database schema for BatchDialer calls (callSource, batchDialerCallId, batchDialerCampaignId, batchDialerCampaignName, batchDialerAgentName)
+- [x] Lead Generator role already exists in schema (teamRole enum)
+- [ ] Fix BatchDialer API timeout issue (API not responding - needs investigation or contact support)
+
+### Lead Generator Grading Rubric
+- [x] Analyze cold calling script PDF
+- [x] Create Lead Generator-specific grading criteria based on script:
+  - [x] Introduction & Permission (greeting, name, permission to continue)
+  - [x] Qualification Questions (ownership, timeline, condition, motivation)
+  - [x] Value Proposition (cash offer benefits, no repairs/commissions)
+  - [x] Objection Handling (price concerns, need to think, other offers)
+  - [x] Appointment Setting (confirm interest, schedule, provide details)
+  - [x] Professional Tone (friendly, respectful, not pushy)
+- [x] Add Lead Generator rubric to grading.ts
+- [x] Create separate grading prompt for cold calling vs offer calls
+
+### Lead Generator Badges & XP
+- [x] Design Lead Generator-specific badges:
+  - [x] Conversation Starter (Bronze/Silver/Gold) - X successful conversations
+  - [x] Appointment Setter (Bronze/Silver/Gold) - X appointments booked
+  - [x] Objection Handler (Bronze/Silver/Gold) - Handle X objections successfully
+  - [x] Qualification Pro (Bronze/Silver/Gold) - High scores on qualification
+  - [x] Cold Call Warrior (Bronze/Silver/Gold) - High weekly volume
+- [x] Add Lead Generator XP rewards (same as existing system)
+- [x] Update gamification.ts to include Lead Generator badges
+
+### BatchDialer Polling & Sync
+- [ ] Implement automatic polling for BatchDialer calls (every 30 minutes like GHL)
+- [ ] Add manual "Sync from BatchDialer" button in Call History
+- [ ] Map BatchDialer agent names to Gunner team members (settings page)
+- [ ] Download call recordings from BatchDialer API
+- [ ] Process BatchDialer calls through transcription pipeline
+- [ ] Process BatchDialer calls through Lead Generator grading rubric
+
+### Lead Generator Authentication & Dashboard
+- [ ] Add email/password login for Lead Generators (already exists - use existing auth)
+- [ ] Create Lead Generator dashboard view (simplified - own calls only)
+- [ ] Show Lead Generator stats (calls made, appointments set, avg score)
+- [ ] Show Lead Generator badges and XP progress
+- [ ] Hide admin features from Lead Generators (training, team management, etc.)
+
+### Lead Tracking for Lead Generators
+- [ ] Add "leads sent" field to track qualified leads passed to acquisition team
+- [ ] Add lead tracking section to Lead Generator dashboard
+- [ ] Show conversion rate (leads sent → appointments set → offers accepted)
+
+### Testing & Validation
+- [ ] Test BatchDialer API connection once timeout issue resolved
+- [ ] Test Lead Generator grading with sample cold call
+- [ ] Test Lead Generator badge awarding
+- [ ] Test Lead Generator XP system
+- [ ] Test Lead Generator dashboard permissions

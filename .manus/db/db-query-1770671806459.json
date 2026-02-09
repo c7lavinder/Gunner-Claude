@@ -1,0 +1,9 @@
+{
+  "query": "\n-- Add BatchDialer fields to calls table one at a time\nALTER TABLE calls ADD COLUMN IF NOT EXISTS callSource ENUM('ghl', 'batchdialer') NOT NULL DEFAULT 'ghl' AFTER tenantId;\nALTER TABLE calls ADD COLUMN IF NOT EXISTS batchDialerCallId INT AFTER ghlLocationId;\nALTER TABLE calls ADD COLUMN IF NOT EXISTS batchDialerCampaignId INT AFTER batchDialerCallId;\nALTER TABLE calls ADD COLUMN IF NOT EXISTS batchDialerCampaignName VARCHAR(255) AFTER batchDialerCampaignId;\nALTER TABLE calls ADD COLUMN IF NOT EXISTS batchDialerAgentName VARCHAR(255) AFTER batchDialerCampaignName;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute \n-- Add BatchDialer fields to calls table one at a time\nALTER TABLE calls ADD COLUMN IF NOT EXISTS callSource ENUM('ghl', 'batchdialer') NOT NULL DEFAULT 'ghl' AFTER tenantId;\nALTER TABLE calls ADD COLUMN IF NOT EXISTS batchDialerCallId INT AFTER ghlLocationId;\nALTER TABLE calls ADD COLUMN IF NOT EXISTS batchDialerCampaignId INT AFTER batchDialerCallId;\nALTER TABLE calls ADD COLUMN IF NOT EXISTS batchDialerCampaignName VARCHAR(255) AFTER batchDialerCampaignId;\nALTER TABLE calls ADD COLUMN IF NOT EXISTS batchDialerAgentName VARCHAR(255) AFTER batchDialerCampaignName;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 3046
+}
