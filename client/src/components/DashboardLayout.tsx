@@ -32,6 +32,16 @@ import { useImpersonation } from "./ImpersonationBanner";
 const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string) => {
   const isAdmin = teamRole === 'admin';
   const isSuperAdmin = userRole === 'super_admin';
+  const isLeadGenerator = teamRole === 'lead_generator';
+  
+  // Lead Generators get a simplified menu
+  if (isLeadGenerator) {
+    return [
+      { icon: LayoutDashboard, label: "My Dashboard", path: "/lead-gen-dashboard" },
+      { icon: Phone, label: "My Calls", path: "/calls" },
+      { icon: Users, label: "My Profile", path: "/team" },
+    ];
+  }
   
   const items = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },

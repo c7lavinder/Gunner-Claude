@@ -20,12 +20,14 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   acquisition_manager: "Acquisition Manager",
   lead_manager: "Lead Manager",
+  lead_generator: "Lead Generator",
 };
 
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-purple-100 text-purple-700",
   acquisition_manager: "bg-blue-100 text-blue-700",
   lead_manager: "bg-green-100 text-green-700",
+  lead_generator: "bg-orange-100 text-orange-700",
 };
 
 export default function TeamManagement() {
@@ -207,6 +209,7 @@ export default function TeamManagement() {
                           <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
                           <SelectItem value="lead_manager">Lead Manager</SelectItem>
+                          <SelectItem value="lead_generator">Lead Generator</SelectItem>
                         </SelectContent>
                       </Select>
                       

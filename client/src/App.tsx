@@ -31,6 +31,7 @@ import VerificationPending from "./pages/VerificationPending";
 import Paywall from "./pages/Paywall";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import LeadGenDashboard from "./pages/LeadGenDashboard";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 
 // Public routes that don't need DashboardLayout
@@ -62,6 +63,7 @@ function ProtectedRouter() {
   return (
     <Switch>
       <Route path="/dashboard" component={Home} />
+      <Route path="/lead-gen-dashboard" component={LeadGenDashboard} />
       <Route path="/calls" component={CallInbox} />
       <Route path="/calls/:id" component={CallDetail} />
       <Route path="/team" component={TeamMembers} />

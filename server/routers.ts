@@ -448,14 +448,13 @@ export const appRouter = router({
         audioData: z.string(), // Base64 encoded audio
         audioType: z.string(), // MIME type
         fileName: z.string(),
-        teamMemberId: z.number(),
         contactName: z.string().optional(),
         contactPhone: z.string().optional(),
         propertyAddress: z.string().optional(),
         duration: z.number().optional(),
         callDate: z.string().optional(), // ISO date string
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
           // Upload audio to S3
           const buffer = Buffer.from(input.audioData, "base64");
@@ -466,10 +465,10 @@ export const appRouter = router({
           const { url: recordingUrl } = await storagePut(fileKey, buffer, input.audioType);
           console.log(`[ManualUpload] Uploaded audio to: ${recordingUrl}`);
 
-          // Get team member info
-          const teamMember = await getTeamMemberById(input.teamMemberId);
+          // Get team member info from logged-in user
+          const teamMember = await getTeamMemberByUserId(ctx.user.id);
           if (!teamMember) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found" });
+            throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found for this user" });
           }
 
           // Create call record
@@ -479,7 +478,7 @@ export const appRouter = router({
             propertyAddress: input.propertyAddress,
             recordingUrl,
             duration: input.duration,
-            teamMemberId: input.teamMemberId,
+            teamMemberId: teamMember.id,
             teamMemberName: teamMember.name,
             callType: teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification",
             status: "pending",

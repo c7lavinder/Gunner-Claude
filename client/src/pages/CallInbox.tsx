@@ -443,7 +443,7 @@ function AICoachQA() {
 function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [teamMemberId, setTeamMemberId] = useState<string>("");
+
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
@@ -465,7 +465,6 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
 
   const resetForm = () => {
     setAudioFile(null);
-    setTeamMemberId("");
     setContactName("");
     setContactPhone("");
     setPropertyAddress("");
@@ -498,11 +497,6 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
       toast.error("Please select an audio file");
       return;
     }
-    if (!teamMemberId) {
-      toast.error("Please select a team member");
-      return;
-    }
-
     setIsUploading(true);
 
     try {
@@ -513,7 +507,6 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
           audioData: base64,
           audioType: audioFile.type || "audio/mpeg",
           fileName: audioFile.name,
-          teamMemberId: parseInt(teamMemberId),
           contactName: contactName || undefined,
           contactPhone: contactPhone || undefined,
           propertyAddress: propertyAddress || undefined,
@@ -579,22 +572,7 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
           </div>
 
-          {/* Team Member Selection */}
-          <div className="space-y-2">
-            <Label>Team Member *</Label>
-            <Select value={teamMemberId} onValueChange={setTeamMemberId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select team member" />
-              </SelectTrigger>
-              <SelectContent>
-                {teamMembers?.map((member) => (
-                  <SelectItem key={member.id} value={member.id.toString()}>
-                    {member.name} ({member.teamRole === "acquisition_manager" ? "Acquisition" : "Lead Manager"})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Team member is automatically set from logged-in user */}
 
           {/* Optional Fields */}
           <div className="grid grid-cols-2 gap-4">
@@ -629,7 +607,7 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
           <Button variant="outline" onClick={() => setOpen(false)} disabled={isUploading}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isUploading || !audioFile || !teamMemberId}>
+          <Button onClick={handleSubmit} disabled={isUploading || !audioFile}>
             {isUploading ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
             ) : (

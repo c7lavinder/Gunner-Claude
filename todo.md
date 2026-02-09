@@ -1322,3 +1322,12 @@
 ## Call History Tab Visibility
 - [x] Hide Pending, Failed, and Admin tabs for non-admin users
 - [x] Keep all tabs visible for admin and super_admin users
+
+## Lead Generator Complete Build
+- [x] Verify Team Management supports adding Lead Generator role
+- [x] Build Lead Generator dashboard (filter calls to show only their own)
+- [x] Add Lead Generator stats widget (calls today, appointments, avg score, XP)
+- [x] Hide admin navigation for Lead Generators (Team, Analytics, Training, Social, KPI, Settings)
+- [x] Add manual call upload functionality for Lead Generators
+- [ ] Add lead conversion tracking (appointments → deals) - DEFERRED: requires deal/opportunity schema
+- [ ] Test Lead Generator user flow end-to-end
