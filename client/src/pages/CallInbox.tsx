@@ -54,6 +54,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Streamdown } from "streamdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -752,6 +753,7 @@ function MultiSelectFilter({
 }
 
 export default function CallInbox() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("calls");
   const { data: calls, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery({ limit: 50 });
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
@@ -916,28 +918,36 @@ export default function CallInbox() {
             {/* Mobile: Horizontal scroll tabs */}
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
               <TabsList className="mb-4 w-max sm:w-auto">
-                <TabsTrigger value="pending" className="text-xs sm:text-sm px-2 sm:px-3">
-                  <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">Pending </span>({pendingCalls.length})
-                </TabsTrigger>
+                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                  <TabsTrigger value="pending" className="text-xs sm:text-sm px-2 sm:px-3">
+                    <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Pending </span>({pendingCalls.length})
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="calls" className="text-xs sm:text-sm px-2 sm:px-3">
                   <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   <span className="hidden sm:inline">Graded </span>({gradedCalls.length})
                 </TabsTrigger>
-                <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">
-                  Admin ({adminCalls.length})
-                </TabsTrigger>
+                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                  <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">
+                    Admin ({adminCalls.length})
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="skipped" className="text-xs sm:text-sm px-2 sm:px-3">
                   Skipped ({skippedCalls.length})
                 </TabsTrigger>
-                <TabsTrigger value="failed" className="text-xs sm:text-sm px-2 sm:px-3">
-                  <XCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  ({failedCalls.length})
-                </TabsTrigger>
-                <TabsTrigger value="feedback" className="text-xs sm:text-sm px-2 sm:px-3">
-                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  ({pendingFeedback.length})
-                </TabsTrigger>
+                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                  <TabsTrigger value="failed" className="text-xs sm:text-sm px-2 sm:px-3">
+                    <XCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    ({failedCalls.length})
+                  </TabsTrigger>
+                )}
+                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                  <TabsTrigger value="feedback" className="text-xs sm:text-sm px-2 sm:px-3">
+                    <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    ({pendingFeedback.length})
+                  </TabsTrigger>
+                )}
               </TabsList>
             </div>
 

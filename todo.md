@@ -1318,3 +1318,7 @@
 - [x] Create Privacy Policy page
 - [x] Create Terms of Service page
 - [x] Update landing page footer with links to Privacy Policy and TOS
+
+## Call History Tab Visibility
+- [x] Hide Pending, Failed, and Admin tabs for non-admin users
+- [x] Keep all tabs visible for admin and super_admin users
