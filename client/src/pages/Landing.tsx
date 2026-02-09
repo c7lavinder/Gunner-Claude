@@ -360,15 +360,11 @@ export default function Landing() {
               © {new Date().getFullYear()} Gunner. All rights reserved.
             </p>
             <div className="flex gap-6">
-              <Link href="/privacy">
-                <a className="text-sm text-muted-foreground hover:text-foreground">
-                  Privacy Policy
-                </a>
+              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground">
+                Privacy Policy
               </Link>
-              <Link href="/terms">
-                <a className="text-sm text-muted-foreground hover:text-foreground">
-                  Terms of Service
-                </a>
+              <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground">
+                Terms of Service
               </Link>
             </div>
           </div>
