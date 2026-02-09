@@ -1313,3 +1313,8 @@
 - [ ] Test Lead Generator badge awarding
 - [ ] Test Lead Generator XP system
 - [ ] Test Lead Generator dashboard permissions
+
+## Landing Page Legal Links
+- [x] Create Privacy Policy page
+- [x] Create Terms of Service page
+- [x] Update landing page footer with links to Privacy Policy and TOS
