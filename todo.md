@@ -1339,3 +1339,8 @@
 - [x] Map BatchDialer agent names to Gunner team members
 - [x] Download and process call recordings from BatchDialer
 - [ ] Test BatchDialer sync end-to-end
+
+## BatchDialer Sync Optimization
+- [x] Update BatchDialer API key
+- [x] Change sync to fetch only last 24 hours (not 7 days)
+- [x] Test sync with new API key and 24-hour window

@@ -33,8 +33,8 @@ async function getLastSyncTime(): Promise<Date> {
     return new Date(recentCall[0].callTimestamp);
   }
 
-  // Default to 7 days ago
-  return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  // Default to 24 hours ago (to avoid overwhelming with hundreds of calls)
+  return new Date(Date.now() - 24 * 60 * 60 * 1000);
 }
 
 /**
