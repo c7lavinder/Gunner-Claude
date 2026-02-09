@@ -620,6 +620,49 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+// BatchDialer Sync Button Component
+function BatchDialerSyncButton({ onSyncComplete }: { onSyncComplete: () => void }) {
+  const { user } = useAuth();
+  const isAdmin = user?.teamRole === 'admin';
+
+  const syncMutation = trpc.calls.syncBatchDialer.useMutation({
+    onSuccess: (stats) => {
+      if (stats.imported === 0 && stats.skipped === 0 && stats.errors === 0) {
+        toast.info("No new calls found from BatchDialer");
+      } else {
+        toast.success(
+          `BatchDialer sync complete! Imported: ${stats.imported}, Skipped: ${stats.skipped}${stats.errors > 0 ? `, Errors: ${stats.errors}` : ""}`
+        );
+      }
+      onSyncComplete();
+    },
+    onError: (error) => {
+      toast.error(`BatchDialer sync failed: ${error.message}`);
+    },
+  });
+
+  // Only show for admin users
+  if (!isAdmin) {
+    return null;
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => syncMutation.mutate()}
+      disabled={syncMutation.isPending}
+      className="h-8 sm:h-9"
+    >
+      {syncMutation.isPending ? (
+        <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Syncing...</>
+      ) : (
+        <><Cloud className="h-4 w-4 mr-2" />Sync BatchDialer</>
+      )}
+    </Button>
+  );
+}
+
 // GHL Sync Status Component
 function GHLSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
   const { data: status, refetch: refetchStatus } = trpc.ghlSync.status.useQuery();
@@ -875,6 +918,7 @@ export default function CallInbox() {
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <GHLSyncStatus onSyncComplete={handleRefresh} />
+          <BatchDialerSyncButton onSyncComplete={handleRefresh} />
           <ManualUploadDialog onSuccess={handleRefresh} />
           <Button 
             variant="outline" 

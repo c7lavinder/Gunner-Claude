@@ -14,6 +14,7 @@ import { initializeBadges } from "../gamification";
 import { handleStripeWebhook } from "../stripe/webhook";
 import selfServeAuthRoutes from "../selfServeAuthRoutes";
 import { runEmailSequenceJobs } from "../emailSequenceJobs";
+import { startBatchDialerPolling } from "../batchDialerSync";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -88,6 +89,11 @@ async function startServer() {
     setTimeout(() => {
       startPolling(30);
     }, 10000);
+    
+    // Start BatchDialer automatic polling every 30 minutes
+    setTimeout(() => {
+      startBatchDialerPolling();
+    }, 15000);
     
     // Start email sequence job - runs every hour
     // Initial run after 30 seconds, then every hour

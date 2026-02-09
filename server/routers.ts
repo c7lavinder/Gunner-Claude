@@ -561,6 +561,18 @@ export const appRouter = router({
 
         return { success: true, newStatus, classification: input.classification };
       }),
+
+    // Manual BatchDialer sync
+    syncBatchDialer: protectedProcedure.mutation(async ({ ctx }) => {
+      // Only admin can trigger manual sync
+      if (ctx.user?.teamRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      
+      const { syncBatchDialerCalls } = await import("./batchDialerSync");
+      const stats = await syncBatchDialerCalls();
+      return stats;
+    }),
   }),
 
   // ============ GHL SYNC ============

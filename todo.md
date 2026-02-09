@@ -1331,3 +1331,11 @@
 - [x] Add manual call upload functionality for Lead Generators
 - [ ] Add lead conversion tracking (appointments → deals) - DEFERRED: requires deal/opportunity schema
 - [ ] Test Lead Generator user flow end-to-end
+
+## BatchDialer Sync Implementation
+- [x] Review existing BatchDialer service and API integration
+- [x] Implement automatic polling mechanism (every 30 minutes)
+- [x] Add manual "Sync from BatchDialer" button in Call History
+- [x] Map BatchDialer agent names to Gunner team members
+- [x] Download and process call recordings from BatchDialer
+- [ ] Test BatchDialer sync end-to-end

@@ -215,6 +215,14 @@ export async function getCallByGhlId(ghlCallId: string): Promise<Call | null> {
   return result[0] || null;
 }
 
+export async function getCallByBatchDialerId(batchDialerCallId: number): Promise<Call | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(calls).where(eq(calls.batchDialerCallId, batchDialerCallId)).limit(1);
+  return result[0] || null;
+}
+
 export async function updateCall(id: number, updates: Partial<InsertCall>): Promise<void> {
   const db = await getDb();
   if (!db) return;
