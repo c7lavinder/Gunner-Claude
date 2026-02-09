@@ -1219,3 +1219,9 @@
 - [ ] Fix badge_progress table schema mismatch
 - [ ] Make badges evaluate automatically when calls are graded (like XP)
 - [ ] Remove need for manual "Evaluate Badges" button
+
+
+## Fix Issue Description Truncation
+- [x] Find where issue descriptions are being truncated with "..."
+- [x] Increase character limit to show full descriptions (line-clamp-5 → line-clamp-10)
+- [x] Test that all issue text displays completely
