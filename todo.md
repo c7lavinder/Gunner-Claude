@@ -1405,3 +1405,6 @@
 
 ## UI Fix - Team Page Spacing
 - [x] Add more spacing between Team page header and tabs
+
+## Team Page - Lead Generator Role Card
+- [x] Add Lead Generator role card to Team Roles section on Team page

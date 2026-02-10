@@ -746,7 +746,7 @@ function TeamMembersContent() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="p-4 border rounded-lg">
               <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 mb-2">
                 Lead Manager
@@ -763,6 +763,15 @@ function TeamMembersContent() {
               <p className="text-sm text-muted-foreground">
                 Handles offer calls and closings. Graded on Offer Call criteria including 
                 motivation restatement, offer setup, and price delivery.
+              </p>
+            </div>
+            <div className="p-4 border rounded-lg">
+              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 mb-2">
+                Lead Generator
+              </Badge>
+              <p className="text-sm text-muted-foreground">
+                Handles cold calls to generate leads. Graded on Introduction & Rapport, 
+                Qualification Questions, Objection Handling, and Appointment Setting.
               </p>
             </div>
           </div>
