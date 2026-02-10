@@ -264,11 +264,19 @@ function GenerateInsightsBtn({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function TeamSkillsSection() {
+function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
-  const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "skill", status: "active" });
+  
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  if (isAdmin && roleFilter && roleFilter !== "all") {
+    teamRole = roleFilter;
+  } else if (!isAdmin && user?.teamRole && user.teamRole !== 'admin') {
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+  }
+  
+  const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "skill", status: "active", teamRole });
   const handleRefresh = () => utils.teamTraining.list.invalidate();
 
   return (
@@ -288,11 +296,19 @@ function TeamSkillsSection() {
   );
 }
 
-function TeamIssuesSection() {
+function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
-  const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "issue", status: "active" });
+  
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  if (isAdmin && roleFilter && roleFilter !== "all") {
+    teamRole = roleFilter;
+  } else if (!isAdmin && user?.teamRole && user.teamRole !== 'admin') {
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+  }
+  
+  const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "issue", status: "active", teamRole });
   const handleRefresh = () => utils.teamTraining.list.invalidate();
   const sortedItems = items?.sort((a, b) => {
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -316,11 +332,19 @@ function TeamIssuesSection() {
   );
 }
 
-function TeamWinsSection() {
+function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
-  const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "win", status: "active" });
+  
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  if (isAdmin && roleFilter && roleFilter !== "all") {
+    teamRole = roleFilter;
+  } else if (!isAdmin && user?.teamRole && user.teamRole !== 'admin') {
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+  }
+  
+  const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "win", status: "active", teamRole });
   const handleRefresh = () => utils.teamTraining.list.invalidate();
 
   return (
@@ -508,10 +532,20 @@ function MeetingFacilitator({ agendaItems, onClose }: { agendaItems: Array<{ id:
   );
 }
 
-function TeamAgendaSection() {
+function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const [showFacilitator, setShowFacilitator] = useState(false);
-  const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "agenda", status: "active" });
+  const { user } = useAuth();
+  const isAdmin = user?.teamRole === 'admin';
+  
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  if (isAdmin && roleFilter && roleFilter !== "all") {
+    teamRole = roleFilter;
+  } else if (!isAdmin && user?.teamRole && user.teamRole !== 'admin') {
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+  }
+  
+  const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "agenda", status: "active", teamRole });
   const handleRefresh = () => utils.teamTraining.list.invalidate();
   const completeMutation = trpc.teamTraining.complete.useMutation({ onSuccess: () => { toast.success("Agenda item completed"); handleRefresh(); } });
   const sortedItems = items?.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
@@ -558,6 +592,7 @@ function TeamTrainingContent() {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
+  const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator">("all");
   const handleInsightsGenerated = () => utils.teamTraining.list.invalidate();
 
   return (
@@ -579,6 +614,21 @@ function TeamTrainingContent() {
         {isAdmin && <GenerateInsightsBtn onSuccess={handleInsightsGenerated} />}
       </div>
 
+      {isAdmin && (
+        <Card>
+          <CardContent className="pt-6">
+            <Tabs value={selectedRole} onValueChange={(value) => setSelectedRole(value as any)} className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="all"><Users className="h-4 w-4 mr-2" />All Roles</TabsTrigger>
+                <TabsTrigger value="lead_manager">Lead Manager</TabsTrigger>
+                <TabsTrigger value="acquisition_manager">Acquisition Manager</TabsTrigger>
+                <TabsTrigger value="lead_generator">Lead Generator</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -587,14 +637,14 @@ function TeamTrainingContent() {
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            <TeamIssuesSection />
-            <TeamWinsSection />
+            <TeamIssuesSection roleFilter={selectedRole} />
+            <TeamWinsSection roleFilter={selectedRole} />
           </div>
-          <TeamSkillsSection />
+          <TeamSkillsSection roleFilter={selectedRole} />
         </TabsContent>
 
         <TabsContent value="agenda">
-          <TeamAgendaSection />
+          <TeamAgendaSection roleFilter={selectedRole} />
         </TabsContent>
       </Tabs>
     </div>

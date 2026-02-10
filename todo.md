@@ -1389,3 +1389,9 @@
 ## Bug Fix - Lead Generator applicableTo validation
 - [x] Update server-side z.enum validation to include "lead_generator" for training materials create/update
 - [x] Update server-side z.enum validation to include "lead_generator" for grading rules create/update
+
+## Team Training Tab - Role Filter Tabs (like Methodology)
+- [x] Add Lead Manager / Acquisition Manager / Lead Generator tabs to Team Training tab
+- [x] Filter Issues, Wins, Skills, and Meeting Agenda by selected role tab
+- [x] Admin sees all tabs, non-admin users see only their role's tab
+- [x] Ensure role filter tabs are visually consistent with Methodology tab
