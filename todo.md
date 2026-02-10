@@ -1344,3 +1344,10 @@
 - [x] Update BatchDialer API key
 - [x] Change sync to fetch only last 24 hours (not 7 days)
 - [x] Test sync with new API key and 24-hour window
+
+## BatchDialer Agent Mapping Verification
+- [x] Check current Gunner team members vs BatchDialer agents (Alex Diaz, Efren Valenzuala, Mirna Razo)
+- [x] Fix agent name mapping - Added 3 Lead Generators to database
+- [x] Reduced sync window from 24 hours to 2 hours to reduce API load
+- [ ] Resolve BatchDialer CDRs API timeout issue (contact support)
+- [ ] Use manual call upload as workaround until API sync is resolved

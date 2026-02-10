@@ -66,19 +66,32 @@ export async function fetchRecentCalls(options: {
 
   const url = `${BATCHDIALER_API_BASE}/cdrs${params.toString() ? `?${params.toString()}` : ""}`;
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      "X-ApiKey": ENV.batchDialerApiKey,
-      "Accept": "application/json",
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout
 
-  if (!response.ok) {
-    throw new Error(`BatchDialer API error: ${response.status} ${response.statusText}`);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "X-ApiKey": ENV.batchDialerApiKey,
+        "Accept": "application/json",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`BatchDialer API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('BatchDialer API request timed out after 120 seconds');
+    }
+    throw error;
   }
-
-  return response.json();
 }
 
 /**

@@ -1,0 +1,43 @@
+{
+  "query": "SELECT * FROM team_members;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT * FROM team_members;",
+  "rows": [
+    {
+      "id": "1",
+      "tenantId": "1",
+      "name": "Chris Segura",
+      "teamRole": "lead_manager",
+      "userId": "390001",
+      "ghlUserId": "nJVGO9byJSmD8O32UF9Z",
+      "isActive": "true",
+      "createdAt": "2026-02-02 06:17:34",
+      "updatedAt": "2026-02-03 15:45:25"
+    },
+    {
+      "id": "2",
+      "tenantId": "1",
+      "name": "Daniel Lozano",
+      "teamRole": "lead_manager",
+      "userId": "180249",
+      "ghlUserId": "G1hAG3KNhzMerkEIvMr5",
+      "isActive": "true",
+      "createdAt": "2026-02-02 06:17:34",
+      "updatedAt": "2026-02-03 08:42:11"
+    },
+    {
+      "id": "3",
+      "tenantId": "1",
+      "name": "Kyle Barks",
+      "teamRole": "acquisition_manager",
+      "userId": "90493",
+      "ghlUserId": "InPGvGL7iu5TCnYJLMEx",
+      "isActive": "true",
+      "createdAt": "2026-02-02 06:17:34",
+      "updatedAt": "2026-02-03 08:42:11"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\tname\tteamRole\tuserId\tghlUserId\tisActive\tcreatedAt\tupdatedAt\n1\t1\tChris Segura\tlead_manager\t390001\tnJVGO9byJSmD8O32UF9Z\ttrue\t2026-02-02 06:17:34\t2026-02-03 15:45:25\n2\t1\tDaniel Lozano\tlead_manager\t180249\tG1hAG3KNhzMerkEIvMr5\ttrue\t2026-02-02 06:17:34\t2026-02-03 08:42:11\n3\t1\tKyle Barks\tacquisition_manager\t90493\tInPGvGL7iu5TCnYJLMEx\ttrue\t2026-02-02 06:17:34\t2026-02-03 08:42:11\n",
+  "stderr": "",
+  "execution_time_ms": 344
+}
