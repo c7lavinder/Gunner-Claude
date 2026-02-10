@@ -1402,3 +1402,6 @@
 - [x] Update AI prompt to generate role-specific insights with minimum counts
 - [x] Lead Managers and Acquisition Managers should have sufficient items from call data
 - [x] Lead Generators are exception (no calls yet)
+
+## UI Fix - Team Page Spacing
+- [x] Add more spacing between Team page header and tabs
