@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE team_training_items ADD COLUMN teamRole ENUM('lead_manager', 'acquisition_manager', 'lead_generator') DEFAULT NULL AFTER teamMemberName;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE team_training_items ADD COLUMN teamRole ENUM('lead_manager', 'acquisition_manager', 'lead_generator') DEFAULT NULL AFTER teamMemberName;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1474
+}

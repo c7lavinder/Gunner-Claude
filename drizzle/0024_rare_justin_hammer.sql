@@ -1,0 +1,1 @@
+ALTER TABLE `team_training_items` ADD `teamRole` enum('lead_manager','acquisition_manager','lead_generator');

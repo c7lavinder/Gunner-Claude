@@ -448,6 +448,8 @@ export const teamTrainingItems = mysqlTable("team_training_items", {
   // Who this applies to (null = whole team)
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
+  // Which role this insight applies to
+  teamRole: mysqlEnum("teamRole", ["lead_manager", "acquisition_manager", "lead_generator"]),
   // Status
   status: mysqlEnum("status", ["active", "in_progress", "completed", "archived"]).default("active"),
   // AI generation tracking

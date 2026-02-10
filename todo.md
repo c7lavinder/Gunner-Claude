@@ -1395,3 +1395,10 @@
 - [x] Filter Issues, Wins, Skills, and Meeting Agenda by selected role tab
 - [x] Admin sees all tabs, non-admin users see only their role's tab
 - [x] Ensure role filter tabs are visually consistent with Methodology tab
+
+## AI Insights - More Items Per Role
+- [x] Update AI insights generation to produce at least 2-3 issues, 2 wins, and 2 long-term skills per role
+- [x] Add teamRole column to team_training_items for direct role filtering
+- [x] Update AI prompt to generate role-specific insights with minimum counts
+- [x] Lead Managers and Acquisition Managers should have sufficient items from call data
+- [x] Lead Generators are exception (no calls yet)

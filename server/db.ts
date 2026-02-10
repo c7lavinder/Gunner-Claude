@@ -1059,7 +1059,7 @@ export async function getTeamTrainingItems(options?: {
   const db = await getDb();
   if (!db) return [];
 
-  // If filtering by teamRole, join with team_members table
+  // If filtering by teamRole, use the teamRole column directly on teamTrainingItems
   if (options?.teamRole) {
     const conditions = [];
     
@@ -1073,30 +1073,11 @@ export async function getTeamTrainingItems(options?: {
       conditions.push(eq(teamTrainingItems.status, options.status));
     }
     
-    conditions.push(eq(teamMembers.teamRole, options.teamRole));
+    conditions.push(eq(teamTrainingItems.teamRole, options.teamRole));
     
     const query = db
-      .select({
-        id: teamTrainingItems.id,
-        tenantId: teamTrainingItems.tenantId,
-        itemType: teamTrainingItems.itemType,
-        title: teamTrainingItems.title,
-        description: teamTrainingItems.description,
-        targetBehavior: teamTrainingItems.targetBehavior,
-        callReference: teamTrainingItems.callReference,
-        sortOrder: teamTrainingItems.sortOrder,
-        priority: teamTrainingItems.priority,
-        teamMemberId: teamTrainingItems.teamMemberId,
-        teamMemberName: teamTrainingItems.teamMemberName,
-        status: teamTrainingItems.status,
-        isAiGenerated: teamTrainingItems.isAiGenerated,
-        sourceCallIds: teamTrainingItems.sourceCallIds,
-        meetingDate: teamTrainingItems.meetingDate,
-        createdAt: teamTrainingItems.createdAt,
-        updatedAt: teamTrainingItems.updatedAt,
-      })
+      .select()
       .from(teamTrainingItems)
-      .leftJoin(teamMembers, eq(teamTrainingItems.teamMemberId, teamMembers.id))
       .where(and(...conditions))
       .orderBy(desc(teamTrainingItems.createdAt));
     

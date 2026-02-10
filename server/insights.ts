@@ -29,6 +29,7 @@ interface GeneratedInsight {
   priority: "low" | "medium" | "high" | "urgent";
   teamMemberName?: string;
   teamMemberId?: number;
+  teamRole?: "lead_manager" | "acquisition_manager" | "lead_generator";
   sourceCallIds?: number[];
 }
 
@@ -133,6 +134,47 @@ export async function generateTeamInsights(tenantId?: number): Promise<InsightsR
     byTeamMember[call.teamMember].push(call);
   }
 
+  // Group by call type (role) for role-based analysis
+  const byCallType: Record<string, typeof callSummaries> = {};
+  for (const call of callSummaries) {
+    const ct = call.callType || "qualification";
+    if (!byCallType[ct]) byCallType[ct] = [];
+    byCallType[ct].push(call);
+  }
+
+  // Map call types to team roles
+  const callTypeToRole: Record<string, string> = {
+    "qualification": "lead_manager",
+    "follow_up": "lead_manager",
+    "acquisition": "acquisition_manager",
+    "negotiation": "acquisition_manager",
+    "lead_generation": "lead_generator",
+    "cold_call": "lead_generator",
+  };
+
+  // Get team member roles from the database
+  const db = await getDb();
+  const memberRoles: Record<string, string> = {};
+  if (db) {
+    const allMembers = tenantId 
+      ? await db.select().from(teamMembers).where(eq(teamMembers.tenantId, tenantId))
+      : await db.select().from(teamMembers);
+    for (const m of allMembers) {
+      memberRoles[m.name] = m.teamRole;
+    }
+  }
+
+  // Build role summary for the prompt
+  const roleGroups: Record<string, { members: string[], callCount: number, avgScore: number }> = {};
+  for (const [member, memberCalls] of Object.entries(byTeamMember)) {
+    const role = memberRoles[member] || "lead_manager";
+    if (!roleGroups[role]) roleGroups[role] = { members: [], callCount: 0, avgScore: 0 };
+    roleGroups[role].members.push(member);
+    roleGroups[role].callCount += memberCalls.length;
+    const scores = memberCalls.filter(c => c.score).map(c => c.score!);
+    roleGroups[role].avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+  }
+
   // Calculate team stats
   const teamStats = {
     totalCalls: callSummaries.length,
@@ -147,19 +189,35 @@ export async function generateTeamInsights(tenantId?: number): Promise<InsightsR
     },
   };
 
-  const prompt = `You are an AI sales coach analyzing call performance data for a real estate wholesaling team. Based on the following call data from the past week, generate actionable insights for the team.
+  // Build role-specific performance summary
+  const rolePerformanceSummary = Object.entries(roleGroups).map(([role, data]) => {
+    const roleName = role === 'lead_manager' ? 'Lead Manager' : role === 'acquisition_manager' ? 'Acquisition Manager' : 'Lead Generator';
+    return `### ${roleName} Team (${data.members.join(', ')})
+- Total Calls: ${data.callCount}
+- Average Score: ${data.avgScore.toFixed(1)}%`;
+  }).join('\n\n');
+
+  // Determine which roles have calls
+  const activeRoles = Object.keys(roleGroups).filter(r => roleGroups[r].callCount > 0);
+
+  const prompt = `You are an AI sales coach analyzing call performance data for a real estate wholesaling team. Based on the following call data from the past week, generate actionable insights ORGANIZED BY TEAM ROLE.
 
 ## Team Performance Summary
 - Total Calls Analyzed: ${teamStats.totalCalls}
 - Average Score: ${teamStats.averageScore.toFixed(1)}%
 - Grade Distribution: A: ${teamStats.gradeDistribution.A}, B: ${teamStats.gradeDistribution.B}, C: ${teamStats.gradeDistribution.C}, D: ${teamStats.gradeDistribution.D}, F: ${teamStats.gradeDistribution.F}
 
+## Performance By Role
+${rolePerformanceSummary}
+
 ## Individual Team Member Performance
 ${Object.entries(byTeamMember).map(([name, memberCalls]) => {
   const avgScore = memberCalls.filter(c => c.score).reduce((sum, c) => sum + (c.score || 0), 0) / 
                    memberCalls.filter(c => c.score).length || 0;
+  const role = memberRoles[name] || 'lead_manager';
+  const roleName = role === 'lead_manager' ? 'Lead Manager' : role === 'acquisition_manager' ? 'Acquisition Manager' : 'Lead Generator';
   return `
-### ${name}
+### ${name} (${roleName})
 - Calls: ${memberCalls.length}
 - Average Score: ${avgScore.toFixed(1)}%
 - Common Strengths: ${Array.from(new Set(memberCalls.map(c => c.strengths).filter(Boolean))).slice(0, 3).join("; ")}
@@ -168,31 +226,17 @@ ${Object.entries(byTeamMember).map(([name, memberCalls]) => {
 `;
 }).join("\n")}
 
-## Your Task
-Generate insights in the following categories:
+## CRITICAL INSTRUCTIONS
+You MUST generate insights FOR EACH ROLE that has calls. The active roles with calls are: ${activeRoles.map(r => r === 'lead_manager' ? 'Lead Manager (lead_manager)' : r === 'acquisition_manager' ? 'Acquisition Manager (acquisition_manager)' : 'Lead Generator (lead_generator)').join(', ')}.
 
-1. **ISSUES** (2-4 items): Urgent problems that need immediate attention. Look for:
-   - Recurring mistakes across multiple calls
-   - Red flags that appeared multiple times
-   - Low scores in specific areas
-   - Bad habits that are costing deals
+For EACH active role, generate:
+- At least 2-3 ISSUES specific to that role's performance
+- At least 2 WINS specific to that role's members
+- At least 2 SKILLS (long-term fixes) specific to that role
+- At least 2-3 AGENDA items for that role's team meeting
 
-2. **WINS** (2-3 items): Celebrate successes to boost morale. Look for:
-   - High-scoring calls and what made them great
-   - Improvement trends from individual team members
-   - Excellent handling of difficult situations
-   - Perfect execution of techniques
-
-3. **SKILLS** (1-2 items): Long-term skills to develop. Look for:
-   - Patterns in improvement areas across the team
-   - Skills that would have the biggest impact on results
-   - Techniques that top performers use but others don't
-
-4. **AGENDA** (3-5 items): Suggested topics for the weekly team meeting. Include:
-   - Review of a specific issue with call examples
-   - Celebration of wins
-   - Training focus area
-   - Role-play scenarios based on common objections
+Every item MUST include a "teamRole" field set to one of: "lead_manager", "acquisition_manager", or "lead_generator".
+Every item MUST include a "teamMemberName" field (set to a specific team member name, or null for role-wide items).
 
 Respond with a JSON object in this exact format:
 {
@@ -201,7 +245,8 @@ Respond with a JSON object in this exact format:
       "title": "Brief title",
       "description": "Detailed description of the issue",
       "priority": "urgent" | "high" | "medium" | "low",
-      "teamMemberName": "Name if specific to one person, or null for team-wide",
+      "teamRole": "lead_manager" | "acquisition_manager" | "lead_generator",
+      "teamMemberName": "Name if specific to one person, or null for role-wide",
       "sourceCallIds": [list of relevant call IDs]
     }
   ],
@@ -210,7 +255,8 @@ Respond with a JSON object in this exact format:
       "title": "Brief title",
       "description": "What happened and why it's worth celebrating",
       "priority": "medium",
-      "teamMemberName": "Name of person to celebrate"
+      "teamRole": "lead_manager" | "acquisition_manager" | "lead_generator",
+      "teamMemberName": "Name of person to celebrate, or null for role-wide"
     }
   ],
   "skills": [
@@ -218,14 +264,16 @@ Respond with a JSON object in this exact format:
       "title": "Skill name",
       "description": "Why this skill matters",
       "targetBehavior": "What success looks like",
-      "priority": "high" | "medium"
+      "priority": "high" | "medium",
+      "teamRole": "lead_manager" | "acquisition_manager" | "lead_generator"
     }
   ],
   "agenda": [
     {
       "title": "Agenda item",
       "description": "What to cover and why",
-      "priority": "high" | "medium" | "low"
+      "priority": "high" | "medium" | "low",
+      "teamRole": "lead_manager" | "acquisition_manager" | "lead_generator"
     }
   ]
 }`;
@@ -252,10 +300,11 @@ Respond with a JSON object in this exact format:
                     title: { type: "string" },
                     description: { type: "string" },
                     priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
+                    teamRole: { type: "string", enum: ["lead_manager", "acquisition_manager", "lead_generator"] },
                     teamMemberName: { type: ["string", "null"] },
                     sourceCallIds: { type: "array", items: { type: "number" } },
                   },
-                  required: ["title", "description", "priority"],
+                  required: ["title", "description", "priority", "teamRole"],
                   additionalProperties: false,
                 },
               },
@@ -267,9 +316,10 @@ Respond with a JSON object in this exact format:
                     title: { type: "string" },
                     description: { type: "string" },
                     priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
+                    teamRole: { type: "string", enum: ["lead_manager", "acquisition_manager", "lead_generator"] },
                     teamMemberName: { type: ["string", "null"] },
                   },
-                  required: ["title", "description", "priority"],
+                  required: ["title", "description", "priority", "teamRole"],
                   additionalProperties: false,
                 },
               },
@@ -282,8 +332,9 @@ Respond with a JSON object in this exact format:
                     description: { type: "string" },
                     targetBehavior: { type: "string" },
                     priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
+                    teamRole: { type: "string", enum: ["lead_manager", "acquisition_manager", "lead_generator"] },
                   },
-                  required: ["title", "description", "targetBehavior", "priority"],
+                  required: ["title", "description", "targetBehavior", "priority", "teamRole"],
                   additionalProperties: false,
                 },
               },
@@ -295,8 +346,9 @@ Respond with a JSON object in this exact format:
                     title: { type: "string" },
                     description: { type: "string" },
                     priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
+                    teamRole: { type: "string", enum: ["lead_manager", "acquisition_manager", "lead_generator"] },
                   },
-                  required: ["title", "description", "priority"],
+                  required: ["title", "description", "priority", "teamRole"],
                   additionalProperties: false,
                 },
               },
@@ -322,6 +374,7 @@ Respond with a JSON object in this exact format:
         title: i.title,
         description: i.description,
         priority: i.priority || "medium",
+        teamRole: i.teamRole || undefined,
         teamMemberName: i.teamMemberName || undefined,
         sourceCallIds: i.sourceCallIds || [],
       })),
@@ -330,6 +383,7 @@ Respond with a JSON object in this exact format:
         title: w.title,
         description: w.description,
         priority: w.priority || "medium",
+        teamRole: w.teamRole || undefined,
         teamMemberName: w.teamMemberName || undefined,
       })),
       skills: insights.skills.map((s: any) => ({
@@ -338,12 +392,14 @@ Respond with a JSON object in this exact format:
         description: s.description,
         targetBehavior: s.targetBehavior,
         priority: s.priority || "high",
+        teamRole: s.teamRole || undefined,
       })),
       agenda: insights.agenda.map((a: any, index: number) => ({
         itemType: "agenda" as const,
         title: a.title,
         description: a.description,
         priority: a.priority || "medium",
+        teamRole: a.teamRole || undefined,
       })),
     };
 
@@ -391,6 +447,7 @@ export async function saveGeneratedInsights(insights: InsightsResult, tenantId?:
       priority: insight.priority,
       teamMemberName: insight.teamMemberName || null,
       teamMemberId: teamMemberId || null,
+      teamRole: insight.teamRole || null,
       status: "active",
       isAiGenerated: "true",
       sourceCallIds: insight.sourceCallIds ? JSON.stringify(insight.sourceCallIds) : null,

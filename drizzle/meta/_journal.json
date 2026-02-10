@@ -169,6 +169,13 @@
       "when": 1770690568064,
       "tag": "0023_strange_cargill",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1770692600532,
+      "tag": "0024_rare_justin_hammer",
+      "breakpoints": true
     }
   ]
 }
