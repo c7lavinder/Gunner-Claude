@@ -365,7 +365,7 @@ export const appRouter = router({
         duration: z.number().optional(),
         teamMemberId: z.number(),
         teamMemberName: z.string().optional(),
-        callType: z.enum(["qualification", "offer"]).optional(),
+        callType: z.enum(["qualification", "offer", "lead_generation"]).optional(),
       }))
       .mutation(async ({ input }) => {
         const call = await createCall({
@@ -480,7 +480,7 @@ export const appRouter = router({
             duration: input.duration,
             teamMemberId: teamMember.id,
             teamMemberName: teamMember.name,
-            callType: teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification",
+            callType: teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "lead_generation" : "qualification",
             status: "pending",
             callTimestamp: input.callDate ? new Date(input.callDate) : new Date(),
           });

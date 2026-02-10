@@ -4,7 +4,7 @@ import { invokeLLM } from "./_core/llm";
 
 export const LEAD_MANAGER_RUBRIC = {
   name: "Lead Manager Qualification Call Rubric",
-  description: "For Chris and Daniel - Qualification/Diagnosis calls",
+  description: "For Lead Managers (Chris and Daniel) - Qualification/Diagnosis calls. The goal is to qualify leads, extract motivation, discuss price, and set appointments for walkthroughs.",
   criteria: [
     {
       name: "Introduction & Rapport",
@@ -143,42 +143,42 @@ export const ACQUISITION_MANAGER_RUBRIC = {
 
 export const LEAD_GENERATOR_RUBRIC = {
   name: "Lead Generator Cold Call Rubric",
-  description: "For Lead Generators - Cold calling for appointment setting",
+  description: "For Lead Generators (Alex, Efren, and Mirna) - Cold calling to generate seller interest and identify motivated sellers. The goal is NOT to set appointments — it is to get the homeowner to express interest in selling so a Lead Manager can follow up and qualify the lead.",
   criteria: [
     {
       name: "Introduction & Permission",
       maxPoints: 15,
-      description: "Professional greeting, stated name and company, asked permission to continue",
+      description: "Professional greeting, stated name and company, asked permission to continue the conversation",
       keyPhrases: ["My name is", "calling from", "Do you have a quick minute?", "Is this a good time?"],
     },
     {
-      name: "Qualification Questions",
+      name: "Interest Discovery",
       maxPoints: 25,
-      description: "Asked about ownership, timeline, property condition, motivation - gathered key info",
-      keyPhrases: ["Do you own", "looking to sell", "condition of the property", "Why are you selling?", "timeline"],
+      description: "Asked if the homeowner has any interest in selling, gauged motivation level, identified potential sellers",
+      keyPhrases: ["interested in selling", "thought about selling", "open to an offer", "considering selling", "looking to sell"],
     },
     {
-      name: "Value Proposition",
+      name: "Building Rapport",
       maxPoints: 20,
-      description: "Explained cash offer benefits: no repairs, no commissions, quick close, as-is purchase",
-      keyPhrases: ["cash offer", "as-is", "no repairs", "no commissions", "quick close", "no closing costs"],
+      description: "Built a connection with the homeowner, showed genuine interest, kept the conversation natural and friendly",
+      keyPhrases: ["How long have you lived there?", "Tell me about", "That makes sense", "I appreciate your time"],
     },
     {
       name: "Objection Handling",
       maxPoints: 15,
-      description: "Addressed concerns appropriately, didn't get defensive, acknowledged and redirected",
-      keyPhrases: ["I understand", "That makes sense", "Many people feel that way", "Let me explain"],
+      description: "Addressed concerns appropriately, didn't get defensive, acknowledged and kept the conversation going",
+      keyPhrases: ["I understand", "That makes sense", "Many people feel that way", "No pressure at all"],
     },
     {
-      name: "Appointment Setting",
+      name: "Warm Transfer / Handoff Setup",
       maxPoints: 15,
-      description: "Confirmed interest, proposed specific time, provided next steps, got commitment",
-      keyPhrases: ["schedule a time", "meet with", "walk through", "available", "Does that work?"],
+      description: "Successfully identified interest and set up the lead for a Lead Manager follow-up call. Mentioned that a manager will call to discuss further details.",
+      keyPhrases: ["my manager will follow up", "someone from our team will call", "we'd love to learn more", "can we have someone reach out"],
     },
     {
       name: "Professional Tone",
       maxPoints: 10,
-      description: "Friendly but professional, respectful, not pushy, good pacing",
+      description: "Friendly but professional, respectful, not pushy, good pacing, conversational",
       keyPhrases: [],
     },
   ],
@@ -186,10 +186,10 @@ export const LEAD_GENERATOR_RUBRIC = {
     "Talking too fast or rushing",
     "Being pushy or aggressive",
     "Not asking permission to continue",
-    "Skipping qualification questions",
-    "Not explaining value proposition",
+    "Skipping interest discovery questions",
+    "Trying to set appointments instead of generating interest",
     "Getting defensive with objections",
-    "Not attempting to set appointment",
+    "Not mentioning Lead Manager follow-up",
     "Unprofessional language or tone",
   ],
 };
@@ -271,7 +271,8 @@ export async function gradeCall(
   const systemPrompt = `You are an expert sales coach for a real estate wholesaling company called Nashville Area Home Buyers. 
 Your job is to analyze phone call transcripts and grade them based on a specific rubric.
 
-You are grading a ${callType === "qualification" ? "Qualification/Diagnosis" : "Offer"} call made by ${teamMemberName}.
+You are grading a ${callType === "lead_generation" ? "Lead Generation Cold Call" : callType === "qualification" ? "Qualification/Diagnosis" : "Offer"} call made by ${teamMemberName}.
+${callType === "lead_generation" ? "\nIMPORTANT: This is a Lead Generator cold call. The goal of this call is NOT to set appointments. The goal is to identify motivated sellers and generate interest in selling their property. A Lead Manager will follow up to qualify and set appointments. Grade accordingly." : ""}
 
 RUBRIC: ${rubric.name}
 ${rubric.description}
@@ -326,7 +327,7 @@ CALL OUTCOME DEFINITIONS:
 - appointment_set: A walkthrough, meeting, or follow-up appointment was scheduled with a specific date/time
 - offer_accepted: The seller accepted an offer or verbally agreed to the deal
 - offer_rejected: An offer was made but the seller declined
-- follow_up: A follow-up call was scheduled but no appointment for in-person meeting
+- follow_up: ${callType === "lead_generation" ? "The seller expressed interest and a Lead Manager follow-up was set up" : "A follow-up call was scheduled but no appointment for in-person meeting"}
 - disqualified: The lead was disqualified (price too high, not motivated, etc.)
 - none: The call ended without a clear outcome or next step`;
 
@@ -494,6 +495,7 @@ Analyze the transcript and classify the call into one of these categories:
    - Negotiation calls - discussing price, terms, counteroffers
    - Objection handling - addressing concerns about the offer or process
    - Appointment setting calls - scheduling meetings to discuss the property
+   - Lead generation cold calls - calling homeowners to gauge interest in selling
    
 2. "admin_call" - Post-sale or administrative calls with NO active selling:
    - POST-OFFER calls: Walking someone through signing documents AFTER an offer was already accepted

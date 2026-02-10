@@ -176,6 +176,13 @@
       "when": 1770692600532,
       "tag": "0024_rare_justin_hammer",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1770696032113,
+      "tag": "0025_nebulous_wolfpack",
+      "breakpoints": true
     }
   ]
 }

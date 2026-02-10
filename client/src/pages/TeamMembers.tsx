@@ -752,8 +752,8 @@ function TeamMembersContent() {
                 Lead Manager
               </Badge>
               <p className="text-sm text-muted-foreground">
-                Handles qualification/diagnosis calls. Graded on Script Mastery, Disqualification Mastery, 
-                and Good Appointment Mastery criteria.
+                Qualifies leads, extracts motivation, discusses price, and sets appointments for walkthroughs. 
+                Graded on Introduction & Rapport, Motivation Extraction, Price Discussion, and Call Outcome.
               </p>
             </div>
             <div className="p-4 border rounded-lg">
@@ -770,8 +770,8 @@ function TeamMembersContent() {
                 Lead Generator
               </Badge>
               <p className="text-sm text-muted-foreground">
-                Handles cold calls to generate leads. Graded on Introduction & Rapport, 
-                Qualification Questions, Objection Handling, and Appointment Setting.
+                Makes cold calls to generate interest in selling — does NOT set appointments. Sets up warm handoffs to Lead Managers. 
+                Graded on Introduction & Permission, Interest Discovery, Building Rapport, Objection Handling, and Warm Transfer / Handoff Setup.
               </p>
             </div>
           </div>

@@ -27,7 +27,7 @@ export interface BadgeDefinition {
   name: string;
   description: string;
   icon: string;
-  category: "universal" | "lead_manager" | "acquisition_manager";
+  category: "universal" | "lead_manager" | "acquisition_manager" | "lead_generator";
   tiers: {
     bronze: { count: number };
     silver: { count: number };
@@ -179,45 +179,45 @@ export const LEAD_GENERATOR_BADGES: BadgeDefinition[] = [
   {
     code: "conversation_starter",
     name: "Conversation Starter",
-    description: "Successful cold call conversations (graded C or better)",
+    description: "Successful cold calls where seller interest was generated (graded C or better)",
     icon: "💬",
-    category: "lead_manager", // Using lead_manager category for now
+    category: "lead_generator",
     tiers: { bronze: { count: 50 }, silver: { count: 200 }, gold: { count: 1000 } },
     criteria: { type: "consecutive_grade", minGrade: "C" },
   },
   {
-    code: "appointment_setter",
-    name: "Appointment Setter",
-    description: "Appointments successfully booked",
-    icon: "📅",
-    category: "lead_manager",
+    code: "warm_handoff_pro",
+    name: "Warm Handoff Pro",
+    description: "Calls where seller expressed interest and was successfully set up for Lead Manager follow-up",
+    icon: "🤝",
+    category: "lead_generator",
     tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
-    criteria: { type: "call_outcome", criteriaName: "appointment_set" },
+    criteria: { type: "call_outcome", criteriaName: "follow_up" },
   },
   {
     code: "objection_handler",
     name: "Objection Handler",
     description: "Score 12+/15 on Objection Handling",
     icon: "🛡️",
-    category: "lead_manager",
+    category: "lead_generator",
     tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
     criteria: { type: "criteria_score", criteriaName: "Objection Handling", minScore: 12 },
   },
   {
-    code: "qualification_pro",
-    name: "Qualification Pro",
-    description: "Score 20+/25 on Qualification Questions",
+    code: "interest_generator",
+    name: "Interest Generator",
+    description: "Score 20+/25 on Interest Discovery — consistently getting sellers to express interest in selling",
     icon: "🎯",
-    category: "lead_manager",
+    category: "lead_generator",
     tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
-    criteria: { type: "criteria_score", criteriaName: "Qualification Questions", minScore: 20 },
+    criteria: { type: "criteria_score", criteriaName: "Interest Discovery", minScore: 20 },
   },
   {
     code: "cold_call_warrior",
     name: "Cold Call Warrior",
-    description: "Weeks with 200+ graded cold calls",
+    description: "Weeks with 200+ graded cold calls generating seller interest",
     icon: "⚔️",
-    category: "lead_manager",
+    category: "lead_generator",
     tiers: { bronze: { count: 5 }, silver: { count: 15 }, gold: { count: 30 } },
     criteria: { type: "weekly_volume", weeklyCount: 200 },
   },
@@ -810,11 +810,11 @@ export async function getAllBadgesWithProgress(teamMemberId: number, teamRole: s
   if (!db) return [];
   
   // Get relevant badges for this role
-  // Lead generators use the same badges as lead managers
   const relevantBadges = ALL_BADGES.filter(b => 
     b.category === "universal" || 
-    ((teamRole === "lead_manager" || teamRole === "lead_generator") && b.category === "lead_manager") ||
-    (teamRole === "acquisition_manager" && b.category === "acquisition_manager")
+    (teamRole === "lead_manager" && b.category === "lead_manager") ||
+    (teamRole === "acquisition_manager" && b.category === "acquisition_manager") ||
+    (teamRole === "lead_generator" && b.category === "lead_generator")
   );
   
   // Get earned badges
@@ -1035,8 +1035,9 @@ export async function evaluateBadgesForCall(teamMemberId: number, callId: number
   // Get relevant badges for this role
   const relevantBadges = ALL_BADGES.filter(b => 
     b.category === "universal" || 
-    ((teamMember.teamRole === "lead_manager" || teamMember.teamRole === "lead_generator") && b.category === "lead_manager") ||
-    (teamMember.teamRole === "acquisition_manager" && b.category === "acquisition_manager")
+    (teamMember.teamRole === "lead_manager" && b.category === "lead_manager") ||
+    (teamMember.teamRole === "acquisition_manager" && b.category === "acquisition_manager") ||
+    (teamMember.teamRole === "lead_generator" && b.category === "lead_generator")
   );
   
   // Check each badge type
@@ -1185,8 +1186,9 @@ export async function batchEvaluateBadges(): Promise<{
     // Get relevant badges for this role
     const relevantBadges = ALL_BADGES.filter(b => 
       b.category === "universal" || 
-      ((member.teamRole === "lead_manager" || member.teamRole === "lead_generator") && b.category === "lead_manager") ||
-      (member.teamRole === "acquisition_manager" && b.category === "acquisition_manager")
+      (member.teamRole === "lead_manager" && b.category === "lead_manager") ||
+      (member.teamRole === "acquisition_manager" && b.category === "acquisition_manager") ||
+      (member.teamRole === "lead_generator" && b.category === "lead_generator")
     );
     
     // Reset progress for this member (we'll recalculate from scratch)

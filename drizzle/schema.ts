@@ -226,7 +226,7 @@ export const calls = mysqlTable("calls", {
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   // Call type - now references tenant_call_types for custom types
-  callType: mysqlEnum("callType", ["qualification", "offer"]).default("qualification"),
+  callType: mysqlEnum("callType", ["qualification", "offer", "lead_generation"]).default("qualification"),
   tenantCallTypeId: int("tenantCallTypeId").references(() => tenantCallTypes.id), // Custom call type
   // Call outcome - what was achieved on this call
   callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_accepted", "offer_rejected", "follow_up", "disqualified"]).default("none"),
@@ -644,7 +644,7 @@ export const badges = mysqlTable("badges", {
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   icon: varchar("icon", { length: 10 }), // Emoji icon
-  category: mysqlEnum("category", ["universal", "lead_manager", "acquisition_manager"]).notNull(),
+  category: mysqlEnum("category", ["universal", "lead_manager", "acquisition_manager", "lead_generator"]).notNull(),
   tier: mysqlEnum("tier", ["bronze", "silver", "gold"]).notNull(),
   target: int("target").notNull(), // Target count to earn this badge tier
   criteriaType: varchar("criteriaType", { length: 50 }).notNull(), // Type of criteria

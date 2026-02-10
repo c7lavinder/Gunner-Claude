@@ -1132,7 +1132,7 @@ export default function Training() {
                   rubric={rubrics?.leadManager} 
                   context={qualificationContext}
                   title="Lead Manager Rubric"
-                  description="Used for qualification calls by Chris and Daniel"
+                  description="Qualification calls to qualify leads and set appointments. Used by Chris and Daniel."
                 />
               </TabsContent>
 
@@ -1150,7 +1150,7 @@ export default function Training() {
                   rubric={(rubrics as any)?.leadGenerator} 
                   context={leadGenContext}
                   title="Lead Generator Rubric"
-                  description="Used for cold calls by Alex, Efren, and Mirna"
+                  description="Cold calls to generate seller interest — Lead Generators do NOT set appointments. Used by Alex, Efren, and Mirna."
                 />
               </TabsContent>
             </Tabs>

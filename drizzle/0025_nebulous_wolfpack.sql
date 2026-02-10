@@ -1,0 +1,2 @@
+ALTER TABLE `badges` MODIFY COLUMN `category` enum('universal','lead_manager','acquisition_manager','lead_generator') NOT NULL;--> statement-breakpoint
+ALTER TABLE `calls` MODIFY COLUMN `callType` enum('qualification','offer','lead_generation') DEFAULT 'qualification';

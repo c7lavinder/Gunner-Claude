@@ -115,11 +115,10 @@ export default function LeadGenDashboard() {
       )
     : 0;
 
-  // Count appointments set (calls with grade A or B)
-  const appointmentsSet = myGradedCalls.filter(c => {
-    // withGrades query includes grade data in a nested structure
-    const grade = (c as any).grade?.overallGrade?.toUpperCase();
-    return grade === 'A' || grade === 'B';
+  // Count interests generated (calls where seller expressed interest - outcome is follow_up or better)
+  const interestsGenerated = myGradedCalls.filter(c => {
+    const outcome = (c as any).callOutcome;
+    return outcome === 'follow_up' || outcome === 'appointment_set';
   }).length;
 
   const recentCalls = myGradedCalls.slice(0, 5);
@@ -255,10 +254,10 @@ export default function LeadGenDashboard() {
           description="All time graded calls"
         />
         <StatCard
-          title="Appointments Set"
-          value={appointmentsSet}
-          icon={Calendar}
-          description="Grade A or B calls"
+          title="Interests Generated"
+          value={interestsGenerated}
+          icon={Target}
+          description="Sellers who expressed interest"
         />
         <StatCard
           title="Average Score"

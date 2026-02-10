@@ -44,9 +44,9 @@ const CRM_OPTIONS = [
 
 const ROLE_TEMPLATES = [
   { id: "admin", name: "Admin", description: "Full access to all features and settings" },
-  { id: "lead_manager", name: "Lead Manager", description: "Handles qualification calls, manages Lead Generators" },
+  { id: "lead_manager", name: "Lead Manager", description: "Qualifies leads, sets appointments for walkthroughs, manages Lead Generators" },
   { id: "acquisition_manager", name: "Acquisition Manager", description: "Handles offer/closing calls" },
-  { id: "lead_generator", name: "Lead Generator", description: "Outbound lead generation (cold calling, SMS)" },
+  { id: "lead_generator", name: "Lead Generator", description: "Cold calls homeowners to generate interest in selling — does NOT set appointments" },
 ];
 
 export default function Onboarding() {

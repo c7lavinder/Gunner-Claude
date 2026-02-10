@@ -1418,3 +1418,21 @@
 ## Create Admin Account - Jessica Guzman
 - [x] Create admin account for Jessica Guzman (yamicead15@gmail.com)
 - [x] Set role to admin
+
+## Update Lead Generator Role Description
+- [x] Update Lead Generator rubric to focus on generating seller interest (not setting appointments)
+- [x] Update Lead Generator role card description on Team page
+- [x] Update Lead Generator grading prompts and AI analysis context
+- [x] Update any Lead Generator references in insights generation
+- [x] Ensure Lead Manager description correctly mentions qualifying and setting appointments
+
+## Lead Generator Badge & Dashboard Updates
+- [x] Replace "Appointment Setter" badge with "Warm Handoff Pro" badge for Lead Generators
+- [x] Update all Lead Generator badges to use "lead_generator" category (was using "lead_manager")
+- [x] Add "lead_generator" to badge category enum in database schema
+- [x] Update badge filtering logic to properly separate lead_generator from lead_manager badges
+- [x] Replace "Appointments Set" stat with "Interests Generated" on Lead Generator Dashboard
+- [x] Update Onboarding role descriptions (Lead Manager: qualifies & sets appointments; Lead Generator: generates interest, NOT appointments)
+- [x] Update Training page rubric descriptions for all three roles
+- [x] Add lead_generation to callType enum for call creation
+- [x] Write comprehensive vitest tests for Lead Generator role definitions (16 tests passing)
