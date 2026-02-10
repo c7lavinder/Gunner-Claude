@@ -1408,3 +1408,9 @@
 
 ## Team Page - Lead Generator Role Card
 - [x] Add Lead Generator role card to Team Roles section on Team page
+
+## Create Lead Generator User Accounts
+- [ ] Create account for Alex Diaz (bu2679773@gmail.com)
+- [ ] Create account for Efren Valenzuela (valenzuelameza9@gmail.com)
+- [ ] Create account for Mirna (esmirnavela08@gmail.com)
+- [ ] Link accounts to existing team members
