@@ -1414,3 +1414,7 @@
 - [x] Create account for Efren Valenzuela (valenzuelameza9@gmail.com)
 - [x] Create account for Mirna Razo (esmirnavela08@gmail.com)
 - [x] Link accounts to existing team members
+
+## Create Admin Account - Jessica Guzman
+- [x] Create admin account for Jessica Guzman (yamicead15@gmail.com)
+- [x] Set role to admin
