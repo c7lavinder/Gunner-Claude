@@ -1365,3 +1365,9 @@
 - [x] Lead Managers see only insights from Lead Manager calls
 - [x] Acquisition Managers see only insights from Acquisition Manager calls
 - [x] Admins see all insights (no role filtering)
+
+## Team Training Role Filter UI
+- [x] Add role filter tabs to Team Training page (All, Lead Manager, Acquisition Manager, Lead Generator)
+- [x] Show all roles by default for admin users
+- [x] Allow admin to switch between role-specific views
+- [x] Update Issues, Wins, Skills, and Agenda sections to respect selected role filter

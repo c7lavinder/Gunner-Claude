@@ -341,14 +341,18 @@ function GenerateInsightsButton({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function SkillsSection() {
+function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-  const teamRole = !isAdmin && user?.teamRole
-    ? user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator"
-    : undefined;
+  
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  if (isAdmin && roleFilter && roleFilter !== "all") {
+    teamRole = roleFilter;
+  } else if (!isAdmin && user?.teamRole) {
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+  }
   
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
     itemType: "skill", 
@@ -413,15 +417,19 @@ function SkillsSection() {
   );
 }
 
-function IssuesSection() {
+function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   
-  // Filter by role: non-admins only see their role's insights
+  // Filter by role: non-admins only see their role's insights, admins can filter by selected role
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-  const teamRole = !isAdmin && user?.teamRole
-    ? user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator"
-    : undefined;
+  
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  if (isAdmin && roleFilter && roleFilter !== "all") {
+    teamRole = roleFilter;
+  } else if (!isAdmin && user?.teamRole) {
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+  }
   
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
     itemType: "issue", 
@@ -487,14 +495,18 @@ function IssuesSection() {
   );
 }
 
-function WinsSection() {
+function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-  const teamRole = !isAdmin && user?.teamRole
-    ? user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator"
-    : undefined;
+  
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  if (isAdmin && roleFilter && roleFilter !== "all") {
+    teamRole = roleFilter;
+  } else if (!isAdmin && user?.teamRole) {
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+  }
   
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
     itemType: "win", 
@@ -924,15 +936,19 @@ function MeetingFacilitator({
   );
 }
 
-function AgendaSection() {
+function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const [showFacilitator, setShowFacilitator] = useState(false);
   const { user } = useAuth();
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-  const teamRole = !isAdmin && user?.teamRole
-    ? user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator"
-    : undefined;
+  
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  if (isAdmin && roleFilter && roleFilter !== "all") {
+    teamRole = roleFilter;
+  } else if (!isAdmin && user?.teamRole) {
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+  }
   
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
     itemType: "agenda", 
@@ -1054,6 +1070,10 @@ function AgendaSection() {
 
 export default function TeamTraining() {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator">("all");
+  
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   const handleInsightsGenerated = () => {
     utils.teamTraining.list.invalidate();
@@ -1070,6 +1090,25 @@ export default function TeamTraining() {
         </div>
         <GenerateInsightsButton onSuccess={handleInsightsGenerated} />
       </div>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Filter by Role</CardTitle>
+            <CardDescription>View training insights for specific team roles</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={selectedRole} onValueChange={(value) => setSelectedRole(value as any)} className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="all">All Roles</TabsTrigger>
+                <TabsTrigger value="lead_manager">Lead Manager</TabsTrigger>
+                <TabsTrigger value="acquisition_manager">Acquisition Manager</TabsTrigger>
+                <TabsTrigger value="lead_generator">Lead Generator</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
@@ -1093,14 +1132,14 @@ export default function TeamTraining() {
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            <IssuesSection />
-            <WinsSection />
+            <IssuesSection roleFilter={selectedRole} />
+            <WinsSection roleFilter={selectedRole} />
           </div>
-          <SkillsSection />
+          <SkillsSection roleFilter={selectedRole} />
         </TabsContent>
 
         <TabsContent value="agenda">
-          <AgendaSection />
+          <AgendaSection roleFilter={selectedRole} />
         </TabsContent>
       </Tabs>
     </div>
