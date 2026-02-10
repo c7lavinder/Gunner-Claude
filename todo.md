@@ -1351,3 +1351,10 @@
 - [x] Reduced sync window from 24 hours to 2 hours to reduce API load
 - [ ] Resolve BatchDialer CDRs API timeout issue (contact support)
 - [ ] Use manual call upload as workaround until API sync is resolved
+
+## Lead Generator Visibility Issue
+- [x] Investigate why Lead Generators (Alex, Efren, Mirna) aren't showing in Team Management UI
+- [x] Fix Team Management page to display team members without user accounts
+- [x] Test that Lead Generators appear in team member cards
+- [x] Fix "lead_generator" to display as "Lead Generator" in UI
+- [x] Make Lead Generators appear in Settings page

@@ -33,12 +33,14 @@ const roleColors: Record<string, string> = {
   admin: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
   lead_manager: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   acquisition_manager: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  lead_generator: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
 };
 
 const roleLabels: Record<string, string> = {
   admin: "Admin",
   lead_manager: "Lead Manager",
   acquisition_manager: "Acquisition Manager",
+  lead_generator: "Lead Generator",
 };
 
 function RankBadge({ rank }: { rank: number }) {

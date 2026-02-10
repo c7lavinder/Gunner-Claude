@@ -368,13 +368,9 @@ export default function TeamManagement() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{tm.name}</div>
-                      {linkedUser ? (
-                        <Badge variant="outline" className="text-xs">
-                          {ROLE_LABELS[linkedUser.teamRole || 'lead_manager']}
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Not linked</span>
-                      )}
+                      <Badge variant="outline" className="text-xs">
+                        {linkedUser ? ROLE_LABELS[linkedUser.teamRole || 'lead_manager'] : ROLE_LABELS[tm.teamRole] || tm.teamRole}
+                      </Badge>
                     </div>
                   </div>
                 );
