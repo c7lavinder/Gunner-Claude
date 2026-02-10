@@ -793,7 +793,7 @@ export default function TeamMembers() {
         </p>
       </div>
 
-      <Tabs defaultValue="team" className="w-full mt-6">
+      <Tabs defaultValue="team" className="w-full mt-10">
         <TabsList>
           <TabsTrigger value="team" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
