@@ -1371,3 +1371,8 @@
 - [x] Show all roles by default for admin users
 - [x] Allow admin to switch between role-specific views
 - [x] Update Issues, Wins, Skills, and Agenda sections to respect selected role filter
+
+## Methodology Page - Lead Generator Rubric Tab
+- [x] Add Lead Generator tab to Methodology page alongside Lead Manager and Acquisition Manager
+- [x] Display Lead Generator rubric criteria when tab is selected
+- [x] Ensure all three role tabs are visible and functional

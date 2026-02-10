@@ -91,7 +91,7 @@ import {
   updateUserTeamRole,
   UserPermissionContext,
 } from "./db";
-import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC } from "./grading";
+import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC, LEAD_GENERATOR_RUBRIC } from "./grading";
 import { processCall } from "./grading";
 import { invokeLLM } from "./_core/llm";
 import { generateTeamInsights, saveGeneratedInsights, clearAiGeneratedInsights } from "./insights";
@@ -1216,11 +1216,12 @@ Keep it brief and actionable.`;
       return {
         leadManager: LEAD_MANAGER_RUBRIC,
         acquisitionManager: ACQUISITION_MANAGER_RUBRIC,
+        leadGenerator: LEAD_GENERATOR_RUBRIC,
       };
     }),
 
     getContext: protectedProcedure
-      .input(z.object({ callType: z.enum(["qualification", "offer"]) }))
+      .input(z.object({ callType: z.enum(["qualification", "offer", "lead_generation"]) }))
       .query(async ({ input }) => {
         return await getGradingContext(input.callType);
       }),

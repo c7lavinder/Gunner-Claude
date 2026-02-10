@@ -1006,12 +1006,12 @@ export async function deleteGradingRule(id: number): Promise<void> {
 /**
  * Get all active training materials and rules for grading context
  */
-export async function getGradingContext(callType: "qualification" | "offer"): Promise<{
+export async function getGradingContext(callType: "qualification" | "offer" | "lead_generation"): Promise<{
   trainingMaterials: TrainingMaterial[];
   gradingRules: GradingRule[];
   recentFeedback: AIFeedback[];
 }> {
-  const applicableTo = callType === "qualification" ? "lead_manager" : "acquisition_manager";
+  const applicableTo = callType === "qualification" ? "lead_manager" : (callType === "offer" ? "acquisition_manager" : "lead_generator");
   
   // Get training materials applicable to this call type or all
   const materials = await getTrainingMaterials({ activeOnly: true });

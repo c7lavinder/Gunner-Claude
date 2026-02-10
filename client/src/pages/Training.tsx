@@ -620,6 +620,7 @@ export default function Training() {
   const { data: rubrics, isLoading: rubricsLoading } = trpc.rubrics.getAll.useQuery();
   const { data: qualificationContext } = trpc.rubrics.getContext.useQuery({ callType: "qualification" });
   const { data: offerContext } = trpc.rubrics.getContext.useQuery({ callType: "offer" });
+  const { data: leadGenContext } = trpc.rubrics.getContext.useQuery({ callType: "lead_generation" });
 
   const createMutation = trpc.training.create.useMutation({
     onSuccess: () => {
@@ -1060,7 +1061,7 @@ export default function Training() {
             </div>
           ) : (
             <Tabs defaultValue="lead_manager" className="space-y-6">
-              <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsList className="grid w-full max-w-2xl grid-cols-3">
                 <TabsTrigger value="lead_manager" className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
                   Lead Manager
@@ -1068,6 +1069,10 @@ export default function Training() {
                 <TabsTrigger value="acquisition_manager" className="flex items-center gap-2">
                   <Target className="h-4 w-4" />
                   Acquisition Manager
+                </TabsTrigger>
+                <TabsTrigger value="lead_generator" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Lead Generator
                 </TabsTrigger>
               </TabsList>
 
@@ -1086,6 +1091,15 @@ export default function Training() {
                   context={offerContext}
                   title="Acquisition Manager Rubric"
                   description="Used for offer calls by Kyle"
+                />
+              </TabsContent>
+
+              <TabsContent value="lead_generator" className="space-y-6">
+                <RubricDisplay 
+                  rubric={(rubrics as any)?.leadGenerator} 
+                  context={leadGenContext}
+                  title="Lead Generator Rubric"
+                  description="Used for cold calls by Alex, Efren, and Mirna"
                 />
               </TabsContent>
             </Tabs>
