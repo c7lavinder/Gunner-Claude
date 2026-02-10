@@ -338,7 +338,7 @@ export const trainingMaterials = mysqlTable("training_materials", {
     "other"
   ]).default("other"),
   // Which role this applies to (legacy - use tenantRoleId for custom roles)
-  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager"]).default("all"),
+  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager", "lead_generator"]).default("all"),
   tenantRoleId: int("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
   // Status
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
@@ -407,7 +407,7 @@ export const gradingRules = mysqlTable("grading_rules", {
   // Priority (higher = more important)
   priority: int("priority").default(0),
   // Which rubric this applies to (legacy)
-  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager"]).default("all"),
+  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager", "lead_generator"]).default("all"),
   tenantRoleId: int("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
   // Status
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),

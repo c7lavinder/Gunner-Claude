@@ -1,0 +1,2 @@
+ALTER TABLE `grading_rules` MODIFY COLUMN `applicableTo` enum('all','lead_manager','acquisition_manager','lead_generator') DEFAULT 'all';--> statement-breakpoint
+ALTER TABLE `training_materials` MODIFY COLUMN `applicableTo` enum('all','lead_manager','acquisition_manager','lead_generator') DEFAULT 'all';

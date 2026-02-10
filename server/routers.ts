@@ -706,7 +706,7 @@ export const appRouter = router({
         fileType: z.string().optional(),
         fileData: z.string().optional(), // Base64 encoded file data for PDF/DOCX
         category: z.enum(["script", "objection_handling", "methodology", "best_practices", "examples", "other"]).optional(),
-        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         let extractedContent = input.content;
@@ -747,7 +747,7 @@ export const appRouter = router({
         description: z.string().optional(),
         content: z.string().optional(),
         category: z.enum(["script", "objection_handling", "methodology", "best_practices", "examples", "other"]).optional(),
-        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator"]).optional(),
         isActive: z.enum(["true", "false"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -865,7 +865,7 @@ export const appRouter = router({
         description: z.string().optional(),
         ruleText: z.string(),
         priority: z.number().optional(),
-        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // CRITICAL: Include tenantId for multi-tenant isolation
@@ -886,7 +886,7 @@ export const appRouter = router({
         description: z.string().optional(),
         ruleText: z.string().optional(),
         priority: z.number().optional(),
-        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator"]).optional(),
         isActive: z.enum(["true", "false"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {

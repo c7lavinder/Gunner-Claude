@@ -1385,3 +1385,7 @@
 - [x] Add "Lead Generators" option to "Applies To" dropdown in training materials upload form
 - [x] Ensure dropdown shows: All Team Members, Lead Managers, Acquisition Manager, Lead Generators
 - [x] Verify materials can be assigned to Lead Generators specifically
+
+## Bug Fix - Lead Generator applicableTo validation
+- [x] Update server-side z.enum validation to include "lead_generator" for training materials create/update
+- [x] Update server-side z.enum validation to include "lead_generator" for grading rules create/update
