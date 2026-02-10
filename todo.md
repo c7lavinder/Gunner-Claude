@@ -1376,3 +1376,7 @@
 - [x] Add Lead Generator tab to Methodology page alongside Lead Manager and Acquisition Manager
 - [x] Display Lead Generator rubric criteria when tab is selected
 - [x] Ensure all three role tabs are visible and functional
+
+## Clean Up Test Data
+- [x] Delete test team members (Test Lead Manager, Test Acquisition Manager, Test Lead Generator)
+- [x] Verify only real team members remain (Chris, Daniel, Kyle, Alex, Efren, Mirna)

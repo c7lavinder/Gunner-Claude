@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, name, teamRole FROM team_members WHERE name LIKE 'Test%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, teamRole FROM team_members WHERE name LIKE 'Test%';",
+  "rows": [
+    {
+      "id": "60001",
+      "name": "Test Lead Manager",
+      "teamRole": "lead_manager"
+    },
+    {
+      "id": "60002",
+      "name": "Test Acquisition Manager",
+      "teamRole": "acquisition_manager"
+    },
+    {
+      "id": "60003",
+      "name": "Test Lead Generator",
+      "teamRole": "lead_generator"
+    },
+    {
+      "id": "60004",
+      "name": "Test Lead Manager",
+      "teamRole": "lead_manager"
+    },
+    {
+      "id": "60005",
+      "name": "Test Acquisition Manager",
+      "teamRole": "acquisition_manager"
+    },
+    {
+      "id": "60006",
+      "name": "Test Lead Generator",
+      "teamRole": "lead_generator"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tteamRole\n60001\tTest Lead Manager\tlead_manager\n60002\tTest Acquisition Manager\tacquisition_manager\n60003\tTest Lead Generator\tlead_generator\n60004\tTest Lead Manager\tlead_manager\n60005\tTest Acquisition Manager\tacquisition_manager\n60006\tTest Lead Generator\tlead_generator\n",
+  "stderr": "",
+  "execution_time_ms": 365
+}

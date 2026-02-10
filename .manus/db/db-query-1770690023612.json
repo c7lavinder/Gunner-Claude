@@ -1,0 +1,9 @@
+{
+  "query": "\nDELETE FROM user_xp WHERE teamMemberId IN (SELECT id FROM team_members WHERE name LIKE 'Test%');\nDELETE FROM user_badges WHERE teamMemberId IN (SELECT id FROM team_members WHERE name LIKE 'Test%');\nDELETE FROM calls WHERE teamMemberId IN (SELECT id FROM team_members WHERE name LIKE 'Test%');\nDELETE FROM team_training_items WHERE teamMemberId IN (SELECT id FROM team_members WHERE name LIKE 'Test%');\nDELETE FROM team_members WHERE name LIKE 'Test%';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute \nDELETE FROM user_xp WHERE teamMemberId IN (SELECT id FROM team_members WHERE name LIKE 'Test%');\nDELETE FROM user_badges WHERE teamMemberId IN (SELECT id FROM team_members WHERE name LIKE 'Test%');\nDELETE FROM calls WHERE teamMemberId IN (SELECT id FROM team_members WHERE name LIKE 'Test%');\nDELETE FROM team_training_items WHERE teamMemberId IN (SELECT id FROM team_members WHERE name LIKE 'Test%');\nDELETE FROM team_members WHERE name LIKE 'Test%';\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 569
+}

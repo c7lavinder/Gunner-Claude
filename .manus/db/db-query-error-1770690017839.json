@@ -1,0 +1,8 @@
+{
+  "query": "DELETE FROM team_members WHERE name LIKE 'Test%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute DELETE FROM team_members WHERE name LIKE 'Test%';",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1451 (23000) at line 1: Cannot delete or update a parent row: a foreign key constraint fails (`nusxfqu5xbtmz3nucr6brb`.`user_xp`, CONSTRAINT `user_xp_teamMemberId_team_members_id_fk` FOREIGN KEY (`teamMemberId`) REFERENCES `team_members` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION)"
+  ]
+}
