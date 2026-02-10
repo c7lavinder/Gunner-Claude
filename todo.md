@@ -1380,3 +1380,8 @@
 ## Clean Up Test Data
 - [x] Delete test team members (Test Lead Manager, Test Acquisition Manager, Test Lead Generator)
 - [x] Verify only real team members remain (Chris, Daniel, Kyle, Alex, Efren, Mirna)
+
+## Training Materials - Lead Generator Option
+- [x] Add "Lead Generators" option to "Applies To" dropdown in training materials upload form
+- [x] Ensure dropdown shows: All Team Members, Lead Managers, Acquisition Manager, Lead Generators
+- [x] Verify materials can be assigned to Lead Generators specifically
