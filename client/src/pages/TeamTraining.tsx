@@ -17,6 +17,7 @@ import {
   FileText, Send, X, ChevronRight, Pause, SkipForward
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type ItemType = "skill" | "issue" | "win" | "agenda";
 type Priority = "low" | "medium" | "high" | "urgent";
@@ -342,9 +343,17 @@ function GenerateInsightsButton({ onSuccess }: { onSuccess: () => void }) {
 
 function SkillsSection() {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const teamRole = !isAdmin && user?.teamRole
+    ? user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator"
+    : undefined;
+  
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
     itemType: "skill", 
-    status: "active" 
+    status: "active",
+    teamRole 
   });
 
   const handleRefresh = () => {
@@ -406,9 +415,18 @@ function SkillsSection() {
 
 function IssuesSection() {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  
+  // Filter by role: non-admins only see their role's insights
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const teamRole = !isAdmin && user?.teamRole
+    ? user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator"
+    : undefined;
+  
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
     itemType: "issue", 
-    status: "active" 
+    status: "active",
+    teamRole 
   });
 
   const handleRefresh = () => {
@@ -471,9 +489,17 @@ function IssuesSection() {
 
 function WinsSection() {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const teamRole = !isAdmin && user?.teamRole
+    ? user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator"
+    : undefined;
+  
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
     itemType: "win", 
-    status: "active" 
+    status: "active",
+    teamRole 
   });
 
   const handleRefresh = () => {
@@ -901,9 +927,17 @@ function MeetingFacilitator({
 function AgendaSection() {
   const utils = trpc.useUtils();
   const [showFacilitator, setShowFacilitator] = useState(false);
+  const { user } = useAuth();
+  
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const teamRole = !isAdmin && user?.teamRole
+    ? user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator"
+    : undefined;
+  
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ 
     itemType: "agenda", 
-    status: "active" 
+    status: "active",
+    teamRole 
   });
 
   const handleRefresh = () => {

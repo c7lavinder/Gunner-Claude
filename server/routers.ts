@@ -1233,6 +1233,7 @@ Keep it brief and actionable.`;
         itemType: z.enum(["skill", "issue", "win", "agenda"]).optional(),
         status: z.enum(["active", "in_progress", "completed", "archived"]).optional(),
         teamMemberId: z.number().optional(),
+        teamRole: z.enum(["lead_manager", "acquisition_manager", "lead_generator"]).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         // CRITICAL: Include tenantId for multi-tenant isolation

@@ -1052,12 +1052,58 @@ export async function getTeamTrainingItems(options?: {
   itemType?: "skill" | "issue" | "win" | "agenda";
   status?: "active" | "in_progress" | "completed" | "archived";
   teamMemberId?: number;
+  teamRole?: "lead_manager" | "acquisition_manager" | "lead_generator";
   meetingDate?: Date;
   tenantId?: number; // For multi-tenant filtering
 }): Promise<TeamTrainingItem[]> {
   const db = await getDb();
   if (!db) return [];
 
+  // If filtering by teamRole, join with team_members table
+  if (options?.teamRole) {
+    const conditions = [];
+    
+    if (options?.tenantId) {
+      conditions.push(eq(teamTrainingItems.tenantId, options.tenantId));
+    }
+    if (options?.itemType) {
+      conditions.push(eq(teamTrainingItems.itemType, options.itemType));
+    }
+    if (options?.status) {
+      conditions.push(eq(teamTrainingItems.status, options.status));
+    }
+    
+    conditions.push(eq(teamMembers.teamRole, options.teamRole));
+    
+    const query = db
+      .select({
+        id: teamTrainingItems.id,
+        tenantId: teamTrainingItems.tenantId,
+        itemType: teamTrainingItems.itemType,
+        title: teamTrainingItems.title,
+        description: teamTrainingItems.description,
+        targetBehavior: teamTrainingItems.targetBehavior,
+        callReference: teamTrainingItems.callReference,
+        sortOrder: teamTrainingItems.sortOrder,
+        priority: teamTrainingItems.priority,
+        teamMemberId: teamTrainingItems.teamMemberId,
+        teamMemberName: teamTrainingItems.teamMemberName,
+        status: teamTrainingItems.status,
+        isAiGenerated: teamTrainingItems.isAiGenerated,
+        sourceCallIds: teamTrainingItems.sourceCallIds,
+        meetingDate: teamTrainingItems.meetingDate,
+        createdAt: teamTrainingItems.createdAt,
+        updatedAt: teamTrainingItems.updatedAt,
+      })
+      .from(teamTrainingItems)
+      .leftJoin(teamMembers, eq(teamTrainingItems.teamMemberId, teamMembers.id))
+      .where(and(...conditions))
+      .orderBy(desc(teamTrainingItems.createdAt));
+    
+    return await query as any;
+  }
+  
+  // Original logic for non-role filtering
   const conditions = [];
   
   // CRITICAL: Filter by tenant for multi-tenant isolation

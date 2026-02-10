@@ -1358,3 +1358,10 @@
 - [x] Test that Lead Generators appear in team member cards
 - [x] Fix "lead_generator" to display as "Lead Generator" in UI
 - [x] Make Lead Generators appear in Settings page
+
+## Role-Specific Training Content
+- [x] Update Team Training tab to filter AI insights by user's team role
+- [x] Lead Generators see only insights from Lead Generator calls
+- [x] Lead Managers see only insights from Lead Manager calls
+- [x] Acquisition Managers see only insights from Acquisition Manager calls
+- [x] Admins see all insights (no role filtering)
