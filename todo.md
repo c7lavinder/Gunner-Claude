@@ -1436,3 +1436,10 @@
 - [x] Update Training page rubric descriptions for all three roles
 - [x] Add lead_generation to callType enum for call creation
 - [x] Write comprehensive vitest tests for Lead Generator role definitions (16 tests passing)
+
+## BatchDialer API Improvements (per support recommendations)
+- [x] Implement pagination for cdrs endpoint requests
+- [x] Break polling into smaller time windows (15-30 min chunks instead of 2 hours)
+- [x] Add graceful retry logic with exponential backoff
+- [x] Improve error handling for SocketError/timeout scenarios
+- [x] Prepare exact request format details for BatchDialer support team
