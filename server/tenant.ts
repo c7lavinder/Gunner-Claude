@@ -101,7 +101,10 @@ export interface TenantCrmConfig {
   batchDialerApiKey?: string;
   batchLeadsApiKey?: string;
   dispoPipelineName?: string;
+  dispoPipelineId?: string;
   newDealStageName?: string;
+  newDealStageId?: string;
+  stageMapping?: Record<string, string>;
 }
 
 export function parseCrmConfig(tenant: { crmConfig: string | null }): TenantCrmConfig {
@@ -604,8 +607,10 @@ export function getTenantIdFromUser(user: { tenantId?: number | null }): number 
  * Check if user is platform owner (super admin)
  */
 export function isPlatformOwner(openId: string): boolean {
-  // Corey's openId - the platform owner
-  return openId === "U3JEthPNs4UbYRrgRBbShj";
+  // Check against the OWNER_OPEN_ID env var (Manus OAuth)
+  // Also check against Corey's Google OAuth openId
+  const ownerOpenId = process.env.OWNER_OPEN_ID || "U3JEthPNs4UbYRrgRBbShj";
+  return openId === ownerOpenId || openId === "google_112815946311339322655";
 }
 
 // ============ USER MANAGEMENT ============

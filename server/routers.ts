@@ -2590,7 +2590,10 @@ Create content that:
           batchDialerEnabled: z.boolean().optional(),
           batchDialerApiKey: z.string().optional(),
           dispoPipelineName: z.string().optional(),
+          dispoPipelineId: z.string().optional(),
           newDealStageName: z.string().optional(),
+          newDealStageId: z.string().optional(),
+          stageMapping: z.record(z.string(), z.string()).optional(),
         }).optional(),
         teamMembers: z.array(z.object({
           name: z.string().min(1),
@@ -2635,7 +2638,10 @@ Create content that:
           batchDialerEnabled: z.boolean().optional(),
           batchDialerApiKey: z.string().optional(),
           dispoPipelineName: z.string().optional(),
+          dispoPipelineId: z.string().optional(),
           newDealStageName: z.string().optional(),
+          newDealStageId: z.string().optional(),
+          stageMapping: z.record(z.string(), z.string()).optional(),
         }),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2794,6 +2800,114 @@ Create content that:
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         return revokePendingInvitation(ctx.user.tenantId, input.invitationId);
+      }),
+
+    // Test GHL connection with provided credentials
+    testGhlConnection: protectedProcedure
+      .input(z.object({
+        apiKey: z.string().min(1),
+        locationId: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const GHL_API_BASE = "https://services.leadconnectorhq.com";
+        try {
+          // Try fetching location info to validate credentials
+          const response = await fetch(`${GHL_API_BASE}/locations/${input.locationId}`, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${input.apiKey}`,
+              "Version": "2021-07-28",
+              "Accept": "application/json",
+            },
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 401) {
+              return { success: false, error: "Invalid API key. Check that your Private Integration token is correct." };
+            }
+            if (response.status === 404 || response.status === 422) {
+              return { success: false, error: "Location not found. Check your Location ID." };
+            }
+            return { success: false, error: `GHL API error (${response.status}): ${errorText.substring(0, 200)}` };
+          }
+          const data = await response.json();
+          const locationName = data.location?.name || data.name || "Unknown";
+          return { success: true, locationName, message: `Connected to "${locationName}"` };
+        } catch (error: any) {
+          return { success: false, error: `Connection failed: ${error.message || "Network error"}` };
+        }
+      }),
+
+    // Fetch GHL pipelines for a tenant (or with provided credentials)
+    fetchGhlPipelines: protectedProcedure
+      .input(z.object({
+        apiKey: z.string().min(1),
+        locationId: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const GHL_API_BASE = "https://services.leadconnectorhq.com";
+        try {
+          const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${input.locationId}`, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${input.apiKey}`,
+              "Version": "2021-07-28",
+              "Content-Type": "application/json",
+            },
+          });
+          if (!response.ok) {
+            return { success: false, pipelines: [], error: `Failed to fetch pipelines (${response.status})` };
+          }
+          const data = await response.json();
+          const pipelines = (data.pipelines || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            stages: (p.stages || []).map((s: any) => ({ id: s.id, name: s.name })),
+          }));
+          return { success: true, pipelines };
+        } catch (error: any) {
+          return { success: false, pipelines: [], error: error.message };
+        }
+      }),
+
+    // Save pipeline stage mapping for a tenant
+    savePipelineMapping: protectedProcedure
+      .input(z.object({
+        tenantId: z.number().optional(), // If provided, super admin updating another tenant
+        pipelineMapping: z.object({
+          dispoPipelineId: z.string().optional(),
+          dispoPipelineName: z.string().optional(),
+          newDealStageId: z.string().optional(),
+          newDealStageName: z.string().optional(),
+          stageMapping: z.record(z.string(), z.string()).optional(), // stageId -> callType mapping
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { isPlatformOwner, updateTenantSettings, parseCrmConfig, getTenantById } = await import("./tenant");
+        const targetTenantId = input.tenantId || ctx.user?.tenantId;
+        if (!targetTenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant specified' });
+        }
+        // Check permissions: platform owner can update any tenant, tenant admin can update own
+        if (input.tenantId && (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId))) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        if (!input.tenantId && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant admin access required' });
+        }
+        // Get existing CRM config and merge pipeline mapping
+        const tenant = await getTenantById(targetTenantId);
+        if (!tenant) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+        const existingConfig = parseCrmConfig({ crmConfig: tenant.crmConfig as string | null });
+        const updatedConfig = {
+          ...existingConfig,
+          dispoPipelineName: input.pipelineMapping.dispoPipelineName || existingConfig.dispoPipelineName,
+          dispoPipelineId: input.pipelineMapping.dispoPipelineId || existingConfig.dispoPipelineId,
+          newDealStageName: input.pipelineMapping.newDealStageName || existingConfig.newDealStageName,
+          newDealStageId: input.pipelineMapping.newDealStageId || existingConfig.newDealStageId,
+          stageMapping: input.pipelineMapping.stageMapping || existingConfig.stageMapping,
+        };
+        return updateTenantSettings(targetTenantId, { crmConfig: JSON.stringify(updatedConfig) });
       }),
 
     // Create checkout session for subscription

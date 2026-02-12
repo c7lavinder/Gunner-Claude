@@ -1527,7 +1527,7 @@
 - [ ] Per-tenant API credentials: move GHL/BatchDialer keys from env vars into tenant crmConfig
 - [ ] Update GHL sync job to loop through tenants and use per-tenant credentials
 - [ ] Update BatchDialer sync job to loop through tenants and use per-tenant credentials
-- [ ] Per-tenant pipeline stage mapping: UI to map GHL stages → call types per tenant
+- [x] Per-tenant pipeline stage mapping: UI to map GHL stages → call types per tenant
 - [ ] Scope all major data queries by tenantId (calls, team_members, grades, badges, etc.)
 - [x] Build tenant setup wizard admin page (company name, GHL key, pipeline mapping)
 - [x] Build team member bulk import (paste names, phone numbers, roles)
@@ -1540,3 +1540,6 @@
 - [x] Add /admin/tenant-setup route for new customer onboarding wizard
 - [x] Fix admin role check in updateSettings to include super_admin role
 - [x] Write vitest tests for tenant setup, bulk import, CRM config update, and permission checks (10 tests passing)
+- [x] Test full tenant setup flow end-to-end via browser (create tenant, verify CRM config saved, verify team members created)
+- [x] Add GHL connection validation endpoint and "Test Connection" button in CRM setup
+- [x] Build per-tenant pipeline stage mapping UI (visual mapper: GHL stages → call types per tenant)

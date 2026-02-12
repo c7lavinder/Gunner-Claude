@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
   Check, Building2, Link2, Users, Rocket, ArrowRight, ArrowLeft,
-  UserPlus, Loader2, Trash2, Plus, Copy
+  Plus, Loader2, Trash2, Copy, Wifi, WifiOff, GitBranch
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -30,10 +30,30 @@ const ROLE_OPTIONS = [
   { value: "admin", label: "Admin", description: "Full access to all features" },
 ];
 
+const CALL_TYPE_OPTIONS = [
+  { value: "", label: "— Not mapped —" },
+  { value: "lead_gen", label: "Lead Generation" },
+  { value: "qualification", label: "Qualification / Lead Mgmt" },
+  { value: "acquisition", label: "Acquisition / Offer" },
+  { value: "follow_up", label: "Follow Up" },
+  { value: "admin", label: "Admin / Internal" },
+];
+
 interface TeamMemberEntry {
   name: string;
   teamRole: "admin" | "lead_manager" | "acquisition_manager" | "lead_generator";
   phone: string;
+}
+
+interface PipelineStage {
+  id: string;
+  name: string;
+}
+
+interface Pipeline {
+  id: string;
+  name: string;
+  stages: PipelineStage[];
 }
 
 export default function TenantSetup() {
@@ -41,6 +61,21 @@ export default function TenantSetup() {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [saving, setSaving] = useState(false);
+
+  // GHL connection test state
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    tested: boolean;
+    success: boolean;
+    locationName?: string;
+    error?: string;
+  }>({ tested: false, success: false });
+
+  // Pipeline state
+  const [loadingPipelines, setLoadingPipelines] = useState(false);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [selectedPipelineId, setSelectedPipelineId] = useState("");
+  const [stageMapping, setStageMapping] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     companyName: "",
@@ -61,6 +96,8 @@ export default function TenantSetup() {
   });
 
   const setupTenantMutation = trpc.tenant.setup.useMutation();
+  const testConnectionMutation = trpc.tenant.testGhlConnection.useMutation();
+  const fetchPipelinesMutation = trpc.tenant.fetchGhlPipelines.useMutation();
 
   const progress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
@@ -107,7 +144,6 @@ export default function TenantSetup() {
       const name = parts[0];
       if (!name) continue;
 
-      // Try to detect role from second column
       let teamRole: TeamMemberEntry["teamRole"] = "lead_generator";
       if (parts[1]) {
         const roleLower = parts[1].toLowerCase();
@@ -134,6 +170,73 @@ export default function TenantSetup() {
     }
   };
 
+  const handleTestConnection = async () => {
+    if (!formData.ghlApiKey || !formData.ghlLocationId) {
+      toast.error("Enter both GHL API Key and Location ID first");
+      return;
+    }
+    setTestingConnection(true);
+    setConnectionStatus({ tested: false, success: false });
+    try {
+      const result = await testConnectionMutation.mutateAsync({
+        apiKey: formData.ghlApiKey,
+        locationId: formData.ghlLocationId,
+      });
+      if (result.success) {
+        setConnectionStatus({
+          tested: true,
+          success: true,
+          locationName: result.locationName,
+        });
+        toast.success(result.message || "Connection successful!");
+        // Auto-fetch pipelines after successful connection
+        handleFetchPipelines();
+      } else {
+        setConnectionStatus({
+          tested: true,
+          success: false,
+          error: result.error,
+        });
+        toast.error(result.error || "Connection failed");
+      }
+    } catch (error: any) {
+      setConnectionStatus({
+        tested: true,
+        success: false,
+        error: error.message || "Connection test failed",
+      });
+      toast.error(error.message || "Connection test failed");
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  const handleFetchPipelines = async () => {
+    if (!formData.ghlApiKey || !formData.ghlLocationId) return;
+    setLoadingPipelines(true);
+    try {
+      const result = await fetchPipelinesMutation.mutateAsync({
+        apiKey: formData.ghlApiKey,
+        locationId: formData.ghlLocationId,
+      });
+      if (result.success && result.pipelines.length > 0) {
+        setPipelines(result.pipelines);
+        // Auto-select first pipeline if none selected
+        if (!selectedPipelineId) {
+          setSelectedPipelineId(result.pipelines[0].id);
+        }
+      } else if (result.pipelines.length === 0) {
+        toast.info("No pipelines found in this GHL location");
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch pipelines:", error);
+    } finally {
+      setLoadingPipelines(false);
+    }
+  };
+
+  const selectedPipeline = pipelines.find(p => p.id === selectedPipelineId);
+
   const handleNext = () => {
     if (currentStep === 1 && !formData.companyName) {
       toast.error("Company name is required");
@@ -153,7 +256,6 @@ export default function TenantSetup() {
   const handleCreate = async () => {
     setSaving(true);
     try {
-      // Build CRM config
       const crmConfig: Record<string, unknown> = {};
       const hasCrm = formData.ghlApiKey && formData.ghlLocationId;
 
@@ -165,14 +267,19 @@ export default function TenantSetup() {
         crmConfig.batchDialerEnabled = true;
         crmConfig.batchDialerApiKey = formData.batchDialerApiKey;
       }
-      if (formData.dispoPipelineName) {
-        crmConfig.dispoPipelineName = formData.dispoPipelineName;
+      if (formData.dispoPipelineName || selectedPipeline) {
+        crmConfig.dispoPipelineName = formData.dispoPipelineName || selectedPipeline?.name;
+        if (selectedPipelineId) crmConfig.dispoPipelineId = selectedPipelineId;
       }
       if (formData.newDealStageName) {
         crmConfig.newDealStageName = formData.newDealStageName;
       }
+      // Save stage mapping if any stages are mapped
+      const mappedStages = Object.entries(stageMapping).filter(([, v]) => v);
+      if (mappedStages.length > 0) {
+        crmConfig.stageMapping = Object.fromEntries(mappedStages);
+      }
 
-      // Filter out empty team members
       const validMembers = formData.teamMembers.filter(m => m.name.trim());
 
       await setupTenantMutation.mutateAsync({
@@ -251,6 +358,7 @@ export default function TenantSetup() {
       case 2:
         return (
           <div className="space-y-6">
+            {/* GHL Connection Section */}
             <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
               <h4 className="font-medium flex items-center gap-2">
                 <Link2 className="h-4 w-4" />
@@ -263,7 +371,10 @@ export default function TenantSetup() {
                   type="password"
                   placeholder="pit-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                   value={formData.ghlApiKey}
-                  onChange={(e) => setFormData({ ...formData, ghlApiKey: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, ghlApiKey: e.target.value });
+                    setConnectionStatus({ tested: false, success: false });
+                  }}
                 />
               </div>
               <div className="space-y-2">
@@ -272,34 +383,212 @@ export default function TenantSetup() {
                   id="ghlLocationId"
                   placeholder="e.g., hmD7eWGQJE7EVFpJxj4q"
                   value={formData.ghlLocationId}
-                  onChange={(e) => setFormData({ ...formData, ghlLocationId: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, ghlLocationId: e.target.value });
+                    setConnectionStatus({ tested: false, success: false });
+                  }}
                 />
+              </div>
+
+              {/* Test Connection Button */}
+              <div className="flex items-center gap-3">
+                <Button
+                  variant={connectionStatus.success ? "outline" : "default"}
+                  size="sm"
+                  onClick={handleTestConnection}
+                  disabled={testingConnection || !formData.ghlApiKey || !formData.ghlLocationId}
+                >
+                  {testingConnection ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : connectionStatus.success ? (
+                    <Wifi className="h-4 w-4 mr-2 text-green-500" />
+                  ) : (
+                    <Wifi className="h-4 w-4 mr-2" />
+                  )}
+                  {testingConnection ? "Testing..." : connectionStatus.success ? "Re-test Connection" : "Test Connection"}
+                </Button>
+
+                {connectionStatus.tested && (
+                  <div className="flex items-center gap-2 text-sm">
+                    {connectionStatus.success ? (
+                      <>
+                        <Check className="h-4 w-4 text-green-500" />
+                        <span className="text-green-600">
+                          Connected to <strong>{connectionStatus.locationName}</strong>
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff className="h-4 w-4 text-red-500" />
+                        <span className="text-red-600">{connectionStatus.error}</span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-              <h4 className="font-medium">Pipeline Mapping</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="dispoPipelineName">Dispo Pipeline Name</Label>
-                  <Input
-                    id="dispoPipelineName"
-                    placeholder="e.g., Dispo Pipeline"
-                    value={formData.dispoPipelineName}
-                    onChange={(e) => setFormData({ ...formData, dispoPipelineName: e.target.value })}
-                  />
+            {/* Pipeline Stage Mapping - only show after successful connection */}
+            {connectionStatus.success && (
+              <div className="space-y-4 p-4 bg-muted/50 rounded-lg border border-green-200">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <GitBranch className="h-4 w-4" />
+                    Pipeline Stage Mapping
+                  </h4>
+                  {!loadingPipelines && pipelines.length === 0 && (
+                    <Button variant="outline" size="sm" onClick={handleFetchPipelines}>
+                      Load Pipelines
+                    </Button>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="newDealStageName">New Deal Stage Name</Label>
-                  <Input
-                    id="newDealStageName"
-                    placeholder="e.g., New Deal"
-                    value={formData.newDealStageName}
-                    onChange={(e) => setFormData({ ...formData, newDealStageName: e.target.value })}
-                  />
+
+                {loadingPipelines && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading pipelines from GHL...
+                  </div>
+                )}
+
+                {pipelines.length > 0 && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Select Dispo Pipeline</Label>
+                      <Select
+                        value={selectedPipelineId}
+                        onValueChange={(value) => {
+                          setSelectedPipelineId(value);
+                          const pipeline = pipelines.find(p => p.id === value);
+                          if (pipeline) {
+                            setFormData({ ...formData, dispoPipelineName: pipeline.name });
+                          }
+                          setStageMapping({});
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a pipeline" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {pipelines.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name} ({p.stages.length} stages)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {selectedPipeline && selectedPipeline.stages.length > 0 && (
+                      <div className="space-y-3">
+                        <Label className="text-sm">Map each stage to a call type</Label>
+                        <p className="text-xs text-muted-foreground">
+                          This tells Gunner which pipeline stages correspond to which call types for routing and grading.
+                        </p>
+                        <div className="space-y-2">
+                          {selectedPipeline.stages.map((stage) => (
+                            <div key={stage.id} className="flex items-center gap-3 p-2 bg-background rounded border">
+                              <span className="text-sm font-medium flex-1 min-w-0 truncate">{stage.name}</span>
+                              <Select
+                                value={stageMapping[stage.id] || ""}
+                                onValueChange={(value) => {
+                                  setStageMapping({ ...stageMapping, [stage.id]: value });
+                                  // Auto-detect "New Deal" stage
+                                  if (stage.name.toLowerCase().includes("new deal") || stage.name.toLowerCase().includes("new lead")) {
+                                    setFormData({ ...formData, newDealStageName: stage.name });
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="w-[200px]">
+                                  <SelectValue placeholder="Select call type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {CALL_TYPE_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value || "none"} value={opt.value || "unmapped"}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="newDealStageName">New Deal Stage Name</Label>
+                        <Input
+                          id="newDealStageName"
+                          placeholder="e.g., New Deal"
+                          value={formData.newDealStageName}
+                          onChange={(e) => setFormData({ ...formData, newDealStageName: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">Stage that triggers the "Closer" badge</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {!loadingPipelines && pipelines.length === 0 && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Or manually enter pipeline names:
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="dispoPipelineName">Dispo Pipeline Name</Label>
+                        <Input
+                          id="dispoPipelineName"
+                          placeholder="e.g., Dispo Pipeline"
+                          value={formData.dispoPipelineName}
+                          onChange={(e) => setFormData({ ...formData, dispoPipelineName: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="newDealStageName2">New Deal Stage Name</Label>
+                        <Input
+                          id="newDealStageName2"
+                          placeholder="e.g., New Deal"
+                          value={formData.newDealStageName}
+                          onChange={(e) => setFormData({ ...formData, newDealStageName: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Manual pipeline mapping fallback when not connected */}
+            {!connectionStatus.success && (
+              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+                <h4 className="font-medium">Pipeline Mapping</h4>
+                <p className="text-xs text-muted-foreground">
+                  Connect GHL above to auto-load pipelines, or enter names manually:
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="dispoPipelineName">Dispo Pipeline Name</Label>
+                    <Input
+                      id="dispoPipelineName"
+                      placeholder="e.g., Dispo Pipeline"
+                      value={formData.dispoPipelineName}
+                      onChange={(e) => setFormData({ ...formData, dispoPipelineName: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="newDealStageName">New Deal Stage Name</Label>
+                    <Input
+                      id="newDealStageName"
+                      placeholder="e.g., New Deal"
+                      value={formData.newDealStageName}
+                      onChange={(e) => setFormData({ ...formData, newDealStageName: e.target.value })}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
               <h4 className="font-medium">BatchDialer (Optional)</h4>
@@ -396,7 +685,8 @@ export default function TenantSetup() {
           </div>
         );
 
-      case 4:
+      case 4: {
+        const mappedStageCount = Object.values(stageMapping).filter(v => v && v !== "unmapped").length;
         return (
           <div className="space-y-6">
             <div className="text-center mb-4">
@@ -427,15 +717,24 @@ export default function TenantSetup() {
                   {formData.ghlApiKey ? (
                     <>
                       <div className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" />
-                        GoHighLevel connected
+                        {connectionStatus.success ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <WifiOff className="h-4 w-4 text-yellow-500" />
+                        )}
+                        GoHighLevel {connectionStatus.success ? "verified" : "configured (not tested)"}
                       </div>
-                      <div><span className="text-muted-foreground">Location:</span> {formData.ghlLocationId}</div>
-                      {formData.dispoPipelineName && (
-                        <div><span className="text-muted-foreground">Pipeline:</span> {formData.dispoPipelineName}</div>
+                      {connectionStatus.locationName && (
+                        <div><span className="text-muted-foreground">Location:</span> {connectionStatus.locationName}</div>
+                      )}
+                      {(formData.dispoPipelineName || selectedPipeline) && (
+                        <div><span className="text-muted-foreground">Pipeline:</span> {formData.dispoPipelineName || selectedPipeline?.name}</div>
                       )}
                       {formData.newDealStageName && (
                         <div><span className="text-muted-foreground">New Deal Stage:</span> {formData.newDealStageName}</div>
+                      )}
+                      {mappedStageCount > 0 && (
+                        <div><span className="text-muted-foreground">Mapped Stages:</span> {mappedStageCount} stage(s)</div>
                       )}
                     </>
                   ) : (
@@ -474,6 +773,7 @@ export default function TenantSetup() {
             </div>
           </div>
         );
+      }
 
       default:
         return null;

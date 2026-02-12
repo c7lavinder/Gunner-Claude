@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2 } from "lucide-react";
+import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -95,6 +95,19 @@ export default function Onboarding() {
   }, [tenantSettings, tenantLoading, stepParam]);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  // GHL connection test state
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    tested: boolean;
+    success: boolean;
+    locationName?: string;
+    error?: string;
+  }>({ tested: false, success: false });
+  // Pipeline state
+  const [loadingPipelines, setLoadingPipelines] = useState(false);
+  const [pipelines, setPipelines] = useState<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>>([]);
+  const [selectedPipelineId, setSelectedPipelineId] = useState("");
+  const [stageMapping, setStageMapping] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     companyName: "",
     companySlug: "",
@@ -125,6 +138,8 @@ export default function Onboarding() {
   const inviteUserMutation = trpc.tenant.inviteUser.useMutation();
   const createTrainingMutation = trpc.training.create.useMutation();
   const completeOnboardingMutation = trpc.tenant.completeOnboarding.useMutation();
+  const testConnectionMut = trpc.tenant.testGhlConnection.useMutation();
+  const fetchPipelinesMut = trpc.tenant.fetchGhlPipelines.useMutation();
 
   const progress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
@@ -388,39 +403,170 @@ export default function Onboarding() {
                     id="ghlLocationId"
                     placeholder="Enter your GHL Location ID"
                     value={formData.ghlLocationId}
-                    onChange={(e) => setFormData({ ...formData, ghlLocationId: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, ghlLocationId: e.target.value });
+                      setConnectionStatus({ tested: false, success: false });
+                    }}
                   />
+                </div>
+
+                {/* Test Connection Button */}
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant={connectionStatus.success ? "outline" : "default"}
+                    size="sm"
+                    onClick={async () => {
+                      if (!formData.ghlApiKey || !formData.ghlLocationId) {
+                        toast.error("Enter both API Key and Location ID first");
+                        return;
+                      }
+                      setTestingConnection(true);
+                      setConnectionStatus({ tested: false, success: false });
+                      try {
+                        const result = await testConnectionMut.mutateAsync({
+                          apiKey: formData.ghlApiKey,
+                          locationId: formData.ghlLocationId,
+                        });
+                        if (result.success) {
+                          setConnectionStatus({ tested: true, success: true, locationName: result.locationName });
+                          toast.success(result.message || "Connection successful!");
+                          // Auto-fetch pipelines
+                          setLoadingPipelines(true);
+                          try {
+                            const pResult = await fetchPipelinesMut.mutateAsync({
+                              apiKey: formData.ghlApiKey,
+                              locationId: formData.ghlLocationId,
+                            });
+                            if (pResult.success && pResult.pipelines.length > 0) {
+                              setPipelines(pResult.pipelines);
+                              if (!selectedPipelineId) setSelectedPipelineId(pResult.pipelines[0].id);
+                            }
+                          } catch {} finally { setLoadingPipelines(false); }
+                        } else {
+                          setConnectionStatus({ tested: true, success: false, error: result.error });
+                          toast.error(result.error || "Connection failed");
+                        }
+                      } catch (error: any) {
+                        setConnectionStatus({ tested: true, success: false, error: error.message });
+                        toast.error(error.message || "Connection test failed");
+                      } finally { setTestingConnection(false); }
+                    }}
+                    disabled={testingConnection || !formData.ghlApiKey || !formData.ghlLocationId}
+                  >
+                    {testingConnection ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : connectionStatus.success ? (
+                      <Wifi className="h-4 w-4 mr-2 text-green-500" />
+                    ) : (
+                      <Wifi className="h-4 w-4 mr-2" />
+                    )}
+                    {testingConnection ? "Testing..." : connectionStatus.success ? "Re-test" : "Test Connection"}
+                  </Button>
+                  {connectionStatus.tested && (
+                    <div className="flex items-center gap-2 text-sm">
+                      {connectionStatus.success ? (
+                        <><Check className="h-4 w-4 text-green-500" /><span className="text-green-600">Connected to <strong>{connectionStatus.locationName}</strong></span></>
+                      ) : (
+                        <><WifiOff className="h-4 w-4 text-red-500" /><span className="text-red-600">{connectionStatus.error}</span></>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="border-t pt-4 mt-4">
-                  <h4 className="font-medium mb-3">Pipeline Mapping</h4>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Tell us which GHL pipeline stages to watch for new deals
-                  </p>
-                  <div className="space-y-2">
-                    <Label htmlFor="dispoPipelineName">Dispo Pipeline Name</Label>
-                    <Input
-                      id="dispoPipelineName"
-                      placeholder="e.g., Dispo Pipeline"
-                      value={formData.dispoPipelineName}
-                      onChange={(e) => setFormData({ ...formData, dispoPipelineName: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      The pipeline in GHL where qualified leads are moved
-                    </p>
-                  </div>
-                  <div className="space-y-2 mt-3">
-                    <Label htmlFor="newDealStageName">New Deal Stage Name</Label>
-                    <Input
-                      id="newDealStageName"
-                      placeholder="e.g., New Deal"
-                      value={formData.newDealStageName}
-                      onChange={(e) => setFormData({ ...formData, newDealStageName: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      The stage name for new deals in your dispo pipeline
-                    </p>
-                  </div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2"><GitBranch className="h-4 w-4" /> Pipeline Mapping</h4>
+                  {connectionStatus.success && pipelines.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label>Select Dispo Pipeline</Label>
+                        <Select
+                          value={selectedPipelineId}
+                          onValueChange={(value) => {
+                            setSelectedPipelineId(value);
+                            const p = pipelines.find(pp => pp.id === value);
+                            if (p) setFormData({ ...formData, dispoPipelineName: p.name });
+                            setStageMapping({});
+                          }}
+                        >
+                          <SelectTrigger><SelectValue placeholder="Choose a pipeline" /></SelectTrigger>
+                          <SelectContent>
+                            {pipelines.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>{p.name} ({p.stages.length} stages)</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {(() => {
+                        const selPipeline = pipelines.find(p => p.id === selectedPipelineId);
+                        if (!selPipeline || selPipeline.stages.length === 0) return null;
+                        return (
+                          <div className="space-y-2">
+                            <Label className="text-sm">Map stages to call types</Label>
+                            {selPipeline.stages.map((stage) => (
+                              <div key={stage.id} className="flex items-center gap-3 p-2 bg-background rounded border">
+                                <span className="text-sm font-medium flex-1 truncate">{stage.name}</span>
+                                <Select
+                                  value={stageMapping[stage.id] || ""}
+                                  onValueChange={(value) => {
+                                    setStageMapping({ ...stageMapping, [stage.id]: value });
+                                    if (stage.name.toLowerCase().includes("new deal") || stage.name.toLowerCase().includes("new lead")) {
+                                      setFormData({ ...formData, newDealStageName: stage.name });
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Call type" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="unmapped">— Not mapped —</SelectItem>
+                                    <SelectItem value="lead_gen">Lead Generation</SelectItem>
+                                    <SelectItem value="qualification">Qualification</SelectItem>
+                                    <SelectItem value="acquisition">Acquisition</SelectItem>
+                                    <SelectItem value="follow_up">Follow Up</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                      <div className="space-y-2 mt-3">
+                        <Label htmlFor="newDealStageName">New Deal Stage Name</Label>
+                        <Input
+                          id="newDealStageName"
+                          placeholder="e.g., New Deal"
+                          value={formData.newDealStageName}
+                          onChange={(e) => setFormData({ ...formData, newDealStageName: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">Stage that triggers the "Closer" badge</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        {connectionStatus.success ? "No pipelines found. Enter names manually:" : "Connect GHL above to auto-load pipelines, or enter names manually:"}
+                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="dispoPipelineName">Dispo Pipeline Name</Label>
+                        <Input
+                          id="dispoPipelineName"
+                          placeholder="e.g., Dispo Pipeline"
+                          value={formData.dispoPipelineName}
+                          onChange={(e) => setFormData({ ...formData, dispoPipelineName: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">The pipeline in GHL where qualified leads are moved</p>
+                      </div>
+                      <div className="space-y-2 mt-3">
+                        <Label htmlFor="newDealStageName">New Deal Stage Name</Label>
+                        <Input
+                          id="newDealStageName"
+                          placeholder="e.g., New Deal"
+                          value={formData.newDealStageName}
+                          onChange={(e) => setFormData({ ...formData, newDealStageName: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">The stage name for new deals in your dispo pipeline</p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="border-t pt-4 mt-4">
