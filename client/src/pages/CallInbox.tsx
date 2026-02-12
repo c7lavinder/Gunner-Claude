@@ -446,7 +446,7 @@ function AICoachQA() {
         requestText: userMessage,
         targetContactId: intent.contactId || undefined,
         targetContactName: intent.contactName || undefined,
-        payload: intent.params,
+        payload: { ...intent.params, assigneeName: intent.assigneeName || "" },
       });
 
       setConversation(prev => [...prev, {
@@ -456,7 +456,7 @@ function AICoachQA() {
         summary: intent.summary,
         contactName: intent.contactName || "",
         status: "pending",
-        payload: intent.params,
+        payload: { ...intent.params, assigneeName: intent.assigneeName || "" },
       }]);
     } catch (error: any) {
       setConversation(prev => [...prev, { role: "assistant", content: `Failed to create action: ${error.message}` }]);

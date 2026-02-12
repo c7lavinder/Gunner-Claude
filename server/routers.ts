@@ -3380,6 +3380,13 @@ Create content that:
           );
         } catch { /* preferences are optional */ }
 
+        // Get team members list for assignee resolution
+        let teamMemberNames: string[] = [];
+        try {
+          const members = await getTeamMembers(tenantId);
+          teamMemberNames = members.map(m => m.name);
+        } catch { /* team list is optional */ }
+
         // Use LLM to parse the intent
         const response = await invokeLLM({
           messages: [
@@ -3401,12 +3408,16 @@ If the message is NOT a CRM action request (it's a coaching question, greeting, 
 
 Context: ${input.contextContactId ? `Currently viewing contact: ${input.contextContactName} (ID: ${input.contextContactId})` : "No contact context"}
 
+The current user is: ${ctx.user!.name || "Unknown"}
+Team members: ${teamMemberNames.length > 0 ? teamMemberNames.join(", ") : "Unknown"}
+
 Return JSON with:
 - actionType: one of the types above or "none"
 - contactName: the contact name mentioned (or from context)
 - contactId: the contact ID if known from context
+- assigneeName: for create_task, the team member name to assign the task to. If the user says "make a task for Daniel" or "assign this to Kyle", use that name. If no specific person is mentioned, use the current user's name ("${ctx.user!.name || "Unknown"}"). For non-task actions, use empty string.
 - params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, fieldKey, fieldValue)
-- summary: human-readable summary of what will be done
+- summary: human-readable summary of what will be done (include who the task is assigned to if it's a create_task)
 - needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID
 ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descriptions), match this user's established style:\n${preferenceContext}` : ""}`
             },
@@ -3442,10 +3453,11 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
                     required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId"],
                     additionalProperties: false
                   },
+                  assigneeName: { type: "string" },
                   summary: { type: "string" },
                   needsContactSearch: { type: "boolean" }
                 },
-                required: ["actionType", "contactName", "contactId", "params", "summary", "needsContactSearch"],
+                required: ["actionType", "contactName", "contactId", "assigneeName", "params", "summary", "needsContactSearch"],
                 additionalProperties: false
               }
             }
@@ -3456,7 +3468,7 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
         if (content && typeof content === "string") {
           return JSON.parse(content);
         }
-        return { actionType: "none", contactName: "", contactId: "", params: {}, summary: "", needsContactSearch: false };
+        return { actionType: "none", contactName: "", contactId: "", assigneeName: "", params: {}, summary: "", needsContactSearch: false };
       }),
 
     // Create a pending action (before confirmation)

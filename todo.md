@@ -1664,3 +1664,12 @@
 - [x] Build preference aggregation service: analyze before/after diffs to extract style patterns
 - [x] Inject user preference profile (or team default) at session start into AI Coach system prompts
 - [x] Write vitest tests for edit capture, preference aggregation, and prompt injection (19/19 passing)
+
+## Smart Task Assignment & Per-User SMS
+- [x] Map logged-in users to their GHL user IDs via team_members table
+- [x] Update LLM intent parsing to detect assignee name in task requests (e.g. "make a task for Daniel")
+- [x] Default task assignment to the user who created it (creator's GHL user ID)
+- [x] Override assignment when user explicitly names someone else
+- [x] Pass assignedTo field to GHL task creation API
+- [x] Update SMS sending to pass userId so it sends from the team member's own phone number
+- [x] Write vitest tests for task assignment and SMS user routing (18/18 passing)

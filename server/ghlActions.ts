@@ -3,7 +3,7 @@
  * Executes CRM actions in GoHighLevel on behalf of the AI Coach.
  * Supports: notes, pipeline stage changes, SMS, tasks, tags, field updates.
  */
-import { getDb } from "./db";
+import { getDb, getTeamMemberByUserId, getTeamMembers } from "./db";
 import { coachActionLog } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
@@ -152,20 +152,27 @@ export async function changePipelineStage(
 export async function sendSms(
   tenantId: number,
   contactId: string,
-  message: string
+  message: string,
+  userId?: string // GHL user ID — routes SMS from that user's assigned phone number
 ): Promise<{ success: boolean; messageId?: string }> {
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured");
+
+  const body: any = {
+    type: "SMS",
+    contactId,
+    message,
+  };
+  // If a GHL userId is provided, include it so GHL routes from that user's number
+  if (userId) {
+    body.userId = userId;
+  }
 
   const data = await ghlFetch(
     creds,
     `/conversations/messages`,
     "POST",
-    {
-      type: "SMS",
-      contactId,
-      message,
-    }
+    body
   );
 
   return { success: true, messageId: data.messageId || data.id };
@@ -178,7 +185,8 @@ export async function createTask(
   contactId: string,
   title: string,
   description: string,
-  dueDate?: string
+  dueDate?: string,
+  assignedTo?: string // GHL user ID to assign the task to
 ): Promise<{ success: boolean; taskId?: string }> {
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured");
@@ -189,6 +197,10 @@ export async function createTask(
     dueDate: dueDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     completed: false,
   };
+  // Assign to specific GHL user if provided
+  if (assignedTo) {
+    body.assignedTo = assignedTo;
+  }
 
   const data = await ghlFetch(
     creds,
@@ -324,6 +336,32 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
   // (payload.contactId from LLM may be empty; the real ID is resolved during contact search)
   const contactId = action.targetContactId || payload.contactId;
   const opportunityId = action.targetOpportunityId || payload.opportunityId;
+
+  // Resolve the requesting user's GHL user ID for SMS routing and task default assignment
+  let requestingUserGhlId: string | undefined;
+  try {
+    const teamMember = await getTeamMemberByUserId(action.requestedBy);
+    if (teamMember?.ghlUserId) {
+      requestingUserGhlId = teamMember.ghlUserId;
+    }
+  } catch { /* non-critical */ }
+
+  // Resolve assignee GHL user ID for tasks (from assigneeName in payload)
+  let taskAssigneeGhlId: string | undefined;
+  if (action.actionType === "create_task" && payload.assigneeName) {
+    try {
+      const members = await getTeamMembers(action.tenantId);
+      const match = members.find(m => 
+        m.name.toLowerCase().includes(payload.assigneeName.toLowerCase()) ||
+        payload.assigneeName.toLowerCase().includes(m.name.split(" ")[0].toLowerCase())
+      );
+      if (match?.ghlUserId) {
+        taskAssigneeGhlId = match.ghlUserId;
+      }
+    } catch { /* non-critical */ }
+  }
+  // Default task assignment: named person > creator
+  const finalTaskAssignee = taskAssigneeGhlId || requestingUserGhlId;
   
   try {
     let result: any;
@@ -343,11 +381,11 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         break;
       case "send_sms":
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
-        result = await sendSms(action.tenantId, contactId, payload.message);
+        result = await sendSms(action.tenantId, contactId, payload.message, requestingUserGhlId);
         break;
       case "create_task":
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
-        result = await createTask(action.tenantId, contactId, payload.title, payload.description, payload.dueDate);
+        result = await createTask(action.tenantId, contactId, payload.title, payload.description, payload.dueDate, finalTaskAssignee);
         break;
       case "add_tag":
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
