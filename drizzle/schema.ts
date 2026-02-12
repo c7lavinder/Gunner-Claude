@@ -665,7 +665,11 @@ export const userBadges = mysqlTable("user_badges", {
   tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy
   teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
   badgeId: int("badgeId").references(() => badges.id).notNull(),
+  badgeCode: varchar("badgeCode", { length: 64 }).notNull(),
+  progress: int("progress").default(0),
   earnedAt: timestamp("earnedAt").defaultNow().notNull(),
+  triggerCallId: int("triggerCallId").references(() => calls.id),
+  isViewed: mysqlEnum("isViewed", ["true", "false"]).default("false"),
 });
 
 export type UserBadge = typeof userBadges.$inferSelect;

@@ -2129,7 +2129,7 @@ Create content that:
 
     // Initialize badges (admin only, run once)
     initBadges: protectedProcedure.mutation(async ({ ctx }) => {
-      if (ctx.user?.teamRole !== 'admin') {
+      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       await initializeBadges();
@@ -2138,7 +2138,7 @@ Create content that:
 
     // Batch award XP for all unprocessed calls (admin only)
     batchAwardXp: protectedProcedure.mutation(async ({ ctx }) => {
-      if (ctx.user?.teamRole !== 'admin') {
+      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       return batchAwardXpForCalls();
@@ -2146,7 +2146,7 @@ Create content that:
     
     // Batch evaluate badges for all team members
     batchEvaluateBadges: protectedProcedure.mutation(async ({ ctx }) => {
-      if (ctx.user?.teamRole !== 'admin') {
+      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       return batchEvaluateBadges();

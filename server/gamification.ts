@@ -556,7 +556,7 @@ export async function updateBadgeProgress(teamMemberId: number, badgeCode: strin
 /**
  * Award a badge to a user
  */
-export async function awardBadge(teamMemberId: number, badgeCode: string, tier: string): Promise<boolean> {
+export async function awardBadge(teamMemberId: number, badgeCode: string, tier: string, triggerCallId?: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
   
@@ -567,7 +567,7 @@ export async function awardBadge(teamMemberId: number, badgeCode: string, tier: 
     .where(and(eq(badges.code, badgeCode), eq(badges.tier, tier as "bronze" | "silver" | "gold")));
   
   if (!badge) {
-    console.log(`Badge not found: ${badgeCode} ${tier}`);
+    console.log(`[Gamification] Badge not found: ${badgeCode} ${tier}`);
     return false;
   }
   
@@ -581,12 +581,28 @@ export async function awardBadge(teamMemberId: number, badgeCode: string, tier: 
     return false; // Already earned
   }
   
-  // Award the badge
-  await db.insert(userBadges).values({ teamMemberId, badgeId: badge.id });
+  // Get current progress count for this badge
+  const progressResult = await getBadgeProgress(teamMemberId);
+  const currentProgress = progressResult[badgeCode] || 0;
+  
+  // Award the badge - include all required fields
+  try {
+    await db.insert(userBadges).values({ 
+      teamMemberId, 
+      badgeId: badge.id, 
+      badgeCode,
+      progress: currentProgress,
+      triggerCallId: triggerCallId || null,
+    });
+  } catch (err) {
+    console.error(`[Gamification] Failed to insert badge ${badgeCode} (${tier}) for member ${teamMemberId}:`, err);
+    return false;
+  }
   
   // Award XP for earning a badge
   await addXp(teamMemberId, XP_REWARDS.BADGE_EARNED, `Earned ${badge.name} (${tier})`);
   
+  console.log(`[Gamification] Successfully awarded ${badge.name} (${tier}) to team member ${teamMemberId}`);
   return true;
 }
 
@@ -1126,10 +1142,9 @@ export async function evaluateBadgesForCall(teamMemberId: number, callId: number
       // Check if any tier threshold was crossed
       for (const [tier, config] of Object.entries(badgeDef.tiers) as Array<[string, { count: number }]>) {
         if (newCount >= config.count) {
-          const awarded = await awardBadge(teamMemberId, badgeDef.code, tier);
+          const awarded = await awardBadge(teamMemberId, badgeDef.code, tier, callId);
           if (awarded) {
             badgesAwarded.push(`${badgeDef.name} (${tier})`);
-            console.log(`[Gamification] Awarded ${badgeDef.name} (${tier}) to team member ${teamMemberId}`);
           }
         }
       }

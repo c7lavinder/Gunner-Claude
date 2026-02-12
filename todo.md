@@ -1488,3 +1488,9 @@
 - [x] Fix Call History showing no calls for admin user after permission scoping changes
 
 - [x] Fix admin visibility bug: admin/super_admin should see ALL calls in Call History (not scoped by Lead Manager logic)
+
+## Bug Fixes - Badges Not Working
+- [x] Investigate and fix badges not working (not being awarded/displayed properly)
+  - Root cause: user_badges table had extra columns (badgeCode, progress, triggerCallId, isViewed) not in Drizzle schema
+  - awardBadge() insert was missing badgeCode (NOT NULL), causing silent insert failures
+  - Fixed schema, awardBadge function, and ran batch evaluation to retroactively award 7 badges
