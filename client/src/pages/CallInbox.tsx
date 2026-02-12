@@ -1760,7 +1760,9 @@ export default function CallInbox() {
 
         {/* AI Coach Sidebar */}
         <div className="lg:col-span-1">
-          <AICoachQA />
+          <div className="sticky top-4">
+            <AICoachQA />
+          </div>
         </div>
       </div>
     </div>

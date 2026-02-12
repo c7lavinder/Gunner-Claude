@@ -1635,3 +1635,4 @@
 - [x] Fix layout spacing: send button overlapping card edge, input field outside card boundary
 - [x] Make everything fit properly within the card container
 - [x] Fix AI Coach card: input area and send button still overflowing past card boundary
+- [x] Make AI Coach sidebar sticky so it follows user when scrolling through calls
