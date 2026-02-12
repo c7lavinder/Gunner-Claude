@@ -1472,3 +1472,8 @@
 - [x] Update AI call type detection to distinguish seller_callback vs admin_callback
 - [x] Update frontend call type options, filters, and badges for 6 types
 - [x] Update CallDetail page for 6 call types
+
+## Call History Filter Cleanup
+- [x] Remove Direction filter from Call History page
+- [x] Fit all remaining filters (Date, Team Member, Call Type, Outcome, Score) on one line
+- [x] Default date range to Today instead of Last 7 Days

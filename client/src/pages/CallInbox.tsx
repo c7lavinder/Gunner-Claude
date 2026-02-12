@@ -845,8 +845,8 @@ export default function CallInbox() {
   const [selectedCallTypes, setSelectedCallTypes] = useState<string[]>([]);
   const [selectedOutcomes, setSelectedOutcomes] = useState<string[]>([]);
   const [selectedScoreRanges, setSelectedScoreRanges] = useState<string[]>([]);
-  const [selectedDirections, setSelectedDirections] = useState<string[]>([]);
-  const [dateRange, setDateRange] = useState<string>("7d");
+
+  const [dateRange, setDateRange] = useState<string>("1d");
   const [showFilters, setShowFilters] = useState(false);
 
   // Compute date range
@@ -874,10 +874,8 @@ export default function CallInbox() {
     statuses: ["completed"],
     callTypes: selectedCallTypes.length > 0 ? selectedCallTypes : undefined,
     outcomes: selectedOutcomes.length > 0 ? selectedOutcomes : undefined,
-    directions: selectedDirections.length > 0 ? selectedDirections : undefined,
     teamMembers: selectedTeamMembers.length > 0 ? selectedTeamMembers : undefined,
-  }), [page, dateFilter, selectedCallTypes, selectedOutcomes, selectedDirections, selectedTeamMembers]);
-
+  }), [page, dateFilter, selectedCallTypes, selectedOutcomes, selectedTeamMembers]);
   const { data: callsData, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery(queryParams);
   
   // Separate query for needs review (pending + flagged) and skipped
@@ -999,11 +997,6 @@ export default function CallInbox() {
     { value: "low", label: "Low (Below 60%)" },
   ];
 
-  // Call direction options
-  const directionOptions = [
-    { value: "inbound", label: "Inbound" },
-    { value: "outbound", label: "Outbound" },
-  ];
 
   // Date range options
   const dateRangeOptions = [
@@ -1016,13 +1009,12 @@ export default function CallInbox() {
 
   // Check if any filters are active
   const hasActiveFilters = selectedTeamMembers.length > 0 || selectedCallTypes.length > 0 || 
-    selectedScoreRanges.length > 0 || selectedDirections.length > 0 || selectedOutcomes.length > 0;
+    selectedScoreRanges.length > 0 || selectedOutcomes.length > 0;
 
   const clearAllFilters = () => {
     setSelectedTeamMembers([]);
     setSelectedCallTypes([]);
     setSelectedScoreRanges([]);
-    setSelectedDirections([]);
     setSelectedOutcomes([]);
     setPage(0);
   };
@@ -1097,7 +1089,7 @@ export default function CallInbox() {
                 >
                   <span className="flex items-center gap-2">
                     <Filter className="h-4 w-4" />
-                    Filters {hasActiveFilters && `(${selectedTeamMembers.length + selectedCallTypes.length + selectedScoreRanges.length + selectedDirections.length + selectedOutcomes.length})`}
+                    Filters {hasActiveFilters && `(${selectedTeamMembers.length + selectedCallTypes.length + selectedScoreRanges.length + selectedOutcomes.length})`}
                   </span>
                   <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
                 </Button>
@@ -1147,12 +1139,7 @@ export default function CallInbox() {
                       selected={selectedScoreRanges}
                       onChange={handleFilterChange(setSelectedScoreRanges)}
                     />
-                    <MultiSelectFilter
-                      label="Direction"
-                      options={directionOptions}
-                      selected={selectedDirections}
-                      onChange={handleFilterChange(setSelectedDirections)}
-                    />
+
                     {hasActiveFilters && (
                       <Button
                         variant="ghost"
