@@ -1628,3 +1628,9 @@
 
 ## Fix: Test Notifications
 - [x] Mock notifyOwner in tenant test files to prevent real email notifications during vitest runs
+
+## AI Coach UI Cleanup
+- [x] Remove "Tag Jane Doe as hot-lead" suggestion
+- [x] Add SMS-related suggestions (e.g. send follow-up SMS, draft SMS to seller)
+- [x] Fix layout spacing: send button overlapping card edge, input field outside card boundary
+- [x] Make everything fit properly within the card container

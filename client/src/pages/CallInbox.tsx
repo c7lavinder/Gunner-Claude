@@ -525,8 +525,8 @@ function AICoachQA() {
   };
 
   return (
-    <Card className="h-[500px] flex flex-col border-2">
-      <CardHeader className="pb-2 flex-shrink-0">
+    <Card className="h-[500px] flex flex-col border-2 overflow-hidden">
+      <CardHeader className="pb-2 flex-shrink-0 px-3 pt-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base">
             <Bot className="h-4 w-4 text-primary" />
@@ -540,7 +540,7 @@ function AICoachQA() {
         </div>
         <p className="text-[10px] text-muted-foreground mt-0.5">Ask questions or give CRM commands</p>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col min-h-0 p-3 pt-0">
+      <CardContent className="flex-1 flex flex-col min-h-0 px-3 pb-3 pt-0">
         <ScrollArea className="flex-1">
           {conversation.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-4 text-center">
@@ -548,7 +548,7 @@ function AICoachQA() {
               <p className="text-sm text-muted-foreground mb-2">
                 Ask questions or take actions
               </p>
-              <div className="flex flex-col gap-1.5 w-full max-w-[240px]">
+              <div className="flex flex-col gap-1.5 w-full">
                 <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mt-1">Coaching</p>
                 {[
                   "How do I handle price objections?",
@@ -562,7 +562,7 @@ function AICoachQA() {
                       setIsAsking(true);
                       askCoachMutation.mutate({ question: prompt });
                     }}
-                    className="text-xs text-left px-3 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+                    className="text-xs text-left px-3 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
                   >
                     {prompt}
                   </button>
@@ -571,14 +571,14 @@ function AICoachQA() {
                 {[
                   'Add note to John Smith: "Called back, interested"',
                   "Create task: Follow up with seller tomorrow",
-                  "Tag Jane Doe as hot-lead",
+                  'Send SMS to Jane Doe: "Are you still interested in selling?"',
                 ].map((prompt, i) => (
                   <button
                     key={`action-${i}`}
                     onClick={() => {
                       setQuestion(prompt);
                     }}
-                    className="text-xs text-left px-3 py-2 rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors text-muted-foreground hover:text-foreground"
+                    className="text-xs text-left px-3 py-1.5 rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors text-muted-foreground hover:text-foreground"
                   >
                     ⚡ {prompt}
                   </button>
@@ -713,20 +713,20 @@ function AICoachQA() {
           )}
         </ScrollArea>
         
-        <div className="flex gap-2 mt-3 pt-3 border-t">
+        <div className="flex gap-2 mt-2 pt-2 border-t flex-shrink-0">
           <Textarea
             placeholder="Ask a question or give a command..."
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="min-h-[44px] max-h-[80px] resize-none text-sm"
+            className="min-h-[40px] max-h-[60px] resize-none text-sm flex-1"
             disabled={isAsking}
           />
           <Button 
             onClick={handleAsk} 
             disabled={!question.trim() || isAsking}
             size="sm"
-            className="self-end h-[44px] w-[44px] p-0"
+            className="self-end h-[40px] w-[40px] p-0 flex-shrink-0"
           >
             <Send className="h-4 w-4" />
           </Button>
