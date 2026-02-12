@@ -554,6 +554,24 @@ export async function updateBadgeProgress(teamMemberId: number, badgeCode: strin
 }
 
 /**
+ * Reset badge progress to 0 (used when a streak is broken)
+ */
+export async function resetBadgeProgress(teamMemberId: number, badgeCode: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const [existing] = await db
+    .select()
+    .from(badgeProgress)
+    .where(and(eq(badgeProgress.teamMemberId, teamMemberId), eq(badgeProgress.badgeCode, badgeCode)));
+  
+  if (existing) {
+    await db.update(badgeProgress)
+      .set({ currentCount: 0 })
+      .where(eq(badgeProgress.id, existing.id));
+  }
+}
+
+/**
  * Award a badge to a user
  */
 export async function awardBadge(teamMemberId: number, badgeCode: string, tier: string, triggerCallId?: number): Promise<boolean> {
@@ -1059,16 +1077,21 @@ export async function evaluateBadgesForCall(teamMemberId: number, callId: number
   // Check each badge type
   for (const badgeDef of relevantBadges) {
     let shouldIncrement = false;
+    let shouldResetStreak = false;
     
     switch (badgeDef.criteria.type) {
       case "consecutive_grade": {
-        // "On Fire" - consecutive C+ grades
+        // "On Fire" / "Conversation Starter" - consecutive C+ grades
+        // This is a STREAK badge: increment on C+ grade, RESET to 0 on below-C grade
         const minGrade = badgeDef.criteria.minGrade || "C";
         const gradeOrder = ["F", "D", "C", "B", "A"];
         const gradeIndex = gradeOrder.indexOf(grade.overallGrade || "F");
         const minIndex = gradeOrder.indexOf(minGrade);
         if (gradeIndex >= minIndex) {
           shouldIncrement = true;
+        } else {
+          // Streak broken — reset progress to 0
+          shouldResetStreak = true;
         }
         break;
       }
@@ -1136,7 +1159,10 @@ export async function evaluateBadgesForCall(teamMemberId: number, callId: number
       // (updateStreaks for consistency, weekly job for volume, GHL sync for deals)
     }
     
-    if (shouldIncrement) {
+    if (shouldResetStreak) {
+      // Streak broken — reset progress to 0 (earned badges are kept)
+      await resetBadgeProgress(teamMemberId, badgeDef.code);
+    } else if (shouldIncrement) {
       const newCount = await updateBadgeProgress(teamMemberId, badgeDef.code, 1);
       
       // Check if any tier threshold was crossed
@@ -1229,6 +1255,7 @@ export async function batchEvaluateBadges(): Promise<{
       // Check each badge type
       for (const badgeDef of relevantBadges) {
         let shouldIncrement = false;
+        let shouldResetStreak = false;
         
         switch (badgeDef.criteria.type) {
           case "consecutive_grade": {
@@ -1241,6 +1268,7 @@ export async function batchEvaluateBadges(): Promise<{
               shouldIncrement = true;
             } else {
               consecutiveGoodGrades = 0;
+              shouldResetStreak = true;
             }
             break;
           }
@@ -1286,7 +1314,10 @@ export async function batchEvaluateBadges(): Promise<{
           }
         }
         
-        if (shouldIncrement) {
+        if (shouldResetStreak) {
+          // Streak broken — reset progress to 0 (earned badges are kept)
+          await resetBadgeProgress(member.id, badgeDef.code);
+        } else if (shouldIncrement) {
           await updateBadgeProgress(member.id, badgeDef.code, 1);
         }
       }

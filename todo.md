@@ -1501,3 +1501,9 @@
 - [x] Remove badge evaluation from processCallViewRewards
 - [x] Add badge evaluation to processCall (grading pipeline, Step 8)
 - [x] Batch evaluation already ran and awarded 7 badges based on chronological order
+
+## Bug Fix - On Fire Badge Counting Incorrectly
+- [x] Fix On Fire badge: now properly resets streak to 0 when a bad grade breaks the streak
+- [x] Reset On Fire progress and re-evaluated from scratch (Kyle=3, Daniel=0, Chris=0)
+- [x] Also fixed Conversation Starter badge (same consecutive_grade criteria type)
+- [x] Removed incorrectly awarded On Fire badges (Daniel and Kyle had false bronze)
