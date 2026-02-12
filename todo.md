@@ -1494,3 +1494,10 @@
   - Root cause: user_badges table had extra columns (badgeCode, progress, triggerCallId, isViewed) not in Drizzle schema
   - awardBadge() insert was missing badgeCode (NOT NULL), causing silent insert failures
   - Fixed schema, awardBadge function, and ran batch evaluation to retroactively award 7 badges
+
+## Badge Evaluation Timing Change
+- [x] Move badge evaluation from call-view-time to grading-time (automatic, chronological order)
+- [x] Keep XP view reward as-is (incentivizes reviewing feedback)
+- [x] Remove badge evaluation from processCallViewRewards
+- [x] Add badge evaluation to processCall (grading pipeline, Step 8)
+- [x] Batch evaluation already ran and awarded 7 badges based on chronological order

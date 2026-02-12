@@ -901,7 +901,7 @@ Respond with JSON only.`,
 // ============ PROCESS CALL FUNCTION ============
 
 import { getCallById, updateCall, createCallGrade, getTeamMemberById, getGradingContext } from "./db";
-import { processCallViewRewards } from "./gamification";
+import { processCallViewRewards, evaluateBadgesForCall } from "./gamification";
 import { canProcessCall } from "./planLimits";
 
 export async function processCall(callId: number): Promise<void> {
@@ -1079,6 +1079,19 @@ export async function processCall(callId: number): Promise<void> {
       } catch (xpError) {
         console.error(`[ProcessCall] Failed to award XP for call ${callId}:`, xpError);
         // Don't fail the whole process if XP award fails
+      }
+    }
+
+    // Step 8: Evaluate badges at grading time (based on chronological call order)
+    if (call.teamMemberId) {
+      try {
+        const badgesEarned = await evaluateBadgesForCall(call.teamMemberId, call.id);
+        if (badgesEarned.length > 0) {
+          console.log(`[ProcessCall] Badges earned for team member ${call.teamMemberId}: ${badgesEarned.join(', ')}`);
+        }
+      } catch (badgeError) {
+        console.error(`[ProcessCall] Failed to evaluate badges for call ${callId}:`, badgeError);
+        // Don't fail the whole process if badge evaluation fails
       }
     }
 

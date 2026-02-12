@@ -685,9 +685,9 @@ export async function processCallViewRewards(teamMemberId: number, callId: numbe
   // Record the view
   await db.insert(rewardViews).values({ teamMemberId, callId, xpAwarded: xp });
   
-  // Check for badge progress and award badges
-  const badgesEarned = await evaluateBadgesForCall(teamMemberId, callId);
-  result.badgesEarned = badgesEarned;
+  // Note: Badge evaluation now happens at grading time (in processCall, Step 8)
+  // to ensure badges are based on chronological call order, not view order.
+  // The badgesEarned field is kept in the return type for backward compatibility.
   
   return result;
 }
