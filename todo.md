@@ -1699,3 +1699,10 @@
 - [x] Add DB connection pool resilience (withDbRetry wrapper with auto-reset on ECONNRESET)
 - [x] Applied retry to getTenantsWithCrm (the function that was failing)
 - [x] Write vitest tests for retry logic and call context (18/18 passing)
+
+## Team Member Sign-In Auto-Assignment Bug
+- [x] When a team member (Daniel, Kyle, Chris) signs in via getgunner.ai, auto-assign them to Corey's tenant instead of funneling into onboarding
+- [x] Match new users to existing team_members records by name (exact + fuzzy first/last name matching)
+- [x] Skip onboarding for users matched to an existing team member
+- [x] Fixed Daniel's account: moved from accidental tenant 270051 to tenant 1, deleted orphan tenant
+- [x] Write vitest tests for name matching logic (16/16 passing)

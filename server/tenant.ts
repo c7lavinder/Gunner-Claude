@@ -778,6 +778,83 @@ export async function updateUserRole(
  * Check for pending invitation when user logs in
  * If found, automatically add them to the tenant
  */
+/**
+ * Auto-match a new user to an existing team_member by name.
+ * If the user's name matches a team_member in any tenant, auto-assign them to that tenant.
+ * This prevents team members from being funneled into onboarding when they sign in for the first time.
+ */
+export async function autoMatchTeamMember(
+  userId: number,
+  userName: string | null,
+  userEmail: string | null
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Check if user already has a tenant
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (user?.tenantId) return null; // Already assigned
+
+  if (!userName && !userEmail) return null;
+
+  // Try to match by name (case-insensitive, fuzzy)
+  // First try exact name match against team_members
+  const allTeamMembers = await db.select().from(teamMembers).where(eq(teamMembers.isActive, 'true'));
+  
+  let matchedMember = null;
+  
+  if (userName) {
+    const normalizedName = userName.toLowerCase().trim();
+    
+    // Exact match
+    matchedMember = allTeamMembers.find(tm => 
+      tm.name.toLowerCase().trim() === normalizedName
+    );
+    
+    // Partial match: first name + last name in either order
+    if (!matchedMember) {
+      const nameParts = normalizedName.split(/\s+/);
+      if (nameParts.length >= 2) {
+        matchedMember = allTeamMembers.find(tm => {
+          const tmParts = tm.name.toLowerCase().trim().split(/\s+/);
+          // Check if first names match
+          return tmParts[0] === nameParts[0] || 
+            // Or last names match and first name starts similarly
+            (tmParts.length >= 2 && nameParts.length >= 2 && 
+             tmParts[tmParts.length - 1] === nameParts[nameParts.length - 1]);
+        });
+      }
+    }
+  }
+  
+  if (!matchedMember || !matchedMember.tenantId) return null;
+
+  const tenantId = matchedMember.tenantId;
+  // Map team_member teamRole to user teamRole
+  const teamRole = matchedMember.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
+
+  // Assign user to the team member's tenant
+  await db
+    .update(users)
+    .set({
+      tenantId,
+      role: 'user',
+      teamRole: teamRole,
+    })
+    .where(eq(users.id, userId));
+
+  const tenant = await getTenantById(tenantId);
+  
+  console.log(`[OAuth] Auto-matched user "${userName}" (id: ${userId}) to team member "${matchedMember.name}" in tenant ${tenant?.name || matchedMember.tenantId}`);
+
+  return {
+    tenantId: matchedMember.tenantId,
+    tenantName: tenant?.name || 'Unknown',
+    teamMemberName: matchedMember.name,
+    teamRole: teamRole,
+  };
+}
+
 export async function checkAndAcceptPendingInvitation(
   userId: number,
   email: string

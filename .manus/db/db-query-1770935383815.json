@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE users SET tenantId = 1, role = 'user', teamRole = 'lead_manager' WHERE id = 840050; DELETE FROM tenants WHERE id = 270051",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute UPDATE users SET tenantId = 1, role = 'user', teamRole = 'lead_manager' WHERE id = 840050; DELETE FROM tenants WHERE id = 270051",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 418
+}

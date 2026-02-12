@@ -3,7 +3,7 @@ import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
-import { checkAndAcceptPendingInvitation } from "../tenant";
+import { checkAndAcceptPendingInvitation, autoMatchTeamMember } from "../tenant";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -42,6 +42,12 @@ export function registerOAuthRoutes(app: Express) {
         const inviteResult = await checkAndAcceptPendingInvitation(user.id, userInfo.email);
         if (inviteResult) {
           console.log(`[OAuth] User ${userInfo.email} auto-joined tenant ${inviteResult.tenantName} via pending invitation`);
+        } else {
+          // No pending invitation — try to auto-match by name to an existing team member
+          const matchResult = await autoMatchTeamMember(user.id, userInfo.name || null, userInfo.email);
+          if (matchResult) {
+            console.log(`[OAuth] User ${userInfo.email} auto-matched to team member "${matchResult.teamMemberName}" in tenant ${matchResult.tenantName}`);
+          }
         }
       }
 
