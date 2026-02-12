@@ -1522,3 +1522,21 @@
 ## Cleanup - Delete Test Team Members
 - [x] Delete Test Lead Manager, Test Acquisition Manager, Test Lead Generator from database (27 test members removed)
 - [x] Fix badge display on Team page: only show highest tier earned per badge, not all tiers (filtered in getUserBadges)
+
+## Multi-Tenant Onboarding (Wholesaling-Only)
+- [ ] Per-tenant API credentials: move GHL/BatchDialer keys from env vars into tenant crmConfig
+- [ ] Update GHL sync job to loop through tenants and use per-tenant credentials
+- [ ] Update BatchDialer sync job to loop through tenants and use per-tenant credentials
+- [ ] Per-tenant pipeline stage mapping: UI to map GHL stages → call types per tenant
+- [ ] Scope all major data queries by tenantId (calls, team_members, grades, badges, etc.)
+- [x] Build tenant setup wizard admin page (company name, GHL key, pipeline mapping)
+- [x] Build team member bulk import (paste names, phone numbers, roles)
+- [ ] Update grading LLM prompt to use tenant company name instead of hardcoded "Nashville Area Home Buyers"
+- [ ] Write tests for multi-tenant isolation
+- [x] Wire up Onboarding page Step 2 to save CRM config (GHL key, location, BatchDialer, pipeline mapping) to database
+- [x] Remove hardcoded team member names from lead generator grading rubric
+- [x] Add BatchDialer API key and pipeline mapping fields to customer onboarding flow
+- [x] Add super admin "Manage" button per tenant with CRM config editing and bulk member import
+- [x] Add /admin/tenant-setup route for new customer onboarding wizard
+- [x] Fix admin role check in updateSettings to include super_admin role
+- [x] Write vitest tests for tenant setup, bulk import, CRM config update, and permission checks (10 tests passing)

@@ -77,6 +77,43 @@ export async function getTenantBySlug(slug: string) {
 }
 
 /**
+ * Get all tenants with CRM connected (for sync jobs)
+ */
+export async function getTenantsWithCrm() {
+  const db = await getDb();
+  if (!db) return [];
+
+  const results = await db
+    .select()
+    .from(tenants)
+    .where(eq(tenants.crmConnected, "true"));
+
+  return results;
+}
+
+/**
+ * Parse a tenant's crmConfig JSON into a typed object
+ */
+export interface TenantCrmConfig {
+  ghlApiKey?: string;
+  ghlLocationId?: string;
+  batchDialerEnabled?: boolean;
+  batchDialerApiKey?: string;
+  batchLeadsApiKey?: string;
+  dispoPipelineName?: string;
+  newDealStageName?: string;
+}
+
+export function parseCrmConfig(tenant: { crmConfig: string | null }): TenantCrmConfig {
+  if (!tenant.crmConfig) return {};
+  try {
+    return JSON.parse(tenant.crmConfig) as TenantCrmConfig;
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Get recent platform activity (for super admin dashboard)
  */
 export async function getRecentActivity() {
@@ -364,6 +401,8 @@ export async function updateTenantSettings(
     domain?: string;
     crmType?: 'ghl' | 'hubspot' | 'salesforce' | 'close' | 'pipedrive' | 'none';
     crmConfig?: string;
+    crmConnected?: 'true' | 'false';
+    onboardingStep?: number;
   }
 ) {
   const db = await getDb();
@@ -374,6 +413,10 @@ export async function updateTenantSettings(
   if (updates.domain) updateData.domain = updates.domain;
   if (updates.crmType) updateData.crmType = updates.crmType;
   if (updates.crmConfig) updateData.crmConfig = updates.crmConfig;
+  if (updates.crmConnected) updateData.crmConnected = updates.crmConnected;
+  if (updates.onboardingStep !== undefined) updateData.onboardingStep = updates.onboardingStep;
+
+  if (Object.keys(updateData).length === 0) return getTenantById(tenantId);
 
   await db
     .update(tenants)
@@ -421,6 +464,99 @@ export async function createTenant(data: {
     .$returningId();
 
   return getTenantById(newTenant.id);
+}
+
+/**
+ * Setup a new tenant with CRM config and team members in one operation.
+ * This is the "15-minute onboarding" flow for the super admin.
+ */
+export async function setupTenant(data: {
+  name: string;
+  slug: string;
+  subscriptionTier?: string;
+  crmType?: 'ghl' | 'none';
+  crmConfig?: TenantCrmConfig;
+  teamMembers?: Array<{
+    name: string;
+    teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
+    phone?: string;
+  }>;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const subscriptionTierValue = (data.subscriptionTier || 'trial') as 'trial' | 'starter' | 'growth' | 'scale';
+  
+  // Create the tenant
+  const [newTenant] = await db
+    .insert(tenants)
+    .values({
+      name: data.name,
+      slug: data.slug,
+      subscriptionTier: subscriptionTierValue,
+      crmType: data.crmType || 'none',
+      crmConnected: (data.crmConfig?.ghlApiKey && data.crmConfig?.ghlLocationId) ? 'true' : 'false',
+      crmConfig: data.crmConfig ? JSON.stringify(data.crmConfig) : null,
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      onboardingCompleted: 'true',
+    })
+    .$returningId();
+
+  const tenantId = newTenant.id;
+
+  // Create team members if provided
+  if (data.teamMembers && data.teamMembers.length > 0) {
+    for (const member of data.teamMembers) {
+      await db.insert(teamMembers).values({
+        name: member.name,
+        teamRole: member.teamRole,
+        tenantId,
+        isActive: 'true',
+      });
+    }
+  }
+
+  // Notify platform owner
+  try {
+    await notifyOwner({
+      title: `New Tenant Setup: ${data.name}`,
+      content: `Tenant "${data.name}" has been set up with ${data.teamMembers?.length || 0} team members. CRM: ${data.crmType || 'none'}.`,
+    });
+  } catch (e) {
+    console.error('[Tenant] Failed to notify owner:', e);
+  }
+
+  return getTenantById(tenantId);
+}
+
+/**
+ * Bulk add team members to an existing tenant
+ */
+export async function bulkAddTeamMembers(
+  tenantId: number,
+  members: Array<{
+    name: string;
+    teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
+    phone?: string;
+  }>
+) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const created: Array<{ id: number; name: string; teamRole: string }> = [];
+
+  for (const member of members) {
+    const [result] = await db.insert(teamMembers).values({
+      name: member.name,
+      teamRole: member.teamRole,
+      tenantId,
+      isActive: 'true',
+    }).$returningId();
+
+    created.push({ id: result.id, name: member.name, teamRole: member.teamRole });
+  }
+
+  return created;
 }
 
 /**

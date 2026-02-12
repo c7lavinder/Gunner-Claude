@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -67,6 +69,11 @@ export default function SuperAdmin() {
     stripePriceIdYearly: "",
   });
   const [newFeature, setNewFeature] = useState("");
+  
+  // Tenant detail / bulk import state
+  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
+  const [bulkMemberPaste, setBulkMemberPaste] = useState("");
+  const [bulkMembers, setBulkMembers] = useState<Array<{name: string; teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator'}>>([]);
 
   // Fetch real data from backend
   const { data: tenants, isLoading: tenantsLoading, refetch: refetchTenants } = trpc.tenant.list.useQuery();
@@ -519,7 +526,7 @@ export default function SuperAdmin() {
         </TabsContent>
 
         <TabsContent value="tenants" className="space-y-4">
-          {/* Search */}
+          {/* Search + New Tenant */}
           <div className="flex items-center gap-4">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -530,6 +537,10 @@ export default function SuperAdmin() {
                 className="pl-9"
               />
             </div>
+            <Button onClick={() => setLocation("/admin/tenant-setup")} className="ml-auto">
+              <Plus className="h-4 w-4 mr-2" />
+              New Tenant Setup
+            </Button>
           </div>
 
           {/* Tenants Table */}
@@ -593,15 +604,25 @@ export default function SuperAdmin() {
                         <TableCell>${mrr}</TableCell>
                         <TableCell>{new Date(tenant.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleImpersonate(tenant.id)}
-                            disabled={startImpersonation.isPending}
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View as Tenant
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleImpersonate(tenant.id)}
+                              disabled={startImpersonation.isPending}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => { setSelectedTenantId(tenant.id); setActiveTab('tenant-detail'); }}
+                            >
+                              <Settings className="h-4 w-4 mr-1" />
+                              Manage
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -1438,7 +1459,272 @@ export default function SuperAdmin() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Tenant Detail Tab (hidden from tab bar, accessed via Manage button) */}
+        <TabsContent value="tenant-detail" className="space-y-4">
+          {selectedTenantId && (
+            <TenantDetailPanel
+              tenantId={selectedTenantId}
+              onBack={() => { setActiveTab('tenants'); setSelectedTenantId(null); }}
+              bulkMemberPaste={bulkMemberPaste}
+              setBulkMemberPaste={setBulkMemberPaste}
+              bulkMembers={bulkMembers}
+              setBulkMembers={setBulkMembers}
+            />
+          )}
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+// --- Tenant Detail Panel with Bulk Import ---
+function TenantDetailPanel({
+  tenantId,
+  onBack,
+  bulkMemberPaste,
+  setBulkMemberPaste,
+  bulkMembers,
+  setBulkMembers,
+}: {
+  tenantId: number;
+  onBack: () => void;
+  bulkMemberPaste: string;
+  setBulkMemberPaste: (v: string) => void;
+  bulkMembers: Array<{name: string; teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator'}>;
+  setBulkMembers: (v: Array<{name: string; teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator'}>) => void;
+}) {
+  const { data: tenant, isLoading, refetch } = trpc.tenant.getById.useQuery({ id: tenantId });
+  const bulkAddMutation = trpc.tenant.bulkAddMembers.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Added ${data.length} team member(s)`);
+      setBulkMembers([]);
+      setBulkMemberPaste("");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to add team members");
+    },
+  });
+
+  const updateCrmMutation = trpc.tenant.updateTenantCrmConfig.useMutation({
+    onSuccess: () => {
+      toast.success("CRM config updated");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to update CRM config");
+    },
+  });
+
+  const [crmForm, setCrmForm] = useState({
+    ghlApiKey: "",
+    ghlLocationId: "",
+    batchDialerApiKey: "",
+    dispoPipelineName: "",
+    newDealStageName: "",
+  });
+  const [crmFormInitialized, setCrmFormInitialized] = useState(false);
+
+  // Initialize CRM form from tenant data
+  if (tenant && !crmFormInitialized) {
+    try {
+      const config = tenant.crmConfig ? JSON.parse(tenant.crmConfig as string) : {};
+      setCrmForm({
+        ghlApiKey: config.ghlApiKey || "",
+        ghlLocationId: config.ghlLocationId || "",
+        batchDialerApiKey: config.batchDialerApiKey || "",
+        dispoPipelineName: config.dispoPipelineName || "",
+        newDealStageName: config.newDealStageName || "",
+      });
+      setCrmFormInitialized(true);
+    } catch {
+      setCrmFormInitialized(true);
+    }
+  }
+
+  const parseBulkPaste = () => {
+    const lines = bulkMemberPaste.trim().split("\n").filter(l => l.trim());
+    if (lines.length === 0) {
+      toast.error("No data to parse");
+      return;
+    }
+    const parsed: typeof bulkMembers = [];
+    for (const line of lines) {
+      const parts = line.split(/[,\t]/).map(p => p.trim());
+      const name = parts[0];
+      if (!name) continue;
+      let teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' = 'lead_generator';
+      if (parts[1]) {
+        const r = parts[1].toLowerCase();
+        if (r.includes('lead_manager') || r.includes('lead manager') || r.includes('lm')) teamRole = 'lead_manager';
+        else if (r.includes('acquisition') || r.includes('am')) teamRole = 'acquisition_manager';
+        else if (r.includes('admin')) teamRole = 'admin';
+      }
+      parsed.push({ name, teamRole });
+    }
+    if (parsed.length > 0) {
+      setBulkMembers(parsed);
+      toast.success(`Parsed ${parsed.length} member(s). Review and confirm.`);
+    } else {
+      toast.error("Could not parse any members");
+    }
+  };
+
+  const handleBulkAdd = () => {
+    if (bulkMembers.length === 0) return;
+    bulkAddMutation.mutate({ tenantId, members: bulkMembers });
+  };
+
+  const handleSaveCrm = () => {
+    const hasCrm = crmForm.ghlApiKey && crmForm.ghlLocationId;
+    updateCrmMutation.mutate({
+      tenantId,
+      crmType: hasCrm ? 'ghl' : 'none',
+      crmConfig: {
+        ghlApiKey: crmForm.ghlApiKey || undefined,
+        ghlLocationId: crmForm.ghlLocationId || undefined,
+        batchDialerEnabled: !!crmForm.batchDialerApiKey,
+        batchDialerApiKey: crmForm.batchDialerApiKey || undefined,
+        dispoPipelineName: crmForm.dispoPipelineName || undefined,
+        newDealStageName: crmForm.newDealStageName || undefined,
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  if (!tenant) {
+    return <div className="text-muted-foreground">Tenant not found</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="sm" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to Tenants
+        </Button>
+        <div>
+          <h2 className="text-xl font-bold">{tenant.name}</h2>
+          <p className="text-sm text-muted-foreground">{tenant.slug} &middot; {tenant.subscriptionTier}</p>
+        </div>
+      </div>
+
+      {/* CRM Config Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">CRM Configuration</CardTitle>
+          <CardDescription>Update GoHighLevel and BatchDialer credentials for this tenant</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>GHL API Key</Label>
+              <Input
+                type="password"
+                value={crmForm.ghlApiKey}
+                onChange={(e) => setCrmForm({ ...crmForm, ghlApiKey: e.target.value })}
+                placeholder="pit-xxx..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>GHL Location ID</Label>
+              <Input
+                value={crmForm.ghlLocationId}
+                onChange={(e) => setCrmForm({ ...crmForm, ghlLocationId: e.target.value })}
+                placeholder="hmD7eWGQJE7EVFpJxj4q"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Dispo Pipeline Name</Label>
+              <Input
+                value={crmForm.dispoPipelineName}
+                onChange={(e) => setCrmForm({ ...crmForm, dispoPipelineName: e.target.value })}
+                placeholder="Dispo Pipeline"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>New Deal Stage Name</Label>
+              <Input
+                value={crmForm.newDealStageName}
+                onChange={(e) => setCrmForm({ ...crmForm, newDealStageName: e.target.value })}
+                placeholder="New Deal"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>BatchDialer API Key</Label>
+            <Input
+              type="password"
+              value={crmForm.batchDialerApiKey}
+              onChange={(e) => setCrmForm({ ...crmForm, batchDialerApiKey: e.target.value })}
+              placeholder="BatchDialer API key (optional)"
+            />
+          </div>
+          <Button onClick={handleSaveCrm} disabled={updateCrmMutation.isPending}>
+            {updateCrmMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+            Save CRM Config
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Bulk Import Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Bulk Add Team Members</CardTitle>
+          <CardDescription>Paste team member names (one per line) or CSV: Name, Role</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <textarea
+            className="w-full min-h-[120px] p-3 border rounded-md text-sm bg-background"
+            placeholder={"John Smith, Lead Manager\nJane Doe, Lead Generator\nMike Johnson, Acquisition Manager"}
+            value={bulkMemberPaste}
+            onChange={(e) => setBulkMemberPaste(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={parseBulkPaste} disabled={!bulkMemberPaste.trim()}>
+              Parse
+            </Button>
+            {bulkMembers.length > 0 && (
+              <Button onClick={handleBulkAdd} disabled={bulkAddMutation.isPending}>
+                {bulkAddMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                Add {bulkMembers.length} Member(s)
+              </Button>
+            )}
+          </div>
+
+          {bulkMembers.length > 0 && (
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Role</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bulkMembers.map((m, i) => (
+                    <TableRow key={i}>
+                      <TableCell>{m.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{m.teamRole.replace(/_/g, ' ')}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

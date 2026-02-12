@@ -127,6 +127,7 @@ export async function fetchRecentCalls(options: {
   disposition?: string;
   page?: number;
   pagelength?: number;
+  apiKey?: string;
 }): Promise<BatchDialerResponse> {
   const params = new URLSearchParams();
   
@@ -146,7 +147,7 @@ export async function fetchRecentCalls(options: {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "X-ApiKey": ENV.batchDialerApiKey,
+        "X-ApiKey": options.apiKey || ENV.batchDialerApiKey,
         "Accept": "application/json",
       },
       signal: controller.signal,
@@ -173,6 +174,7 @@ export async function fetchRecentCalls(options: {
 async function fetchAllPagesForWindow(
   windowStart: Date,
   windowEnd: Date,
+  apiKey?: string,
 ): Promise<BatchDialerCall[]> {
   const allCalls: BatchDialerCall[] = [];
   let page = 1;
@@ -189,6 +191,7 @@ async function fetchAllPagesForWindow(
         callDateEnd: endStr,
         page,
         pagelength: PAGE_SIZE,
+        apiKey,
       }),
       `Page ${page} for window ${windowLabel}`,
     );
@@ -215,7 +218,7 @@ async function fetchAllPagesForWindow(
  * into 15-minute windows and paginates within each window.
  * This prevents the 120-second server-side timeout that BatchDialer support identified.
  */
-export async function getCallsSince(since: Date): Promise<BatchDialerCall[]> {
+export async function getCallsSince(since: Date, apiKey?: string): Promise<BatchDialerCall[]> {
   const allCalls: BatchDialerCall[] = [];
   const now = new Date();
 
@@ -232,7 +235,7 @@ export async function getCallsSince(since: Date): Promise<BatchDialerCall[]> {
     windowIndex++;
 
     try {
-      const windowCalls = await fetchAllPagesForWindow(windowStart, windowEnd);
+      const windowCalls = await fetchAllPagesForWindow(windowStart, windowEnd, apiKey);
       allCalls.push(...windowCalls);
 
       if (windowCalls.length > 0) {
@@ -259,7 +262,7 @@ export async function getCallsSince(since: Date): Promise<BatchDialerCall[]> {
 /**
  * Download call recording from BatchDialer with retry logic
  */
-export async function fetchCallRecording(callId: number): Promise<Buffer> {
+export async function fetchCallRecording(callId: number, apiKey?: string): Promise<Buffer> {
   return withRetry(async () => {
     const url = `${BATCHDIALER_API_BASE}/callrecording/${callId}`;
 
@@ -270,7 +273,7 @@ export async function fetchCallRecording(callId: number): Promise<Buffer> {
       const response = await fetch(url, {
         method: "GET",
         headers: {
-          "X-ApiKey": ENV.batchDialerApiKey,
+          "X-ApiKey": apiKey || ENV.batchDialerApiKey,
         },
         signal: controller.signal,
       });

@@ -102,6 +102,9 @@ export default function Onboarding() {
     selectedCrm: "",
     ghlApiKey: "",
     ghlLocationId: "",
+    batchDialerApiKey: "",
+    dispoPipelineName: "",
+    newDealStageName: "",
     selectedRoles: ["lead_manager", "acquisition_manager"] as string[],
     trainingMaterials: "",
     teamInvites: [
@@ -140,9 +143,49 @@ export default function Onboarding() {
       if (currentStep === 1 && formData.companyName) {
         await updateTenantMutation.mutateAsync({
           name: formData.companyName,
+          onboardingStep: 2,
         });
       }
       
+      if (currentStep === 2 && formData.selectedCrm) {
+        if (formData.selectedCrm === 'ghl' && formData.ghlApiKey && formData.ghlLocationId) {
+          // Build crmConfig JSON with all CRM credentials
+          const crmConfig: Record<string, unknown> = {
+            ghlApiKey: formData.ghlApiKey,
+            ghlLocationId: formData.ghlLocationId,
+          };
+          if (formData.batchDialerApiKey) {
+            crmConfig.batchDialerEnabled = true;
+            crmConfig.batchDialerApiKey = formData.batchDialerApiKey;
+          }
+          if (formData.dispoPipelineName) {
+            crmConfig.dispoPipelineName = formData.dispoPipelineName;
+          }
+          if (formData.newDealStageName) {
+            crmConfig.newDealStageName = formData.newDealStageName;
+          }
+          
+          await updateTenantMutation.mutateAsync({
+            crmType: 'ghl',
+            crmConfig: JSON.stringify(crmConfig),
+            crmConnected: 'true',
+            onboardingStep: 3,
+          });
+          toast.success("CRM credentials saved successfully!");
+        } else if (formData.selectedCrm === 'none') {
+          await updateTenantMutation.mutateAsync({
+            crmType: 'none',
+            onboardingStep: 3,
+          });
+        }
+      }
+      
+      if (currentStep === 3) {
+        await updateTenantMutation.mutateAsync({
+          onboardingStep: 4,
+        });
+      }
+
       if (currentStep === 4 && formData.trainingMaterials.trim()) {
         await createTrainingMutation.mutateAsync({
           title: "Initial Training Materials",
@@ -347,6 +390,57 @@ export default function Onboarding() {
                     value={formData.ghlLocationId}
                     onChange={(e) => setFormData({ ...formData, ghlLocationId: e.target.value })}
                   />
+                </div>
+                
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-medium mb-3">Pipeline Mapping</h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Tell us which GHL pipeline stages to watch for new deals
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="dispoPipelineName">Dispo Pipeline Name</Label>
+                    <Input
+                      id="dispoPipelineName"
+                      placeholder="e.g., Dispo Pipeline"
+                      value={formData.dispoPipelineName}
+                      onChange={(e) => setFormData({ ...formData, dispoPipelineName: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The pipeline in GHL where qualified leads are moved
+                    </p>
+                  </div>
+                  <div className="space-y-2 mt-3">
+                    <Label htmlFor="newDealStageName">New Deal Stage Name</Label>
+                    <Input
+                      id="newDealStageName"
+                      placeholder="e.g., New Deal"
+                      value={formData.newDealStageName}
+                      onChange={(e) => setFormData({ ...formData, newDealStageName: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The stage name for new deals in your dispo pipeline
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-medium mb-3">BatchDialer Integration (Optional)</h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    If your team uses BatchDialer for cold calling, connect it to sync those calls too
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="batchDialerApiKey">BatchDialer API Key</Label>
+                    <Input
+                      id="batchDialerApiKey"
+                      type="password"
+                      placeholder="Enter your BatchDialer API key (optional)"
+                      value={formData.batchDialerApiKey}
+                      onChange={(e) => setFormData({ ...formData, batchDialerApiKey: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Find this in BatchDialer → Settings → API
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

@@ -2577,6 +2577,80 @@ Create content that:
         return createTenant(input);
       }),
 
+    // Super Admin: Setup new tenant with CRM config and team members
+    setup: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        slug: z.string().min(1),
+        subscriptionTier: z.enum(['trial', 'starter', 'growth', 'scale']).optional(),
+        crmType: z.enum(['ghl', 'none']).optional(),
+        crmConfig: z.object({
+          ghlApiKey: z.string().optional(),
+          ghlLocationId: z.string().optional(),
+          batchDialerEnabled: z.boolean().optional(),
+          batchDialerApiKey: z.string().optional(),
+          dispoPipelineName: z.string().optional(),
+          newDealStageName: z.string().optional(),
+        }).optional(),
+        teamMembers: z.array(z.object({
+          name: z.string().min(1),
+          teamRole: z.enum(['admin', 'lead_manager', 'acquisition_manager', 'lead_generator']),
+          phone: z.string().optional(),
+        })).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { isPlatformOwner, setupTenant } = await import("./tenant");
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        return setupTenant(input);
+      }),
+
+    // Super Admin: Bulk add team members to a tenant
+    bulkAddMembers: protectedProcedure
+      .input(z.object({
+        tenantId: z.number(),
+        members: z.array(z.object({
+          name: z.string().min(1),
+          teamRole: z.enum(['admin', 'lead_manager', 'acquisition_manager', 'lead_generator']),
+          phone: z.string().optional(),
+        })).min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { isPlatformOwner, bulkAddTeamMembers } = await import("./tenant");
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        return bulkAddTeamMembers(input.tenantId, input.members);
+      }),
+
+    // Super Admin: Update tenant CRM config
+    updateTenantCrmConfig: protectedProcedure
+      .input(z.object({
+        tenantId: z.number(),
+        crmType: z.enum(['ghl', 'none']),
+        crmConfig: z.object({
+          ghlApiKey: z.string().optional(),
+          ghlLocationId: z.string().optional(),
+          batchDialerEnabled: z.boolean().optional(),
+          batchDialerApiKey: z.string().optional(),
+          dispoPipelineName: z.string().optional(),
+          newDealStageName: z.string().optional(),
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { isPlatformOwner, updateTenantSettings } = await import("./tenant");
+        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        const crmConnected = (input.crmConfig.ghlApiKey && input.crmConfig.ghlLocationId) ? 'true' as const : 'false' as const;
+        return updateTenantSettings(input.tenantId, {
+          crmType: input.crmType,
+          crmConfig: JSON.stringify(input.crmConfig),
+          crmConnected,
+        });
+      }),
+
     // Tenant Admin: Get own tenant settings
     getSettings: protectedProcedure.query(async ({ ctx }) => {
       const { getTenantSettings } = await import("./tenant");
@@ -2593,14 +2667,16 @@ Create content that:
         domain: z.string().optional(),
         crmType: z.enum(['ghl', 'hubspot', 'salesforce', 'close', 'pipedrive', 'none']).optional(),
         crmConfig: z.string().optional(),
+        crmConnected: z.enum(['true', 'false']).optional(),
+        onboardingStep: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { updateTenantSettings } = await import("./tenant");
         if (!ctx.user?.tenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
         }
-        // Check if user is tenant admin
-        if (ctx.user.role !== 'admin' && ctx.user.isTenantAdmin !== 'true') {
+        // Check if user is tenant admin (admin, super_admin, or isTenantAdmin)
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin' && ctx.user.isTenantAdmin !== 'true') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant admin access required' });
         }
         return updateTenantSettings(ctx.user.tenantId, input);

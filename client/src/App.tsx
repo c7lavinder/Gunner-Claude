@@ -21,6 +21,7 @@ import Pricing from "./pages/Pricing";
 import SuperAdmin from "./pages/SuperAdmin";
 import TenantSettings from "./pages/TenantSettings";
 import AdminDashboard from "./pages/AdminDashboard";
+import TenantSetup from "./pages/TenantSetup";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -77,6 +78,7 @@ function ProtectedRouter() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/paywall" component={Paywall} />
       <Route path="/admin" component={SuperAdmin} />
+      <Route path="/admin/tenant-setup" component={TenantSetup} />
       <Route path="/admin-dashboard" component={AdminDashboard} />
       <Route path="/settings" component={TenantSettings} />
       <Route path="/leaderboard">

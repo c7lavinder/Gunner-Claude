@@ -10,11 +10,43 @@ import { storagePut } from "./storage";
 import { runArchivalJob } from "./archival";
 import { generateTeamInsights } from "./insights";
 import { createTeamTrainingItem } from "./db";
+import { getTenantsWithCrm, parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
 
 // GHL API Configuration
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
-const GHL_LOCATION_ID = "hmD7eWGQJE7EVFpJxj4q";
-const GHL_API_KEY = "pit-bfb8f738-3530-4385-b40f-86a5a1275f35";
+
+/**
+ * Tenant-specific GHL credentials used by all API calls.
+ * Loaded from tenant.crmConfig at poll time.
+ */
+interface GHLCredentials {
+  apiKey: string;
+  locationId: string;
+  tenantId: number;
+  tenantName: string;
+  dispoPipelineName?: string;
+  newDealStageName?: string;
+}
+
+// Active credentials for the current polling cycle
+let activeCredentials: GHLCredentials | null = null;
+
+/**
+ * Set the active GHL credentials for the current polling cycle
+ */
+function setActiveCredentials(creds: GHLCredentials): void {
+  activeCredentials = creds;
+}
+
+/**
+ * Get the active GHL credentials (throws if not set)
+ */
+function getActiveCredentials(): GHLCredentials {
+  if (!activeCredentials) {
+    throw new Error("[GHL] No active credentials set. Call setActiveCredentials() first.");
+  }
+  return activeCredentials;
+}
 
 // GHL Conversation from search API
 interface GHLConversation {
@@ -102,7 +134,8 @@ async function fetchGHLConversations(params: {
   const { startDate, limit = 100 } = params;
 
   const url = new URL(`${GHL_API_BASE}/conversations/search`);
-  url.searchParams.set("locationId", GHL_LOCATION_ID);
+  const creds = getActiveCredentials();
+  url.searchParams.set("locationId", creds.locationId);
   url.searchParams.set("limit", limit.toString());
   // Sort by last message date to get recent conversations with calls
   url.searchParams.set("sortBy", "last_message_date");
@@ -115,7 +148,7 @@ async function fetchGHLConversations(params: {
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${GHL_API_KEY}`,
+        "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
         "Accept": "application/json",
       },
@@ -143,12 +176,13 @@ async function fetchGHLConversations(params: {
  */
 async function fetchConversationMessages(conversationId: string): Promise<GHLMessage[]> {
   const url = new URL(`${GHL_API_BASE}/conversations/${conversationId}/messages`);
+  const creds = getActiveCredentials();
 
   try {
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${GHL_API_KEY}`,
+        "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
         "Accept": "application/json",
       },
@@ -173,15 +207,16 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
  * Returns the recording as a Buffer, or null if not available
  */
 async function fetchCallRecording(messageId: string): Promise<Buffer | null> {
+  const creds = getActiveCredentials();
   // Correct endpoint format: /conversations/messages/:messageId/locations/:locationId/recording
-  const url = `${GHL_API_BASE}/conversations/messages/${messageId}/locations/${GHL_LOCATION_ID}/recording`;
+  const url = `${GHL_API_BASE}/conversations/messages/${messageId}/locations/${creds.locationId}/recording`;
 
   try {
     console.log(`[GHL] Fetching recording for message ${messageId}`);
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${GHL_API_KEY}`,
+        "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-04-15", // This endpoint requires version 2021-04-15
       },
     });
@@ -326,10 +361,10 @@ export async function fetchGHLCalls(params: {
 /**
  * Match a GHL user ID to a team member
  */
-async function matchTeamMember(ghlUserId?: string, userName?: string): Promise<{ id: number; name: string; role: string; tenantId: number | null } | null> {
+async function matchTeamMember(ghlUserId?: string, userName?: string, tenantId?: number): Promise<{ id: number; name: string; role: string; tenantId: number | null } | null> {
   if (!ghlUserId && !userName) return null;
 
-  const teamMembers = await getTeamMembers();
+  const teamMembers = await getTeamMembers(tenantId);
   
   // First try to match by GHL User ID
   if (ghlUserId) {
@@ -359,8 +394,9 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
     return { success: true, skipped: true, reason: "Call already synced" };
   }
 
-  // Match team member
-  const teamMember = await matchTeamMember(ghlCall.userId);
+  // Match team member (scoped to the active tenant)
+  const creds = getActiveCredentials();
+  const teamMember = await matchTeamMember(ghlCall.userId, undefined, creds.tenantId);
   if (!teamMember) {
     console.log(`[GHL] Could not match team member for call ${ghlCall.id} (userId: ${ghlCall.userId})`);
     return { success: true, skipped: true, reason: "Could not match team member" };
@@ -418,6 +454,10 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
 /**
  * Poll for new calls from GHL
  */
+/**
+ * Poll for new calls across all tenants with CRM connected.
+ * Loads each tenant's credentials from crmConfig and polls their GHL account.
+ */
 export async function pollForNewCalls(): Promise<{
   success: boolean;
   synced: number;
@@ -433,40 +473,65 @@ export async function pollForNewCalls(): Promise<{
   const results = { success: true, synced: 0, skipped: 0, failed: 0, errors: [] as string[] };
 
   try {
-    // Fetch calls from the last poll time (or last 72 hours if first poll)
-    const startDate = lastPollTimestamp || new Date(Date.now() - 72 * 60 * 60 * 1000);
-    const endDate = new Date();
+    // Get all tenants with CRM connected
+    const crmTenants = await getTenantsWithCrm();
+    
+    for (const tenant of crmTenants) {
+      const config = parseCrmConfig(tenant);
+      if (!config.ghlApiKey || !config.ghlLocationId) {
+        console.log(`[GHL] Tenant ${tenant.id} (${tenant.name}) missing GHL credentials, skipping`);
+        continue;
+      }
 
-    console.log(`[GHL] Polling for calls from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      // Set active credentials for this tenant
+      setActiveCredentials({
+        apiKey: config.ghlApiKey,
+        locationId: config.ghlLocationId,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        dispoPipelineName: config.dispoPipelineName,
+        newDealStageName: config.newDealStageName,
+      });
 
-    const ghlCalls = await fetchGHLCalls({ startDate, endDate });
-    console.log(`[GHL] Found ${ghlCalls.length} calls to process`);
+      try {
+        const startDate = lastPollTimestamp || new Date(Date.now() - 72 * 60 * 60 * 1000);
+        const endDate = new Date();
 
-    for (const ghlCall of ghlCalls) {
-      const result = await syncGHLCall(ghlCall);
-      
-      if (result.skipped) {
-        results.skipped++;
-        console.log(`[GHL] Skipped call ${ghlCall.id}: ${result.reason}`);
-      } else if (result.success) {
-        results.synced++;
-        console.log(`[GHL] Synced call ${ghlCall.id} -> ${result.callId}`);
-      } else {
-        results.failed++;
-        if (result.reason) {
-          results.errors.push(`Call ${ghlCall.id}: ${result.reason}`);
+        console.log(`[GHL] Polling tenant ${tenant.id} (${tenant.name}) from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+        const ghlCalls = await fetchGHLCalls({ startDate, endDate });
+        console.log(`[GHL] Tenant ${tenant.id}: Found ${ghlCalls.length} calls to process`);
+
+        for (const ghlCall of ghlCalls) {
+          const result = await syncGHLCall(ghlCall);
+          
+          if (result.skipped) {
+            results.skipped++;
+          } else if (result.success) {
+            results.synced++;
+            console.log(`[GHL] Tenant ${tenant.id}: Synced call ${ghlCall.id} -> ${result.callId}`);
+          } else {
+            results.failed++;
+            if (result.reason) {
+              results.errors.push(`Tenant ${tenant.id} call ${ghlCall.id}: ${result.reason}`);
+            }
+          }
         }
+      } catch (tenantError) {
+        console.error(`[GHL] Error polling tenant ${tenant.id} (${tenant.name}):`, tenantError);
+        results.errors.push(`Tenant ${tenant.id}: ${tenantError instanceof Error ? tenantError.message : "Unknown error"}`);
       }
     }
 
     // Update last poll timestamp
-    lastPollTimestamp = endDate;
+    lastPollTimestamp = new Date();
 
   } catch (error) {
     results.success = false;
     results.errors.push(error instanceof Error ? error.message : "Unknown error");
   } finally {
     isPolling = false;
+    activeCredentials = null; // Clear credentials after polling
   }
 
   console.log(`[GHL] Poll complete: ${results.synced} synced, ${results.skipped} skipped, ${results.failed} failed`);
@@ -579,15 +644,16 @@ export function startPolling(intervalMinutes: number = 30): void {
   currentIntervalMinutes = intervalMinutes;
   console.log(`[GHL] Starting automatic polling every ${intervalMinutes} minutes`);
   
-  // Do an initial poll
-  pollForNewCalls().catch(err => console.error("[GHL] Initial poll error:", err));
-  
-  // Start opportunity polling for Closer badge
-  startOpportunityPolling();
+  // Do an initial poll, then opportunity poll (sequential to avoid credential race condition)
+  pollForNewCalls()
+    .then(() => pollOpportunities())
+    .catch(err => console.error("[GHL] Initial poll error:", err));
 
-  // Set up interval
+  // Set up interval — run call poll then opportunity poll sequentially
   pollInterval = setInterval(() => {
-    pollForNewCalls().catch(err => console.error("[GHL] Poll error:", err));
+    pollForNewCalls()
+      .then(() => pollOpportunities())
+      .catch(err => console.error("[GHL] Poll error:", err));
   }, intervalMinutes * 60 * 1000);
 
   // Start daily archival job (runs every 24 hours)
@@ -700,22 +766,24 @@ interface GHLOpportunity {
 let lastOpportunityPollTimestamp: Date | null = null;
 let opportunityPollInterval: ReturnType<typeof setInterval> | null = null;
 
-// Dispo Pipeline configuration
-const DISPO_PIPELINE_NAME = "dispo pipeline";
-const NEW_DEAL_STAGE_NAME = "new deal";
+// Dispo Pipeline configuration (now loaded from tenant crmConfig)
+// Defaults for backwards compatibility
+const DEFAULT_DISPO_PIPELINE_NAME = "dispo pipeline";
+const DEFAULT_NEW_DEAL_STAGE_NAME = "new deal";
 
 /**
  * Fetch opportunities from GHL
  */
 async function fetchOpportunities(startDate?: Date): Promise<GHLOpportunity[]> {
+  const creds = getActiveCredentials();
   try {
     const url = new URL(`${GHL_API_BASE}/opportunities/search`);
-    url.searchParams.set("location_id", GHL_LOCATION_ID);
+    url.searchParams.set("location_id", creds.locationId);
     
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${GHL_API_KEY}`,
+        "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
         "Content-Type": "application/json",
       },
@@ -739,10 +807,11 @@ async function fetchOpportunities(startDate?: Date): Promise<GHLOpportunity[]> {
  */
 async function getPipelines(): Promise<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>> {
   try {
-    const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${GHL_LOCATION_ID}`, {
+    const creds = getActiveCredentials();
+    const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${creds.locationId}`, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${GHL_API_KEY}`,
+        "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
         "Content-Type": "application/json",
       },
@@ -823,23 +892,64 @@ async function processNewDeal(opportunity: GHLOpportunity): Promise<boolean> {
 /**
  * Poll for new opportunities in the Dispo Pipeline
  */
+/**
+ * Poll for new opportunities across all tenants with CRM connected.
+ */
 export async function pollOpportunities(): Promise<{ processed: number; errors: number }> {
   const result = { processed: 0, errors: 0 };
   
   try {
-    // Get pipelines to find Dispo Pipeline
-    const pipelines = await getPipelines();
-    const dispoPipeline = pipelines.find(p => p.name.toLowerCase() === DISPO_PIPELINE_NAME);
+    // Get all tenants with CRM connected
+    const crmTenants = await getTenantsWithCrm();
     
-    if (!dispoPipeline) {
-      console.log("[GHL Opportunities] Dispo pipeline not found");
-      return result;
+    for (const tenant of crmTenants) {
+      const config = parseCrmConfig(tenant);
+      if (!config.ghlApiKey || !config.ghlLocationId) continue;
+
+      setActiveCredentials({
+        apiKey: config.ghlApiKey,
+        locationId: config.ghlLocationId,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        dispoPipelineName: config.dispoPipelineName,
+        newDealStageName: config.newDealStageName,
+      });
+
+      try {
+        await pollOpportunitiesForTenant(result);
+      } catch (tenantError) {
+        console.error(`[GHL Opportunities] Error polling tenant ${tenant.id}:`, tenantError);
+        result.errors++;
+      }
     }
     
-    const newDealStage = dispoPipeline.stages.find(s => s.name.toLowerCase() === NEW_DEAL_STAGE_NAME);
+    lastOpportunityPollTimestamp = new Date();
+    activeCredentials = null;
+  } catch (error) {
+    console.error("[GHL Opportunities] Poll error:", error);
+    result.errors++;
+  }
+  
+  return result;
+}
+
+async function pollOpportunitiesForTenant(result: { processed: number; errors: number }): Promise<void> {
+    // Get pipelines to find Dispo Pipeline
+    const pipelines = await getPipelines();
+    const creds = getActiveCredentials();
+    const pipelineName = (creds.dispoPipelineName || DEFAULT_DISPO_PIPELINE_NAME).toLowerCase();
+    const dispoPipeline = pipelines.find(p => p.name.toLowerCase() === pipelineName);
+    
+    if (!dispoPipeline) {
+      console.log(`[GHL Opportunities] Dispo pipeline not found`);
+      return;
+    }
+    
+    const stageName = (creds.newDealStageName || DEFAULT_NEW_DEAL_STAGE_NAME).toLowerCase();
+    const newDealStage = dispoPipeline.stages.find(s => s.name.toLowerCase() === stageName);
     if (!newDealStage) {
-      console.log("[GHL Opportunities] New Deal stage not found in Dispo pipeline");
-      return result;
+      console.log(`[GHL Opportunities] New Deal stage not found in Dispo pipeline`);
+      return;
     }
     
     // Fetch opportunities
@@ -850,7 +960,7 @@ export async function pollOpportunities(): Promise<{ processed: number; errors: 
       opp => opp.pipelineId === dispoPipeline.id && opp.pipelineStageId === newDealStage.id
     );
     
-    console.log(`[GHL Opportunities] Found ${newDeals.length} opportunities in New Deal stage`);
+    console.log(`[GHL Opportunities] Tenant ${creds.tenantId}: Found ${newDeals.length} opportunities in New Deal stage`);
     
     // Process each new deal
     for (const opp of newDeals) {
@@ -864,15 +974,6 @@ export async function pollOpportunities(): Promise<{ processed: number; errors: 
         result.errors++;
       }
     }
-    
-    lastOpportunityPollTimestamp = new Date();
-    
-  } catch (error) {
-    console.error("[GHL Opportunities] Poll error:", error);
-    result.errors++;
-  }
-  
-  return result;
 }
 
 /**
@@ -925,6 +1026,24 @@ export async function resyncCallRecording(callId: number): Promise<{
     // Check if we have a GHL call ID
     if (!call.ghlCallId) {
       return { success: false, message: "Call does not have a GHL call ID - cannot re-sync" };
+    }
+
+    // Load tenant credentials for this call
+    if (call.tenantId) {
+      const tenant = await getTenantById(call.tenantId);
+      if (tenant) {
+        const config = parseCrmConfig(tenant);
+        if (config.ghlApiKey && config.ghlLocationId) {
+          setActiveCredentials({
+            apiKey: config.ghlApiKey,
+            locationId: config.ghlLocationId,
+            tenantId: tenant.id,
+            tenantName: tenant.name,
+            dispoPipelineName: config.dispoPipelineName,
+            newDealStageName: config.newDealStageName,
+          });
+        }
+      }
     }
 
     console.log(`[GHL Resync] Re-syncing recording for call ${callId} (GHL ID: ${call.ghlCallId})`);

@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, name, crmType, crmConnected, crmConfig FROM tenants WHERE id = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, crmType, crmConnected, crmConfig FROM tenants WHERE id = 1;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "crmType": "ghl",
+      "crmConnected": "true",
+      "crmConfig": "{\"batchDialerApiKey\": \"from_env\", \"batchDialerEnabled\": true, \"dispoPipelineName\": \"dispo pipeline\", \"ghlApiKey\": \"pit-bfb8f738-3530-4385-b40f-86a5a1275f35\", \"ghlLocationId\": \"hmD7eWGQJE7EVFpJxj4q\", \"newDealStageName\": \"new deal\"}"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcrmType\tcrmConnected\tcrmConfig\n1\tNew Again Houses\tghl\ttrue\t{\"batchDialerApiKey\": \"from_env\", \"batchDialerEnabled\": true, \"dispoPipelineName\": \"dispo pipeline\", \"ghlApiKey\": \"pit-bfb8f738-3530-4385-b40f-86a5a1275f35\", \"ghlLocationId\": \"hmD7eWGQJE7EVFpJxj4q\", \"newDealStageName\": \"new deal\"}\n",
+  "stderr": "",
+  "execution_time_ms": 356
+}

@@ -143,7 +143,7 @@ export const ACQUISITION_MANAGER_RUBRIC = {
 
 export const LEAD_GENERATOR_RUBRIC = {
   name: "Lead Generator Cold Call Rubric",
-  description: "For Lead Generators (Alex, Efren, and Mirna) - Cold calling to generate seller interest and identify motivated sellers. The goal is NOT to set appointments — it is to get the homeowner to express interest in selling so a Lead Manager can follow up and qualify the lead.",
+  description: "For Lead Generators - Cold calling to generate seller interest and identify motivated sellers. The goal is NOT to set appointments — it is to get the homeowner to express interest in selling so a Lead Manager can follow up and qualify the lead.",
   criteria: [
     {
       name: "Introduction & Permission",
@@ -428,6 +428,7 @@ export async function gradeCall(
     trainingMaterials?: { title: string; content: string | null; category: string | null }[];
     gradingRules?: { title: string; ruleText: string | null; priority: number | null }[];
     recentFeedback?: { feedbackType: string | null; explanation: string | null; correctBehavior: string | null }[];
+    companyName?: string;
   }
 ): Promise<GradingResult> {
   // Rubric mapping (6 call types → 6 rubrics):
@@ -472,7 +473,8 @@ export async function gradeCall(
     ).join("\n")}`;
   }
 
-  const systemPrompt = `You are an expert sales coach for a real estate wholesaling company called Nashville Area Home Buyers. 
+  const companyName = context?.companyName || "the company";
+  const systemPrompt = `You are an expert sales coach for a real estate wholesaling company called ${companyName}. 
 Your job is to analyze phone call transcripts and grade them based on a specific rubric.
 
 You are grading a ${callType === "cold_call" ? "Cold Call (Lead Generation)" : callType === "qualification" ? "Qualification/Diagnosis" : callType === "follow_up" ? "Follow-Up" : callType === "seller_callback" ? "Seller Callback (Inbound)" : callType === "admin_callback" ? "Admin Callback (Operational)" : "Offer"} call made by ${teamMemberName}.
@@ -903,6 +905,7 @@ Respond with JSON only.`,
 import { getCallById, updateCall, createCallGrade, getTeamMemberById, getGradingContext } from "./db";
 import { processCallViewRewards, evaluateBadgesForCall } from "./gamification";
 import { canProcessCall } from "./planLimits";
+import { getTenantById } from "./tenant";
 
 export async function processCall(callId: number): Promise<void> {
   const call = await getCallById(callId);
@@ -1020,6 +1023,13 @@ export async function processCall(callId: number): Promise<void> {
     // Fetch grading context (training materials, rules, feedback)
     const gradingContext = await getGradingContext(gradingContextType);
     
+    // Get tenant company name for grading prompt
+    let companyName: string | undefined;
+    if (call.tenantId) {
+      const tenant = await getTenantById(call.tenantId);
+      if (tenant) companyName = tenant.name;
+    }
+
     const gradeResult = await gradeCall(transcript, callType, teamMemberName, {
       trainingMaterials: gradingContext.trainingMaterials.map(m => ({
         title: m.title,
@@ -1036,6 +1046,7 @@ export async function processCall(callId: number): Promise<void> {
         explanation: f.explanation,
         correctBehavior: f.correctBehavior,
       })),
+      companyName,
     });
 
     // Map callType to rubricType for storage

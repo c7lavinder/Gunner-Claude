@@ -1,9 +1,10 @@
 import { getCallsSince, fetchCallRecording } from "./batchDialerService";
-import { getDb, createCall, getCallByBatchDialerId } from "./db";
+import { getDb, createCall, getCallByBatchDialerId, getTeamMembers } from "./db";
 import { calls, teamMembers } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { storagePut } from "./storage";
 import { processCall } from "./grading";
+import { getTenantsWithCrm, parseCrmConfig } from "./tenant";
 
 const POLL_INTERVAL = 30 * 60 * 1000; // 30 minutes
 const LAST_SYNC_KEY = "batchdialer_last_sync";
@@ -38,31 +39,23 @@ async function getLastSyncTime(): Promise<Date> {
 }
 
 /**
- * Map BatchDialer agent name to Gunner team member
+ * Map BatchDialer agent name to Gunner team member, scoped by tenantId
  */
-async function findTeamMemberByAgentName(agentName: string): Promise<number | null> {
-  const db = await getDb();
-  if (!db) return null;
+async function findTeamMemberByAgentName(agentName: string, tenantId?: number): Promise<{ id: number; teamRole: string | null } | null> {
+  const members = await getTeamMembers(tenantId);
 
   // Try exact match first
-  const exactMatch = await db
-    .select()
-    .from(teamMembers)
-    .where(eq(teamMembers.name, agentName))
-    .limit(1);
-
-  if (exactMatch.length > 0) {
-    return exactMatch[0].id;
+  const normalizedAgent = agentName.toLowerCase().trim();
+  const exactMatch = members.find(m => m.name.toLowerCase().trim() === normalizedAgent);
+  if (exactMatch) {
+    return { id: exactMatch.id, teamRole: exactMatch.teamRole };
   }
 
-  // Try case-insensitive partial match
-  const allMembers = await db.select().from(teamMembers);
-  const normalizedAgent = agentName.toLowerCase().trim();
-
-  for (const member of allMembers) {
+  // Try partial match
+  for (const member of members) {
     const normalizedMember = member.name.toLowerCase().trim();
     if (normalizedMember.includes(normalizedAgent) || normalizedAgent.includes(normalizedMember)) {
-      return member.id;
+      return { id: member.id, teamRole: member.teamRole };
     }
   }
 
@@ -70,33 +63,43 @@ async function findTeamMemberByAgentName(agentName: string): Promise<number | nu
 }
 
 /**
- * Sync calls from BatchDialer
+ * Determine call type based on team member's role (not hardcoded names)
  */
-export async function syncBatchDialerCalls(): Promise<{
-  imported: number;
-  skipped: number;
-  errors: number;
-}> {
-  console.log("[BatchDialer] Starting sync...");
-  
-  const stats = {
-    imported: 0,
-    skipped: 0,
-    errors: 0,
-  };
+function getCallTypeForRole(teamRole: string | null): "cold_call" | "qualification" | "offer" {
+  switch (teamRole) {
+    case "lead_generator":
+      return "cold_call";
+    case "acquisition_manager":
+      return "offer";
+    case "lead_manager":
+    default:
+      return "qualification";
+  }
+}
+
+/**
+ * Sync calls from BatchDialer for a specific tenant
+ */
+async function syncBatchDialerCallsForTenant(
+  tenantId: number,
+  tenantName: string,
+  batchDialerApiKey: string
+): Promise<{ imported: number; skipped: number; errors: number }> {
+  const stats = { imported: 0, skipped: 0, errors: 0 };
 
   try {
     const db = await getDb();
     if (!db) {
-      console.error("[BatchDialer] Database not available");
+      console.error(`[BatchDialer] Tenant ${tenantId}: Database not available`);
       return stats;
     }
 
     const lastSync = await getLastSyncTime();
-    console.log(`[BatchDialer] Fetching calls since ${lastSync.toISOString()}`);
+    console.log(`[BatchDialer] Tenant ${tenantId} (${tenantName}): Fetching calls since ${lastSync.toISOString()}`);
 
-    const batchDialerCalls = await getCallsSince(lastSync);
-    console.log(`[BatchDialer] Found ${batchDialerCalls.length} calls`);
+    // Pass the tenant-specific API key to getCallsSince
+    const batchDialerCalls = await getCallsSince(lastSync, batchDialerApiKey);
+    console.log(`[BatchDialer] Tenant ${tenantId}: Found ${batchDialerCalls.length} calls`);
 
     for (const bdCall of batchDialerCalls) {
       try {
@@ -109,44 +112,45 @@ export async function syncBatchDialerCalls(): Promise<{
 
         // Skip if no recording available
         if (!bdCall.recordingenabled || !bdCall.callRecordUrl) {
-          console.log(`[BatchDialer] Skipping call ${bdCall.id} - no recording`);
           stats.skipped++;
           continue;
         }
 
         // Skip if duration is too short (less than 10 seconds)
         if (bdCall.duration < 10) {
-          console.log(`[BatchDialer] Skipping call ${bdCall.id} - too short (${bdCall.duration}s)`);
           stats.skipped++;
           continue;
         }
 
-        // Find team member
+        // Find team member by agent name, scoped to this tenant
         let teamMemberId: number | null = null;
         let teamMemberName = "Unknown";
+        let callType: "cold_call" | "qualification" | "offer" = "qualification";
 
         if (bdCall.agent) {
-          teamMemberId = await findTeamMemberByAgentName(bdCall.agent);
-          teamMemberName = bdCall.agent;
+          const match = await findTeamMemberByAgentName(bdCall.agent, tenantId);
+          if (match) {
+            teamMemberId = match.id;
+            teamMemberName = bdCall.agent;
+            callType = getCallTypeForRole(match.teamRole);
+          }
         }
 
         if (!teamMemberId) {
-          console.log(`[BatchDialer] Could not map agent "${bdCall.agent}" to team member, skipping call ${bdCall.id}`);
+          console.log(`[BatchDialer] Tenant ${tenantId}: Could not map agent "${bdCall.agent}" to team member, skipping call ${bdCall.id}`);
           stats.skipped++;
           continue;
         }
 
         // Download recording
-        console.log(`[BatchDialer] Downloading recording for call ${bdCall.id}`);
-        const recordingBuffer = await fetchCallRecording(bdCall.id);
+        console.log(`[BatchDialer] Tenant ${tenantId}: Downloading recording for call ${bdCall.id}`);
+        const recordingBuffer = await fetchCallRecording(bdCall.id, batchDialerApiKey);
 
         // Upload to S3
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substring(7);
         const fileKey = `calls/batchdialer-${bdCall.id}-${timestamp}-${randomSuffix}.mp3`;
         const { url: recordingUrl } = await storagePut(fileKey, recordingBuffer, "audio/mpeg");
-
-        console.log(`[BatchDialer] Uploaded recording to: ${recordingUrl}`);
 
         // Create call record
         const contactName = `${bdCall.contact.firstname} ${bdCall.contact.lastname}`.trim();
@@ -160,7 +164,7 @@ export async function syncBatchDialerCalls(): Promise<{
           duration: bdCall.duration,
           teamMemberId,
           teamMemberName,
-          callType: teamMemberName && ["Alex Diaz", "Efren Valenzuela", "Mirna Razo"].some(n => teamMemberName.toLowerCase().includes(n.split(" ")[0].toLowerCase())) ? "cold_call" : "qualification", // Lead Generators get cold_call, Lead Managers get qualification
+          callType,
           status: "pending",
           callTimestamp: new Date(bdCall.callStartTime),
           callSource: "batchdialer",
@@ -168,29 +172,68 @@ export async function syncBatchDialerCalls(): Promise<{
           batchDialerCampaignId: bdCall.campaign.id,
           batchDialerCampaignName: bdCall.campaign.name,
           batchDialerAgentName: bdCall.agent || undefined,
+          tenantId,
         });
 
         // Process the call asynchronously
         if (newCall) {
           processCall(newCall.id).catch((err: Error) => {
-            console.error(`[BatchDialer] Error processing call ${bdCall.id}:`, err);
+            console.error(`[BatchDialer] Tenant ${tenantId}: Error processing call ${bdCall.id}:`, err);
           });
         }
 
         stats.imported++;
-        console.log(`[BatchDialer] Imported call ${bdCall.id}`);
+        console.log(`[BatchDialer] Tenant ${tenantId}: Imported call ${bdCall.id}`);
       } catch (error) {
-        console.error(`[BatchDialer] Error importing call ${bdCall.id}:`, error);
+        console.error(`[BatchDialer] Tenant ${tenantId}: Error importing call ${bdCall.id}:`, error);
         stats.errors++;
       }
     }
+  } catch (error) {
+    console.error(`[BatchDialer] Tenant ${tenantId}: Sync failed:`, error);
+  }
 
-    console.log(`[BatchDialer] Sync complete. Imported: ${stats.imported}, Skipped: ${stats.skipped}, Errors: ${stats.errors}`);
+  return stats;
+}
+
+/**
+ * Sync calls from BatchDialer across all tenants with BatchDialer configured
+ */
+export async function syncBatchDialerCalls(): Promise<{
+  imported: number;
+  skipped: number;
+  errors: number;
+}> {
+  console.log("[BatchDialer] Starting sync...");
+  
+  const totalStats = { imported: 0, skipped: 0, errors: 0 };
+
+  try {
+    const crmTenants = await getTenantsWithCrm();
+    
+    for (const tenant of crmTenants) {
+      const config = parseCrmConfig(tenant);
+      if (!config.batchDialerApiKey) {
+        continue; // Tenant doesn't have BatchDialer configured
+      }
+
+      const stats = await syncBatchDialerCallsForTenant(
+        tenant.id,
+        tenant.name,
+        config.batchDialerApiKey
+      );
+
+      totalStats.imported += stats.imported;
+      totalStats.skipped += stats.skipped;
+      totalStats.errors += stats.errors;
+    }
+
+    console.log(`[BatchDialer] Sync complete. Imported: ${totalStats.imported}, Skipped: ${totalStats.skipped}, Errors: ${totalStats.errors}`);
   } catch (error) {
     console.error("[BatchDialer] Sync failed:", error);
   }
 
-  return stats;
+  return totalStats;
 }
 
 /**
