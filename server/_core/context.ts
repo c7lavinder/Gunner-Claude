@@ -55,21 +55,26 @@ export async function createContext(
     }
   }
 
-  // Handle impersonation - only super_admin can impersonate
-  if (user && user.role === 'super_admin' && impersonationHeader) {
+  // Handle impersonation - admin and super_admin can impersonate
+  if (user && (user.role === 'super_admin' || user.role === 'admin') && impersonationHeader) {
     try {
       const targetUserId = parseInt(impersonationHeader, 10);
       if (!isNaN(targetUserId)) {
         const impersonatedUser = await getUserById(targetUserId);
         if (impersonatedUser) {
-          // Store original admin info and switch to impersonated user
-          isImpersonating = true;
-          user = {
-            ...impersonatedUser,
-            // Keep a reference to original admin for audit purposes
-            // @ts-ignore - adding custom property for impersonation tracking
-            _originalAdminId: user.id,
-          };
+          // Admin can only impersonate users within the same tenant
+          if (user.role === 'admin' && impersonatedUser.tenantId !== user.tenantId) {
+            console.warn(`[Impersonation] Admin ${user.id} tried to impersonate user ${targetUserId} from a different tenant`);
+          } else {
+            // Store original admin info and switch to impersonated user
+            isImpersonating = true;
+            user = {
+              ...impersonatedUser,
+              // Keep a reference to original admin for audit purposes
+              // @ts-ignore - adding custom property for impersonation tracking
+              _originalAdminId: user.id,
+            };
+          }
         }
       }
     } catch (error) {

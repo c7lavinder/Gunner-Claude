@@ -1711,3 +1711,11 @@
 - [x] Fix Auto-Grade as Admin button — was sending classification "conversation" instead of "admin_call"
 - [x] Fix reclassify endpoint — now triggers processCall for admin_call classification (not just conversation)
 - [x] Write vitest tests for reclassify logic (14/14 passing)
+
+## Daniel's Calls Not Showing Bug
+- [x] Root cause: team_member.userId pointed to old user 180249, but Daniel signs in as user 840050
+- [x] Fixed: updated team_members SET userId = 840050 WHERE id = 2 (Daniel Lozano)
+
+## View As Not Showing Calls Bug
+- [x] Root cause: context.ts only allowed super_admin to impersonate, but Corey is admin
+- [x] Fixed: allow admin role to impersonate users within the same tenant
