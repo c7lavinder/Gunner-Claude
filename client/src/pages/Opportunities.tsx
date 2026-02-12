@@ -132,6 +132,11 @@ const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string 
     icon: MessageCircle,
     shortLabel: "Talk Time DQ",
   },
+  active_negotiation_in_followup: {
+    label: "Active Engagement in Follow Up — Worth a Look",
+    icon: MessageSquare,
+    shortLabel: "Active Engagement",
+  },
 };
 
 const sourceConfig: Record<string, { label: string; icon: any; color: string }> = {

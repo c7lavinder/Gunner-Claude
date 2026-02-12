@@ -1611,3 +1611,13 @@
 - [x] Drop backward_movement_no_call rule (too noisy without stage history from GHL)
 - [x] Rename "Opportunities" page to "Signals" across entire UI (sidebar, page title, headings)
 - [x] Persist Call History filters in URL so back button from call detail restores filters
+- [x] Fix detection gap: Suzanne Burgess (negotiating seller after offer call) not showing in Signals
+
+## New Detection Rule: Active Negotiation in Follow-Up
+- [x] Build active_negotiation_in_followup rule as Tier 3 (Worth a Look): detect contacts in follow-up stages with recent inbound messages (72h) showing engagement/negotiation — owner review opportunity to help acquisitions with negotiation strategy, NOT a missed deal
+- [x] Add GHL conversation messages fetching to detection engine (fetch actual message history, not just last message)
+- [x] Add negotiation keyword matching for SMS content
+- [x] Wire new rule into Phase 2 conversation scan
+- [x] Write vitest tests for the new rule
+- [x] Test against live data (Suzanne Burgess should trigger)
+- [x] Clean up all test tenants and associated data (keep only tenant ID 1 - New Again Houses)

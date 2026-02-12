@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, name, crmType, crmConnected, crmConfig FROM tenants WHERE name = 'New Again Houses' LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, crmType, crmConnected, crmConfig FROM tenants WHERE name = 'New Again Houses' LIMIT 1;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "crmType": "ghl",
+      "crmConnected": "true",
+      "crmConfig": "{\"ghlApiKey\":\"new-ghl-key\",\"ghlLocationId\":\"new-location-id\",\"batchDialerEnabled\":true,\"batchDialerApiKey\":\"new-bd-key\",\"dispoPipelineName\":\"Owner Pipeline\",\"newDealStageName\":\"Fresh Deal\",\"stageMapping\":{\"stage-a\":\"lead_gen\",\"stage-b\":\"follow_up\"}}"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcrmType\tcrmConnected\tcrmConfig\n1\tNew Again Houses\tghl\ttrue\t{\"ghlApiKey\":\"new-ghl-key\",\"ghlLocationId\":\"new-location-id\",\"batchDialerEnabled\":true,\"batchDialerApiKey\":\"new-bd-key\",\"dispoPipelineName\":\"Owner Pipeline\",\"newDealStageName\":\"Fresh Deal\",\"stageMapping\":{\"stage-a\":\"lead_gen\",\"stage-b\":\"follow_up\"}}\n",
+  "stderr": "",
+  "execution_time_ms": 405
+}

@@ -201,6 +201,36 @@ async function fetchRecentConversations(
   return data.conversations || [];
 }
 
+// Fetch individual messages from a conversation (for content analysis)
+interface GHLMessageDetail {
+  id: string;
+  body?: string;
+  direction: string;
+  type: number;
+  messageType?: string;
+  contentType?: string;
+  dateAdded: string;
+  contactId?: string;
+}
+
+async function fetchConversationMessages(
+  creds: GHLCredentials,
+  conversationId: string,
+  limit = 20
+): Promise<GHLMessageDetail[]> {
+  try {
+    const data = await ghlFetch(
+      creds,
+      `/conversations/${conversationId}/messages`
+    );
+    const messages = data.messages?.messages || data.messages || [];
+    return messages.slice(0, limit);
+  } catch (error) {
+    console.error(`[OpportunityDetection] Error fetching messages for conversation ${conversationId}:`, error);
+    return [];
+  }
+}
+
 async function fetchContactById(creds: GHLCredentials, contactId: string): Promise<any> {
   try {
     const data = await ghlFetch(creds, `/contacts/${contactId}`);
@@ -378,6 +408,114 @@ async function detectFollowUpInboundIgnored(
     lastActivityAt: lastMsgTime,
     lastStageChangeAt: null,
     transcriptExcerpt: conversation.lastMessageBody || "",
+  };
+}
+
+// Rule 14: Active negotiation/engagement in follow-up stage
+// Catches contacts who are in follow-up stages but have recent inbound SMS/messages
+// showing active engagement or negotiation. This is the "still talking but got shelved" pattern.
+// Unlike Rule 3 (which only catches unread messages >4h old), this rule:
+// - Looks at actual message content for negotiation keywords
+// - Works even if messages were "read" but not acted on
+// - Checks the last 72 hours of message history
+const NEGOTIATION_KEYWORDS = [
+  // Direct negotiation signals
+  "consider", "counter", "counteroffer", "negotiate", "negotiating",
+  "lower", "come down", "meet in the middle", "split the difference",
+  "best offer", "final offer", "bottom line", "lowest",
+  // Price/offer discussion
+  "what if", "how about", "would you", "willing to",
+  "offer", "price", "amount", "number",
+  // Active consideration
+  "think about it", "thinking about", "considering", "might accept",
+  "let me talk to", "talk to my", "discuss with",
+  "husband", "wife", "partner", "family",
+  // Engagement signals (seller is still warm)
+  "interested", "still interested", "want to sell", "ready to",
+  "when can", "how soon", "next step", "move forward",
+  "send me", "send over", "paperwork", "contract",
+  // Re-engagement after silence
+  "changed my mind", "reconsidered", "thought about",
+  "calling back", "reaching out", "following up",
+];
+
+async function detectActiveNegotiationInFollowUp(
+  conversation: GHLConversation,
+  opp: GHLPipelineOpportunity | null,
+  stageName: string | null,
+  creds: GHLCredentials,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  // Must be in a follow-up stage
+  if (!stageName || classifyStage(stageName) !== "follow_up") return null;
+
+  // Check if last message was recent (within 72 hours)
+  const lastMsgTime = new Date(conversation.lastMessageDate);
+  const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
+  if (lastMsgTime < seventyTwoHoursAgo) return null; // No recent activity
+
+  // Fetch actual message history to analyze content
+  let messages: GHLMessageDetail[] = [];
+  try {
+    messages = await fetchConversationMessages(creds, conversation.id, 20);
+  } catch {
+    // If we can't fetch messages, fall back to lastMessageBody
+  }
+
+  // Collect recent inbound message bodies (last 72 hours)
+  const recentInboundBodies: string[] = [];
+
+  for (const msg of messages) {
+    if (!msg.body) continue;
+    if (msg.direction !== "inbound") continue;
+    const msgDate = new Date(msg.dateAdded);
+    if (msgDate < seventyTwoHoursAgo) continue;
+    recentInboundBodies.push(msg.body);
+  }
+
+  // Fallback: if we couldn't fetch messages but have lastMessageBody and it's inbound
+  if (recentInboundBodies.length === 0 && conversation.lastMessageBody && conversation.lastMessageDirection === "inbound") {
+    recentInboundBodies.push(conversation.lastMessageBody);
+  }
+
+  if (recentInboundBodies.length === 0) return null; // No recent inbound messages
+
+  // Check for negotiation/engagement keywords in the messages
+  const allText = recentInboundBodies.join(" ").toLowerCase();
+  const matchedKeywords = NEGOTIATION_KEYWORDS.filter(kw => allText.includes(kw.toLowerCase()));
+
+  // Need at least 1 negotiation keyword match to trigger
+  if (matchedKeywords.length === 0) return null;
+
+  // Build a meaningful excerpt from the inbound messages
+  const excerpt = recentInboundBodies.slice(0, 3).join(" | ").substring(0, 500);
+
+  // Calculate priority based on keyword strength
+  // Worth a Look tier: base 50, scales up to 65 with more keyword matches
+  const basePriority = 50;
+  const keywordBonus = Math.min(matchedKeywords.length * 3, 15);
+  const priorityScore = Math.min(basePriority + keywordBonus, 65);
+
+  return {
+    tier: "possible",
+    triggerRules: ["active_negotiation_in_followup"],
+    priorityScore,
+    contactName: conversation.fullName || conversation.contactName || opp?.name || null,
+    contactPhone: conversation.phone || opp?.contact?.phone || null,
+    propertyAddress: null,
+    ghlContactId: conversation.contactId,
+    ghlOpportunityId: opp?.id || null,
+    ghlPipelineStageId: opp?.pipelineStageId || null,
+    ghlPipelineStageName: stageName,
+    relatedCallId: null,
+    teamMemberId: null,
+    teamMemberName: null,
+    assignedTo: opp?.assignedTo || null,
+    detectionSource: "conversation",
+    lastActivityAt: lastMsgTime,
+    lastStageChangeAt: opp?.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null,
+    transcriptExcerpt: excerpt,
   };
 }
 
@@ -1092,6 +1230,10 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string }> = {
     label: "Long Conversation — DQ'd Too Fast",
     context: "Seller did most of the talking (3+ min call, long transcript) but got DQ'd after just one attempt. Usually means motivation was there."
   },
+  active_negotiation_in_followup: {
+    label: "Active Engagement in Follow Up — Worth a Look",
+    context: "This contact is in a follow-up stage but has recent inbound messages (SMS/text) showing active engagement or negotiation. The team is communicating, but there may be an opportunity for the owner to help with negotiation strategy or dig deeper into the property's potential."
+  },
 };
 
 async function generateAIReason(detection: DetectedOpportunity): Promise<{ reason: string; suggestion: string }> {
@@ -1352,6 +1494,17 @@ async function scanTenant(
         tenantId
       );
       if (followUpIgnored) detections.push(followUpIgnored);
+
+      // Rule 14: Active negotiation in follow-up stage
+      const activeNegotiation = await detectActiveNegotiationInFollowUp(
+        conv,
+        oppInfo?.opp || null,
+        oppInfo?.stageName || null,
+        creds,
+        db,
+        tenantId
+      );
+      if (activeNegotiation) detections.push(activeNegotiation);
     }
   } catch (convError) {
     console.error(`[OpportunityDetection] Conversation scan error:`, convError);

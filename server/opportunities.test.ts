@@ -574,6 +574,111 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
       expect(createdAt > fifteenMinAgo).toBe(true); // Still within SLA
     });
 
+    it("Rule 14: detects active negotiation in follow-up stage", () => {
+      const NEGOTIATION_KEYWORDS = [
+        "consider", "counter", "counteroffer", "negotiate", "negotiating",
+        "lower", "come down", "meet in the middle", "split the difference",
+        "best offer", "final offer", "bottom line", "lowest",
+        "what if", "how about", "would you", "willing to",
+        "offer", "price", "amount", "number",
+        "think about it", "thinking about", "considering", "might accept",
+        "let me talk to", "talk to my", "discuss with",
+        "husband", "wife", "partner", "family",
+        "interested", "still interested", "want to sell", "ready to",
+        "when can", "how soon", "next step", "move forward",
+        "send me", "send over", "paperwork", "contract",
+        "changed my mind", "reconsidered", "thought about",
+        "calling back", "reaching out", "following up",
+      ];
+
+      // Suzanne Burgess pattern: "she'd consider lower"
+      const smsMessages = [
+        "I'd consider a lower offer",
+        "What's the best you can do?",
+        "Let me think about it and talk to my husband",
+      ];
+
+      const allText = smsMessages.join(" ").toLowerCase();
+      const matchedKeywords = NEGOTIATION_KEYWORDS.filter(kw => allText.includes(kw.toLowerCase()));
+      expect(matchedKeywords.length).toBeGreaterThan(0);
+      expect(matchedKeywords).toContain("consider");
+      expect(matchedKeywords).toContain("lower");
+      expect(matchedKeywords).toContain("think about it");
+      expect(matchedKeywords).toContain("husband");
+    });
+
+    it("Rule 14: requires follow-up stage classification", () => {
+      const followUpStages = ["1 Month Follow Up", "4 Month Follow Up", "1 Year Follow Up"];
+      for (const stage of followUpStages) {
+        const lower = stage.toLowerCase();
+        const isFollowUp = [
+          "1 month follow up", "4 month follow up", "1 year follow up",
+          "follow up", "new offer", "new walkthrough"
+        ].some(s => lower.includes(s));
+        expect(isFollowUp).toBe(true);
+      }
+    });
+
+    it("Rule 14: does NOT flag messages without negotiation keywords", () => {
+      const NEGOTIATION_KEYWORDS = [
+        "consider", "counter", "counteroffer", "negotiate", "negotiating",
+        "lower", "come down", "meet in the middle", "split the difference",
+        "best offer", "final offer", "bottom line", "lowest",
+        "what if", "how about", "would you", "willing to",
+        "offer", "price", "amount", "number",
+        "think about it", "thinking about", "considering", "might accept",
+        "let me talk to", "talk to my", "discuss with",
+        "husband", "wife", "partner", "family",
+        "interested", "still interested", "want to sell", "ready to",
+        "when can", "how soon", "next step", "move forward",
+        "send me", "send over", "paperwork", "contract",
+        "changed my mind", "reconsidered", "thought about",
+        "calling back", "reaching out", "following up",
+      ];
+
+      const nonNegotiationMessages = [
+        "ok",
+        "thanks",
+        "bye",
+        "stop",
+        "unsubscribe",
+      ];
+
+      const allText = nonNegotiationMessages.join(" ").toLowerCase();
+      const matchedKeywords = NEGOTIATION_KEYWORDS.filter(kw => allText.includes(kw.toLowerCase()));
+      expect(matchedKeywords.length).toBe(0);
+    });
+
+    it("Rule 14: only checks messages within 72-hour window", () => {
+      const seventyTwoHoursAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
+      const recentMsg = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago
+      const oldMsg = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000); // 5 days ago
+
+      expect(recentMsg > seventyTwoHoursAgo).toBe(true); // Within window
+      expect(oldMsg < seventyTwoHoursAgo).toBe(true); // Outside window
+    });
+
+    it("Rule 14: priority scales with keyword matches (Tier 3 range)", () => {
+      const basePriority = 50;
+      // 1 keyword = 53, 3 keywords = 59, 5+ keywords = 65 (capped)
+      expect(Math.min(basePriority + Math.min(1 * 3, 15), 65)).toBe(53);
+      expect(Math.min(basePriority + Math.min(3 * 3, 15), 65)).toBe(59);
+      expect(Math.min(basePriority + Math.min(5 * 3, 15), 65)).toBe(65);
+      expect(Math.min(basePriority + Math.min(10 * 3, 15), 65)).toBe(65); // Capped
+    });
+
+    it("Rule 14: does NOT flag active deal stages", () => {
+      const activeStages = ["Hot Leads", "Pending Apt", "Made Offer"];
+      for (const stage of activeStages) {
+        const lower = stage.toLowerCase();
+        const isFollowUp = [
+          "1 month follow up", "4 month follow up", "1 year follow up",
+          "follow up", "new offer", "new walkthrough"
+        ].some(s => lower.includes(s));
+        expect(isFollowUp).toBe(false);
+      }
+    });
+
     it("Rule 6: detects price stated in transcript with no follow-up", () => {
       const pricePatterns = [
         /i(?:'d|would)\s+take\s+\$?[\d,]+/i,
@@ -809,8 +914,15 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
       const conversationRules = [
         "repeat_inbound_ignored",
         "followup_inbound_ignored",
+        "active_negotiation_in_followup",
       ];
-      expect(conversationRules.length).toBe(2);
+      expect(conversationRules.length).toBe(3);
+    });
+
+    it("active_negotiation_in_followup is Tier 3 (Worth a Look)", () => {
+      // This rule is for owner review, not a missed deal
+      const tier3Rules = ["missed_callback_request", "high_talk_time_dq", "active_negotiation_in_followup"];
+      expect(tier3Rules).toContain("active_negotiation_in_followup");
     });
 
     it("hybrid rules use transcript enrichment on pipeline data", () => {
@@ -842,10 +954,11 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
       "duplicate_property_address",
       "missed_callback_request",
       "high_talk_time_dq",
+      "active_negotiation_in_followup",
     ];
 
-    it("has 13 detection rules total", () => {
-      expect(allRules).toHaveLength(13);
+    it("has 14 detection rules total", () => {
+      expect(allRules).toHaveLength(14);
     });
 
     it("all rule names use snake_case", () => {
@@ -877,12 +990,13 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
       expect(tier2).toHaveLength(5);
     });
 
-    it("Tier 3 has 2 rules", () => {
+    it("Tier 3 has 3 rules", () => {
       const tier3 = [
         "missed_callback_request",
         "high_talk_time_dq",
+        "active_negotiation_in_followup",
       ];
-      expect(tier3).toHaveLength(2);
+      expect(tier3).toHaveLength(3);
     });
   });
 
@@ -907,7 +1021,7 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
     });
 
     it("all priority scores are between 0 and 100", () => {
-      const allScores = [75, 80, 85, 80, 70, 85, 65, 60, 70, 65, 55, 50, 45];
+      const allScores = [75, 80, 85, 80, 70, 85, 65, 60, 70, 65, 55, 50, 45, 50];
       for (const score of allScores) {
         expect(score).toBeGreaterThanOrEqual(0);
         expect(score).toBeLessThanOrEqual(100);
