@@ -3219,6 +3219,298 @@ Create content that:
         return history;
       }),
   }),
+
+  // ============ OPPORTUNITIES ============
+  opportunities: router({
+    // Get opportunities for a tenant with tier filtering
+    list: protectedProcedure
+      .input(z.object({
+        tier: z.enum(["missed", "warning", "possible", "all"]).default("all"),
+        status: z.enum(["active", "handled", "dismissed", "all"]).default("active"),
+        limit: z.number().min(1).max(100).default(50),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        const { opportunities, calls } = await import("../drizzle/schema");
+        const { eq, and, desc } = await import("drizzle-orm");
+
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) return [];
+
+        const tier = input?.tier || "all";
+        const status = input?.status || "active";
+
+        const conditions = [eq(opportunities.tenantId, tenantId)];
+        if (tier !== "all") conditions.push(eq(opportunities.tier, tier));
+        if (status !== "all") conditions.push(eq(opportunities.status, status));
+
+        const results = await db
+          .select()
+          .from(opportunities)
+          .where(and(...conditions))
+          .orderBy(desc(opportunities.priorityScore), desc(opportunities.flaggedAt))
+          .limit(input?.limit || 50);
+
+        return results;
+      }),
+
+    // Get opportunity counts by tier for the dashboard badges
+    counts: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return { missed: 0, warning: 0, possible: 0, total: 0 };
+        const { opportunities } = await import("../drizzle/schema");
+        const { eq, and, sql } = await import("drizzle-orm");
+
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) return { missed: 0, warning: 0, possible: 0, total: 0 };
+
+        const counts = await db
+          .select({
+            tier: opportunities.tier,
+            count: sql<number>`count(*)`,
+          })
+          .from(opportunities)
+          .where(and(
+            eq(opportunities.tenantId, tenantId),
+            eq(opportunities.status, "active")
+          ))
+          .groupBy(opportunities.tier);
+
+        const result = { missed: 0, warning: 0, possible: 0, total: 0 };
+        for (const row of counts) {
+          if (row.tier === "missed") result.missed = Number(row.count);
+          else if (row.tier === "warning") result.warning = Number(row.count);
+          else if (row.tier === "possible") result.possible = Number(row.count);
+        }
+        result.total = result.missed + result.warning + result.possible;
+        return result;
+      }),
+
+    // Mark an opportunity as handled or dismissed
+    resolve: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["handled", "dismissed"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const { opportunities } = await import("../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
+
+        await db.update(opportunities)
+          .set({
+            status: input.status,
+            resolvedBy: ctx.user!.id,
+            resolvedAt: new Date(),
+          })
+          .where(and(
+            eq(opportunities.id, input.id),
+            eq(opportunities.tenantId, tenantId)
+          ));
+
+        return { success: true };
+      }),
+
+    // Run detection manually (admin only)
+    runDetection: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
+        if (ctx.user?.role !== "admin" && ctx.user?.role !== "super_admin" && ctx.user?.isTenantAdmin !== "true") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+
+        const { runOpportunityDetection } = await import("./opportunityDetection");
+        const result = await runOpportunityDetection(tenantId);
+        return result;
+      }),
+  }),
+
+  // ============ COACH ACTIONS (GHL) ============
+  coachActions: router({
+    // Search GHL contacts
+    searchContacts: protectedProcedure
+      .input(z.object({ query: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const { searchContacts } = await import("./ghlActions");
+        return searchContacts(tenantId, input.query);
+      }),
+
+    // Parse user intent from natural language
+    parseIntent: protectedProcedure
+      .input(z.object({
+        message: z.string(),
+        contextContactId: z.string().optional(),
+        contextContactName: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
+
+        // Use LLM to parse the intent
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are an AI assistant that parses user requests into structured CRM actions.
+The user is a real estate wholesaling team member. Parse their natural language request into one of these action types:
+
+1. add_note_contact - Add a note to a contact
+2. add_note_opportunity - Add a note to an opportunity/deal
+3. change_pipeline_stage - Move a deal to a different pipeline stage
+4. send_sms - Send an SMS to a contact
+5. create_task - Create a follow-up task
+6. add_tag - Add a tag to a contact
+7. remove_tag - Remove a tag from a contact
+8. update_field - Update a custom field on a contact
+
+If the message is NOT a CRM action request (it's a coaching question, greeting, etc.), return actionType as "none".
+
+Context: ${input.contextContactId ? `Currently viewing contact: ${input.contextContactName} (ID: ${input.contextContactId})` : "No contact context"}
+
+Return JSON with:
+- actionType: one of the types above or "none"
+- contactName: the contact name mentioned (or from context)
+- contactId: the contact ID if known from context
+- params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, fieldKey, fieldValue)
+- summary: human-readable summary of what will be done
+- needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID`
+            },
+            { role: "user", content: input.message }
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "action_intent",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  actionType: { type: "string" },
+                  contactName: { type: "string" },
+                  contactId: { type: "string" },
+                  params: {
+                    type: "object",
+                    properties: {
+                      noteBody: { type: "string" },
+                      message: { type: "string" },
+                      title: { type: "string" },
+                      description: { type: "string" },
+                      dueDate: { type: "string" },
+                      tags: { type: "string" },
+                      stageName: { type: "string" },
+                      fieldKey: { type: "string" },
+                      fieldValue: { type: "string" },
+                      opportunityId: { type: "string" },
+                      pipelineId: { type: "string" },
+                      stageId: { type: "string" },
+                    },
+                    required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId"],
+                    additionalProperties: false
+                  },
+                  summary: { type: "string" },
+                  needsContactSearch: { type: "boolean" }
+                },
+                required: ["actionType", "contactName", "contactId", "params", "summary", "needsContactSearch"],
+                additionalProperties: false
+              }
+            }
+          }
+        });
+
+        const content = response.choices?.[0]?.message?.content;
+        if (content && typeof content === "string") {
+          return JSON.parse(content);
+        }
+        return { actionType: "none", contactName: "", contactId: "", params: {}, summary: "", needsContactSearch: false };
+      }),
+
+    // Create a pending action (before confirmation)
+    createPending: protectedProcedure
+      .input(z.object({
+        actionType: z.string(),
+        requestText: z.string(),
+        targetContactId: z.string().optional(),
+        targetContactName: z.string().optional(),
+        targetOpportunityId: z.string().optional(),
+        payload: z.any(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const { createActionLog } = await import("./ghlActions");
+        const actionId = await createActionLog({
+          tenantId,
+          requestedBy: ctx.user!.id,
+          requestedByName: ctx.user!.name || "Unknown",
+          actionType: input.actionType,
+          requestText: input.requestText,
+          targetContactId: input.targetContactId,
+          targetContactName: input.targetContactName,
+          targetOpportunityId: input.targetOpportunityId,
+          payload: input.payload,
+        });
+
+        return { actionId };
+      }),
+
+    // Confirm and execute an action
+    confirmAndExecute: protectedProcedure
+      .input(z.object({ actionId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { confirmAction, executeAction } = await import("./ghlActions");
+        await confirmAction(input.actionId);
+        const result = await executeAction(input.actionId);
+        return result;
+      }),
+
+    // Cancel a pending action
+    cancel: protectedProcedure
+      .input(z.object({ actionId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { cancelAction } = await import("./ghlActions");
+        await cancelAction(input.actionId);
+        return { success: true };
+      }),
+
+    // Get action history (audit log)
+    history: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(100).default(50),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        const { coachActionLog } = await import("../drizzle/schema");
+        const { eq, desc } = await import("drizzle-orm");
+
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) return [];
+
+        const results = await db
+          .select()
+          .from(coachActionLog)
+          .where(eq(coachActionLog.tenantId, tenantId))
+          .orderBy(desc(coachActionLog.createdAt))
+          .limit(input?.limit || 50);
+
+        return results;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

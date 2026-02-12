@@ -211,6 +211,13 @@
       "when": 1770875684656,
       "tag": "0029_steady_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1770887190451,
+      "tag": "0030_handy_microchip",
+      "breakpoints": true
     }
   ]
 }

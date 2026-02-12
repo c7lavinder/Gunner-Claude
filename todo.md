@@ -1543,3 +1543,34 @@
 - [x] Test full tenant setup flow end-to-end via browser (create tenant, verify CRM config saved, verify team members created)
 - [x] Add GHL connection validation endpoint and "Test Connection" button in CRM setup
 - [x] Build per-tenant pipeline stage mapping UI (visual mapper: GHL stages → call types per tenant)
+
+## Opportunities Dashboard (V1)
+- [x] Database schema: opportunities table with tier, priority score, trigger rules, status
+- [x] Detection engine: Tier 1 (Missed) - premature DQ, unexplored motivation, weak objection handling
+- [x] Detection engine: Tier 2 (Warning) - slow response, stale lead, unanswered callback
+- [x] Detection engine: Tier 3 (Possible) - hidden motivation, multi-property owner, positive no commitment
+- [x] Priority scoring system (0-100)
+- [x] LLM-generated reason and suggestion per opportunity
+- [x] Dashboard UI: tier filter tabs with counts, priority-sorted cards
+- [x] Card UI: property address, AI reason, suggestion, handle/dismiss actions
+- [x] History view for handled/dismissed opportunities (status filter)
+- [x] Role-based visibility (tenant-scoped)
+- [x] Detection runs on demand (admin trigger) and can be scheduled hourly
+- [x] Pipeline stages to monitor: Warm Leads, Hot Leads, Pending Apt, Walkthrough, Offer Call Apts
+- [x] Vitest tests: 53 tests covering all endpoints, detection logic, and action types
+
+## AI Coach GHL Action Commands
+- [x] GHL API service layer: contact search, notes, tasks, pipeline stage, SMS, tags, field updates
+- [x] Intent detection: coaching vs action in AI Coach chat (LLM-powered)
+- [x] Confirmation card UI: confirm/edit/cancel for each action type
+- [x] Action 1: Add note to contact
+- [x] Action 2: Add note to opportunity
+- [x] Action 3: Change pipeline stage
+- [x] Action 4: Send SMS
+- [x] Action 5: Create task
+- [x] Action 6: Add/remove tag
+- [x] Action 7: Update contact field
+- [x] Context awareness: auto-detect contact from current call view
+- [x] Audit log table (coach_action_log) and history endpoint
+- [x] Permission checks per role (tenant-scoped, auth required)
+- [x] Error handling: contact not found, API down, rate limiting

@@ -1164,3 +1164,58 @@ export const emailsSent = mysqlTable("emails_sent", {
 
 export type EmailSent = typeof emailsSent.$inferSelect;
 export type InsertEmailSent = typeof emailsSent.$inferInsert;
+
+
+/**
+ * Opportunities - AI-detected leads that need attention
+ * Three tiers: missed (red), warning (yellow), possible (green)
+ */
+export const opportunities = mysqlTable("opportunities", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  contactName: varchar("contactName", { length: 255 }),
+  contactPhone: varchar("contactPhone", { length: 50 }),
+  propertyAddress: text("propertyAddress"),
+  ghlContactId: varchar("ghlContactId", { length: 255 }),
+  tier: mysqlEnum("tier", ["missed", "warning", "possible"]).notNull(),
+  priorityScore: int("priorityScore").notNull().default(0),
+  triggerRules: json("triggerRules").$type<string[]>().notNull(),
+  reason: text("reason").notNull(),
+  suggestion: text("suggestion").notNull(),
+  relatedCallId: int("relatedCallId").references(() => calls.id),
+  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
+  teamMemberName: varchar("teamMemberName", { length: 255 }),
+  status: mysqlEnum("status", ["active", "handled", "dismissed"]).notNull().default("active"),
+  resolvedBy: int("resolvedBy").references(() => users.id),
+  resolvedAt: timestamp("resolvedAt"),
+  flaggedAt: timestamp("flaggedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type Opportunity = typeof opportunities.$inferSelect;
+export type InsertOpportunity = typeof opportunities.$inferInsert;
+
+/**
+ * Coach Action Log - audit trail for AI Coach GHL actions
+ */
+export const coachActionLog = mysqlTable("coach_action_log", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  requestedBy: int("requestedBy").references(() => users.id).notNull(),
+  requestedByName: varchar("requestedByName", { length: 255 }),
+  actionType: mysqlEnum("actionType", [
+    "add_note_contact", "add_note_opportunity", "change_pipeline_stage",
+    "send_sms", "create_task", "add_tag", "remove_tag", "update_field"
+  ]).notNull(),
+  requestText: text("requestText").notNull(),
+  targetContactId: varchar("targetContactId", { length: 255 }),
+  targetContactName: varchar("targetContactName", { length: 255 }),
+  targetOpportunityId: varchar("targetOpportunityId", { length: 255 }),
+  payload: json("payload"),
+  status: mysqlEnum("status", ["pending", "confirmed", "executed", "failed", "cancelled"]).notNull().default("pending"),
+  error: text("error"),
+  confirmedAt: timestamp("confirmedAt"),
+  executedAt: timestamp("executedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type CoachActionLog = typeof coachActionLog.$inferSelect;
+export type InsertCoachActionLog = typeof coachActionLog.$inferInsert;

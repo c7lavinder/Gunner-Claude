@@ -337,10 +337,39 @@ function FeedbackCard({
 }
 
 // AI Coach Q&A Component
+type ConversationMessage = 
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string }
+  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string };
+
+const ACTION_TYPE_LABELS: Record<string, string> = {
+  add_note_contact: "Add Note to Contact",
+  add_note_opportunity: "Add Note to Opportunity",
+  change_pipeline_stage: "Change Pipeline Stage",
+  send_sms: "Send SMS",
+  create_task: "Create Task",
+  add_tag: "Add Tag",
+  remove_tag: "Remove Tag",
+  update_field: "Update Field",
+};
+
+const ACTION_ICONS: Record<string, string> = {
+  add_note_contact: "📝",
+  add_note_opportunity: "📝",
+  change_pipeline_stage: "🔄",
+  send_sms: "💬",
+  create_task: "✅",
+  add_tag: "🏷️",
+  remove_tag: "🏷️",
+  update_field: "✏️",
+};
+
 function AICoachQA() {
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
-  const [conversation, setConversation] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [contactSearchResults, setContactSearchResults] = useState<Array<{id: string; name: string; phone?: string; email?: string}>>([]);
+  const [pendingAction, setPendingAction] = useState<{intent: any; message: string} | null>(null);
   
   const askCoachMutation = trpc.coach.askQuestion.useMutation({
     onSuccess: (response) => {
@@ -353,13 +382,133 @@ function AICoachQA() {
     },
   });
 
-  const handleAsk = () => {
+  const parseIntentMutation = trpc.coachActions.parseIntent.useMutation();
+  const searchContactsMutation = trpc.coachActions.searchContacts.useMutation();
+  const createPendingMutation = trpc.coachActions.createPending.useMutation();
+  const confirmExecuteMutation = trpc.coachActions.confirmAndExecute.useMutation();
+  const cancelActionMutation = trpc.coachActions.cancel.useMutation();
+
+  const handleAsk = async () => {
     if (!question.trim()) return;
-    
-    setConversation(prev => [...prev, { role: "user", content: question }]);
+    const userMessage = question.trim();
+    setConversation(prev => [...prev, { role: "user", content: userMessage }]);
     setIsAsking(true);
-    askCoachMutation.mutate({ question });
     setQuestion("");
+
+    try {
+      // First, parse the intent to see if it's an action command
+      const intent = await parseIntentMutation.mutateAsync({ message: userMessage });
+      
+      if (intent.actionType !== "none") {
+        // It's an action command!
+        if (intent.needsContactSearch && intent.contactName) {
+          // Need to search for the contact first
+          const contacts = await searchContactsMutation.mutateAsync({ query: intent.contactName });
+          if (contacts.length === 0) {
+            setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${intent.contactName}" in GHL. Please check the name and try again.` }]);
+            setIsAsking(false);
+            return;
+          } else if (contacts.length === 1) {
+            // Auto-select the only match
+            intent.contactId = contacts[0].id;
+            intent.contactName = contacts[0].name || intent.contactName;
+            await createActionCard(intent, userMessage);
+          } else {
+            // Multiple matches — show selection
+            setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
+            setPendingAction({ intent, message: userMessage });
+            setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${intent.contactName}". Please select the right one:` }]);
+            setIsAsking(false);
+            return;
+          }
+        } else {
+          await createActionCard(intent, userMessage);
+        }
+      } else {
+        // Regular coaching question
+        askCoachMutation.mutate({ question: userMessage });
+        return; // Don't setIsAsking(false) here, the mutation callback handles it
+      }
+    } catch (error: any) {
+      toast.error("Failed to process: " + error.message);
+    }
+    setIsAsking(false);
+  };
+
+  const createActionCard = async (intent: any, userMessage: string) => {
+    try {
+      const result = await createPendingMutation.mutateAsync({
+        actionType: intent.actionType,
+        requestText: userMessage,
+        targetContactId: intent.contactId || undefined,
+        targetContactName: intent.contactName || undefined,
+        payload: intent.params,
+      });
+
+      setConversation(prev => [...prev, {
+        role: "action_card",
+        actionId: result.actionId,
+        actionType: intent.actionType,
+        summary: intent.summary,
+        contactName: intent.contactName || "",
+        status: "pending",
+      }]);
+    } catch (error: any) {
+      setConversation(prev => [...prev, { role: "assistant", content: `Failed to create action: ${error.message}` }]);
+    }
+  };
+
+  const handleSelectContact = async (contactId: string, contactName: string) => {
+    if (!pendingAction) return;
+    setContactSearchResults([]);
+    setIsAsking(true);
+    const intent = { ...pendingAction.intent, contactId, contactName };
+    await createActionCard(intent, pendingAction.message);
+    setPendingAction(null);
+    setIsAsking(false);
+  };
+
+  const handleConfirmAction = async (actionId: number) => {
+    // Update card status to confirmed
+    setConversation(prev => prev.map(msg => 
+      msg.role === "action_card" && msg.actionId === actionId 
+        ? { ...msg, status: "confirmed" as const }
+        : msg
+    ));
+
+    try {
+      const result = await confirmExecuteMutation.mutateAsync({ actionId });
+      setConversation(prev => prev.map(msg => 
+        msg.role === "action_card" && msg.actionId === actionId 
+          ? { ...msg, status: result.success ? "executed" as const : "failed" as const, result: result.success ? "Action completed successfully!" : (result.error || "Action failed") }
+          : msg
+      ));
+      if (result.success) {
+        toast.success("Action executed successfully!");
+      } else {
+        toast.error(result.error || "Action failed");
+      }
+    } catch (error: any) {
+      setConversation(prev => prev.map(msg => 
+        msg.role === "action_card" && msg.actionId === actionId 
+          ? { ...msg, status: "failed" as const, result: error.message }
+          : msg
+      ));
+      toast.error("Failed to execute: " + error.message);
+    }
+  };
+
+  const handleCancelAction = async (actionId: number) => {
+    try {
+      await cancelActionMutation.mutateAsync({ actionId });
+      setConversation(prev => prev.map(msg => 
+        msg.role === "action_card" && msg.actionId === actionId 
+          ? { ...msg, status: "cancelled" as const }
+          : msg
+      ));
+    } catch (error: any) {
+      toast.error("Failed to cancel: " + error.message);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -371,6 +520,8 @@ function AICoachQA() {
 
   const clearConversation = () => {
     setConversation([]);
+    setContactSearchResults([]);
+    setPendingAction(null);
   };
 
   return (
@@ -387,21 +538,21 @@ function AICoachQA() {
             </Button>
           )}
         </div>
+        <p className="text-[10px] text-muted-foreground mt-0.5">Ask questions or give CRM commands</p>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col min-h-0 p-3 pt-0">
         <ScrollArea className="flex-1">
           {conversation.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-6 text-center">
+            <div className="flex flex-col items-center justify-center py-4 text-center">
               <Sparkles className="h-8 w-8 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground mb-3">
-                Ask for coaching tips
+              <p className="text-sm text-muted-foreground mb-2">
+                Ask questions or take actions
               </p>
-              <div className="flex flex-col gap-2 w-full max-w-[220px]">
+              <div className="flex flex-col gap-1.5 w-full max-w-[240px]">
+                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mt-1">Coaching</p>
                 {[
                   "How do I handle price objections?",
-                  "Best way to set the anchor?",
                   "Tips for building rapport quickly",
-                  "How to close for commitment?"
                 ].map((prompt, i) => (
                   <button
                     key={i}
@@ -416,32 +567,138 @@ function AICoachQA() {
                     {prompt}
                   </button>
                 ))}
+                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mt-2">Actions</p>
+                {[
+                  'Add note to John Smith: "Called back, interested"',
+                  "Create task: Follow up with seller tomorrow",
+                  "Tag Jane Doe as hot-lead",
+                ].map((prompt, i) => (
+                  <button
+                    key={`action-${i}`}
+                    onClick={() => {
+                      setQuestion(prompt);
+                    }}
+                    className="text-xs text-left px-3 py-2 rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    ⚡ {prompt}
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
             <div className="space-y-3">
-              {conversation.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  {msg.role === "assistant" && (
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-1">
-                      <Bot className="h-3 w-3 text-primary" />
-                    </div>
-                  )}
-                  <div className={`rounded-xl px-3 py-2 ${
-                    msg.role === "user" 
-                      ? "bg-primary text-primary-foreground max-w-[80%]" 
-                      : "bg-muted/60 flex-1"
-                  }`}>
-                    {msg.role === "assistant" ? (
-                      <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                        <Streamdown>{msg.content}</Streamdown>
+              {conversation.map((msg, i) => {
+                if (msg.role === "action_card") {
+                  const statusColors = {
+                    pending: "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20",
+                    confirmed: "border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20",
+                    executed: "border-green-500/50 bg-green-50/50 dark:bg-green-950/20",
+                    cancelled: "border-gray-400/50 bg-gray-50/50 dark:bg-gray-800/20 opacity-60",
+                    failed: "border-red-500/50 bg-red-50/50 dark:bg-red-950/20",
+                  };
+                  const statusIcons = {
+                    pending: "⏳",
+                    confirmed: "🔄",
+                    executed: "✅",
+                    cancelled: "❌",
+                    failed: "⚠️",
+                  };
+                  return (
+                    <div key={i} className={`rounded-xl border-2 p-3 ${statusColors[msg.status]}`}>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg">{ACTION_ICONS[msg.actionType] || "⚡"}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold">
+                              {ACTION_TYPE_LABELS[msg.actionType] || msg.actionType}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {statusIcons[msg.status]} {msg.status}
+                            </span>
+                          </div>
+                          {msg.contactName && (
+                            <p className="text-xs text-muted-foreground mt-0.5">Contact: {msg.contactName}</p>
+                          )}
+                          <p className="text-sm mt-1">{msg.summary}</p>
+                          {msg.result && (
+                            <p className={`text-xs mt-1 ${msg.status === "executed" ? "text-green-600" : "text-red-600"}`}>
+                              {msg.result}
+                            </p>
+                          )}
+                          {msg.status === "pending" && (
+                            <div className="flex gap-2 mt-2">
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => handleConfirmAction(msg.actionId)}
+                                disabled={confirmExecuteMutation.isPending}
+                              >
+                                {confirmExecuteMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                ) : (
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                )}
+                                Confirm
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => handleCancelAction(msg.actionId)}
+                                disabled={cancelActionMutation.isPending}
+                              >
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    ) : (
-                      <p className="text-sm">{msg.content}</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    {msg.role === "assistant" && (
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-1">
+                        <Bot className="h-3 w-3 text-primary" />
+                      </div>
                     )}
+                    <div className={`rounded-xl px-3 py-2 ${
+                      msg.role === "user" 
+                        ? "bg-primary text-primary-foreground max-w-[80%]" 
+                        : "bg-muted/60 flex-1"
+                    }`}>
+                      {msg.role === "assistant" ? (
+                        <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                          <Streamdown>{msg.content}</Streamdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm">{msg.content}</p>
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+
+              {/* Contact search results */}
+              {contactSearchResults.length > 0 && (
+                <div className="space-y-1">
+                  {contactSearchResults.slice(0, 5).map((contact) => (
+                    <button
+                      key={contact.id}
+                      onClick={() => handleSelectContact(contact.id, contact.name)}
+                      className="w-full text-left px-3 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm"
+                    >
+                      <span className="font-medium">{contact.name}</span>
+                      {contact.phone && <span className="text-muted-foreground ml-2 text-xs">{contact.phone}</span>}
+                      {contact.email && <span className="text-muted-foreground ml-2 text-xs">{contact.email}</span>}
+                    </button>
+                  ))}
                 </div>
-              ))}
+              )}
+
               {isAsking && (
                 <div className="flex justify-start">
                   <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2">
@@ -458,7 +715,7 @@ function AICoachQA() {
         
         <div className="flex gap-2 mt-3 pt-3 border-t">
           <Textarea
-            placeholder="Ask a question..."
+            placeholder="Ask a question or give a command..."
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={handleKeyDown}
