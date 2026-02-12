@@ -34,7 +34,7 @@ describe("Badge Streak Logic", () => {
   it("batchEvaluateBadges should also reset streak on bad grade", () => {
     // Find the batchEvaluateBadges function
     const funcStart = gamificationSource.indexOf("export async function batchEvaluateBadges");
-    const funcBody = gamificationSource.substring(funcStart, funcStart + 5000);
+    const funcBody = gamificationSource.substring(funcStart, funcStart + 8000);
     
     // Should have shouldResetStreak in batch too
     expect(funcBody).toContain("shouldResetStreak");

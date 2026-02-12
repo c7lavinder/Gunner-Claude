@@ -1507,3 +1507,9 @@
 - [x] Reset On Fire progress and re-evaluated from scratch (Kyle=3, Daniel=0, Chris=0)
 - [x] Also fixed Conversation Starter badge (same consecutive_grade criteria type)
 - [x] Removed incorrectly awarded On Fire badges (Daniel and Kyle had false bronze)
+
+## Bug Fix - Criteria-Based Badges Not Counting
+- [x] Investigate why criteria_score badges show 0 progress - root cause: criteriaScores stored as array of objects, not flat key-value
+- [x] Fix criteria badge evaluation parsing to handle array format [{name, score, maxPoints}]
+- [x] Re-evaluated all criteria badges from existing call data
+- [x] Also fixed Lead Manager criteria badges (Script Starter, Motivation Miner, etc.)

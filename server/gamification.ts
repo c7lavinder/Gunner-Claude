@@ -1056,12 +1056,23 @@ export async function evaluateBadgesForCall(teamMemberId: number, callId: number
   
   if (!grade) return [];
   
-  // Parse criteria scores
+  // Parse criteria scores — stored as array of {name, score, maxPoints} objects
   let criteriaScores: Record<string, number> = {};
   try {
-    criteriaScores = typeof grade.criteriaScores === 'string' 
+    const raw = typeof grade.criteriaScores === 'string' 
       ? JSON.parse(grade.criteriaScores) 
-      : (grade.criteriaScores as Record<string, number>) || {};
+      : grade.criteriaScores;
+    if (Array.isArray(raw)) {
+      // Convert [{name: "Offer Setup", score: 10, maxPoints: 15}, ...] to {"Offer Setup": 10, ...}
+      for (const item of raw) {
+        if (item && typeof item.name === 'string' && typeof item.score === 'number') {
+          criteriaScores[item.name] = item.score;
+        }
+      }
+    } else if (raw && typeof raw === 'object') {
+      // Fallback: already a flat key-value object
+      criteriaScores = raw as Record<string, number>;
+    }
   } catch {
     criteriaScores = {};
   }
@@ -1242,12 +1253,21 @@ export async function batchEvaluateBadges(): Promise<{
     for (const call of memberCalls) {
       totalCalls++;
       
-      // Parse criteria scores
+      // Parse criteria scores — stored as array of {name, score, maxPoints} objects
       let criteriaScores: Record<string, number> = {};
       try {
-        criteriaScores = typeof call.criteriaScores === 'string' 
+        const raw = typeof call.criteriaScores === 'string' 
           ? JSON.parse(call.criteriaScores) 
-          : (call.criteriaScores as Record<string, number>) || {};
+          : call.criteriaScores;
+        if (Array.isArray(raw)) {
+          for (const item of raw) {
+            if (item && typeof item.name === 'string' && typeof item.score === 'number') {
+              criteriaScores[item.name] = item.score;
+            }
+          }
+        } else if (raw && typeof raw === 'object') {
+          criteriaScores = raw as Record<string, number>;
+        }
       } catch {
         criteriaScores = {};
       }
