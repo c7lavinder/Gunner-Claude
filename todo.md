@@ -1649,3 +1649,8 @@
 ## Regenerate Active Signal Descriptions
 - [x] Build one-time script to regenerate all active signal AI descriptions with the new factual prompt
 - [x] Run the script and verify updated descriptions are neutral and accurate
+
+## Bug Fixes
+- [x] Add "Lead Generator" to team invite role dropdown (currently only shows Admin, Acquisition Manager, Lead Manager)
+- [x] Make AI Coach box taller so all suggestions show without scrolling (increased from 500px to 650px)
+- [x] Verify "Tag Jane Doe as hot-lead" suggestion is fully removed (was already removed, old screenshot was cached)

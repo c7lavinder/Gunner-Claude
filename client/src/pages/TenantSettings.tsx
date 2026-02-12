@@ -552,7 +552,7 @@ export default function TenantSettings() {
                   onChange={(e) => setInviteEmail(e.target.value)}
                   className="flex-1 min-w-[200px]"
                 />
-                <Select value={inviteTeamRole} onValueChange={(v) => setInviteTeamRole(v as 'admin' | 'acquisition_manager' | 'lead_manager')}>
+                <Select value={inviteTeamRole} onValueChange={(v) => setInviteTeamRole(v as 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator')}>
                   <SelectTrigger className="w-44">
                     <SelectValue placeholder="Team Role" />
                   </SelectTrigger>
@@ -560,6 +560,7 @@ export default function TenantSettings() {
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
                     <SelectItem value="lead_manager">Lead Manager</SelectItem>
+                    <SelectItem value="lead_generator">Lead Generator</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'user')}>

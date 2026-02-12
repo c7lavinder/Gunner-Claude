@@ -525,7 +525,7 @@ function AICoachQA() {
   };
 
   return (
-    <Card className="h-[500px] flex flex-col border-2 overflow-hidden">
+    <Card className="h-[650px] flex flex-col border-2 overflow-hidden">
       <CardHeader className="pb-2 flex-shrink-0 px-3 pt-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base">
