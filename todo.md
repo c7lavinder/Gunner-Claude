@@ -1684,3 +1684,9 @@
 
 ## Reclassify Call Dropdown Bug
 - [x] Update reclassify dropdown to show correct updated options — "Admin Call (auto-graded)" and labels for skipped types
+
+## AI Coach Draft Content Preview
+- [x] Update LLM intent parsing to generate actual draft content (note text, SMS body, task description) upfront
+- [x] Display the draft content in the action card so users can preview before confirming
+- [x] Make draft content editable inline — edits feed the learning system
+- [x] Write vitest tests for draft content generation (19/19 passing)

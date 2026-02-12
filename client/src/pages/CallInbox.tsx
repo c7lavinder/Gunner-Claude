@@ -687,16 +687,30 @@ function AICoachQA() {
                           {msg.contactName && (
                             <p className="text-xs text-muted-foreground mt-0.5">Contact: {msg.contactName}</p>
                           )}
-                          {/* Show editable content or summary */}
-                          {msg.status === "pending" && editingActionId === msg.actionId ? (
+                          {/* Show draft content preview */}
+                          {msg.status === "pending" && isEditableAction(msg.actionType) && msg.payload ? (
                             <div className="mt-1">
-                              <Textarea
-                                value={editedContent}
-                                onChange={(e) => setEditedContent(e.target.value)}
-                                className="text-sm min-h-[60px] resize-none"
-                                autoFocus
-                              />
-                              <p className="text-[10px] text-muted-foreground mt-1">Edit the content above, then confirm or cancel</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">
+                                {msg.actionType === "send_sms" ? "SMS Draft:" : msg.actionType === "create_task" ? "Task:" : "Note Draft:"}
+                              </p>
+                              {editingActionId === msg.actionId ? (
+                                <>
+                                  <Textarea
+                                    value={editedContent}
+                                    onChange={(e) => setEditedContent(e.target.value)}
+                                    className="text-sm min-h-[60px] resize-none bg-white dark:bg-gray-900 border"
+                                    autoFocus
+                                  />
+                                  <p className="text-[10px] text-muted-foreground mt-1">Edit the content above, then confirm or cancel</p>
+                                </>
+                              ) : (
+                                <div className="text-sm bg-white/60 dark:bg-gray-900/60 rounded-md p-2 border border-dashed border-gray-300 dark:border-gray-700 whitespace-pre-wrap">
+                                  {getEditableContent(msg.actionType, msg.payload) || msg.summary}
+                                  {msg.actionType === "create_task" && msg.payload?.description && (
+                                    <p className="text-xs text-muted-foreground mt-1 border-t pt-1">{msg.payload.description}</p>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <p className="text-sm mt-1">{msg.summary}</p>

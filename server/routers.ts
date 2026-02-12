@@ -3411,13 +3411,18 @@ Context: ${input.contextContactId ? `Currently viewing contact: ${input.contextC
 The current user is: ${ctx.user!.name || "Unknown"}
 Team members: ${teamMemberNames.length > 0 ? teamMemberNames.join(", ") : "Unknown"}
 
+IMPORTANT: For actions that involve writing content, you MUST generate the FULL DRAFT TEXT upfront so the user can review and edit it before confirming:
+- For add_note_contact / add_note_opportunity: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note.
+- For send_sms: Write the complete SMS message text in params.message. Don't describe the SMS — write the actual message that will be sent.
+- For create_task: Write a clear task title in params.title AND a detailed description in params.description.
+
 Return JSON with:
 - actionType: one of the types above or "none"
 - contactName: the contact name mentioned (or from context)
 - contactId: the contact ID if known from context
 - assigneeName: for create_task, the team member name to assign the task to. If the user says "make a task for Daniel" or "assign this to Kyle", use that name. If no specific person is mentioned, use the current user's name ("${ctx.user!.name || "Unknown"}"). For non-task actions, use empty string.
 - params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, fieldKey, fieldValue)
-- summary: human-readable summary of what will be done (include who the task is assigned to if it's a create_task)
+- summary: a SHORT one-line summary of the action (e.g. "Send SMS to John" or "Add note to Kimberly"). The full content will be shown separately.
 - needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID
 ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descriptions), match this user's established style:\n${preferenceContext}` : ""}`
             },
