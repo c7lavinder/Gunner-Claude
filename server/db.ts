@@ -29,6 +29,38 @@ export async function getDb() {
   return _db;
 }
 
+/**
+ * Reset the DB connection pool - call this on ECONNRESET or similar errors
+ * so the next getDb() creates a fresh connection.
+ */
+export function resetDbConnection() {
+  console.warn("[Database] Resetting connection pool due to connection error");
+  _db = null;
+}
+
+/**
+ * Retry wrapper for DB operations that may fail due to transient connection issues.
+ * Retries once after resetting the connection pool on ECONNRESET-type errors.
+ */
+export async function withDbRetry<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error: any) {
+    const isTransient = error?.cause?.code === 'ECONNRESET' 
+      || error?.message?.includes('ECONNRESET')
+      || error?.message?.includes('Connection lost')
+      || error?.message?.includes('PROTOCOL_CONNECTION_LOST');
+    if (isTransient) {
+      console.warn("[Database] Transient error detected, retrying with fresh connection...");
+      resetDbConnection();
+      // Re-initialize and retry once
+      await getDb();
+      return await operation();
+    }
+    throw error;
+  }
+}
+
 // ============ USER FUNCTIONS ============
 
 export async function upsertUser(user: InsertUser): Promise<{ id: number; openId: string; email: string | null } | null> {

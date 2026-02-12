@@ -80,15 +80,18 @@ export async function getTenantBySlug(slug: string) {
  * Get all tenants with CRM connected (for sync jobs)
  */
 export async function getTenantsWithCrm() {
-  const db = await getDb();
-  if (!db) return [];
+  const { withDbRetry } = await import("./db");
+  return withDbRetry(async () => {
+    const db = await getDb();
+    if (!db) return [];
 
-  const results = await db
-    .select()
-    .from(tenants)
-    .where(eq(tenants.crmConnected, "true"));
+    const results = await db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.crmConnected, "true"));
 
-  return results;
+    return results;
+  });
 }
 
 /**

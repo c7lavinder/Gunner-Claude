@@ -3387,6 +3387,75 @@ Create content that:
           teamMemberNames = members.map(m => m.name);
         } catch { /* team list is optional */ }
 
+        // Look up recent call data for the contact if the message mentions calls/summaries
+        let callContext = "";
+        const callKeywords = /\b(call|summary|summarize|last call|recent call|conversation)\b/i;
+        if (callKeywords.test(input.message)) {
+          try {
+            const { getDb } = await import("./db");
+            const db = await getDb();
+            if (db) {
+              const { calls: callsTable, callGrades } = await import("../drizzle/schema");
+              const { desc, eq, and, like, isNotNull, sql } = await import("drizzle-orm");
+              
+              // Extract contact name from message for lookup
+              const contactNameForLookup = input.contextContactName || "";
+              
+              // Build query conditions
+              const conditions: any[] = [eq(callsTable.tenantId, tenantId)];
+              if (contactNameForLookup) {
+                conditions.push(like(callsTable.contactName, `%${contactNameForLookup}%`));
+              }
+              
+              // Get recent calls with grades
+              const recentCalls = await db
+                .select({
+                  id: callsTable.id,
+                  contactName: callsTable.contactName,
+                  callType: callsTable.callType,
+                  classification: callsTable.classification,
+                  duration: callsTable.duration,
+                  callTimestamp: callsTable.callTimestamp,
+                  teamMemberName: callsTable.teamMemberName,
+                  transcript: callsTable.transcript,
+                  gradeSummary: callGrades.summary,
+                  overallScore: callGrades.overallScore,
+                  overallGrade: callGrades.overallGrade,
+                  strengths: callGrades.strengths,
+                  improvements: callGrades.improvements,
+                })
+                .from(callsTable)
+                .leftJoin(callGrades, eq(callsTable.id, callGrades.callId))
+                .where(and(...conditions))
+                .orderBy(desc(callsTable.callTimestamp))
+                .limit(3);
+              
+              if (recentCalls.length > 0) {
+                callContext = "\n\nRECENT CALL DATA (use this to draft accurate notes/summaries):\n";
+                for (const call of recentCalls) {
+                  callContext += `\n--- Call with ${call.contactName || "Unknown"} ---\n`;
+                  callContext += `Date: ${call.callTimestamp ? new Date(call.callTimestamp).toLocaleDateString() : "Unknown"}\n`;
+                  callContext += `Type: ${call.callType || "Unknown"} | Duration: ${call.duration ? Math.floor(call.duration / 60) + "m " + (call.duration % 60) + "s" : "Unknown"}\n`;
+                  callContext += `Team Member: ${call.teamMemberName || "Unknown"}\n`;
+                  if (call.gradeSummary) callContext += `Grade Summary: ${call.gradeSummary}\n`;
+                  if (call.overallGrade) callContext += `Grade: ${call.overallGrade} (${call.overallScore}%)\n`;
+                  if (call.strengths) callContext += `Strengths: ${JSON.stringify(call.strengths)}\n`;
+                  if (call.improvements) callContext += `Areas for improvement: ${JSON.stringify(call.improvements)}\n`;
+                  if (call.transcript) {
+                    // Include first 2000 chars of transcript for context
+                    const truncatedTranscript = call.transcript.length > 2000 
+                      ? call.transcript.substring(0, 2000) + "... [truncated]"
+                      : call.transcript;
+                    callContext += `Transcript:\n${truncatedTranscript}\n`;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error("[AI Coach] Failed to fetch call context:", e);
+          }
+        }
+
         // Use LLM to parse the intent
         const response = await invokeLLM({
           messages: [
@@ -3412,9 +3481,12 @@ The current user is: ${ctx.user!.name || "Unknown"}
 Team members: ${teamMemberNames.length > 0 ? teamMemberNames.join(", ") : "Unknown"}
 
 IMPORTANT: For actions that involve writing content, you MUST generate the FULL DRAFT TEXT upfront so the user can review and edit it before confirming:
-- For add_note_contact / add_note_opportunity: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note.
+- For add_note_contact / add_note_opportunity: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note. If the user asks to summarize a call, use the RECENT CALL DATA provided below to write a real summary.
 - For send_sms: Write the complete SMS message text in params.message. Don't describe the SMS — write the actual message that will be sent.
 - For create_task: Write a clear task title in params.title AND a detailed description in params.description.
+
+NEVER generate placeholder text like "Please provide the summary" or "Insert details here". You have access to real call data below — use it to write actual content.
+${callContext}
 
 Return JSON with:
 - actionType: one of the types above or "none"

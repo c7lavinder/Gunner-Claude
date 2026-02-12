@@ -1690,3 +1690,12 @@
 - [x] Display the draft content in the action card so users can preview before confirming
 - [x] Make draft content editable inline — edits feed the learning system
 - [x] Write vitest tests for draft content generation (19/19 passing)
+
+## AI Coach Call Summary Context Bug
+- [x] When user asks to summarize a call and add to notes, AI Coach looks up actual call data (summary, transcript, grade) and uses it to draft the note
+- [x] Pass recent call history/summaries for the contact into the LLM prompt (up to 3 recent calls with transcripts)
+
+## tRPC HTML Response Error Fix
+- [x] Add DB connection pool resilience (withDbRetry wrapper with auto-reset on ECONNRESET)
+- [x] Applied retry to getTenantsWithCrm (the function that was failing)
+- [x] Write vitest tests for retry logic and call context (18/18 passing)
