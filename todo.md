@@ -1518,3 +1518,7 @@
 - [x] Add 'Rapport Builder' badge for high score in Introduction & Rapport criteria (8+/10, Lead Manager only)
 - [x] Seed badge tiers in database (bronze: 25, silver: 100, gold: 500)
 - [x] Re-evaluated existing calls: Daniel 9/25, Chris 3/25
+
+## Cleanup - Delete Test Team Members
+- [x] Delete Test Lead Manager, Test Acquisition Manager, Test Lead Generator from database (27 test members removed)
+- [x] Fix badge display on Team page: only show highest tier earned per badge, not all tiers (filtered in getUserBadges)

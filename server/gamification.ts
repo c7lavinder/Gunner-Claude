@@ -515,7 +515,18 @@ export async function getUserBadges(teamMemberId: number): Promise<Array<{
     .where(eq(userBadges.teamMemberId, teamMemberId))
     .orderBy(desc(userBadges.earnedAt));
   
-  return earned.map(b => ({
+  // Only keep the highest tier per badge code
+  const tierRank: Record<string, number> = { bronze: 1, silver: 2, gold: 3 };
+  const highestByCode = new Map<string, typeof earned[0]>();
+  
+  for (const b of earned) {
+    const existing = highestByCode.get(b.code);
+    if (!existing || (tierRank[b.tier] || 0) > (tierRank[existing.tier] || 0)) {
+      highestByCode.set(b.code, b);
+    }
+  }
+  
+  return Array.from(highestByCode.values()).map(b => ({
     code: b.code,
     name: b.name,
     icon: b.icon || "🏆",
