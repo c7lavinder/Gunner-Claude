@@ -350,10 +350,21 @@ export const appRouter = router({
         teamMembers: z.array(z.string()).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
-        // CRITICAL: Include tenantId for multi-tenant isolation
+        // Get the current user's team member record for permission scoping
+        const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+        const permissionContext = {
+          teamRole: (teamMember?.teamRole || ctx.user?.role) as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | undefined,
+          teamMemberId: teamMember?.id,
+          tenantId: ctx.user?.tenantId ?? undefined,
+        };
+        
+        // Get allowed team member IDs based on role
+        const allowedTeamMemberIds = await getViewableTeamMemberIds(permissionContext);
+        
         return await getCallsWithGrades({ 
           ...input, 
-          tenantId: ctx.user?.tenantId || undefined 
+          tenantId: ctx.user?.tenantId || undefined,
+          allowedTeamMemberIds,
         });
       }),
 

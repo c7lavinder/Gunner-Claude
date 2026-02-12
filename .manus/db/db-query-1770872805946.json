@@ -1,0 +1,28 @@
+{
+  "query": "SELECT id, contactName, status, createdAt FROM calls WHERE contactName LIKE '%Berry Hampton%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, status, createdAt FROM calls WHERE contactName LIKE '%Berry Hampton%';",
+  "rows": [
+    {
+      "id": "60003",
+      "contactName": "Berry Hampton",
+      "status": "completed",
+      "createdAt": "2026-02-02 17:28:58"
+    },
+    {
+      "id": "240021",
+      "contactName": "Berry Hampton",
+      "status": "skipped",
+      "createdAt": "2026-02-03 18:04:48"
+    },
+    {
+      "id": "240022",
+      "contactName": "Berry Hampton",
+      "status": "transcribing",
+      "createdAt": "2026-02-03 18:15:05"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tstatus\tcreatedAt\n60003\tBerry Hampton\tcompleted\t2026-02-02 17:28:58\n240021\tBerry Hampton\tskipped\t2026-02-03 18:04:48\n240022\tBerry Hampton\ttranscribing\t2026-02-03 18:15:05\n",
+  "stderr": "",
+  "execution_time_ms": 350
+}

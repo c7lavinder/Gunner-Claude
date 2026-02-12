@@ -339,6 +339,7 @@ export async function getCallsWithGrades(options: {
   directions?: string[];
   scoreRanges?: string[];
   teamMembers?: string[];
+  allowedTeamMemberIds?: number[] | 'all'; // Permission-based scoping
 }): Promise<{ items: Array<Call & { grade: CallGrade | null }>; total: number }> {
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
@@ -372,6 +373,14 @@ export async function getCallsWithGrades(options: {
   }
   if (options.teamMembers && options.teamMembers.length > 0) {
     conditions.push(inArray(calls.teamMemberName, options.teamMembers as any));
+  }
+
+  // Apply permission-based scoping: restrict to allowed team member IDs
+  if (options.allowedTeamMemberIds && options.allowedTeamMemberIds !== 'all') {
+    if (options.allowedTeamMemberIds.length === 0) {
+      return { items: [], total: 0 }; // No access
+    }
+    conditions.push(inArray(calls.teamMemberId, options.allowedTeamMemberIds));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -1774,6 +1783,32 @@ export async function getLeadManagersForAcquisitionManager(acquisitionManagerId:
   return assignments.map(a => a.leadManagerId);
 }
 
+/**
+ * Get Lead Generator IDs assigned to a Lead Manager.
+ * In team_assignments, LG→LM assignments use:
+ *   leadManagerId = Lead Generator's team member ID
+ *   acquisitionManagerId = Lead Manager's team member ID
+ */
+export async function getLeadGeneratorsForLeadManager(leadManagerTeamMemberId: number): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // LG assignments: acquisitionManagerId = the Lead Manager, leadManagerId = the Lead Generator
+  const assignments = await db.select()
+    .from(teamAssignments)
+    .where(eq(teamAssignments.acquisitionManagerId, leadManagerTeamMemberId));
+  
+  // Filter to only include actual lead generators by checking teamRole
+  const lgIds: number[] = [];
+  for (const a of assignments) {
+    const member = await db.select().from(teamMembers).where(eq(teamMembers.id, a.leadManagerId)).limit(1);
+    if (member[0]?.teamRole === 'lead_generator') {
+      lgIds.push(a.leadManagerId);
+    }
+  }
+  return lgIds;
+}
+
 export async function assignLeadManagerToAcquisitionManager(
   leadManagerId: number, 
   acquisitionManagerId: number,
@@ -1880,11 +1915,8 @@ export async function getCallsWithPermissions(
     }
   } else if (permissionContext.teamRole === 'lead_manager' && permissionContext.teamMemberId) {
     // Lead Manager sees own calls + assigned Lead Generator calls
-    const assignedLeadGenerators = await getLeadManagersForAcquisitionManager(permissionContext.teamMemberId);
-    const allowedTeamMemberIds = [permissionContext.teamMemberId, ...assignedLeadGenerators.filter(id => {
-      // Filter to only include actual lead generators (reusing the same assignment table)
-      return true; // The assignment table stores the relationship
-    })];
+    const assignedLeadGenerators = await getLeadGeneratorsForLeadManager(permissionContext.teamMemberId);
+    const allowedTeamMemberIds = [permissionContext.teamMemberId, ...assignedLeadGenerators];
     
     if (allowedTeamMemberIds.length > 0) {
       conditions.push(sql`${calls.teamMemberId} IN (${sql.join(allowedTeamMemberIds.map(id => sql`${id}`), sql`, `)})`);
@@ -1922,6 +1954,11 @@ export async function getViewableTeamMemberIds(
   if (permissionContext.teamRole === 'acquisition_manager' && permissionContext.teamMemberId) {
     const assignedLeadManagers = await getLeadManagersForAcquisitionManager(permissionContext.teamMemberId);
     return [permissionContext.teamMemberId, ...assignedLeadManagers];
+  }
+  
+  if (permissionContext.teamRole === 'lead_manager' && permissionContext.teamMemberId) {
+    const assignedLeadGenerators = await getLeadGeneratorsForLeadManager(permissionContext.teamMemberId);
+    return [permissionContext.teamMemberId, ...assignedLeadGenerators];
   }
   
   if (permissionContext.teamMemberId) {

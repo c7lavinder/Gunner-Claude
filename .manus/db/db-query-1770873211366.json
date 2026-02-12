@@ -1,0 +1,45 @@
+{
+  "query": "SELECT ta.id, ta.leadManagerId, ta.acquisitionManagerId, CONCAT(tm1.name, ' (', tm1.teamRole, ')') as leadManagerIdInfo, CONCAT(tm2.name, ' (', tm2.teamRole, ')') as acquisitionManagerIdInfo FROM team_assignments ta LEFT JOIN team_members tm1 ON ta.leadManagerId = tm1.id LEFT JOIN team_members tm2 ON ta.acquisitionManagerId = tm2.id ORDER BY ta.id",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT ta.id, ta.leadManagerId, ta.acquisitionManagerId, CONCAT(tm1.name, ' (', tm1.teamRole, ')') as leadManagerIdInfo, CONCAT(tm2.name, ' (', tm2.teamRole, ')') as acquisitionManagerIdInfo FROM team_assignments ta LEFT JOIN team_members tm1 ON ta.leadManagerId = tm1.id LEFT JOIN team_members tm2 ON ta.acquisitionManagerId = tm2.id ORDER BY ta.id",
+  "rows": [
+    {
+      "id": "60015",
+      "leadManagerId": "1",
+      "acquisitionManagerId": "3",
+      "leadManagerIdInfo": "Chris Segura (lead_manager)",
+      "acquisitionManagerIdInfo": "Kyle Barks (acquisition_manager)"
+    },
+    {
+      "id": "60022",
+      "leadManagerId": "2",
+      "acquisitionManagerId": "3",
+      "leadManagerIdInfo": "Daniel Lozano (lead_manager)",
+      "acquisitionManagerIdInfo": "Kyle Barks (acquisition_manager)"
+    },
+    {
+      "id": "90001",
+      "leadManagerId": "30002",
+      "acquisitionManagerId": "2",
+      "leadManagerIdInfo": "Efren Valenzuala (lead_generator)",
+      "acquisitionManagerIdInfo": "Daniel Lozano (lead_manager)"
+    },
+    {
+      "id": "90002",
+      "leadManagerId": "30001",
+      "acquisitionManagerId": "2",
+      "leadManagerIdInfo": "Alex Diaz (lead_generator)",
+      "acquisitionManagerIdInfo": "Daniel Lozano (lead_manager)"
+    },
+    {
+      "id": "90003",
+      "leadManagerId": "30003",
+      "acquisitionManagerId": "2",
+      "leadManagerIdInfo": "Mirna Razo (lead_generator)",
+      "acquisitionManagerIdInfo": "Daniel Lozano (lead_manager)"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tleadManagerId\tacquisitionManagerId\tleadManagerIdInfo\tacquisitionManagerIdInfo\n60015\t1\t3\tChris Segura (lead_manager)\tKyle Barks (acquisition_manager)\n60022\t2\t3\tDaniel Lozano (lead_manager)\tKyle Barks (acquisition_manager)\n90001\t30002\t2\tEfren Valenzuala (lead_generator)\tDaniel Lozano (lead_manager)\n90002\t30001\t2\tAlex Diaz (lead_generator)\tDaniel Lozano (lead_manager)\n90003\t30003\t2\tMirna Razo (lead_generator)\tDaniel Lozano (lead_manager)\n",
+  "stderr": "",
+  "execution_time_ms": 354
+}

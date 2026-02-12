@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, contactName, status, teamMemberId, createdAt FROM calls WHERE contactName LIKE '%Berry Hampton%' AND status = 'transcribing' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, status, teamMemberId, createdAt FROM calls WHERE contactName LIKE '%Berry Hampton%' AND status = 'transcribing' LIMIT 5;",
+  "rows": [
+    {
+      "id": "240022",
+      "contactName": "Berry Hampton",
+      "status": "transcribing",
+      "teamMemberId": "3",
+      "createdAt": "2026-02-03 18:15:05"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tstatus\tteamMemberId\tcreatedAt\n240022\tBerry Hampton\ttranscribing\t3\t2026-02-03 18:15:05\n",
+  "stderr": "",
+  "execution_time_ms": 397
+}

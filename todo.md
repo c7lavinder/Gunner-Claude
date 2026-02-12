@@ -1477,3 +1477,9 @@
 - [x] Remove Direction filter from Call History page
 - [x] Fit all remaining filters (Date, Team Member, Call Type, Outcome, Score) on one line
 - [x] Default date range to Today instead of Last 7 Days
+
+## Lead Manager Call Visibility Scoping
+- [x] Lead Managers should only see their own calls + calls from their assigned Lead Generators
+- [x] Update backend withGrades query to filter by allowed team member IDs for Lead Managers
+- [x] Update frontend Team Member filter to only show relevant members for Lead Managers
+- [x] Admins and Acquisition Managers continue to see all calls
