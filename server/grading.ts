@@ -960,15 +960,63 @@ export async function processCall(callId: number): Promise<void> {
       classificationReason: classificationResult.reason,
     });
 
-    // If not a real conversation, skip grading
+    // If not a real conversation, handle accordingly
     if (!classificationResult.shouldGrade) {
-      console.log(`[ProcessCall] Call ${callId} classified as ${classificationResult.classification}, skipping grading`);
-      // For admin calls, save the summary as the classificationReason for display
-      const updateData: any = { status: "skipped" };
-      if (classificationResult.classification === "admin_call" && classificationResult.summary) {
-        updateData.classificationReason = classificationResult.summary;
+      // Admin calls get auto-graded with the admin_callback rubric
+      if (classificationResult.classification === "admin_call") {
+        console.log(`[ProcessCall] Call ${callId} classified as admin_call, auto-grading with admin rubric`);
+        
+        // Save summary to classificationReason
+        if (classificationResult.summary) {
+          await updateCall(callId, { classificationReason: classificationResult.summary });
+        }
+        
+        // Proceed to grade with admin_callback rubric (don't return — fall through to grading)
+        await updateCall(callId, { status: "grading" });
+        
+        let teamMemberName = call.teamMemberName || "Team Member";
+        if (call.teamMemberId) {
+          const teamMember = await getTeamMemberById(call.teamMemberId);
+          if (teamMember) teamMemberName = teamMember.name;
+        }
+        
+        // Get tenant company name
+        let companyName: string | undefined;
+        if (call.tenantId) {
+          const tenant = await getTenantById(call.tenantId);
+          if (tenant) companyName = tenant.name;
+        }
+        
+        const gradeResult = await gradeCall(transcript, "admin_callback", teamMemberName, { companyName });
+        
+        await createCallGrade({
+          callId: call.id,
+          overallScore: gradeResult.overallScore.toString(),
+          overallGrade: gradeResult.overallGrade,
+          criteriaScores: gradeResult.criteriaScores,
+          strengths: gradeResult.strengths,
+          improvements: gradeResult.improvements,
+          coachingTips: gradeResult.coachingTips,
+          redFlags: gradeResult.redFlags,
+          summary: gradeResult.summary,
+          rubricType: "admin_callback",
+        });
+        
+        await updateCall(callId, {
+          status: "completed",
+          callType: "admin_callback",
+          callTypeSource: "auto",
+          classification: "admin_call",
+          callOutcome: gradeResult.callOutcome,
+        });
+        
+        console.log(`[ProcessCall] Admin call ${callId} auto-graded: ${gradeResult.overallGrade} (${gradeResult.overallScore}%)`);
+        return;
       }
-      await updateCall(callId, updateData);
+      
+      // All other non-gradable classifications (voicemail, no_answer, etc.) get skipped
+      console.log(`[ProcessCall] Call ${callId} classified as ${classificationResult.classification}, skipping grading`);
+      await updateCall(callId, { status: "skipped" });
       return;
     }
 

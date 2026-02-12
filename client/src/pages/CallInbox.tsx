@@ -1824,25 +1824,47 @@ export default function CallInbox() {
                           </div>
                           <div className="flex items-center gap-2">
                             <StatusBadge status="skipped" />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                reclassifyMutation.mutate({ 
-                                  callId: item.id, 
-                                  classification: "conversation",
-                                  reason: "Manually reclassified for grading"
-                                });
-                              }}
-                              disabled={reclassifyMutation.isPending}
-                            >
-                              {reclassifyMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <CheckCircle className="h-4 w-4" />
-                              )}
-                              <span className="ml-1">Grade This Call</span>
-                            </Button>
+                            {item.classification === "admin_call" ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  reclassifyMutation.mutate({ 
+                                    callId: item.id, 
+                                    classification: "conversation",
+                                    reason: "Admin call - auto-grade with admin rubric"
+                                  });
+                                }}
+                                disabled={reclassifyMutation.isPending}
+                              >
+                                {reclassifyMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle className="h-4 w-4" />
+                                )}
+                                <span className="ml-1">Auto-Grade as Admin</span>
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  reclassifyMutation.mutate({ 
+                                    callId: item.id, 
+                                    classification: "conversation",
+                                    reason: "Manually reclassified for grading"
+                                  });
+                                }}
+                                disabled={reclassifyMutation.isPending}
+                              >
+                                {reclassifyMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle className="h-4 w-4" />
+                                )}
+                                <span className="ml-1">Grade This Call</span>
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardContent>

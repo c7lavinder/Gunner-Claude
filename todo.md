@@ -1673,3 +1673,11 @@
 - [x] Pass assignedTo field to GHL task creation API
 - [x] Update SMS sending to pass userId so it sends from the team member's own phone number
 - [x] Write vitest tests for task assignment and SMS user routing (18/18 passing)
+
+## Admin Call Grading Bug
+- [x] Admin Calls now auto-grade with admin_callback rubric instead of being skipped
+
+## Admin Call Auto-Grading
+- [x] Update processCall to auto-grade admin_call classified calls with admin_callback rubric instead of skipping
+- [x] Frontend: show "Auto-Grade as Admin" button for existing skipped admin calls, hide "Grade This Call"
+- [x] Write vitest tests for admin call auto-grading flow (17/17 passing)
