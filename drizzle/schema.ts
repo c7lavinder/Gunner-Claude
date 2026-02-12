@@ -1228,3 +1228,60 @@ export const coachActionLog = mysqlTable("coach_action_log", {
 });
 export type CoachActionLog = typeof coachActionLog.$inferSelect;
 export type InsertCoachActionLog = typeof coachActionLog.$inferInsert;
+
+/**
+ * Coach Action Edits - captures before/after for every confirmed action.
+ * "before" = the AI-generated draft, "after" = what the user actually sent.
+ * wasEdited=false means the user accepted as-is (positive signal).
+ */
+export const coachActionEdits = mysqlTable("coach_action_edits", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  userId: int("userId").references(() => users.id).notNull(),
+  actionLogId: int("actionLogId").references(() => coachActionLog.id).notNull(),
+  // What kind of content this is
+  category: mysqlEnum("category", [
+    "sms",       // SMS message text
+    "note",      // Contact/opportunity note body
+    "task",      // Task title + description
+  ]).notNull(),
+  // The AI-generated draft
+  draftContent: text("draftContent").notNull(),
+  // What the user actually confirmed (may be identical to draft)
+  finalContent: text("finalContent").notNull(),
+  // Did the user change anything?
+  wasEdited: mysqlEnum("wasEdited", ["true", "false"]).default("false").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type CoachActionEdit = typeof coachActionEdits.$inferSelect;
+export type InsertCoachActionEdit = typeof coachActionEdits.$inferInsert;
+
+/**
+ * AI Coach Preferences - per-user (or per-tenant team-wide) style profiles.
+ * Built by aggregating coach_action_edits patterns.
+ * One row per user+category. userId=NULL means team-wide default.
+ */
+export const aiCoachPreferences = mysqlTable("ai_coach_preferences", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  // NULL userId = team-wide default profile
+  userId: int("userId").references(() => users.id),
+  // Category of preference (one row per category per user)
+  category: mysqlEnum("pref_category", [
+    "sms_style",         // How they write SMS messages
+    "note_style",        // How they write contact/opportunity notes
+    "task_style",        // How they name and describe tasks
+  ]).notNull(),
+  // LLM-generated summary of the user's style
+  // e.g. "Prefers shorter SMS. Always removes exclamation marks. Adds property address to task titles."
+  styleSummary: text("styleSummary").notNull(),
+  // JSON array of up to 5 recent final-content examples for few-shot prompting
+  recentExamples: text("recentExamples"),
+  // How many edits contributed to this preference
+  sampleCount: int("sampleCount").default(0).notNull(),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AiCoachPreference = typeof aiCoachPreferences.$inferSelect;
+export type InsertAiCoachPreference = typeof aiCoachPreferences.$inferInsert;

@@ -1,0 +1,25 @@
+{
+  "query": "SELECT id FROM coach_action_log ORDER BY id DESC LIMIT 5",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id FROM coach_action_log ORDER BY id DESC LIMIT 5",
+  "rows": [
+    {
+      "id": "30044"
+    },
+    {
+      "id": "30043"
+    },
+    {
+      "id": "30042"
+    },
+    {
+      "id": "30041"
+    },
+    {
+      "id": "30040"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\n30044\n30043\n30042\n30041\n30040\n",
+  "stderr": "",
+  "execution_time_ms": 343
+}

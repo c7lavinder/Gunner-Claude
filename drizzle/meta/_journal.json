@@ -225,6 +225,20 @@
       "when": 1770915472392,
       "tag": "0031_bent_stepford_cuckoos",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1770927270876,
+      "tag": "0032_huge_shadowcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1770927643402,
+      "tag": "0033_medical_mephisto",
+      "breakpoints": true
     }
   ]
 }

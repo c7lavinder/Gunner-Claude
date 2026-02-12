@@ -1015,12 +1015,22 @@ export const appRouter = router({
           })
           .join("\n\n");
 
+        // Get user's coaching tone preferences
+        let coachingPrefs = "";
+        try {
+          const { buildPreferenceContext } = await import("./coachPreferences");
+          coachingPrefs = await buildPreferenceContext(
+            ctx.user?.tenantId || 0,
+            ctx.user!.id
+          );
+        } catch { /* preferences are optional */ }
+
         const systemPrompt = `You are a supportive sales coach for a real estate wholesaling team.
 
 Training context:
 ${trainingContext.substring(0, 2000)}
 
-${successfulCalls.length > 0 ? `High-scoring call examples available.` : ""}
+${successfulCalls.length > 0 ? `High-scoring call examples available.` : ""}${coachingPrefs ? `\n${coachingPrefs}` : ""}
 
 CRITICAL - YOUR RESPONSE MUST BE:
 1. EXACTLY 2-4 sentences total (NO MORE)
@@ -3359,6 +3369,17 @@ Create content that:
         const tenantId = ctx.user?.tenantId;
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
+        // Get user's learned preferences to improve content drafting
+        let preferenceContext = "";
+        try {
+          const { buildPreferenceContext } = await import("./coachPreferences");
+          preferenceContext = await buildPreferenceContext(
+            tenantId,
+            ctx.user!.id,
+            ["sms_style", "note_style", "task_style"]
+          );
+        } catch { /* preferences are optional */ }
+
         // Use LLM to parse the intent
         const response = await invokeLLM({
           messages: [
@@ -3386,7 +3407,8 @@ Return JSON with:
 - contactId: the contact ID if known from context
 - params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, fieldKey, fieldValue)
 - summary: human-readable summary of what will be done
-- needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID`
+- needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID
+${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descriptions), match this user's established style:\n${preferenceContext}` : ""}`
             },
             { role: "user", content: input.message }
           ],
@@ -3469,11 +3491,80 @@ Return JSON with:
 
     // Confirm and execute an action
     confirmAndExecute: protectedProcedure
-      .input(z.object({ actionId: z.number() }))
+      .input(z.object({
+        actionId: z.number(),
+        // If the user edited the content before confirming, send the edited payload
+        editedPayload: z.record(z.string(), z.any()).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
+
         const { confirmAction, executeAction } = await import("./ghlActions");
+        const { recordEdit } = await import("./coachPreferences");
+
+        // If user edited the payload, update the action log before executing
+        if (input.editedPayload) {
+          const { getDb } = await import("./db");
+          const db = await getDb();
+          if (db) {
+            const { coachActionLog } = await import("../drizzle/schema");
+            const { eq } = await import("drizzle-orm");
+            // Get original payload for before/after comparison
+            const [action] = await db.select().from(coachActionLog).where(eq(coachActionLog.id, input.actionId));
+            if (action) {
+              const originalPayload = action.payload as any;
+              // Update the action log with edited payload
+              await db.update(coachActionLog)
+                .set({ payload: input.editedPayload })
+                .where(eq(coachActionLog.id, input.actionId));
+              // Record the before/after edit
+              try {
+                await recordEdit({
+                  tenantId,
+                  userId: ctx.user!.id,
+                  actionLogId: input.actionId,
+                  actionType: action.actionType,
+                  originalPayload,
+                  finalPayload: input.editedPayload,
+                  wasEdited: true,
+                });
+              } catch (e) {
+                console.error("[CoachPreferences] Failed to record edit:", e);
+              }
+            }
+          }
+        }
+
         await confirmAction(input.actionId);
         const result = await executeAction(input.actionId);
+
+        // If user accepted as-is (no edit), record that as a positive signal
+        if (!input.editedPayload && result.success) {
+          try {
+            const { getDb } = await import("./db");
+            const db = await getDb();
+            if (db) {
+              const { coachActionLog } = await import("../drizzle/schema");
+              const { eq } = await import("drizzle-orm");
+              const [action] = await db.select().from(coachActionLog).where(eq(coachActionLog.id, input.actionId));
+              if (action) {
+                await recordEdit({
+                  tenantId,
+                  userId: ctx.user!.id,
+                  actionLogId: input.actionId,
+                  actionType: action.actionType,
+                  originalPayload: action.payload as any,
+                  finalPayload: action.payload as any,
+                  wasEdited: false,
+                });
+              }
+            }
+          } catch (e) {
+            console.error("[CoachPreferences] Failed to record accept-as-is:", e);
+          }
+        }
+
         return result;
       }),
 
@@ -3509,6 +3600,26 @@ Return JSON with:
           .limit(input?.limit || 50);
 
         return results;
+      }),
+
+    // Get current user's learned preferences
+    getPreferences: protectedProcedure
+      .query(async ({ ctx }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) return [];
+
+        const { getAllPreferences } = await import("./coachPreferences");
+        return getAllPreferences(tenantId, ctx.user!.id);
+      }),
+
+    // Get edit stats for the current user
+    editStats: protectedProcedure
+      .query(async ({ ctx }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) return { totalEdits: 0, totalAccepts: 0, categories: [] as string[] };
+
+        const { getEditStats } = await import("./coachPreferences");
+        return getEditStats(tenantId, ctx.user!.id);
       }),
   }),
 });

@@ -1654,3 +1654,13 @@
 - [x] Add "Lead Generator" to team invite role dropdown (currently only shows Admin, Acquisition Manager, Lead Manager)
 - [x] Make AI Coach box taller so all suggestions show without scrolling (increased from 500px to 650px)
 - [x] Verify "Tag Jane Doe as hot-lead" suggestion is fully removed (was already removed, old screenshot was cached)
+
+## AI Coach Learning System (Preferences)
+- [x] Add coach_action_edits table: capture AI-generated draft (before) and user's final version (after) for every confirmed action
+- [x] Add ai_coach_preferences table: per-user preference profiles with style summaries per category (sms, notes, tasks)
+- [x] Add team-level preference fallback: aggregate all users' patterns into a team-wide default for new users
+- [x] Frontend: make action card content editable before confirm — save both original AI draft and user's edited version
+- [x] Frontend: track accept-as-is as a positive signal (wasEdited=false)
+- [x] Build preference aggregation service: analyze before/after diffs to extract style patterns
+- [x] Inject user preference profile (or team default) at session start into AI Coach system prompts
+- [x] Write vitest tests for edit capture, preference aggregation, and prompt injection (19/19 passing)

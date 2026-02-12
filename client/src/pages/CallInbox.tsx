@@ -35,7 +35,8 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  Tag
+  Tag,
+  Pencil
 } from "lucide-react";
 import { Link, useSearch, useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -340,7 +341,7 @@ function FeedbackCard({
 type ConversationMessage = 
   | { role: "user"; content: string }
   | { role: "assistant"; content: string }
-  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string };
+  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any };
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
   add_note_contact: "Add Note to Contact",
@@ -370,6 +371,9 @@ function AICoachQA() {
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [contactSearchResults, setContactSearchResults] = useState<Array<{id: string; name: string; phone?: string; email?: string}>>([]);
   const [pendingAction, setPendingAction] = useState<{intent: any; message: string} | null>(null);
+  // Track which action card is being edited and its edited content
+  const [editingActionId, setEditingActionId] = useState<number | null>(null);
+  const [editedContent, setEditedContent] = useState("");
   
   const askCoachMutation = trpc.coach.askQuestion.useMutation({
     onSuccess: (response) => {
@@ -452,6 +456,7 @@ function AICoachQA() {
         summary: intent.summary,
         contactName: intent.contactName || "",
         status: "pending",
+        payload: intent.params,
       }]);
     } catch (error: any) {
       setConversation(prev => [...prev, { role: "assistant", content: `Failed to create action: ${error.message}` }]);
@@ -468,16 +473,79 @@ function AICoachQA() {
     setIsAsking(false);
   };
 
+  // Get the editable content field from a payload based on action type
+  const getEditableContent = (actionType: string, payload: any): string => {
+    if (!payload) return "";
+    switch (actionType) {
+      case "send_sms": return payload.message || "";
+      case "add_note_contact":
+      case "add_note_opportunity": return payload.noteBody || "";
+      case "create_task": return payload.title || "";
+      default: return "";
+    }
+  };
+
+  // Check if an action type has editable content
+  const isEditableAction = (actionType: string): boolean => {
+    return ["send_sms", "add_note_contact", "add_note_opportunity", "create_task"].includes(actionType);
+  };
+
+  // Start editing an action card
+  const handleStartEdit = (actionId: number, actionType: string, payload: any) => {
+    setEditingActionId(actionId);
+    setEditedContent(getEditableContent(actionType, payload));
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingActionId(null);
+    setEditedContent("");
+  };
+
+  // Build edited payload from the edited content
+  const buildEditedPayload = (actionType: string, originalPayload: any, newContent: string): any => {
+    const edited = { ...originalPayload };
+    switch (actionType) {
+      case "send_sms": edited.message = newContent; break;
+      case "add_note_contact":
+      case "add_note_opportunity": edited.noteBody = newContent; break;
+      case "create_task": edited.title = newContent; break;
+    }
+    return edited;
+  };
+
   const handleConfirmAction = async (actionId: number) => {
-    // Update card status to confirmed
+    // Find the action card to check if it was edited
+    const actionCard = conversation.find(
+      (msg): msg is Extract<ConversationMessage, { role: "action_card" }> =>
+        msg.role === "action_card" && msg.actionId === actionId
+    );
+
+    let editedPayload: any = undefined;
+    if (editingActionId === actionId && actionCard) {
+      const originalContent = getEditableContent(actionCard.actionType, actionCard.payload);
+      if (editedContent !== originalContent) {
+        editedPayload = buildEditedPayload(actionCard.actionType, actionCard.payload, editedContent);
+      }
+    }
+
+    // Clear editing state
+    setEditingActionId(null);
+    setEditedContent("");
+
+    // Update card status to confirmed (and update summary if edited)
     setConversation(prev => prev.map(msg => 
       msg.role === "action_card" && msg.actionId === actionId 
-        ? { ...msg, status: "confirmed" as const }
+        ? { 
+            ...msg, 
+            status: "confirmed" as const,
+            ...(editedPayload ? { payload: editedPayload, summary: `${msg.summary} (edited)` } : {})
+          }
         : msg
     ));
 
     try {
-      const result = await confirmExecuteMutation.mutateAsync({ actionId });
+      const result = await confirmExecuteMutation.mutateAsync({ actionId, editedPayload });
       setConversation(prev => prev.map(msg => 
         msg.role === "action_card" && msg.actionId === actionId 
           ? { ...msg, status: result.success ? "executed" as const : "failed" as const, result: result.success ? "Action completed successfully!" : (result.error || "Action failed") }
@@ -619,7 +687,20 @@ function AICoachQA() {
                           {msg.contactName && (
                             <p className="text-xs text-muted-foreground mt-0.5">Contact: {msg.contactName}</p>
                           )}
-                          <p className="text-sm mt-1">{msg.summary}</p>
+                          {/* Show editable content or summary */}
+                          {msg.status === "pending" && editingActionId === msg.actionId ? (
+                            <div className="mt-1">
+                              <Textarea
+                                value={editedContent}
+                                onChange={(e) => setEditedContent(e.target.value)}
+                                className="text-sm min-h-[60px] resize-none"
+                                autoFocus
+                              />
+                              <p className="text-[10px] text-muted-foreground mt-1">Edit the content above, then confirm or cancel</p>
+                            </div>
+                          ) : (
+                            <p className="text-sm mt-1">{msg.summary}</p>
+                          )}
                           {msg.result && (
                             <p className={`text-xs mt-1 ${msg.status === "executed" ? "text-green-600" : "text-red-600"}`}>
                               {msg.result}
@@ -638,18 +719,43 @@ function AICoachQA() {
                                 ) : (
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                 )}
-                                Confirm
+                                {editingActionId === msg.actionId ? "Confirm Edit" : "Confirm"}
                               </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => handleCancelAction(msg.actionId)}
-                                disabled={cancelActionMutation.isPending}
-                              >
-                                <XCircle className="h-3 w-3 mr-1" />
-                                Cancel
-                              </Button>
+                              {editingActionId === msg.actionId ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={handleCancelEdit}
+                                >
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                  Cancel Edit
+                                </Button>
+                              ) : (
+                                <>
+                                  {isEditableAction(msg.actionType) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      onClick={() => handleStartEdit(msg.actionId, msg.actionType, msg.payload)}
+                                    >
+                                      <Pencil className="h-3 w-3 mr-1" />
+                                      Edit
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => handleCancelAction(msg.actionId)}
+                                    disabled={cancelActionMutation.isPending}
+                                  >
+                                    <XCircle className="h-3 w-3 mr-1" />
+                                    Cancel
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
