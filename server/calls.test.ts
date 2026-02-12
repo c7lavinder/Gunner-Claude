@@ -87,8 +87,11 @@ describe("calls router", () => {
 
     const result = await caller.calls.withGrades({ limit: 10 });
     
-    // Result should be an array
-    expect(Array.isArray(result)).toBe(true);
+    // Result should be a paginated object with items array and total count
+    expect(result).toHaveProperty("items");
+    expect(result).toHaveProperty("total");
+    expect(Array.isArray(result.items)).toBe(true);
+    expect(typeof result.total).toBe("number");
   });
 });
 

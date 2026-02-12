@@ -52,6 +52,7 @@ describe("Team Training Role-Based Filtering", () => {
       isAiGenerated: "false",
       teamMemberId: leadManagerMemberId,
       teamMemberName: "Test Lead Manager",
+      teamRole: "lead_manager",
     });
     skillItemId = skillItem!.id;
 
@@ -64,6 +65,7 @@ describe("Team Training Role-Based Filtering", () => {
       isAiGenerated: "false",
       teamMemberId: acquisitionManagerMemberId,
       teamMemberName: "Test Acquisition Manager",
+      teamRole: "acquisition_manager",
     });
     issueItemId = issueItem!.id;
 
@@ -76,6 +78,7 @@ describe("Team Training Role-Based Filtering", () => {
       isAiGenerated: "false",
       teamMemberId: leadGeneratorMemberId,
       teamMemberName: "Test Lead Generator",
+      teamRole: "lead_generator",
     });
     winItemId = winItem!.id;
   });

@@ -14,11 +14,16 @@ vi.mock('./loops', () => ({
   onNoCallsAfter48Hours: vi.fn().mockResolvedValue({ success: true }),
   onPowerUser: vi.fn().mockResolvedValue({ success: true }),
   onTrialEndingSoon: vi.fn().mockResolvedValue({ success: true }),
+  sendTransactionalEmail: vi.fn().mockResolvedValue({ success: true }),
+  TRANSACTIONAL_EMAIL_IDS: {
+    DAY1_FIRST_CALL: 'day1_first_call_id',
+    DAY2_TRIAL_ENDING: 'day2_trial_ending_id',
+  },
 }));
 
 import { runEmailSequenceJob } from './emailSequenceJob';
 import { getEmailSentRecord, recordEmailSent, getUsersForEmailSequence } from './db';
-import { sendEvent, onNoCallsAfter48Hours, onPowerUser, onTrialEndingSoon } from './loops';
+import { sendEvent, onNoCallsAfter48Hours, onPowerUser, onTrialEndingSoon, sendTransactionalEmail } from './loops';
 
 describe('Email Sequence Job', () => {
   beforeEach(() => {
@@ -63,9 +68,9 @@ describe('Email Sequence Job', () => {
     
     expect(result.usersProcessed).toBe(1);
     expect(result.emailsSent).toBeGreaterThan(0);
-    expect(sendEvent).toHaveBeenCalledWith(expect.objectContaining({
+    // Day 1 now uses sendTransactionalEmail instead of sendEvent
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(expect.objectContaining({
       email: 'test@example.com',
-      eventName: 'day1_first_call',
     }));
     expect(recordEmailSent).toHaveBeenCalledWith(1, 'day1_first_call');
   });
@@ -125,8 +130,12 @@ describe('Email Sequence Job', () => {
     
     const result = await runEmailSequenceJob();
     
+    // Day 2 user with 0 calls triggers both day2_trial_reminder and no_calls_48h
     expect(onNoCallsAfter48Hours).toHaveBeenCalledWith('test@example.com');
     expect(recordEmailSent).toHaveBeenCalledWith(1, 'no_calls_48h');
+    // Also sends day2 trial reminder
+    expect(sendTransactionalEmail).toHaveBeenCalled();
+    expect(recordEmailSent).toHaveBeenCalledWith(1, 'day2_trial_reminder');
   });
 
   it('should send power_user email for users with 10+ calls in first week', async () => {
@@ -180,6 +189,8 @@ describe('Email Sequence Job', () => {
     
     const result = await runEmailSequenceJob();
     
+    // User is day 2, not subscribed, trial ending in 12h, has 2 calls
+    // Should trigger: day2_trial_reminder + trial_ending_soon
     expect(onTrialEndingSoon).toHaveBeenCalledWith('trial@example.com');
     expect(recordEmailSent).toHaveBeenCalledWith(1, 'trial_ending_soon');
   });
