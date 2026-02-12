@@ -418,6 +418,10 @@ export default function AdminDashboard() {
                       className="pl-8 w-64"
                     />
                   </div>
+                  <Button onClick={() => setLocation("/admin/tenant-setup")}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Tenant Setup
+                  </Button>
                 </div>
               </div>
             </CardHeader>
