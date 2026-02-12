@@ -1,6 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { getDb } from "./db";
+import { tenants, teamMembers, userStreaks, userXp } from "../drizzle/schema";
+import { like, ne, and } from "drizzle-orm";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -293,6 +296,21 @@ describe("tenant.savePipelineMapping", () => {
 
     expect(result).toBeDefined();
   });
+});
+
+afterAll(async () => {
+  // Clean up test tenants created during tests
+  const db = await getDb();
+  if (db) {
+    // Delete test tenants (Pipeline Test Co, Stage Mapping Test Co, etc.)
+    await db.delete(tenants).where(
+      and(
+        ne(tenants.id, 1),
+        like(tenants.name, "%Test%")
+      )
+    );
+    console.log("[Test Cleanup] Deleted test tenants from ghlConnection tests");
+  }
 });
 
 describe("TenantCrmConfig stageMapping field", () => {

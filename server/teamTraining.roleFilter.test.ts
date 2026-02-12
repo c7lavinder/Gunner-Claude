@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getTeamTrainingItems, createTeamTrainingItem, deleteTeamTrainingItem, createTeamMember } from "./db";
 import { getDb } from "./db";
+import { sql } from "drizzle-orm";
+import { teamMembers, userStreaks, userXp, xpTransactions, badgeProgress, performanceMetrics } from "../drizzle/schema";
+import { inArray } from "drizzle-orm";
 
 describe("Team Training Role-Based Filtering", () => {
   let leadManagerMemberId: number;
@@ -84,10 +87,25 @@ describe("Team Training Role-Based Filtering", () => {
   });
 
   afterAll(async () => {
-    // Clean up test data
+    const db = await getDb();
+    // Clean up test training items
     if (skillItemId) await deleteTeamTrainingItem(skillItemId);
     if (issueItemId) await deleteTeamTrainingItem(issueItemId);
     if (winItemId) await deleteTeamTrainingItem(winItemId);
+
+    // Clean up test team members and their dependent data
+    const testMemberIds = [leadManagerMemberId, acquisitionManagerMemberId, leadGeneratorMemberId].filter(Boolean);
+    if (testMemberIds.length > 0 && db) {
+      // Delete dependent records first
+      await db.delete(userStreaks).where(inArray(userStreaks.teamMemberId, testMemberIds));
+      await db.delete(userXp).where(inArray(userXp.teamMemberId, testMemberIds));
+      await db.delete(xpTransactions).where(inArray(xpTransactions.teamMemberId, testMemberIds));
+      await db.delete(badgeProgress).where(inArray(badgeProgress.teamMemberId, testMemberIds));
+      await db.delete(performanceMetrics).where(inArray(performanceMetrics.teamMemberId, testMemberIds));
+      // Delete team members
+      await db.delete(teamMembers).where(inArray(teamMembers.id, testMemberIds));
+      console.log(`[Test Cleanup] Deleted ${testMemberIds.length} test team members and their dependent data`);
+    }
   });
 
   it("should filter training items by lead_manager role", async () => {

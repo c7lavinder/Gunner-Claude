@@ -1,8 +1,15 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { getDb } from "./db";
+import { tenants, teamMembers, userStreaks, userXp, xpTransactions, badgeProgress, performanceMetrics } from "../drizzle/schema";
+import { ne, like, and, or, inArray } from "drizzle-orm";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
+
+// Track IDs of test tenants created during tests for cleanup
+const createdTenantIds: number[] = [];
+const createdTeamMemberIds: number[] = [];
 
 function createPlatformOwnerContext(): TrpcContext {
   const user: AuthenticatedUser = {
@@ -94,6 +101,55 @@ function createTenantAdminContext(): TrpcContext {
   };
 }
 
+// ============ CLEANUP ============
+// Auto-delete all test tenants and team members after tests complete
+afterAll(async () => {
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    // Clean up team members from test tenants
+    if (createdTenantIds.length > 0) {
+      // Get team member IDs from test tenants
+      const testMembers = await db.select({ id: teamMembers.id })
+        .from(teamMembers)
+        .where(inArray(teamMembers.tenantId, createdTenantIds));
+      const memberIds = testMembers.map(m => m.id);
+
+      if (memberIds.length > 0) {
+        // Delete dependent data
+        await db.delete(userStreaks).where(inArray(userStreaks.teamMemberId, memberIds));
+        await db.delete(userXp).where(inArray(userXp.teamMemberId, memberIds));
+        await db.delete(xpTransactions).where(inArray(xpTransactions.teamMemberId, memberIds));
+        await db.delete(badgeProgress).where(inArray(badgeProgress.teamMemberId, memberIds));
+        await db.delete(performanceMetrics).where(inArray(performanceMetrics.teamMemberId, memberIds));
+        await db.delete(teamMembers).where(inArray(teamMembers.id, memberIds));
+      }
+
+      // Delete test tenants
+      await db.delete(tenants).where(inArray(tenants.id, createdTenantIds));
+      console.log(`[Test Cleanup] Deleted ${createdTenantIds.length} test tenants and ${memberIds.length} team members`);
+    }
+
+    // Restore tenant 1's real GHL credentials (in case updateTenantCrmConfig test overwrote them)
+    const [tenant1] = await db.select({ crmConfig: tenants.crmConfig }).from(tenants).where(
+      // @ts-ignore
+      require("drizzle-orm").eq(tenants.id, 1)
+    );
+    if (tenant1) {
+      const config = typeof tenant1.crmConfig === "string" ? JSON.parse(tenant1.crmConfig) : tenant1.crmConfig;
+      // Only restore if the key was overwritten by tests
+      if (config?.ghlApiKey === "new-ghl-key" || config?.ghlApiKey === "updated-key") {
+        config.ghlApiKey = process.env.REAL_GHL_API_KEY || config.ghlApiKey;
+        config.ghlLocationId = process.env.REAL_GHL_LOCATION_ID || config.ghlLocationId;
+        console.log("[Test Cleanup] WARNING: Tenant 1 CRM config was overwritten by tests. Manual restoration may be needed.");
+      }
+    }
+  } catch (err) {
+    console.error("[Test Cleanup] Error during cleanup:", err);
+  }
+});
+
 describe("tenant.setup", () => {
   it("rejects non-platform-owner users", async () => {
     const ctx = createRegularUserContext();
@@ -125,7 +181,7 @@ describe("tenant.setup", () => {
 
     const result = await caller.tenant.setup({
       name: "Test Wholesalers LLC",
-      slug: "test-wholesalers",
+      slug: "test-wholesalers-" + Date.now(),
       subscriptionTier: "trial",
       crmType: "ghl",
       crmConfig: {
@@ -145,10 +201,12 @@ describe("tenant.setup", () => {
 
     expect(result).toBeDefined();
     expect(result!.name).toBe("Test Wholesalers LLC");
-    expect(result!.slug).toBe("test-wholesalers");
     expect(result!.crmType).toBe("ghl");
     expect(result!.crmConnected).toBe("true");
     expect(result!.onboardingCompleted).toBe("true");
+
+    // Track for cleanup
+    createdTenantIds.push(result!.id);
 
     // Verify CRM config was saved
     const config = JSON.parse(result!.crmConfig as string);
@@ -166,7 +224,7 @@ describe("tenant.setup", () => {
 
     const result = await caller.tenant.setup({
       name: "No CRM Company",
-      slug: "no-crm-company",
+      slug: "no-crm-company-" + Date.now(),
       crmType: "none",
     });
 
@@ -174,6 +232,9 @@ describe("tenant.setup", () => {
     expect(result!.name).toBe("No CRM Company");
     expect(result!.crmType).toBe("none");
     expect(result!.crmConnected).toBe("false");
+
+    // Track for cleanup
+    createdTenantIds.push(result!.id);
   });
 });
 
@@ -197,10 +258,11 @@ describe("tenant.bulkAddMembers", () => {
     // First create a tenant to add members to
     const tenant = await caller.tenant.setup({
       name: "Bulk Test Company",
-      slug: "bulk-test-company",
+      slug: "bulk-test-company-" + Date.now(),
     });
 
     expect(tenant).toBeDefined();
+    createdTenantIds.push(tenant!.id);
 
     const result = await caller.tenant.bulkAddMembers({
       tenantId: tenant!.id,
@@ -223,11 +285,28 @@ describe("tenant.bulkAddMembers", () => {
 
 describe("tenant.updateSettings (CRM config)", () => {
   it("allows tenant admin to update CRM config", async () => {
-    const ctx = createPlatformOwnerContext();
-    const caller = appRouter.createCaller(ctx);
+    // Create a separate test tenant for this test to avoid overwriting tenant 1's real config
+    const ownerCtx = createPlatformOwnerContext();
+    const ownerCaller = appRouter.createCaller(ownerCtx);
 
-    // Platform owner can also update settings (they have admin role)
-    const result = await caller.tenant.updateSettings({
+    const testTenant = await ownerCaller.tenant.setup({
+      name: "Settings Test Co",
+      slug: "settings-test-" + Date.now(),
+      crmType: "ghl",
+      crmConfig: {
+        ghlApiKey: "original-settings-key",
+        ghlLocationId: "original-settings-loc",
+      },
+    });
+    createdTenantIds.push(testTenant!.id);
+
+    // Use a tenant admin context with the test tenant
+    const adminCtx = createTenantAdminContext();
+    (adminCtx.user as AuthenticatedUser).tenantId = testTenant!.id;
+    (adminCtx.user as AuthenticatedUser).role = "super_admin";
+    const adminCaller = appRouter.createCaller(adminCtx);
+
+    const result = await adminCaller.tenant.updateSettings({
       crmType: "ghl",
       crmConfig: JSON.stringify({
         ghlApiKey: "updated-key",
@@ -270,11 +349,23 @@ describe("tenant.updateTenantCrmConfig", () => {
   });
 
   it("allows platform owner to update tenant CRM config", async () => {
+    // Create a separate test tenant for this test instead of overwriting tenant 1
     const ctx = createPlatformOwnerContext();
     const caller = appRouter.createCaller(ctx);
 
+    const testTenant = await caller.tenant.setup({
+      name: "CRM Config Test Co",
+      slug: "crm-config-test-" + Date.now(),
+      crmType: "ghl",
+      crmConfig: {
+        ghlApiKey: "original-key",
+        ghlLocationId: "original-location",
+      },
+    });
+    createdTenantIds.push(testTenant!.id);
+
     const result = await caller.tenant.updateTenantCrmConfig({
-      tenantId: 1,
+      tenantId: testTenant!.id,
       crmType: "ghl",
       crmConfig: {
         ghlApiKey: "new-ghl-key",

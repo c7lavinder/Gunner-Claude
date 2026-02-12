@@ -1621,3 +1621,7 @@
 - [x] Write vitest tests for the new rule
 - [x] Test against live data (Suzanne Burgess should trigger)
 - [x] Clean up all test tenants and associated data (keep only tenant ID 1 - New Again Houses)
+
+## Test Data Cleanup
+- [x] Delete all test team members (Test Lead Manager, Test Acquisition Manager, Test Lead Generator) from database
+- [x] Update vitest tests to auto-clean up test data (tenants, team members, users) after each test run
