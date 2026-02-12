@@ -1645,3 +1645,7 @@
 - [x] Improve LLM prompt to be factual and grounded in actual data, not dramatic assumptions
 - [x] Pass more context (GHL messages, actual call data, timeline) to the LLM for accurate descriptions
 - [x] Ensure descriptions state what actually happened, not what the AI assumes happened
+
+## Regenerate Active Signal Descriptions
+- [x] Build one-time script to regenerate all active signal AI descriptions with the new factual prompt
+- [x] Run the script and verify updated descriptions are neutral and accurate
