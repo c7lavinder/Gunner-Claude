@@ -1639,3 +1639,9 @@
 
 ## Bug Fix: False Callback Signal
 - [x] Fix callback_requested rule: Cathie Cooper flagged as "Callback Requested — None Made" but team DID call (2 outbound calls + SMS follow-up). Rule now checks GHL conversation messages for outbound activity (calls + SMS) after the callback request.
+
+## Refine AI Signal Descriptions
+- [x] Review current AI reason generation (generateAIReason) and RULE_DESCRIPTIONS
+- [x] Improve LLM prompt to be factual and grounded in actual data, not dramatic assumptions
+- [x] Pass more context (GHL messages, actual call data, timeline) to the LLM for accurate descriptions
+- [x] Ensure descriptions state what actually happened, not what the AI assumes happened

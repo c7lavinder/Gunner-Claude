@@ -1214,92 +1214,127 @@ async function detectHighTalkTimeDQ(
 
 // ============ AI REASON GENERATION ============
 
-const RULE_DESCRIPTIONS: Record<string, { label: string; context: string }> = {
+const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: string }> = {
   backward_movement_no_call: {
     label: "Lead Moved to Follow Up Without a Call",
-    context: "Lead was in an active pipeline stage and got moved to follow-up without anyone making an outbound call first."
+    context: "This lead was moved from an active pipeline stage to follow-up. No outbound call was logged before the move.",
+    tier: "missed"
   },
   repeat_inbound_ignored: {
-    label: "Repeat Inbound — Nobody Responded",
-    context: "This seller has reached out multiple times in the past week but the team hasn't responded."
+    label: "Repeat Inbound — No Response Yet",
+    context: "This seller has sent multiple inbound messages in the past week. No outbound response has been logged yet.",
+    tier: "missed"
   },
   followup_inbound_ignored: {
-    label: "Follow Up Lead Reached Out — No Response",
-    context: "A lead in the follow-up pipeline reached back out (inbound) but hasn't gotten a response within 4 hours."
+    label: "Follow Up Lead Reached Out — Awaiting Response",
+    context: "A lead in the follow-up pipeline sent an inbound message. It has been 4+ hours without a logged response.",
+    tier: "missed"
   },
   offer_no_followup: {
-    label: "Offer Made — Team Went Silent",
-    context: "An offer was made but nobody followed up within 48 hours. The seller didn't say no — the team just stopped."
+    label: "Offer Made — No Follow Up Logged",
+    context: "An offer was made and 48+ hours have passed. No follow-up call or message has been logged since the offer.",
+    tier: "missed"
   },
   new_lead_sla_breach: {
     label: "New Lead — No Call Within 15 Min",
-    context: "A new lead came in but nobody called within the 15-minute SLA window."
+    context: "A new lead entered the pipeline. No outbound call was logged within the 15-minute SLA window.",
+    tier: "missed"
   },
   price_stated_no_followup: {
-    label: "Seller Stated Price — No Follow Up",
-    context: "The seller mentioned a specific price they'd accept during a call, but nobody followed up within 48 hours."
+    label: "Seller Stated Price — No Follow Up Logged",
+    context: "During a call, the seller mentioned a specific price they would accept. No follow-up has been logged in the 48 hours since.",
+    tier: "at_risk"
   },
   motivated_one_and_done: {
     label: "Motivated Seller — Only 1 Call Attempt",
-    context: "Seller showed clear motivation (life event, timeline, urgency) but the team only made one call attempt with no follow-up in 72 hours."
+    context: "The seller showed motivation signals (life event, timeline, urgency) during the call. Only one call attempt has been logged with no follow-up in 72 hours.",
+    tier: "at_risk"
   },
   stale_active_stage: {
     label: "Stale in Active Stage",
-    context: "Lead has been sitting in Pending Apt or Walkthrough for 5+ days with no activity."
+    context: "This lead has been in an active stage (Pending Apt or Walkthrough) for 5+ days. No recent activity has been logged.",
+    tier: "at_risk"
   },
   dead_with_selling_signals: {
-    label: "DQ'd Lead Had Real Selling Signals",
-    context: "Lead was marked dead/ghosted but the call transcript shows real selling signals (timeline, condition, life event)."
+    label: "DQ'd Lead Had Selling Signals",
+    context: "This lead was moved to dead/ghosted status. However, the call transcript contains selling signals such as timeline mentions, property condition details, or life events.",
+    tier: "at_risk"
   },
   walkthrough_no_offer: {
-    label: "Walkthrough Done — No Offer Sent",
-    context: "A walkthrough was completed but no offer has been sent within 24 hours."
+    label: "Walkthrough Done — No Offer Sent Yet",
+    context: "A walkthrough was completed for this property. No offer has been logged in the 24 hours since.",
+    tier: "at_risk"
   },
   duplicate_property_address: {
     label: "Multiple Contacts — Same Property",
-    context: "Different household members have called about the same property address but nobody connected the dots."
+    context: "Multiple contacts have been associated with the same property address. This may indicate different household members reaching out separately.",
+    tier: "possible"
   },
   missed_callback_request: {
-    label: "Seller Asked for Callback — None Made",
-    context: "The seller specifically asked to be called back at a certain time, but no callback was logged."
+    label: "Seller Asked for Callback — No Follow Up Logged",
+    context: "During a call, the seller requested a callback at a specific time. No subsequent outbound call or message has been logged after that request.",
+    tier: "possible"
   },
   high_talk_time_dq: {
-    label: "Long Conversation — DQ'd Too Fast",
-    context: "Seller did most of the talking (3+ min call, long transcript) but got DQ'd after just one attempt. Usually means motivation was there."
+    label: "Long Conversation — DQ'd After One Attempt",
+    context: "This was a 3+ minute call where the seller did significant talking, suggesting engagement. The lead was DQ'd after this single attempt.",
+    tier: "possible"
   },
   active_negotiation_in_followup: {
-    label: "Active Engagement in Follow Up — Worth a Look",
-    context: "This contact is in a follow-up stage but has recent inbound messages (SMS/text) showing active engagement or negotiation. The team is communicating, but there may be an opportunity for the owner to help with negotiation strategy or dig deeper into the property's potential."
+    label: "Active Engagement in Follow Up",
+    context: "This contact is in a follow-up stage and has recent inbound messages showing active engagement or negotiation language. The team is communicating — this is flagged for owner review to potentially help with negotiation strategy or assess the property's potential.",
+    tier: "possible"
   },
 };
 
 async function generateAIReason(detection: DetectedOpportunity): Promise<{ reason: string; suggestion: string }> {
   const ruleDesc = RULE_DESCRIPTIONS[detection.triggerRules[0]];
+  const tierLabel = ruleDesc?.tier === "missed" ? "Missed (urgent)" : ruleDesc?.tier === "at_risk" ? "At Risk" : "Worth a Look";
+  
+  // Build a factual timeline from available data
+  const facts: string[] = [];
+  if (detection.contactName) facts.push(`Contact: ${detection.contactName}`);
+  if (detection.ghlPipelineStageName) facts.push(`Current pipeline stage: ${detection.ghlPipelineStageName}`);
+  if (detection.teamMemberName) facts.push(`Assigned to / last handled by: ${detection.teamMemberName}`);
+  if (detection.lastActivityAt) {
+    const hoursAgo = Math.round((Date.now() - new Date(detection.lastActivityAt).getTime()) / (1000 * 60 * 60));
+    facts.push(`Last logged activity: ${hoursAgo} hours ago (${new Date(detection.lastActivityAt).toLocaleDateString()})`);
+  }
+  if (detection.lastStageChangeAt) {
+    const daysAgo = Math.round((Date.now() - new Date(detection.lastStageChangeAt).getTime()) / (1000 * 60 * 60 * 24));
+    facts.push(`Stage changed: ${daysAgo} days ago`);
+  }
+  if (detection.propertyAddress) facts.push(`Property: ${detection.propertyAddress}`);
   
   try {
     const response = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: `You are a real estate wholesaling Acquisition Manager reviewing your team's pipeline for missed deals.
-Generate a brief, direct explanation and actionable next step.
+          content: `You write brief signal descriptions for a real estate wholesaling team's pipeline review tool.
 
-RULES:
-- Reason: 1-2 sentences explaining what happened and why it matters. Be specific to this lead.
-- Suggestion: 1 sentence with a SPECIFIC action to take right now.
-- Write like a manager talking to their team, not a robot.
-- Reference the contact name and stage if available.`
+CRITICAL RULES:
+- ONLY state facts that are provided in the data below. NEVER assume or infer what happened.
+- Use phrases like "no follow-up has been logged" instead of "we completely missed it" or "the team dropped the ball."
+- If you don't know whether the team took action, say "no activity was logged" — do NOT say they failed or missed it.
+- The tone should be neutral and informative, like a CRM status update — not accusatory or dramatic.
+- Tier context: "${tierLabel}" — ${ruleDesc?.tier === "missed" ? "This appears to be a gap that needs attention." : ruleDesc?.tier === "at_risk" ? "This lead may need re-engagement." : "This is flagged for the owner to review and potentially help the team."}
+- Reason: 1-2 factual sentences about what the data shows. Reference the contact name.
+- Suggestion: 1 sentence with a specific next action.
+- Keep it concise and professional.`
         },
         {
           role: "user",
-          content: `Detection: ${ruleDesc?.label || detection.triggerRules[0]}
-Context: ${ruleDesc?.context || ""}
-Contact: ${detection.contactName || "Unknown"}
-Current Stage: ${detection.ghlPipelineStageName || "Unknown"}
-Last Activity: ${detection.lastActivityAt?.toISOString() || "Unknown"}
-Transcript excerpt: ${detection.transcriptExcerpt.substring(0, 300) || "N/A"}
+          content: `Signal type: ${ruleDesc?.label || detection.triggerRules[0]}
+What the data shows: ${ruleDesc?.context || ""}
+Tier: ${tierLabel}
 
-Generate JSON with "reason" and "suggestion" fields.`
+Facts from the system:
+${facts.join("\n")}
+
+Transcript excerpt (if available): ${detection.transcriptExcerpt ? detection.transcriptExcerpt.substring(0, 400) : "No transcript available"}
+
+Generate JSON with "reason" and "suggestion" fields. Remember: ONLY state what the data shows, never assume.`
         }
       ],
       response_format: {
@@ -1310,8 +1345,8 @@ Generate JSON with "reason" and "suggestion" fields.`
           schema: {
             type: "object",
             properties: {
-              reason: { type: "string", description: "1-2 sentence explanation" },
-              suggestion: { type: "string", description: "1 sentence specific action" }
+              reason: { type: "string", description: "1-2 factual sentences about what the data shows" },
+              suggestion: { type: "string", description: "1 sentence specific next action" }
             },
             required: ["reason", "suggestion"],
             additionalProperties: false
@@ -1328,10 +1363,10 @@ Generate JSON with "reason" and "suggestion" fields.`
     console.error("[OpportunityDetection] LLM error:", error);
   }
 
-  // Fallback
+  // Fallback: use the factual context string directly
   return {
     reason: ruleDesc?.context || `${detection.triggerRules[0]} detected for ${detection.contactName || "this lead"}.`,
-    suggestion: "Review this lead and take action — there may be a deal here that's being missed."
+    suggestion: `Review ${detection.contactName || "this lead"} and determine if follow-up is needed.`
   };
 }
 
