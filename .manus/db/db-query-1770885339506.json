@@ -1,0 +1,88 @@
+{
+  "query": "SELECT id, name, slug, createdAt FROM tenants ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, slug, createdAt FROM tenants ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "slug": "nah",
+      "createdAt": "2026-02-03 08:42:11"
+    },
+    {
+      "id": "150008",
+      "name": "VELNO MEDIA GROUP",
+      "slug": "velno-media-group-1a4a27a3",
+      "createdAt": "2026-02-05 05:53:30"
+    },
+    {
+      "id": "180001",
+      "name": "VELNO MEDIA GROUP",
+      "slug": "velno-media-group-f24c6212",
+      "createdAt": "2026-02-11 04:01:24"
+    },
+    {
+      "id": "210001",
+      "name": "Viddix",
+      "slug": "viddix-4db2fb9e",
+      "createdAt": "2026-02-11 21:07:24"
+    },
+    {
+      "id": "240004",
+      "name": "Pipeline Test Co",
+      "slug": "pipeline-test-co-1770883561398",
+      "createdAt": "2026-02-12 08:06:01"
+    },
+    {
+      "id": "240005",
+      "name": "Stage Mapping Test Co",
+      "slug": "stage-mapping-test-1770883562302",
+      "createdAt": "2026-02-12 08:06:02"
+    },
+    {
+      "id": "240006",
+      "name": "Pipeline Test Co",
+      "slug": "pipeline-test-co-1770883643754",
+      "createdAt": "2026-02-12 08:07:24"
+    },
+    {
+      "id": "240007",
+      "name": "Stage Mapping Test Co",
+      "slug": "stage-mapping-test-1770883644736",
+      "createdAt": "2026-02-12 08:07:24"
+    },
+    {
+      "id": "240008",
+      "name": "Test Wholesalers LLC",
+      "slug": "test-wholesalers",
+      "createdAt": "2026-02-12 08:07:34"
+    },
+    {
+      "id": "240009",
+      "name": "No CRM Company",
+      "slug": "no-crm-company",
+      "createdAt": "2026-02-12 08:07:34"
+    },
+    {
+      "id": "240010",
+      "name": "Bulk Test Company",
+      "slug": "bulk-test-company",
+      "createdAt": "2026-02-12 08:07:34"
+    },
+    {
+      "id": "240011",
+      "name": "Pipeline Test Co",
+      "slug": "pipeline-test-co-1770883657769",
+      "createdAt": "2026-02-12 08:07:38"
+    },
+    {
+      "id": "240012",
+      "name": "Stage Mapping Test Co",
+      "slug": "stage-mapping-test-1770883658685",
+      "createdAt": "2026-02-12 08:07:38"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tslug\tcreatedAt\n1\tNew Again Houses\tnah\t2026-02-03 08:42:11\n150008\tVELNO MEDIA GROUP\tvelno-media-group-1a4a27a3\t2026-02-05 05:53:30\n180001\tVELNO MEDIA GROUP\tvelno-media-group-f24c6212\t2026-02-11 04:01:24\n210001\tViddix\tviddix-4db2fb9e\t2026-02-11 21:07:24\n240004\tPipeline Test Co\tpipeline-test-co-1770883561398\t2026-02-12 08:06:01\n240005\tStage Mapping Test Co\tstage-mapping-test-1770883562302\t2026-02-12 08:06:02\n240006\tPipeline Test Co\tpipeline-test-co-1770883643754\t2026-02-12 08:07:24\n240007\tStage Mapping Test Co\tstage-mapping-test-1770883644736\t2026-02-12 08:07:24\n240008\tTest Wholesalers LLC\ttest-wholesalers\t2026-02-12 08:07:34\n240009\tNo CRM Company\tno-crm-company\t2026-02-12 08:07:34\n240010\tBulk Test Company\tbulk-test-company\t2026-02-12 08:07:34\n240011\tPipeline Test Co\tpipeline-test-co-1770883657769\t2026-02-12 08:07:38\n240012\tStage Mapping Test Co\tstage-mapping-test-1770883658685\t2026-02-12 08:07:38\n",
+  "stderr": "",
+  "execution_time_ms": 347
+}
