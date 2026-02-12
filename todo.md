@@ -1513,3 +1513,8 @@
 - [x] Fix criteria badge evaluation parsing to handle array format [{name, score, maxPoints}]
 - [x] Re-evaluated all criteria badges from existing call data
 - [x] Also fixed Lead Manager criteria badges (Script Starter, Motivation Miner, etc.)
+
+## New Badge - Rapport Builder
+- [x] Add 'Rapport Builder' badge for high score in Introduction & Rapport criteria (8+/10, Lead Manager only)
+- [x] Seed badge tiers in database (bronze: 25, silver: 100, gold: 500)
+- [x] Re-evaluated existing calls: Daniel 9/25, Chris 3/25

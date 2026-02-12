@@ -115,6 +115,15 @@ export const LEAD_MANAGER_BADGES: BadgeDefinition[] = [
     criteria: { type: "criteria_score", criteriaName: "Tonality & Empathy", minScore: 9 },
   },
   {
+    code: "rapport_builder",
+    name: "Rapport Builder",
+    description: "Score 8+/10 on Introduction & Rapport",
+    icon: "🤝",
+    category: "lead_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "criteria_score", criteriaName: "Introduction & Rapport", minScore: 8 },
+  },
+  {
     code: "volume_dialer",
     name: "Volume Dialer",
     description: "Weeks with 100+ graded calls",
