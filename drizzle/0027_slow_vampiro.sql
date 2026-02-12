@@ -1,0 +1,1 @@
+ALTER TABLE `calls` MODIFY COLUMN `callType` enum('cold_call','qualification','follow_up','offer','seller_callback','admin_callback') DEFAULT 'qualification';

@@ -1461,3 +1461,14 @@
 - [x] Add Outcome tag to call cards (colored tag next to score)
 - [x] Add AI call type suggestion from transcript
 - [x] Add manual call type selection/override
+
+## Call History Redesign v2 (Updated Spec)
+- [x] Split callback into seller_callback and admin_callback (6 call types total)
+- [x] Implement Follow-Up rubric (7 criteria, critical failure cap at 50%, talk ratio ≥50%)
+- [x] Implement Seller Callback rubric (8 criteria, critical failure cap at 50%, talk ratio ≥60%)
+- [x] Implement Admin Callback rubric (5 criteria, no critical failures, exclude from leaderboard)
+- [x] Add critical failure detection and score capping logic to grading engine
+- [x] Update rubric routing for 6 call types
+- [x] Update AI call type detection to distinguish seller_callback vs admin_callback
+- [x] Update frontend call type options, filters, and badges for 6 types
+- [x] Update CallDetail page for 6 call types

@@ -373,7 +373,7 @@ export const appRouter = router({
         duration: z.number().optional(),
         teamMemberId: z.number(),
         teamMemberName: z.string().optional(),
-        callType: z.enum(["cold_call", "qualification", "follow_up", "offer", "callback"]).optional(),
+        callType: z.enum(["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback"]).optional(),
       }))
       .mutation(async ({ input }) => {
         const call = await createCall({
@@ -574,7 +574,7 @@ export const appRouter = router({
     updateCallType: protectedProcedure
       .input(z.object({
         callId: z.number(),
-        callType: z.enum(["cold_call", "qualification", "follow_up", "offer", "callback"]),
+        callType: z.enum(["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback"]),
         regrade: z.boolean().optional(), // Whether to re-grade with the new rubric
       }))
       .mutation(async ({ input }) => {

@@ -226,7 +226,7 @@ export const calls = mysqlTable("calls", {
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   // Call type - now references tenant_call_types for custom types
-  callType: mysqlEnum("callType", ["cold_call", "qualification", "follow_up", "offer", "callback"]).default("qualification"),
+  callType: mysqlEnum("callType", ["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback"]).default("qualification"),
   tenantCallTypeId: int("tenantCallTypeId").references(() => tenantCallTypes.id), // Custom call type
   // How the call type was determined
   callTypeSource: mysqlEnum("callTypeSource", ["ai_suggested", "manual", "auto"]).default("ai_suggested"),
@@ -275,7 +275,7 @@ export const callGrades = mysqlTable("call_grades", {
   // Summary
   summary: text("summary"),
   // Which rubric was used (legacy)
-  rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager", "lead_generator", "follow_up", "callback"]).notNull(),
+  rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager", "lead_generator", "follow_up", "seller_callback", "admin_callback"]).notNull(),
   // Custom rubric reference
   tenantRubricId: int("tenantRubricId").references(() => tenantRubrics.id),
   // Timestamps

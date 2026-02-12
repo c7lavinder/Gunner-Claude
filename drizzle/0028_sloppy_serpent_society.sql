@@ -1,0 +1,1 @@
+ALTER TABLE `call_grades` MODIFY COLUMN `rubricType` enum('lead_manager','acquisition_manager','lead_generator','follow_up','seller_callback','admin_callback') NOT NULL;

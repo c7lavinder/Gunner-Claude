@@ -148,7 +148,9 @@ export async function generateTeamInsights(tenantId?: number): Promise<InsightsR
     "qualification": "lead_manager",
     "follow_up": "lead_manager",
     "offer": "acquisition_manager",
-    "callback": "lead_manager",
+    "seller_callback": "lead_manager",
+    "admin_callback": "lead_manager",
+    "callback": "lead_manager", // Legacy
     // Legacy mappings
     "lead_generation": "lead_generator",
     "acquisition": "acquisition_manager",

@@ -133,7 +133,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
     const teamMemberName = extractField<string>(payload, "userName", "user_name");
     let teamMemberId: number | undefined;
     let resolvedTeamMemberName: string | undefined = teamMemberName;
-    let callType: "cold_call" | "qualification" | "follow_up" | "offer" | "callback" = "qualification";
+    let callType: "cold_call" | "qualification" | "follow_up" | "offer" | "seller_callback" | "admin_callback" = "qualification";
     let tenantId: number | null = null;
     
     // First try to match by GHL User ID

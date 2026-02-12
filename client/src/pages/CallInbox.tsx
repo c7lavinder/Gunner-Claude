@@ -91,7 +91,8 @@ const CALL_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   qualification: { label: "Qualification", color: "bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800" },
   follow_up: { label: "Follow-Up", color: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800" },
   offer: { label: "Offer", color: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800" },
-  callback: { label: "Callback", color: "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800" },
+  seller_callback: { label: "Seller Callback", color: "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800" },
+  admin_callback: { label: "Admin Callback", color: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800" },
 };
 
 const OUTCOME_LABELS: Record<string, { label: string; color: string }> = {
@@ -486,6 +487,7 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
+  const [selectedCallType, setSelectedCallType] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
 
   const { data: teamMembers } = trpc.team.list.useQuery();
@@ -507,6 +509,7 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
     setContactName("");
     setContactPhone("");
     setPropertyAddress("");
+    setSelectedCallType("");
     setIsUploading(false);
   };
 
@@ -640,6 +643,23 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
               value={propertyAddress}
               onChange={(e) => setPropertyAddress(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Call Type <span className="text-xs text-muted-foreground">(optional — AI will auto-detect if not set)</span></Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={selectedCallType}
+              onChange={(e) => setSelectedCallType(e.target.value)}
+            >
+              <option value="">Auto-detect from transcript</option>
+              <option value="cold_call">Cold Call</option>
+              <option value="qualification">Qualification</option>
+              <option value="follow_up">Follow-Up</option>
+              <option value="offer">Offer</option>
+              <option value="seller_callback">Seller Callback</option>
+              <option value="admin_callback">Admin Callback</option>
+            </select>
           </div>
         </div>
         <DialogFooter>
@@ -949,13 +969,14 @@ export default function CallInbox() {
     return Array.from(members).sort().map(name => ({ value: name, label: name }));
   }, [gradedCalls]);
 
-  // Call type options - all 5 types
+  // Call type options - all 6 types
   const callTypeOptions = [
     { value: "cold_call", label: "Cold Call" },
     { value: "qualification", label: "Qualification" },
     { value: "follow_up", label: "Follow-Up" },
     { value: "offer", label: "Offer" },
-    { value: "callback", label: "Callback" },
+    { value: "seller_callback", label: "Seller Callback" },
+    { value: "admin_callback", label: "Admin Callback" },
   ];
 
   // Outcome options

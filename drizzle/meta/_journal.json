@@ -190,6 +190,20 @@
       "when": 1770870237996,
       "tag": "0026_gorgeous_roxanne_simpson",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1770871390496,
+      "tag": "0027_slow_vampiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1770871840111,
+      "tag": "0028_sloppy_serpent_society",
+      "breakpoints": true
     }
   ]
 }

@@ -194,6 +194,193 @@ export const LEAD_GENERATOR_RUBRIC = {
   ],
 };
 
+// ============ FOLLOW-UP CALL RUBRIC ============
+
+export const FOLLOW_UP_RUBRIC = {
+  name: "Follow-Up Call Rubric",
+  description: "For re-engagement calls where the lead went cold, said 'call me later', or needs nurturing. Full qualification already happened — this is about restarting the conversation and advancing the deal. Based on the NAH Follow-Up Script.",
+  criteria: [
+    {
+      name: "Referenced Previous Conversation & Property",
+      maxPoints: 10,
+      description: "Mentioned date of last call, address, what was discussed. Shows the seller they're not just another number.",
+      keyPhrases: ["last time we spoke", "we talked about", "your property at", "when we last connected"],
+    },
+    {
+      name: "Anchored the Previous Offer",
+      maxPoints: 15,
+      description: "'We put an offer on the table at $X.' Most reps skip this and dance around price. Script leads with it deliberately.",
+      keyPhrases: ["put an offer", "we offered", "the number was", "our offer of"],
+    },
+    {
+      name: "Re-confirmed Decision Maker",
+      maxPoints: 10,
+      description: "'Is it still just you making the call, or is anyone else involved?' Deals die when you're talking to the wrong person on follow-up.",
+      keyPhrases: ["still just you", "anyone else involved", "decision maker", "spouse", "partner"],
+    },
+    {
+      name: "Re-qualified Motivation/Timeline",
+      maxPoints: 15,
+      description: "'You mentioned [motivation]. Is that still the situation? Has anything changed?' Not full re-qualification — just checking for shifts.",
+      keyPhrases: ["you mentioned", "still the situation", "has anything changed", "still looking to", "timeline"],
+    },
+    {
+      name: "Surfaced Roadblocks",
+      maxPoints: 15,
+      description: "'What's been the biggest thing holding you back?' Then PAUSED and let them speak. The pause is critical — score whether the rep fills silence or lets the seller process.",
+      keyPhrases: ["holding you back", "what's been stopping", "what's preventing", "biggest concern"],
+    },
+    {
+      name: "Pushed for a Decision",
+      maxPoints: 20,
+      description: "The reality check close — 'Is that a yes or a no for you today?' Binary by design. Score whether the rep actually asked for the decision, not just 'set a next step.'",
+      keyPhrases: ["yes or no", "where do you stand", "are you ready", "what's your decision", "move forward"],
+    },
+    {
+      name: "Handled Objection / Set Concrete Next Step",
+      maxPoints: 15,
+      description: "If no → 'What would need to change for this to make sense?' If not ready → 'When I check back in, what should I come prepared with?' Must be specific, not vague.",
+      keyPhrases: ["what would need to change", "what should I come prepared with", "next step", "specific date"],
+    },
+  ],
+  redFlags: [
+    "Never referenced the previous offer amount",
+    "Never asked for a decision",
+    "Talked through the seller's silence after the roadblock question",
+    "Didn't identify/confirm who the decision maker is",
+    "Ran a full qualification script instead of a targeted follow-up",
+    "No concrete next step set",
+  ],
+  criticalFailures: [
+    "Never referenced the previous offer amount",
+    "Never asked for a decision",
+    "Talked through the seller's silence after the roadblock question",
+    "Didn't identify/confirm who the decision maker is",
+  ],
+  criticalFailureCap: 50, // Cap score at 50% if any critical failure
+  talkRatioTarget: 50, // Seller should talk ≥50% of the time
+};
+
+// ============ SELLER CALLBACK RUBRIC ============
+
+export const SELLER_CALLBACK_RUBRIC = {
+  name: "Seller Callback Rubric",
+  description: "For inbound calls where the seller called YOU back. This is a high-intent signal — they're ready to talk, have questions, or want to move. The goal is to capitalize on their momentum and lock down next steps.",
+  criteria: [
+    {
+      name: "Acknowledged They Called Back",
+      maxPoints: 10,
+      description: "'Thanks for calling back' or 'Glad you reached out.' Don't treat it like a cold call.",
+      keyPhrases: ["thanks for calling", "glad you reached out", "appreciate you calling", "good to hear from you"],
+    },
+    {
+      name: "Asked What Prompted the Callback",
+      maxPoints: 15,
+      description: "'What made you reach out?' Reveals their current headspace — got another offer? Ready to move? Just had questions? Huge intel.",
+      keyPhrases: ["what made you", "what prompted", "what's going on", "what can I help with", "why are you calling"],
+    },
+    {
+      name: "Matched Energy to Their Intent",
+      maxPoints: 10,
+      description: "If they're ready to go, don't slow them down with a full qualification script. If they have questions, answer them. Read the room.",
+      keyPhrases: [],
+    },
+    {
+      name: "Filled Gaps in Info",
+      maxPoints: 15,
+      description: "They called back, but you might still be missing property details, timeline, price expectations. Get what you need without interrogating.",
+      keyPhrases: ["can you tell me about", "what's the situation with", "timeline", "price", "condition"],
+    },
+    {
+      name: "Moved Toward Commitment",
+      maxPoints: 20,
+      description: "Appointment, offer, walkthrough, contract. They called YOU — the momentum is there. Don't waste it.",
+      keyPhrases: ["schedule", "walkthrough", "offer", "next step", "move forward", "appointment"],
+    },
+    {
+      name: "Handled Their Specific Questions/Concerns",
+      maxPoints: 15,
+      description: "They usually call back with something specific on their mind. Did the rep address it directly?",
+      keyPhrases: [],
+    },
+    {
+      name: "Set Firm Next Step with Timeline",
+      maxPoints: 10,
+      description: "Not 'we'll be in touch.' A date, a time, a specific action.",
+      keyPhrases: ["specific date", "tomorrow at", "this week", "I'll send", "by Friday"],
+    },
+    {
+      name: "Talk Ratio — Seller Talks More",
+      maxPoints: 5,
+      description: "They called for a reason. Let them tell you what it is.",
+      keyPhrases: [],
+    },
+  ],
+  redFlags: [
+    "Ran a full cold call script on someone who called back",
+    "Didn't ask why they're calling",
+    "Let them hang up without a next step",
+    "Talked over the seller",
+    "Missed the seller's urgency signals",
+  ],
+  criticalFailures: [
+    "Ran a full cold call script on someone who called back",
+    "Didn't ask why they're calling",
+    "Let them hang up without a next step",
+  ],
+  criticalFailureCap: 50, // Cap score at 50% if any critical failure
+  talkRatioTarget: 60, // Seller should talk ≥60% of the time
+};
+
+// ============ ADMIN CALLBACK RUBRIC ============
+
+export const ADMIN_CALLBACK_RUBRIC = {
+  name: "Admin Callback Rubric",
+  description: "For operational calls about documents, scheduling, closing details, title info, walkthrough times. These are NOT sales calls — they're task execution. Scored on a simple checklist. Scores are tracked but can be excluded from the main leaderboard rankings.",
+  criteria: [
+    {
+      name: "Stated Purpose of Call Clearly",
+      maxPoints: 20,
+      description: "Got to the point — 'I'm calling about [specific thing].'",
+      keyPhrases: ["I'm calling about", "reason for my call", "following up on", "wanted to check on"],
+    },
+    {
+      name: "Got the Info/Action Needed",
+      maxPoints: 30,
+      description: "Did the call accomplish its objective? Did they get the document, answer, confirmation, or scheduling done?",
+      keyPhrases: [],
+    },
+    {
+      name: "Confirmed Next Step + Timeline",
+      maxPoints: 25,
+      description: "Clear on what happens next and when. 'We'll have the contract over by Thursday' not 'we'll send it soon.'",
+      keyPhrases: ["by Thursday", "tomorrow", "this week", "next step is", "I'll send", "you'll receive"],
+    },
+    {
+      name: "Professional Tone",
+      maxPoints: 10,
+      description: "Courteous, clear, not rushed or dismissive.",
+      keyPhrases: [],
+    },
+    {
+      name: "Kept It Tight",
+      maxPoints: 15,
+      description: "Didn't ramble, go off-topic, or waste the seller's time. Admin calls should be efficient.",
+      keyPhrases: [],
+    },
+  ],
+  redFlags: [
+    "Rambling or going off-topic",
+    "Not confirming next steps",
+    "Vague timeline ('soon', 'when we can')",
+    "Dismissive or rushed tone",
+  ],
+  // No critical failures for admin callbacks — low-stakes calls
+  criticalFailures: [] as string[],
+  criticalFailureCap: 0, // Not applicable
+  excludeFromLeaderboard: true, // Track but don't weight in rep scores
+};
+
 // ============ GRADING FUNCTION ============
 
 // Must match the callOutcome enum in drizzle/schema.ts
@@ -231,7 +418,7 @@ function getGradeFromScore(score: number): "A" | "B" | "C" | "D" | "F" {
   return "F";
 }
 
-export type GradableCallType = "cold_call" | "qualification" | "follow_up" | "offer" | "callback";
+export type GradableCallType = "cold_call" | "qualification" | "follow_up" | "offer" | "seller_callback" | "admin_callback";
 
 export async function gradeCall(
   transcript: string,
@@ -243,15 +430,22 @@ export async function gradeCall(
     recentFeedback?: { feedbackType: string | null; explanation: string | null; correctBehavior: string | null }[];
   }
 ): Promise<GradingResult> {
-  // Rubric mapping:
+  // Rubric mapping (6 call types → 6 rubrics):
   // cold_call → Lead Generator rubric (generating interest, NOT setting appointments)
   // qualification → Lead Manager rubric (qualifying leads, setting appointments)
-  // follow_up → placeholder (uses Lead Manager rubric until custom rubric is defined)
+  // follow_up → Follow-Up rubric (re-engagement, anchoring previous offer, pushing for decision)
   // offer → Acquisition Manager rubric (presenting offers, closing deals)
-  // callback → placeholder (uses Lead Manager rubric until custom rubric is defined)
-  const rubric = callType === "cold_call" ? LEAD_GENERATOR_RUBRIC 
-    : callType === "offer" ? ACQUISITION_MANAGER_RUBRIC 
-    : LEAD_MANAGER_RUBRIC; // qualification, follow_up, callback all use Lead Manager rubric for now
+  // seller_callback → Seller Callback rubric (inbound high-intent, capitalize on momentum)
+  // admin_callback → Admin Callback rubric (operational task execution, simple checklist)
+  const rubricMap: Record<GradableCallType, { name: string; description: string; criteria: { name: string; maxPoints: number; description: string; keyPhrases: string[] }[]; redFlags: string[]; criticalFailures?: string[]; criticalFailureCap?: number; talkRatioTarget?: number; disqualificationTarget?: string; excludeFromLeaderboard?: boolean }> = {
+    cold_call: LEAD_GENERATOR_RUBRIC,
+    qualification: LEAD_MANAGER_RUBRIC,
+    follow_up: FOLLOW_UP_RUBRIC,
+    offer: ACQUISITION_MANAGER_RUBRIC,
+    seller_callback: SELLER_CALLBACK_RUBRIC,
+    admin_callback: ADMIN_CALLBACK_RUBRIC,
+  };
+  const rubric = rubricMap[callType] || LEAD_MANAGER_RUBRIC;
 
   // Build training materials context
   let trainingContext = "";
@@ -281,10 +475,11 @@ export async function gradeCall(
   const systemPrompt = `You are an expert sales coach for a real estate wholesaling company called Nashville Area Home Buyers. 
 Your job is to analyze phone call transcripts and grade them based on a specific rubric.
 
-You are grading a ${callType === "cold_call" ? "Cold Call (Lead Generation)" : callType === "qualification" ? "Qualification/Diagnosis" : callType === "follow_up" ? "Follow-Up" : callType === "callback" ? "Callback (Inbound)" : "Offer"} call made by ${teamMemberName}.
+You are grading a ${callType === "cold_call" ? "Cold Call (Lead Generation)" : callType === "qualification" ? "Qualification/Diagnosis" : callType === "follow_up" ? "Follow-Up" : callType === "seller_callback" ? "Seller Callback (Inbound)" : callType === "admin_callback" ? "Admin Callback (Operational)" : "Offer"} call made by ${teamMemberName}.
 ${callType === "cold_call" ? "\nIMPORTANT: This is a Lead Generator cold call. The goal of this call is NOT to set appointments. The goal is to identify motivated sellers and generate interest in selling their property. A Lead Manager will follow up to qualify and set appointments. Grade accordingly." : ""}
-${callType === "follow_up" ? "\nIMPORTANT: This is a Follow-Up call. The rep is re-engaging a known lead — they may skip qualification steps by design. Do NOT penalize for skipping introduction or qualification steps that were already completed on a previous call. Focus on re-engagement quality, progress toward next steps, and maintaining rapport." : ""}
-${callType === "callback" ? "\nIMPORTANT: This is a Callback — the seller called us back. The dynamic is different because the seller initiated contact, showing interest. Do NOT penalize for abbreviated introductions. Focus on how well the rep capitalized on the seller's initiative and moved the conversation forward." : ""}
+${callType === "follow_up" ? "\nIMPORTANT: This is a Follow-Up call. The rep is re-engaging a known lead who went cold or said 'call me later.' Full qualification already happened. Do NOT penalize for skipping qualification steps. Focus on: referencing the previous conversation, anchoring the previous offer, surfacing roadblocks (and PAUSING to let the seller speak), and pushing for a binary decision. Talk ratio target: seller should talk ≥50%.\n\nCRITICAL FAILURES (cap score at 50% max if any of these occur):\n- Never referenced the previous offer amount\n- Never asked for a decision\n- Talked through the seller's silence after the roadblock question\n- Didn't identify/confirm who the decision maker is" : ""}
+${callType === "seller_callback" ? "\nIMPORTANT: This is a Seller Callback — the seller called US back. This is a high-intent signal. The dynamic is completely different from outbound calls. Do NOT run a cold call or full qualification script. Focus on: acknowledging they called back, asking what prompted the callback, matching energy to their intent, and moving toward commitment. Talk ratio target: seller should talk ≥60%.\n\nCRITICAL FAILURES (cap score at 50% max if any of these occur):\n- Ran a full cold call script on someone who called back\n- Didn't ask why they're calling\n- Let them hang up without a next step" : ""}
+${callType === "admin_callback" ? "\nIMPORTANT: This is an Admin Callback — an operational call about documents, scheduling, closing details, or other administrative tasks. This is NOT a sales call. Score on task execution: did they state the purpose clearly, get what they needed, confirm next steps with a timeline, maintain professional tone, and keep it efficient? No critical failures — these are low-stakes calls." : ""}
 
 RUBRIC: ${rubric.name}
 ${rubric.description}
@@ -414,7 +609,23 @@ CALL OUTCOME DEFINITIONS:
     // Calculate overall score
     const totalPoints = parsed.criteriaScores.reduce((sum: number, c: any) => sum + c.score, 0);
     const maxPoints = parsed.criteriaScores.reduce((sum: number, c: any) => sum + c.maxPoints, 0);
-    const overallScore = maxPoints > 0 ? (totalPoints / maxPoints) * 100 : 0;
+    let overallScore = maxPoints > 0 ? (totalPoints / maxPoints) * 100 : 0;
+
+    // Apply critical failure cap if applicable
+    // Some rubrics (Follow-Up, Seller Callback) cap the score at 50% if critical failures are detected
+    const rubricWithCriticalFailures = rubric;
+    const critFailures = rubricWithCriticalFailures.criticalFailures;
+    const critCap = rubricWithCriticalFailures.criticalFailureCap;
+    if (critFailures && critFailures.length > 0 && critCap && critCap > 0) {
+      const detectedRedFlags = parsed.redFlags || [];
+      const hasCriticalFailure = critFailures.some((cf: string) =>
+        detectedRedFlags.some((rf: string) => rf.toLowerCase().includes(cf.toLowerCase().substring(0, 30)))
+      );
+      if (hasCriticalFailure && overallScore > critCap) {
+        console.log(`[Grading] Critical failure detected for ${callType} call. Capping score from ${overallScore.toFixed(1)}% to ${critCap}%`);
+        overallScore = critCap;
+      }
+    }
 
     return {
       overallScore: Math.round(overallScore * 100) / 100,
@@ -623,13 +834,15 @@ export async function detectCallType(
 CALL TYPES:
 1. "cold_call" - First contact with a homeowner. The caller is reaching out to someone who hasn't spoken with the company before. The goal is to gauge interest in selling, NOT to set appointments. Signs: introducing the company, asking if they've thought about selling, no prior relationship mentioned.
 
-2. "qualification" - A follow-up qualification/diagnosis call with a lead who has already expressed some interest. The caller is digging deeper into motivation, property condition, timeline, price expectations, and potentially setting an appointment for a walkthrough. Signs: references to previous conversation, detailed questions about property/situation, price discussion, appointment setting.
+2. "qualification" - A qualification/diagnosis call with a lead who has already expressed some interest. The caller is digging deeper into motivation, property condition, timeline, price expectations, and potentially setting an appointment for a walkthrough. Signs: detailed questions about property/situation, price discussion, appointment setting.
 
-3. "follow_up" - Re-engaging a known lead after a previous conversation. The caller is checking in, providing updates, or re-establishing contact. Signs: "just following up", "checking in", references to previous offer or conversation, shorter call.
+3. "follow_up" - Re-engaging a known lead after a previous conversation where an offer was already discussed. The caller is checking in, referencing a previous offer, or trying to get a decision. Signs: "just following up", "checking in", references to previous offer amount, "last time we spoke", anchoring a previous price.
 
-4. "offer" - Presenting a formal offer to the seller. The caller is delivering a specific price, discussing terms, and trying to close. Signs: specific dollar amounts, "walk away with", contract discussion, closing language.
+4. "offer" - Presenting a formal offer to the seller for the FIRST TIME. The caller is delivering a specific price, discussing terms, and trying to close. Signs: specific dollar amounts, "walk away with", contract discussion, closing language, first-time price presentation.
 
-5. "callback" - The seller called the company back (inbound). The seller initiated this contact. Signs: seller says "I got your letter/postcard/voicemail", "you called me earlier", seller is asking questions about the process.
+5. "seller_callback" - INBOUND call where the seller called the company back. High-intent signal. Signs: seller says "I got your letter/postcard/voicemail", "you called me earlier", seller is asking questions, seller initiated the contact. The rep should acknowledge the callback and capitalize on momentum.
+
+6. "admin_callback" - OUTBOUND operational call about documents, scheduling, closing details, title info, walkthrough times. NOT a sales call. Signs: discussing DocuSign, purchase agreements, scheduling inspections, coordinating closing dates, helping with paperwork, vendor coordination. No active selling happening.
 
 The team member's role is: ${teamMemberRole || "unknown"}. Use this as a hint but let the transcript content be the primary signal.
 
@@ -650,7 +863,7 @@ Respond with JSON only.`,
             properties: {
               callType: {
                 type: "string",
-                enum: ["cold_call", "qualification", "follow_up", "offer", "callback"],
+                enum: ["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback"],
               },
               confidence: {
                 type: "number",
@@ -829,7 +1042,8 @@ export async function processCall(callId: number): Promise<void> {
     const rubricType = callType === "cold_call" ? "lead_generator" as const
       : callType === "offer" ? "acquisition_manager" as const
       : callType === "follow_up" ? "follow_up" as const
-      : callType === "callback" ? "callback" as const
+      : callType === "seller_callback" ? "seller_callback" as const
+      : callType === "admin_callback" ? "admin_callback" as const
       : "lead_manager" as const;
 
     // Step 5: Save grade
