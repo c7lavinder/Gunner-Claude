@@ -1603,3 +1603,9 @@
 - [x] Tier 3 - Worth a Look: High seller talk-time ratio but got DQ'd (motivation was there)
 - [x] Update opportunities UI to reflect new pipeline-based detection types
 - [x] Write and run vitest tests for new detection engine (88 tests, all passing)
+
+## Opportunity Detection Auto-Run Fix
+- [x] Fix automatic opportunity detection to run on startup and hourly without manual trigger
+- [x] Verify detection runs and populates opportunities automatically
+- [x] Tighten backward_movement_no_call rule: only flag Warm/Hot leads moved to Follow Up without calls or communication
+- [x] Drop backward_movement_no_call rule (too noisy without stage history from GHL)

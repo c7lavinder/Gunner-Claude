@@ -216,7 +216,10 @@ async function fetchContactById(creds: GHLCredentials, contactId: string): Promi
  * TIER 1 — MISSED DEALS (urgent, money left on table)
  */
 
-// Rule 1: Lead moved backward from active to follow-up without outbound call
+// Rule 1: Lead moved to Follow Up without any calls or communication
+// Simple rule: if a lead is now in a Follow Up stage, the move was recent (7 days),
+// and there were ZERO calls (inbound or outbound) in the 48 hours before the move,
+// then nobody talked to this person before shelving them.
 async function detectBackwardMovement(
   opp: GHLPipelineOpportunity,
   stageName: string,
@@ -226,35 +229,33 @@ async function detectBackwardMovement(
   const stageClass = classifyStage(stageName);
   if (stageClass !== "follow_up") return null;
 
-  // Check if this opportunity was recently in an active stage
-  // We detect this by looking at lastStageChangeAt — if it's recent (within 7 days),
-  // the lead was likely moved from an active stage
+  // Must have a recent stage change (within 7 days)
   const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null;
   if (!stageChangeAt) return null;
   
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   if (stageChangeAt < sevenDaysAgo) return null;
 
-  // Check if there was an outbound call to this contact around the stage change
-  const contactCalls = await db
-    .select()
+  // Check if there was ANY call (inbound or outbound) in the 48 hours before the move
+  const recentCalls = await db
+    .select({ id: calls.id })
     .from(calls)
     .where(
       and(
         eq(calls.tenantId, tenantId),
         eq(calls.ghlContactId, opp.contactId),
-        eq(calls.callDirection, "outbound"),
-        gte(calls.callTimestamp, new Date(stageChangeAt.getTime() - 24 * 60 * 60 * 1000))
+        gte(calls.callTimestamp, new Date(stageChangeAt.getTime() - 48 * 60 * 60 * 1000)),
+        sql`${calls.callTimestamp} <= ${stageChangeAt}`
       )
     )
     .limit(1);
 
-  if (contactCalls.length > 0) return null; // They did call before moving
+  if (recentCalls.length > 0) return null; // Someone talked to them before moving — that's fine
 
   return {
     tier: "missed",
     triggerRules: ["backward_movement_no_call"],
-    priorityScore: 75,
+    priorityScore: 80,
     contactName: opp.name || opp.contact?.name || null,
     contactPhone: opp.contact?.phone || null,
     propertyAddress: null,
@@ -1165,6 +1166,7 @@ async function isAlreadyFlagged(
 ): Promise<boolean> {
   if (!ghlContactId) return false;
 
+  // Check if this contact already has an active or recently handled/dismissed opportunity with the same rule
   const existing = await db
     .select({ id: opportunities.id })
     .from(opportunities)
@@ -1172,8 +1174,9 @@ async function isAlreadyFlagged(
       and(
         eq(opportunities.tenantId, tenantId),
         eq(opportunities.ghlContactId, ghlContactId),
-        eq(opportunities.status, "active"),
-        sql`JSON_CONTAINS(${opportunities.triggerRules}, ${JSON.stringify(triggerRule)})`
+        sql`JSON_CONTAINS(${opportunities.triggerRules}, ${JSON.stringify(triggerRule)})`,
+        // Don't re-flag if active, or handled/dismissed in last 30 days
+        sql`(${opportunities.status} = 'active' OR (${opportunities.status} IN ('handled', 'dismissed') AND ${opportunities.resolvedAt} > DATE_SUB(NOW(), INTERVAL 30 DAY)))`
       )
     )
     .limit(1);
@@ -1256,9 +1259,10 @@ async function scanTenant(
       for (const opp of allOpps) {
         const stageName = stageMap.get(opp.pipelineStageId) || "Unknown";
 
-        // Rule 1: Backward movement
-        const backward = await detectBackwardMovement(opp, stageName, db, tenantId);
-        if (backward) detections.push(backward);
+        // Rule 1: Backward movement — DISABLED (too noisy without GHL stage history)
+        // Will revisit once we can reliably determine prior stage
+        // const backward = await detectBackwardMovement(opp, stageName, db, tenantId);
+        // if (backward) detections.push(backward);
 
         // Rule 4: Offer no follow-up
         const offerStale = await detectOfferNoFollowUp(opp, stageName, db, tenantId);
@@ -1299,12 +1303,8 @@ async function scanTenant(
         followUpContactMap.set(opp.contactId, { opp, stageName });
       }
 
-      // Also check backward movement in Follow Up pipeline
-      for (const opp of followUpOpps) {
-        const stageName = followUpStageMap.get(opp.pipelineStageId) || "Unknown";
-        const backward = await detectBackwardMovement(opp, stageName, db, tenantId);
-        if (backward) detections.push(backward);
-      }
+      // Note: backward movement check only runs on Sales Process pipeline
+      // Follow Up pipeline leads are expected to be in follow-up stages
     }
   } catch (pipelineError) {
     console.error(`[OpportunityDetection] Pipeline scan error:`, pipelineError);
@@ -1389,10 +1389,17 @@ async function scanTenant(
   // ========== PHASE 4: DEDUPLICATE & SAVE ==========
   console.log(`[OpportunityDetection] Phase 4: Saving ${detections.length} potential detections for tenant ${tenantId}`);
 
+  // In-memory dedup: prevent same contact+rule from being saved multiple times in one scan
+  const seenInThisScan = new Set<string>();
+
   for (const detection of detections) {
     try {
       // Skip if already flagged
       const primaryRule = detection.triggerRules[0];
+      const dedupKey = `${detection.ghlContactId || detection.contactPhone || detection.contactName}::${primaryRule}`;
+      if (seenInThisScan.has(dedupKey)) continue;
+      seenInThisScan.add(dedupKey);
+
       if (await isAlreadyFlagged(db, tenantId, detection.ghlContactId, primaryRule)) {
         continue;
       }
