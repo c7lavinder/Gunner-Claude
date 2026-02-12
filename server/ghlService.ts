@@ -11,6 +11,7 @@ import { runArchivalJob } from "./archival";
 import { generateTeamInsights } from "./insights";
 import { createTeamTrainingItem } from "./db";
 import { getTenantsWithCrm, parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
+import { runOpportunityDetection } from "./opportunityDetection";
 
 // GHL API Configuration
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
@@ -549,6 +550,10 @@ let lastArchivalTime: Date | null = null;
 let insightsInterval: ReturnType<typeof setInterval> | null = null;
 let lastInsightsTime: Date | null = null;
 
+// Hourly opportunity detection
+let opportunityDetectionInterval: ReturnType<typeof setInterval> | null = null;
+let lastOpportunityDetectionTime: Date | null = null;
+
 /**
  * Check if it's Monday morning (6 AM) and run insights generation
  */
@@ -691,6 +696,30 @@ export function startPolling(intervalMinutes: number = 30): void {
       checkAndRunWeeklyInsights().catch(err => console.error("[Insights] Hourly check error:", err));
     }, 60 * 60 * 1000); // 1 hour
   }
+
+  // Start hourly opportunity detection
+  if (!opportunityDetectionInterval) {
+    console.log("[OpportunityDetection] Starting hourly opportunity detection scheduler");
+    // Run initial detection after a 5-minute delay (let other services settle)
+    setTimeout(() => {
+      runOpportunityDetection()
+        .then(result => {
+          lastOpportunityDetectionTime = new Date();
+          console.log(`[OpportunityDetection] Initial run: detected ${result.detected}, errors ${result.errors}`);
+        })
+        .catch(err => console.error("[OpportunityDetection] Initial run error:", err));
+    }, 5 * 60 * 1000); // Wait 5 minutes after startup
+
+    // Then run every hour
+    opportunityDetectionInterval = setInterval(() => {
+      runOpportunityDetection()
+        .then(result => {
+          lastOpportunityDetectionTime = new Date();
+          console.log(`[OpportunityDetection] Hourly run: detected ${result.detected}, errors ${result.errors}`);
+        })
+        .catch(err => console.error("[OpportunityDetection] Hourly run error:", err));
+    }, 60 * 60 * 1000); // 1 hour
+  }
 }
 
 /**
@@ -713,6 +742,11 @@ export function stopPolling(): void {
     clearInterval(insightsInterval);
     insightsInterval = null;
     console.log("[Insights] Weekly insights scheduler stopped");
+  }
+  if (opportunityDetectionInterval) {
+    clearInterval(opportunityDetectionInterval);
+    opportunityDetectionInterval = null;
+    console.log("[OpportunityDetection] Hourly detection stopped");
   }
 }
 

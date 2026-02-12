@@ -1574,3 +1574,12 @@
 - [x] Audit log table (coach_action_log) and history endpoint
 - [x] Permission checks per role (tenant-scoped, auth required)
 - [x] Error handling: contact not found, API down, rate limiting
+
+## GHL Credentials & Cron Setup
+- [x] Update GHL API key and Location ID in database for tenant 1
+- [x] Verify GHL connection works with new credentials
+- [x] Set up hourly opportunity detection cron job
+- [x] Test AI Coach actions end-to-end
+
+## Bug Fixes - AI Coach Actions
+- [x] Fix contactId undefined when executing AI Coach actions (contact name resolved but ID not passed)

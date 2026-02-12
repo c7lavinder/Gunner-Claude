@@ -320,34 +320,46 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
   if (action.status !== "confirmed") throw new Error("Action must be confirmed before execution");
 
   const payload = action.payload as any;
+  // Use targetContactId from the action log as the authoritative contact ID
+  // (payload.contactId from LLM may be empty; the real ID is resolved during contact search)
+  const contactId = action.targetContactId || payload.contactId;
+  const opportunityId = action.targetOpportunityId || payload.opportunityId;
   
   try {
     let result: any;
 
     switch (action.actionType) {
       case "add_note_contact":
-        result = await addNoteToContact(action.tenantId, payload.contactId, payload.noteBody);
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        result = await addNoteToContact(action.tenantId, contactId, payload.noteBody);
         break;
       case "add_note_opportunity":
-        result = await addNoteToOpportunity(action.tenantId, payload.opportunityId, payload.noteBody);
+        if (!opportunityId) throw new Error("No opportunity ID available.");
+        result = await addNoteToOpportunity(action.tenantId, opportunityId, payload.noteBody);
         break;
       case "change_pipeline_stage":
-        result = await changePipelineStage(action.tenantId, payload.opportunityId, payload.pipelineId, payload.stageId);
+        if (!opportunityId) throw new Error("No opportunity ID available.");
+        result = await changePipelineStage(action.tenantId, opportunityId, payload.pipelineId, payload.stageId);
         break;
       case "send_sms":
-        result = await sendSms(action.tenantId, payload.contactId, payload.message);
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        result = await sendSms(action.tenantId, contactId, payload.message);
         break;
       case "create_task":
-        result = await createTask(action.tenantId, payload.contactId, payload.title, payload.description, payload.dueDate);
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        result = await createTask(action.tenantId, contactId, payload.title, payload.description, payload.dueDate);
         break;
       case "add_tag":
-        result = await addTag(action.tenantId, payload.contactId, payload.tags);
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        result = await addTag(action.tenantId, contactId, payload.tags);
         break;
       case "remove_tag":
-        result = await removeTag(action.tenantId, payload.contactId, payload.tags);
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        result = await removeTag(action.tenantId, contactId, payload.tags);
         break;
       case "update_field":
-        result = await updateContactField(action.tenantId, payload.contactId, payload.fieldKey, payload.fieldValue);
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        result = await updateContactField(action.tenantId, contactId, payload.fieldKey, payload.fieldValue);
         break;
       default:
         throw new Error(`Unknown action type: ${action.actionType}`);
