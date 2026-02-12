@@ -1609,3 +1609,5 @@
 - [x] Verify detection runs and populates opportunities automatically
 - [x] Tighten backward_movement_no_call rule: only flag Warm/Hot leads moved to Follow Up without calls or communication
 - [x] Drop backward_movement_no_call rule (too noisy without stage history from GHL)
+- [x] Rename "Opportunities" page to "Signals" across entire UI (sidebar, page title, headings)
+- [x] Persist Call History filters in URL so back button from call detail restores filters

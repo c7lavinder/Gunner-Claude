@@ -161,7 +161,7 @@ export default function Opportunities() {
 
   const runDetectionMutation = trpc.opportunities.runDetection.useMutation({
     onSuccess: (result) => {
-      toast.success(`Pipeline scan complete — found ${result.detected} new opportunities`);
+      toast.success(`Pipeline scan complete — found ${result.detected} new signals`);
       refetchList();
       refetchCounts();
     },
@@ -201,7 +201,7 @@ export default function Opportunities() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Pipeline Opportunities</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Pipeline Signals</h1>
           <p className="text-muted-foreground mt-1">
             Deals your team might be missing — detected from pipeline activity, conversations, and call data
           </p>
@@ -306,8 +306,8 @@ export default function Opportunities() {
                   <h3 className="text-lg font-semibold">Pipeline Looks Clean</h3>
                   <p className="text-muted-foreground mt-1">
                     {activeTab === "all"
-                      ? "No missed opportunities detected. Scan the pipeline to check for new ones."
-                      : `No ${tierConfig[activeTab as keyof typeof tierConfig]?.label.toLowerCase()} opportunities found.`}
+                      ? "No missed signals detected. Scan the pipeline to check for new ones."
+                      : `No ${tierConfig[activeTab as keyof typeof tierConfig]?.label.toLowerCase()} signals found.`}
                   </p>
                   <Button
                     variant="outline"
@@ -349,7 +349,7 @@ export default function Opportunities() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold text-sm">
-                                {rule?.label || primaryRule || "Opportunity"}
+                                {rule?.label || primaryRule || "Signal"}
                               </span>
                               <Badge variant={config.badgeVariant} className="text-[10px] px-1.5 py-0">
                                 {config.label}
@@ -404,7 +404,7 @@ export default function Opportunities() {
 
                             {/* AI Reason (always visible) */}
                             <p className="text-sm mt-2 text-foreground/80">
-                              {opp.reason || "Opportunity detected from pipeline activity."}
+                              {opp.reason || "Signal detected from pipeline activity."}
                             </p>
                           </div>
                         </div>

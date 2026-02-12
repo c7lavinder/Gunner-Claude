@@ -193,12 +193,10 @@ export default function CallDetail() {
       <div className="flex flex-col items-center justify-center py-16">
         <Phone className="h-16 w-16 text-muted-foreground/50 mb-4" />
         <h3 className="text-lg font-semibold mb-2">Call not found</h3>
-        <Link href="/calls">
-          <Button variant="outline">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Inbox
-          </Button>
-        </Link>
+        <Button variant="outline" onClick={() => window.history.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Inbox
+        </Button>
       </div>
     );
   }
@@ -218,11 +216,9 @@ export default function CallDetail() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/calls">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
+        <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">
             {call.contactName || call.contactPhone || "Unknown Contact"}

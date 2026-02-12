@@ -47,7 +47,7 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Phone, label: "Call History", path: "/calls" },
     { icon: BarChart3, label: "Analytics", path: "/analytics" },
-    { icon: AlertTriangle, label: "Opportunities", path: "/opportunities" },
+    { icon: AlertTriangle, label: "Signals", path: "/opportunities" },
     { icon: BookOpen, label: "Training", path: "/training" },
   ];
   

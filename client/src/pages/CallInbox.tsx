@@ -37,7 +37,7 @@ import {
   ChevronRight,
   Tag
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -57,7 +57,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Streamdown } from "streamdown";
@@ -1093,18 +1093,54 @@ const PAGE_SIZE = 25;
 
 export default function CallInbox() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("calls");
-  const [page, setPage] = useState(0);
+  const searchString = useSearch();
+  const [, setLocation] = useLocation();
+
+  // Parse initial filter state from URL query params
+  const initialParams = useMemo(() => {
+    const sp = new URLSearchParams(searchString);
+    return {
+      tab: sp.get('tab') || 'calls',
+      page: parseInt(sp.get('page') || '0', 10),
+      team: sp.get('team') ? sp.get('team')!.split(',') : [],
+      types: sp.get('types') ? sp.get('types')!.split(',') : [],
+      outcomes: sp.get('outcomes') ? sp.get('outcomes')!.split(',') : [],
+      scores: sp.get('scores') ? sp.get('scores')!.split(',') : [],
+      date: sp.get('date') || '1d',
+    };
+  }, []); // Only parse once on mount
+
+  const [activeTab, setActiveTab] = useState(initialParams.tab);
+  const [page, setPage] = useState(initialParams.page);
   const utils = trpc.useUtils();
 
   // Filter states
-  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
-  const [selectedCallTypes, setSelectedCallTypes] = useState<string[]>([]);
-  const [selectedOutcomes, setSelectedOutcomes] = useState<string[]>([]);
-  const [selectedScoreRanges, setSelectedScoreRanges] = useState<string[]>([]);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>(initialParams.team);
+  const [selectedCallTypes, setSelectedCallTypes] = useState<string[]>(initialParams.types);
+  const [selectedOutcomes, setSelectedOutcomes] = useState<string[]>(initialParams.outcomes);
+  const [selectedScoreRanges, setSelectedScoreRanges] = useState<string[]>(initialParams.scores);
 
-  const [dateRange, setDateRange] = useState<string>("1d");
-  const [showFilters, setShowFilters] = useState(false);
+  const [dateRange, setDateRange] = useState<string>(initialParams.date);
+  const [showFilters, setShowFilters] = useState(
+    initialParams.team.length > 0 || initialParams.types.length > 0 || 
+    initialParams.outcomes.length > 0 || initialParams.scores.length > 0 || 
+    initialParams.date !== '1d'
+  );
+
+  // Sync filter state to URL query params (replaceState to avoid polluting history)
+  useEffect(() => {
+    const sp = new URLSearchParams();
+    if (activeTab !== 'calls') sp.set('tab', activeTab);
+    if (page > 0) sp.set('page', String(page));
+    if (selectedTeamMembers.length > 0) sp.set('team', selectedTeamMembers.join(','));
+    if (selectedCallTypes.length > 0) sp.set('types', selectedCallTypes.join(','));
+    if (selectedOutcomes.length > 0) sp.set('outcomes', selectedOutcomes.join(','));
+    if (selectedScoreRanges.length > 0) sp.set('scores', selectedScoreRanges.join(','));
+    if (dateRange !== '1d') sp.set('date', dateRange);
+    const qs = sp.toString();
+    const newUrl = qs ? `/calls?${qs}` : '/calls';
+    window.history.replaceState(null, '', newUrl);
+  }, [activeTab, page, selectedTeamMembers, selectedCallTypes, selectedOutcomes, selectedScoreRanges, dateRange]);
 
   // Compute date range
   const dateFilter = useMemo(() => {
