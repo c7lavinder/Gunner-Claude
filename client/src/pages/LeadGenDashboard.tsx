@@ -95,8 +95,8 @@ export default function LeadGenDashboard() {
   });
 
   // Filter to only show this user's calls (for now show all until we have proper team member linking)
-  const myCalls = calls || [];
-  const myGradedCalls = myCalls.filter(c => c.status === "completed" && c.classification === "conversation");
+  const myCalls = calls?.items || [];
+  const myGradedCalls = myCalls.filter((c: any) => c.status === "completed" && c.classification === "conversation");
   
   // Calculate stats
   const today = new Date();
@@ -348,7 +348,7 @@ export default function LeadGenDashboard() {
         <CardContent>
           {recentCalls.length > 0 ? (
             <div className="space-y-3">
-              {recentCalls.map((call) => {
+              {recentCalls.map((call: any) => {
                 const timeAgo = formatDistanceToNow(new Date(call.createdAt), { addSuffix: true });
                 return (
                   <Link key={call.id} href={`/calls/${call.id}`}>

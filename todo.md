@@ -1443,3 +1443,21 @@
 - [x] Add graceful retry logic with exponential backoff
 - [x] Improve error handling for SocketError/timeout scenarios
 - [x] Prepare exact request format details for BatchDialer support team
+
+## Call History Page Redesign
+- [x] Expand callType enum to 5 types: cold_call, qualification, follow_up, offer, callback
+- [x] Add callOutcome field to calls table (AI-extracted with manual override)
+- [x] Add callTypeSource field (ai_suggested, manual, auto) to track how type was set
+- [x] Build multi-rubric routing infrastructure (call type → rubric mapping)
+- [x] Map Cold Call → Lead Generator rubric, Qualification → Lead Manager rubric
+- [x] Create placeholder rubrics for Follow-Up, Offer, Callback
+- [x] Add AI outcome detection during grading (extract outcome from transcript)
+- [x] Add manual outcome override support for admins
+- [x] Redesign tabs: All Calls, Needs Review, Skipped (3 tabs instead of 6)
+- [x] Add Date Range filter (default Last 7 days)
+- [x] Add Outcome filter
+- [x] Add pagination (25 per page, lazy load)
+- [x] Add Property Address pill to call cards
+- [x] Add Outcome tag to call cards (colored tag next to score)
+- [x] Add AI call type suggestion from transcript
+- [x] Add manual call type selection/override

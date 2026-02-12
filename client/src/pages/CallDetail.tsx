@@ -535,9 +535,35 @@ export default function CallDetail() {
                       Outbound
                     </Badge>
                   )}
-                  <Badge variant="secondary" className="capitalize">
-                    {call.callType === "offer" ? "Offer Call" : "Qualification Call"}
+                  <Badge variant="secondary" className={`capitalize ${
+                    call.callType === 'cold_call' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200' :
+                    call.callType === 'qualification' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200' :
+                    call.callType === 'follow_up' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' :
+                    call.callType === 'offer' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' :
+                    call.callType === 'callback' ? 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200' : ''
+                  }`}>
+                    {call.callType === 'cold_call' ? 'Cold Call' :
+                     call.callType === 'qualification' ? 'Qualification' :
+                     call.callType === 'follow_up' ? 'Follow-Up' :
+                     call.callType === 'offer' ? 'Offer' :
+                     call.callType === 'callback' ? 'Callback' :
+                     String(call.callType || '').replace(/_/g, ' ') || 'Unknown'}
                   </Badge>
+                  {(call as any).callOutcome && (call as any).callOutcome !== 'pending' && (
+                    <Badge variant="outline" className="capitalize">
+                      {(call as any).callOutcome?.replace(/_/g, ' ')}
+                    </Badge>
+                  )}
+                  {call.propertyAddress && (
+                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800">
+                      {call.propertyAddress}
+                    </Badge>
+                  )}
+                  {(call as any).callTypeSource === 'ai_detected' && (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                      AI-detected type
+                    </Badge>
+                  )}
                 </div>
               </CardContent>
             </Card>

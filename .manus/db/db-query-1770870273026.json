@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `call_grades` MODIFY COLUMN `rubricType` enum('lead_manager','acquisition_manager','lead_generator','follow_up','callback') NOT NULL;\nALTER TABLE `calls` MODIFY COLUMN `callType` enum('cold_call','qualification','follow_up','offer','callback') DEFAULT 'qualification';\nALTER TABLE `calls` MODIFY COLUMN `callOutcome` enum('none','appointment_set','offer_made','callback_scheduled','interested','left_vm','no_answer','not_interested','dead') DEFAULT 'none';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE `call_grades` MODIFY COLUMN `rubricType` enum('lead_manager','acquisition_manager','lead_generator','follow_up','callback') NOT NULL;\nALTER TABLE `calls` MODIFY COLUMN `callType` enum('cold_call','qualification','follow_up','offer','callback') DEFAULT 'qualification';\nALTER TABLE `calls` MODIFY COLUMN `callOutcome` enum('none','appointment_set','offer_made','callback_scheduled','interested','left_vm','no_answer','not_interested','dead') DEFAULT 'none';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1400
+}

@@ -12,7 +12,7 @@ vi.mock("./db", () => ({
   getTrainingMaterials: vi.fn().mockResolvedValue([
     { id: 1, title: "Test Training", content: "Training content" },
   ]),
-  getCallsWithGrades: vi.fn().mockResolvedValue([
+  getCallsWithGrades: vi.fn().mockResolvedValue({ items: [
     {
       id: 1,
       contactName: "Test Contact",
@@ -25,7 +25,7 @@ vi.mock("./db", () => ({
         improvements: ["Follow up faster"],
       },
     },
-  ]),
+  ], total: 1 }),
 }));
 
 describe("Meeting Facilitator", () => {

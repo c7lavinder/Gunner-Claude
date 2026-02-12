@@ -144,12 +144,15 @@ export async function generateTeamInsights(tenantId?: number): Promise<InsightsR
 
   // Map call types to team roles
   const callTypeToRole: Record<string, string> = {
+    "cold_call": "lead_generator",
     "qualification": "lead_manager",
     "follow_up": "lead_manager",
+    "offer": "acquisition_manager",
+    "callback": "lead_manager",
+    // Legacy mappings
+    "lead_generation": "lead_generator",
     "acquisition": "acquisition_manager",
     "negotiation": "acquisition_manager",
-    "lead_generation": "lead_generator",
-    "cold_call": "lead_generator",
   };
 
   // Get team member roles from the database

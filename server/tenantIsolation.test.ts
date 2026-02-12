@@ -20,7 +20,9 @@ describe("Tenant Isolation", () => {
       const { getCallsWithGrades } = await import("./db");
       // Verify function accepts tenantId parameter
       const result = await getCallsWithGrades({ tenantId: 1, limit: 1 });
-      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveProperty('items');
+      expect(result).toHaveProperty('total');
+      expect(Array.isArray(result.items)).toBe(true);
     });
 
     it("getTeamMembers should filter by tenantId", async () => {

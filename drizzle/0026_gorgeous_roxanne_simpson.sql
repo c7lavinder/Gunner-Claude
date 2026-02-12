@@ -1,0 +1,4 @@
+ALTER TABLE `call_grades` MODIFY COLUMN `rubricType` enum('lead_manager','acquisition_manager','lead_generator','follow_up','callback') NOT NULL;--> statement-breakpoint
+ALTER TABLE `calls` MODIFY COLUMN `callType` enum('cold_call','qualification','follow_up','offer','callback') DEFAULT 'qualification';--> statement-breakpoint
+ALTER TABLE `calls` MODIFY COLUMN `callOutcome` enum('none','appointment_set','offer_made','callback_scheduled','interested','left_vm','no_answer','not_interested','dead') DEFAULT 'none';--> statement-breakpoint
+ALTER TABLE `calls` ADD `callTypeSource` enum('ai_suggested','manual','auto') DEFAULT 'ai_suggested';

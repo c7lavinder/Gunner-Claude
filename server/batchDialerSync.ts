@@ -160,7 +160,7 @@ export async function syncBatchDialerCalls(): Promise<{
           duration: bdCall.duration,
           teamMemberId,
           teamMemberName,
-          callType: teamMemberName && ["Alex Diaz", "Efren Valenzuela", "Mirna Razo"].some(n => teamMemberName.toLowerCase().includes(n.split(" ")[0].toLowerCase())) ? "lead_generation" : "qualification", // Lead Generators get lead_generation, Lead Managers get qualification
+          callType: teamMemberName && ["Alex Diaz", "Efren Valenzuela", "Mirna Razo"].some(n => teamMemberName.toLowerCase().includes(n.split(" ")[0].toLowerCase())) ? "cold_call" : "qualification", // Lead Generators get cold_call, Lead Managers get qualification
           status: "pending",
           callTimestamp: new Date(bdCall.callStartTime),
           callSource: "batchdialer",

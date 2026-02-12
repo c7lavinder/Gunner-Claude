@@ -133,7 +133,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
     const teamMemberName = extractField<string>(payload, "userName", "user_name");
     let teamMemberId: number | undefined;
     let resolvedTeamMemberName: string | undefined = teamMemberName;
-    let callType: "qualification" | "offer" = "qualification";
+    let callType: "cold_call" | "qualification" | "follow_up" | "offer" | "callback" = "qualification";
     let tenantId: number | null = null;
     
     // First try to match by GHL User ID
@@ -142,7 +142,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
       if (teamMember) {
         teamMemberId = teamMember.id;
         resolvedTeamMemberName = teamMember.name;
-        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
+        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification";
         tenantId = teamMember.tenantId;
         console.log(`[Webhook] Matched team member by GHL User ID: ${teamMember.name} (${ghlUserId})`);
       }
@@ -153,7 +153,7 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
       const teamMember = await getTeamMemberByName(teamMemberName);
       if (teamMember) {
         teamMemberId = teamMember.id;
-        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
+        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification";
         tenantId = teamMember.tenantId;
         console.log(`[Webhook] Matched team member by name: ${teamMember.name}`);
       }

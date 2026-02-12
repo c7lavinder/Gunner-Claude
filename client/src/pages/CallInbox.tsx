@@ -30,7 +30,12 @@ import {
   CloudOff,
   Filter,
   ChevronDown,
-  X
+  X,
+  MapPin,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Tag
 } from "lucide-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -81,8 +86,33 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const CALL_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  cold_call: { label: "Cold Call", color: "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800" },
+  qualification: { label: "Qualification", color: "bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800" },
+  follow_up: { label: "Follow-Up", color: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800" },
+  offer: { label: "Offer", color: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800" },
+  callback: { label: "Callback", color: "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800" },
+};
+
+const OUTCOME_LABELS: Record<string, { label: string; color: string }> = {
+  interested: { label: "Interested", color: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300" },
+  not_interested: { label: "Not Interested", color: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
+  appointment_set: { label: "Apt Set", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
+  callback_scheduled: { label: "Callback", color: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
+  offer_made: { label: "Offer Made", color: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
+  offer_accepted: { label: "Offer Accepted", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
+  offer_rejected: { label: "Offer Rejected", color: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
+  left_voicemail: { label: "Voicemail", color: "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300" },
+  no_answer: { label: "No Answer", color: "bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400" },
+  wrong_number: { label: "Wrong #", color: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300" },
+  do_not_call: { label: "DNC", color: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
+  other: { label: "Other", color: "bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400" },
+};
+
 function CallCard({ call, grade }: { call: any; grade: any }) {
   const timeAgo = call.createdAt ? formatDistanceToNow(new Date(call.createdAt), { addSuffix: true }) : "Unknown";
+  const callTypeInfo = CALL_TYPE_LABELS[call.callType] || CALL_TYPE_LABELS.qualification;
+  const outcomeInfo = call.callOutcome ? OUTCOME_LABELS[call.callOutcome] : null;
   
   return (
     <Link href={`/calls/${call.id}`}>
@@ -94,7 +124,7 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
                 <h3 className="font-semibold text-sm sm:text-base truncate">
                   {call.contactName || call.contactPhone || "Unknown Contact"}
                 </h3>
-                {/* Hide direction badge on mobile */}
+                {/* Call direction badge - hidden on mobile */}
                 {call.callDirection === "inbound" ? (
                   <Badge variant="outline" className="hidden sm:flex text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
                     <PhoneIncoming className="h-3 w-3 mr-1" />
@@ -106,10 +136,15 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
                     Outbound
                   </Badge>
                 )}
-                {call.callType === "offer" ? (
-                  <Badge variant="secondary" className="text-[10px] sm:text-xs">Offer</Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] sm:text-xs">Qualification</Badge>
+                {/* Call type badge */}
+                <Badge variant="outline" className={`text-[10px] sm:text-xs ${callTypeInfo.color}`}>
+                  {callTypeInfo.label}
+                </Badge>
+                {/* Outcome tag */}
+                {outcomeInfo && (
+                  <Badge variant="secondary" className={`text-[10px] sm:text-xs ${outcomeInfo.color}`}>
+                    {outcomeInfo.label}
+                  </Badge>
                 )}
               </div>
               
@@ -133,10 +168,14 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
                 <span className="sm:hidden text-[10px]">{timeAgo}</span>
               </div>
 
+              {/* Property address pill */}
               {call.propertyAddress && (
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1 truncate hidden sm:block">
-                  {call.propertyAddress}
-                </p>
+                <div className="mt-1.5">
+                  <Badge variant="outline" className="text-[10px] sm:text-xs font-normal bg-muted/50 border-muted-foreground/20">
+                    <MapPin className="h-3 w-3 mr-1 shrink-0" />
+                    <span className="truncate max-w-[200px] sm:max-w-[300px]">{call.propertyAddress}</span>
+                  </Badge>
+                </div>
               )}
             </div>
 
@@ -773,16 +812,70 @@ function MultiSelectFilter({
   );
 }
 
+const PAGE_SIZE = 25;
+
 export default function CallInbox() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("calls");
-  const { data: calls, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery({ limit: 50 });
+  const [page, setPage] = useState(0);
+  const utils = trpc.useUtils();
+
+  // Filter states
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  const [selectedCallTypes, setSelectedCallTypes] = useState<string[]>([]);
+  const [selectedOutcomes, setSelectedOutcomes] = useState<string[]>([]);
+  const [selectedScoreRanges, setSelectedScoreRanges] = useState<string[]>([]);
+  const [selectedDirections, setSelectedDirections] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<string>("7d");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Compute date range
+  const dateFilter = useMemo(() => {
+    const now = new Date();
+    let startDate: string | undefined;
+    if (dateRange === "1d") {
+      const d = new Date(now); d.setDate(d.getDate() - 1); startDate = d.toISOString();
+    } else if (dateRange === "7d") {
+      const d = new Date(now); d.setDate(d.getDate() - 7); startDate = d.toISOString();
+    } else if (dateRange === "30d") {
+      const d = new Date(now); d.setDate(d.getDate() - 30); startDate = d.toISOString();
+    } else if (dateRange === "90d") {
+      const d = new Date(now); d.setDate(d.getDate() - 90); startDate = d.toISOString();
+    }
+    // "all" = no date filter
+    return { startDate };
+  }, [dateRange]);
+
+  // Build query params for "All Calls" tab (graded calls with server-side filters)
+  const queryParams = useMemo(() => ({
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+    startDate: dateFilter.startDate,
+    statuses: ["completed"],
+    callTypes: selectedCallTypes.length > 0 ? selectedCallTypes : undefined,
+    outcomes: selectedOutcomes.length > 0 ? selectedOutcomes : undefined,
+    directions: selectedDirections.length > 0 ? selectedDirections : undefined,
+    teamMembers: selectedTeamMembers.length > 0 ? selectedTeamMembers : undefined,
+  }), [page, dateFilter, selectedCallTypes, selectedOutcomes, selectedDirections, selectedTeamMembers]);
+
+  const { data: callsData, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery(queryParams);
+  
+  // Separate query for needs review (pending + flagged) and skipped
+  const { data: reviewData, refetch: refetchReview } = trpc.calls.withGrades.useQuery({
+    limit: 100,
+    statuses: ["pending", "transcribing", "grading", "failed"],
+  });
+  const { data: skippedData, refetch: refetchSkipped } = trpc.calls.withGrades.useQuery({
+    limit: 100,
+    statuses: ["skipped"],
+  });
+
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
   const updateStatusMutation = trpc.feedback.updateStatus.useMutation();
   const reclassifyMutation = trpc.calls.reclassify.useMutation({
     onSuccess: () => {
       toast.success("Call reclassified - grading will begin shortly");
-      refetch();
+      handleRefresh();
     },
     onError: (error) => {
       toast.error(`Failed to reclassify: ${error.message}`);
@@ -795,22 +888,17 @@ export default function CallInbox() {
       } else {
         toast.info("No stuck calls found");
       }
-      refetch();
+      handleRefresh();
     },
     onError: (error) => {
       toast.error(`Failed to reset stuck calls: ${error.message}`);
     },
   });
-  const utils = trpc.useUtils();
-
-  // Filter states
-  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
-  const [selectedCallTypes, setSelectedCallTypes] = useState<string[]>([]);
-  const [selectedScoreRanges, setSelectedScoreRanges] = useState<string[]>([]);
-  const [selectedDirections, setSelectedDirections] = useState<string[]>([]);
 
   const handleRefresh = () => {
     refetch();
+    refetchReview();
+    refetchSkipped();
     utils.feedback.list.invalidate();
   };
 
@@ -819,22 +907,68 @@ export default function CallInbox() {
     utils.feedback.list.invalidate();
   };
 
+  // Paginated graded calls
+  const gradedCalls = callsData?.items || [];
+  const totalCalls = callsData?.total || 0;
+  const totalPages = Math.ceil(totalCalls / PAGE_SIZE);
+
+  // Apply client-side score filter (score isn't in the DB query)
+  const filteredGradedCalls = useMemo(() => {
+    if (selectedScoreRanges.length === 0) return gradedCalls;
+    return gradedCalls.filter((c: any) => {
+      const score = parseFloat(c.grade?.overallScore || "0");
+      return selectedScoreRanges.some(range => {
+        if (range === "high") return score >= 80;
+        if (range === "medium") return score >= 60 && score < 80;
+        if (range === "low") return score < 60;
+        return false;
+      });
+    });
+  }, [gradedCalls, selectedScoreRanges]);
+
+  // Needs Review items: pending/processing + failed + flagged feedback
+  const reviewItems = reviewData?.items || [];
+  const pendingCalls = reviewItems.filter((c: any) => c.status === "pending" || c.status === "transcribing" || c.status === "grading");
+  const failedCalls = reviewItems.filter((c: any) => c.status === "failed");
   const pendingFeedback = allFeedback?.filter(f => f.status === "pending") || [];
   const processedFeedback = allFeedback?.filter(f => f.status !== "pending") || [];
+  const needsReviewCount = pendingCalls.length + failedCalls.length + pendingFeedback.length;
 
-  // Get unique team members from calls for filter options
+  // Skipped calls
+  const skippedItems = skippedData?.items || [];
+  const skippedCalls = skippedItems.filter((c: any) => 
+    c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call")
+  );
+
+  // Get unique team members from current results for filter options
   const teamMemberOptions = useMemo(() => {
     const members = new Set<string>();
-    calls?.forEach(c => {
+    gradedCalls.forEach((c: any) => {
       if (c.teamMemberName) members.add(c.teamMemberName);
     });
     return Array.from(members).sort().map(name => ({ value: name, label: name }));
-  }, [calls]);
+  }, [gradedCalls]);
 
-  // Call type options
+  // Call type options - all 5 types
   const callTypeOptions = [
+    { value: "cold_call", label: "Cold Call" },
     { value: "qualification", label: "Qualification" },
-    { value: "offer", label: "Offer Call" },
+    { value: "follow_up", label: "Follow-Up" },
+    { value: "offer", label: "Offer" },
+    { value: "callback", label: "Callback" },
+  ];
+
+  // Outcome options
+  const outcomeOptions = [
+    { value: "interested", label: "Interested" },
+    { value: "not_interested", label: "Not Interested" },
+    { value: "appointment_set", label: "Appointment Set" },
+    { value: "callback_scheduled", label: "Callback Scheduled" },
+    { value: "offer_made", label: "Offer Made" },
+    { value: "offer_accepted", label: "Offer Accepted" },
+    { value: "offer_rejected", label: "Offer Rejected" },
+    { value: "left_voicemail", label: "Left Voicemail" },
+    { value: "no_answer", label: "No Answer" },
   ];
 
   // Score range options
@@ -850,62 +984,33 @@ export default function CallInbox() {
     { value: "outbound", label: "Outbound" },
   ];
 
-  // Separate graded calls from skipped/admin/failed/pending calls
-  const allGradedCalls = calls?.filter(c => c.status === "completed" && c.classification === "conversation") || [];
-  const adminCalls = calls?.filter(c => c.classification === "admin_call") || [];
-  const failedCalls = calls?.filter(c => c.status === "failed") || [];
-  const pendingCalls = calls?.filter(c => c.status === "pending" || c.status === "transcribing" || c.status === "grading") || [];
-  const skippedCalls = calls?.filter(c => 
-    (c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call")) && c.status !== "failed"
-  ) || [];
-
-  // Apply filters to graded calls
-  const gradedCalls = useMemo(() => {
-    let filtered = allGradedCalls;
-
-    // Filter by team member
-    if (selectedTeamMembers.length > 0) {
-      filtered = filtered.filter(c => c.teamMemberName && selectedTeamMembers.includes(c.teamMemberName));
-    }
-
-    // Filter by call type
-    if (selectedCallTypes.length > 0) {
-      filtered = filtered.filter(c => c.callType && selectedCallTypes.includes(c.callType));
-    }
-
-    // Filter by score range
-    if (selectedScoreRanges.length > 0) {
-      filtered = filtered.filter(c => {
-        const score = parseFloat(c.grade?.overallScore || "0");
-        return selectedScoreRanges.some(range => {
-          if (range === "high") return score >= 80;
-          if (range === "medium") return score >= 60 && score < 80;
-          if (range === "low") return score < 60;
-          return false;
-        });
-      });
-    }
-
-    // Filter by call direction
-    if (selectedDirections.length > 0) {
-      filtered = filtered.filter(c => c.callDirection && selectedDirections.includes(c.callDirection));
-    }
-
-    return filtered;
-  }, [allGradedCalls, selectedTeamMembers, selectedCallTypes, selectedScoreRanges, selectedDirections]);
+  // Date range options
+  const dateRangeOptions = [
+    { value: "1d", label: "Today" },
+    { value: "7d", label: "Last 7 Days" },
+    { value: "30d", label: "Last 30 Days" },
+    { value: "90d", label: "Last 90 Days" },
+    { value: "all", label: "All Time" },
+  ];
 
   // Check if any filters are active
   const hasActiveFilters = selectedTeamMembers.length > 0 || selectedCallTypes.length > 0 || 
-    selectedScoreRanges.length > 0 || selectedDirections.length > 0;
+    selectedScoreRanges.length > 0 || selectedDirections.length > 0 || selectedOutcomes.length > 0;
 
   const clearAllFilters = () => {
     setSelectedTeamMembers([]);
     setSelectedCallTypes([]);
     setSelectedScoreRanges([]);
     setSelectedDirections([]);
+    setSelectedOutcomes([]);
+    setPage(0);
   };
 
-  const [showFilters, setShowFilters] = useState(false);
+  // Reset page when filters change
+  const handleFilterChange = (setter: (v: string[]) => void) => (values: string[]) => {
+    setter(values);
+    setPage(0);
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -936,40 +1041,26 @@ export default function CallInbox() {
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Main Content - Calls and Feedback */}
         <div className="lg:col-span-2">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            {/* Mobile: Horizontal scroll tabs */}
+          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setPage(0); }}>
+            {/* 3 Clean Tabs */}
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
               <TabsList className="mb-4 w-max sm:w-auto">
-                {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                  <TabsTrigger value="pending" className="text-xs sm:text-sm px-2 sm:px-3">
-                    <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    <span className="hidden sm:inline">Pending </span>({pendingCalls.length})
-                  </TabsTrigger>
-                )}
-                <TabsTrigger value="calls" className="text-xs sm:text-sm px-2 sm:px-3">
+                <TabsTrigger value="calls" className="text-xs sm:text-sm px-3 sm:px-4">
                   <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">Graded </span>({gradedCalls.length})
+                  All Calls
+                  {totalCalls > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{totalCalls}</Badge>}
                 </TabsTrigger>
                 {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                  <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">
-                    Admin ({adminCalls.length})
+                  <TabsTrigger value="review" className="text-xs sm:text-sm px-3 sm:px-4">
+                    <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    Needs Review
+                    {needsReviewCount > 0 && <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0">{needsReviewCount}</Badge>}
                   </TabsTrigger>
                 )}
-                <TabsTrigger value="skipped" className="text-xs sm:text-sm px-2 sm:px-3">
-                  Skipped ({skippedCalls.length})
+                <TabsTrigger value="skipped" className="text-xs sm:text-sm px-3 sm:px-4">
+                  Skipped
+                  {skippedCalls.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{skippedCalls.length}</Badge>}
                 </TabsTrigger>
-                {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                  <TabsTrigger value="failed" className="text-xs sm:text-sm px-2 sm:px-3">
-                    <XCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    ({failedCalls.length})
-                  </TabsTrigger>
-                )}
-                {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                  <TabsTrigger value="feedback" className="text-xs sm:text-sm px-2 sm:px-3">
-                    <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    ({pendingFeedback.length})
-                  </TabsTrigger>
-                )}
               </TabsList>
             </div>
 
@@ -985,7 +1076,7 @@ export default function CallInbox() {
                 >
                   <span className="flex items-center gap-2">
                     <Filter className="h-4 w-4" />
-                    Filters {hasActiveFilters && `(${selectedTeamMembers.length + selectedCallTypes.length + selectedScoreRanges.length + selectedDirections.length})`}
+                    Filters {hasActiveFilters && `(${selectedTeamMembers.length + selectedCallTypes.length + selectedScoreRanges.length + selectedDirections.length + selectedOutcomes.length})`}
                   </span>
                   <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
                 </Button>
@@ -993,35 +1084,53 @@ export default function CallInbox() {
                 {/* Filter content - always visible on desktop, collapsible on mobile */}
                 <div className={`${showFilters ? 'block' : 'hidden'} sm:block`}>
                   <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/30 rounded-lg border">
-                    <div className="hidden sm:flex items-center gap-1 text-sm text-muted-foreground mr-2">
-                      <Filter className="h-4 w-4" />
-                      <span>Filters:</span>
-                    </div>
+                    {/* Date range selector */}
+                    <Select value={dateRange} onValueChange={(v) => { setDateRange(v); setPage(0); }}>
+                      <SelectTrigger className="h-8 w-auto min-w-[130px] border-dashed text-sm">
+                        <Calendar className="h-3.5 w-3.5 mr-2 opacity-50" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dateRangeOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <div className="hidden sm:block w-px h-6 bg-border" />
+
                     <MultiSelectFilter
                       label="Team Member"
                       options={teamMemberOptions}
                       selected={selectedTeamMembers}
-                      onChange={setSelectedTeamMembers}
+                      onChange={handleFilterChange(setSelectedTeamMembers)}
                       icon={User}
                     />
                     <MultiSelectFilter
                       label="Call Type"
                       options={callTypeOptions}
                       selected={selectedCallTypes}
-                      onChange={setSelectedCallTypes}
+                      onChange={handleFilterChange(setSelectedCallTypes)}
                       icon={Phone}
+                    />
+                    <MultiSelectFilter
+                      label="Outcome"
+                      options={outcomeOptions}
+                      selected={selectedOutcomes}
+                      onChange={handleFilterChange(setSelectedOutcomes)}
+                      icon={Tag}
                     />
                     <MultiSelectFilter
                       label="Score"
                       options={scoreRangeOptions}
                       selected={selectedScoreRanges}
-                      onChange={setSelectedScoreRanges}
+                      onChange={handleFilterChange(setSelectedScoreRanges)}
                     />
                     <MultiSelectFilter
                       label="Direction"
                       options={directionOptions}
                       selected={selectedDirections}
-                      onChange={setSelectedDirections}
+                      onChange={handleFilterChange(setSelectedDirections)}
                     />
                     {hasActiveFilters && (
                       <Button
@@ -1039,9 +1148,84 @@ export default function CallInbox() {
               </div>
             )}
 
-            <TabsContent value="pending" className="space-y-4">
-              {/* Show Reset Stuck button if there are calls stuck for more than 1 hour */}
-              {pendingCalls.some(c => 
+            {/* === TAB: All Calls (paginated, filtered) === */}
+            <TabsContent value="calls" className="space-y-4">
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Card key={i}>
+                      <CardContent className="p-4">
+                        <Skeleton className="h-20 w-full" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : filteredGradedCalls.length > 0 ? (
+                <>
+                  <div className="space-y-4">
+                    {filteredGradedCalls.map((item: any) => (
+                      <CallCard key={item.id} call={item} grade={item.grade} />
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <p className="text-sm text-muted-foreground">
+                        Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCalls)} of {totalCalls} calls
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage(p => Math.max(0, p - 1))}
+                          disabled={page === 0}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          <span className="hidden sm:inline ml-1">Previous</span>
+                        </Button>
+                        <span className="text-sm text-muted-foreground px-2">
+                          Page {page + 1} of {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                          disabled={page >= totalPages - 1}
+                        >
+                          <span className="hidden sm:inline mr-1">Next</span>
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-16">
+                    <Phone className="h-16 w-16 text-muted-foreground/50 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">
+                      {hasActiveFilters || dateRange !== "all" ? "No calls match filters" : "No graded calls yet"}
+                    </h3>
+                    <p className="text-muted-foreground text-center max-w-md">
+                      {hasActiveFilters || dateRange !== "all" 
+                        ? "Try adjusting your filters or expanding the date range."
+                        : "Calls will appear here once they're received and graded."}
+                    </p>
+                    {(hasActiveFilters || dateRange !== "all") && (
+                      <Button variant="outline" size="sm" className="mt-4" onClick={() => { clearAllFilters(); setDateRange("all"); }}>
+                        Clear all filters
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            {/* === TAB: Needs Review (pending + failed + flagged feedback) === */}
+            <TabsContent value="review" className="space-y-6">
+              {/* Stuck calls warning */}
+              {pendingCalls.some((c: any) => 
                 (c.status === 'transcribing' || c.status === 'grading') && 
                 c.updatedAt && 
                 new Date(c.updatedAt) < new Date(Date.now() - 60 * 60 * 1000)
@@ -1066,96 +1250,14 @@ export default function CallInbox() {
                   </Button>
                 </div>
               )}
-              {pendingCalls.length > 0 ? (
-                <div className="space-y-4">
-                  {pendingCalls.map((item) => (
-                    <Card key={item.id} className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold truncate">
-                                {item.contactName || item.contactPhone || "Unknown Contact"}
-                              </h3>
-                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                {item.status === "pending" ? "Queued" : item.status === "transcribing" ? "Transcribing" : "Grading"}
-                              </Badge>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                              {item.teamMemberName && (
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  {item.teamMemberName}
-                                </span>
-                              )}
-                              {item.duration && (
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
-                                </span>
-                              )}
-                              {item.createdAt && (
-                                <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center">
-                            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
-                    <CheckCircle className="h-16 w-16 text-green-500/50 mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No calls in queue</h3>
-                    <p className="text-muted-foreground text-center max-w-md">
-                      All calls have been processed. New calls will appear here when they're being transcribed or graded.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
 
-            <TabsContent value="calls" className="space-y-4">
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Card key={i}>
-                      <CardContent className="p-4">
-                        <Skeleton className="h-20 w-full" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : gradedCalls.length > 0 ? (
-                <div className="space-y-4">
-                  {gradedCalls.map((item) => (
-                    <CallCard key={item.id} call={item} grade={item.grade} />
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
-                    <Phone className="h-16 w-16 text-muted-foreground/50 mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No graded calls yet</h3>
-                    <p className="text-muted-foreground text-center max-w-md">
-                      Calls will appear here once they're received and graded via the GoHighLevel webhook.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="admin" className="space-y-4">
-              {adminCalls.length > 0 ? (
-                <div className="space-y-4">
-                  {adminCalls.map((item) => (
-                    <Link key={item.id} href={`/calls/${item.id}`}>
-                      <Card className="card-hover cursor-pointer">
+              {/* Processing calls */}
+              {pendingCalls.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Processing ({pendingCalls.length})</h3>
+                  <div className="space-y-3">
+                    {pendingCalls.map((item: any) => (
+                      <Card key={item.id} className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
@@ -1163,8 +1265,8 @@ export default function CallInbox() {
                                 <h3 className="font-semibold truncate">
                                   {item.contactName || item.contactPhone || "Unknown Contact"}
                                 </h3>
-                                <Badge variant="secondary" className="text-xs bg-gray-200 text-gray-700">
-                                  N/A
+                                <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                  {item.status === "pending" ? "Queued" : item.status === "transcribing" ? "Transcribing" : "Grading"}
                                 </Badge>
                               </div>
                               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -1184,35 +1286,103 @@ export default function CallInbox() {
                                   <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
                                 )}
                               </div>
+                            </div>
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Failed calls */}
+              {failedCalls.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Failed ({failedCalls.length})</h3>
+                  <div className="space-y-3">
+                    {failedCalls.map((item: any) => (
+                      <Card key={item.id} className="border-red-200 bg-red-50/30 dark:border-red-900 dark:bg-red-950/20">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold truncate">
+                                  {item.contactName || item.contactPhone || "Unknown Contact"}
+                                </h3>
+                                <Badge variant="destructive" className="text-xs">
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                  Failed
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                {item.teamMemberName && (
+                                  <span className="flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    {item.teamMemberName}
+                                  </span>
+                                )}
+                                {item.createdAt && (
+                                  <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
+                                )}
+                              </div>
                               {item.classificationReason && (
-                                <p className="text-sm text-muted-foreground mt-2 italic">
+                                <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                                  <AlertTriangle className="h-3 w-3 inline mr-1" />
                                   {item.classificationReason}
                                 </p>
                               )}
                             </div>
+                            <Link href={`/calls/${item.id}`}>
+                              <Button variant="outline" size="sm">
+                                View
+                                <ArrowRight className="h-4 w-4 ml-1" />
+                              </Button>
+                            </Link>
                           </div>
                         </CardContent>
                       </Card>
-                    </Link>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {/* Pending feedback */}
+              {pendingFeedback.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Flagged Feedback ({pendingFeedback.length})</h3>
+                  <div className="space-y-3">
+                    {pendingFeedback.map((feedback: any) => (
+                      <FeedbackCard
+                        key={feedback.id}
+                        feedback={feedback}
+                        onStatusChange={handleStatusChange}
+                        showActions
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {needsReviewCount === 0 && (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-16">
-                    <CheckCircle className="h-16 w-16 text-muted-foreground/50 mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No administrative calls</h3>
+                    <CheckCircle className="h-16 w-16 text-green-500/50 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">All caught up</h3>
                     <p className="text-muted-foreground text-center max-w-md">
-                      Administrative calls (scheduling, follow-ups, etc.) that don't require grading will appear here.
+                      No calls need review right now. Processing calls, failed transcriptions, and flagged feedback will appear here.
                     </p>
                   </CardContent>
                 </Card>
               )}
             </TabsContent>
 
+            {/* === TAB: Skipped === */}
             <TabsContent value="skipped" className="space-y-4">
               {skippedCalls.length > 0 ? (
                 <div className="space-y-4">
-                  {skippedCalls.map((item) => (
+                  {skippedCalls.map((item: any) => (
                     <Card key={item.id} className="opacity-75">
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between gap-4">
@@ -1282,140 +1452,6 @@ export default function CallInbox() {
                     </p>
                   </CardContent>
                 </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="failed" className="space-y-4">
-              {failedCalls.length > 0 ? (
-                <div className="space-y-4">
-                  {failedCalls.map((item) => (
-                    <Card key={item.id} className="border-red-200 bg-red-50/30 dark:border-red-900 dark:bg-red-950/20">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold truncate">
-                                {item.contactName || item.contactPhone || "Unknown Contact"}
-                              </h3>
-                              <Badge variant="destructive" className="text-xs">
-                                <XCircle className="h-3 w-3 mr-1" />
-                                Failed
-                              </Badge>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                              {item.teamMemberName && (
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  {item.teamMemberName}
-                                </span>
-                              )}
-                              {item.duration && (
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
-                                </span>
-                              )}
-                              {item.createdAt && (
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
-                                </span>
-                              )}
-                            </div>
-                            {item.classificationReason && (
-                              <p className="text-sm text-red-600 dark:text-red-400 mt-2">
-                                <AlertTriangle className="h-3 w-3 inline mr-1" />
-                                {item.classificationReason}
-                              </p>
-                            )}
-                          </div>
-                          <Link href={`/calls/${item.id}`}>
-                            <Button variant="outline" size="sm">
-                              View Details
-                              <ArrowRight className="h-4 w-4 ml-1" />
-                            </Button>
-                          </Link>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
-                    <CheckCircle className="h-16 w-16 text-green-500/50 mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No failed calls</h3>
-                    <p className="text-muted-foreground text-center max-w-md">
-                      All calls have been processed successfully. Failed transcriptions or grading attempts will appear here.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="feedback" className="space-y-4">
-              {feedbackLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <Card key={i}>
-                      <CardHeader>
-                        <Skeleton className="h-5 w-3/4" />
-                        <Skeleton className="h-4 w-1/2" />
-                      </CardHeader>
-                    </Card>
-                  ))}
-                </div>
-              ) : allFeedback?.length === 0 ? (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No Feedback Yet</h3>
-                    <p className="text-muted-foreground text-center max-w-md">
-                      When you provide feedback on call grades, it will appear here.
-                      Click on any call to view details and submit feedback.
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Tabs defaultValue="pending" className="space-y-4">
-                  <TabsList>
-                    <TabsTrigger value="pending">Pending ({pendingFeedback.length})</TabsTrigger>
-                    <TabsTrigger value="processed">Processed ({processedFeedback.length})</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="pending" className="space-y-4">
-                    {pendingFeedback.length === 0 ? (
-                      <Card>
-                        <CardContent className="py-8 text-center text-muted-foreground">
-                          No pending feedback to review
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      pendingFeedback.map((feedback) => (
-                        <FeedbackCard
-                          key={feedback.id}
-                          feedback={feedback}
-                          onStatusChange={handleStatusChange}
-                          showActions
-                        />
-                      ))
-                    )}
-                  </TabsContent>
-
-                  <TabsContent value="processed" className="space-y-4">
-                    {processedFeedback.length === 0 ? (
-                      <Card>
-                        <CardContent className="py-8 text-center text-muted-foreground">
-                          No processed feedback yet
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      processedFeedback.map((feedback) => (
-                        <FeedbackCard key={feedback.id} feedback={feedback} />
-                      ))
-                    )}
-                  </TabsContent>
-                </Tabs>
               )}
             </TabsContent>
           </Tabs>

@@ -254,9 +254,9 @@ export default function Home() {
                   <Skeleton key={i} className="h-14 w-full" />
                 ))}
               </div>
-            ) : recentCalls && recentCalls.length > 0 ? (
+            ) : recentCalls?.items && recentCalls.items.length > 0 ? (
               <div className="space-y-2">
-                {recentCalls.map((call) => (
+                {recentCalls.items.map((call: any) => (
                   <Link key={call.id} href={`/calls/${call.id}`}>
                     <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer">
                       <div className="flex-1 min-w-0">

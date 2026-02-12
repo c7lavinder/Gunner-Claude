@@ -226,10 +226,12 @@ export const calls = mysqlTable("calls", {
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   // Call type - now references tenant_call_types for custom types
-  callType: mysqlEnum("callType", ["qualification", "offer", "lead_generation"]).default("qualification"),
+  callType: mysqlEnum("callType", ["cold_call", "qualification", "follow_up", "offer", "callback"]).default("qualification"),
   tenantCallTypeId: int("tenantCallTypeId").references(() => tenantCallTypes.id), // Custom call type
+  // How the call type was determined
+  callTypeSource: mysqlEnum("callTypeSource", ["ai_suggested", "manual", "auto"]).default("ai_suggested"),
   // Call outcome - what was achieved on this call
-  callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_accepted", "offer_rejected", "follow_up", "disqualified"]).default("none"),
+  callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_made", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"]).default("none"),
   // Call classification - determines if call should be graded
   classification: mysqlEnum("classification", ["pending", "conversation", "voicemail", "no_answer", "callback_request", "wrong_number", "too_short", "admin_call", "limit_reached"]).default("pending"),
   classificationReason: text("classificationReason"), // AI explanation for classification
@@ -273,7 +275,7 @@ export const callGrades = mysqlTable("call_grades", {
   // Summary
   summary: text("summary"),
   // Which rubric was used (legacy)
-  rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager"]).notNull(),
+  rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager", "lead_generator", "follow_up", "callback"]).notNull(),
   // Custom rubric reference
   tenantRubricId: int("tenantRubricId").references(() => tenantRubrics.id),
   // Timestamps

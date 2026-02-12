@@ -197,7 +197,7 @@ export const LEAD_GENERATOR_RUBRIC = {
 // ============ GRADING FUNCTION ============
 
 // Must match the callOutcome enum in drizzle/schema.ts
-export type CallOutcome = "none" | "appointment_set" | "offer_accepted" | "offer_rejected" | "follow_up" | "disqualified";
+export type CallOutcome = "none" | "appointment_set" | "offer_made" | "callback_scheduled" | "interested" | "left_vm" | "no_answer" | "not_interested" | "dead";
 
 export interface ObjectionHandlingItem {
   objection: string; // The objection identified (e.g., "Price too high", "Need to think about it")
@@ -231,9 +231,11 @@ function getGradeFromScore(score: number): "A" | "B" | "C" | "D" | "F" {
   return "F";
 }
 
+export type GradableCallType = "cold_call" | "qualification" | "follow_up" | "offer" | "callback";
+
 export async function gradeCall(
   transcript: string,
-  callType: "qualification" | "offer" | "lead_generation",
+  callType: GradableCallType,
   teamMemberName: string,
   context?: {
     trainingMaterials?: { title: string; content: string | null; category: string | null }[];
@@ -241,7 +243,15 @@ export async function gradeCall(
     recentFeedback?: { feedbackType: string | null; explanation: string | null; correctBehavior: string | null }[];
   }
 ): Promise<GradingResult> {
-  const rubric = callType === "lead_generation" ? LEAD_GENERATOR_RUBRIC : (callType === "qualification" ? LEAD_MANAGER_RUBRIC : ACQUISITION_MANAGER_RUBRIC);
+  // Rubric mapping:
+  // cold_call → Lead Generator rubric (generating interest, NOT setting appointments)
+  // qualification → Lead Manager rubric (qualifying leads, setting appointments)
+  // follow_up → placeholder (uses Lead Manager rubric until custom rubric is defined)
+  // offer → Acquisition Manager rubric (presenting offers, closing deals)
+  // callback → placeholder (uses Lead Manager rubric until custom rubric is defined)
+  const rubric = callType === "cold_call" ? LEAD_GENERATOR_RUBRIC 
+    : callType === "offer" ? ACQUISITION_MANAGER_RUBRIC 
+    : LEAD_MANAGER_RUBRIC; // qualification, follow_up, callback all use Lead Manager rubric for now
 
   // Build training materials context
   let trainingContext = "";
@@ -271,8 +281,10 @@ export async function gradeCall(
   const systemPrompt = `You are an expert sales coach for a real estate wholesaling company called Nashville Area Home Buyers. 
 Your job is to analyze phone call transcripts and grade them based on a specific rubric.
 
-You are grading a ${callType === "lead_generation" ? "Lead Generation Cold Call" : callType === "qualification" ? "Qualification/Diagnosis" : "Offer"} call made by ${teamMemberName}.
-${callType === "lead_generation" ? "\nIMPORTANT: This is a Lead Generator cold call. The goal of this call is NOT to set appointments. The goal is to identify motivated sellers and generate interest in selling their property. A Lead Manager will follow up to qualify and set appointments. Grade accordingly." : ""}
+You are grading a ${callType === "cold_call" ? "Cold Call (Lead Generation)" : callType === "qualification" ? "Qualification/Diagnosis" : callType === "follow_up" ? "Follow-Up" : callType === "callback" ? "Callback (Inbound)" : "Offer"} call made by ${teamMemberName}.
+${callType === "cold_call" ? "\nIMPORTANT: This is a Lead Generator cold call. The goal of this call is NOT to set appointments. The goal is to identify motivated sellers and generate interest in selling their property. A Lead Manager will follow up to qualify and set appointments. Grade accordingly." : ""}
+${callType === "follow_up" ? "\nIMPORTANT: This is a Follow-Up call. The rep is re-engaging a known lead — they may skip qualification steps by design. Do NOT penalize for skipping introduction or qualification steps that were already completed on a previous call. Focus on re-engagement quality, progress toward next steps, and maintaining rapport." : ""}
+${callType === "callback" ? "\nIMPORTANT: This is a Callback — the seller called us back. The dynamic is different because the seller initiated contact, showing interest. Do NOT penalize for abbreviated introductions. Focus on how well the rep capitalized on the seller's initiative and moved the conversation forward." : ""}
 
 RUBRIC: ${rubric.name}
 ${rubric.description}
@@ -320,15 +332,18 @@ Respond with a JSON object in this exact format:
     {"objection": "Price too high", "context": "Seller said: 'I was hoping for at least $200k'", "suggestedResponses": ["Response 1", "Response 2"]}
   ],
   "summary": "brief overall summary",
-  "callOutcome": "appointment_set" or "offer_accepted" or "offer_rejected" or "follow_up" or "disqualified" or "none"
+  "callOutcome": "appointment_set" or "offer_made" or "callback_scheduled" or "interested" or "left_vm" or "no_answer" or "not_interested" or "dead" or "none"
 }
 
 CALL OUTCOME DEFINITIONS:
 - appointment_set: A walkthrough, meeting, or follow-up appointment was scheduled with a specific date/time
-- offer_accepted: The seller accepted an offer or verbally agreed to the deal
-- offer_rejected: An offer was made but the seller declined
-- follow_up: ${callType === "lead_generation" ? "The seller expressed interest and a Lead Manager follow-up was set up" : "A follow-up call was scheduled but no appointment for in-person meeting"}
-- disqualified: The lead was disqualified (price too high, not motivated, etc.)
+- offer_made: An offer was presented to the seller (regardless of whether accepted or rejected)
+- callback_scheduled: The seller agreed to a callback or follow-up call at a specific time
+- interested: The seller expressed interest in selling but no firm commitment was made
+- left_vm: The rep left a voicemail message
+- no_answer: The call went unanswered or was very brief with no real conversation
+- not_interested: The seller clearly stated they are not interested in selling
+- dead: Wrong number, disconnected, or the lead is completely dead
 - none: The call ended without a clear outcome or next step`;
 
   try {
@@ -379,7 +394,7 @@ CALL OUTCOME DEFINITIONS:
               summary: { type: "string" },
               callOutcome: { 
                 type: "string", 
-                enum: ["none", "appointment_set", "offer_accepted", "offer_rejected", "follow_up", "disqualified"] 
+                enum: ["none", "appointment_set", "offer_made", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"] 
               },
             },
             required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "objectionHandling", "summary", "callOutcome"],
@@ -588,6 +603,88 @@ Respond with JSON only:
   }
 }
 
+// ============ AI CALL TYPE DETECTION ============
+
+/**
+ * Detect call type from transcript content using AI
+ * Returns a suggested call type based on what actually happened in the conversation
+ */
+export async function detectCallType(
+  transcript: string,
+  teamMemberRole?: string
+): Promise<{ callType: GradableCallType; confidence: number; reason: string }> {
+  try {
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `You are a call type classifier for a real estate wholesaling company. Analyze the transcript and determine what type of call this is.
+
+CALL TYPES:
+1. "cold_call" - First contact with a homeowner. The caller is reaching out to someone who hasn't spoken with the company before. The goal is to gauge interest in selling, NOT to set appointments. Signs: introducing the company, asking if they've thought about selling, no prior relationship mentioned.
+
+2. "qualification" - A follow-up qualification/diagnosis call with a lead who has already expressed some interest. The caller is digging deeper into motivation, property condition, timeline, price expectations, and potentially setting an appointment for a walkthrough. Signs: references to previous conversation, detailed questions about property/situation, price discussion, appointment setting.
+
+3. "follow_up" - Re-engaging a known lead after a previous conversation. The caller is checking in, providing updates, or re-establishing contact. Signs: "just following up", "checking in", references to previous offer or conversation, shorter call.
+
+4. "offer" - Presenting a formal offer to the seller. The caller is delivering a specific price, discussing terms, and trying to close. Signs: specific dollar amounts, "walk away with", contract discussion, closing language.
+
+5. "callback" - The seller called the company back (inbound). The seller initiated this contact. Signs: seller says "I got your letter/postcard/voicemail", "you called me earlier", seller is asking questions about the process.
+
+The team member's role is: ${teamMemberRole || "unknown"}. Use this as a hint but let the transcript content be the primary signal.
+
+Respond with JSON only.`,
+        },
+        {
+          role: "user",
+          content: `Classify this call transcript (first 2000 chars):\n\n${transcript.substring(0, 2000)}`,
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "call_type_detection",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              callType: {
+                type: "string",
+                enum: ["cold_call", "qualification", "follow_up", "offer", "callback"],
+              },
+              confidence: {
+                type: "number",
+                description: "Confidence score from 0.0 to 1.0",
+              },
+              reason: {
+                type: "string",
+                description: "Brief explanation of why this call type was chosen",
+              },
+            },
+            required: ["callType", "confidence", "reason"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content || typeof content !== "string") {
+      return { callType: "qualification", confidence: 0.3, reason: "AI detection failed, defaulting to qualification" };
+    }
+
+    const parsed = JSON.parse(content);
+    return {
+      callType: parsed.callType as GradableCallType,
+      confidence: Math.min(1, Math.max(0, parsed.confidence)),
+      reason: parsed.reason,
+    };
+  } catch (error) {
+    console.error("[CallTypeDetection] Error:", error);
+    return { callType: "qualification", confidence: 0.3, reason: "AI detection error, defaulting to qualification" };
+  }
+}
+
 // ============ PROCESS CALL FUNCTION ============
 
 import { getCallById, updateCall, createCallGrade, getTeamMemberById, getGradingContext } from "./db";
@@ -662,21 +759,53 @@ export async function processCall(callId: number): Promise<void> {
     // Step 4: Grade (only for real conversations)
     await updateCall(callId, { status: "grading" });
     
-    // Determine call type based on team member role
-    let callType: "qualification" | "offer" = "qualification";
+    // Determine call type using a 3-tier approach:
+    // 1. If manually set (callTypeSource === "manual"), use it as-is
+    // 2. Otherwise, use AI detection from transcript
+    // 3. Fall back to team member role-based inference
+    let callType: GradableCallType = (call.callType as GradableCallType) || "qualification";
+    let callTypeSource = call.callTypeSource || "ai_suggested";
     let teamMemberName = call.teamMemberName || "Team Member";
+    let teamMemberRole: string | undefined;
     
     if (call.teamMemberId) {
       const teamMember = await getTeamMemberById(call.teamMemberId);
       if (teamMember) {
         teamMemberName = teamMember.name;
-        // Lead generators use the same grading as lead managers (qualification calls)
-        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : "qualification";
+        teamMemberRole = teamMember.teamRole;
       }
     }
 
+    // Only auto-detect if not manually set
+    if (callTypeSource !== "manual") {
+      // Try AI detection from transcript
+      const aiDetection = await detectCallType(transcript, teamMemberRole);
+      console.log(`[ProcessCall] AI detected call type: ${aiDetection.callType} (confidence: ${aiDetection.confidence}, reason: ${aiDetection.reason})`);
+      
+      if (aiDetection.confidence >= 0.6) {
+        // High confidence: use AI suggestion
+        callType = aiDetection.callType;
+        callTypeSource = "ai_suggested";
+      } else {
+        // Low confidence: fall back to role-based inference
+        if (teamMemberRole === "acquisition_manager") {
+          callType = "offer";
+        } else if (teamMemberRole === "lead_generator") {
+          callType = "cold_call";
+        } else {
+          callType = "qualification";
+        }
+        callTypeSource = "auto";
+      }
+    }
+
+    // Map callType to grading context type for fetching training materials
+    const gradingContextType = callType === "cold_call" ? "lead_generation" as const
+      : callType === "offer" ? "offer" as const
+      : "qualification" as const;
+
     // Fetch grading context (training materials, rules, feedback)
-    const gradingContext = await getGradingContext(callType);
+    const gradingContext = await getGradingContext(gradingContextType);
     
     const gradeResult = await gradeCall(transcript, callType, teamMemberName, {
       trainingMaterials: gradingContext.trainingMaterials.map(m => ({
@@ -696,6 +825,13 @@ export async function processCall(callId: number): Promise<void> {
       })),
     });
 
+    // Map callType to rubricType for storage
+    const rubricType = callType === "cold_call" ? "lead_generator" as const
+      : callType === "offer" ? "acquisition_manager" as const
+      : callType === "follow_up" ? "follow_up" as const
+      : callType === "callback" ? "callback" as const
+      : "lead_manager" as const;
+
     // Step 5: Save grade
     await createCallGrade({
       callId: call.id,
@@ -707,13 +843,14 @@ export async function processCall(callId: number): Promise<void> {
       coachingTips: gradeResult.coachingTips,
       redFlags: gradeResult.redFlags,
       summary: gradeResult.summary,
-      rubricType: callType === "qualification" ? "lead_manager" : "acquisition_manager",
+      rubricType,
     });
 
     // Step 6: Mark complete and save outcome
     await updateCall(callId, { 
       status: "completed", 
       callType,
+      callTypeSource,
       classification: "conversation",
       callOutcome: gradeResult.callOutcome,
     });

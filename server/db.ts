@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users, calls, callGrades, teamMembers, performanceMetrics, 
@@ -330,13 +330,63 @@ export async function getCallsWithGrades(options: {
   teamMemberId?: number;
   limit?: number;
   offset?: number;
-  tenantId?: number; // For multi-tenant filtering
-}): Promise<Array<Call & { grade: CallGrade | null }>> {
+  tenantId?: number;
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
+  callTypes?: string[];
+  outcomes?: string[];
+  statuses?: string[];
+  directions?: string[];
+  scoreRanges?: string[];
+  teamMembers?: string[];
+}): Promise<{ items: Array<Call & { grade: CallGrade | null }>; total: number }> {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) return { items: [], total: 0 };
 
-  const callsList = await getCalls({ ...options, tenantId: options.tenantId });
-  
+  const conditions = [];
+  conditions.push(eq(calls.isArchived, "false"));
+
+  if (options.tenantId) {
+    conditions.push(eq(calls.tenantId, options.tenantId));
+  }
+  if (options.teamMemberId) {
+    conditions.push(eq(calls.teamMemberId, options.teamMemberId));
+  }
+  if (options.startDate) {
+    conditions.push(gte(calls.createdAt, new Date(options.startDate)));
+  }
+  if (options.endDate) {
+    conditions.push(lte(calls.createdAt, new Date(options.endDate)));
+  }
+  if (options.callTypes && options.callTypes.length > 0) {
+    conditions.push(inArray(calls.callType, options.callTypes as any));
+  }
+  if (options.outcomes && options.outcomes.length > 0) {
+    conditions.push(inArray(calls.callOutcome, options.outcomes as any));
+  }
+  if (options.statuses && options.statuses.length > 0) {
+    conditions.push(inArray(calls.status, options.statuses as any));
+  }
+  if (options.directions && options.directions.length > 0) {
+    conditions.push(inArray(calls.callDirection, options.directions as any));
+  }
+  if (options.teamMembers && options.teamMembers.length > 0) {
+    conditions.push(inArray(calls.teamMemberName, options.teamMembers as any));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Get total count
+  const countResult = await db.select({ count: sql<number>`count(*)` }).from(calls).where(whereClause);
+  const total = Number(countResult[0]?.count || 0);
+
+  // Get paginated calls
+  const callsList = await db.select().from(calls)
+    .where(whereClause)
+    .orderBy(desc(calls.createdAt))
+    .limit(options.limit || 25)
+    .offset(options.offset || 0);
+
   const result = await Promise.all(
     callsList.map(async (call) => {
       const grade = await getCallGradeByCallId(call.id);
@@ -344,7 +394,7 @@ export async function getCallsWithGrades(options: {
     })
   );
 
-  return result;
+  return { items: result, total };
 }
 
 // ============ LEADERBOARD FUNCTIONS ============
@@ -1007,6 +1057,7 @@ export async function deleteGradingRule(id: number): Promise<void> {
  * Get all active training materials and rules for grading context
  */
 export async function getGradingContext(callType: "qualification" | "offer" | "lead_generation"): Promise<{
+  // Note: callType here maps to the legacy applicableTo values in training materials/rules
   trainingMaterials: TrainingMaterial[];
   gradingRules: GradingRule[];
   recentFeedback: AIFeedback[];
@@ -1528,8 +1579,8 @@ export async function getKPIsForContentGeneration(tenantId?: number): Promise<{
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // Get total deals (offers accepted all time)
-  const totalDealsConditions = [eq(calls.callOutcome, "offer_accepted")];
+  // Get total deals (offers made all time)
+  const totalDealsConditions = [eq(calls.callOutcome, "offer_made")];
   if (tenantId) totalDealsConditions.push(eq(calls.tenantId, tenantId));
   
   const totalDealsResult = await db
@@ -1548,8 +1599,8 @@ export async function getKPIsForContentGeneration(tenantId?: number): Promise<{
     .where(and(...appointmentsConditions));
   const appointmentsThisMonth = appointmentsResult[0]?.count || 0;
 
-  // Get offers accepted this month
-  const offersConditions = [eq(calls.callOutcome, "offer_accepted"), gte(calls.createdAt, startOfMonth)];
+  // Get offers made this month
+  const offersConditions = [eq(calls.callOutcome, "offer_made"), gte(calls.createdAt, startOfMonth)];
   if (tenantId) offersConditions.push(eq(calls.tenantId, tenantId));
   
   const offersResult = await db

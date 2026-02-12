@@ -340,6 +340,14 @@ export const appRouter = router({
         teamMemberId: z.number().optional(),
         limit: z.number().optional(),
         offset: z.number().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        callTypes: z.array(z.string()).optional(),
+        outcomes: z.array(z.string()).optional(),
+        statuses: z.array(z.string()).optional(),
+        directions: z.array(z.string()).optional(),
+        scoreRanges: z.array(z.string()).optional(),
+        teamMembers: z.array(z.string()).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         // CRITICAL: Include tenantId for multi-tenant isolation
@@ -365,7 +373,7 @@ export const appRouter = router({
         duration: z.number().optional(),
         teamMemberId: z.number(),
         teamMemberName: z.string().optional(),
-        callType: z.enum(["qualification", "offer", "lead_generation"]).optional(),
+        callType: z.enum(["cold_call", "qualification", "follow_up", "offer", "callback"]).optional(),
       }))
       .mutation(async ({ input }) => {
         const call = await createCall({
@@ -480,7 +488,7 @@ export const appRouter = router({
             duration: input.duration,
             teamMemberId: teamMember.id,
             teamMemberName: teamMember.name,
-            callType: teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "lead_generation" : "qualification",
+            callType: teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification",
             status: "pending",
             callTimestamp: input.callDate ? new Date(input.callDate) : new Date(),
           });
@@ -560,6 +568,55 @@ export const appRouter = router({
         }
 
         return { success: true, newStatus, classification: input.classification };
+      }),
+
+    // Update call type manually
+    updateCallType: protectedProcedure
+      .input(z.object({
+        callId: z.number(),
+        callType: z.enum(["cold_call", "qualification", "follow_up", "offer", "callback"]),
+        regrade: z.boolean().optional(), // Whether to re-grade with the new rubric
+      }))
+      .mutation(async ({ input }) => {
+        const call = await getCallById(input.callId);
+        if (!call) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
+        }
+
+        await updateCall(input.callId, {
+          callType: input.callType,
+          callTypeSource: "manual",
+        });
+
+        // Optionally re-grade with the correct rubric
+        if (input.regrade && call.status === "completed" && call.transcript) {
+          // Reset status and reprocess
+          await updateCall(input.callId, { status: "pending" });
+          processCall(input.callId).catch(err => {
+            console.error(`[UpdateCallType] Error reprocessing call ${input.callId}:`, err);
+          });
+        }
+
+        return { success: true, callType: input.callType };
+      }),
+
+    // Update call outcome manually
+    updateCallOutcome: protectedProcedure
+      .input(z.object({
+        callId: z.number(),
+        callOutcome: z.enum(["none", "appointment_set", "offer_made", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"]),
+      }))
+      .mutation(async ({ input }) => {
+        const call = await getCallById(input.callId);
+        if (!call) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
+        }
+
+        await updateCall(input.callId, {
+          callOutcome: input.callOutcome,
+        });
+
+        return { success: true, callOutcome: input.callOutcome };
       }),
 
     // Manual BatchDialer sync
@@ -918,7 +975,8 @@ export const appRouter = router({
         
         // Get training materials and recent successful calls for context (filtered by tenant)
         const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
-        const recentCalls = await getCallsWithGrades({ limit: 20, tenantId: ctx.user?.tenantId || undefined });
+        const recentCallsResult = await getCallsWithGrades({ limit: 20, tenantId: ctx.user?.tenantId || undefined });
+        const recentCalls = recentCallsResult.items;
         
         // Filter for high-scoring calls to use as examples
         const successfulCalls = recentCalls
@@ -993,7 +1051,8 @@ Format: Start with brief encouragement, then give your one tip in 1-2 sentences.
           .join("\n");
 
         // Get recent calls for examples (filtered by tenant)
-        const recentCalls = await getCallsWithGrades({ limit: 30, tenantId: ctx.user?.tenantId || undefined });
+        const recentCallsResult = await getCallsWithGrades({ limit: 30, tenantId: ctx.user?.tenantId || undefined });
+        const recentCalls = recentCallsResult.items;
         const goodCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 75).slice(0, 5);
         const badCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") < 60).slice(0, 5);
 
@@ -1039,7 +1098,8 @@ Format: Start with brief encouragement, then give your one tip in 1-2 sentences.
           .join("\n\n");
 
         // Get recent calls for examples (filtered by tenant)
-        const recentCalls = await getCallsWithGrades({ limit: 30, tenantId: ctx.user?.tenantId || undefined });
+        const recentCallsResult = await getCallsWithGrades({ limit: 30, tenantId: ctx.user?.tenantId || undefined });
+        const recentCalls = recentCallsResult.items;
         const goodCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 75).slice(0, 5);
         const badCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") < 60).slice(0, 5);
 
