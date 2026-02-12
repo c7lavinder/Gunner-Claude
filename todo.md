@@ -1636,3 +1636,6 @@
 - [x] Make everything fit properly within the card container
 - [x] Fix AI Coach card: input area and send button still overflowing past card boundary
 - [x] Make AI Coach sidebar sticky so it follows user when scrolling through calls
+
+## Bug Fix: False Callback Signal
+- [x] Fix callback_requested rule: Cathie Cooper flagged as "Callback Requested — None Made" but team DID call (2 outbound calls + SMS follow-up). Rule now checks GHL conversation messages for outbound activity (calls + SMS) after the callback request.

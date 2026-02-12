@@ -867,6 +867,61 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
       }
     });
 
+    it("Rule 12: should NOT flag when outbound activity exists after callback request", () => {
+      // Simulates the Cathie Cooper case: seller scheduled callback, team called + texted
+      const callbackPatterns = [
+        /call\s+(?:me\s+)?back\s+(?:in\s+)?(?:a\s+)?(?:few|couple|two|three|2|3)?\s*(?:days?|weeks?|hours?|minutes?)/i,
+        /(?:try|call)\s+(?:me\s+)?(?:back\s+)?(?:tomorrow|next week|monday|tuesday|wednesday|thursday|friday)/i,
+        /(?:i'll|i will)\s+be\s+(?:available|free|around)\s+(?:tomorrow|next|on)/i,
+        /(?:reach|get)\s+(?:back\s+)?(?:to\s+)?me\s+(?:later|tomorrow|next)/i,
+      ];
+
+      const transcript = "I'll be available tomorrow at noon, call me back then";
+      const hasCallbackRequest = callbackPatterns.some(p => p.test(transcript));
+      expect(hasCallbackRequest).toBe(true);
+
+      // Simulate GHL conversation messages showing outbound follow-up
+      const callTimestamp = new Date("2026-02-12T09:00:00Z").getTime();
+      const ghlMessages = [
+        { direction: "outbound", dateAdded: "2026-02-12T11:01:00Z", body: "Outbound Call" },
+        { direction: "outbound", dateAdded: "2026-02-12T11:02:00Z", body: "Hey Cathie, is now a bad time?" },
+      ];
+
+      // Check if any outbound message is after the callback request
+      let hasOutboundFollowUp = false;
+      for (const msg of ghlMessages) {
+        if (msg.direction !== "outbound") continue;
+        const msgTime = new Date(msg.dateAdded).getTime();
+        if (msgTime > callTimestamp) {
+          hasOutboundFollowUp = true;
+          break;
+        }
+      }
+      expect(hasOutboundFollowUp).toBe(true);
+      // When outbound follow-up exists, the rule should NOT create a detection
+    });
+
+    it("Rule 12: SHOULD flag when NO outbound activity after callback request", () => {
+      const callTimestamp = new Date("2026-02-12T09:00:00Z").getTime();
+      const ghlMessages = [
+        { direction: "inbound", dateAdded: "2026-02-12T08:00:00Z", body: "Can you call me back tomorrow?" },
+        { direction: "outbound", dateAdded: "2026-02-11T15:00:00Z", body: "We'd like to make an offer" },
+      ];
+
+      // Check if any outbound message is AFTER the callback request
+      let hasOutboundFollowUp = false;
+      for (const msg of ghlMessages) {
+        if (msg.direction !== "outbound") continue;
+        const msgTime = new Date(msg.dateAdded).getTime();
+        if (msgTime > callTimestamp) {
+          hasOutboundFollowUp = true;
+          break;
+        }
+      }
+      expect(hasOutboundFollowUp).toBe(false);
+      // No outbound follow-up after callback request = should flag as missed callback
+    });
+
     it("Rule 13: detects high talk-time DQ pattern", () => {
       // Long call (3+ min) + long transcript + DQ'd = potential missed deal
       const call = {

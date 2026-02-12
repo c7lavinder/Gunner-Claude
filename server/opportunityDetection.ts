@@ -1033,9 +1033,12 @@ async function detectDuplicateProperty(
  */
 
 // Rule 12: Seller said "call me back in [timeframe]" — check if callback happened
+// Now also checks GHL conversation messages for outbound activity (calls + SMS)
+// to avoid false positives when team followed up but calls were too short to be logged
 async function detectMissedCallback(
   db: any,
-  tenantId: number
+  tenantId: number,
+  creds: GHLCredentials | null
 ): Promise<DetectedOpportunity[]> {
   const results: DetectedOpportunity[] = [];
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -1066,7 +1069,7 @@ async function detectMissedCallback(
     const hasCallbackRequest = callbackPatterns.some(p => p.test(call.transcript));
     if (!hasCallbackRequest) continue;
 
-    // Check if there was a follow-up call
+    // Check 1: Was there a follow-up call in our database?
     const followUp = await db
       .select()
       .from(calls)
@@ -1079,7 +1082,41 @@ async function detectMissedCallback(
       )
       .limit(2);
 
-    if (followUp.length > 1) continue; // Callback was made
+    if (followUp.length > 1) continue; // Callback was made (logged in our DB)
+
+    // Check 2: Check GHL conversation for outbound activity after the callback request
+    // This catches short calls that were filtered out + outbound SMS follow-ups
+    let hasOutboundFollowUp = false;
+    if (creds) {
+      try {
+        // Search for the contact's conversation
+        const conversations = await ghlFetch(
+          creds,
+          `/conversations/search?locationId=${creds.locationId}&contactId=${call.ghlContactId}`
+        );
+        const convList = conversations.conversations || [];
+        if (convList.length > 0) {
+          const convId = convList[0].id;
+          const messages = await fetchConversationMessages(creds, convId, 30);
+          const callTimestamp = new Date(call.callTimestamp).getTime();
+
+          for (const msg of messages) {
+            if (msg.direction !== "outbound") continue;
+            const msgTime = new Date(msg.dateAdded).getTime();
+            // Only count outbound activity AFTER the callback request call
+            if (msgTime <= callTimestamp) continue;
+            // Found outbound activity (call or SMS) after the callback request
+            hasOutboundFollowUp = true;
+            break;
+          }
+        }
+      } catch (err) {
+        // If GHL check fails, fall through to the DB-only check result
+        console.warn(`[OpportunityDetection] GHL conversation check failed for contact ${call.ghlContactId}:`, err);
+      }
+    }
+
+    if (hasOutboundFollowUp) continue; // Team followed up via GHL (calls/SMS)
 
     results.push({
       tier: "possible",
@@ -1527,8 +1564,8 @@ async function scanTenant(
     const dupDetections = await detectDuplicateProperty(db, tenantId);
     detections.push(...dupDetections);
 
-    // Rule 12: Missed callback
-    const callbackDetections = await detectMissedCallback(db, tenantId);
+    // Rule 12: Missed callback (now also checks GHL conversation for outbound follow-up)
+    const callbackDetections = await detectMissedCallback(db, tenantId, creds);
     detections.push(...callbackDetections);
 
     // Rule 13: High talk-time DQ
