@@ -5,6 +5,17 @@ import { getDb } from "./db";
 import { tenants, teamMembers, userStreaks, userXp, xpTransactions, badgeProgress, performanceMetrics } from "../drizzle/schema";
 import { ne, like, and, or, inArray } from "drizzle-orm";
 
+// Mock notifyOwner to prevent real email notifications during tests
+vi.mock("./_core/notification", () => ({
+  notifyOwner: vi.fn().mockResolvedValue(true),
+}));
+
+// Mock emailService to prevent real emails during tests
+vi.mock("./emailService", () => ({
+  sendTeamInviteEmail: vi.fn().mockResolvedValue(true),
+  sendWelcomeEmail: vi.fn().mockResolvedValue(true),
+}));
+
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
 // Track IDs of test tenants created during tests for cleanup

@@ -1625,3 +1625,6 @@
 ## Test Data Cleanup
 - [x] Delete all test team members (Test Lead Manager, Test Acquisition Manager, Test Lead Generator) from database
 - [x] Update vitest tests to auto-clean up test data (tenants, team members, users) after each test run
+
+## Fix: Test Notifications
+- [x] Mock notifyOwner in tenant test files to prevent real email notifications during vitest runs
