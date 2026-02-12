@@ -1634,3 +1634,4 @@
 - [x] Add SMS-related suggestions (e.g. send follow-up SMS, draft SMS to seller)
 - [x] Fix layout spacing: send button overlapping card edge, input field outside card boundary
 - [x] Make everything fit properly within the card container
+- [x] Fix AI Coach card: input area and send button still overflowing past card boundary

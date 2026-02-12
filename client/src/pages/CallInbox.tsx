@@ -540,8 +540,8 @@ function AICoachQA() {
         </div>
         <p className="text-[10px] text-muted-foreground mt-0.5">Ask questions or give CRM commands</p>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col min-h-0 px-3 pb-3 pt-0">
-        <ScrollArea className="flex-1">
+      <CardContent className="flex-1 flex flex-col overflow-hidden px-3 pb-3 pt-0">
+        <div className="flex-1 overflow-y-auto">
           {conversation.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-4 text-center">
               <Sparkles className="h-8 w-8 text-muted-foreground/40 mb-3" />
@@ -711,7 +711,7 @@ function AICoachQA() {
               )}
             </div>
           )}
-        </ScrollArea>
+        </div>
         
         <div className="flex gap-2 mt-2 pt-2 border-t flex-shrink-0">
           <Textarea
