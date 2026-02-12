@@ -289,9 +289,11 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         // Get user's permission context
         const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+        const rawRole = teamMember?.teamRole || ctx.user?.teamRole || ctx.user?.role;
+        const normalizedRole = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : rawRole;
         const permissionContext: UserPermissionContext = {
           teamMemberId: teamMember?.id,
-          teamRole: (ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager') || 'lead_manager',
+          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator') || 'lead_manager',
           userId: ctx.user?.id,
           tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };
@@ -309,9 +311,11 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         // Get user's permission context
         const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+        const rawRole = teamMember?.teamRole || ctx.user?.teamRole || ctx.user?.role;
+        const normalizedRole = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : rawRole;
         const permissionContext: UserPermissionContext = {
           teamMemberId: teamMember?.id,
-          teamRole: (ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager') || 'lead_manager',
+          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator') || 'lead_manager',
           userId: ctx.user?.id,
           tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };
@@ -352,8 +356,11 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         // Get the current user's team member record for permission scoping
         const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+        // Normalize role: super_admin and admin users should both map to 'admin' for permission checks
+        const rawRole = teamMember?.teamRole || ctx.user?.teamRole || ctx.user?.role;
+        const normalizedRole = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : rawRole;
         const permissionContext = {
-          teamRole: (teamMember?.teamRole || ctx.user?.role) as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | undefined,
+          teamRole: normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | undefined,
           teamMemberId: teamMember?.id,
           tenantId: ctx.user?.tenantId ?? undefined,
         };
@@ -695,11 +702,12 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         // Get user's permission context for filtering
         const teamMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
-        const userRole = ctx.user?.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager' | undefined;
+        const rawRole = teamMember?.teamRole || ctx.user?.teamRole || ctx.user?.role;
+        const normalizedRole = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : rawRole;
         
         const permissionContext: UserPermissionContext = {
           teamMemberId: teamMember?.id,
-          teamRole: userRole || 'lead_manager',
+          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator') || 'lead_manager',
           userId: ctx.user?.id,
           tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };

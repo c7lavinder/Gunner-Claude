@@ -1483,3 +1483,8 @@
 - [x] Update backend withGrades query to filter by allowed team member IDs for Lead Managers
 - [x] Update frontend Team Member filter to only show relevant members for Lead Managers
 - [x] Admins and Acquisition Managers continue to see all calls
+
+## Bug Fixes - Call History Empty
+- [x] Fix Call History showing no calls for admin user after permission scoping changes
+
+- [x] Fix admin visibility bug: admin/super_admin should see ALL calls in Call History (not scoped by Lead Manager logic)

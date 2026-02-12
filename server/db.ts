@@ -1903,8 +1903,8 @@ export async function getCallsWithPermissions(
   }
 
   // Apply permission-based filtering (within tenant)
-  if (permissionContext.teamRole === 'admin') {
-    // Admin sees all calls within their tenant - no additional filter
+  if (permissionContext.teamRole === 'admin' || permissionContext.teamRole === 'super_admin' as any) {
+    // Admin/super_admin sees all calls within their tenant - no additional filter
   } else if (permissionContext.teamRole === 'acquisition_manager' && permissionContext.teamMemberId) {
     // Acquisition Manager sees own calls + assigned Lead Manager calls
     const assignedLeadManagers = await getLeadManagersForAcquisitionManager(permissionContext.teamMemberId);
@@ -1947,7 +1947,7 @@ export async function getCallsWithPermissions(
 export async function getViewableTeamMemberIds(
   permissionContext: UserPermissionContext
 ): Promise<number[] | 'all'> {
-  if (permissionContext.teamRole === 'admin') {
+  if (permissionContext.teamRole === 'admin' || (permissionContext.teamRole as any) === 'super_admin') {
     return 'all';
   }
   
