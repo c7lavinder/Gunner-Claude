@@ -218,6 +218,13 @@
       "when": 1770887190451,
       "tag": "0030_handy_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1770915472392,
+      "tag": "0031_bent_stepford_cuckoos",
+      "breakpoints": true
     }
   ]
 }

@@ -1,17 +1,76 @@
 /**
- * Opportunity Detection Engine
- * Scans calls and GHL data to detect missed, warning, and possible opportunities.
- * Runs hourly via scheduler.
+ * Opportunity Detection Engine V2 — Pipeline Manager
+ * 
+ * Architecture: GHL-event-first, transcript-enriched.
+ * Primary data sources: GHL pipeline opportunities, conversations, contact activity.
+ * Secondary enrichment: call transcripts from Gunner's database.
+ * 
+ * This engine thinks like an Acquisition Manager reviewing the pipeline,
+ * NOT a call coach reviewing technique.
  */
 import { getDb } from "./db";
 import { calls, callGrades, opportunities, teamMembers } from "../drizzle/schema";
-import { eq, and, desc, gte, isNull, inArray, sql, not } from "drizzle-orm";
+import { eq, and, desc, gte, isNull, inArray, sql, not, lt } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { getTenantsWithCrm, parseCrmConfig, type TenantCrmConfig } from "./tenant";
 
-// ============ DETECTION RULES ============
+const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
-interface DetectionResult {
+// ============ TYPES ============
+
+interface GHLCredentials {
+  apiKey: string;
+  locationId: string;
+}
+
+interface GHLPipelineOpportunity {
+  id: string;
+  name: string;
+  contactId: string;
+  pipelineId: string;
+  pipelineStageId: string;
+  status: string;
+  assignedTo?: string;
+  monetaryValue?: number;
+  createdAt: string;
+  updatedAt: string;
+  lastStageChangeAt?: string;
+  lastStatusChangeAt?: string;
+  contact?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    tags?: string[];
+  };
+}
+
+interface GHLConversation {
+  id: string;
+  contactId: string;
+  lastMessageDate: number;
+  lastMessageType: string;
+  lastMessageDirection: string;
+  lastMessageBody?: string;
+  unreadCount: number;
+  fullName?: string;
+  contactName?: string;
+  phone?: string;
+  tags?: string[];
+}
+
+interface PipelineStage {
+  id: string;
+  name: string;
+  position: number;
+}
+
+interface Pipeline {
+  id: string;
+  name: string;
+  stages: PipelineStage[];
+}
+
+interface DetectedOpportunity {
   tier: "missed" | "warning" | "possible";
   triggerRules: string[];
   priorityScore: number;
@@ -19,247 +78,1048 @@ interface DetectionResult {
   contactPhone: string | null;
   propertyAddress: string | null;
   ghlContactId: string | null;
-  relatedCallId: number;
+  ghlOpportunityId: string | null;
+  ghlPipelineStageId: string | null;
+  ghlPipelineStageName: string | null;
+  relatedCallId: number | null;
   teamMemberId: number | null;
   teamMemberName: string | null;
+  assignedTo: string | null;
+  detectionSource: "pipeline" | "conversation" | "transcript" | "hybrid";
+  lastActivityAt: Date | null;
+  lastStageChangeAt: Date | null;
   transcriptExcerpt: string;
-  callScore: string | null;
-  callType: string | null;
-  redFlags: string[];
-  strengths: string[];
 }
 
-// ============ TIER 1: MISSED (RED) ============
+// ============ SALES PROCESS PIPELINE STAGE CLASSIFICATION ============
 
-const MOTIVATION_KEYWORDS = [
-  "divorce", "divorcing", "separated",
-  "foreclosure", "pre-foreclosure", "behind on payments", "can't afford",
-  "death", "passed away", "inherited", "estate",
-  "relocating", "moving", "transferred",
-  "tired of landlording", "bad tenants", "tenant issues",
-  "code violations", "condemned", "fire damage",
-  "tax lien", "tax sale", "back taxes",
-  "health issues", "hospital", "medical",
-  "downsizing", "retirement",
-  "job loss", "laid off", "unemployed"
+// These stage names are matched case-insensitively
+const ACTIVE_DEAL_STAGES = [
+  "new lead", "warm leads", "sms warm leads", "hot leads",
+  "pending apt", "walkthrough apt scheduled", "offer apt scheduled",
+  "made offer", "under contract", "purchased"
 ];
 
-const OBJECTION_KEYWORDS = [
-  "not interested", "no thanks", "don't call",
-  "too low", "that's insulting", "worth more",
-  "need to think", "let me think", "talk to my",
-  "not ready", "maybe later", "call back",
-  "already listed", "have an agent", "realtor",
-  "just looking", "just curious"
+const FOLLOW_UP_STAGES = [
+  "1 month follow up", "4 month follow up", "1 year follow up",
+  "follow up", "new offer", "new walkthrough"
 ];
 
-const URGENCY_KEYWORDS = [
-  "need to sell fast", "need to sell quick", "asap",
-  "moving next month", "closing date", "deadline",
-  "can't wait", "urgent", "immediately",
-  "foreclosure date", "auction", "sheriff sale"
+const DEAD_STAGES = [
+  "ghosted lead", "ghosted", "agreement not closed", "do not want",
+  "sold", "trash"
 ];
 
-function detectMissedOpportunities(
-  call: any,
-  grade: any,
-  transcript: string
-): { triggers: string[]; score: number } {
-  const triggers: string[] = [];
-  let score = 0;
-  const lowerTranscript = transcript.toLowerCase();
-
-  // Rule 1: Premature DQ — call ended quickly despite motivation signals
-  const motivationFound = MOTIVATION_KEYWORDS.filter(k => lowerTranscript.includes(k));
-  if (motivationFound.length > 0) {
-    // Check if the call was short (under 3 min) or ended abruptly
-    if (call.duration && call.duration < 180) {
-      triggers.push("premature_dq");
-      score += 30;
-    }
-    // Check if the grade flagged issues
-    if (grade?.overallScore && parseFloat(grade.overallScore) < 60) {
-      triggers.push("low_score_with_motivation");
-      score += 20;
-    }
-  }
-
-  // Rule 2: Unexplored motivation — seller mentioned motivation but rep didn't dig deeper
-  if (motivationFound.length > 0) {
-    // Check if rep asked follow-up questions about the motivation
-    const followUpPhrases = ["tell me more", "can you explain", "what happened", "how long", "when did"];
-    const hasFollowUp = followUpPhrases.some(p => lowerTranscript.includes(p));
-    if (!hasFollowUp) {
-      triggers.push("unexplored_motivation");
-      score += 25;
-    }
-  }
-
-  // Rule 3: Unaddressed objection — seller objected and rep didn't handle it
-  const objectionsFound = OBJECTION_KEYWORDS.filter(k => lowerTranscript.includes(k));
-  if (objectionsFound.length > 0 && grade?.redFlags && Array.isArray(grade.redFlags) && grade.redFlags.length > 0) {
-    triggers.push("unaddressed_objection");
-    score += 20;
-  }
-
-  // Rule 4: Missed urgency — seller expressed urgency but no appointment was set
-  const urgencyFound = URGENCY_KEYWORDS.filter(k => lowerTranscript.includes(k));
-  if (urgencyFound.length > 0 && call.callOutcome !== "appointment_set") {
-    triggers.push("missed_urgency");
-    score += 35;
-  }
-
-  // Rule 5: Poor grade on a warm/hot lead call
-  if (grade?.overallScore && parseFloat(grade.overallScore) < 50) {
-    triggers.push("very_low_score");
-    score += 15;
-  }
-
-  return { triggers, score };
+function classifyStage(stageName: string): "active" | "follow_up" | "dead" | "unknown" {
+  const lower = stageName.toLowerCase();
+  if (ACTIVE_DEAL_STAGES.some(s => lower.includes(s.toLowerCase()))) return "active";
+  if (FOLLOW_UP_STAGES.some(s => lower.includes(s.toLowerCase()))) return "follow_up";
+  if (DEAD_STAGES.some(s => lower.includes(s.toLowerCase()))) return "dead";
+  return "unknown";
 }
 
-// ============ TIER 2: WARNING (YELLOW) ============
-
-function detectWarningOpportunities(
-  call: any,
-  grade: any,
-  transcript: string,
-  recentCallsForContact: any[]
-): { triggers: string[]; score: number } {
-  const triggers: string[] = [];
-  let score = 0;
-  const lowerTranscript = transcript.toLowerCase();
-
-  // Rule 1: Slow response — inbound call not returned within 24h
-  // (This would need call history comparison — simplified here)
-  if (call.callDirection === "inbound" && call.callOutcome === "no_answer") {
-    // Check if there's a follow-up outbound call within 24h
-    const callTime = call.callTimestamp ? new Date(call.callTimestamp).getTime() : 0;
-    const hasFollowUp = recentCallsForContact.some(c => {
-      if (c.callDirection !== "outbound" || c.id === call.id) return false;
-      const cTime = c.callTimestamp ? new Date(c.callTimestamp).getTime() : 0;
-      return cTime > callTime && cTime - callTime < 24 * 60 * 60 * 1000;
-    });
-    if (!hasFollowUp) {
-      triggers.push("slow_response");
-      score += 20;
-    }
-  }
-
-  // Rule 2: Unanswered callback — seller requested callback but none logged
-  if (call.callOutcome === "callback_scheduled") {
-    const callTime = call.callTimestamp ? new Date(call.callTimestamp).getTime() : 0;
-    const hasCallback = recentCallsForContact.some(c => {
-      if (c.id === call.id) return false;
-      const cTime = c.callTimestamp ? new Date(c.callTimestamp).getTime() : 0;
-      return cTime > callTime;
-    });
-    if (!hasCallback) {
-      triggers.push("unanswered_callback");
-      score += 25;
-    }
-  }
-
-  // Rule 3: Declining engagement — multiple calls with decreasing scores
-  if (recentCallsForContact.length >= 2) {
-    // Check if scores are declining
-    const scores = recentCallsForContact
-      .filter(c => c.grade?.overallScore)
-      .map(c => parseFloat(c.grade.overallScore))
-      .slice(0, 3);
-    if (scores.length >= 2 && scores[0] < scores[scores.length - 1] - 10) {
-      triggers.push("declining_engagement");
-      score += 15;
-    }
-  }
-
-  // Rule 4: Interested but no follow-up — seller showed interest but no next step
-  if (call.callOutcome === "interested" || lowerTranscript.includes("send me an offer") || lowerTranscript.includes("what can you offer")) {
-    if (call.callOutcome !== "appointment_set" && call.callOutcome !== "offer_made") {
-      triggers.push("interested_no_followup");
-      score += 20;
-    }
-  }
-
-  return { triggers, score };
+function isHighValueStage(stageName: string): boolean {
+  const lower = stageName.toLowerCase();
+  return ["warm leads", "hot leads", "pending apt", "walkthrough apt scheduled", "offer apt scheduled", "made offer"].some(
+    s => lower.includes(s.toLowerCase())
+  );
 }
 
-// ============ TIER 3: POSSIBLE (GREEN) ============
+function isOfferOrBeyond(stageName: string): boolean {
+  const lower = stageName.toLowerCase();
+  return ["made offer", "offer apt scheduled"].some(s => lower.includes(s.toLowerCase()));
+}
 
-function detectPossibleOpportunities(
-  call: any,
-  grade: any,
-  transcript: string
-): { triggers: string[]; score: number } {
-  const triggers: string[] = [];
-  let score = 0;
-  const lowerTranscript = transcript.toLowerCase();
+function isWalkthroughStage(stageName: string): boolean {
+  return stageName.toLowerCase().includes("walkthrough");
+}
 
-  // Rule 1: Hidden motivation — subtle signals in transcript
-  const subtleSignals = [
-    "might sell", "thinking about selling", "considering",
-    "what would you pay", "what's it worth", "market value",
-    "how does this work", "what's the process",
-    "my neighbor sold", "friend sold their house",
-    "property is vacant", "not living there", "renting it out"
+// ============ GHL API HELPERS ============
+
+async function ghlFetch(creds: GHLCredentials, path: string): Promise<any> {
+  const url = `${GHL_API_BASE}${path}`;
+  const response = await fetch(url, {
+    headers: {
+      "Authorization": `Bearer ${creds.apiKey}`,
+      "Version": "2021-07-28",
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`GHL API ${response.status}: ${await response.text()}`);
+  }
+  return response.json();
+}
+
+async function fetchPipelines(creds: GHLCredentials): Promise<Pipeline[]> {
+  const data = await ghlFetch(creds, `/opportunities/pipelines?locationId=${creds.locationId}`);
+  return data.pipelines || [];
+}
+
+async function fetchPipelineOpportunities(
+  creds: GHLCredentials,
+  pipelineId: string,
+  stageId?: string,
+  maxResults = 100
+): Promise<GHLPipelineOpportunity[]> {
+  const allOpps: GHLPipelineOpportunity[] = [];
+  const pageSize = Math.min(maxResults, 100); // GHL max is 100 per page
+  let startAfter: string | number | undefined;
+  let startAfterId: string | undefined;
+  let fetched = 0;
+
+  while (fetched < maxResults) {
+    let path = `/opportunities/search?location_id=${creds.locationId}&pipeline_id=${pipelineId}&limit=${pageSize}`;
+    if (stageId) path += `&pipeline_stage_id=${stageId}`;
+    if (startAfter && startAfterId) path += `&startAfter=${startAfter}&startAfterId=${startAfterId}`;
+    const data = await ghlFetch(creds, path);
+    const opps = data.opportunities || [];
+    allOpps.push(...opps);
+    fetched += opps.length;
+    if (opps.length < pageSize) break; // No more pages
+    // Use meta pagination cursors from GHL response
+    const meta = data.meta;
+    if (meta?.startAfter && meta?.startAfterId) {
+      startAfter = meta.startAfter;
+      startAfterId = meta.startAfterId;
+    } else {
+      break; // No more pages
+    }
+  }
+
+  return allOpps.slice(0, maxResults);
+}
+
+async function fetchRecentConversations(
+  creds: GHLCredentials,
+  limit = 50
+): Promise<GHLConversation[]> {
+  const data = await ghlFetch(
+    creds,
+    `/conversations/search?locationId=${creds.locationId}&limit=${limit}&sort=desc&sortBy=last_message_date`
+  );
+  return data.conversations || [];
+}
+
+async function fetchContactById(creds: GHLCredentials, contactId: string): Promise<any> {
+  try {
+    const data = await ghlFetch(creds, `/contacts/${contactId}`);
+    return data.contact || data;
+  } catch {
+    return null;
+  }
+}
+
+// ============ DETECTION RULES ============
+
+/**
+ * TIER 1 — MISSED DEALS (urgent, money left on table)
+ */
+
+// Rule 1: Lead moved backward from active to follow-up without outbound call
+async function detectBackwardMovement(
+  opp: GHLPipelineOpportunity,
+  stageName: string,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  const stageClass = classifyStage(stageName);
+  if (stageClass !== "follow_up") return null;
+
+  // Check if this opportunity was recently in an active stage
+  // We detect this by looking at lastStageChangeAt — if it's recent (within 7 days),
+  // the lead was likely moved from an active stage
+  const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null;
+  if (!stageChangeAt) return null;
+  
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  if (stageChangeAt < sevenDaysAgo) return null;
+
+  // Check if there was an outbound call to this contact around the stage change
+  const contactCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, opp.contactId),
+        eq(calls.callDirection, "outbound"),
+        gte(calls.callTimestamp, new Date(stageChangeAt.getTime() - 24 * 60 * 60 * 1000))
+      )
+    )
+    .limit(1);
+
+  if (contactCalls.length > 0) return null; // They did call before moving
+
+  return {
+    tier: "missed",
+    triggerRules: ["backward_movement_no_call"],
+    priorityScore: 75,
+    contactName: opp.name || opp.contact?.name || null,
+    contactPhone: opp.contact?.phone || null,
+    propertyAddress: null,
+    ghlContactId: opp.contactId,
+    ghlOpportunityId: opp.id,
+    ghlPipelineStageId: opp.pipelineStageId,
+    ghlPipelineStageName: stageName,
+    relatedCallId: null,
+    teamMemberId: null,
+    teamMemberName: null,
+    assignedTo: opp.assignedTo || null,
+    detectionSource: "pipeline",
+    lastActivityAt: stageChangeAt,
+    lastStageChangeAt: stageChangeAt,
+    transcriptExcerpt: "",
+  };
+}
+
+// Rule 2: Repeat inbound from same seller (2+ in a week) not prioritized
+async function detectRepeatInbound(
+  conversation: GHLConversation,
+  creds: GHLCredentials,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  if (conversation.lastMessageDirection !== "inbound") return null;
+
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  
+  // Check how many inbound calls/messages from this contact in the last week
+  const recentInbound = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, conversation.contactId),
+        eq(calls.callDirection, "inbound"),
+        gte(calls.callTimestamp, oneWeekAgo)
+      )
+    );
+
+  if (recentInbound.length < 2) return null;
+
+  // Check if team responded (outbound call after the inbound)
+  const latestInbound = recentInbound[0];
+  const responseCall = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, conversation.contactId),
+        eq(calls.callDirection, "outbound"),
+        gte(calls.callTimestamp, latestInbound.callTimestamp)
+      )
+    )
+    .limit(1);
+
+  if (responseCall.length > 0) return null; // Team responded
+
+  return {
+    tier: "missed",
+    triggerRules: ["repeat_inbound_ignored"],
+    priorityScore: 80,
+    contactName: conversation.fullName || conversation.contactName || null,
+    contactPhone: conversation.phone || null,
+    propertyAddress: null,
+    ghlContactId: conversation.contactId,
+    ghlOpportunityId: null,
+    ghlPipelineStageId: null,
+    ghlPipelineStageName: null,
+    relatedCallId: latestInbound?.id || null,
+    teamMemberId: null,
+    teamMemberName: null,
+    assignedTo: null,
+    detectionSource: "conversation",
+    lastActivityAt: new Date(conversation.lastMessageDate),
+    lastStageChangeAt: null,
+    transcriptExcerpt: "",
+  };
+}
+
+// Rule 3: Inbound from Follow Up lead unanswered within 4 hours
+async function detectFollowUpInboundIgnored(
+  conversation: GHLConversation,
+  opp: GHLPipelineOpportunity | null,
+  stageName: string | null,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  if (conversation.lastMessageDirection !== "inbound") return null;
+  if (!stageName || classifyStage(stageName) !== "follow_up") return null;
+
+  const lastMsgTime = new Date(conversation.lastMessageDate);
+  const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+  
+  // Only flag if the inbound was more than 4 hours ago and still unanswered
+  if (lastMsgTime > fourHoursAgo) return null; // Still within SLA
+
+  // Check if there was a response
+  if (conversation.unreadCount === 0) return null; // Already read/responded
+
+  return {
+    tier: "missed",
+    triggerRules: ["followup_inbound_ignored"],
+    priorityScore: 85,
+    contactName: conversation.fullName || conversation.contactName || null,
+    contactPhone: conversation.phone || null,
+    propertyAddress: null,
+    ghlContactId: conversation.contactId,
+    ghlOpportunityId: opp?.id || null,
+    ghlPipelineStageId: opp?.pipelineStageId || null,
+    ghlPipelineStageName: stageName,
+    relatedCallId: null,
+    teamMemberId: null,
+    teamMemberName: null,
+    assignedTo: opp?.assignedTo || null,
+    detectionSource: "conversation",
+    lastActivityAt: lastMsgTime,
+    lastStageChangeAt: null,
+    transcriptExcerpt: conversation.lastMessageBody || "",
+  };
+}
+
+// Rule 4: Offer made but no counter/follow-up within 48h
+async function detectOfferNoFollowUp(
+  opp: GHLPipelineOpportunity,
+  stageName: string,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  if (!isOfferOrBeyond(stageName)) return null;
+
+  const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null;
+  if (!stageChangeAt) return null;
+
+  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  if (stageChangeAt > fortyEightHoursAgo) return null; // Still within window
+
+  // Check if there's been any outbound activity since the offer
+  const recentOutbound = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, opp.contactId),
+        eq(calls.callDirection, "outbound"),
+        gte(calls.callTimestamp, stageChangeAt)
+      )
+    )
+    .limit(1);
+
+  if (recentOutbound.length > 0) return null; // There was follow-up
+
+  return {
+    tier: "missed",
+    triggerRules: ["offer_no_followup"],
+    priorityScore: 80,
+    contactName: opp.name || opp.contact?.name || null,
+    contactPhone: opp.contact?.phone || null,
+    propertyAddress: null,
+    ghlContactId: opp.contactId,
+    ghlOpportunityId: opp.id,
+    ghlPipelineStageId: opp.pipelineStageId,
+    ghlPipelineStageName: stageName,
+    relatedCallId: null,
+    teamMemberId: null,
+    teamMemberName: null,
+    assignedTo: opp.assignedTo || null,
+    detectionSource: "pipeline",
+    lastActivityAt: stageChangeAt,
+    lastStageChangeAt: stageChangeAt,
+    transcriptExcerpt: "",
+  };
+}
+
+// Rule 5: New lead with no first call within 15 min SLA
+async function detectNewLeadSLABreach(
+  opp: GHLPipelineOpportunity,
+  stageName: string,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  const lower = stageName.toLowerCase();
+  if (!lower.includes("new lead")) return null;
+
+  const createdAt = new Date(opp.createdAt);
+  const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
+  
+  if (createdAt > fifteenMinAgo) return null; // Still within SLA
+
+  // Check if there's been any outbound call
+  const outboundCall = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, opp.contactId),
+        gte(calls.callTimestamp, createdAt)
+      )
+    )
+    .limit(1);
+
+  if (outboundCall.length > 0) return null; // Call was made
+
+  // Only flag if lead is still in New Lead stage (hasn't progressed)
+  if (opp.pipelineStageId !== opp.pipelineStageId) return null; // redundant but safe
+
+  return {
+    tier: "missed",
+    triggerRules: ["new_lead_sla_breach"],
+    priorityScore: 70,
+    contactName: opp.name || opp.contact?.name || null,
+    contactPhone: opp.contact?.phone || null,
+    propertyAddress: null,
+    ghlContactId: opp.contactId,
+    ghlOpportunityId: opp.id,
+    ghlPipelineStageId: opp.pipelineStageId,
+    ghlPipelineStageName: stageName,
+    relatedCallId: null,
+    teamMemberId: null,
+    teamMemberName: null,
+    assignedTo: opp.assignedTo || null,
+    detectionSource: "pipeline",
+    lastActivityAt: createdAt,
+    lastStageChangeAt: null,
+    transcriptExcerpt: "",
+  };
+}
+
+// Rule 6: Seller stated price but no follow-up within 48h (transcript-enriched)
+async function detectPriceStatedNoFollowUp(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+
+  // Get recent calls with transcripts
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, "completed"),
+        eq(calls.classification, "conversation"),
+        gte(calls.callTimestamp, fourDaysAgo),
+        lt(calls.callTimestamp, twoDaysAgo)
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(50);
+
+  const pricePatterns = [
+    /i(?:'d|would)\s+take\s+\$?[\d,]+/i,
+    /asking\s+(?:price\s+)?(?:is\s+)?\$?[\d,]+/i,
+    /i\s+want\s+\$?[\d,]+/i,
+    /(?:need|want)\s+at\s+least\s+\$?[\d,]+/i,
+    /\$[\d,]+\s*(?:thousand|k)/i,
+    /bottom\s+(?:line|dollar)\s+(?:is\s+)?\$?[\d,]+/i,
   ];
-  const subtleFound = subtleSignals.filter(s => lowerTranscript.includes(s));
-  if (subtleFound.length > 0) {
-    triggers.push("hidden_motivation");
-    score += 15;
+
+  for (const call of recentCalls) {
+    if (!call.transcript || !call.ghlContactId) continue;
+
+    const hasPriceMention = pricePatterns.some(p => p.test(call.transcript));
+    if (!hasPriceMention) continue;
+
+    // Check if there was a follow-up call after this one
+    const followUp = await db
+      .select()
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId),
+          gte(calls.callTimestamp, call.callTimestamp)
+        )
+      )
+      .limit(2);
+
+    if (followUp.length > 1) continue; // There was a follow-up
+
+    results.push({
+      tier: "missed",
+      triggerRules: ["price_stated_no_followup"],
+      priorityScore: 85,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "hybrid",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: call.transcript.substring(0, 500),
+    });
   }
 
-  // Rule 2: Re-engage candidate — old lead with no recent contact
-  // (This is more of a batch check, handled in the main detection loop)
+  return results;
+}
 
-  // Rule 3: High-value property signals
-  if (lowerTranscript.includes("multiple properties") || lowerTranscript.includes("portfolio") || lowerTranscript.includes("several houses")) {
-    triggers.push("multi_property_owner");
-    score += 20;
+/**
+ * TIER 2 — AT RISK (needs attention soon)
+ */
+
+// Rule 7: Motivated seller with only 1 call, no 2nd attempt in 72h
+async function detectMotivatedOneDone(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const MOTIVATION_KEYWORDS = [
+    "divorce", "foreclosure", "inherited", "estate", "relocating",
+    "tired of landlording", "bad tenants", "code violations", "fire damage",
+    "tax lien", "back taxes", "health issues", "downsizing", "job loss",
+    "need to sell fast", "need to sell quick", "asap", "deadline",
+    "can't afford", "behind on payments", "passed away", "death"
+  ];
+
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, "completed"),
+        eq(calls.classification, "conversation"),
+        gte(calls.callTimestamp, sevenDaysAgo),
+        lt(calls.callTimestamp, threeDaysAgo)
+      )
+    )
+    .limit(50);
+
+  for (const call of recentCalls) {
+    if (!call.transcript || !call.ghlContactId) continue;
+
+    const lower = call.transcript.toLowerCase();
+    const hasMotivation = MOTIVATION_KEYWORDS.some(k => lower.includes(k));
+    if (!hasMotivation) continue;
+
+    // Check total calls to this contact
+    const allCalls = await db
+      .select({ id: calls.id })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId)
+        )
+      );
+
+    if (allCalls.length > 1) continue; // Multiple calls exist
+
+    results.push({
+      tier: "warning",
+      triggerRules: ["motivated_one_and_done"],
+      priorityScore: 65,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "hybrid",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: call.transcript.substring(0, 500),
+    });
   }
 
-  // Rule 4: Positive sentiment despite no commitment
-  if (grade?.strengths && Array.isArray(grade.strengths) && grade.strengths.length >= 2) {
-    if (call.callOutcome === "none" || call.callOutcome === "callback_scheduled") {
-      triggers.push("positive_no_commitment");
-      score += 10;
+  return results;
+}
+
+// Rule 8: Lead in Pending Apt/Walkthrough 5+ days with no activity
+async function detectStaleActiveStage(
+  opp: GHLPipelineOpportunity,
+  stageName: string,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  const lower = stageName.toLowerCase();
+  const isStaleCandidate = lower.includes("pending apt") || lower.includes("walkthrough");
+  if (!isStaleCandidate) return null;
+
+  const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : new Date(opp.updatedAt);
+  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+  
+  if (stageChangeAt > fiveDaysAgo) return null; // Not stale yet
+
+  // Check for any recent activity (calls)
+  const recentActivity = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, opp.contactId),
+        gte(calls.callTimestamp, fiveDaysAgo)
+      )
+    )
+    .limit(1);
+
+  if (recentActivity.length > 0) return null; // There's been activity
+
+  return {
+    tier: "warning",
+    triggerRules: ["stale_active_stage"],
+    priorityScore: 60,
+    contactName: opp.name || opp.contact?.name || null,
+    contactPhone: opp.contact?.phone || null,
+    propertyAddress: null,
+    ghlContactId: opp.contactId,
+    ghlOpportunityId: opp.id,
+    ghlPipelineStageId: opp.pipelineStageId,
+    ghlPipelineStageName: stageName,
+    relatedCallId: null,
+    teamMemberId: null,
+    teamMemberName: null,
+    assignedTo: opp.assignedTo || null,
+    detectionSource: "pipeline",
+    lastActivityAt: stageChangeAt,
+    lastStageChangeAt: stageChangeAt,
+    transcriptExcerpt: "",
+  };
+}
+
+// Rule 9: Lead marked dead/DQ'd but transcript had real selling signals
+async function detectDeadWithSignals(
+  opp: GHLPipelineOpportunity,
+  stageName: string,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  if (classifyStage(stageName) !== "dead") return null;
+
+  const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null;
+  if (!stageChangeAt) return null;
+
+  // Only check recently dead leads (within 14 days)
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  if (stageChangeAt < fourteenDaysAgo) return null;
+
+  // Find calls for this contact with transcripts
+  const contactCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, opp.contactId),
+        eq(calls.classification, "conversation")
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(3);
+
+  if (contactCalls.length === 0) return null;
+
+  const SELLING_SIGNALS = [
+    "timeline", "moving", "relocating", "need to sell",
+    "divorce", "inherited", "estate", "foreclosure",
+    "fire damage", "condemned", "vacant", "not living there",
+    "how does this work", "what would you pay", "send me an offer",
+    "what can you offer", "interested", "thinking about selling",
+    "might sell", "considering", "what's it worth"
+  ];
+
+  let hasSignals = false;
+  let excerpt = "";
+  let relatedCallId: number | null = null;
+
+  for (const call of contactCalls) {
+    if (!call.transcript) continue;
+    const lower = call.transcript.toLowerCase();
+    const signals = SELLING_SIGNALS.filter(s => lower.includes(s));
+    if (signals.length >= 2) {
+      hasSignals = true;
+      excerpt = call.transcript.substring(0, 500);
+      relatedCallId = call.id;
+      break;
     }
   }
 
-  return { triggers, score };
+  if (!hasSignals) return null;
+
+  return {
+    tier: "warning",
+    triggerRules: ["dead_with_selling_signals"],
+    priorityScore: 70,
+    contactName: opp.name || opp.contact?.name || null,
+    contactPhone: opp.contact?.phone || null,
+    propertyAddress: null,
+    ghlContactId: opp.contactId,
+    ghlOpportunityId: opp.id,
+    ghlPipelineStageId: opp.pipelineStageId,
+    ghlPipelineStageName: stageName,
+    relatedCallId,
+    teamMemberId: contactCalls[0]?.teamMemberId || null,
+    teamMemberName: contactCalls[0]?.teamMemberName || null,
+    assignedTo: opp.assignedTo || null,
+    detectionSource: "hybrid",
+    lastActivityAt: stageChangeAt,
+    lastStageChangeAt: stageChangeAt,
+    transcriptExcerpt: excerpt,
+  };
+}
+
+// Rule 10: Walkthrough completed but no offer sent within 24h
+async function detectWalkthroughNoOffer(
+  opp: GHLPipelineOpportunity,
+  stageName: string,
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity | null> {
+  if (!isWalkthroughStage(stageName)) return null;
+
+  const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null;
+  if (!stageChangeAt) return null;
+
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  if (stageChangeAt > twentyFourHoursAgo) return null; // Still within window
+
+  // Check if they've moved to offer stage or beyond — if so, no issue
+  // Since we're checking the current stage and it's still walkthrough, that means no progression
+
+  return {
+    tier: "warning",
+    triggerRules: ["walkthrough_no_offer"],
+    priorityScore: 65,
+    contactName: opp.name || opp.contact?.name || null,
+    contactPhone: opp.contact?.phone || null,
+    propertyAddress: null,
+    ghlContactId: opp.contactId,
+    ghlOpportunityId: opp.id,
+    ghlPipelineStageId: opp.pipelineStageId,
+    ghlPipelineStageName: stageName,
+    relatedCallId: null,
+    teamMemberId: null,
+    teamMemberName: null,
+    assignedTo: opp.assignedTo || null,
+    detectionSource: "pipeline",
+    lastActivityAt: stageChangeAt,
+    lastStageChangeAt: stageChangeAt,
+    transcriptExcerpt: "",
+  };
+}
+
+// Rule 11: Multiple leads from same property address
+async function detectDuplicateProperty(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Find property addresses that appear in multiple calls with different contacts
+  const duplicates = await db
+    .select({
+      propertyAddress: calls.propertyAddress,
+      count: sql<number>`COUNT(DISTINCT ${calls.ghlContactId})`,
+    })
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.callTimestamp, thirtyDaysAgo),
+        sql`${calls.propertyAddress} IS NOT NULL AND ${calls.propertyAddress} != ''`,
+        sql`${calls.ghlContactId} IS NOT NULL`
+      )
+    )
+    .groupBy(calls.propertyAddress)
+    .having(sql`COUNT(DISTINCT ${calls.ghlContactId}) >= 2`);
+
+  for (const dup of duplicates) {
+    // Get the calls for this property
+    const propertyCalls = await db
+      .select()
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.propertyAddress, dup.propertyAddress)
+        )
+      )
+      .orderBy(desc(calls.callTimestamp))
+      .limit(5);
+
+    if (propertyCalls.length < 2) continue;
+
+    results.push({
+      tier: "warning",
+      triggerRules: ["duplicate_property_address"],
+      priorityScore: 55,
+      contactName: propertyCalls[0].contactName,
+      contactPhone: propertyCalls[0].contactPhone,
+      propertyAddress: dup.propertyAddress,
+      ghlContactId: propertyCalls[0].ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: propertyCalls[0].id,
+      teamMemberId: null,
+      teamMemberName: null,
+      assignedTo: null,
+      detectionSource: "pipeline",
+      lastActivityAt: propertyCalls[0].callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: `${dup.count} different contacts called about this property`,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * TIER 3 — WORTH A LOOK
+ */
+
+// Rule 12: Seller said "call me back in [timeframe]" — check if callback happened
+async function detectMissedCallback(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, "completed"),
+        eq(calls.classification, "conversation"),
+        gte(calls.callTimestamp, sevenDaysAgo)
+      )
+    )
+    .limit(50);
+
+  const callbackPatterns = [
+    /call\s+(?:me\s+)?back\s+(?:in\s+)?(?:a\s+)?(?:few|couple|two|three|2|3)?\s*(?:days?|weeks?|hours?|minutes?)/i,
+    /(?:try|call)\s+(?:me\s+)?(?:back\s+)?(?:tomorrow|next week|monday|tuesday|wednesday|thursday|friday)/i,
+    /(?:i'll|i will)\s+be\s+(?:available|free|around)\s+(?:tomorrow|next|on)/i,
+    /(?:reach|get)\s+(?:back\s+)?(?:to\s+)?me\s+(?:later|tomorrow|next)/i,
+  ];
+
+  for (const call of recentCalls) {
+    if (!call.transcript || !call.ghlContactId) continue;
+
+    const hasCallbackRequest = callbackPatterns.some(p => p.test(call.transcript));
+    if (!hasCallbackRequest) continue;
+
+    // Check if there was a follow-up call
+    const followUp = await db
+      .select()
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId),
+          gte(calls.callTimestamp, call.callTimestamp)
+        )
+      )
+      .limit(2);
+
+    if (followUp.length > 1) continue; // Callback was made
+
+    results.push({
+      tier: "possible",
+      triggerRules: ["missed_callback_request"],
+      priorityScore: 50,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "hybrid",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: call.transcript.substring(0, 500),
+    });
+  }
+
+  return results;
+}
+
+// Rule 13: High seller talk-time ratio but got DQ'd
+async function detectHighTalkTimeDQ(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  // Get calls that were marked as dead/not interested but had long duration
+  const dqdCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, "completed"),
+        eq(calls.classification, "conversation"),
+        inArray(calls.callOutcome, ["not_interested", "dead"]),
+        gte(calls.callTimestamp, fourteenDaysAgo),
+        gte(calls.duration, 180) // 3+ minute calls — seller was talking
+      )
+    )
+    .limit(30);
+
+  for (const call of dqdCalls) {
+    if (!call.transcript || !call.ghlContactId) continue;
+
+    // Simple heuristic: if transcript is long (seller talked a lot), motivation was likely there
+    // A truly uninterested seller hangs up quickly
+    if (call.transcript.length < 1000) continue; // Short transcript = short conversation
+
+    // Check if there's only 1 call to this contact (one-and-done DQ)
+    const allCalls = await db
+      .select({ id: calls.id })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId)
+        )
+      );
+
+    if (allCalls.length > 1) continue; // Multiple attempts were made
+
+    results.push({
+      tier: "possible",
+      triggerRules: ["high_talk_time_dq"],
+      priorityScore: 45,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "hybrid",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: call.transcript.substring(0, 500),
+    });
+  }
+
+  return results;
 }
 
 // ============ AI REASON GENERATION ============
 
-async function generateAIReason(detection: DetectionResult): Promise<{ reason: string; suggestion: string }> {
+const RULE_DESCRIPTIONS: Record<string, { label: string; context: string }> = {
+  backward_movement_no_call: {
+    label: "Lead Moved to Follow Up Without a Call",
+    context: "Lead was in an active pipeline stage and got moved to follow-up without anyone making an outbound call first."
+  },
+  repeat_inbound_ignored: {
+    label: "Repeat Inbound — Nobody Responded",
+    context: "This seller has reached out multiple times in the past week but the team hasn't responded."
+  },
+  followup_inbound_ignored: {
+    label: "Follow Up Lead Reached Out — No Response",
+    context: "A lead in the follow-up pipeline reached back out (inbound) but hasn't gotten a response within 4 hours."
+  },
+  offer_no_followup: {
+    label: "Offer Made — Team Went Silent",
+    context: "An offer was made but nobody followed up within 48 hours. The seller didn't say no — the team just stopped."
+  },
+  new_lead_sla_breach: {
+    label: "New Lead — No Call Within 15 Min",
+    context: "A new lead came in but nobody called within the 15-minute SLA window."
+  },
+  price_stated_no_followup: {
+    label: "Seller Stated Price — No Follow Up",
+    context: "The seller mentioned a specific price they'd accept during a call, but nobody followed up within 48 hours."
+  },
+  motivated_one_and_done: {
+    label: "Motivated Seller — Only 1 Call Attempt",
+    context: "Seller showed clear motivation (life event, timeline, urgency) but the team only made one call attempt with no follow-up in 72 hours."
+  },
+  stale_active_stage: {
+    label: "Stale in Active Stage",
+    context: "Lead has been sitting in Pending Apt or Walkthrough for 5+ days with no activity."
+  },
+  dead_with_selling_signals: {
+    label: "DQ'd Lead Had Real Selling Signals",
+    context: "Lead was marked dead/ghosted but the call transcript shows real selling signals (timeline, condition, life event)."
+  },
+  walkthrough_no_offer: {
+    label: "Walkthrough Done — No Offer Sent",
+    context: "A walkthrough was completed but no offer has been sent within 24 hours."
+  },
+  duplicate_property_address: {
+    label: "Multiple Contacts — Same Property",
+    context: "Different household members have called about the same property address but nobody connected the dots."
+  },
+  missed_callback_request: {
+    label: "Seller Asked for Callback — None Made",
+    context: "The seller specifically asked to be called back at a certain time, but no callback was logged."
+  },
+  high_talk_time_dq: {
+    label: "Long Conversation — DQ'd Too Fast",
+    context: "Seller did most of the talking (3+ min call, long transcript) but got DQ'd after just one attempt. Usually means motivation was there."
+  },
+};
+
+async function generateAIReason(detection: DetectedOpportunity): Promise<{ reason: string; suggestion: string }> {
+  const ruleDesc = RULE_DESCRIPTIONS[detection.triggerRules[0]];
+  
   try {
     const response = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: `You are a real estate wholesaling sales manager reviewing missed opportunities. 
-Generate a brief explanation and actionable suggestion for a flagged opportunity.
+          content: `You are a real estate wholesaling Acquisition Manager reviewing your team's pipeline for missed deals.
+Generate a brief, direct explanation and actionable next step.
 
 RULES:
-- Reason: 1-2 sentences explaining WHY this is a missed opportunity
-- Suggestion: 1-2 sentences with a SPECIFIC next action to take
-- Be direct and actionable, not generic
-- Reference the specific trigger rules and call details provided
-- Use a professional but urgent tone`
+- Reason: 1-2 sentences explaining what happened and why it matters. Be specific to this lead.
+- Suggestion: 1 sentence with a SPECIFIC action to take right now.
+- Write like a manager talking to their team, not a robot.
+- Reference the contact name and stage if available.`
         },
         {
           role: "user",
-          content: `Opportunity detected:
-Tier: ${detection.tier}
+          content: `Detection: ${ruleDesc?.label || detection.triggerRules[0]}
+Context: ${ruleDesc?.context || ""}
 Contact: ${detection.contactName || "Unknown"}
-Property: ${detection.propertyAddress || "Unknown"}
-Call type: ${detection.callType || "Unknown"}
-Call score: ${detection.callScore || "N/A"}
-Trigger rules: ${detection.triggerRules.join(", ")}
-Red flags from grading: ${detection.redFlags.join(", ") || "None"}
-Transcript excerpt (first 500 chars): ${detection.transcriptExcerpt.substring(0, 500)}
+Current Stage: ${detection.ghlPipelineStageName || "Unknown"}
+Last Activity: ${detection.lastActivityAt?.toISOString() || "Unknown"}
+Transcript excerpt: ${detection.transcriptExcerpt.substring(0, 300) || "N/A"}
 
-Generate a JSON response with "reason" and "suggestion" fields.`
+Generate JSON with "reason" and "suggestion" fields.`
         }
       ],
       response_format: {
@@ -270,8 +1130,8 @@ Generate a JSON response with "reason" and "suggestion" fields.`
           schema: {
             type: "object",
             properties: {
-              reason: { type: "string", description: "1-2 sentence explanation of why this is a missed opportunity" },
-              suggestion: { type: "string", description: "1-2 sentence specific actionable next step" }
+              reason: { type: "string", description: "1-2 sentence explanation" },
+              suggestion: { type: "string", description: "1 sentence specific action" }
             },
             required: ["reason", "suggestion"],
             additionalProperties: false
@@ -282,75 +1142,43 @@ Generate a JSON response with "reason" and "suggestion" fields.`
 
     const content = response.choices?.[0]?.message?.content;
     if (content && typeof content === "string") {
-      const parsed = JSON.parse(content);
-      return { reason: parsed.reason, suggestion: parsed.suggestion };
+      return JSON.parse(content);
     }
   } catch (error) {
     console.error("[OpportunityDetection] LLM error:", error);
   }
 
-  // Fallback to template-based reason
-  return generateTemplateReason(detection);
+  // Fallback
+  return {
+    reason: ruleDesc?.context || `${detection.triggerRules[0]} detected for ${detection.contactName || "this lead"}.`,
+    suggestion: "Review this lead and take action — there may be a deal here that's being missed."
+  };
 }
 
-function generateTemplateReason(detection: DetectionResult): { reason: string; suggestion: string } {
-  const ruleReasons: Record<string, { reason: string; suggestion: string }> = {
-    premature_dq: {
-      reason: `Call with ${detection.contactName || "this seller"} ended too quickly (under 3 min) despite motivation signals in the conversation.`,
-      suggestion: "Call back within 24 hours and ask about their situation. Lead with empathy and re-explore their motivation to sell."
-    },
-    unexplored_motivation: {
-      reason: `Seller mentioned motivation to sell but the rep didn't ask follow-up questions to understand their timeline or urgency.`,
-      suggestion: "Call back and dig deeper into their situation. Ask 'What's driving your decision to sell?' and 'What's your ideal timeline?'"
-    },
-    unaddressed_objection: {
-      reason: `Seller raised objections that weren't properly addressed, leaving potential value on the table.`,
-      suggestion: "Prepare responses for the specific objections raised, then call back with a tailored approach."
-    },
-    missed_urgency: {
-      reason: `Seller expressed urgency to sell but no appointment was set during the call.`,
-      suggestion: "Call back immediately and offer a specific appointment time. Their urgency means they're likely talking to other buyers."
-    },
-    slow_response: {
-      reason: `Inbound call from seller went unanswered and no follow-up was made within 24 hours.`,
-      suggestion: "Call back immediately. Every hour of delay reduces contact rate by 10%. Prioritize this lead."
-    },
-    unanswered_callback: {
-      reason: `Seller requested a callback but no follow-up call has been logged yet.`,
-      suggestion: "Make the callback today. The seller is expecting your call and may lose interest if you don't follow through."
-    },
-    interested_no_followup: {
-      reason: `Seller showed clear interest but no concrete next step was established.`,
-      suggestion: "Call back with a specific offer or appointment time. Don't leave interested sellers without a clear next step."
-    },
-    hidden_motivation: {
-      reason: `Subtle signals suggest this seller may be more motivated than they initially let on.`,
-      suggestion: "Schedule a follow-up call focused on building rapport and gently exploring their situation."
-    },
-    multi_property_owner: {
-      reason: `Seller mentioned multiple properties, indicating potential for multiple deals.`,
-      suggestion: "Prioritize this contact — ask about all their properties and offer a portfolio deal."
-    },
-    declining_engagement: {
-      reason: `Call quality scores are declining with this contact, suggesting the relationship is cooling.`,
-      suggestion: "Change the approach — try a different team member or adjust the pitch to re-engage."
-    },
-    positive_no_commitment: {
-      reason: `Call went well with positive rapport but no commitment was secured.`,
-      suggestion: "Follow up with a soft touch — send a text or leave a voicemail referencing the positive conversation."
-    },
-    very_low_score: {
-      reason: `Call received a very low grade, indicating significant room for improvement and a potentially lost lead.`,
-      suggestion: "Review the call recording with the team member for coaching, then have a senior rep call the seller back."
-    },
-    low_score_with_motivation: {
-      reason: `Despite the seller showing motivation to sell, the call scored poorly — indicating the rep may have mishandled the conversation.`,
-      suggestion: "Have a more experienced team member call back and re-engage. Review the original call for coaching."
-    }
-  };
+// ============ DEDUPLICATION ============
 
-  const primaryRule = detection.triggerRules[0] || "unexplored_motivation";
-  return ruleReasons[primaryRule] || ruleReasons.unexplored_motivation;
+async function isAlreadyFlagged(
+  db: any,
+  tenantId: number,
+  ghlContactId: string | null,
+  triggerRule: string
+): Promise<boolean> {
+  if (!ghlContactId) return false;
+
+  const existing = await db
+    .select({ id: opportunities.id })
+    .from(opportunities)
+    .where(
+      and(
+        eq(opportunities.tenantId, tenantId),
+        eq(opportunities.ghlContactId, ghlContactId),
+        eq(opportunities.status, "active"),
+        sql`JSON_CONTAINS(${opportunities.triggerRules}, ${JSON.stringify(triggerRule)})`
+      )
+    )
+    .limit(1);
+
+  return existing.length > 0;
 }
 
 // ============ MAIN DETECTION LOOP ============
@@ -361,7 +1189,6 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
   if (!db) return result;
 
   try {
-    // Get tenants to scan
     let tenantsToScan: Array<{ id: number; name: string }>;
     if (tenantId) {
       tenantsToScan = [{ id: tenantId, name: "specified" }];
@@ -372,136 +1199,7 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
 
     for (const tenant of tenantsToScan) {
       try {
-        // Get recent graded calls from the last 24 hours that haven't been flagged yet
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        
-        const recentCalls = await db
-          .select({
-            call: calls,
-            grade: callGrades,
-            member: teamMembers,
-          })
-          .from(calls)
-          .leftJoin(callGrades, eq(calls.id, callGrades.callId))
-          .leftJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
-          .where(
-            and(
-              eq(calls.tenantId, tenant.id),
-              eq(calls.status, "completed"),
-              gte(calls.createdAt, oneDayAgo),
-              // Only look at conversation calls (not voicemails, no-answers, etc.)
-              eq(calls.classification, "conversation")
-            )
-          )
-          .orderBy(desc(calls.createdAt))
-          .limit(100);
-
-        // Check which calls already have opportunities flagged
-        const callIds = recentCalls.map((c: any) => c.call.id);
-        if (callIds.length === 0) continue;
-
-        const existingOpps = await db
-          .select({ relatedCallId: opportunities.relatedCallId })
-          .from(opportunities)
-          .where(
-            and(
-              eq(opportunities.tenantId, tenant.id),
-              inArray(opportunities.relatedCallId, callIds)
-            )
-          );
-        const flaggedCallIds = new Set(existingOpps.map((o: any) => o.relatedCallId));
-
-        for (const { call, grade, member } of recentCalls) {
-          if (flaggedCallIds.has(call.id)) continue;
-          if (!call.transcript) continue;
-
-          const transcript = call.transcript;
-
-          // Get other calls for this contact (for warning detection)
-          let contactCalls: any[] = [];
-          if (call.ghlContactId) {
-            const otherCalls = await db
-              .select({ call: calls, grade: callGrades })
-              .from(calls)
-              .leftJoin(callGrades, eq(calls.id, callGrades.callId))
-              .where(
-                and(
-                  eq(calls.tenantId, tenant.id),
-                  eq(calls.ghlContactId, call.ghlContactId)
-                )
-              )
-              .orderBy(desc(calls.createdAt))
-              .limit(10);
-            contactCalls = otherCalls.map((c: any) => ({ ...c.call, grade: c.grade }));
-          }
-
-          // Run all three tier detections
-          const missed = detectMissedOpportunities(call, grade, transcript);
-          const warning = detectWarningOpportunities(call, grade, transcript, contactCalls);
-          const possible = detectPossibleOpportunities(call, grade, transcript);
-
-          // Determine the highest tier triggered
-          let tier: "missed" | "warning" | "possible" | null = null;
-          let triggers: string[] = [];
-          let score = 0;
-
-          if (missed.triggers.length > 0) {
-            tier = "missed";
-            triggers = missed.triggers;
-            score = missed.score;
-          } else if (warning.triggers.length > 0) {
-            tier = "warning";
-            triggers = warning.triggers;
-            score = warning.score;
-          } else if (possible.triggers.length > 0) {
-            tier = "possible";
-            triggers = possible.triggers;
-            score = possible.score;
-          }
-
-          if (!tier) continue;
-
-          // Build detection result for AI reason generation
-          const detection: DetectionResult = {
-            tier,
-            triggerRules: triggers,
-            priorityScore: Math.min(score, 100),
-            contactName: call.contactName,
-            contactPhone: call.contactPhone,
-            propertyAddress: call.propertyAddress,
-            ghlContactId: call.ghlContactId,
-            relatedCallId: call.id,
-            teamMemberId: call.teamMemberId,
-            teamMemberName: call.teamMemberName || member?.name || null,
-            transcriptExcerpt: transcript.substring(0, 1000),
-            callScore: grade?.overallScore?.toString() || null,
-            callType: call.callType,
-            redFlags: (grade?.redFlags as string[]) || [],
-            strengths: (grade?.strengths as string[]) || [],
-          };
-
-          // Generate AI reason and suggestion
-          const { reason, suggestion } = await generateAIReason(detection);
-
-          // Insert the opportunity
-          await db.insert(opportunities).values({
-            tenantId: tenant.id,
-            contactName: call.contactName,
-            contactPhone: call.contactPhone,
-            propertyAddress: call.propertyAddress,
-            ghlContactId: call.ghlContactId,
-            tier,
-            priorityScore: Math.min(score, 100),
-            triggerRules: triggers,
-            reason,
-            suggestion,
-            relatedCallId: call.id,
-            teamMemberId: call.teamMemberId,
-            teamMemberName: call.teamMemberName || member?.name || null,
-          });
-
-          result.detected++;
-        }
+        await scanTenant(db, tenant.id, result);
       } catch (tenantError) {
         console.error(`[OpportunityDetection] Error scanning tenant ${tenant.id}:`, tenantError);
         result.errors++;
@@ -514,4 +1212,261 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
 
   console.log(`[OpportunityDetection] Scan complete. Detected: ${result.detected}, Errors: ${result.errors}`);
   return result;
+}
+
+async function scanTenant(
+  db: any,
+  tenantId: number,
+  result: { detected: number; errors: number }
+): Promise<void> {
+  // Get tenant CRM credentials
+  const allTenants = await getTenantsWithCrm();
+  const tenant = allTenants.find(t => t.id === tenantId);
+  if (!tenant) return;
+
+  const config = parseCrmConfig(tenant);
+  if (!config.ghlApiKey || !config.ghlLocationId) return;
+
+  const creds: GHLCredentials = {
+    apiKey: config.ghlApiKey,
+    locationId: config.ghlLocationId,
+  };
+
+  const detections: DetectedOpportunity[] = [];
+
+  // ========== PHASE 1: GHL PIPELINE SCAN ==========
+  console.log(`[OpportunityDetection] Phase 1: Scanning GHL pipelines for tenant ${tenantId}`);
+
+  try {
+    const pipelines = await fetchPipelines(creds);
+    
+    // Find the Sales Process pipeline (main acquisition pipeline)
+    const salesPipeline = pipelines.find(p => p.name.toLowerCase().includes("sales process"));
+    
+    if (salesPipeline) {
+      // Build stage name lookup
+      const stageMap = new Map<string, string>();
+      for (const stage of salesPipeline.stages) {
+        stageMap.set(stage.id, stage.name);
+      }
+
+      // Scan all stages for pipeline-based rules
+      const allOpps = await fetchPipelineOpportunities(creds, salesPipeline.id, undefined, 200);
+      
+      for (const opp of allOpps) {
+        const stageName = stageMap.get(opp.pipelineStageId) || "Unknown";
+
+        // Rule 1: Backward movement
+        const backward = await detectBackwardMovement(opp, stageName, db, tenantId);
+        if (backward) detections.push(backward);
+
+        // Rule 4: Offer no follow-up
+        const offerStale = await detectOfferNoFollowUp(opp, stageName, db, tenantId);
+        if (offerStale) detections.push(offerStale);
+
+        // Rule 5: New lead SLA breach
+        const slaBreach = await detectNewLeadSLABreach(opp, stageName, db, tenantId);
+        if (slaBreach) detections.push(slaBreach);
+
+        // Rule 8: Stale active stage
+        const stale = await detectStaleActiveStage(opp, stageName, db, tenantId);
+        if (stale) detections.push(stale);
+
+        // Rule 9: Dead with signals
+        const deadSignals = await detectDeadWithSignals(opp, stageName, db, tenantId);
+        if (deadSignals) detections.push(deadSignals);
+
+        // Rule 10: Walkthrough no offer
+        const walkthrough = await detectWalkthroughNoOffer(opp, stageName, db, tenantId);
+        if (walkthrough) detections.push(walkthrough);
+      }
+    }
+
+    // Also check Follow Up pipeline for inbound signals
+    const followUpPipeline = pipelines.find(p => p.name.toLowerCase().includes("follow up"));
+    if (followUpPipeline) {
+      const followUpStageMap = new Map<string, string>();
+      for (const stage of followUpPipeline.stages) {
+        followUpStageMap.set(stage.id, stage.name);
+      }
+
+      // We'll use conversations to detect inbound from follow-up leads
+      // Build a set of follow-up contactIds for cross-referencing
+      const followUpOpps = await fetchPipelineOpportunities(creds, followUpPipeline.id, undefined, 100);
+      const followUpContactMap = new Map<string, { opp: GHLPipelineOpportunity; stageName: string }>();
+      for (const opp of followUpOpps) {
+        const stageName = followUpStageMap.get(opp.pipelineStageId) || "Unknown";
+        followUpContactMap.set(opp.contactId, { opp, stageName });
+      }
+
+      // Also check backward movement in Follow Up pipeline
+      for (const opp of followUpOpps) {
+        const stageName = followUpStageMap.get(opp.pipelineStageId) || "Unknown";
+        const backward = await detectBackwardMovement(opp, stageName, db, tenantId);
+        if (backward) detections.push(backward);
+      }
+    }
+  } catch (pipelineError) {
+    console.error(`[OpportunityDetection] Pipeline scan error:`, pipelineError);
+    result.errors++;
+  }
+
+  // ========== PHASE 2: CONVERSATION SCAN ==========
+  console.log(`[OpportunityDetection] Phase 2: Scanning recent conversations for tenant ${tenantId}`);
+
+  // Reuse pipeline data from Phase 1 — build contactOppMap from already-fetched pipelines
+  const contactOppMap = new Map<string, { opp: GHLPipelineOpportunity; stageName: string }>();
+
+  try {
+    // Fetch pipelines once for cross-referencing (lightweight — just Sales Process + Follow Up)
+    const pipelinesForConv = await fetchPipelines(creds);
+    const salesPipelineConv = pipelinesForConv.find(p => p.name.toLowerCase().includes("sales process"));
+    const followUpPipelineConv = pipelinesForConv.find(p => p.name.toLowerCase().includes("follow up"));
+    
+    for (const pipeline of [salesPipelineConv, followUpPipelineConv].filter(Boolean) as any[]) {
+      const stageMap = new Map<string, string>();
+      for (const stage of pipeline.stages) {
+        stageMap.set(stage.id, stage.name);
+      }
+      const opps = await fetchPipelineOpportunities(creds, pipeline.id, undefined, 100);
+      for (const opp of opps) {
+        contactOppMap.set(opp.contactId, { opp, stageName: stageMap.get(opp.pipelineStageId) || "Unknown" });
+      }
+    }
+
+    const conversations = await fetchRecentConversations(creds, 50);
+
+    for (const conv of conversations) {
+      const oppInfo = contactOppMap.get(conv.contactId);
+
+      // Rule 2: Repeat inbound
+      const repeat = await detectRepeatInbound(conv, creds, db, tenantId);
+      if (repeat) detections.push(repeat);
+
+      // Rule 3: Follow-up inbound ignored
+      const followUpIgnored = await detectFollowUpInboundIgnored(
+        conv,
+        oppInfo?.opp || null,
+        oppInfo?.stageName || null,
+        db,
+        tenantId
+      );
+      if (followUpIgnored) detections.push(followUpIgnored);
+    }
+  } catch (convError) {
+    console.error(`[OpportunityDetection] Conversation scan error:`, convError);
+    result.errors++;
+  }
+
+  // ========== PHASE 3: TRANSCRIPT-ENRICHED DETECTION ==========
+  console.log(`[OpportunityDetection] Phase 3: Transcript-enriched detection for tenant ${tenantId}`);
+
+  try {
+    // Rule 6: Price stated no follow-up
+    const priceDetections = await detectPriceStatedNoFollowUp(db, tenantId);
+    detections.push(...priceDetections);
+
+    // Rule 7: Motivated one-and-done
+    const motivatedDetections = await detectMotivatedOneDone(db, tenantId);
+    detections.push(...motivatedDetections);
+
+    // Rule 11: Duplicate property
+    const dupDetections = await detectDuplicateProperty(db, tenantId);
+    detections.push(...dupDetections);
+
+    // Rule 12: Missed callback
+    const callbackDetections = await detectMissedCallback(db, tenantId);
+    detections.push(...callbackDetections);
+
+    // Rule 13: High talk-time DQ
+    const talkTimeDetections = await detectHighTalkTimeDQ(db, tenantId);
+    detections.push(...talkTimeDetections);
+  } catch (transcriptError) {
+    console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
+    result.errors++;
+  }
+
+  // ========== PHASE 4: DEDUPLICATE & SAVE ==========
+  console.log(`[OpportunityDetection] Phase 4: Saving ${detections.length} potential detections for tenant ${tenantId}`);
+
+  for (const detection of detections) {
+    try {
+      // Skip if already flagged
+      const primaryRule = detection.triggerRules[0];
+      if (await isAlreadyFlagged(db, tenantId, detection.ghlContactId, primaryRule)) {
+        continue;
+      }
+
+      // Generate AI reason
+      const { reason, suggestion } = await generateAIReason(detection);
+
+      // Enrich with property address from calls if missing
+      let propertyAddress = detection.propertyAddress;
+      if (!propertyAddress && detection.ghlContactId) {
+        const contactCall = await db
+          .select({ propertyAddress: calls.propertyAddress })
+          .from(calls)
+          .where(
+            and(
+              eq(calls.tenantId, tenantId),
+              eq(calls.ghlContactId, detection.ghlContactId),
+              sql`${calls.propertyAddress} IS NOT NULL AND ${calls.propertyAddress} != ''`
+            )
+          )
+          .limit(1);
+        if (contactCall.length > 0) {
+          propertyAddress = contactCall[0].propertyAddress;
+        }
+      }
+
+      // Enrich with team member from calls if missing
+      let teamMemberId = detection.teamMemberId;
+      let teamMemberName = detection.teamMemberName;
+      if (!teamMemberId && detection.ghlContactId) {
+        const contactCall = await db
+          .select({ teamMemberId: calls.teamMemberId, teamMemberName: calls.teamMemberName })
+          .from(calls)
+          .where(
+            and(
+              eq(calls.tenantId, tenantId),
+              eq(calls.ghlContactId, detection.ghlContactId)
+            )
+          )
+          .orderBy(desc(calls.callTimestamp))
+          .limit(1);
+        if (contactCall.length > 0) {
+          teamMemberId = contactCall[0].teamMemberId;
+          teamMemberName = contactCall[0].teamMemberName;
+        }
+      }
+
+      await db.insert(opportunities).values({
+        tenantId,
+        contactName: detection.contactName,
+        contactPhone: detection.contactPhone,
+        propertyAddress,
+        ghlContactId: detection.ghlContactId,
+        ghlOpportunityId: detection.ghlOpportunityId,
+        ghlPipelineStageId: detection.ghlPipelineStageId,
+        ghlPipelineStageName: detection.ghlPipelineStageName,
+        tier: detection.tier,
+        priorityScore: Math.min(detection.priorityScore, 100),
+        triggerRules: detection.triggerRules,
+        reason,
+        suggestion,
+        detectionSource: detection.detectionSource,
+        relatedCallId: detection.relatedCallId,
+        teamMemberId,
+        teamMemberName,
+        assignedTo: detection.assignedTo,
+        lastActivityAt: detection.lastActivityAt,
+        lastStageChangeAt: detection.lastStageChangeAt,
+      });
+
+      result.detected++;
+    } catch (saveError) {
+      console.error(`[OpportunityDetection] Error saving detection:`, saveError);
+      result.errors++;
+    }
+  }
 }

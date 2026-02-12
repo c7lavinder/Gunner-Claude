@@ -1583,3 +1583,23 @@
 
 ## Bug Fixes - AI Coach Actions
 - [x] Fix contactId undefined when executing AI Coach actions (contact name resolved but ID not passed)
+
+## Opportunity Detection V2 - Pipeline Manager Rebuild (GHL-event-first)
+- [x] Audit current detection engine and GHL API capabilities
+- [x] Update schema: ghlContactId backfill (373/376 calls linked), ghlContactId now set during sync
+- [x] Build GHL data layer: pipeline opportunities, conversations, contact activity
+- [x] Tier 1 - Missed: Seller stated price but no follow-up within 48h
+- [x] Tier 1 - Missed: Lead moved backward (Warm/Hot to Follow Up) without outbound call
+- [x] Tier 1 - Missed: Repeat inbound from same seller (2+ contacts/week) not prioritized
+- [x] Tier 1 - Missed: Inbound from Follow Up lead unanswered/unreturned within 4h
+- [x] Tier 1 - Missed: Offer made but no counter/follow-up within 48h (team went silent)
+- [x] Tier 1 - Missed: New lead with no first call within 15 min SLA
+- [x] Tier 2 - At Risk: Motivated seller (life event/timeline) with only 1 call, no 2nd in 72h
+- [x] Tier 2 - At Risk: Lead in Pending Apt/Walkthrough 5+ days with no activity
+- [x] Tier 2 - At Risk: Lead marked dead/DQ'd but transcript had real selling signals
+- [x] Tier 2 - At Risk: Walkthrough completed but no offer sent within 24h
+- [x] Tier 2 - At Risk: Multiple leads from same property address (nobody connected the dots)
+- [x] Tier 3 - Worth a Look: Seller said "call me back in [timeframe]" — check if callback happened
+- [x] Tier 3 - Worth a Look: High seller talk-time ratio but got DQ'd (motivation was there)
+- [x] Update opportunities UI to reflect new pipeline-based detection types
+- [x] Write and run vitest tests for new detection engine (88 tests, all passing)

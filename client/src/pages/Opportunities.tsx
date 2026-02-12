@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,11 +17,22 @@ import {
   ChevronUp,
   MapPin,
   User,
-  Calendar,
-  ArrowRight,
   Flame,
   Eye,
   EyeOff,
+  GitBranch,
+  MessageSquare,
+  FileText,
+  Layers,
+  ArrowDownRight,
+  PhoneOff,
+  PhoneMissed,
+  Timer,
+  Repeat,
+  Skull,
+  Building,
+  PhoneCall,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,38 +44,101 @@ const tierConfig = {
     bgColor: "bg-red-500/10",
     borderColor: "border-red-500/30",
     badgeVariant: "destructive" as const,
-    description: "Revenue-impacting opportunities that need immediate attention",
+    description: "Deals slipping through the cracks — act now",
   },
   warning: {
-    label: "Warning",
+    label: "At Risk",
     icon: AlertCircle,
     color: "text-amber-500",
     bgColor: "bg-amber-500/10",
     borderColor: "border-amber-500/30",
     badgeVariant: "secondary" as const,
-    description: "Leads at risk of going cold — act within 24 hours",
+    description: "Leads going cold — needs attention within 24h",
   },
   possible: {
-    label: "Possible",
+    label: "Worth a Look",
     icon: Lightbulb,
     color: "text-blue-500",
     bgColor: "bg-blue-500/10",
     borderColor: "border-blue-500/30",
     badgeVariant: "outline" as const,
-    description: "Coaching moments and process improvements to review",
+    description: "Potential deals that deserve a second look",
   },
 };
 
-const ruleLabels: Record<string, string> = {
-  motivated_seller_no_followup: "Motivated Seller — No Follow-up",
-  objection_not_handled: "Objection Not Handled",
-  verbal_commitment_dropped: "Verbal Commitment Dropped",
-  slow_response: "Slow Response Time",
-  unanswered_callback: "Unanswered Callback Request",
-  stale_lead: "Stale Lead",
-  low_score_no_coaching: "Low Score — No Coaching",
-  missed_upsell: "Missed Upsell Opportunity",
-  incomplete_info: "Incomplete Information Gathered",
+const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string }> = {
+  backward_movement_no_call: {
+    label: "Lead Moved to Follow Up Without a Call",
+    icon: ArrowDownRight,
+    shortLabel: "Moved Without Call",
+  },
+  repeat_inbound_ignored: {
+    label: "Repeat Inbound — Nobody Responded",
+    icon: Repeat,
+    shortLabel: "Repeat Inbound",
+  },
+  followup_inbound_ignored: {
+    label: "Follow Up Lead Reached Out — No Response",
+    icon: PhoneMissed,
+    shortLabel: "Inbound Ignored",
+  },
+  offer_no_followup: {
+    label: "Offer Made — Team Went Silent",
+    icon: PhoneOff,
+    shortLabel: "Offer Stalled",
+  },
+  new_lead_sla_breach: {
+    label: "New Lead — No Call Within 15 Min",
+    icon: Timer,
+    shortLabel: "SLA Breach",
+  },
+  price_stated_no_followup: {
+    label: "Seller Stated Price — No Follow Up",
+    icon: MessageSquare,
+    shortLabel: "Price Stated",
+  },
+  motivated_one_and_done: {
+    label: "Motivated Seller — Only 1 Call",
+    icon: PhoneCall,
+    shortLabel: "One & Done",
+  },
+  stale_active_stage: {
+    label: "Stale in Active Stage",
+    icon: Clock,
+    shortLabel: "Stale Deal",
+  },
+  dead_with_selling_signals: {
+    label: "DQ'd Lead Had Selling Signals",
+    icon: Skull,
+    shortLabel: "DQ'd w/ Signals",
+  },
+  walkthrough_no_offer: {
+    label: "Walkthrough Done — No Offer Sent",
+    icon: Building,
+    shortLabel: "No Offer",
+  },
+  duplicate_property_address: {
+    label: "Multiple Contacts — Same Property",
+    icon: Layers,
+    shortLabel: "Duplicate Property",
+  },
+  missed_callback_request: {
+    label: "Callback Requested — None Made",
+    icon: PhoneMissed,
+    shortLabel: "Missed Callback",
+  },
+  high_talk_time_dq: {
+    label: "Long Conversation — DQ'd Too Fast",
+    icon: MessageCircle,
+    shortLabel: "Talk Time DQ",
+  },
+};
+
+const sourceConfig: Record<string, { label: string; icon: any; color: string }> = {
+  pipeline: { label: "Pipeline", icon: GitBranch, color: "text-purple-500" },
+  conversation: { label: "Conversation", icon: MessageSquare, color: "text-blue-500" },
+  transcript: { label: "Transcript", icon: FileText, color: "text-green-500" },
+  hybrid: { label: "Pipeline + Transcript", icon: Layers, color: "text-orange-500" },
 };
 
 export default function Opportunities() {
@@ -87,7 +161,7 @@ export default function Opportunities() {
 
   const runDetectionMutation = trpc.opportunities.runDetection.useMutation({
     onSuccess: (result) => {
-      toast.success(`Detection complete — found ${result.detected} new opportunities`);
+      toast.success(`Pipeline scan complete — found ${result.detected} new opportunities`);
       refetchList();
       refetchCounts();
     },
@@ -127,9 +201,9 @@ export default function Opportunities() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Opportunities</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Pipeline Opportunities</h1>
           <p className="text-muted-foreground mt-1">
-            AI-detected missed opportunities and at-risk leads
+            Deals your team might be missing — detected from pipeline activity, conversations, and call data
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -148,7 +222,7 @@ export default function Opportunities() {
             disabled={runDetectionMutation.isPending}
           >
             <RefreshCw className={`h-4 w-4 mr-1.5 ${runDetectionMutation.isPending ? "animate-spin" : ""}`} />
-            Run Detection
+            Scan Pipeline
           </Button>
         </div>
       </div>
@@ -182,6 +256,7 @@ export default function Opportunities() {
                     </Badge>
                   )}
                 </div>
+                <p className="text-xs text-muted-foreground mt-2">{config.description}</p>
               </CardContent>
             </Card>
           );
@@ -202,12 +277,12 @@ export default function Opportunities() {
           </TabsTrigger>
           <TabsTrigger value="warning">
             <AlertCircle className="h-3.5 w-3.5 mr-1 text-amber-500" />
-            Warning
+            At Risk
             {counts?.warning ? <Badge variant="secondary" className="ml-1.5 text-xs">{counts.warning}</Badge> : null}
           </TabsTrigger>
           <TabsTrigger value="possible">
             <Lightbulb className="h-3.5 w-3.5 mr-1 text-blue-500" />
-            Possible
+            Worth a Look
             {counts?.possible ? <Badge variant="outline" className="ml-1.5 text-xs">{counts.possible}</Badge> : null}
           </TabsTrigger>
         </TabsList>
@@ -228,10 +303,10 @@ export default function Opportunities() {
               <CardContent className="pt-6">
                 <div className="text-center py-12">
                   <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                  <h3 className="text-lg font-semibold">All Clear</h3>
+                  <h3 className="text-lg font-semibold">Pipeline Looks Clean</h3>
                   <p className="text-muted-foreground mt-1">
                     {activeTab === "all"
-                      ? "No active opportunities detected. Run detection to scan for new ones."
+                      ? "No missed opportunities detected. Scan the pipeline to check for new ones."
                       : `No ${tierConfig[activeTab as keyof typeof tierConfig]?.label.toLowerCase()} opportunities found.`}
                   </p>
                   <Button
@@ -242,7 +317,7 @@ export default function Opportunities() {
                     disabled={runDetectionMutation.isPending}
                   >
                     <RefreshCw className={`h-4 w-4 mr-1.5 ${runDetectionMutation.isPending ? "animate-spin" : ""}`} />
-                    Run Detection Now
+                    Scan Pipeline Now
                   </Button>
                 </div>
               </CardContent>
@@ -252,9 +327,12 @@ export default function Opportunities() {
               {opportunities.map(opp => {
                 const tier = opp.tier as keyof typeof tierConfig;
                 const config = tierConfig[tier];
-                const Icon = config.icon;
+                const primaryRule = (opp.triggerRules as string[])?.[0] || "";
+                const rule = ruleConfig[primaryRule];
+                const RuleIcon = rule?.icon || config.icon;
                 const isExpanded = expandedCards.has(opp.id);
                 const isResolved = opp.status !== "active";
+                const source = sourceConfig[(opp as any).detectionSource || "pipeline"];
 
                 return (
                   <Card
@@ -266,12 +344,12 @@ export default function Opportunities() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
                           <div className={`p-1.5 rounded-md ${config.bgColor} mt-0.5 shrink-0`}>
-                            <Icon className={`h-4 w-4 ${config.color}`} />
+                            <RuleIcon className={`h-4 w-4 ${config.color}`} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold text-sm">
-                                {ruleLabels[opp.triggerRules?.[0] as string] || (opp.triggerRules?.[0] as string) || "Opportunity"}
+                                {rule?.label || primaryRule || "Opportunity"}
                               </span>
                               <Badge variant={config.badgeVariant} className="text-[10px] px-1.5 py-0">
                                 {config.label}
@@ -286,7 +364,7 @@ export default function Opportunities() {
                               )}
                             </div>
 
-                            {/* Contact & Property Info */}
+                            {/* Contact & Pipeline Info */}
                             <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
                               {opp.contactName && (
                                 <span className="flex items-center gap-1">
@@ -300,10 +378,22 @@ export default function Opportunities() {
                                   {opp.propertyAddress}
                                 </span>
                               )}
+                              {(opp as any).ghlPipelineStageName && (
+                                <span className="flex items-center gap-1">
+                                  <GitBranch className="h-3 w-3" />
+                                  {(opp as any).ghlPipelineStageName}
+                                </span>
+                              )}
                               {opp.teamMemberName && (
                                 <span className="flex items-center gap-1">
                                   <Phone className="h-3 w-3" />
                                   {opp.teamMemberName}
+                                </span>
+                              )}
+                              {source && (
+                                <span className={`flex items-center gap-1 ${source.color}`}>
+                                  <source.icon className="h-3 w-3" />
+                                  {source.label}
                                 </span>
                               )}
                               <span className="flex items-center gap-1">
@@ -314,7 +404,7 @@ export default function Opportunities() {
 
                             {/* AI Reason (always visible) */}
                             <p className="text-sm mt-2 text-foreground/80">
-                              {opp.reason || "Opportunity detected by automated rules."}
+                              {opp.reason || "Opportunity detected from pipeline activity."}
                             </p>
                           </div>
                         </div>
@@ -331,7 +421,7 @@ export default function Opportunities() {
                                 disabled={resolveMutation.isPending}
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                                Handled
+                                On It
                               </Button>
                               <Button
                                 variant="ghost"
@@ -341,7 +431,7 @@ export default function Opportunities() {
                                 disabled={resolveMutation.isPending}
                               >
                                 <XCircle className="h-3.5 w-3.5 mr-1" />
-                                Dismiss
+                                Not a Deal
                               </Button>
                             </>
                           )}
@@ -364,7 +454,7 @@ export default function Opportunities() {
                             <div className="bg-primary/5 rounded-lg p-3">
                               <p className="text-xs font-medium text-primary mb-1 flex items-center gap-1">
                                 <Lightbulb className="h-3 w-3" />
-                                Suggested Action
+                                Recommended Next Step
                               </p>
                               <p className="text-sm">{opp.suggestion}</p>
                             </div>
@@ -372,10 +462,10 @@ export default function Opportunities() {
 
                           {/* Details Grid */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                            {opp.relatedCallId && (
+                            {(opp as any).ghlPipelineStageName && (
                               <div>
-                                <span className="text-muted-foreground">Call ID</span>
-                                <p className="font-medium">#{opp.relatedCallId}</p>
+                                <span className="text-muted-foreground">Pipeline Stage</span>
+                                <p className="font-medium">{(opp as any).ghlPipelineStageName}</p>
                               </div>
                             )}
                             {opp.priorityScore && (
@@ -384,10 +474,40 @@ export default function Opportunities() {
                                 <p className="font-medium">{opp.priorityScore}/100</p>
                               </div>
                             )}
+                            {(opp as any).lastActivityAt && (
+                              <div>
+                                <span className="text-muted-foreground">Last Activity</span>
+                                <p className="font-medium">{formatTimeAgo((opp as any).lastActivityAt)}</p>
+                              </div>
+                            )}
                             {opp.flaggedAt && (
                               <div>
                                 <span className="text-muted-foreground">Detected</span>
                                 <p className="font-medium">{new Date(opp.flaggedAt).toLocaleString()}</p>
+                              </div>
+                            )}
+                            {opp.contactPhone && (
+                              <div>
+                                <span className="text-muted-foreground">Phone</span>
+                                <p className="font-medium">{opp.contactPhone}</p>
+                              </div>
+                            )}
+                            {(opp as any).assignedTo && (
+                              <div>
+                                <span className="text-muted-foreground">Assigned To</span>
+                                <p className="font-medium">{(opp as any).assignedTo}</p>
+                              </div>
+                            )}
+                            {opp.relatedCallId && (
+                              <div>
+                                <span className="text-muted-foreground">Related Call</span>
+                                <p className="font-medium">#{opp.relatedCallId}</p>
+                              </div>
+                            )}
+                            {(opp as any).detectionSource && (
+                              <div>
+                                <span className="text-muted-foreground">Detection Source</span>
+                                <p className="font-medium capitalize">{(opp as any).detectionSource}</p>
                               </div>
                             )}
                           </div>
@@ -395,11 +515,11 @@ export default function Opportunities() {
                           {/* Trigger Rules */}
                           {opp.triggerRules && Array.isArray(opp.triggerRules) && opp.triggerRules.length > 0 && (
                             <div className="bg-muted/50 rounded-lg p-3">
-                              <p className="text-xs font-medium text-muted-foreground mb-1">Detection Rules Triggered</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Detection Rules</p>
                               <div className="flex flex-wrap gap-1 mt-1">
-                                {(opp.triggerRules as string[]).map((rule, i) => (
+                                {(opp.triggerRules as string[]).map((r, i) => (
                                   <Badge key={i} variant="outline" className="text-[10px]">
-                                    {ruleLabels[rule] || rule}
+                                    {ruleConfig[r]?.shortLabel || r}
                                   </Badge>
                                 ))}
                               </div>

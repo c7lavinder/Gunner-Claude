@@ -422,6 +422,7 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
     // Create the call record with tenantId from team member
     const call = await createCall({
       ghlCallId: ghlCall.id,
+      ghlContactId: ghlCall.contactId,
       contactName: ghlCall.contactName,
       contactPhone: ghlCall.contactPhone,
       recordingUrl: recordingUrl,
