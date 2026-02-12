@@ -1845,7 +1845,7 @@ export default function CallInbox() {
                                 onClick={() => {
                                   reclassifyMutation.mutate({ 
                                     callId: item.id, 
-                                    classification: "conversation",
+                                    classification: "admin_call",
                                     reason: "Admin call - auto-grade with admin rubric"
                                   });
                                 }}

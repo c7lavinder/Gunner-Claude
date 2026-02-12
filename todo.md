@@ -1706,3 +1706,8 @@
 - [x] Skip onboarding for users matched to an existing team member
 - [x] Fixed Daniel's account: moved from accidental tenant 270051 to tenant 1, deleted orphan tenant
 - [x] Write vitest tests for name matching logic (16/16 passing)
+
+## Admin Call Grading Not Working
+- [x] Fix Auto-Grade as Admin button — was sending classification "conversation" instead of "admin_call"
+- [x] Fix reclassify endpoint — now triggers processCall for admin_call classification (not just conversation)
+- [x] Write vitest tests for reclassify logic (14/14 passing)

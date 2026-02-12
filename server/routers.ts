@@ -542,7 +542,7 @@ export const appRouter = router({
         }
 
         // Determine new status based on classification
-        const shouldGrade = input.classification === "conversation";
+        const shouldGrade = input.classification === "conversation" || input.classification === "admin_call";
         const newStatus = shouldGrade ? "completed" : "skipped";
 
         let classificationReason = input.reason || `Manually reclassified to ${input.classification.replace(/_/g, " ")}`;
@@ -578,8 +578,8 @@ export const appRouter = router({
           status: newStatus,
         });
 
-        // If reclassified to conversation and wasn't graded before, trigger grading
-        if (shouldGrade && call.status === "skipped") {
+        // If reclassified to conversation or admin_call and wasn't graded before, trigger grading
+        if (shouldGrade && (call.status === "skipped" || call.status === "completed")) {
           processCall(input.callId).catch(err => {
             console.error("[Reclassify] Error processing call:", err);
           });
