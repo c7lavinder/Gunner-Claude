@@ -1681,3 +1681,6 @@
 - [x] Update processCall to auto-grade admin_call classified calls with admin_callback rubric instead of skipping
 - [x] Frontend: show "Auto-Grade as Admin" button for existing skipped admin calls, hide "Grade This Call"
 - [x] Write vitest tests for admin call auto-grading flow (17/17 passing)
+
+## Reclassify Call Dropdown Bug
+- [x] Update reclassify dropdown to show correct updated options — "Admin Call (auto-graded)" and labels for skipped types

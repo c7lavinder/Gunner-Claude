@@ -381,7 +381,7 @@ export default function CallDetail() {
               <DialogHeader>
                 <DialogTitle>Reclassify Call</DialogTitle>
                 <DialogDescription>
-                  Change the classification of this call. Selecting "Conversation" will trigger grading if not already graded.
+                  Change the classification of this call. "Conversation" triggers full grading. "Admin Call" auto-grades with the admin rubric. Other options skip grading.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -404,11 +404,11 @@ export default function CallDetail() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="conversation">Conversation (will be graded)</SelectItem>
-                      <SelectItem value="admin_call">N/A - Administrative Call</SelectItem>
-                      <SelectItem value="voicemail">Voicemail</SelectItem>
-                      <SelectItem value="no_answer">No Answer</SelectItem>
-                      <SelectItem value="callback_request">Callback Request</SelectItem>
-                      <SelectItem value="wrong_number">Wrong Number</SelectItem>
+                      <SelectItem value="admin_call">Admin Call (auto-graded)</SelectItem>
+                      <SelectItem value="voicemail">Voicemail (skipped)</SelectItem>
+                      <SelectItem value="no_answer">No Answer (skipped)</SelectItem>
+                      <SelectItem value="callback_request">Callback Request (skipped)</SelectItem>
+                      <SelectItem value="wrong_number">Wrong Number (skipped)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
