@@ -1,0 +1,52 @@
+{
+  "query": "SELECT u.id, u.name, u.role, u.isTenantAdmin, tm.teamRole FROM users u LEFT JOIN team_members tm ON tm.userId = u.id WHERE tm.tenantId = 1 ORDER BY u.name",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT u.id, u.name, u.role, u.isTenantAdmin, tm.teamRole FROM users u LEFT JOIN team_members tm ON tm.userId = u.id WHERE tm.tenantId = 1 ORDER BY u.name",
+  "rows": [
+    {
+      "id": "630001",
+      "name": "Alex Diaz",
+      "role": "user",
+      "isTenantAdmin": "false",
+      "teamRole": "lead_generator"
+    },
+    {
+      "id": "390001",
+      "name": "Christian Segura",
+      "role": "user",
+      "isTenantAdmin": "false",
+      "teamRole": "lead_manager"
+    },
+    {
+      "id": "840050",
+      "name": "Daniel Lozano",
+      "role": "user",
+      "isTenantAdmin": "true",
+      "teamRole": "lead_manager"
+    },
+    {
+      "id": "630002",
+      "name": "Efren Valenzuela",
+      "role": "user",
+      "isTenantAdmin": "false",
+      "teamRole": "lead_generator"
+    },
+    {
+      "id": "90493",
+      "name": "Kyle Barks",
+      "role": "user",
+      "isTenantAdmin": "false",
+      "teamRole": "acquisition_manager"
+    },
+    {
+      "id": "630003",
+      "name": "Mirna Razo",
+      "role": "user",
+      "isTenantAdmin": "false",
+      "teamRole": "lead_generator"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\trole\tisTenantAdmin\tteamRole\n630001\tAlex Diaz\tuser\tfalse\tlead_generator\n390001\tChristian Segura\tuser\tfalse\tlead_manager\n840050\tDaniel Lozano\tuser\ttrue\tlead_manager\n630002\tEfren Valenzuela\tuser\tfalse\tlead_generator\n90493\tKyle Barks\tuser\tfalse\tacquisition_manager\n630003\tMirna Razo\tuser\tfalse\tlead_generator\n",
+  "stderr": "",
+  "execution_time_ms": 358
+}

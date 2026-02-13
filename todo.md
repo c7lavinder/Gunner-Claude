@@ -1747,3 +1747,7 @@
 - [x] Bug 3: Remove console.log debug statements from DashboardLayout
 - [x] Write tests for Bug 1 and Bug 2 fixes — 16 tests passing
 - [x] Add password change / account settings section to Profile page (change password, update name/email)
+
+## Bug Fix: Daniel's Dashboard Showing Signals Instead of Gamification
+- [x] Investigate Daniel's user role — isTenantAdmin was 'true' causing admin dashboard view
+- [x] Fixed: set Daniel's isTenantAdmin to 'false' and hardened isAdmin check to use user.role only (not isTenantAdmin)
