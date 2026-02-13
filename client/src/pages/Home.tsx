@@ -400,9 +400,25 @@ export default function Home() {
                         <p className="font-medium text-sm truncate">
                           {call.contactName || call.contactPhone || "Unknown"}
                         </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {call.teamMemberName || "Unassigned"}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-muted-foreground truncate">
+                            {call.teamMemberName || "Unassigned"}
+                          </p>
+                          <span className="text-xs text-muted-foreground">•</span>
+                          <p className="text-xs text-muted-foreground">
+                            {(() => {
+                              const now = Date.now();
+                              const callTime = new Date(call.createdAt).getTime();
+                              const diffMs = now - callTime;
+                              const diffMins = Math.floor(diffMs / 60000);
+                              const diffHours = Math.floor(diffMins / 60);
+                              const diffDays = Math.floor(diffHours / 24);
+                              if (diffMins < 60) return `${diffMins}m ago`;
+                              if (diffHours < 24) return `${diffHours}h ago`;
+                              return `${diffDays}d ago`;
+                            })()}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {call.grade ? (

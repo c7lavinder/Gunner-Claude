@@ -451,7 +451,10 @@ export async function getCallsWithGrades(options: {
     })
   );
 
-  return { items: result, total };
+  // Filter to only include calls with grades (exclude skipped/too_short)
+  const gradedOnly = result.filter(item => item.grade !== null);
+
+  return { items: gradedOnly, total: gradedOnly.length };
 }
 
 // ============ LEADERBOARD FUNCTIONS ============

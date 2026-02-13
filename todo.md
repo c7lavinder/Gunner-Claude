@@ -1883,3 +1883,10 @@
 - [x] Root cause: xhaka's role was set to "user" instead of "admin" in database
 - [x] Fixed: Updated xhaka's role to "admin" (user ID 180239)
 - [x] Verified: Dashboard logic already correct, will show signals after xhaka logs out and back in
+
+## Feature: Recent Calls Filtering & Timestamp
+- [x] Find Recent Calls component on dashboard (Home.tsx line 376-428)
+- [x] Filter to only show graded calls in getCallsWithGrades (db.ts line 454-457)
+- [x] Admin: show all team members' graded calls (already handled by allowedTeamMemberIds in routers.ts line 462)
+- [x] Regular user: show only their own graded calls (already handled by allowedTeamMemberIds)
+- [x] Add timestamp showing "Xm/Xh/Xd ago" for each call (Home.tsx line 407-420)
