@@ -1212,6 +1212,143 @@ async function detectHighTalkTimeDQ(
   return results;
 }
 
+// Rule 15: Seller offered a concrete timeline/meeting window but agent left it open-ended
+// Catches the pattern: seller says "I'll be in town in March" or "call me in a few weeks"
+// and the agent responds with "feel free to reach out" instead of locking in a next step.
+// This is distinct from Rule 12 (explicit callback request not followed up on).
+// Rule 15 is about the agent's RESPONSE — they had an opening and didn't commit.
+
+const TIMELINE_PATTERNS = [
+  // Specific future dates/months
+  /(?:i'll|i will|we'll|we will|i'm|i am)\s+(?:be\s+)?(?:in\s+town|back|there|around|available|free|here|home|ready)\s+(?:in|around|by|first\s+(?:part|week)\s+of|beginning\s+of|end\s+of|middle\s+of|early|late|sometime\s+in)?\s*(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|next\s+(?:week|month|year)|a\s+(?:few|couple)\s+(?:weeks?|months?)|\d+\s+(?:weeks?|months?|days?))/i,
+  // "After X happens" patterns (life events)
+  /(?:after|once|when)\s+(?:my|the|her|his)\s+(?:mother|mom|father|dad|parent|spouse|husband|wife)\s+(?:passes|goes|moves|is\s+(?:in|at)|gets\s+into)/i,
+  /(?:after|once|when)\s+(?:we|i|they)\s+(?:get\s+(?:through|past|done)|finish|close|settle|figure\s+out|know\s+(?:more|what))/i,
+  // Timeframe mentions
+  /(?:in\s+(?:a\s+)?(?:few|couple|two|three|four|2|3|4|5|6)\s+(?:weeks?|months?))/i,
+  /(?:(?:maybe|probably|likely)\s+(?:in|around|by)\s+(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|spring|summer|fall|winter))/i,
+  // "I don't know if that's weeks or months" — uncertain but real timeline
+  /(?:don't|do\s+not|doesn't|does\s+not)\s+know\s+(?:if|whether)\s+(?:that's|it's|it\s+(?:will|would)\s+be)\s+(?:weeks?|months?|days?)/i,
+  // "I'll know more in..."
+  /(?:i'll|i will|we'll|we will)\s+(?:know\s+more|have\s+(?:a\s+)?(?:better|more|clearer)\s+(?:idea|picture|answer|sense))\s+(?:in|by|around|within)/i,
+  // Willingness to meet in the future
+  /(?:i'd|i\s+would|we'd|we\s+would)\s+(?:be\s+(?:happy|glad|willing|open|down)|like|love|want)\s+to\s+(?:meet|show|walk|let\s+you|have\s+you)\s+(?:when|once|after|if)/i,
+];
+
+const OPEN_ENDED_AGENT_PATTERNS = [
+  // "Reach out anytime" patterns
+  /(?:feel\s+free|don't\s+hesitate|you're\s+welcome)\s+to\s+(?:reach\s+out|call|contact|give\s+(?:us|me)\s+a\s+(?:call|ring|shout))/i,
+  /(?:reach\s+out|call\s+(?:us|me)|give\s+(?:us|me)\s+a\s+(?:call|ring))\s+(?:anytime|whenever|any\s+time|at\s+any\s+time|when\s+you're\s+ready)/i,
+  /(?:we'll|i'll|we\s+will|i\s+will)\s+be\s+(?:here|around|on\s+standby|standing\s+by|ready)/i,
+  /(?:keep\s+(?:us|me)\s+in\s+mind|let\s+(?:us|me)\s+know|just\s+(?:let\s+(?:us|me)\s+know|give\s+(?:us|me)\s+a\s+call))/i,
+  /(?:whenever\s+you're\s+ready|when\s+the\s+time\s+(?:comes|is\s+right)|no\s+rush|no\s+pressure|take\s+your\s+time)/i,
+];
+
+const COMMITMENT_PATTERNS = [
+  // Agent locked in a next step
+  /(?:i'll|i\s+will|let\s+me|i'm\s+going\s+to|we'll|we\s+will)\s+(?:call\s+you|follow\s+up|reach\s+out|check\s+(?:in|back)|touch\s+base|set\s+(?:a|an)|schedule|put\s+(?:it|that|this)\s+(?:on|in))\s+(?:on|in|around|the\s+first|early|next|before|after|by)?/i,
+  /(?:let's|let\s+us)\s+(?:schedule|set\s+up|plan|book|lock\s+in|pencil\s+in|put\s+(?:something|a\s+time|a\s+date))/i,
+  /(?:i'll|i\s+will|let\s+me)\s+(?:set\s+a\s+reminder|mark\s+(?:my|the)\s+calendar|add\s+(?:it|that|this)\s+to\s+(?:my|the)\s+calendar)/i,
+  /(?:how\s+about|what\s+about|would)\s+(?:the\s+first|early|late|mid|beginning|end)\s+(?:of\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|next\s+(?:week|month))/i,
+];
+
+async function detectTimelineNoCommitment(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  // Get recent completed conversation calls with transcripts
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, "completed"),
+        eq(calls.classification, "conversation"),
+        gte(calls.callTimestamp, fourteenDaysAgo),
+        lt(calls.callTimestamp, threeDaysAgo)
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(50);
+
+  for (const call of recentCalls) {
+    if (!call.transcript || !call.ghlContactId) continue;
+    // Need a decent-length transcript to analyze conversation flow
+    if (call.transcript.length < 300) continue;
+
+    const transcript = call.transcript;
+
+    // Step 1: Check if the seller offered a timeline
+    const hasTimeline = TIMELINE_PATTERNS.some(p => p.test(transcript));
+    if (!hasTimeline) continue;
+
+    // Step 2: Check if the agent responded with open-ended language
+    const hasOpenEnded = OPEN_ENDED_AGENT_PATTERNS.some(p => p.test(transcript));
+    if (!hasOpenEnded) continue;
+
+    // Step 3: Check if the agent ALSO made a commitment (if so, they handled it)
+    const hasCommitment = COMMITMENT_PATTERNS.some(p => p.test(transcript));
+    if (hasCommitment) continue; // Agent locked in a next step — good
+
+    // Step 4: Check if there's been a follow-up call since
+    const followUp = await db
+      .select({ id: calls.id })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId),
+          gte(calls.callTimestamp, call.callTimestamp)
+        )
+      )
+      .limit(2);
+
+    if (followUp.length > 1) continue; // A follow-up call was made
+
+    // Extract the timeline mention for the excerpt
+    let timelineExcerpt = "";
+    for (const pattern of TIMELINE_PATTERNS) {
+      const match = transcript.match(pattern);
+      if (match) {
+        // Get surrounding context (100 chars before and after)
+        const idx = match.index || 0;
+        const start = Math.max(0, idx - 100);
+        const end = Math.min(transcript.length, idx + match[0].length + 100);
+        timelineExcerpt = transcript.substring(start, end);
+        break;
+      }
+    }
+
+    results.push({
+      tier: "warning",
+      triggerRules: ["timeline_offered_no_commitment"],
+      priorityScore: 70,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "transcript",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: timelineExcerpt || transcript.substring(0, 500),
+    });
+  }
+
+  return results;
+}
+
 // ============ AI REASON GENERATION ============
 
 const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: string }> = {
@@ -1284,6 +1421,11 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
     label: "Active Engagement in Follow Up",
     context: "This contact is in a follow-up stage and has recent inbound messages showing active engagement or negotiation language. The team is communicating — this is flagged for owner review to potentially help with negotiation strategy or assess the property's potential.",
     tier: "possible"
+  },
+  timeline_offered_no_commitment: {
+    label: "Seller Gave Timeline — No Next Step Locked In",
+    context: "During a call, the seller offered a concrete timeline or availability window (e.g., 'I'll be in town in March,' 'after my mother passes,' 'in a few weeks'). The agent responded with open-ended language ('feel free to reach out,' 'I can be on standby') instead of locking in a specific follow-up date, appointment, or calendar commitment. No follow-up call has been logged since.",
+    tier: "at_risk"
   },
 };
 
@@ -1606,6 +1748,10 @@ async function scanTenant(
     // Rule 13: High talk-time DQ
     const talkTimeDetections = await detectHighTalkTimeDQ(db, tenantId);
     detections.push(...talkTimeDetections);
+
+    // Rule 15: Timeline offered, no commitment set
+    const timelineDetections = await detectTimelineNoCommitment(db, tenantId);
+    detections.push(...timelineDetections);
   } catch (transcriptError) {
     console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
     result.errors++;

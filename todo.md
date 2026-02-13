@@ -1719,3 +1719,11 @@
 ## View As Not Showing Calls Bug
 - [x] Root cause: context.ts only allowed super_admin to impersonate, but Corey is admin
 - [x] Fixed: allow admin role to impersonate users within the same tenant
+
+## New Signal Rule 15: Seller Gave Timeline / Agent Left Open-Ended
+- [x] Create Rule 15: timeline_offered_no_commitment — seller offered a concrete timeline or meeting window but agent responded open-ended with no next step locked in
+- [x] Add detection function to opportunityDetection.ts
+- [x] Add rule to RULE_DESCRIPTIONS for AI context
+- [x] Wire into Phase 3 of scanTenant()
+- [x] Add frontend label and icon in Opportunities.tsx ruleConfig
+- [x] Write tests for the new rule — 52 tests passing

@@ -137,6 +137,11 @@ const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string 
     icon: MessageSquare,
     shortLabel: "Active Engagement",
   },
+  timeline_offered_no_commitment: {
+    label: "Seller Gave Timeline — No Next Step Locked In",
+    icon: Clock,
+    shortLabel: "Timeline, No Commitment",
+  },
 };
 
 const sourceConfig: Record<string, { label: string; icon: any; color: string }> = {
