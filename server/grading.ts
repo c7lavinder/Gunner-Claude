@@ -953,6 +953,7 @@ import { getCallById, updateCall, createCallGrade, getCallGradeByCallId, getTeam
 import { processCallViewRewards, evaluateBadgesForCall } from "./gamification";
 import { canProcessCall } from "./planLimits";
 import { getTenantById } from "./tenant";
+import { sendCallGradedWebhook } from "./gunnerEngineWebhook";
 
 export async function processCall(callId: number): Promise<void> {
   const call = await getCallById(callId);
@@ -1122,6 +1123,32 @@ export async function processCall(callId: number): Promise<void> {
         });
         
         console.log(`[ProcessCall] Admin call ${callId} auto-graded: ${gradeResult.overallGrade} (${gradeResult.overallScore}%)`);
+
+        // Step: Fire webhook to Gunner Engine for admin_callback grading
+        try {
+          await sendCallGradedWebhook({
+            callId: call.id.toString(),
+            contactId: call.ghlContactId || undefined,
+            teamMember: teamMemberName,
+            grade: gradeResult.overallGrade,
+            score: gradeResult.overallScore,
+            transcript: transcript.substring(0, 10000),
+            coachingFeedback: [
+              ...(gradeResult.strengths || []).map((s: string) => `Strength: ${s}`),
+              ...(gradeResult.improvements || []).map((i: string) => `Improve: ${i}`),
+              ...(gradeResult.coachingTips || []),
+            ].join('\n'),
+            callType: "admin_callback",
+            duration: call.duration || 0,
+            propertyAddress: call.propertyAddress || undefined,
+            phone: call.contactPhone || "",
+            timestamp: call.callTimestamp?.toISOString() || new Date().toISOString(),
+          });
+        } catch (webhookError) {
+          console.error(`[ProcessCall] Webhook failed for admin call ${callId}:`, webhookError);
+          // Don't block grading if webhook fails
+        }
+
         return;
       }
       
@@ -1296,6 +1323,31 @@ export async function processCall(callId: number): Promise<void> {
         console.error(`[ProcessCall] Failed to evaluate badges for call ${callId}:`, badgeError);
         // Don't fail the whole process if badge evaluation fails
       }
+    }
+
+    // Step 9: Fire webhook to Gunner Engine
+    try {
+      await sendCallGradedWebhook({
+        callId: call.id.toString(),
+        contactId: call.ghlContactId || undefined,
+        teamMember: teamMemberName,
+        grade: gradeResult.overallGrade,
+        score: gradeResult.overallScore,
+        transcript: (call.transcript || transcript).substring(0, 10000),
+        coachingFeedback: [
+          ...(gradeResult.strengths || []).map((s: string) => `Strength: ${s}`),
+          ...(gradeResult.improvements || []).map((i: string) => `Improve: ${i}`),
+          ...(gradeResult.coachingTips || []),
+        ].join('\n'),
+        callType: callType,
+        duration: call.duration || 0,
+        propertyAddress: call.propertyAddress || undefined,
+        phone: call.contactPhone || "",
+        timestamp: call.callTimestamp?.toISOString() || new Date().toISOString(),
+      });
+    } catch (webhookError) {
+      console.error(`[ProcessCall] Webhook failed for call ${callId}:`, webhookError);
+      // Don't block grading if webhook fails
     }
 
     console.log(`[ProcessCall] Successfully processed call ${callId}`);

@@ -1890,3 +1890,10 @@
 - [x] Admin: show all team members' graded calls (already handled by allowedTeamMemberIds in routers.ts line 462)
 - [x] Regular user: show only their own graded calls (already handled by allowedTeamMemberIds)
 - [x] Add timestamp showing "Xm/Xh/Xd ago" for each call (Home.tsx line 407-420)
+
+## Feature: Gunner Engine Webhook Integration
+- [x] Create webhook helper function to POST to https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded
+- [x] Include all required fields: callId, contactId, teamMember, grade, score, transcript, coachingFeedback, callType, duration, propertyAddress, phone, timestamp
+- [x] Trigger webhook after successful call grading in processCall function (both main flow Step 9 and admin_callback flow)
+- [x] Handle webhook errors gracefully (log but don't block grading)
+- [x] Write 13 vitest tests for webhook (URL, payload, error handling, edge cases) - all passing
