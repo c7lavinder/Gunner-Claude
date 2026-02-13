@@ -34,6 +34,10 @@ export const tenants = mysqlTable("tenants", {
   onboardingCompleted: mysqlEnum("onboardingCompleted", ["true", "false"]).default("false"),
   // Settings
   settings: text("settings"), // JSON for tenant-specific settings
+  // CRM sync timestamps
+  lastGhlSync: timestamp("lastGhlSync"),
+  lastBatchDialerSync: timestamp("lastBatchDialerSync"),
+  lastBatchLeadsSync: timestamp("lastBatchLeadsSync"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -286,6 +290,32 @@ export const callGrades = mysqlTable("call_grades", {
 
 export type CallGrade = typeof callGrades.$inferSelect;
 export type InsertCallGrade = typeof callGrades.$inferInsert;
+
+/**
+ * Webhook retry queue - stores failed Gunner Engine webhooks for automatic retry
+ */
+export const webhookRetryQueue = mysqlTable("webhook_retry_queue", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  callId: int("callId").references(() => calls.id).notNull(),
+  // Webhook payload (JSON)
+  payload: text("payload").notNull(),
+  // Retry tracking
+  attemptCount: int("attemptCount").default(0).notNull(),
+  maxAttempts: int("maxAttempts").default(5).notNull(),
+  lastAttemptAt: timestamp("lastAttemptAt"),
+  nextRetryAt: timestamp("nextRetryAt").notNull(),
+  // Status: pending, delivered, failed
+  status: mysqlEnum("status", ["pending", "delivered", "failed"]).default("pending").notNull(),
+  // Last error message
+  lastError: text("lastError"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WebhookRetryQueue = typeof webhookRetryQueue.$inferSelect;
+export type InsertWebhookRetryQueue = typeof webhookRetryQueue.$inferInsert;
 
 /**
  * Performance metrics - aggregated stats for leaderboard

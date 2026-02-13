@@ -1143,7 +1143,7 @@ export async function processCall(callId: number): Promise<void> {
             propertyAddress: call.propertyAddress || undefined,
             phone: call.contactPhone || "",
             timestamp: call.callTimestamp?.toISOString() || new Date().toISOString(),
-          });
+          }, call.tenantId, call.id);
         } catch (webhookError) {
           console.error(`[ProcessCall] Webhook failed for admin call ${callId}:`, webhookError);
           // Don't block grading if webhook fails
@@ -1344,7 +1344,7 @@ export async function processCall(callId: number): Promise<void> {
         propertyAddress: call.propertyAddress || undefined,
         phone: call.contactPhone || "",
         timestamp: call.callTimestamp?.toISOString() || new Date().toISOString(),
-      });
+      }, call.tenantId, call.id);
     } catch (webhookError) {
       console.error(`[ProcessCall] Webhook failed for call ${callId}:`, webhookError);
       // Don't block grading if webhook fails

@@ -177,6 +177,11 @@ export async function syncBatchLeadsCalls(): Promise<{
       totalStats.enriched += stats.enriched;
       totalStats.skipped += stats.skipped;
       totalStats.errors += stats.errors;
+
+      // Record successful sync timestamp
+      const { updateTenantSettings } = await import("./tenant");
+      await updateTenantSettings(tenant.id, { lastBatchLeadsSync: new Date() });
+      console.log(`[BatchLeads] Tenant ${tenant.id}: Recorded sync timestamp`);
     }
 
     console.log(`[BatchLeads] Sync complete. Enriched: ${totalStats.enriched}, Skipped: ${totalStats.skipped}, Errors: ${totalStats.errors}`);

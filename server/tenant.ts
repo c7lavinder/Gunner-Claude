@@ -409,6 +409,9 @@ export async function updateTenantSettings(
     crmConfig?: string;
     crmConnected?: 'true' | 'false';
     onboardingStep?: number;
+    lastGhlSync?: Date;
+    lastBatchDialerSync?: Date;
+    lastBatchLeadsSync?: Date;
   }
 ) {
   const db = await getDb();
@@ -421,6 +424,9 @@ export async function updateTenantSettings(
   if (updates.crmConfig) updateData.crmConfig = updates.crmConfig;
   if (updates.crmConnected) updateData.crmConnected = updates.crmConnected;
   if (updates.onboardingStep !== undefined) updateData.onboardingStep = updates.onboardingStep;
+  if (updates.lastGhlSync) updateData.lastGhlSync = updates.lastGhlSync;
+  if (updates.lastBatchDialerSync) updateData.lastBatchDialerSync = updates.lastBatchDialerSync;
+  if (updates.lastBatchLeadsSync) updateData.lastBatchLeadsSync = updates.lastBatchLeadsSync;
 
   if (Object.keys(updateData).length === 0) return getTenantById(tenantId);
 

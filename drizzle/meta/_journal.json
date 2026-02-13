@@ -274,6 +274,13 @@
       "when": 1771010538174,
       "tag": "0038_faithful_tony_stark",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "5",
+      "when": 1771013412410,
+      "tag": "0039_yellow_titanium_man",
+      "breakpoints": true
     }
   ]
 }

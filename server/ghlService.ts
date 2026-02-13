@@ -534,6 +534,11 @@ export async function pollForNewCalls(): Promise<{
           tenantPoll(),
           new Promise((_, reject) => setTimeout(() => reject(new Error(`Tenant ${tenant.id} polling timed out after ${TENANT_TIMEOUT_MS / 1000}s`)), TENANT_TIMEOUT_MS)),
         ]);
+
+        // Record successful sync timestamp
+        const { updateTenantSettings } = await import("./tenant");
+        await updateTenantSettings(tenant.id, { lastGhlSync: new Date() });
+        console.log(`[GHL] Tenant ${tenant.id}: Recorded sync timestamp`);
       } catch (tenantError) {
         console.error(`[GHL] Error polling tenant ${tenant.id} (${tenant.name}):`, tenantError);
         results.errors.push(`Tenant ${tenant.id}: ${tenantError instanceof Error ? tenantError.message : "Unknown error"}`);

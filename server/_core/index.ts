@@ -16,6 +16,7 @@ import selfServeAuthRoutes from "../selfServeAuthRoutes";
 import { runEmailSequenceJobs } from "../emailSequenceJobs";
 import { startBatchDialerPolling } from "../batchDialerSync";
 import { startBatchLeadsPolling } from "../batchLeadsSync";
+import { startWebhookRetryQueue } from "../webhookRetryQueue";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -100,6 +101,11 @@ async function startServer() {
     setTimeout(() => {
       startBatchLeadsPolling();
     }, 20000);
+    
+    // Start webhook retry queue processing every 5 minutes
+    setTimeout(() => {
+      startWebhookRetryQueue();
+    }, 25000);
     
     // Start email sequence job - runs every hour
     // Initial run after 30 seconds, then every hour

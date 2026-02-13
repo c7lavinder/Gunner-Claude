@@ -43,6 +43,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { formatRelativeTime } from "@/lib/timeUtils";
 
 export default function TenantSettings() {
   const { user } = useAuth();
@@ -1538,6 +1539,11 @@ export default function TenantSettings() {
                   <div>
                     <CardTitle className="text-base">GoHighLevel</CardTitle>
                     <CardDescription>Sync contacts, call recordings, and pipeline data</CardDescription>
+                    {crmIntegrations?.ghl?.lastSynced && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Last synced: {formatRelativeTime(crmIntegrations.ghl.lastSynced)}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {crmIntegrations?.ghl?.connected ? (
@@ -1653,6 +1659,11 @@ export default function TenantSettings() {
                   <div>
                     <CardTitle className="text-base">BatchDialer</CardTitle>
                     <CardDescription>Sync cold calling campaigns and call recordings</CardDescription>
+                    {crmIntegrations?.batchDialer?.lastSynced && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Last synced: {formatRelativeTime(crmIntegrations.batchDialer.lastSynced)}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {crmIntegrations?.batchDialer?.connected ? (
@@ -1756,6 +1767,11 @@ export default function TenantSettings() {
                   <div>
                     <CardTitle className="text-base">BatchLeads</CardTitle>
                     <CardDescription>Enrich calls with property data, owner info, and estimated values</CardDescription>
+                    {crmIntegrations?.batchLeads?.lastSynced && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Last synced: {formatRelativeTime(crmIntegrations.batchLeads.lastSynced)}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {crmIntegrations?.batchLeads?.connected ? (

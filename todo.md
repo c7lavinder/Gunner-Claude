@@ -1909,3 +1909,22 @@
 - [x] Update crmConfig to support multiple simultaneous integrations
 - [x] Add per-integration connection test (validate API key on save)
 - [x] Write 12 vitest tests for CRM integrations (all passing)
+
+## Feature: Last Synced Timestamps for CRM Integrations
+- [x] Add lastGhlSync, lastBatchDialerSync, lastBatchLeadsSync columns to tenants table
+- [x] Update GHL sync service to record timestamp after successful sync
+- [x] Update BatchDialer sync service to record timestamp after successful sync
+- [x] Update BatchLeads sync service to record timestamp after successful sync
+- [x] Add backend endpoint to fetch sync timestamps for current tenant (added to getCrmIntegrations)
+- [x] Update CRM integration cards UI to display "Last synced: X minutes ago" or "Never synced"
+- [x] Add relative time formatting (e.g., "2 minutes ago", "1 hour ago", "3 days ago")
+- [x] Write 11 vitest tests for timestamp recording and webhook retry queue (all passing)
+
+## Feature: Webhook Retry Queue for Failed Gunner Engine Webhooks
+- [x] Create webhook_retry_queue table (id, tenantId, callId, payload, attemptCount, maxAttempts, lastAttemptAt, nextRetryAt, status, lastError, createdAt, updatedAt)
+- [x] Update sendCallGradedWebhook to store failed webhooks in retry queue with tenantId and callId
+- [x] Build webhook retry service with exponential backoff (1min, 5min, 15min, 1hr, 6hr)
+- [x] Add scheduled job to process retry queue every 5 minutes (starts 30s after server boot)
+- [x] Mark webhooks as 'delivered' after successful retry or 'failed' after max attempts (5)
+- [x] Add backend endpoint getWebhookRetryQueueStatus to view retry queue status (admin only)
+- [x] Write 11 vitest tests for retry queue logic and exponential backoff (all passing)

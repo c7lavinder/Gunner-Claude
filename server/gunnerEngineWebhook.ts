@@ -23,7 +23,11 @@ interface CallGradedPayload {
 
 const GUNNER_ENGINE_WEBHOOK_URL = "https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded";
 
-export async function sendCallGradedWebhook(payload: CallGradedPayload): Promise<boolean> {
+export async function sendCallGradedWebhook(
+  payload: CallGradedPayload,
+  tenantId: number,
+  callId: number
+): Promise<boolean> {
   try {
     const response = await fetch(GUNNER_ENGINE_WEBHOOK_URL, {
       method: "POST",
@@ -34,7 +38,13 @@ export async function sendCallGradedWebhook(payload: CallGradedPayload): Promise
     });
 
     if (!response.ok) {
-      console.error(`[Gunner Engine Webhook] Failed to send: ${response.status} ${response.statusText}`);
+      const error = `HTTP ${response.status}: ${response.statusText}`;
+      console.error(`[Gunner Engine Webhook] Failed to send: ${error}`);
+      
+      // Queue for retry
+      const { queueFailedWebhook } = await import("./webhookRetryQueue");
+      await queueFailedWebhook(tenantId, callId, payload as unknown as Record<string, unknown>, error);
+      
       return false;
     }
 
@@ -42,7 +52,13 @@ export async function sendCallGradedWebhook(payload: CallGradedPayload): Promise
     console.log(`[Gunner Engine Webhook] Success for call ${payload.callId}:`, result);
     return true;
   } catch (error) {
-    console.error(`[Gunner Engine Webhook] Error sending webhook for call ${payload.callId}:`, error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[Gunner Engine Webhook] Error sending webhook for call ${payload.callId}:`, errorMsg);
+    
+    // Queue for retry
+    const { queueFailedWebhook } = await import("./webhookRetryQueue");
+    await queueFailedWebhook(tenantId, callId, payload as unknown as Record<string, unknown>, errorMsg);
+    
     return false;
   }
 }

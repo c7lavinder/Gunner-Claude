@@ -3188,16 +3188,19 @@ Create content that:
           dispoPipelineName: config.dispoPipelineName || undefined,
           dispoPipelineId: config.dispoPipelineId || undefined,
           newDealStageName: config.newDealStageName || undefined,
+          lastSynced: tenant.lastGhlSync ? tenant.lastGhlSync.toISOString() : null,
         },
         batchDialer: {
           enabled: !!config.batchDialerEnabled,
           connected: !!config.batchDialerApiKey,
           hasApiKey: !!config.batchDialerApiKey,
+          lastSynced: tenant.lastBatchDialerSync ? tenant.lastBatchDialerSync.toISOString() : null,
         },
         batchLeads: {
           enabled: !!config.batchLeadsApiKey,
           connected: !!config.batchLeadsApiKey,
           hasApiKey: !!config.batchLeadsApiKey,
+          lastSynced: tenant.lastBatchLeadsSync ? tenant.lastBatchLeadsSync.toISOString() : null,
         },
       };
     }),
@@ -3212,6 +3215,18 @@ Create content that:
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated' });
       }
       return syncBatchLeadsForTenant(ctx.user.tenantId);
+    }),
+
+    // Get webhook retry queue status (admin only)
+    getWebhookRetryQueueStatus: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.isTenantAdmin !== 'true') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      if (!ctx.user?.tenantId) {
+        return { pending: 0, delivered: 0, failed: 0, recentFailures: [] };
+      }
+      const { getRetryQueueStatus } = await import("./webhookRetryQueue");
+      return getRetryQueueStatus(ctx.user.tenantId);
     }),
 
     // Create checkout session for subscription
