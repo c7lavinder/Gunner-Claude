@@ -1877,3 +1877,9 @@
 - [x] Add connection status and sync info for BatchDialer
 - [x] Add connection status and sync info for BatchLeads
 - [x] Wire up backend endpoints if needed (uses same crmType field as GHL)
+
+## Bug: Admin Users Still See Gamification on Dashboard
+- [x] Identified: Home.tsx line 183 already has isAdmin check (admin → signals, user → gamification)
+- [x] Root cause: xhaka's role was set to "user" instead of "admin" in database
+- [x] Fixed: Updated xhaka's role to "admin" (user ID 180239)
+- [x] Verified: Dashboard logic already correct, will show signals after xhaka logs out and back in
