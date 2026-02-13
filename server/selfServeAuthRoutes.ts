@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { signUpWithEmail, signInWithEmail, getUserWithTenant, createSessionToken, requestPasswordReset, verifyResetToken, resetPassword, createEmailVerification, verifyEmailToken, resendVerificationEmail } from "./selfServeAuth";
-import { createTenantCheckoutSession } from "./tenant";
+import { createTenantCheckoutSession, checkAndAcceptPendingInvitation, autoMatchTeamMember } from "./tenant";
 import { exchangeCodeForTokens, decodeIdToken, signInWithGoogle, completeGoogleSignup, getGoogleAuthUrl } from "./googleAuth";
 
 const router = Router();
@@ -30,11 +30,41 @@ router.post("/signup", async (req: Request, res: Response) => {
       return;
     }
 
+    // Check for pending invitation — if this email was invited to a team,
+    // move the user into that tenant instead of the one just created
+    let finalTenantId = result.tenantId!;
+    let joinedExistingTenant = false;
+    try {
+      const inviteResult = await checkAndAcceptPendingInvitation(result.userId!, email);
+      if (inviteResult) {
+        finalTenantId = inviteResult.tenantId;
+        joinedExistingTenant = true;
+        console.log(`[Auth] Email/password signup: User ${email} joined tenant "${inviteResult.tenantName}" via pending invitation`);
+      }
+    } catch (inviteError) {
+      console.warn('[Auth] Error checking pending invitation during signup:', inviteError);
+      // Non-fatal — user continues with their new tenant
+    }
+
+    // If no invitation, try auto-matching by name to an existing team member record
+    if (!joinedExistingTenant) {
+      try {
+        const matchResult = await autoMatchTeamMember(result.userId!, name, email);
+        if (matchResult) {
+          finalTenantId = matchResult.tenantId;
+          joinedExistingTenant = true;
+          console.log(`[Auth] Email/password signup: User ${email} auto-matched to team member "${matchResult.teamMemberName}" in tenant "${matchResult.tenantName}"`);
+        }
+      } catch (matchError) {
+        console.warn('[Auth] Error auto-matching team member during signup:', matchError);
+      }
+    }
+
     // Send verification email
     await createEmailVerification(result.userId!, email, name, companyName);
 
-    // Create session token
-    const token = createSessionToken(result.userId!, result.tenantId!);
+    // Create session token with the correct tenant (may have changed from invitation/auto-match)
+    const token = createSessionToken(result.userId!, finalTenantId);
 
     // Set cookie for session
     res.cookie('auth_token', token, {
@@ -44,13 +74,15 @@ router.post("/signup", async (req: Request, res: Response) => {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
-    // No checkout session - user will go to onboarding first, then paywall
+    // If user joined an existing tenant, they skip onboarding
+    const onboardingComplete = joinedExistingTenant;
+
     res.json({
       success: true,
       token,
       userId: result.userId,
-      tenantId: result.tenantId,
-      onboardingComplete: false,
+      tenantId: finalTenantId,
+      onboardingComplete,
     });
   } catch (error) {
     console.error('[Auth] Signup error:', error);
@@ -73,6 +105,37 @@ router.post("/login", async (req: Request, res: Response) => {
     if (!result.success) {
       res.status(401).json({ success: false, error: result.error });
       return;
+    }
+
+    // Check for pending invitations on each login (user may have been invited after initial signup)
+    try {
+      const inviteResult = await checkAndAcceptPendingInvitation(result.user.id, email);
+      if (inviteResult) {
+        console.log(`[Auth] Email/password login: User ${email} accepted pending invitation to tenant "${inviteResult.tenantName}"`);
+        // Update the user object with the new tenant info
+        result.user.tenantId = inviteResult.tenantId;
+        result.user.role = inviteResult.role;
+        result.user.teamRole = inviteResult.teamRole;
+        // Re-create token with new tenant
+        result.token = createSessionToken(result.user.id, inviteResult.tenantId);
+      }
+    } catch (inviteError) {
+      console.warn('[Auth] Error checking pending invitation during login:', inviteError);
+    }
+
+    // Auto-match team member if user doesn't have a tenant yet
+    if (!result.user.tenantId) {
+      try {
+        const matchResult = await autoMatchTeamMember(result.user.id, result.user.name, email);
+        if (matchResult) {
+          console.log(`[Auth] Email/password login: User ${email} auto-matched to team member "${matchResult.teamMemberName}" in tenant "${matchResult.tenantName}"`);
+          result.user.tenantId = matchResult.tenantId;
+          result.user.teamRole = matchResult.teamRole;
+          result.token = createSessionToken(result.user.id, matchResult.tenantId);
+        }
+      } catch (matchError) {
+        console.warn('[Auth] Error auto-matching team member during login:', matchError);
+      }
     }
 
     // Set cookie for session

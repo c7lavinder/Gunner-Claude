@@ -174,18 +174,6 @@ export default function DashboardLayout({
     (tenantSettings?.subscriptionStatus === 'active' || tenantSettings?.subscriptionStatus === 'past_due');
   const isSuperAdmin = user?.role === 'super_admin';
   
-  // DEBUG: Log flow check values
-  console.log('[Flow Debug]', {
-    location,
-    userRole: user?.role,
-    isSuperAdmin,
-    onboardingCompleted,
-    hasActiveSubscription,
-    justCompletedCheckout,
-    stripeSubscriptionId: tenantSettings?.stripeSubscriptionId,
-    subscriptionStatus: tenantSettings?.subscriptionStatus,
-  });
-  
   // FLOW LOGIC:
   // 1. If on onboarding page, always render it (let the page handle its own logic)
   if (isOnboardingRoute) {

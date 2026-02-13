@@ -138,6 +138,99 @@ export const appRouter = router({
         
         return { url };
       }),
+
+    changePassword: protectedProcedure
+      .input(z.object({
+        currentPassword: z.string().min(1, "Current password is required"),
+        newPassword: z.string().min(8, "New password must be at least 8 characters"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const { verifyPassword, hashPassword } = await import("./selfServeAuth");
+        
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        
+        // Get user with password hash
+        const [user] = await db.select().from(users).where(eq(users.id, ctx.user!.id)).limit(1);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+        
+        // Only email/password users can change password
+        if (user.loginMethod !== 'email_password') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Password change is only available for email/password accounts. You signed in with Google.' });
+        }
+        
+        if (!user.passwordHash) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'No password set for this account' });
+        }
+        
+        // Verify current password
+        const isValid = await verifyPassword(input.currentPassword, user.passwordHash);
+        if (!isValid) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Current password is incorrect' });
+        }
+        
+        // Hash and save new password
+        const newHash = await hashPassword(input.newPassword);
+        await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, ctx.user!.id));
+        
+        return { success: true };
+      }),
+
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1, "Name is required").optional(),
+        email: z.string().email("Invalid email").optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        
+        const updates: Record<string, string> = {};
+        if (input.name) updates.name = input.name;
+        if (input.email) {
+          // Check if email is already taken by another user
+          const [existing] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+          if (existing && existing.id !== ctx.user!.id) {
+            throw new TRPCError({ code: 'CONFLICT', message: 'Email is already in use by another account' });
+          }
+          updates.email = input.email;
+        }
+        
+        if (Object.keys(updates).length > 0) {
+          await db.update(users).set(updates).where(eq(users.id, ctx.user!.id));
+        }
+        
+        return { success: true };
+      }),
+
+    getAccountInfo: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getDb } = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        
+        const [user] = await db.select().from(users).where(eq(users.id, ctx.user!.id)).limit(1);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+        
+        return {
+          name: user.name,
+          email: user.email,
+          loginMethod: user.loginMethod,
+          emailVerified: user.emailVerified === 'true',
+          profilePicture: user.profilePicture,
+          createdAt: user.createdAt,
+        };
+      }),
   }),
 
   // ============ TEAM MEMBERS ============

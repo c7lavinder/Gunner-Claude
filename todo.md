@@ -1740,3 +1740,10 @@
 
 ## Signals UI: Fix rule name display
 - [x] Show friendly labels instead of raw underscore keys (e.g. "Timeline Offered — No Commitment" instead of "timeline_offered_no_commitment")
+
+## V1 Pre-Launch Bug Fixes
+- [x] Bug 1: Email/password signup must check pending_invitations and join existing tenant instead of creating new one
+- [x] Bug 2: Email/password login must call autoMatchTeamMember after successful authentication
+- [x] Bug 3: Remove console.log debug statements from DashboardLayout
+- [x] Write tests for Bug 1 and Bug 2 fixes — 16 tests passing
+- [x] Add password change / account settings section to Profile page (change password, update name/email)

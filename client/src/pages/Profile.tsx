@@ -2,11 +2,14 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { Award, Trophy, Flame, Target, Zap, Lock, CheckCircle, Camera, Loader2 } from "lucide-react";
+import { Award, Trophy, Flame, Target, Zap, Lock, CheckCircle, Camera, Loader2, KeyRound, User, Mail, Eye, EyeOff, Settings } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 
 
@@ -114,6 +117,264 @@ function BadgeCard({ badge }: { badge: BadgeData }) {
   );
 }
 
+function AccountSettings() {
+  const { user, refresh } = useAuth();
+  const { data: accountInfo, isLoading: accountLoading } = trpc.auth.getAccountInfo.useQuery();
+  const changePasswordMutation = trpc.auth.changePassword.useMutation();
+  const updateProfileMutation = trpc.auth.updateProfile.useMutation();
+  
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  
+  useEffect(() => {
+    if (accountInfo) {
+      setEditName(accountInfo.name || '');
+      setEditEmail(accountInfo.email || '');
+    }
+  }, [accountInfo]);
+  
+  const isGoogleUser = accountInfo?.loginMethod === 'google';
+  
+  const handleUpdateProfile = async () => {
+    try {
+      const updates: { name?: string; email?: string } = {};
+      if (editName !== accountInfo?.name) updates.name = editName;
+      if (editEmail !== accountInfo?.email) updates.email = editEmail;
+      
+      if (Object.keys(updates).length === 0) {
+        setIsEditingProfile(false);
+        return;
+      }
+      
+      await updateProfileMutation.mutateAsync(updates);
+      toast.success('Profile updated successfully');
+      setIsEditingProfile(false);
+      refresh();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update profile');
+    }
+  };
+  
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters');
+      return;
+    }
+    try {
+      await changePasswordMutation.mutateAsync({
+        currentPassword,
+        newPassword,
+      });
+      toast.success('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to change password');
+    }
+  };
+  
+  if (accountLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <Skeleton className="h-48 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  return (
+    <div className="space-y-6">
+      {/* Profile Information */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Profile Information
+              </CardTitle>
+              <CardDescription>Update your name and email address</CardDescription>
+            </div>
+            {!isEditingProfile && (
+              <Button variant="outline" size="sm" onClick={() => setIsEditingProfile(true)}>
+                Edit
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              {isEditingProfile ? (
+                <Input
+                  id="name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Your name"
+                />
+              ) : (
+                <p className="text-sm py-2 px-3 bg-muted/50 rounded-md">{accountInfo?.name || '—'}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              {isEditingProfile ? (
+                <Input
+                  id="email"
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="your@email.com"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <p className="text-sm py-2 px-3 bg-muted/50 rounded-md flex-1">{accountInfo?.email || '—'}</p>
+                  {accountInfo?.emailVerified && (
+                    <span className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" /> Verified
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            <Mail className="h-3 w-3 inline mr-1" />
+            Sign-in method: {isGoogleUser ? 'Google' : 'Email & Password'}
+          </div>
+          {isEditingProfile && (
+            <div className="flex gap-2 pt-2">
+              <Button
+                onClick={handleUpdateProfile}
+                disabled={updateProfileMutation.isPending}
+                size="sm"
+              >
+                {updateProfileMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                ) : 'Save Changes'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditingProfile(false);
+                  setEditName(accountInfo?.name || '');
+                  setEditEmail(accountInfo?.email || '');
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Change Password - only for email/password users */}
+      {!isGoogleUser && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              Change Password
+            </CardTitle>
+            <CardDescription>Update your password to keep your account secure</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="current-password"
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="new-password"
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="At least 8 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                />
+              </div>
+            </div>
+            {newPassword && confirmPassword && newPassword !== confirmPassword && (
+              <p className="text-sm text-destructive">Passwords do not match</p>
+            )}
+            <Button
+              onClick={handleChangePassword}
+              disabled={changePasswordMutation.isPending || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+              size="sm"
+            >
+              {changePasswordMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Changing...</>
+              ) : 'Change Password'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Google users see a note */}
+      {isGoogleUser && (
+        <Card className="bg-muted/30">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Lock className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Password managed by Google</p>
+              <p className="text-xs text-muted-foreground">You signed in with Google. To change your password, visit your Google account settings.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function Profile() {
   const { user, refresh } = useAuth();
   const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
@@ -121,6 +382,7 @@ export default function Profile() {
   const uploadMutation = trpc.auth.updateProfilePicture.useMutation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'achievements' | 'account'>('achievements');
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -177,7 +439,7 @@ export default function Profile() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
           <p className="text-muted-foreground mt-1">
-            Track your progress, achievements, and badges
+            {activeTab === 'achievements' ? 'Track your progress, achievements, and badges' : 'Manage your account settings and security'}
           </p>
         </div>
         
@@ -226,6 +488,36 @@ export default function Profile() {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="flex gap-1 border-b">
+        <button
+          onClick={() => setActiveTab('achievements')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'achievements'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Trophy className="h-4 w-4 inline mr-2" />
+          Achievements
+        </button>
+        <button
+          onClick={() => setActiveTab('account')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'account'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Settings className="h-4 w-4 inline mr-2" />
+          Account Settings
+        </button>
+      </div>
+
+      {activeTab === 'account' ? (
+        <AccountSettings />
+      ) : (
+      <>
       {/* XP & Level Card */}
       <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
         <CardHeader>
@@ -407,6 +699,8 @@ export default function Profile() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
