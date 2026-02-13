@@ -147,7 +147,7 @@ export default function Home() {
       {/* Admin: Pipeline Signals Summary | Non-admin: Gamification Stats */}
       {isAdmin ? (
         <Link href="/opportunities">
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 cursor-pointer group">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 cursor-pointer group pb-2">
             {/* Missed */}
             <Card className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950 dark:to-rose-950 p-3 sm:p-4 border-red-200 dark:border-red-800 group-hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-2">
