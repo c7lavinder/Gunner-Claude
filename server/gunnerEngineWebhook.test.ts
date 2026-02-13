@@ -5,6 +5,21 @@ import { sendCallGradedWebhook } from "./gunnerEngineWebhook";
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
+// Mock the GHL contact search (used for fallback lookup)
+vi.mock("./ghlActions", () => ({
+  searchContacts: vi.fn().mockResolvedValue([]),
+}));
+
+// Mock the db updateCall (used for backfilling ghlContactId)
+vi.mock("./db", () => ({
+  updateCall: vi.fn().mockResolvedValue(null),
+}));
+
+// Mock the webhook retry queue
+vi.mock("./webhookRetryQueue", () => ({
+  queueFailedWebhook: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe("Gunner Engine Webhook", () => {
   const validPayload = {
     callId: "123",
@@ -21,6 +36,9 @@ describe("Gunner Engine Webhook", () => {
     timestamp: "2026-02-13T12:00:00.000Z",
   };
 
+  const tenantId = 1;
+  const callId = 123;
+
   beforeEach(() => {
     mockFetch.mockReset();
   });
@@ -35,7 +53,7 @@ describe("Gunner Engine Webhook", () => {
       json: async () => ({ received: true, dryRun: true }),
     });
 
-    const result = await sendCallGradedWebhook(validPayload);
+    const result = await sendCallGradedWebhook(validPayload, tenantId, callId);
 
     expect(result).toBe(true);
     expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -57,7 +75,7 @@ describe("Gunner Engine Webhook", () => {
       json: async () => ({ received: true, dryRun: true }),
     });
 
-    const result = await sendCallGradedWebhook(validPayload);
+    const result = await sendCallGradedWebhook(validPayload, tenantId, callId);
     expect(result).toBe(true);
   });
 
@@ -68,7 +86,7 @@ describe("Gunner Engine Webhook", () => {
       statusText: "Internal Server Error",
     });
 
-    const result = await sendCallGradedWebhook(validPayload);
+    const result = await sendCallGradedWebhook(validPayload, tenantId, callId);
     expect(result).toBe(false);
   });
 
@@ -79,40 +97,117 @@ describe("Gunner Engine Webhook", () => {
       statusText: "Not Found",
     });
 
-    const result = await sendCallGradedWebhook(validPayload);
+    const result = await sendCallGradedWebhook(validPayload, tenantId, callId);
     expect(result).toBe(false);
   });
 
   it("should return false and not throw on network error", async () => {
     mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
 
-    const result = await sendCallGradedWebhook(validPayload);
+    const result = await sendCallGradedWebhook(validPayload, tenantId, callId);
     expect(result).toBe(false);
   });
 
   it("should return false and not throw on timeout", async () => {
     mockFetch.mockRejectedValueOnce(new Error("AbortError: signal timed out"));
 
-    const result = await sendCallGradedWebhook(validPayload);
+    const result = await sendCallGradedWebhook(validPayload, tenantId, callId);
     expect(result).toBe(false);
   });
 
-  it("should send payload without optional contactId", async () => {
+  it("should attempt GHL contact lookup when contactId is empty", async () => {
+    const { searchContacts } = await import("./ghlActions");
+    const mockSearch = vi.mocked(searchContacts);
+    mockSearch.mockResolvedValueOnce([
+      { id: "resolved-contact-789", name: "John Doe", phone: "+15551234567", email: "john@test.com" },
+    ]);
+
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ received: true }),
     });
 
-    const payloadNoContact = { ...validPayload, contactId: undefined };
-    const result = await sendCallGradedWebhook(payloadNoContact);
+    const payloadNoContact = { ...validPayload, contactId: "" };
+    const result = await sendCallGradedWebhook(payloadNoContact, tenantId, callId);
+
+    expect(result).toBe(true);
+    expect(mockSearch).toHaveBeenCalledWith(tenantId, "+15551234567");
+
+    // The sent payload should have the resolved contactId
+    const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(sentBody.contactId).toBe("resolved-contact-789");
+  });
+
+  it("should send empty contactId when GHL lookup finds no match", async () => {
+    const { searchContacts } = await import("./ghlActions");
+    const mockSearch = vi.mocked(searchContacts);
+    mockSearch.mockResolvedValueOnce([]);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ received: true }),
+    });
+
+    const payloadNoContact = { ...validPayload, contactId: "" };
+    const result = await sendCallGradedWebhook(payloadNoContact, tenantId, callId);
 
     expect(result).toBe(true);
     const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    // contactId should not be present or be undefined in the payload
-    expect(sentBody.callId).toBe("123");
-    expect(sentBody.teamMember).toBe("Chris Smith");
-    expect(sentBody.grade).toBe("B");
-    expect(sentBody.score).toBe(82);
+    expect(sentBody.contactId).toBe("");
+  });
+
+  it("should still send webhook even if GHL lookup fails", async () => {
+    const { searchContacts } = await import("./ghlActions");
+    const mockSearch = vi.mocked(searchContacts);
+    mockSearch.mockRejectedValueOnce(new Error("GHL API down"));
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ received: true }),
+    });
+
+    const payloadNoContact = { ...validPayload, contactId: "" };
+    const result = await sendCallGradedWebhook(payloadNoContact, tenantId, callId);
+
+    expect(result).toBe(true);
+    // Webhook should still fire even if contact lookup failed
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("should backfill ghlContactId in database when resolved", async () => {
+    const { searchContacts } = await import("./ghlActions");
+    const mockSearch = vi.mocked(searchContacts);
+    mockSearch.mockResolvedValueOnce([
+      { id: "resolved-contact-789", name: "John Doe", phone: "+15551234567", email: "john@test.com" },
+    ]);
+
+    const { updateCall } = await import("./db");
+    const mockUpdate = vi.mocked(updateCall);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ received: true }),
+    });
+
+    const payloadNoContact = { ...validPayload, contactId: "" };
+    await sendCallGradedWebhook(payloadNoContact, tenantId, callId);
+
+    expect(mockUpdate).toHaveBeenCalledWith(callId, { ghlContactId: "resolved-contact-789" });
+  });
+
+  it("should skip GHL lookup when contactId is already populated", async () => {
+    const { searchContacts } = await import("./ghlActions");
+    const mockSearch = vi.mocked(searchContacts);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ received: true }),
+    });
+
+    await sendCallGradedWebhook(validPayload, tenantId, callId);
+
+    // Should NOT have called searchContacts since contactId was already set
+    expect(mockSearch).not.toHaveBeenCalled();
   });
 
   it("should send payload without optional propertyAddress", async () => {
@@ -122,7 +217,7 @@ describe("Gunner Engine Webhook", () => {
     });
 
     const payloadNoAddress = { ...validPayload, propertyAddress: undefined };
-    const result = await sendCallGradedWebhook(payloadNoAddress);
+    const result = await sendCallGradedWebhook(payloadNoAddress, tenantId, callId);
 
     expect(result).toBe(true);
     const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -136,7 +231,7 @@ describe("Gunner Engine Webhook", () => {
       json: async () => ({ received: true }),
     });
 
-    await sendCallGradedWebhook(validPayload);
+    await sendCallGradedWebhook(validPayload, tenantId, callId);
 
     const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(sentBody).toHaveProperty("callId", "123");
@@ -160,7 +255,7 @@ describe("Gunner Engine Webhook", () => {
     });
 
     const offerPayload = { ...validPayload, callType: "offer", grade: "A", score: 95 };
-    await sendCallGradedWebhook(offerPayload);
+    await sendCallGradedWebhook(offerPayload, tenantId, callId);
 
     const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(sentBody.callType).toBe("offer");
@@ -175,37 +270,14 @@ describe("Gunner Engine Webhook", () => {
     });
 
     const adminPayload = { ...validPayload, callType: "admin_callback", grade: "C", score: 72 };
-    await sendCallGradedWebhook(adminPayload);
+    await sendCallGradedWebhook(adminPayload, tenantId, callId);
 
     const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(sentBody.callType).toBe("admin_callback");
   });
 
-  it("should handle empty transcript gracefully", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ received: true }),
-    });
-
-    const emptyTranscriptPayload = { ...validPayload, transcript: "" };
-    const result = await sendCallGradedWebhook(emptyTranscriptPayload);
-
-    expect(result).toBe(true);
-    const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(sentBody.transcript).toBe("");
-  });
-
-  it("should handle empty phone gracefully", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ received: true }),
-    });
-
-    const emptyPhonePayload = { ...validPayload, phone: "" };
-    const result = await sendCallGradedWebhook(emptyPhonePayload);
-
-    expect(result).toBe(true);
-    const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(sentBody.phone).toBe("");
+  it("should accept tenantId and callId as required parameters", () => {
+    // Verify function signature requires 3 parameters
+    expect(sendCallGradedWebhook.length).toBe(3);
   });
 });

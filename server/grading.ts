@@ -1128,7 +1128,7 @@ export async function processCall(callId: number): Promise<void> {
         try {
           await sendCallGradedWebhook({
             callId: call.id.toString(),
-            contactId: call.ghlContactId || undefined,
+            contactId: call.ghlContactId || "",
             teamMember: teamMemberName,
             grade: gradeResult.overallGrade,
             score: gradeResult.overallScore,
@@ -1329,7 +1329,7 @@ export async function processCall(callId: number): Promise<void> {
     try {
       await sendCallGradedWebhook({
         callId: call.id.toString(),
-        contactId: call.ghlContactId || undefined,
+        contactId: call.ghlContactId || "",
         teamMember: teamMemberName,
         grade: gradeResult.overallGrade,
         score: gradeResult.overallScore,

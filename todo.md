@@ -1928,3 +1928,10 @@
 - [x] Mark webhooks as 'delivered' after successful retry or 'failed' after max attempts (5)
 - [x] Add backend endpoint getWebhookRetryQueueStatus to view retry queue status (admin only)
 - [x] Write 11 vitest tests for retry queue logic and exponential backoff (all passing)
+
+## Bug Fix: contactId empty/null in Gunner Engine webhook payload
+- [x] Investigated: Call 1920034 had null ghlContactId because it was uploaded manually (not synced from GHL)
+- [x] Added GHL contact lookup fallback: when ghlContactId is null, searches GHL by phone number
+- [x] Added automatic backfill: resolved contactId is saved back to the call record in the database
+- [x] Changed contactId from optional to required string (sends empty string instead of omitting field)
+- [x] 16 vitest tests passing including 5 new tests for fallback/backfill logic
