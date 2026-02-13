@@ -1751,3 +1751,35 @@
 ## Bug Fix: Daniel's Dashboard Showing Signals Instead of Gamification
 - [x] Investigate Daniel's user role — isTenantAdmin was 'true' causing admin dashboard view
 - [x] Fixed: set Daniel's isTenantAdmin to 'false' and hardened isAdmin check to use user.role only (not isTenantAdmin)
+
+## Pre-Onboarding Audit (15 Items)
+
+### CRITICAL
+- [ ] #1: Dashboard stats don't match Analytics (same filter, different numbers) — find root cause and unify queries
+- [ ] #2: Call Processing numbers shift between page loads — unstable data query
+
+### UX Fixes
+- [ ] #3: De-emphasize skipped calls on Dashboard — add activity summary line + gray out skipped calls
+- [ ] #4: Gamification section — add badge names/descriptions, show progress toward next badge/level
+- [ ] #5: Score Trends chart — empty weeks show 0% dots, should show gap instead
+- [ ] #6: Analytics leaderboard — add visible ranking criteria label (e.g. "Ranked by Average Score")
+- [ ] #7: Signals page empty states — show "No urgent signals — your team is on track" when 0
+
+### Scale Items
+- [ ] #8: Conversation scan capped at 50 — increase to 200 with pagination
+- [ ] #9: CRM settings shows "Connect GHL" even when connected — show connected status + last sync
+- [ ] #10: Custom Domain field has no save button — remove or link to Management UI
+- [ ] #11: Role-based access audit — verify Signals, Scan Pipeline, Settings, rubrics are admin-only
+- [ ] #12: URL inconsistency — clean up all references to use getgunner.ai consistently
+
+### Quick Wins
+- [ ] #13: Add "last synced" indicator to Dashboard
+- [ ] #14: Skipped calls over 30 seconds — generate 1-2 sentence summary from recording
+- [ ] #15: Smart dashboard greeting — admins see signal count, team members see their own stats
+
+### Additional Items
+- [ ] Add missing rubric types to Training page (Follow-Up, Seller Callback, Admin Callback) — currently only shows Lead Gen, Qualification, Offer
+
+## Bug Fix: Account Settings Not Visible on Profile Page
+- [x] Verify account settings tab/section is rendering on Profile page — code was there but no navigation link existed
+- [x] Added 'Account Settings' to user avatar dropdown menu in sidebar — now accessible from any page
