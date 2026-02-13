@@ -1863,3 +1863,17 @@
 - [x] Fixed: added w-full to grade distribution bar container
 - [x] Fixed: consistent mt-1 spacing between numbers and labels in stat boxes
 - [x] Header section already consistent (no changes needed)
+
+## UI Fix: Team Card Header Height & Gamification Enhancement
+- [x] Fix header section to have fixed height so all cards align (min-h-[120px] sm:min-h-[140px])
+- [x] Handle variable content (name length, hot streaks, badges) within fixed height
+- [x] Enhance gamification styling — added gradients, backdrop blur, decorative patterns, shadows
+- [x] Ensure level badges, XP, and role badges are consistently positioned
+- [x] Add visual polish (shadows, gradients, better spacing)
+
+## Feature: Add BatchDialer/BatchLeads CRM Integration
+- [x] Add BatchDialer option to CRM dropdown in settings
+- [x] Add BatchLeads option to CRM dropdown in settings
+- [x] Add connection status and sync info for BatchDialer
+- [x] Add connection status and sync info for BatchLeads
+- [x] Wire up backend endpoints if needed (uses same crmType field as GHL)

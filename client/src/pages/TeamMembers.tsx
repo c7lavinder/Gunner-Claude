@@ -180,21 +180,27 @@ function TeamMemberShowcase({
       rank === 2 ? "ring-gray-400" : 
       rank === 3 ? "ring-amber-600" : ""
     }`}>
-      <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-3 sm:p-6 text-white">
-        <div className="flex items-start gap-3 sm:gap-4">
-          <div className="relative shrink-0">
+      <div className="bg-gradient-to-br from-orange-600 via-orange-500 to-amber-600 p-3 sm:p-4 text-white relative overflow-hidden">
+        {/* Decorative background pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full -translate-y-16 translate-x-16"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white rounded-full translate-y-12 -translate-x-12"></div>
+        </div>
+        
+        <div className="relative flex items-center gap-3 sm:gap-4 min-h-[120px] sm:min-h-[140px]">
+          <div className="relative shrink-0 self-start">
             {rank <= 3 && <RankBadge rank={rank} />}
             <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
               <DialogTrigger asChild>
-                <div className={`cursor-pointer ${isCurrentUser ? 'hover:opacity-80' : ''}`}>
-                  <Avatar className="h-14 w-14 sm:h-20 sm:w-20 border-2 sm:border-4 border-white shadow-lg">
+                <div className={`cursor-pointer ${isCurrentUser ? 'hover:opacity-80 transition-opacity' : ''}`}>
+                  <Avatar className="h-16 w-16 sm:h-24 sm:w-24 border-3 sm:border-4 border-white/90 shadow-xl ring-2 ring-white/20">
                     <AvatarImage src={member.user?.profilePicture || undefined} />
-                    <AvatarFallback className="text-xl sm:text-2xl font-bold bg-white text-orange-700">
+                    <AvatarFallback className="text-2xl sm:text-3xl font-bold bg-gradient-to-br from-white to-orange-50 text-orange-700">
                       {member.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   {isCurrentUser && (
-                    <div className="absolute bottom-0 right-0 bg-white rounded-full p-1 shadow">
+                    <div className="absolute bottom-0 right-0 bg-white rounded-full p-1.5 shadow-lg ring-2 ring-orange-500">
                       <Camera className="h-3 w-3 text-orange-700" />
                     </div>
                   )}
@@ -220,26 +226,42 @@ function TeamMemberShowcase({
             </Dialog>
           </div>
           
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-         <h3 className="text-lg sm:text-2xl font-bold">{member.name}</h3>           {hotStreak > 0 && (
-                <span className="text-xs sm:text-sm bg-white/20 px-1.5 sm:px-2 py-0.5 rounded-full flex items-center gap-1">
+          <div className="flex-1 min-w-0 flex flex-col justify-center py-2">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-xl sm:text-2xl font-bold truncate">{member.name}</h3>
+              {hotStreak > 0 && (
+                <span className="text-xs sm:text-sm bg-white/25 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-1 shadow-sm shrink-0">
                   <Flame className="h-3 w-3" /> {hotStreak}
                 </span>
               )}
             </div>
-            <Badge className="bg-white/20 text-white border-0 mt-1 text-xs">
+            <Badge className="bg-white/25 backdrop-blur-sm text-white border-0 text-xs w-fit shadow-sm">
               {roleLabels[member.teamRole] || member.teamRole}
             </Badge>
-            <div className="hidden sm:block">
-              <BadgeDisplay badges={badges} />
-            </div>
+            {badges.length > 0 && (
+              <div className="hidden sm:flex flex-wrap gap-1 mt-2">
+                {badges.slice(0, 4).map((badge: any, i: number) => (
+                  <span 
+                    key={i} 
+                    className="text-base px-1.5 py-0.5 rounded bg-white/20 backdrop-blur-sm shadow-sm"
+                    title={`${badge.name} (${badge.tier})`}
+                  >
+                    {badge.icon}
+                  </span>
+                ))}
+                {badges.length > 4 && (
+                  <span className="text-xs text-white/80 self-center px-1">+{badges.length - 4}</span>
+                )}
+              </div>
+            )}
           </div>
           
-          <div className="text-right shrink-0">
-            <p className="text-xl sm:text-3xl font-bold">Lvl {level}</p>
-            <p className="text-xs sm:text-sm opacity-90 hidden sm:block">{title}</p>
-            <p className="text-[10px] sm:text-xs opacity-75">{xp.toLocaleString()} XP</p>
+          <div className="text-right shrink-0 self-start pt-1">
+            <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+              <p className="text-2xl sm:text-3xl font-bold leading-none">Lvl {level}</p>
+              <p className="text-xs sm:text-sm opacity-90 mt-0.5 hidden sm:block">{title}</p>
+              <p className="text-[10px] sm:text-xs opacity-80 mt-1">{xp.toLocaleString()} XP</p>
+            </div>
           </div>
         </div>
       </div>

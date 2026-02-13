@@ -1480,6 +1480,8 @@ export default function TenantSettings() {
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
                         <SelectItem value="ghl">GoHighLevel</SelectItem>
+                        <SelectItem value="batchdialer">BatchDialer</SelectItem>
+                        <SelectItem value="batchleads">BatchLeads</SelectItem>
                         <SelectItem value="hubspot">HubSpot</SelectItem>
                         <SelectItem value="salesforce">Salesforce</SelectItem>
                         <SelectItem value="close">Close.io</SelectItem>
@@ -1494,7 +1496,10 @@ export default function TenantSettings() {
                           <div className="flex items-center gap-2 mb-2">
                             <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
                             <p className="text-sm font-medium text-green-700">
-                              {crmType === 'ghl' ? 'GoHighLevel' : crmType.toUpperCase()} is connected and syncing
+                              {crmType === 'ghl' ? 'GoHighLevel' : 
+                               crmType === 'batchdialer' ? 'BatchDialer' :
+                               crmType === 'batchleads' ? 'BatchLeads' :
+                               crmType.toUpperCase()} is connected and syncing
                             </p>
                           </div>
                           <p className="text-xs text-muted-foreground">
@@ -1505,6 +1510,8 @@ export default function TenantSettings() {
                         <>
                           <p className="text-sm text-muted-foreground">
                             {crmType === 'ghl' && "Connect your GoHighLevel account to sync contacts and call recordings."}
+                            {crmType === 'batchdialer' && "Connect your BatchDialer account to sync dialer campaigns and call recordings."}
+                            {crmType === 'batchleads' && "Connect your BatchLeads account to sync lead generation campaigns and call data."}
                             {crmType === 'hubspot' && "Connect your HubSpot account to sync contacts and call data."}
                             {crmType === 'salesforce' && "Connect your Salesforce account to sync leads and call activities."}
                             {crmType === 'close' && "Connect your Close.io account to sync leads and call recordings."}
