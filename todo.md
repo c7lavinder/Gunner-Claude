@@ -1737,3 +1737,6 @@
 - [x] Tighten Rule 15 scan window from 3-14 days to 1-14 days for faster detection
 - [x] Add coaching nudge to grading engine: flag when agent leaves seller's timeline open-ended without locking in a next step
 - [x] Update tests — 62 tests passing (10 coaching nudge + 52 Rule 15)
+
+## Signals UI: Fix rule name display
+- [x] Show friendly labels instead of raw underscore keys (e.g. "Timeline Offered — No Commitment" instead of "timeline_offered_no_commitment")

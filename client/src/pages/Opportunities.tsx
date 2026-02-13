@@ -66,6 +66,16 @@ const tierConfig = {
   },
 };
 
+// Format raw rule keys (e.g. "timeline_offered_no_commitment") into readable labels
+function formatRuleKey(key: string): string {
+  return key
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+    .replace(" No ", " — No ")
+    .replace(" Without ", " — Without ");
+}
+
 const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string }> = {
   backward_movement_no_call: {
     label: "Lead Moved to Follow Up Without a Call",
@@ -359,7 +369,7 @@ export default function Opportunities() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold text-sm">
-                                {rule?.label || primaryRule || "Signal"}
+                                {rule?.label || formatRuleKey(primaryRule) || "Signal"}
                               </span>
                               <Badge variant={config.badgeVariant} className="text-[10px] px-1.5 py-0">
                                 {config.label}
@@ -529,7 +539,7 @@ export default function Opportunities() {
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {(opp.triggerRules as string[]).map((r, i) => (
                                   <Badge key={i} variant="outline" className="text-[10px]">
-                                    {ruleConfig[r]?.shortLabel || r}
+                                    {ruleConfig[r]?.shortLabel || formatRuleKey(r)}
                                   </Badge>
                                 ))}
                               </div>
