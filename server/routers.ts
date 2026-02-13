@@ -3052,6 +3052,168 @@ Create content that:
         return updateTenantSettings(targetTenantId, { crmConfig: JSON.stringify(updatedConfig) });
       }),
 
+    // Test BatchDialer API key
+    testBatchDialerConnection: protectedProcedure
+      .input(z.object({
+        apiKey: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
+          const response = await fetch("https://app.batchdialer.com/api/campaigns", {
+            method: "GET",
+            headers: {
+              "X-ApiKey": input.apiKey,
+              "Accept": "application/json",
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              return { success: false, error: "Invalid API key. Check your BatchDialer API key in Settings → API." };
+            }
+            return { success: false, error: `BatchDialer API error (${response.status})` };
+          }
+          const data = await response.json();
+          const campaignCount = Array.isArray(data) ? data.length : (data.items?.length || 0);
+          return { success: true, message: `Connected! Found ${campaignCount} campaigns.` };
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            return { success: false, error: "Connection timed out. Please try again." };
+          }
+          return { success: false, error: `Connection failed: ${error.message || "Network error"}` };
+        }
+      }),
+
+    // Test BatchLeads API key
+    testBatchLeadsConnection: protectedProcedure
+      .input(z.object({
+        apiKey: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const { validateApiKey } = await import("./batchLeadsService");
+        const result = await validateApiKey(input.apiKey);
+        if (result.valid) {
+          const props = result.usage?.Properties;
+          return {
+            success: true,
+            message: `Connected! ${props?.total_properties || 0} properties available.`,
+            usage: result.usage,
+          };
+        }
+        return { success: false, error: result.error || "Failed to validate API key" };
+      }),
+
+    // Save individual CRM integration config (supports multiple simultaneous integrations)
+    saveCrmIntegration: protectedProcedure
+      .input(z.object({
+        tenantId: z.number().optional(), // If provided, super admin updating another tenant
+        integration: z.enum(['ghl', 'batchdialer', 'batchleads']),
+        enabled: z.boolean(),
+        config: z.object({
+          apiKey: z.string().optional(),
+          locationId: z.string().optional(), // GHL only
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { isPlatformOwner, updateTenantSettings, parseCrmConfig, getTenantById } = await import("./tenant");
+        const targetTenantId = input.tenantId || ctx.user?.tenantId;
+        if (!targetTenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant specified' });
+        }
+        // Check permissions
+        if (input.tenantId && (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId))) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        if (!input.tenantId && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant admin access required' });
+        }
+
+        // Get existing CRM config and merge
+        const tenant = await getTenantById(targetTenantId);
+        if (!tenant) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+        const existingConfig = parseCrmConfig({ crmConfig: tenant.crmConfig as string | null });
+
+        if (input.integration === 'ghl') {
+          existingConfig.ghlApiKey = input.enabled ? (input.config.apiKey || existingConfig.ghlApiKey) : undefined;
+          existingConfig.ghlLocationId = input.enabled ? (input.config.locationId || existingConfig.ghlLocationId) : undefined;
+        } else if (input.integration === 'batchdialer') {
+          existingConfig.batchDialerEnabled = input.enabled;
+          existingConfig.batchDialerApiKey = input.enabled ? (input.config.apiKey || existingConfig.batchDialerApiKey) : undefined;
+        } else if (input.integration === 'batchleads') {
+          existingConfig.batchLeadsApiKey = input.enabled ? (input.config.apiKey || existingConfig.batchLeadsApiKey) : undefined;
+        }
+
+        // Determine overall CRM connection status
+        const hasAnyCrm = !!(existingConfig.ghlApiKey || existingConfig.batchDialerApiKey || existingConfig.batchLeadsApiKey);
+        const crmConnected = hasAnyCrm ? 'true' as const : 'false' as const;
+        // Keep crmType as 'ghl' if GHL is connected, otherwise 'none' (legacy field)
+        const crmType = existingConfig.ghlApiKey ? 'ghl' as const : 'none' as const;
+
+        return updateTenantSettings(targetTenantId, {
+          crmType,
+          crmConfig: JSON.stringify(existingConfig),
+          crmConnected,
+        });
+      }),
+
+    // Get parsed CRM integration status for the current tenant
+    getCrmIntegrations: protectedProcedure.query(async ({ ctx }) => {
+      const { parseCrmConfig, getTenantById } = await import("./tenant");
+      if (!ctx.user?.tenantId) {
+        return {
+          ghl: { enabled: false, connected: false },
+          batchDialer: { enabled: false, connected: false },
+          batchLeads: { enabled: false, connected: false },
+        };
+      }
+      const tenant = await getTenantById(ctx.user.tenantId);
+      if (!tenant) {
+        return {
+          ghl: { enabled: false, connected: false },
+          batchDialer: { enabled: false, connected: false },
+          batchLeads: { enabled: false, connected: false },
+        };
+      }
+      const config = parseCrmConfig({ crmConfig: tenant.crmConfig as string | null });
+      return {
+        ghl: {
+          enabled: !!(config.ghlApiKey && config.ghlLocationId),
+          connected: !!(config.ghlApiKey && config.ghlLocationId),
+          hasApiKey: !!config.ghlApiKey,
+          hasLocationId: !!config.ghlLocationId,
+          locationId: config.ghlLocationId || undefined,
+          dispoPipelineName: config.dispoPipelineName || undefined,
+          dispoPipelineId: config.dispoPipelineId || undefined,
+          newDealStageName: config.newDealStageName || undefined,
+        },
+        batchDialer: {
+          enabled: !!config.batchDialerEnabled,
+          connected: !!config.batchDialerApiKey,
+          hasApiKey: !!config.batchDialerApiKey,
+        },
+        batchLeads: {
+          enabled: !!config.batchLeadsApiKey,
+          connected: !!config.batchLeadsApiKey,
+          hasApiKey: !!config.batchLeadsApiKey,
+        },
+      };
+    }),
+
+    // Manual BatchLeads sync (property enrichment for recent calls)
+    syncBatchLeads: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.isTenantAdmin !== 'true') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      const { syncBatchLeadsForTenant } = await import("./batchLeadsSync");
+      if (!ctx.user?.tenantId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated' });
+      }
+      return syncBatchLeadsForTenant(ctx.user.tenantId);
+    }),
+
     // Create checkout session for subscription
     createCheckout: protectedProcedure
       .input(z.object({

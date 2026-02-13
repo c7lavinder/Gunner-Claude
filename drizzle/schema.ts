@@ -240,6 +240,8 @@ export const calls = mysqlTable("calls", {
   // Transcript
   transcript: text("transcript"),
   transcriptUrl: text("transcriptUrl"), // S3 URL for archived transcripts
+  // BatchLeads property enrichment data (JSON)
+  batchLeadsEnrichment: text("batchLeadsEnrichment"),
   // Archival
   isArchived: mysqlEnum("isArchived", ["true", "false"]).default("false"),
   archivedAt: timestamp("archivedAt"),

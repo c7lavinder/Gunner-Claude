@@ -32,7 +32,12 @@ import {
   Zap,
   Eye,
   LogOut,
-  Award
+  Award,
+  Cloud,
+  Loader2,
+  Phone,
+  Home,
+  TestTube
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -45,6 +50,11 @@ export default function TenantSettings() {
   const [companyName, setCompanyName] = useState("");
   const [customDomain, setCustomDomain] = useState("");
   const [crmType, setCrmType] = useState<string>("none");
+  // CRM integration state
+  const [ghlApiKey, setGhlApiKey] = useState("");
+  const [ghlLocationId, setGhlLocationId] = useState("");
+  const [bdApiKey, setBdApiKey] = useState("");
+  const [blApiKey, setBlApiKey] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
   const [inviteTeamRole, setInviteTeamRole] = useState<'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator'>('lead_manager');
@@ -79,6 +89,12 @@ export default function TenantSettings() {
 
   // Fetch subscription plans from database
   const { data: dbPlans } = trpc.tenant.getPlans.useQuery();
+
+  // Fetch CRM integration status
+  const { data: crmIntegrations, refetch: refetchCrmIntegrations } = trpc.tenant.getCrmIntegrations.useQuery(
+    undefined,
+    { enabled: !!user?.tenantId }
+  );
 
   // Update settings mutation
   const updateSettingsMutation = trpc.tenant.updateSettings.useMutation({
@@ -328,6 +344,71 @@ export default function TenantSettings() {
       crmType: crmType as 'ghl' | 'hubspot' | 'salesforce' | 'close' | 'pipedrive' | 'none',
     });
   };
+
+  // CRM integration mutations
+  const testGhlMutation = trpc.tenant.testGhlConnection.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success(result.message || "GHL connected!");
+      } else {
+        toast.error(result.error || "Connection failed");
+      }
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const testBdMutation = trpc.tenant.testBatchDialerConnection.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success(result.message || "BatchDialer connected!");
+      } else {
+        toast.error(result.error || "Connection failed");
+      }
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const testBlMutation = trpc.tenant.testBatchLeadsConnection.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success(result.message || "BatchLeads connected!");
+      } else {
+        toast.error(result.error || "Connection failed");
+      }
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const saveCrmIntegrationMutation = trpc.tenant.saveCrmIntegration.useMutation({
+    onSuccess: () => {
+      toast.success("Integration saved!");
+      refetchSettings();
+      refetchCrmIntegrations();
+    },
+    onError: (error) => toast.error(error.message || "Failed to save"),
+  });
+
+  const syncBdMutation = trpc.calls.syncBatchDialer.useMutation({
+    onSuccess: (stats) => {
+      if (stats.imported === 0 && stats.skipped === 0 && stats.errors === 0) {
+        toast.info("No new calls found from BatchDialer");
+      } else {
+        toast.success(`BatchDialer sync: ${stats.imported} imported, ${stats.skipped} skipped`);
+      }
+    },
+    onError: (error) => toast.error(`Sync failed: ${error.message}`),
+  });
+
+  const syncBlMutation = trpc.tenant.syncBatchLeads.useMutation({
+    onSuccess: (stats) => {
+      if (stats.enriched === 0 && stats.skipped === 0 && stats.errors === 0) {
+        toast.info("No calls to enrich from BatchLeads");
+      } else {
+        toast.success(`BatchLeads: ${stats.enriched} calls enriched, ${stats.skipped} skipped`);
+      }
+    },
+    onError: (error) => toast.error(`Sync failed: ${error.message}`),
+  });
 
   const handleInviteTeamMember = () => {
     if (!inviteEmail) {
@@ -1446,21 +1527,142 @@ export default function TenantSettings() {
 
         {/* CRM Integrations */}
         <TabsContent value="integrations" className="space-y-6">
+          {/* GoHighLevel Integration Card */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>CRM Integration</CardTitle>
-                  <CardDescription>Connect your CRM to sync contacts and call data</CardDescription>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <Link2 className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">GoHighLevel</CardTitle>
+                    <CardDescription>Sync contacts, call recordings, and pipeline data</CardDescription>
+                  </div>
                 </div>
-                {settings?.crmConnected === 'true' ? (
+                {crmIntegrations?.ghl?.connected ? (
                   <Badge className="bg-green-100 text-green-700 border-green-300 gap-1">
                     <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
                     Connected
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-muted-foreground gap-1">
-                    <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
+                    <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
+                    Not Connected
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {settingsLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ghlApiKey">API Key</Label>
+                      <Input
+                        id="ghlApiKey"
+                        type="password"
+                        placeholder={crmIntegrations?.ghl?.hasApiKey ? "••••••••••••" : "Enter GHL Private Integration token"}
+                        value={ghlApiKey}
+                        onChange={(e) => setGhlApiKey(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ghlLocationId">Location ID</Label>
+                      <Input
+                        id="ghlLocationId"
+                        placeholder={crmIntegrations?.ghl?.hasLocationId ? (crmIntegrations.ghl.locationId || "••••••••") : "Enter GHL Location ID"}
+                        value={ghlLocationId}
+                        onChange={(e) => setGhlLocationId(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {crmIntegrations?.ghl?.connected && crmIntegrations.ghl.dispoPipelineName && (
+                    <div className="p-3 bg-muted/50 rounded-lg text-sm">
+                      <p className="text-muted-foreground">Pipeline: <span className="font-medium text-foreground">{crmIntegrations.ghl.dispoPipelineName}</span></p>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!ghlApiKey && !crmIntegrations?.ghl?.hasApiKey) {
+                          toast.error("Enter an API key first");
+                          return;
+                        }
+                        testGhlMutation.mutate({
+                          apiKey: ghlApiKey || "existing",
+                          locationId: ghlLocationId || crmIntegrations?.ghl?.locationId || "",
+                        });
+                      }}
+                      disabled={testGhlMutation.isPending}
+                    >
+                      {testGhlMutation.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Testing...</> : <><TestTube className="h-4 w-4 mr-1" />Test Connection</>}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        saveCrmIntegrationMutation.mutate({
+                          integration: 'ghl',
+                          enabled: true,
+                          config: {
+                            apiKey: ghlApiKey || undefined,
+                            locationId: ghlLocationId || undefined,
+                          },
+                        });
+                      }}
+                      disabled={saveCrmIntegrationMutation.isPending}
+                    >
+                      {saveCrmIntegrationMutation.isPending ? "Saving..." : "Save"}
+                    </Button>
+                    {crmIntegrations?.ghl?.connected && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          saveCrmIntegrationMutation.mutate({
+                            integration: 'ghl',
+                            enabled: false,
+                            config: {},
+                          });
+                        }}
+                      >
+                        <Unlink className="h-4 w-4 mr-1" /> Disconnect
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Calls sync automatically every 30 minutes. Find your API key in GHL → Settings → Integrations → Private Integrations.
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* BatchDialer Integration Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <Phone className="h-5 w-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">BatchDialer</CardTitle>
+                    <CardDescription>Sync cold calling campaigns and call recordings</CardDescription>
+                  </div>
+                </div>
+                {crmIntegrations?.batchDialer?.connected ? (
+                  <Badge className="bg-green-100 text-green-700 border-green-300 gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
                     Not Connected
                   </Badge>
                 )}
@@ -1472,67 +1674,191 @@ export default function TenantSettings() {
               ) : (
                 <>
                   <div className="space-y-2">
-                    <Label>Select CRM</Label>
-                    <Select value={crmType} onValueChange={setCrmType}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a CRM" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="ghl">GoHighLevel</SelectItem>
-                        <SelectItem value="batchdialer">BatchDialer</SelectItem>
-                        <SelectItem value="batchleads">BatchLeads</SelectItem>
-                        <SelectItem value="hubspot">HubSpot</SelectItem>
-                        <SelectItem value="salesforce">Salesforce</SelectItem>
-                        <SelectItem value="close">Close.io</SelectItem>
-                        <SelectItem value="pipedrive">Pipedrive</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="bdApiKey">API Key</Label>
+                    <Input
+                      id="bdApiKey"
+                      type="password"
+                      placeholder={crmIntegrations?.batchDialer?.hasApiKey ? "••••••••••••" : "Enter your BatchDialer API key"}
+                      value={bdApiKey}
+                      onChange={(e) => setBdApiKey(e.target.value)}
+                    />
                   </div>
-                  {crmType !== 'none' && (
-                    <div className="p-4 bg-muted/50 rounded-lg">
-                      {settings?.crmConnected === 'true' ? (
-                        <>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-                            <p className="text-sm font-medium text-green-700">
-                              {crmType === 'ghl' ? 'GoHighLevel' : 
-                               crmType === 'batchdialer' ? 'BatchDialer' :
-                               crmType === 'batchleads' ? 'BatchLeads' :
-                               crmType.toUpperCase()} is connected and syncing
-                            </p>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Calls are automatically synced every 30 minutes. Use the "Sync from GHL" button on the Call History page for manual sync.
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm text-muted-foreground">
-                            {crmType === 'ghl' && "Connect your GoHighLevel account to sync contacts and call recordings."}
-                            {crmType === 'batchdialer' && "Connect your BatchDialer account to sync dialer campaigns and call recordings."}
-                            {crmType === 'batchleads' && "Connect your BatchLeads account to sync lead generation campaigns and call data."}
-                            {crmType === 'hubspot' && "Connect your HubSpot account to sync contacts and call data."}
-                            {crmType === 'salesforce' && "Connect your Salesforce account to sync leads and call activities."}
-                            {crmType === 'close' && "Connect your Close.io account to sync leads and call recordings."}
-                            {crmType === 'pipedrive' && "Connect your Pipedrive account to sync deals and call activities."}
-                          </p>
-                          <Button className="mt-4" variant="outline">
-                            Connect {crmType.toUpperCase()}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                  <Button 
-                    onClick={handleSaveCrm}
-                    disabled={updateSettingsMutation.isPending}
-                  >
-                    {updateSettingsMutation.isPending ? "Saving..." : "Save CRM Settings"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!bdApiKey && !crmIntegrations?.batchDialer?.hasApiKey) {
+                          toast.error("Enter an API key first");
+                          return;
+                        }
+                        testBdMutation.mutate({ apiKey: bdApiKey || "existing" });
+                      }}
+                      disabled={testBdMutation.isPending}
+                    >
+                      {testBdMutation.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Testing...</> : <><TestTube className="h-4 w-4 mr-1" />Test Connection</>}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        saveCrmIntegrationMutation.mutate({
+                          integration: 'batchdialer',
+                          enabled: true,
+                          config: { apiKey: bdApiKey || undefined },
+                        });
+                      }}
+                      disabled={saveCrmIntegrationMutation.isPending}
+                    >
+                      {saveCrmIntegrationMutation.isPending ? "Saving..." : "Save"}
+                    </Button>
+                    {crmIntegrations?.batchDialer?.connected && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => syncBdMutation.mutate()}
+                          disabled={syncBdMutation.isPending}
+                        >
+                          {syncBdMutation.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Syncing...</> : <><Cloud className="h-4 w-4 mr-1" />Sync Now</>}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            saveCrmIntegrationMutation.mutate({
+                              integration: 'batchdialer',
+                              enabled: false,
+                              config: {},
+                            });
+                          }}
+                        >
+                          <Unlink className="h-4 w-4 mr-1" /> Disconnect
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Calls sync automatically every 30 minutes. Find your API key in BatchDialer → Settings → API.
+                  </p>
                 </>
               )}
             </CardContent>
+          </Card>
+
+          {/* BatchLeads Integration Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                    <Home className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">BatchLeads</CardTitle>
+                    <CardDescription>Enrich calls with property data, owner info, and estimated values</CardDescription>
+                  </div>
+                </div>
+                {crmIntegrations?.batchLeads?.connected ? (
+                  <Badge className="bg-green-100 text-green-700 border-green-300 gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
+                    Not Connected
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {settingsLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="blApiKey">API Key</Label>
+                    <Input
+                      id="blApiKey"
+                      type="password"
+                      placeholder={crmIntegrations?.batchLeads?.hasApiKey ? "••••••••••••" : "Enter your BatchLeads API key"}
+                      value={blApiKey}
+                      onChange={(e) => setBlApiKey(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!blApiKey && !crmIntegrations?.batchLeads?.hasApiKey) {
+                          toast.error("Enter an API key first");
+                          return;
+                        }
+                        testBlMutation.mutate({ apiKey: blApiKey || "existing" });
+                      }}
+                      disabled={testBlMutation.isPending}
+                    >
+                      {testBlMutation.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Testing...</> : <><TestTube className="h-4 w-4 mr-1" />Test Connection</>}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        saveCrmIntegrationMutation.mutate({
+                          integration: 'batchleads',
+                          enabled: true,
+                          config: { apiKey: blApiKey || undefined },
+                        });
+                      }}
+                      disabled={saveCrmIntegrationMutation.isPending}
+                    >
+                      {saveCrmIntegrationMutation.isPending ? "Saving..." : "Save"}
+                    </Button>
+                    {crmIntegrations?.batchLeads?.connected && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => syncBlMutation.mutate()}
+                          disabled={syncBlMutation.isPending}
+                        >
+                          {syncBlMutation.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Enriching...</> : <><Cloud className="h-4 w-4 mr-1" />Enrich Now</>}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            saveCrmIntegrationMutation.mutate({
+                              integration: 'batchleads',
+                              enabled: false,
+                              config: {},
+                            });
+                          }}
+                        >
+                          <Unlink className="h-4 w-4 mr-1" /> Disconnect
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically enriches calls with property value, equity, owner info, and more. Runs every 60 minutes. Find your API key at app.batchleads.io → Settings → API.
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Other CRMs - Coming Soon */}
+          <Card className="opacity-60">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">More Integrations Coming Soon</CardTitle>
+                  <CardDescription>HubSpot, Salesforce, Close.io, Pipedrive</CardDescription>
+                </div>
+                <Badge variant="outline">Coming Soon</Badge>
+              </div>
+            </CardHeader>
           </Card>
         </TabsContent>
 

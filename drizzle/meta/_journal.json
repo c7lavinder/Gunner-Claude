@@ -267,6 +267,13 @@
       "when": 1771004519501,
       "tag": "0037_spooky_ultimates",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1771010538174,
+      "tag": "0038_faithful_tony_stark",
+      "breakpoints": true
     }
   ]
 }

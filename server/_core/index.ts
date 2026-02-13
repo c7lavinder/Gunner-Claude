@@ -15,6 +15,7 @@ import { handleStripeWebhook } from "../stripe/webhook";
 import selfServeAuthRoutes from "../selfServeAuthRoutes";
 import { runEmailSequenceJobs } from "../emailSequenceJobs";
 import { startBatchDialerPolling } from "../batchDialerSync";
+import { startBatchLeadsPolling } from "../batchLeadsSync";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -94,6 +95,11 @@ async function startServer() {
     setTimeout(() => {
       startBatchDialerPolling();
     }, 15000);
+    
+    // Start BatchLeads enrichment polling every 60 minutes
+    setTimeout(() => {
+      startBatchLeadsPolling();
+    }, 20000);
     
     // Start email sequence job - runs every hour
     // Initial run after 30 seconds, then every hour

@@ -1897,3 +1897,15 @@
 - [x] Trigger webhook after successful call grading in processCall function (both main flow Step 9 and admin_callback flow)
 - [x] Handle webhook errors gracefully (log but don't block grading)
 - [x] Write 13 vitest tests for webhook (URL, payload, error handling, edge cases) - all passing
+
+## Feature: Wire Up BatchDialer & BatchLeads as Separate CRM Integrations
+- [x] Redesign CRM settings UI from single-select dropdown to multi-integration card layout
+- [x] Add GHL integration card with API key, location ID, connection status, sync button
+- [x] Add BatchDialer integration card with API key, connection status, sync button
+- [x] Add BatchLeads integration card with API key, connection status, sync button
+- [x] Add backend endpoints for saving/testing individual CRM API keys
+- [x] Build BatchLeads service for property data enrichment (skip tracing, property details)
+- [x] Add BatchLeads sync to enrich existing calls with property data
+- [x] Update crmConfig to support multiple simultaneous integrations
+- [x] Add per-integration connection test (validate API key on save)
+- [x] Write 12 vitest tests for CRM integrations (all passing)
