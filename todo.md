@@ -1727,3 +1727,8 @@
 - [x] Wire into Phase 3 of scanTenant()
 - [x] Add frontend label and icon in Opportunities.tsx ruleConfig
 - [x] Write tests for the new rule — 52 tests passing
+
+## Dashboard: Signals Cards for Admins
+- [x] Replace gamification cards (Level & XP, Hot Streak, Consistency, Badges) with Pipeline Signals summary cards for admin users
+- [x] Non-admin users continue to see gamification widgets
+- [x] Signals cards link to /opportunities page

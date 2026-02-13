@@ -4,7 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useSearch } from "wouter";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, TrendingUp, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap } from "lucide-react";
+import { Phone, TrendingUp, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap, AlertTriangle, Lightbulb, ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -81,6 +81,10 @@ export default function Home() {
   const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ limit: 5 });
   const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery();
   const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin" || user?.isTenantAdmin === "true";
+  const { data: signalCounts, isLoading: signalsLoading } = trpc.opportunities.counts.useQuery(undefined, {
+    enabled: isAdmin,
+  });
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -140,99 +144,192 @@ export default function Home() {
         />
       </div>
 
-      {/* Gamification Stats - 2x2 grid on mobile, 4 columns on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-        {/* Level & XP - Compact */}
-        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 p-3 sm:p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Trophy className="h-4 w-4 text-orange-500 shrink-0" />
-            <span className="text-xs font-medium text-orange-700">Level & XP</span>
-          </div>
-          {gamificationLoading ? (
-            <Skeleton className="h-6 w-16" />
-          ) : (
-            <>
-              <div className="text-lg sm:text-xl font-bold text-orange-900">
-                Lvl {gamification?.xp.level ?? 1}
-              </div>
-              <div className="mt-1.5 h-1.5 bg-orange-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-orange-500 transition-all duration-500" 
-                  style={{ width: `${gamification?.xp.progress ?? 0}%` }}
-                />
-              </div>
-              <p className="text-[10px] sm:text-xs text-orange-600 mt-1 truncate">
-                {gamification?.xp.title ?? "Rookie"}
-              </p>
-            </>
-          )}
-        </Card>
-
-        {/* Hot Streak - Compact */}
-        <Card className="bg-gradient-to-br from-red-50 to-orange-50 p-3 sm:p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Flame className="h-4 w-4 text-red-500 shrink-0" />
-            <span className="text-xs font-medium text-red-700">Hot Streak</span>
-          </div>
-          {gamificationLoading ? (
-            <Skeleton className="h-6 w-16" />
-          ) : (
-            <>
-              <div className="text-lg sm:text-xl font-bold text-red-900">
-                {gamification?.streaks.hotStreakCurrent ?? 0} 🔥
-              </div>
-              <p className="text-[10px] sm:text-xs text-red-600 mt-1">
-                Best: {gamification?.streaks.hotStreakBest ?? 0}
-              </p>
-            </>
-          )}
-        </Card>
-
-        {/* Consistency Streak - Compact */}
-        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Target className="h-4 w-4 text-blue-500 shrink-0" />
-            <span className="text-xs font-medium text-blue-700">Consistency</span>
-          </div>
-          {gamificationLoading ? (
-            <Skeleton className="h-6 w-16" />
-          ) : (
-            <>
-              <div className="text-lg sm:text-xl font-bold text-blue-900">
-                {gamification?.streaks.consistencyStreakCurrent ?? 0} days
-              </div>
-              <p className="text-[10px] sm:text-xs text-blue-600 mt-1">
-                Best: {gamification?.streaks.consistencyStreakBest ?? 0}
-              </p>
-            </>
-          )}
-        </Card>
-
-        {/* Badges - Compact */}
-        <Card className="bg-gradient-to-br from-purple-50 to-pink-50 p-3 sm:p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Award className="h-4 w-4 text-purple-500 shrink-0" />
-            <span className="text-xs font-medium text-purple-700">Badges</span>
-          </div>
-          {gamificationLoading ? (
-            <Skeleton className="h-6 w-16" />
-          ) : (
-            <>
-              <div className="text-lg sm:text-xl font-bold text-purple-900">
-                {gamification?.badgeCount ?? 0}
-              </div>
-              <div className="flex gap-0.5 mt-1">
-                {gamification?.badges.slice(0, 3).map((badge: { code: string; icon: string }, i: number) => (
-                  <span key={i} className="text-sm" title={badge.code}>{badge.icon}</span>
-                ))}
-                {(gamification?.badgeCount ?? 0) > 3 && (
-                  <span className="text-[10px] text-purple-600">+{(gamification?.badgeCount ?? 0) - 3}</span>
+      {/* Admin: Pipeline Signals Summary | Non-admin: Gamification Stats */}
+      {isAdmin ? (
+        <Link href="/opportunities">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 cursor-pointer group">
+            {/* Missed */}
+            <Card className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950 dark:to-rose-950 p-3 sm:p-4 border-red-200 dark:border-red-800 group-hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900">
+                    <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  </div>
+                  <span className="text-xs font-medium text-red-700 dark:text-red-300">Missed</span>
+                </div>
+                {(signalCounts?.missed ?? 0) > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 font-medium">
+                    {signalCounts?.missed} active
+                  </span>
                 )}
               </div>
-            </>
-          )}
-        </Card>
-      </div>
+              {signalsLoading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                <>
+                  <div className="text-2xl sm:text-3xl font-bold text-red-900 dark:text-red-100">
+                    {signalCounts?.missed ?? 0}
+                  </div>
+                  <p className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 mt-1">
+                    Deals slipping through the cracks
+                  </p>
+                </>
+              )}
+            </Card>
+
+            {/* At Risk */}
+            <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950 p-3 sm:p-4 border-amber-200 dark:border-amber-800 group-hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900">
+                    <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <span className="text-xs font-medium text-amber-700 dark:text-amber-300">At Risk</span>
+                </div>
+                {(signalCounts?.warning ?? 0) > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 font-medium">
+                    {signalCounts?.warning} active
+                  </span>
+                )}
+              </div>
+              {signalsLoading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                <>
+                  <div className="text-2xl sm:text-3xl font-bold text-amber-900 dark:text-amber-100">
+                    {signalCounts?.warning ?? 0}
+                  </div>
+                  <p className="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Needs attention within 24h
+                  </p>
+                </>
+              )}
+            </Card>
+
+            {/* Worth a Look */}
+            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-3 sm:p-4 border-blue-200 dark:border-blue-800 group-hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900">
+                    <Lightbulb className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Worth a Look</span>
+                </div>
+                {(signalCounts?.possible ?? 0) > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 font-medium">
+                    {signalCounts?.possible} active
+                  </span>
+                )}
+              </div>
+              {signalsLoading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                <>
+                  <div className="text-2xl sm:text-3xl font-bold text-blue-900 dark:text-blue-100">
+                    {signalCounts?.possible ?? 0}
+                  </div>
+                  <p className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    Potential deals to review
+                  </p>
+                </>
+              )}
+            </Card>
+          </div>
+        </Link>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+          {/* Level & XP - Compact */}
+          <Card className="bg-gradient-to-br from-orange-50 to-amber-50 p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Trophy className="h-4 w-4 text-orange-500 shrink-0" />
+              <span className="text-xs font-medium text-orange-700">Level & XP</span>
+            </div>
+            {gamificationLoading ? (
+              <Skeleton className="h-6 w-16" />
+            ) : (
+              <>
+                <div className="text-lg sm:text-xl font-bold text-orange-900">
+                  Lvl {gamification?.xp.level ?? 1}
+                </div>
+                <div className="mt-1.5 h-1.5 bg-orange-200 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-orange-500 transition-all duration-500" 
+                    style={{ width: `${gamification?.xp.progress ?? 0}%` }}
+                  />
+                </div>
+                <p className="text-[10px] sm:text-xs text-orange-600 mt-1 truncate">
+                  {gamification?.xp.title ?? "Rookie"}
+                </p>
+              </>
+            )}
+          </Card>
+
+          {/* Hot Streak - Compact */}
+          <Card className="bg-gradient-to-br from-red-50 to-orange-50 p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Flame className="h-4 w-4 text-red-500 shrink-0" />
+              <span className="text-xs font-medium text-red-700">Hot Streak</span>
+            </div>
+            {gamificationLoading ? (
+              <Skeleton className="h-6 w-16" />
+            ) : (
+              <>
+                <div className="text-lg sm:text-xl font-bold text-red-900">
+                  {gamification?.streaks.hotStreakCurrent ?? 0} 🔥
+                </div>
+                <p className="text-[10px] sm:text-xs text-red-600 mt-1">
+                  Best: {gamification?.streaks.hotStreakBest ?? 0}
+                </p>
+              </>
+            )}
+          </Card>
+
+          {/* Consistency Streak - Compact */}
+          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Target className="h-4 w-4 text-blue-500 shrink-0" />
+              <span className="text-xs font-medium text-blue-700">Consistency</span>
+            </div>
+            {gamificationLoading ? (
+              <Skeleton className="h-6 w-16" />
+            ) : (
+              <>
+                <div className="text-lg sm:text-xl font-bold text-blue-900">
+                  {gamification?.streaks.consistencyStreakCurrent ?? 0} days
+                </div>
+                <p className="text-[10px] sm:text-xs text-blue-600 mt-1">
+                  Best: {gamification?.streaks.consistencyStreakBest ?? 0}
+                </p>
+              </>
+            )}
+          </Card>
+
+          {/* Badges - Compact */}
+          <Card className="bg-gradient-to-br from-purple-50 to-pink-50 p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Award className="h-4 w-4 text-purple-500 shrink-0" />
+              <span className="text-xs font-medium text-purple-700">Badges</span>
+            </div>
+            {gamificationLoading ? (
+              <Skeleton className="h-6 w-16" />
+            ) : (
+              <>
+                <div className="text-lg sm:text-xl font-bold text-purple-900">
+                  {gamification?.badgeCount ?? 0}
+                </div>
+                <div className="flex gap-0.5 mt-1">
+                  {gamification?.badges.slice(0, 3).map((badge: { code: string; icon: string }, i: number) => (
+                    <span key={i} className="text-sm" title={badge.code}>{badge.icon}</span>
+                  ))}
+                  {(gamification?.badgeCount ?? 0) > 3 && (
+                    <span className="text-[10px] text-purple-600">+{(gamification?.badgeCount ?? 0) - 3}</span>
+                  )}
+                </div>
+              </>
+            )}
+          </Card>
+        </div>
+      )}
 
       {/* Recent Calls & Leaderboard - Stack on mobile */}
       <div className="grid gap-4 lg:grid-cols-2">
