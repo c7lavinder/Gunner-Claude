@@ -1855,3 +1855,11 @@
 - [x] Fixed: split into <30s (instant skip) and 30-60s (transcribe + LLM summary, then skip grading)
 - [x] Classified as too_short/skipped but classificationReason now contains the AI-generated summary
 - [x] Batch reprocessed all 66 existing 30-60s calls — 66/66 successful, all now have specific summaries
+
+## UI Fix: Team Page Alignment Issues
+- [x] Identified: TeamMembers.tsx, TeamMemberCard component at line 147-323
+- [x] Fixed: added min-h-[72px] sm:min-h-[84px] to all stat boxes for consistent height
+- [x] Fixed: added flex flex-col justify-center to all stat boxes, added leading-tight to numbers, mt-1 to labels
+- [x] Fixed: added w-full to grade distribution bar container
+- [x] Fixed: consistent mt-1 spacing between numbers and labels in stat boxes
+- [x] Header section already consistent (no changes needed)

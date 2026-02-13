@@ -246,29 +246,29 @@ function TeamMemberShowcase({
       
       <CardContent className="p-3 sm:p-6">
         <div className="grid grid-cols-4 gap-2 sm:gap-4">
-          <div className="text-center p-2 sm:p-3 bg-muted/50 rounded-lg">
-            <p className="text-lg sm:text-2xl font-bold">{totalCalls}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Calls</p>
+          <div className="text-center p-2 sm:p-3 bg-muted/50 rounded-lg flex flex-col justify-center min-h-[72px] sm:min-h-[84px]">
+            <p className="text-lg sm:text-2xl font-bold leading-tight">{totalCalls}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">Calls</p>
           </div>
-          <div className="text-center p-2 sm:p-3 bg-muted/50 rounded-lg">
-            <p className="text-lg sm:text-2xl font-bold">
+          <div className="text-center p-2 sm:p-3 bg-muted/50 rounded-lg flex flex-col justify-center min-h-[72px] sm:min-h-[84px]">
+            <p className="text-lg sm:text-2xl font-bold leading-tight">
               {avgScore ? `${Math.round(avgScore)}%` : "N/A"}
             </p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Score</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">Score</p>
           </div>
-          <div className="text-center p-2 sm:p-3 bg-emerald-50 dark:bg-emerald-950 rounded-lg">
-            <p className="text-lg sm:text-2xl font-bold text-emerald-600">{gradeDistribution.A + gradeDistribution.B}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">A&B</p>
+          <div className="text-center p-2 sm:p-3 bg-emerald-50 dark:bg-emerald-950 rounded-lg flex flex-col justify-center min-h-[72px] sm:min-h-[84px]">
+            <p className="text-lg sm:text-2xl font-bold text-emerald-600 leading-tight">{gradeDistribution.A + gradeDistribution.B}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">A&B</p>
           </div>
-          <div className="text-center p-2 sm:p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
-            <p className="text-lg sm:text-2xl font-bold text-orange-600">{badges.length}</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Badges</p>
+          <div className="text-center p-2 sm:p-3 bg-orange-50 dark:bg-orange-950 rounded-lg flex flex-col justify-center min-h-[72px] sm:min-h-[84px]">
+            <p className="text-lg sm:text-2xl font-bold text-orange-600 leading-tight">{badges.length}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">Badges</p>
           </div>
         </div>
         
         {totalCalls > 0 && (
           <div className="mt-3 sm:mt-4">
-            <div className="flex h-2 sm:h-3 rounded-full overflow-hidden">
+            <div className="flex h-2 sm:h-3 rounded-full overflow-hidden w-full">
               {gradeDistribution.A > 0 && (
                 <div 
                   className="bg-emerald-500" 
