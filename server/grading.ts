@@ -993,8 +993,61 @@ export async function processCall(callId: number): Promise<void> {
 
   try {
     // Step 1: Check duration first (quick filter)
+    // Under 30s: instant skip, no transcription needed
+    // 30-60s: transcribe and generate a short summary, but still skip grading
+    // 60s+: proceed to full classification and grading
+    if (call.duration && call.duration < 30) {
+      console.log(`[ProcessCall] Call ${callId} is very short (${call.duration}s), skipping without transcription`);
+      await updateCall(callId, {
+        status: "skipped",
+        classification: "too_short",
+        classificationReason: `Call duration (${call.duration}s) is under 30s — too short for meaningful content`,
+      });
+      return;
+    }
+
     if (call.duration && call.duration < MINIMUM_CALL_DURATION_SECONDS) {
-      console.log(`[ProcessCall] Call ${callId} is too short (${call.duration}s), skipping`);
+      console.log(`[ProcessCall] Call ${callId} is short (${call.duration}s), transcribing for summary`);
+      try {
+        await updateCall(callId, { status: "transcribing" });
+        const shortTranscript = await transcribeCallRecording(call.recordingUrl);
+        await updateCall(callId, { transcript: shortTranscript });
+
+        // Generate a brief summary of what happened
+        if (shortTranscript && shortTranscript.length > 20) {
+          const summaryResponse = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: `You summarize phone calls for a real estate investment company. Write a 1-2 sentence summary of what happened on this short call. Be specific and concise. Examples:
+- "Left voicemail for homeowner about selling their property on Oak St."
+- "Callback request — seller asked to be called back next Tuesday."
+- "Brief conversation, homeowner said they're not interested in selling right now."
+- "Wrong number — person does not own the property."
+- "Seller answered but was busy, asked to call back later."`
+              },
+              {
+                role: "user",
+                content: `This was a short call (${call.duration}s). Summarize what happened:\n\n${shortTranscript.substring(0, 2000)}`
+              }
+            ],
+          });
+          const summary = summaryResponse.choices[0]?.message?.content;
+          if (summary && typeof summary === 'string') {
+            await updateCall(callId, {
+              status: "skipped",
+              classification: "too_short",
+              classificationReason: summary.trim(),
+            });
+            console.log(`[ProcessCall] Short call ${callId} summarized: ${summary.trim().substring(0, 80)}...`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error(`[ProcessCall] Failed to transcribe/summarize short call ${callId}:`, err);
+      }
+
+      // Fallback if transcription/summary fails
       await updateCall(callId, {
         status: "skipped",
         classification: "too_short",

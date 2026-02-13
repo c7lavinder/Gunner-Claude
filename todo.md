@@ -1849,3 +1849,9 @@
 - [x] Add dismiss reason dialog UI with dropdown (5 reasons) and optional note field
 - [x] Update resolve endpoint to accept dismissReason and dismissNote; shows reason on dismissed badge
 - [x] Write tests — 8 new tests total: 2 for Rule 3 answered-call logic, 6 for dismiss reason validation. 107 tests passing
+
+## Bug: 30-60s Calls Not Getting Short Summary
+- [x] Investigated: calls under 60s were rejected at line 996 before transcription, so summary code at line 1078 never ran
+- [x] Fixed: split into <30s (instant skip) and 30-60s (transcribe + LLM summary, then skip grading)
+- [x] Classified as too_short/skipped but classificationReason now contains the AI-generated summary
+- [x] Batch reprocessed all 66 existing 30-60s calls — 66/66 successful, all now have specific summaries
