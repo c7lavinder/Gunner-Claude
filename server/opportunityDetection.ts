@@ -1257,7 +1257,7 @@ async function detectTimelineNoCommitment(
   tenantId: number
 ): Promise<DetectedOpportunity[]> {
   const results: DetectedOpportunity[] = [];
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
   // Get recent completed conversation calls with transcripts
@@ -1270,7 +1270,7 @@ async function detectTimelineNoCommitment(
         eq(calls.status, "completed"),
         eq(calls.classification, "conversation"),
         gte(calls.callTimestamp, fourteenDaysAgo),
-        lt(calls.callTimestamp, threeDaysAgo)
+        lt(calls.callTimestamp, oneDayAgo)
       )
     )
     .orderBy(desc(calls.callTimestamp))

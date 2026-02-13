@@ -1732,3 +1732,8 @@
 - [x] Replace gamification cards (Level & XP, Hot Streak, Consistency, Badges) with Pipeline Signals summary cards for admin users
 - [x] Non-admin users continue to see gamification widgets
 - [x] Signals cards link to /opportunities page
+
+## Rule 15 Scan Window + Coaching Nudge
+- [x] Tighten Rule 15 scan window from 3-14 days to 1-14 days for faster detection
+- [x] Add coaching nudge to grading engine: flag when agent leaves seller's timeline open-ended without locking in a next step
+- [x] Update tests — 62 tests passing (10 coaching nudge + 52 Rule 15)

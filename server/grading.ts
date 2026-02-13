@@ -72,6 +72,7 @@ export const LEAD_MANAGER_RUBRIC = {
     "Talking too fast or too slow",
     "Not matching seller's tone",
     "Weak objection handling",
+    "Seller offered a timeline or availability window but agent left the conversation open-ended without locking in a follow-up date",
   ],
   disqualificationTarget: "Under 4 minutes for clear disqualifications",
 };
@@ -250,6 +251,7 @@ export const FOLLOW_UP_RUBRIC = {
     "Didn't identify/confirm who the decision maker is",
     "Ran a full qualification script instead of a targeted follow-up",
     "No concrete next step set",
+    "Seller offered a timeline or availability window but agent left the conversation open-ended without locking in a follow-up date",
   ],
   criticalFailures: [
     "Never referenced the previous offer amount",
@@ -322,6 +324,7 @@ export const SELLER_CALLBACK_RUBRIC = {
     "Let them hang up without a next step",
     "Talked over the seller",
     "Missed the seller's urgency signals",
+    "Seller offered a timeline or availability window but agent left the conversation open-ended without locking in a follow-up date",
   ],
   criticalFailures: [
     "Ran a full cold call script on someone who called back",
@@ -495,6 +498,27 @@ ${i + 1}. ${c.name} (${c.maxPoints} points max)
 
 RED FLAGS TO IDENTIFY:
 ${rubric.redFlags.map(f => `- ${f}`).join("\n")}
+
+TIMELINE COMMITMENT CHECK (applies to all sales call types):
+Watch for this specific pattern — it is a CRITICAL coaching opportunity:
+1. The seller offers a concrete timeline or availability window. Examples:
+   - "I'll be in town in March"
+   - "Call me in a few weeks"
+   - "After my mother passes / goes to assisted living"
+   - "I'll know more by next month"
+   - "I'm available next week"
+   - "Once the tenant moves out"
+2. The agent responds with open-ended, non-committal language instead of locking in a specific next step. Examples:
+   - "Feel free to reach out anytime"
+   - "I can be on standby"
+   - "Just let us know"
+   - "Give us a call when you're ready"
+   - "Keep us in mind"
+
+If this pattern is detected:
+- Add it as a RED FLAG: "Seller offered a timeline/availability window but agent left the conversation open-ended without locking in a specific follow-up date"
+- Add it as a COACHING TIP with a specific script alternative. For example: "When a seller says 'I'll be in town in March,' don't say 'feel free to reach out.' Instead say: 'Perfect — let me put something on the calendar for the first week of March so we can connect when you're here. Does March 3rd or 4th work better?' Always convert a seller's timeline into a calendar commitment."
+- Penalize the Call Outcome criterion — the call should NOT get full marks if the seller gave an opening and the agent didn't lock it down.
 
 ${callType === "qualification" ? `DISQUALIFICATION TARGET: ${LEAD_MANAGER_RUBRIC.disqualificationTarget}` : ""}${trainingContext}${rulesContext}${feedbackContext}
 
