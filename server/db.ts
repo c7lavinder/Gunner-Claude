@@ -440,7 +440,7 @@ export async function getCallsWithGrades(options: {
 
 // ============ LEADERBOARD FUNCTIONS ============
 
-export async function getLeaderboardData(tenantId?: number): Promise<Array<{
+export async function getLeaderboardData(tenantId?: number, dateRange?: "today" | "week" | "month" | "ytd" | "all"): Promise<Array<{
   teamMember: TeamMember;
   totalCalls: number;
   gradedCalls: number;
@@ -456,6 +456,49 @@ export async function getLeaderboardData(tenantId?: number): Promise<Array<{
 
   const members = await getTeamMembers(tenantId);
   
+  // Calculate date range start using CST timezone (matching getCallStats)
+  let rangeStart: Date | null = null;
+  if (dateRange && dateRange !== 'all') {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const getStartOfDayCST = (date: Date): Date => {
+      const parts = formatter.formatToParts(date);
+      const year = parseInt(parts.find(p => p.type === 'year')!.value);
+      const month = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
+      const day = parseInt(parts.find(p => p.type === 'day')!.value);
+      return new Date(Date.UTC(year, month, day, 6, 0, 0, 0));
+    };
+    switch (dateRange) {
+      case 'today':
+        rangeStart = getStartOfDayCST(now);
+        break;
+      case 'week': {
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        rangeStart = getStartOfDayCST(weekAgo);
+        break;
+      }
+      case 'month': {
+        const monthAgo = new Date(now);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        rangeStart = getStartOfDayCST(monthAgo);
+        break;
+      }
+      case 'ytd': {
+        const ytdFormatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric' });
+        const ytdParts = ytdFormatter.formatToParts(now);
+        const ytdYear = parseInt(ytdParts.find(p => p.type === 'year')!.value);
+        rangeStart = new Date(Date.UTC(ytdYear, 0, 1, 6, 0, 0, 0));
+        break;
+      }
+    }
+  }
+
   const leaderboard = await Promise.all(
     members.map(async (member) => {
       // Get all non-archived calls for this member (tenant-scoped)
@@ -466,11 +509,14 @@ export async function getLeaderboardData(tenantId?: number): Promise<Array<{
       if (tenantId) {
         callConditions.push(eq(calls.tenantId, tenantId));
       }
+      if (rangeStart) {
+        callConditions.push(gte(calls.createdAt, rangeStart));
+      }
       const memberCalls = await db.select().from(calls)
         .where(and(...callConditions));
       
-      // Only count completed (graded) calls for leaderboard
-      const gradedCalls = memberCalls.filter(c => c.status === "completed" && c.classification === "conversation");
+      // Only count completed (graded) calls for leaderboard (conversation + admin_call both get AI-scored)
+      const gradedCalls = memberCalls.filter(c => c.status === "completed" && (c.classification === "conversation" || c.classification === "admin_call"));
       const skippedCalls = memberCalls.filter(c => c.status === "skipped");
       
       // Count appointments and offer calls completed
@@ -537,6 +583,7 @@ export async function getCallStats(options?: {
   offerCallsCompleted: number;
   classificationBreakdown: {
     conversation: number;
+    admin_call: number;
     voicemail: number;
     no_answer: number;
     callback_request: number;
@@ -591,6 +638,7 @@ export async function getCallStats(options?: {
     offerCallsCompleted: 0,
     classificationBreakdown: {
       conversation: 0,
+      admin_call: 0,
       voicemail: 0,
       no_answer: 0,
       callback_request: 0,
@@ -687,30 +735,43 @@ export async function getCallStats(options?: {
     allCalls = allCalls.filter(c => c.teamMemberId && viewableIds.includes(c.teamMemberId));
   }
   
-  const gradedCalls = allCalls.filter(c => c.status === "completed" && c.classification === "conversation");
+  // Include both conversation and admin_call as "graded" calls (both get AI-scored)
+  const gradedCalls = allCalls.filter(c => c.status === "completed" && (c.classification === "conversation" || c.classification === "admin_call"));
   const skippedCalls = allCalls.filter(c => c.status === "skipped");
   const pendingCalls = allCalls.filter(c => c.status === "pending" || c.status === "transcribing" || c.status === "classifying" || c.status === "grading");
 
-  // Only count grades from graded conversations within the date range
+  // Only count grades from graded calls within the date range
   const gradedCallIds = gradedCalls.map(c => c.id);
-  const allGrades = await db.select().from(callGrades);
-  // Filter grades to only include grades for calls in the current date range
-  const grades = allGrades.filter(g => gradedCallIds.includes(g.callId));
+  // Fetch only grades for calls in scope (not entire table) and deduplicate
+  const callGradesArr = gradedCallIds.length > 0
+    ? await db.select().from(callGrades).where(inArray(callGrades.callId, gradedCallIds))
+    : [];
+  // Deduplicate: keep only the latest grade per call (highest ID)
+  const gradeMap = new Map<number, (typeof callGradesArr)[number]>();
+  for (const g of callGradesArr) {
+    const existing = gradeMap.get(g.callId);
+    if (!existing || g.id > existing.id) {
+      gradeMap.set(g.callId, g);
+    }
+  }
+  const grades = Array.from(gradeMap.values());
   const totalScore = grades.reduce((sum, g) => sum + (parseFloat(g.overallScore || "0")), 0);
   const averageScore = grades.length > 0 ? totalScore / grades.length : 0;
 
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const weekStart = new Date(todayStart);
-  weekStart.setDate(weekStart.getDate() - 7);
+  // Use CST-aware dates for today/week counts to match the main date range filter
+  const todayStartCST = getStartOfDayCST(now);
+  const weekStartCST = new Date(todayStartCST);
+  weekStartCST.setDate(weekStartCST.getDate() - 7);
 
-  const callsToday = allCalls.filter(c => c.createdAt >= todayStart).length;
-  const callsThisWeek = allCalls.filter(c => c.createdAt >= weekStart).length;
-  const gradedToday = gradedCalls.filter(c => c.createdAt >= todayStart).length;
-  const skippedToday = skippedCalls.filter(c => c.createdAt >= todayStart).length;
+  const callsToday = allCalls.filter(c => c.createdAt >= todayStartCST).length;
+  const callsThisWeek = allCalls.filter(c => c.createdAt >= weekStartCST).length;
+  const gradedToday = gradedCalls.filter(c => c.createdAt >= todayStartCST).length;
+  const skippedToday = skippedCalls.filter(c => c.createdAt >= todayStartCST).length;
 
   // Classification breakdown
   const classificationBreakdown = {
     conversation: allCalls.filter(c => c.classification === "conversation").length,
+    admin_call: allCalls.filter(c => c.classification === "admin_call").length,
     voicemail: allCalls.filter(c => c.classification === "voicemail").length,
     no_answer: allCalls.filter(c => c.classification === "no_answer").length,
     callback_request: allCalls.filter(c => c.classification === "callback_request").length,
@@ -777,12 +838,28 @@ export async function getCallStats(options?: {
   
   // Get all calls and grades for trend calculation (ignore date filter for trends, but apply tenant filter)
   let allCallsForTrends: Call[];
+  const trendConditions = [eq(calls.isArchived, "false")];
   if (options?.tenantId) {
-    allCallsForTrends = await db.select().from(calls).where(eq(calls.tenantId, options.tenantId));
-  } else {
-    allCallsForTrends = await db.select().from(calls);
+    trendConditions.push(eq(calls.tenantId, options.tenantId));
   }
-  const allGradesForTrends = await db.select().from(callGrades);
+  allCallsForTrends = await db.select().from(calls).where(and(...trendConditions));
+  
+  // Get grades scoped to these calls and deduplicate
+  const trendGradedCallIds = allCallsForTrends
+    .filter(c => c.status === "completed" && (c.classification === "conversation" || c.classification === "admin_call"))
+    .map(c => c.id);
+  const allGradesForTrendsRaw = trendGradedCallIds.length > 0
+    ? await db.select().from(callGrades).where(inArray(callGrades.callId, trendGradedCallIds))
+    : [];
+  // Deduplicate: keep only the latest grade per call
+  const trendGradeMap = new Map<number, (typeof allGradesForTrendsRaw)[number]>();
+  for (const g of allGradesForTrendsRaw) {
+    const existing = trendGradeMap.get(g.callId);
+    if (!existing || g.id > existing.id) {
+      trendGradeMap.set(g.callId, g);
+    }
+  }
+  const allGradesForTrends = Array.from(trendGradeMap.values());
   
   for (let i = 11; i >= 0; i--) {
     const weekStart = new Date(now);
@@ -796,7 +873,7 @@ export async function getCallStats(options?: {
       c.createdAt >= weekStart && c.createdAt < weekEnd
     );
     const weekGradedCalls = weekCalls.filter(c => 
-      c.status === "completed" && c.classification === "conversation"
+      c.status === "completed" && (c.classification === "conversation" || c.classification === "admin_call")
     );
     const weekGrades = allGradesForTrends.filter(g => 
       weekGradedCalls.some(c => c.id === g.callId)
@@ -834,7 +911,7 @@ export async function getCallStats(options?: {
         c.createdAt >= weekStart && 
         c.createdAt < weekEnd &&
         c.status === "completed" && 
-        c.classification === "conversation"
+        (c.classification === "conversation" || c.classification === "admin_call")
       );
       const memberWeekGrades = allGradesForTrends.filter(g => 
         memberWeekCalls.some(c => c.id === g.callId)
@@ -1097,13 +1174,14 @@ export async function deleteGradingRule(id: number): Promise<void> {
 /**
  * Get all active training materials and rules for grading context
  */
-export async function getGradingContext(callType: "qualification" | "offer" | "lead_generation"): Promise<{
+export async function getGradingContext(callType: "qualification" | "offer" | "lead_generation" | "follow_up" | "seller_callback" | "admin_callback"): Promise<{
   // Note: callType here maps to the legacy applicableTo values in training materials/rules
   trainingMaterials: TrainingMaterial[];
   gradingRules: GradingRule[];
   recentFeedback: AIFeedback[];
 }> {
-  const applicableTo = callType === "qualification" ? "lead_manager" : (callType === "offer" ? "acquisition_manager" : "lead_generator");
+  // follow_up, seller_callback, admin_callback all use lead_manager training context
+  const applicableTo = (callType === "qualification" || callType === "follow_up" || callType === "seller_callback" || callType === "admin_callback") ? "lead_manager" : (callType === "offer" ? "acquisition_manager" : "lead_generator");
   
   // Get training materials applicable to this call type or all
   const materials = await getTrainingMaterials({ activeOnly: true });

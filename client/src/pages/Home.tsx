@@ -79,35 +79,70 @@ export default function Home() {
   
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
   const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ limit: 5 });
-  const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery();
+  const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery({ dateRange });
   const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
   const { data: signalCounts, isLoading: signalsLoading } = trpc.opportunities.counts.useQuery(undefined, {
     enabled: isAdmin,
   });
+  const { data: syncStatus } = trpc.sync.status.useQuery(undefined, {
+    refetchInterval: 60000, // refresh every minute
+  });
+
+  // Format last synced time
+  const formatLastSynced = () => {
+    if (!syncStatus?.lastSyncedAt) return null;
+    const lastSync = new Date(syncStatus.lastSyncedAt);
+    const now = new Date();
+    const diffMs = now.getTime() - lastSync.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    return lastSync.toLocaleDateString();
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome back, {firstName}!</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            {isAdmin 
+              ? ((signalCounts?.missed ?? 0) + (signalCounts?.warning ?? 0) > 0
+                ? `${(signalCounts?.missed ?? 0) + (signalCounts?.warning ?? 0)} signals need attention`
+                : `All clear, ${firstName}`)
+              : (stats?.gradedToday && stats.gradedToday > 0
+                ? `${stats.callsToday ?? 0} calls today — ${stats.gradedToday} graded${stats.averageScore ? `, avg ${Math.round(stats.averageScore)}%` : ''}`
+                : `Welcome back, ${firstName}`)}
+          </h1>
           <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
-            Here's how your team is performing
+            {isAdmin 
+              ? `Team made ${stats?.callsToday ?? 0} calls today — ${stats?.gradedToday ?? 0} graded, ${stats?.skippedToday ?? 0} skipped`
+              : "Here's how you're performing"}
           </p>
         </div>
-        <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Select period" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="week">Last 7 Days</SelectItem>
-            <SelectItem value="month">Last 30 Days</SelectItem>
-            <SelectItem value="ytd">Year to Date</SelectItem>
-            <SelectItem value="all">All Time</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          {formatLastSynced() && (
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1 align-middle" />
+              Synced {formatLastSynced()}
+            </p>
+          )}
+          <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Select period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="week">Last 7 Days</SelectItem>
+              <SelectItem value="month">Last 30 Days</SelectItem>
+              <SelectItem value="ytd">Year to Date</SelectItem>
+              <SelectItem value="all">All Time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Stats Grid - 2 columns on mobile, 5 on desktop */}
@@ -249,7 +284,7 @@ export default function Home() {
             ) : (
               <>
                 <div className="text-lg sm:text-xl font-bold text-orange-900">
-                  Lvl {gamification?.xp.level ?? 1}
+                  Lvl {gamification?.xp.level ?? 1} &middot; {gamification?.xp.title ?? "Rookie"}
                 </div>
                 <div className="mt-1.5 h-1.5 bg-orange-200 rounded-full overflow-hidden">
                   <div 
@@ -258,7 +293,7 @@ export default function Home() {
                   />
                 </div>
                 <p className="text-[10px] sm:text-xs text-orange-600 mt-1 truncate">
-                  {gamification?.xp.title ?? "Rookie"}
+                  {gamification?.xp.totalXp?.toLocaleString() ?? 0} / {gamification?.xp.nextLevelXp?.toLocaleString() ?? 500} XP to next level
                 </p>
               </>
             )}
@@ -315,14 +350,19 @@ export default function Home() {
             ) : (
               <>
                 <div className="text-lg sm:text-xl font-bold text-purple-900">
-                  {gamification?.badgeCount ?? 0}
+                  {gamification?.badgeCount ?? 0} earned
                 </div>
-                <div className="flex gap-0.5 mt-1">
-                  {gamification?.badges.slice(0, 3).map((badge: { code: string; icon: string }, i: number) => (
-                    <span key={i} className="text-sm" title={badge.code}>{badge.icon}</span>
+                <div className="flex flex-col gap-0.5 mt-1">
+                  {gamification?.badges.slice(0, 3).map((badge: { code: string; name: string; icon: string; tier: string }, i: number) => (
+                    <span key={i} className="text-[10px] sm:text-xs text-purple-700 truncate" title={badge.name}>
+                      {badge.icon} {badge.name} <span className="text-purple-400 capitalize">({badge.tier})</span>
+                    </span>
                   ))}
                   {(gamification?.badgeCount ?? 0) > 3 && (
-                    <span className="text-[10px] text-purple-600">+{(gamification?.badgeCount ?? 0) - 3}</span>
+                    <span className="text-[10px] text-purple-500">+{(gamification?.badgeCount ?? 0) - 3} more</span>
+                  )}
+                  {(gamification?.badgeCount ?? 0) === 0 && (
+                    <span className="text-[10px] text-purple-400">Grade calls to earn badges</span>
                   )}
                 </div>
               </>
@@ -475,13 +515,20 @@ export default function Home() {
         </Card>
       </div>
 
-      {/* Call Processing Status - Horizontal row on mobile */}
+      {/* Call Processing Status - De-emphasized skipped calls */}
       <Card>
         <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-2">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
-            Call Processing
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
+              Call Processing
+            </CardTitle>
+            {!statsLoading && stats && (
+              <p className="text-xs text-muted-foreground">
+                {stats.totalCalls} calls — {stats.gradedCalls} graded, {stats.skippedCalls} skipped
+              </p>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-2 sm:pt-2">
           {statsLoading ? (
@@ -502,10 +549,10 @@ export default function Home() {
                 <p className="text-lg sm:text-2xl font-bold text-emerald-700 dark:text-emerald-300">{stats?.gradedCalls ?? 0}</p>
                 <p className="text-[10px] sm:text-sm text-emerald-600 dark:text-emerald-400">Scored</p>
               </div>
-              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
-                <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-400 mb-1" />
-                <p className="text-lg sm:text-2xl font-bold text-amber-700 dark:text-amber-300">{stats?.skippedCalls ?? 0}</p>
-                <p className="text-[10px] sm:text-sm text-amber-600 dark:text-amber-400">Skipped</p>
+              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 opacity-60">
+                <PhoneOff className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 dark:text-gray-500 mb-1" />
+                <p className="text-lg sm:text-2xl font-bold text-gray-400 dark:text-gray-500">{stats?.skippedCalls ?? 0}</p>
+                <p className="text-[10px] sm:text-sm text-gray-400 dark:text-gray-500">Skipped</p>
               </div>
               <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
                 <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600 dark:text-gray-400 mb-1" />

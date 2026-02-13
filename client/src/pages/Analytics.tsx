@@ -51,7 +51,7 @@ export default function Analytics() {
   const [dateRange, setDateRange] = useState<DateRange>("week");
   
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
-  const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery();
+  const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery({ dateRange });
 
   const isLoading = statsLoading || leaderboardLoading;
 
@@ -156,7 +156,7 @@ export default function Analytics() {
             Team Leaderboard
           </CardTitle>
           <CardDescription className="text-xs sm:text-sm">
-            Performance rankings by role
+            Ranked by appointments (LMs) and offers (AMs) — {dateRange === 'today' ? 'today' : dateRange === 'week' ? 'last 7 days' : dateRange === 'month' ? 'last 30 days' : dateRange === 'ytd' ? 'year to date' : 'all time'}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-3 sm:px-6">
@@ -499,34 +499,44 @@ export default function Analytics() {
                           <stop offset="100%" stopColor="rgb(6, 182, 212)" stopOpacity="0" />
                         </linearGradient>
                       </defs>
-                      {/* Area fill */}
-                      <path
-                        d={`M 0 ${100 - (stats.weeklyTrends[0]?.averageScore || 0)} ` +
-                          stats.weeklyTrends.map((week, i) => {
-                            const x = (i / (stats.weeklyTrends.length - 1)) * 100;
-                            const y = 100 - week.averageScore;
-                            return `L ${x} ${y}`;
-                          }).join(' ') +
-                          ` L 100 100 L 0 100 Z`}
-                        fill="url(#scoreGradient)"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      {/* Line */}
-                      <path
-                        d={`M 0 ${100 - (stats.weeklyTrends[0]?.averageScore || 0)} ` +
-                          stats.weeklyTrends.map((week, i) => {
-                            const x = (i / (stats.weeklyTrends.length - 1)) * 100;
-                            const y = 100 - week.averageScore;
-                            return `L ${x} ${y}`;
-                          }).join(' ')}
-                        fill="none"
-                        stroke="rgb(6, 182, 212)"
-                        strokeWidth="2"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      {/* Data points */}
+                      {/* Build line segments that skip empty weeks (gradedCalls === 0) */}
+                      {(() => {
+                        const dataWeeks = stats.weeklyTrends
+                          .map((week, i) => ({ ...week, i }))
+                          .filter(w => w.gradedCalls > 0);
+                        if (dataWeeks.length === 0) return null;
+                        const total = stats.weeklyTrends.length;
+                        // Build segments (consecutive data points)
+                        const segments: typeof dataWeeks[] = [];
+                        let current: typeof dataWeeks = [];
+                        for (let j = 0; j < dataWeeks.length; j++) {
+                          if (current.length === 0 || dataWeeks[j].i === dataWeeks[j-1].i + 1) {
+                            current.push(dataWeeks[j]);
+                          } else {
+                            segments.push(current);
+                            current = [dataWeeks[j]];
+                          }
+                        }
+                        if (current.length > 0) segments.push(current);
+                        return segments.map((seg, si) => {
+                          const pts = seg.map(w => ({
+                            x: total > 1 ? (w.i / (total - 1)) * 100 : 50,
+                            y: 100 - w.averageScore,
+                          }));
+                          const lineD = pts.map((p, pi) => `${pi === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                          const areaD = lineD + ` L ${pts[pts.length-1].x} 100 L ${pts[0].x} 100 Z`;
+                          return (
+                            <g key={si}>
+                              <path d={areaD} fill="url(#scoreGradient)" vectorEffect="non-scaling-stroke" />
+                              <path d={lineD} fill="none" stroke="rgb(6, 182, 212)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                            </g>
+                          );
+                        });
+                      })()}
+                      {/* Data points — only for weeks with graded calls */}
                       {stats.weeklyTrends.map((week, i) => {
-                        const x = (i / (stats.weeklyTrends.length - 1)) * 100;
+                        if (week.gradedCalls === 0) return null;
+                        const x = stats.weeklyTrends.length > 1 ? (i / (stats.weeklyTrends.length - 1)) * 100 : 50;
                         const y = 100 - week.averageScore;
                         return (
                           <circle

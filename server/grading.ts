@@ -1040,6 +1040,37 @@ export async function processCall(callId: number): Promise<void> {
       
       // All other non-gradable classifications (voicemail, no_answer, etc.) get skipped
       console.log(`[ProcessCall] Call ${callId} classified as ${classificationResult.classification}, skipping grading`);
+      
+      // Generate a brief summary for skipped calls over 30 seconds (they had some conversation)
+      if (call.duration && call.duration >= 30 && transcript && transcript.length > 50) {
+        try {
+          const summaryResponse = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: `You summarize phone calls for a real estate investment company. Write a 1-2 sentence summary of what happened on this call. Be specific and concise. Examples:
+- "Left voicemail for homeowner about selling their property on Oak St."
+- "Callback request — seller asked to be called back next Tuesday."
+- "Brief conversation, homeowner said they're not interested in selling right now."
+- "Wrong number — person does not own the property."`
+              },
+              {
+                role: "user",
+                content: `Classification: ${classificationResult.classification}\nReason: ${classificationResult.reason}\n\nTranscript:\n${transcript.substring(0, 2000)}`
+              }
+            ],
+          });
+          const summary = summaryResponse.choices[0]?.message?.content;
+          if (summary && typeof summary === 'string') {
+            await updateCall(callId, { classificationReason: summary.trim() });
+            console.log(`[ProcessCall] Generated summary for skipped call ${callId}: ${summary.trim().substring(0, 80)}...`);
+          }
+        } catch (err) {
+          console.error(`[ProcessCall] Failed to generate summary for skipped call ${callId}:`, err);
+          // Non-critical — don't block the skip
+        }
+      }
+      
       await updateCall(callId, { status: "skipped" });
       return;
     }

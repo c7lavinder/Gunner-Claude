@@ -323,11 +323,11 @@ export default function Opportunities() {
               <CardContent className="pt-6">
                 <div className="text-center py-12">
                   <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                  <h3 className="text-lg font-semibold">Pipeline Looks Clean</h3>
+                  <h3 className="text-lg font-semibold">No Urgent Signals — Your Team Is on Track</h3>
                   <p className="text-muted-foreground mt-1">
                     {activeTab === "all"
-                      ? "No missed signals detected. Scan the pipeline to check for new ones."
-                      : `No ${tierConfig[activeTab as keyof typeof tierConfig]?.label.toLowerCase()} signals found.`}
+                      ? "No missed follow-ups or stale leads detected. Scan the pipeline anytime to double-check."
+                      : `No ${tierConfig[activeTab as keyof typeof tierConfig]?.label.toLowerCase()} signals right now — looking good.`}
                   </p>
                   <Button
                     variant="outline"

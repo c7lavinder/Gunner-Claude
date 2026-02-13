@@ -91,7 +91,7 @@ import {
   updateUserTeamRole,
   UserPermissionContext,
 } from "./db";
-import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC, LEAD_GENERATOR_RUBRIC } from "./grading";
+import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC, LEAD_GENERATOR_RUBRIC, FOLLOW_UP_RUBRIC, SELLER_CALLBACK_RUBRIC, ADMIN_CALLBACK_RUBRIC } from "./grading";
 import { processCall } from "./grading";
 import { invokeLLM } from "./_core/llm";
 import { generateTeamInsights, saveGeneratedInsights, clearAiGeneratedInsights } from "./insights";
@@ -513,7 +513,11 @@ export const appRouter = router({
     // Reprocess a failed call
     reprocess: protectedProcedure
       .input(z.object({ callId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Only admins can reprocess calls
+        if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
         const call = await getCallById(input.callId);
         if (!call) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
@@ -628,7 +632,11 @@ export const appRouter = router({
         classification: z.enum(["conversation", "admin_call", "voicemail", "no_answer", "callback_request", "wrong_number"]),
         reason: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Only admins can reclassify calls
+        if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
         const call = await getCallById(input.callId);
         if (!call) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
@@ -778,12 +786,29 @@ export const appRouter = router({
       }),
   }),
 
+  // ============ SYNC STATUS ============
+  sync: router({
+    status: protectedProcedure.query(async () => {
+      const { getPollingStatus } = await import("./ghlService");
+      const status = getPollingStatus();
+      return {
+        lastSyncedAt: status.lastPollTime?.toISOString() || null,
+        isPolling: status.isPolling,
+        intervalMinutes: status.intervalMinutes,
+      };
+    }),
+  }),
+
   // ============ LEADERBOARD ============
   leaderboard: router({
-    get: protectedProcedure.query(async ({ ctx }) => {
-      // Pass tenant ID for multi-tenant filtering
-      return await getLeaderboardData(ctx.user?.tenantId || undefined);
-    }),
+    get: protectedProcedure
+      .input(z.object({
+        dateRange: z.enum(["today", "week", "month", "ytd", "all"]).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        // Pass tenant ID and date range for consistent filtering with analytics
+        return await getLeaderboardData(ctx.user?.tenantId || undefined, input?.dateRange);
+      }),
   }),
 
   // ============ ANALYTICS ============
@@ -1399,11 +1424,14 @@ Keep it brief and actionable.`;
         leadManager: LEAD_MANAGER_RUBRIC,
         acquisitionManager: ACQUISITION_MANAGER_RUBRIC,
         leadGenerator: LEAD_GENERATOR_RUBRIC,
+        followUp: FOLLOW_UP_RUBRIC,
+        sellerCallback: SELLER_CALLBACK_RUBRIC,
+        adminCallback: ADMIN_CALLBACK_RUBRIC,
       };
     }),
 
     getContext: protectedProcedure
-      .input(z.object({ callType: z.enum(["qualification", "offer", "lead_generation"]) }))
+      .input(z.object({ callType: z.enum(["qualification", "offer", "lead_generation", "follow_up", "seller_callback", "admin_callback"]) }))
       .query(async ({ input }) => {
         return await getGradingContext(input.callType);
       }),

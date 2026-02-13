@@ -1,0 +1,35 @@
+{
+  "query": "SELECT classification, status, COUNT(*) as cnt FROM calls WHERE isArchived = 'false' GROUP BY classification, status ORDER BY classification, status",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT classification, status, COUNT(*) as cnt FROM calls WHERE isArchived = 'false' GROUP BY classification, status ORDER BY classification, status",
+  "rows": [
+    {
+      "classification": "conversation",
+      "status": "completed",
+      "cnt": "126"
+    },
+    {
+      "classification": "voicemail",
+      "status": "skipped",
+      "cnt": "2"
+    },
+    {
+      "classification": "wrong_number",
+      "status": "skipped",
+      "cnt": "4"
+    },
+    {
+      "classification": "too_short",
+      "status": "skipped",
+      "cnt": "211"
+    },
+    {
+      "classification": "admin_call",
+      "status": "skipped",
+      "cnt": "53"
+    }
+  ],
+  "messages": [],
+  "stdout": "classification\tstatus\tcnt\nconversation\tcompleted\t126\nvoicemail\tskipped\t2\nwrong_number\tskipped\t4\ntoo_short\tskipped\t211\nadmin_call\tskipped\t53\n",
+  "stderr": "",
+  "execution_time_ms": 355
+}

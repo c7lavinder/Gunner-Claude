@@ -506,35 +506,7 @@ export default function TenantSettings() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Custom Domain</CardTitle>
-              <CardDescription>Use your own domain for Gunner (Scale plan only)</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {settingsLoading ? (
-                <Skeleton className="h-10 w-full" />
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="customDomain">Custom Domain</Label>
-                    <Input
-                      id="customDomain"
-                      placeholder="coaching.yourcompany.com"
-                      value={customDomain}
-                      onChange={(e) => setCustomDomain(e.target.value)}
-                      disabled={settings?.subscriptionTier !== "scale"}
-                    />
-                  </div>
-                  {settings?.subscriptionTier !== "scale" && (
-                    <p className="text-sm text-muted-foreground">
-                      Upgrade to Scale plan to use a custom domain
-                    </p>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+
         </TabsContent>
 
         {/* Team Management */}
@@ -1476,8 +1448,23 @@ export default function TenantSettings() {
         <TabsContent value="integrations" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>CRM Integration</CardTitle>
-              <CardDescription>Connect your CRM to sync contacts and call data</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>CRM Integration</CardTitle>
+                  <CardDescription>Connect your CRM to sync contacts and call data</CardDescription>
+                </div>
+                {settings?.crmConnected === 'true' ? (
+                  <Badge className="bg-green-100 text-green-700 border-green-300 gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
+                    Not Connected
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {settingsLoading ? (
@@ -1502,16 +1489,32 @@ export default function TenantSettings() {
                   </div>
                   {crmType !== 'none' && (
                     <div className="p-4 bg-muted/50 rounded-lg">
-                      <p className="text-sm text-muted-foreground">
-                        {crmType === 'ghl' && "Connect your GoHighLevel account to sync contacts and call recordings."}
-                        {crmType === 'hubspot' && "Connect your HubSpot account to sync contacts and call data."}
-                        {crmType === 'salesforce' && "Connect your Salesforce account to sync leads and call activities."}
-                        {crmType === 'close' && "Connect your Close.io account to sync leads and call recordings."}
-                        {crmType === 'pipedrive' && "Connect your Pipedrive account to sync deals and call activities."}
-                      </p>
-                      <Button className="mt-4" variant="outline">
-                        Connect {crmType.toUpperCase()}
-                      </Button>
+                      {settings?.crmConnected === 'true' ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                            <p className="text-sm font-medium text-green-700">
+                              {crmType === 'ghl' ? 'GoHighLevel' : crmType.toUpperCase()} is connected and syncing
+                            </p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Calls are automatically synced every 30 minutes. Use the "Sync from GHL" button on the Call History page for manual sync.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-muted-foreground">
+                            {crmType === 'ghl' && "Connect your GoHighLevel account to sync contacts and call recordings."}
+                            {crmType === 'hubspot' && "Connect your HubSpot account to sync contacts and call data."}
+                            {crmType === 'salesforce' && "Connect your Salesforce account to sync leads and call activities."}
+                            {crmType === 'close' && "Connect your Close.io account to sync leads and call recordings."}
+                            {crmType === 'pipedrive' && "Connect your Pipedrive account to sync deals and call activities."}
+                          </p>
+                          <Button className="mt-4" variant="outline">
+                            Connect {crmType.toUpperCase()}
+                          </Button>
+                        </>
+                      )}
                     </div>
                   )}
                   <Button 

@@ -192,7 +192,7 @@ async function fetchPipelineOpportunities(
 
 async function fetchRecentConversations(
   creds: GHLCredentials,
-  limit = 50
+  limit = 200
 ): Promise<GHLConversation[]> {
   const data = await ghlFetch(
     creds,

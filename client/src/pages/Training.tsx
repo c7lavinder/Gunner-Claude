@@ -61,7 +61,8 @@ import {
   HelpCircle,
   Send,
   X,
-  SkipForward
+  SkipForward,
+  PhoneCall
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -672,6 +673,9 @@ export default function Training() {
   const { data: qualificationContext } = trpc.rubrics.getContext.useQuery({ callType: "qualification" });
   const { data: offerContext } = trpc.rubrics.getContext.useQuery({ callType: "offer" });
   const { data: leadGenContext } = trpc.rubrics.getContext.useQuery({ callType: "lead_generation" });
+  const { data: followUpContext } = trpc.rubrics.getContext.useQuery({ callType: "follow_up" });
+  const { data: sellerCallbackContext } = trpc.rubrics.getContext.useQuery({ callType: "seller_callback" });
+  const { data: adminCallbackContext } = trpc.rubrics.getContext.useQuery({ callType: "admin_callback" });
 
   const createMutation = trpc.training.create.useMutation({
     onSuccess: () => {
@@ -1112,14 +1116,26 @@ export default function Training() {
             </div>
           ) : (
             <Tabs defaultValue="lead_manager" className="space-y-6">
-              <TabsList className="grid w-full max-w-2xl grid-cols-3">
+              <TabsList className="flex flex-wrap gap-1 w-full max-w-4xl">
                 <TabsTrigger value="lead_manager" className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  Lead Manager
+                  Qualification
                 </TabsTrigger>
                 <TabsTrigger value="acquisition_manager" className="flex items-center gap-2">
                   <Target className="h-4 w-4" />
-                  Acquisition Manager
+                  Offer
+                </TabsTrigger>
+                <TabsTrigger value="follow_up" className="flex items-center gap-2">
+                  <PhoneCall className="h-4 w-4" />
+                  Follow-Up
+                </TabsTrigger>
+                <TabsTrigger value="seller_callback" className="flex items-center gap-2">
+                  <PhoneCall className="h-4 w-4" />
+                  Seller Callback
+                </TabsTrigger>
+                <TabsTrigger value="admin_callback" className="flex items-center gap-2">
+                  <PhoneCall className="h-4 w-4" />
+                  Admin Callback
                 </TabsTrigger>
                 <TabsTrigger value="lead_generator" className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
@@ -1131,8 +1147,8 @@ export default function Training() {
                 <RubricDisplay 
                   rubric={rubrics?.leadManager} 
                   context={qualificationContext}
-                  title="Lead Manager Rubric"
-                  description="Qualification calls to qualify leads and set appointments. Used by Chris and Daniel."
+                  title="Lead Manager — Qualification Rubric"
+                  description="First-touch qualification calls to qualify leads and set appointments. Used by Chris and Daniel."
                 />
               </TabsContent>
 
@@ -1140,8 +1156,35 @@ export default function Training() {
                 <RubricDisplay 
                   rubric={rubrics?.acquisitionManager} 
                   context={offerContext}
-                  title="Acquisition Manager Rubric"
-                  description="Used for offer calls by Kyle"
+                  title="Acquisition Manager — Offer Rubric"
+                  description="Offer presentation calls where numbers are presented to the seller. Used by Kyle."
+                />
+              </TabsContent>
+
+              <TabsContent value="follow_up" className="space-y-6">
+                <RubricDisplay 
+                  rubric={(rubrics as any)?.followUp} 
+                  context={followUpContext}
+                  title="Follow-Up Call Rubric"
+                  description="Second and subsequent touches after initial qualification. Focuses on re-engagement, urgency building, and appointment setting."
+                />
+              </TabsContent>
+
+              <TabsContent value="seller_callback" className="space-y-6">
+                <RubricDisplay 
+                  rubric={(rubrics as any)?.sellerCallback} 
+                  context={sellerCallbackContext}
+                  title="Seller Callback Rubric"
+                  description="Inbound calls where the seller is calling back. Focuses on capitalizing on seller initiative, qualifying motivation, and locking in next steps."
+                />
+              </TabsContent>
+
+              <TabsContent value="admin_callback" className="space-y-6">
+                <RubricDisplay 
+                  rubric={(rubrics as any)?.adminCallback} 
+                  context={adminCallbackContext}
+                  title="Admin Callback Rubric"
+                  description="Administrative follow-up calls for scheduling, document collection, and process management. Focuses on professionalism and task completion."
                 />
               </TabsContent>
 

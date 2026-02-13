@@ -322,7 +322,7 @@ export default function Onboarding() {
             <div className="space-y-2">
               <Label htmlFor="companySlug">Your Gunner URL</Label>
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground text-sm">app.getgunner.ai/</span>
+                <span className="text-muted-foreground text-sm">getgunner.ai/</span>
                 <Input
                   id="companySlug"
                   placeholder="acme-real-estate"

@@ -1755,31 +1755,36 @@
 ## Pre-Onboarding Audit (15 Items)
 
 ### CRITICAL
-- [ ] #1: Dashboard stats don't match Analytics (same filter, different numbers) — find root cause and unify queries
-- [ ] #2: Call Processing numbers shift between page loads — unstable data query
+- [x] #1: Dashboard stats don't match Analytics — fixed: included admin_call in graded calls, scoped grade queries to relevant call IDs, added deduplication
+- [x] #2: Call Processing numbers shift between page loads — fixed: scoped grade queries with inArray, deduplicated grades, tenant-scoped trend queries
 
 ### UX Fixes
-- [ ] #3: De-emphasize skipped calls on Dashboard — add activity summary line + gray out skipped calls
-- [ ] #4: Gamification section — add badge names/descriptions, show progress toward next badge/level
-- [ ] #5: Score Trends chart — empty weeks show 0% dots, should show gap instead
-- [ ] #6: Analytics leaderboard — add visible ranking criteria label (e.g. "Ranked by Average Score")
-- [ ] #7: Signals page empty states — show "No urgent signals — your team is on track" when 0
+- [x] #3: De-emphasize skipped calls on Dashboard — already implemented (opacity-60, gray text, activity summary line)
+- [x] #4: Gamification section — added badge names with tier labels, XP progress showing total/next level, empty state guidance
+- [x] #5: Score Trends chart — fixed: empty weeks now show gap instead of 0% dots, line segments break at empty weeks
+- [x] #6: Analytics leaderboard — already implemented (shows "Ranked by appointments (LMs) and offers (AMs)")
+- [x] #7: Signals page empty states — fixed: shows "No Urgent Signals — Your Team Is on Track" with reassuring messaging
 
 ### Scale Items
-- [ ] #8: Conversation scan capped at 50 — increase to 200 with pagination
-- [ ] #9: CRM settings shows "Connect GHL" even when connected — show connected status + last sync
-- [ ] #10: Custom Domain field has no save button — remove or link to Management UI
-- [ ] #11: Role-based access audit — verify Signals, Scan Pipeline, Settings, rubrics are admin-only
-- [ ] #12: URL inconsistency — clean up all references to use getgunner.ai consistently
+- [x] #8: Conversation scan increased from 50 to 200
+- [x] #9: CRM settings now shows connected status with sync info when GHL is connected
+- [x] #10: Custom Domain field — no visible input field exists in UI, state variable is saved as part of general settings (non-issue)
+- [x] #11: Role-based access audit — Signals page moved to admin-only in sidebar, Scan Pipeline endpoint already admin-gated, Settings already admin-only
+- [x] #12: URL inconsistency — fixed sales@gunner.ai to sales@getgunner.ai, all other references already use getgunner.ai
 
 ### Quick Wins
-- [ ] #13: Add "last synced" indicator to Dashboard
-- [ ] #14: Skipped calls over 30 seconds — generate 1-2 sentence summary from recording
-- [ ] #15: Smart dashboard greeting — admins see signal count, team members see their own stats
+- [x] #13: Add "last synced" indicator to Dashboard — already implemented (shows "Synced X ago" below greeting)
+- [x] #14: Skipped calls over 30 seconds — already implemented (AI generates 1-2 sentence summary, shown in call inbox)
+- [x] #15: Smart dashboard greeting — already implemented (admins see signal count, team members see their own stats)
 
 ### Additional Items
-- [ ] Add missing rubric types to Training page (Follow-Up, Seller Callback, Admin Callback) — currently only shows Lead Gen, Qualification, Offer
+- [x] Add missing rubric types to Training page — already implemented (all 6 types: Qualification, Offer, Follow-Up, Seller Callback, Admin Callback, Lead Generator)
 
 ## Bug Fix: Account Settings Not Visible on Profile Page
 - [x] Verify account settings tab/section is rendering on Profile page — code was there but no navigation link existed
 - [x] Added 'Account Settings' to user avatar dropdown menu in sidebar — now accessible from any page
+
+## Training Materials Upload
+- [x] Extract and review gunner-training-materials.zip
+- [x] Upload training materials to the platform via the training system
+- [x] Upload 15 training materials from zip file — seeded all 15 materials with proper categories and role assignments

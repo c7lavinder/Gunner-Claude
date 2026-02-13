@@ -48,9 +48,14 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Phone, label: "Call History", path: "/calls" },
     { icon: BarChart3, label: "Analytics", path: "/analytics" },
-    { icon: AlertTriangle, label: "Signals", path: "/opportunities" },
-    { icon: BookOpen, label: "Training", path: "/training" },
   ];
+  
+  // Signals is admin-only
+  if (isAdmin) {
+    items.push({ icon: AlertTriangle, label: "Signals", path: "/opportunities" });
+  }
+  
+  items.push({ icon: BookOpen, label: "Training", path: "/training" });
   
   // Social Media is temporarily hidden (coming soon)
   // if (!isLeadManager) {

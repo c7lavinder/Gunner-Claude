@@ -218,7 +218,7 @@ export default function Pricing() {
 
   const handleSelectPlan = (planId: string) => {
     if (planId === "scale") {
-      toast.info("Contact us at sales@gunner.ai for enterprise pricing");
+      toast.info("Contact us at sales@getgunner.ai for enterprise pricing");
       return;
     }
     // Redirect to onboarding with selected plan
