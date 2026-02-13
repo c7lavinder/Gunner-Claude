@@ -333,7 +333,14 @@ async function detectRepeatInbound(
 
   if (recentInbound.length < 2) return null;
 
-  // Check if team responded (outbound call after the inbound)
+  // Check if any of the inbound calls were actually answered (completed with a real conversation)
+  // An answered inbound call means the team DID respond — they picked up the phone
+  const answeredInbound = recentInbound.filter(
+    (c: any) => c.status === "completed" && c.classification === "conversation" && c.duration && c.duration > 60
+  );
+  if (answeredInbound.length > 0) return null; // Team answered inbound calls — not ignored
+
+  // Also check if team made an outbound call after the latest inbound
   const latestInbound = recentInbound[0];
   const responseCall = await db
     .select()
@@ -348,7 +355,7 @@ async function detectRepeatInbound(
     )
     .limit(1);
 
-  if (responseCall.length > 0) return null; // Team responded
+  if (responseCall.length > 0) return null; // Team responded with outbound call
 
   return {
     tier: "missed",

@@ -506,11 +506,55 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
 
     it("Rule 2: detects repeat inbound from same seller (2+ in a week)", () => {
       const inboundCalls = [
-        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) },
-        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), status: "skipped", classification: "no_answer", duration: 5 },
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), status: "skipped", classification: "no_answer", duration: 3 },
       ];
       expect(inboundCalls.length).toBeGreaterThanOrEqual(2);
       expect(inboundCalls.every(c => c.callDirection === "inbound")).toBe(true);
+      // None were answered — signal should fire
+      const answered = inboundCalls.filter(
+        c => c.status === "completed" && c.classification === "conversation" && c.duration > 60
+      );
+      expect(answered.length).toBe(0);
+    });
+
+    it("Rule 2: does NOT flag when inbound calls were answered (completed conversations)", () => {
+      // Shirley Brackett scenario: 2 inbound calls, both answered with long conversations
+      const inboundCalls = [
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), status: "completed", classification: "conversation", duration: 1158 },
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), status: "completed", classification: "conversation", duration: 730 },
+      ];
+      expect(inboundCalls.length).toBeGreaterThanOrEqual(2);
+      // Team answered — signal should NOT fire
+      const answered = inboundCalls.filter(
+        c => c.status === "completed" && c.classification === "conversation" && c.duration > 60
+      );
+      expect(answered.length).toBeGreaterThan(0); // At least one answered = no signal
+    });
+
+    it("Rule 2: does NOT flag when at least one inbound call was answered", () => {
+      // Mix of answered and missed inbound calls
+      const inboundCalls = [
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), status: "completed", classification: "conversation", duration: 300 },
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), status: "skipped", classification: "no_answer", duration: 5 },
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), status: "skipped", classification: "too_short", duration: 10 },
+      ];
+      const answered = inboundCalls.filter(
+        c => c.status === "completed" && c.classification === "conversation" && c.duration > 60
+      );
+      expect(answered.length).toBeGreaterThan(0); // One was answered = no signal
+    });
+
+    it("Rule 2: DOES flag when inbound calls are short/unanswered even if completed", () => {
+      // Calls that are 'completed' but too short (voicemail, missed)
+      const inboundCalls = [
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), status: "completed", classification: "voicemail", duration: 30 },
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), status: "skipped", classification: "no_answer", duration: 5 },
+      ];
+      const answered = inboundCalls.filter(
+        c => c.status === "completed" && c.classification === "conversation" && c.duration > 60
+      );
+      expect(answered.length).toBe(0); // None truly answered = signal should fire
     });
 
     it("Rule 3: detects follow-up inbound ignored (>4h no response)", () => {

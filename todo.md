@@ -1835,3 +1835,9 @@
 - [x] Diagnose column mismatch in call_grades INSERT — was from pre-deployment code, current Drizzle schema generates correct SQL
 - [x] Fix: added duplicate grade guard (getCallGradeByCallId check) to prevent double-grading on reprocess
 - [x] Reprocessed Kim Wooten (1890003) and Shirley Brackett (1890001) — both graded successfully (B and D)
+
+## Bug: False Positive "Repeat Inbound — Nobody Responded" Signal
+- [x] Investigate repeat_inbound_no_response detection logic — was only checking for outbound calls as "response", ignoring answered inbound calls
+- [x] Fix rule: now checks if any inbound calls were completed conversations (status=completed, classification=conversation, duration>60s)
+- [x] Dismissed false positive signal #90002 for Shirley Brackett
+- [x] Added 4 new tests for Rule 2: answered calls, mixed calls, voicemail-only — 100 tests passing
