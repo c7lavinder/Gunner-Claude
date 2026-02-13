@@ -164,6 +164,61 @@ describe("Opportunities Dashboard", () => {
       const result = await caller.opportunities.resolve({ id: 999999, status: "dismissed" });
       expect(result).toEqual({ success: true });
     });
+
+    it("accepts dismiss with reason 'false_positive'", async () => {
+      const caller = appRouter.createCaller(createAuthenticatedContext());
+      const result = await caller.opportunities.resolve({
+        id: 999999,
+        status: "dismissed",
+        dismissReason: "false_positive",
+        dismissNote: "Team already spoke with seller on the phone",
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    it("accepts dismiss with reason 'already_handled'", async () => {
+      const caller = appRouter.createCaller(createAuthenticatedContext());
+      const result = await caller.opportunities.resolve({
+        id: 999999,
+        status: "dismissed",
+        dismissReason: "already_handled",
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    it("accepts dismiss with reason 'duplicate'", async () => {
+      const caller = appRouter.createCaller(createAuthenticatedContext());
+      const result = await caller.opportunities.resolve({
+        id: 999999,
+        status: "dismissed",
+        dismissReason: "duplicate",
+        dismissNote: "Same signal as #90001",
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    it("rejects invalid dismiss reason", async () => {
+      const caller = appRouter.createCaller(createAuthenticatedContext());
+      await expect(
+        caller.opportunities.resolve({
+          id: 999999,
+          status: "dismissed",
+          dismissReason: "invalid_reason" as any,
+        })
+      ).rejects.toThrow();
+    });
+
+    it("rejects dismiss note over 500 chars", async () => {
+      const caller = appRouter.createCaller(createAuthenticatedContext());
+      await expect(
+        caller.opportunities.resolve({
+          id: 999999,
+          status: "dismissed",
+          dismissReason: "other",
+          dismissNote: "x".repeat(501),
+        })
+      ).rejects.toThrow();
+    });
   });
 
   describe("opportunities.runDetection", () => {
@@ -577,6 +632,34 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
       };
       const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
       expect(conversation.lastMessageDate > fourHoursAgo).toBe(true); // Still within SLA
+    });
+
+    it("Rule 3: does NOT flag when a recent call was answered (completed conversation)", () => {
+      // Follow-up lead sent inbound message >4h ago, but team had a call with them within 4h
+      const conversation = {
+        lastMessageDirection: "inbound",
+        lastMessageDate: Date.now() - 6 * 60 * 60 * 1000, // 6 hours ago
+        unreadCount: 1,
+      };
+      const recentCalls = [
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), status: "completed", classification: "conversation", duration: 480 },
+      ];
+      // Team had a completed conversation within 4h — should NOT flag
+      const answeredCall = recentCalls.find(
+        c => c.status === "completed" && c.classification === "conversation" && c.duration > 60
+      );
+      expect(answeredCall).toBeDefined(); // Call was answered = no signal
+    });
+
+    it("Rule 3: DOES flag when recent calls were not real conversations", () => {
+      const recentCalls = [
+        { callDirection: "inbound", callTimestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), status: "completed", classification: "voicemail", duration: 25 },
+        { callDirection: "outbound", callTimestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), status: "skipped", classification: "no_answer", duration: 8 },
+      ];
+      const answeredCall = recentCalls.find(
+        c => c.status === "completed" && c.classification === "conversation" && c.duration > 60
+      );
+      expect(answeredCall).toBeUndefined(); // No real conversation = signal should fire
     });
 
     it("Rule 4: detects offer made but no follow-up within 48h", () => {

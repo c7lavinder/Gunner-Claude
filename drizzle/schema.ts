@@ -1184,6 +1184,8 @@ export const opportunities = mysqlTable("opportunities", {
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   assignedTo: varchar("assignedTo", { length: 255 }),
   status: mysqlEnum("status", ["active", "handled", "dismissed"]).notNull().default("active"),
+  dismissReason: mysqlEnum("dismissReason", ["false_positive", "not_a_deal", "already_handled", "duplicate", "other"]),
+  dismissNote: text("dismissNote"),
   resolvedBy: int("resolvedBy").references(() => users.id),
   resolvedAt: timestamp("resolvedAt"),
   lastActivityAt: timestamp("lastActivityAt"),

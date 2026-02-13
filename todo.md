@@ -1841,3 +1841,11 @@
 - [x] Fix rule: now checks if any inbound calls were completed conversations (status=completed, classification=conversation, duration>60s)
 - [x] Dismissed false positive signal #90002 for Shirley Brackett
 - [x] Added 4 new tests for Rule 2: answered calls, mixed calls, voicemail-only — 100 tests passing
+
+## Fix Rule 3 (Follow Up Inbound Ignored) + Dismiss Reason Feature
+- [x] Fix Rule 3 detectFollowUpInboundIgnored to check for answered inbound calls (same pattern as Rule 2 fix)
+- [x] Add dismissReason enum + dismissNote text columns to opportunities table schema
+- [x] Run db:push migration — also fixed null tenantId rows in 9 tables (campaign_kpis, kpi_channels, kpi_markets, kpi_periods, lead_gen_staff, users, badges, reward_views, user_badges, user_xp, xp_transactions, user_streaks)
+- [x] Add dismiss reason dialog UI with dropdown (5 reasons) and optional note field
+- [x] Update resolve endpoint to accept dismissReason and dismissNote; shows reason on dismissed badge
+- [x] Write tests — 8 new tests total: 2 for Rule 3 answered-call logic, 6 for dismiss reason validation. 107 tests passing

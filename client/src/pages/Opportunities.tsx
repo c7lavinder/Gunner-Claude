@@ -4,6 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertTriangle,
   AlertCircle,
@@ -165,6 +168,9 @@ export default function Opportunities() {
   const [activeTab, setActiveTab] = useState("all");
   const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
   const [showDismissed, setShowDismissed] = useState(false);
+  const [dismissDialogId, setDismissDialogId] = useState<number | null>(null);
+  const [dismissReason, setDismissReason] = useState<"false_positive" | "not_a_deal" | "already_handled" | "duplicate" | "other">("not_a_deal");
+  const [dismissNote, setDismissNote] = useState("");
 
   const { data: counts, refetch: refetchCounts } = trpc.opportunities.counts.useQuery();
   const { data: opportunities, isLoading, refetch: refetchList } = trpc.opportunities.list.useQuery({
@@ -200,7 +206,29 @@ export default function Opportunities() {
   };
 
   const handleResolve = (id: number, status: "handled" | "dismissed") => {
+    if (status === "dismissed") {
+      setDismissDialogId(id);
+      setDismissReason("not_a_deal");
+      setDismissNote("");
+      return;
+    }
     resolveMutation.mutate({ id, status });
+  };
+
+  const confirmDismiss = () => {
+    if (dismissDialogId === null) return;
+    resolveMutation.mutate({
+      id: dismissDialogId,
+      status: "dismissed",
+      dismissReason,
+      dismissNote: dismissNote.trim() || undefined,
+    }, {
+      onSuccess: () => {
+        setDismissDialogId(null);
+        refetchList();
+        refetchCounts();
+      },
+    });
   };
 
   const formatTimeAgo = (date: Date | string | null) => {
@@ -379,7 +407,9 @@ export default function Opportunities() {
                               )}
                               {isResolved && (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                  {opp.status}
+                                  {opp.status === "dismissed" && (opp as any).dismissReason
+                                    ? `Dismissed: ${(opp as any).dismissReason.replace(/_/g, " ")}`
+                                    : opp.status}
                                 </Badge>
                               )}
                             </div>
@@ -555,6 +585,48 @@ export default function Opportunities() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Dismiss Reason Dialog */}
+      <Dialog open={dismissDialogId !== null} onOpenChange={(open) => { if (!open) setDismissDialogId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Dismiss Signal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Reason</label>
+              <Select value={dismissReason} onValueChange={(v: any) => setDismissReason(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="not_a_deal">Not a Deal</SelectItem>
+                  <SelectItem value="false_positive">False Positive</SelectItem>
+                  <SelectItem value="already_handled">Already Handled</SelectItem>
+                  <SelectItem value="duplicate">Duplicate Signal</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Note <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <Textarea
+                placeholder="Add context for why this was dismissed..."
+                value={dismissNote}
+                onChange={(e) => setDismissNote(e.target.value)}
+                rows={3}
+                maxLength={500}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDismissDialogId(null)}>Cancel</Button>
+            <Button onClick={confirmDismiss} disabled={resolveMutation.isPending}>
+              {resolveMutation.isPending ? "Dismissing..." : "Dismiss"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

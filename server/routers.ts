@@ -3437,6 +3437,8 @@ Create content that:
       .input(z.object({
         id: z.number(),
         status: z.enum(["handled", "dismissed"]),
+        dismissReason: z.enum(["false_positive", "not_a_deal", "already_handled", "duplicate", "other"]).optional(),
+        dismissNote: z.string().max(500).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { getDb } = await import("./db");
@@ -3451,6 +3453,8 @@ Create content that:
         await db.update(opportunities)
           .set({
             status: input.status,
+            dismissReason: input.status === "dismissed" ? (input.dismissReason || "not_a_deal") : null,
+            dismissNote: input.status === "dismissed" ? (input.dismissNote || null) : null,
             resolvedBy: ctx.user!.id,
             resolvedAt: new Date(),
           })

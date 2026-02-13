@@ -399,6 +399,26 @@ async function detectFollowUpInboundIgnored(
   // Check if there was a response
   if (conversation.unreadCount === 0) return null; // Already read/responded
 
+  // Check if any recent inbound calls from this contact were actually answered (completed conversations)
+  // If the team picked up the phone and had a real conversation, this is NOT ignored
+  const fourHoursAgoDate = new Date(Date.now() - 4 * 60 * 60 * 1000);
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, conversation.contactId),
+        gte(calls.callTimestamp, fourHoursAgoDate)
+      )
+    );
+  
+  // If any call (inbound answered OR outbound) was a completed conversation, not ignored
+  const answeredCall = recentCalls.find(
+    (c: any) => c.status === "completed" && c.classification === "conversation" && c.duration && c.duration > 60
+  );
+  if (answeredCall) return null; // Team engaged with this contact recently
+
   return {
     tier: "missed",
     triggerRules: ["followup_inbound_ignored"],
