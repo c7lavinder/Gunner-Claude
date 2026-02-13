@@ -79,9 +79,9 @@ const CATEGORIES = [
 
 const APPLICABLE_TO = [
   { value: "all", label: "All Team Members" },
-  { value: "lead_manager", label: "Lead Managers (Chris & Daniel)" },
-  { value: "acquisition_manager", label: "Acquisition Manager (Kyle)" },
-  { value: "lead_generator", label: "Lead Generators (Alex, Efren & Mirna)" },
+  { value: "lead_manager", label: "Lead Managers" },
+  { value: "acquisition_manager", label: "Acquisition Managers" },
+  { value: "lead_generator", label: "Lead Generators" },
 ];
 
 function getCategoryIcon(category: string) {
@@ -1148,7 +1148,7 @@ export default function Training() {
                   rubric={rubrics?.leadManager} 
                   context={qualificationContext}
                   title="Lead Manager — Qualification Rubric"
-                  description="First-touch qualification calls to qualify leads and set appointments. Used by Chris and Daniel."
+                  description="First-touch qualification calls to qualify leads and set appointments. Used by Lead Managers."
                 />
               </TabsContent>
 
@@ -1157,7 +1157,7 @@ export default function Training() {
                   rubric={rubrics?.acquisitionManager} 
                   context={offerContext}
                   title="Acquisition Manager — Offer Rubric"
-                  description="Offer presentation calls where numbers are presented to the seller. Used by Kyle."
+                  description="Offer presentation calls where numbers are presented to the seller. Used by Acquisition Managers."
                 />
               </TabsContent>
 
@@ -1193,7 +1193,7 @@ export default function Training() {
                   rubric={(rubrics as any)?.leadGenerator} 
                   context={leadGenContext}
                   title="Lead Generator Rubric"
-                  description="Cold calls to generate seller interest — Lead Generators do NOT set appointments. Used by Alex, Efren, and Mirna."
+                  description="Cold calls to generate seller interest — Lead Generators do NOT set appointments."
                 />
               </TabsContent>
             </Tabs>

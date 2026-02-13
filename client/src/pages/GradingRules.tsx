@@ -49,9 +49,9 @@ import { toast } from "sonner";
 
 const APPLICABLE_TO = [
   { value: "all", label: "All Team Members" },
-  { value: "lead_manager", label: "Lead Managers (Chris & Daniel)" },
-  { value: "acquisition_manager", label: "Acquisition Manager (Kyle)" },
-  { value: "lead_generator", label: "Lead Generators (Alex, Efren & Mirna)" },
+  { value: "lead_manager", label: "Lead Managers" },
+  { value: "acquisition_manager", label: "Acquisition Managers" },
+  { value: "lead_generator", label: "Lead Generators" },
 ];
 
 function getApplicableLabel(applicableTo: string) {

@@ -1,5 +1,6 @@
 import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2";
 import { 
   InsertUser, users, calls, callGrades, teamMembers, performanceMetrics, 
   InsertCall, InsertCallGrade, InsertTeamMember, Call, CallGrade, TeamMember,
@@ -11,16 +12,27 @@ import {
   InsertBrandAsset, InsertSocialPost, InsertContentIdea,
   BrandAsset, SocialPost, ContentIdea, BrandProfile, InsertBrandProfile,
   teamAssignments, TeamAssignment, InsertTeamAssignment,
-  emailsSent, InsertEmailSent, EmailSent, tenants
+  emailsSent, InsertEmailSent, EmailSent, tenants, tenantRubrics
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: mysql.Pool | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      // S17: Use connection pool instead of single connection
+      _pool = mysql.createPool({
+        uri: process.env.DATABASE_URL,
+        connectionLimit: 15,
+        waitForConnections: true,
+        queueLimit: 0, // unlimited queue (connections wait instead of failing)
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 30000,
+      });
+      _db = drizzle(_pool);
+      console.log("[Database] Connection pool created (limit: 10)");
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -196,11 +208,15 @@ export async function getTeamMemberById(id: number): Promise<TeamMember | null> 
   return result[0] || null;
 }
 
-export async function getTeamMemberByName(name: string): Promise<TeamMember | null> {
+export async function getTeamMemberByName(name: string, tenantId?: number): Promise<TeamMember | null> {
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.select().from(teamMembers).where(eq(teamMembers.name, name)).limit(1);
+  const conditions = [eq(teamMembers.name, name)];
+  if (tenantId) {
+    conditions.push(eq(teamMembers.tenantId, tenantId));
+  }
+  const result = await db.select().from(teamMembers).where(and(...conditions)).limit(1);
   return result[0] || null;
 }
 
@@ -958,23 +974,9 @@ export async function getCallStats(options?: {
 // ============ SEED DATA ============
 
 export async function seedTeamMembers(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-
-  const existingMembers = await getTeamMembers();
-  if (existingMembers.length > 0) return;
-
-  const defaultMembers: InsertTeamMember[] = [
-    { name: "Chris", teamRole: "lead_manager" },
-    { name: "Daniel", teamRole: "lead_manager" },
-    { name: "Kyle", teamRole: "acquisition_manager" },
-  ];
-
-  for (const member of defaultMembers) {
-    await createTeamMember(member);
-  }
-
-  console.log("[Database] Seeded default team members");
+  // No-op: team members are now added per-tenant during onboarding.
+  // Each tenant configures their own team members via the Team Members page.
+  return;
 }
 
 
@@ -1103,12 +1105,17 @@ export async function updateAIFeedback(id: number, updates: Partial<InsertAIFeed
   await db.update(aiFeedback).set(updates).where(eq(aiFeedback.id, id));
 }
 
-export async function getPendingFeedbackForGrading(): Promise<AIFeedback[]> {
+export async function getPendingFeedbackForGrading(tenantId?: number): Promise<AIFeedback[]> {
   const db = await getDb();
   if (!db) return [];
 
+  const conditions = [eq(aiFeedback.status, "incorporated")];
+  if (tenantId) {
+    conditions.push(eq(aiFeedback.tenantId, tenantId));
+  }
+
   return await db.select().from(aiFeedback)
-    .where(eq(aiFeedback.status, "incorporated"))
+    .where(and(...conditions))
     .orderBy(desc(aiFeedback.createdAt))
     .limit(50);
 }
@@ -1174,34 +1181,51 @@ export async function deleteGradingRule(id: number): Promise<void> {
 /**
  * Get all active training materials and rules for grading context
  */
-export async function getGradingContext(callType: "qualification" | "offer" | "lead_generation" | "follow_up" | "seller_callback" | "admin_callback"): Promise<{
+export async function getGradingContext(callType: "qualification" | "offer" | "lead_generation" | "follow_up" | "seller_callback" | "admin_callback", tenantId?: number): Promise<{
   // Note: callType here maps to the legacy applicableTo values in training materials/rules
   trainingMaterials: TrainingMaterial[];
   gradingRules: GradingRule[];
   recentFeedback: AIFeedback[];
+  tenantRubrics: { name: string; description: string | null; criteria: string }[];
 }> {
   // follow_up, seller_callback, admin_callback all use lead_manager training context
   const applicableTo = (callType === "qualification" || callType === "follow_up" || callType === "seller_callback" || callType === "admin_callback") ? "lead_manager" : (callType === "offer" ? "acquisition_manager" : "lead_generator");
   
-  // Get training materials applicable to this call type or all
-  const materials = await getTrainingMaterials({ activeOnly: true });
+  // Get training materials scoped to tenant
+  const materials = await getTrainingMaterials({ activeOnly: true, tenantId });
   const filteredMaterials = materials.filter(m => 
     m.applicableTo === "all" || m.applicableTo === applicableTo
   );
 
-  // Get grading rules applicable to this call type or all
-  const rules = await getGradingRules({ activeOnly: true });
+  // Get grading rules scoped to tenant
+  const rules = await getGradingRules({ activeOnly: true, tenantId });
   const filteredRules = rules.filter(r => 
     r.applicableTo === "all" || r.applicableTo === applicableTo
   );
 
-  // Get recent incorporated feedback for learning
-  const feedback = await getPendingFeedbackForGrading();
+  // Get recent incorporated feedback scoped to tenant
+  const feedback = await getPendingFeedbackForGrading(tenantId);
+
+  // S13: Fetch tenant-specific rubrics if tenantId is provided
+  let tenantRubricsList: { name: string; description: string | null; criteria: string }[] = [];
+  if (tenantId) {
+    const db = await getDb();
+    if (db) {
+      const rubrics = await db.select().from(tenantRubrics).where(
+        and(
+          eq(tenantRubrics.tenantId, tenantId),
+          eq(tenantRubrics.isActive, "true")
+        )
+      );
+      tenantRubricsList = rubrics.map(r => ({ name: r.name, description: r.description, criteria: r.criteria }));
+    }
+  }
 
   return {
     trainingMaterials: filteredMaterials,
     gradingRules: filteredRules,
     recentFeedback: feedback,
+    tenantRubrics: tenantRubricsList,
   };
 }
 

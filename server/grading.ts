@@ -4,7 +4,7 @@ import { invokeLLM } from "./_core/llm";
 
 export const LEAD_MANAGER_RUBRIC = {
   name: "Lead Manager Qualification Call Rubric",
-  description: "For Lead Managers (Chris and Daniel) - Qualification/Diagnosis calls. The goal is to qualify leads, extract motivation, discuss price, and set appointments for walkthroughs.",
+  description: "For Lead Managers - Qualification/Diagnosis calls. The goal is to qualify leads, extract motivation, discuss price, and set appointments for walkthroughs.",
   criteria: [
     {
       name: "Introduction & Rapport",
@@ -79,7 +79,7 @@ export const LEAD_MANAGER_RUBRIC = {
 
 export const ACQUISITION_MANAGER_RUBRIC = {
   name: "Acquisition Manager Offer Call Rubric",
-  description: "For Kyle - Offer/Closing calls",
+  description: "For Acquisition Managers - Offer/Closing calls",
   criteria: [
     {
       name: "Intro & Confirmation",
@@ -432,6 +432,7 @@ export async function gradeCall(
     gradingRules?: { title: string; ruleText: string | null; priority: number | null }[];
     recentFeedback?: { feedbackType: string | null; explanation: string | null; correctBehavior: string | null }[];
     companyName?: string;
+    tenantRubrics?: { name: string; description: string | null; criteria: string }[];
   }
 ): Promise<GradingResult> {
   // Rubric mapping (6 call types → 6 rubrics):
@@ -449,7 +450,29 @@ export async function gradeCall(
     seller_callback: SELLER_CALLBACK_RUBRIC,
     admin_callback: ADMIN_CALLBACK_RUBRIC,
   };
-  const rubric = rubricMap[callType] || LEAD_MANAGER_RUBRIC;
+  let rubric = rubricMap[callType] || LEAD_MANAGER_RUBRIC;
+
+  // S13: Override with tenant-specific rubric if available
+  if (context?.tenantRubrics && context.tenantRubrics.length > 0) {
+    const tenantRubric = context.tenantRubrics.find(r => 
+      r.name.toLowerCase().includes(callType.replace('_', ' ')) ||
+      r.name.toLowerCase().includes(callType.replace('_', '-'))
+    );
+    if (tenantRubric) {
+      try {
+        const parsedCriteria = JSON.parse(tenantRubric.criteria);
+        rubric = {
+          ...rubric,
+          name: tenantRubric.name,
+          description: tenantRubric.description || rubric.description,
+          criteria: parsedCriteria,
+        };
+        console.log(`[Grading] Using tenant-specific rubric: ${tenantRubric.name}`);
+      } catch (e) {
+        console.error(`[Grading] Failed to parse tenant rubric criteria, using default`);
+      }
+    }
+  }
 
   // Build training materials context
   let trainingContext = "";
@@ -1124,7 +1147,7 @@ export async function processCall(callId: number): Promise<void> {
       : "qualification" as const;
 
     // Fetch grading context (training materials, rules, feedback)
-    const gradingContext = await getGradingContext(gradingContextType);
+    const gradingContext = await getGradingContext(gradingContextType, call.tenantId ?? undefined);
     
     // Get tenant company name for grading prompt
     let companyName: string | undefined;
@@ -1150,6 +1173,7 @@ export async function processCall(callId: number): Promise<void> {
         correctBehavior: f.correctBehavior,
       })),
       companyName,
+      tenantRubrics: gradingContext.tenantRubrics,
     });
 
     // Map callType to rubricType for storage

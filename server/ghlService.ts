@@ -6,9 +6,15 @@
 import { ENV } from "./_core/env";
 import { createCall, getTeamMembers, updateCall, getCallById, getCallByGhlId } from "./db";
 import { processCall } from "./grading";
+import PQueue from "p-queue";
+
+// Processing queue: limits concurrent LLM-heavy processCall operations
+// Each processCall makes 2-4 LLM calls, so limit concurrency to prevent overload
+const callProcessingQueue = new PQueue({ concurrency: 5 });
 import { storagePut } from "./storage";
 import { runArchivalJob } from "./archival";
 import { generateTeamInsights } from "./insights";
+import { getAllTenants } from "./tenant";
 import { createTeamTrainingItem } from "./db";
 import { getTenantsWithCrm, parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
 import { runOpportunityDetection } from "./opportunityDetection";
@@ -438,8 +444,8 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
 
     if (call) {
       console.log(`[GHL] Created call record ${call.id}, starting processing...`);
-      // Process the call asynchronously
-      processCall(call.id).catch(err => {
+      // Process the call via concurrency-limited queue
+      callProcessingQueue.add(() => processCall(call.id)).catch(err => {
         console.error(`[GHL] Error processing call ${call.id}:`, err);
       });
 
@@ -501,24 +507,33 @@ export async function pollForNewCalls(): Promise<{
 
         console.log(`[GHL] Polling tenant ${tenant.id} (${tenant.name}) from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-        const ghlCalls = await fetchGHLCalls({ startDate, endDate });
-        console.log(`[GHL] Tenant ${tenant.id}: Found ${ghlCalls.length} calls to process`);
+        // Per-tenant timeout: 5 minutes max per tenant to prevent blocking
+        const TENANT_TIMEOUT_MS = 5 * 60 * 1000;
+        const tenantPoll = async () => {
+          const ghlCalls = await fetchGHLCalls({ startDate, endDate });
+          console.log(`[GHL] Tenant ${tenant.id}: Found ${ghlCalls.length} calls to process`);
 
-        for (const ghlCall of ghlCalls) {
-          const result = await syncGHLCall(ghlCall);
-          
-          if (result.skipped) {
-            results.skipped++;
-          } else if (result.success) {
-            results.synced++;
-            console.log(`[GHL] Tenant ${tenant.id}: Synced call ${ghlCall.id} -> ${result.callId}`);
-          } else {
-            results.failed++;
-            if (result.reason) {
-              results.errors.push(`Tenant ${tenant.id} call ${ghlCall.id}: ${result.reason}`);
+          for (const ghlCall of ghlCalls) {
+            const result = await syncGHLCall(ghlCall);
+            
+            if (result.skipped) {
+              results.skipped++;
+            } else if (result.success) {
+              results.synced++;
+              console.log(`[GHL] Tenant ${tenant.id}: Synced call ${ghlCall.id} -> ${result.callId}`);
+            } else {
+              results.failed++;
+              if (result.reason) {
+                results.errors.push(`Tenant ${tenant.id} call ${ghlCall.id}: ${result.reason}`);
+              }
             }
           }
-        }
+        };
+
+        await Promise.race([
+          tenantPoll(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`Tenant ${tenant.id} polling timed out after ${TENANT_TIMEOUT_MS / 1000}s`)), TENANT_TIMEOUT_MS)),
+        ]);
       } catch (tenantError) {
         console.error(`[GHL] Error polling tenant ${tenant.id} (${tenant.name}):`, tenantError);
         results.errors.push(`Tenant ${tenant.id}: ${tenantError instanceof Error ? tenantError.message : "Unknown error"}`);
@@ -576,62 +591,48 @@ async function checkAndRunWeeklyInsights(): Promise<void> {
     
     console.log("[Insights] Running weekly AI insights generation (Monday morning)");
     try {
-      const insights = await generateTeamInsights();
+      // Iterate over all tenants to generate insights per-tenant
+      const allTenants = await getAllTenants();
+      let totalSavedCount = 0;
       
-      // Save all generated insights to the database
-      let savedCount = 0;
-      for (const skill of insights.skills) {
-        await createTeamTrainingItem({
-          itemType: "skill",
-          title: skill.title,
-          description: skill.description,
-          targetBehavior: skill.targetBehavior,
-          priority: skill.priority,
-          status: "active",
-          teamMemberId: skill.teamMemberId,
-          sourceCallIds: skill.sourceCallIds ? JSON.stringify(skill.sourceCallIds) : null,
-        });
-        savedCount++;
-      }
-      for (const issue of insights.issues) {
-        await createTeamTrainingItem({
-          itemType: "issue",
-          title: issue.title,
-          description: issue.description,
-          priority: issue.priority,
-          status: "active",
-          teamMemberId: issue.teamMemberId,
-          sourceCallIds: issue.sourceCallIds ? JSON.stringify(issue.sourceCallIds) : null,
-        });
-        savedCount++;
-      }
-      for (const win of insights.wins) {
-        await createTeamTrainingItem({
-          itemType: "win",
-          title: win.title,
-          description: win.description,
-          priority: win.priority,
-          status: "active",
-          teamMemberId: win.teamMemberId,
-          sourceCallIds: win.sourceCallIds ? JSON.stringify(win.sourceCallIds) : null,
-        });
-        savedCount++;
-      }
-      for (const agenda of insights.agenda) {
-        await createTeamTrainingItem({
-          itemType: "agenda",
-          title: agenda.title,
-          description: agenda.description,
-          priority: agenda.priority,
-          status: "active",
-          teamMemberId: agenda.teamMemberId,
-          sourceCallIds: agenda.sourceCallIds ? JSON.stringify(agenda.sourceCallIds) : null,
-        });
-        savedCount++;
+      for (const tenant of allTenants) {
+        try {
+          console.log(`[Insights] Generating insights for tenant ${tenant.id} (${tenant.name})`);
+          const insights = await generateTeamInsights(tenant.id);
+          
+          // Save all generated insights scoped to this tenant
+          let savedCount = 0;
+          const allItems = [
+            ...insights.skills.map(s => ({ ...s, itemType: "skill" as const })),
+            ...insights.issues.map(i => ({ ...i, itemType: "issue" as const })),
+            ...insights.wins.map(w => ({ ...w, itemType: "win" as const })),
+            ...insights.agenda.map(a => ({ ...a, itemType: "agenda" as const })),
+          ];
+          
+          for (const item of allItems) {
+            await createTeamTrainingItem({
+              tenantId: tenant.id,
+              itemType: item.itemType,
+              title: item.title,
+              description: item.description,
+              targetBehavior: (item as any).targetBehavior,
+              priority: item.priority,
+              status: "active",
+              teamMemberId: item.teamMemberId,
+              sourceCallIds: item.sourceCallIds ? JSON.stringify(item.sourceCallIds) : null,
+            });
+            savedCount++;
+          }
+          
+          totalSavedCount += savedCount;
+          console.log(`[Insights] Tenant ${tenant.id}: saved ${savedCount} insights`);
+        } catch (tenantErr) {
+          console.error(`[Insights] Error generating insights for tenant ${tenant.id}:`, tenantErr);
+        }
       }
       
       lastInsightsTime = new Date();
-      console.log(`[Insights] Weekly generation complete. Saved ${savedCount} insights.`);
+      console.log(`[Insights] Weekly generation complete. Saved ${totalSavedCount} insights across ${allTenants.length} tenants.`);
     } catch (err) {
       console.error("[Insights] Weekly generation error:", err);
     }
@@ -1108,8 +1109,8 @@ export async function resyncCallRecording(callId: number): Promise<{
 
     console.log(`[GHL Resync] Successfully re-synced call ${callId} with new recording URL: ${newRecordingUrl}`);
 
-    // Start processing the call again
-    processCall(callId).catch(err => {
+    // Start processing the call again via concurrency-limited queue
+    callProcessingQueue.add(() => processCall(callId)).catch(err => {
       console.error(`[GHL Resync] Error processing call ${callId}:`, err);
     });
 

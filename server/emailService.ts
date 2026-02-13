@@ -621,7 +621,7 @@ P.S. - We truly believe Gunner can help your team close more deals. Let us prove
 /**
  * Send an email using Resend. Falls back to owner notification if Resend is not configured.
  */
-export async function sendEmail(options: EmailOptions): Promise<boolean> {
+export async function sendEmail(options: EmailOptions & { fromEmail?: string }): Promise<boolean> {
   const { subject, html, text } = generateEmailContent(options.type, options.data);
   
   // Churn emails always notify owner (they're internal notifications about outreach)
@@ -639,7 +639,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   if (resend) {
     try {
       const { error } = await resend.emails.send({
-        from: FROM_EMAIL,
+        from: options.fromEmail || FROM_EMAIL,
         to: options.to,
         subject,
         html,

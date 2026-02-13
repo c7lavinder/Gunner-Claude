@@ -93,6 +93,9 @@ interface DetectedOpportunity {
 
 // ============ SALES PROCESS PIPELINE STAGE CLASSIFICATION ============
 
+// TODO (S19): Move these stage classifications to a tenant-configurable table
+// so each client can define their own pipeline stages and signal rules.
+// For now, these defaults work for real estate flipping businesses.
 // These stage names are matched case-insensitively
 const ACTIVE_DEAL_STAGES = [
   "new lead", "warm leads", "sms warm leads", "hot leads",

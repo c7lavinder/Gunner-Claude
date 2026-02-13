@@ -143,7 +143,7 @@ function AddItemDialog({
               placeholder={
                 itemType === "skill" ? "e.g., Price Anchoring Technique" :
                 itemType === "issue" ? "e.g., Giving price before seller" :
-                itemType === "win" ? "e.g., Chris had 3 A-graded calls today" :
+                itemType === "win" ? "e.g., Team member had 3 A-graded calls today" :
                 "e.g., Review last week's call grades"
               }
             />

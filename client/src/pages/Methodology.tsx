@@ -54,7 +54,7 @@ export default function Methodology() {
             rubric={rubrics?.leadManager} 
             context={qualificationContext}
             title="Lead Manager Rubric"
-            description="Used for qualification calls by Chris and Daniel"
+            description="Used for qualification calls by Lead Managers"
           />
         </TabsContent>
 
@@ -63,7 +63,7 @@ export default function Methodology() {
             rubric={rubrics?.acquisitionManager} 
             context={offerContext}
             title="Acquisition Manager Rubric"
-            description="Used for offer calls by Kyle"
+            description="Used for offer calls by Acquisition Managers"
           />
         </TabsContent>
       </Tabs>

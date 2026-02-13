@@ -725,14 +725,14 @@ function TeamMembersContent() {
             <Users className="h-16 w-16 text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-semibold mb-2">No team members</h3>
             <p className="text-muted-foreground text-center max-w-md mb-4">
-              Click the button below to initialize your team with Chris, Daniel, and Kyle.
+              Add your first team members to start tracking call performance and coaching.
+              Go to Settings to invite and configure your team.
             </p>
             <Button 
-              onClick={() => seedMutation.mutate()}
-              disabled={seedMutation.isPending}
+              onClick={() => window.location.href = "/settings"}
             >
               <UserPlus className="h-4 w-4 mr-2" />
-              Initialize Team
+              Go to Settings
             </Button>
           </CardContent>
         </Card>

@@ -3613,7 +3613,7 @@ Return JSON with:
 - actionType: one of the types above or "none"
 - contactName: the contact name mentioned (or from context)
 - contactId: the contact ID if known from context
-- assigneeName: for create_task, the team member name to assign the task to. If the user says "make a task for Daniel" or "assign this to Kyle", use that name. If no specific person is mentioned, use the current user's name ("${ctx.user!.name || "Unknown"}"). For non-task actions, use empty string.
+- assigneeName: for create_task, the team member name to assign the task to. If the user mentions a specific team member by name, use that name. If no specific person is mentioned, use the current user's name ("${ctx.user!.name || "Unknown"}"). For non-task actions, use empty string.
 - params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, fieldKey, fieldValue)
 - summary: a SHORT one-line summary of the action (e.g. "Send SMS to John" or "Add note to Kimberly"). The full content will be shown separately.
 - needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID

@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import { createCall, getTeamMemberByName, getTeamMemberByGhlUserId, getCallByGhlId } from "./db";
 import { processCall } from "./grading";
+import { getTenantsWithCrm, parseCrmConfig } from "./tenant";
+import PQueue from "p-queue";
+
+// Shared processing queue for webhook-triggered calls
+const webhookProcessingQueue = new PQueue({ concurrency: 5 });
 
 /**
  * Webhook payload from GoHighLevel when a call ends
@@ -148,14 +153,31 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
       }
     }
     
-    // Fall back to name matching if GHL User ID didn't match
+    // If we still don't have a tenantId, try to resolve from GHL locationId
+    if (!tenantId && ghlLocationId) {
+      try {
+        const crmTenants = await getTenantsWithCrm();
+        for (const t of crmTenants) {
+          const config = parseCrmConfig(t);
+          if (config.ghlLocationId === ghlLocationId) {
+            tenantId = t.id;
+            console.log(`[Webhook] Resolved tenant ${t.id} (${t.name}) from GHL locationId ${ghlLocationId}`);
+            break;
+          }
+        }
+      } catch (e) {
+        console.error(`[Webhook] Failed to resolve tenant from locationId:`, e);
+      }
+    }
+
+    // Fall back to name matching if GHL User ID didn't match — now scoped to tenant
     if (!teamMemberId && teamMemberName) {
-      const teamMember = await getTeamMemberByName(teamMemberName);
+      const teamMember = await getTeamMemberByName(teamMemberName, tenantId ?? undefined);
       if (teamMember) {
         teamMemberId = teamMember.id;
         callType = teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification";
-        tenantId = teamMember.tenantId;
-        console.log(`[Webhook] Matched team member by name: ${teamMember.name}`);
+        if (!tenantId) tenantId = teamMember.tenantId;
+        console.log(`[Webhook] Matched team member by name: ${teamMember.name} (tenant: ${tenantId})`);
       }
     }
 
@@ -190,8 +212,8 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
 
     console.log(`[Webhook] Created call ${call.id} from GHL call ${ghlCallId}`);
 
-    // Process the call asynchronously (transcribe + grade)
-    processCall(call.id).catch(err => {
+    // Process the call via concurrency-limited queue
+    webhookProcessingQueue.add(() => processCall(call.id)).catch(err => {
       console.error(`[Webhook] Error processing call ${call.id}:`, err);
     });
 

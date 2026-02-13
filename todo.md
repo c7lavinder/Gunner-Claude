@@ -1788,3 +1788,38 @@
 - [x] Extract and review gunner-training-materials.zip
 - [x] Upload training materials to the platform via the training system
 - [x] Upload 15 training materials from zip file — seeded all 15 materials with proper categories and role assignments
+
+## Multi-Tenant Scalability Audit
+- [x] Audit database schema for tenant isolation gaps
+- [x] Audit server-side queries for missing tenant filters and N+1 patterns
+- [x] Audit external API integrations for rate limits and shared credentials
+- [x] Audit background jobs, cron tasks, and processing pipelines for concurrency issues
+- [x] Audit frontend for hardcoded tenant assumptions
+- [x] Compile findings into a structured scalability report (19 issues found)
+
+## Multi-Tenant Scalability Fixes (19 Issues)
+
+### Phase A — Critical (Before Client #2)
+- [x] #S1: Grading context isolation — added tenantId to getGradingContext, getTrainingMaterials, getGradingRules, getPendingFeedbackForGrading
+- [x] #S2: Team member name lookup — scoped getTeamMemberByName with tenantId, added tenant resolution from GHL locationId in webhook
+- [x] #S3: Hardcoded schema enums — replaced ENUM columns on kpi_deals with VARCHAR for lmName, amName, dmName, location
+- [x] #S4: Weekly insights isolation — now iterates over all tenants, generates insights per tenant with tenantId
+- [x] #S5: Seed data removal — removed hardcoded team member initialization, updated empty state messaging
+
+### Phase B — High Severity (Before Clients 3-10)
+- [x] #S6: Global polling lock — added per-tenant timeout (60s) with error isolation so one slow tenant doesn't block others
+- [x] #S7: Processing queue — wrapped processCall in p-queue with concurrency limit of 5 (shared across GHL sync and webhook)
+- [x] #S8: DB indexes — added composite indexes on tenantId+status+createdAt for calls, tenantId for call_grades, team_members, training_materials, grading_rules, ai_feedback, team_training_items
+- [x] #S9: Rate limit persistence — documented as acceptable for single-instance, flagged for Redis migration at multi-instance scale
+- [x] #S10: GHL credentials — documented for future refactor (deeply coupled to 10+ functions, sequential polling is safe for now)
+- [x] #S11: Email per-tenant — sendEmail now accepts optional fromEmail parameter for tenant-specific sender
+- [x] #S12: Archival policies — runArchivalJob now accepts configurable retentionDays parameter
+
+### Phase C — Medium Severity (Before 20+ Tenants)
+- [x] #S13: AI prompt templates — wired tenantRubrics table into grading pipeline (getGradingContext fetches tenant rubrics, gradeCall uses them as override)
+- [x] #S14: Frontend hardcoded names — replaced all Chris/Daniel/Kyle references with dynamic lookups from teamMembers query
+- [x] #S15: KPI location enums — converted to VARCHAR in schema migration (combined with S3)
+- [x] #S16: SQL aggregation — deferred (400-line function rewrite too risky at current scale of 500 calls, flagged for optimization when needed)
+- [x] #S17: Connection pool — switched to mysql2.createPool() with connectionLimit: 15, unlimited queue
+- [x] #S18: Nullable tenantId — backfilled all NULL tenantId values to tenant 1 across all tables
+- [x] #S19: Signal customization — added TODO markers for tenant-configurable pipeline stages (defaults work for all RE flipping clients)

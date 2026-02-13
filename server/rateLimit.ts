@@ -7,7 +7,9 @@
 
 import { TRPCError } from "@trpc/server";
 
-// In-memory store for rate limiting (consider Redis for production multi-instance)
+// In-memory store for rate limiting
+// S9 NOTE: Acceptable for single-instance deployment.
+// When scaling to multiple server instances, migrate to Redis-backed rate limiting.
 interface RateLimitEntry {
   count: number;
   windowStart: number;

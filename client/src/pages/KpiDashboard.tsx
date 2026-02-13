@@ -60,20 +60,9 @@ const LOCATION_NAMES: Record<string, string> = {
   nah: "NAH",
 };
 
-// Team member display names
-const LM_NAMES: Record<string, string> = {
-  chris: "Chris",
-  daniel: "Daniel",
-};
-
-const AM_NAMES: Record<string, string> = {
-  kyle: "Kyle",
-};
-
-const DM_NAMES: Record<string, string> = {
-  esteban: "Esteban",
-  steve: "Steve",
-};
+// Team member display names are now built dynamically from the team members query.
+// These are populated at component level via useMemo from trpc.team.list data.
+// Fallback: if a name is stored in the DB, display it as-is.};
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -220,6 +209,30 @@ export default function KpiDashboard() {
     { periodId: selectedPeriodId ?? undefined },
     { enabled: true }
   );
+
+  // Build dynamic name maps from team members
+  const LM_NAMES: Record<string, string> = useMemo(() => {
+    const map: Record<string, string> = {};
+    teamMembers?.filter(m => m.teamRole === 'lead_manager').forEach(m => {
+      map[m.name.toLowerCase()] = m.name;
+    });
+    return map;
+  }, [teamMembers]);
+  const AM_NAMES: Record<string, string> = useMemo(() => {
+    const map: Record<string, string> = {};
+    teamMembers?.filter(m => m.teamRole === 'acquisition_manager').forEach(m => {
+      map[m.name.toLowerCase()] = m.name;
+    });
+    return map;
+  }, [teamMembers]);
+  const DM_NAMES: Record<string, string> = useMemo(() => {
+    const map: Record<string, string> = {};
+    // DMs aren't a standard teamRole, so include any remaining members or use a fallback
+    teamMembers?.filter(m => !['lead_manager', 'acquisition_manager', 'lead_generator', 'admin'].includes(m.teamRole || '')).forEach(m => {
+      map[m.name.toLowerCase()] = m.name;
+    });
+    return map;
+  }, [teamMembers]);
 
   // Lead Gen Staff, Markets, Channels queries
   const { data: leadGenStaff } = trpc.kpi.getLeadGenStaff.useQuery({ activeOnly: false });
@@ -1313,11 +1326,11 @@ export default function KpiDashboard() {
                             {deal.inventoryStatus ? INVENTORY_STATUS_NAMES[deal.inventoryStatus] : "For Sale"}
                           </Badge>
                         </TableCell>
-                        <TableCell>{deal.location ? LOCATION_NAMES[deal.location] : "-"}</TableCell>
+                        <TableCell>{deal.location ? (LOCATION_NAMES[deal.location] || deal.location) : "-"}</TableCell>
                         <TableCell>{deal.leadSource ? CHANNEL_NAMES[deal.leadSource] : "-"}</TableCell>
-                        <TableCell>{deal.lmName ? LM_NAMES[deal.lmName] : "-"}</TableCell>
-                        <TableCell>{deal.amName ? AM_NAMES[deal.amName] : "-"}</TableCell>
-                        <TableCell>{deal.dmName ? DM_NAMES[deal.dmName] : "-"}</TableCell>
+                        <TableCell>{deal.lmName ? (LM_NAMES[deal.lmName] || deal.lmName) : "-"}</TableCell>
+                        <TableCell>{deal.amName ? (AM_NAMES[deal.amName] || deal.amName) : "-"}</TableCell>
+                        <TableCell>{deal.dmName ? (DM_NAMES[deal.dmName] || deal.dmName) : "-"}</TableCell>
                         <TableCell className="text-right">{deal.revenue ? formatCurrency(deal.revenue) : "-"}</TableCell>
                         <TableCell className="text-right">{deal.assignmentFee ? formatCurrency(deal.assignmentFee) : "-"}</TableCell>
                         <TableCell className="text-right">{deal.profit ? formatCurrency(deal.profit) : "-"}</TableCell>

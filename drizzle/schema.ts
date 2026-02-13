@@ -875,15 +875,8 @@ export const kpiDeals = mysqlTable("kpi_deals", {
     "assigned",
     "funded"
   ]).default("for_sale"),
-  // Location: Nashville, Nash SW, Knoxville, Chattanooga, Global, NAH
-  location: mysqlEnum("location", [
-    "nashville",
-    "nash_sw",
-    "knoxville",
-    "chattanooga",
-    "global",
-    "nah"
-  ]),
+  // Location: dynamic per-tenant market areas
+  location: varchar("location", { length: 100 }),
   // Lead source
   leadSource: mysqlEnum("leadSource", [
     "cold_calls", 
@@ -895,12 +888,10 @@ export const kpiDeals = mysqlTable("kpi_deals", {
     "jv", 
     "referrals"
   ]),
-  // Team members: LM (Chris, Daniel)
-  lmName: mysqlEnum("lmName", ["chris", "daniel"]),
-  // Team members: AM (Kyle)
-  amName: mysqlEnum("amName", ["kyle"]),
-  // Team members: DM (Esteban, Steve)
-  dmName: mysqlEnum("dmName", ["esteban", "steve"]),
+  // Team members: dynamic per-tenant (stored as lowercase name)
+  lmName: varchar("lmName", { length: 100 }),
+  amName: varchar("amName", { length: 100 }),
+  dmName: varchar("dmName", { length: 100 }),
   // Deal financials
   revenue: int("revenue").default(0), // in cents
   assignmentFee: int("assignmentFee").default(0), // in cents

@@ -15,7 +15,7 @@ import { eq, and, lt, isNull, sql } from "drizzle-orm";
 import { storagePut } from "./storage";
 
 // Archive calls older than 14 days
-const ARCHIVE_THRESHOLD_DAYS = 14;
+const DEFAULT_ARCHIVE_THRESHOLD_DAYS = 14;
 
 export interface ArchivalResult {
   totalArchived: number;
@@ -83,7 +83,7 @@ export async function archiveCall(callId: number): Promise<boolean> {
 /**
  * Run the archival job - archive all calls older than threshold
  */
-export async function runArchivalJob(): Promise<ArchivalResult> {
+export async function runArchivalJob(options?: { retentionDays?: number }): Promise<ArchivalResult> {
   const result: ArchivalResult = {
     totalArchived: 0,
     transcriptsMovedToS3: 0,
@@ -97,11 +97,12 @@ export async function runArchivalJob(): Promise<ArchivalResult> {
   }
 
   try {
-    // Calculate the cutoff date (14 days ago)
+    // Use configurable retention days (default 14)
+    const thresholdDays = options?.retentionDays ?? DEFAULT_ARCHIVE_THRESHOLD_DAYS;
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - ARCHIVE_THRESHOLD_DAYS);
+    cutoffDate.setDate(cutoffDate.getDate() - thresholdDays);
 
-    console.log(`[Archival] Starting archival job. Archiving calls older than ${cutoffDate.toISOString()}`);
+    console.log(`[Archival] Starting archival job (retention: ${thresholdDays} days). Archiving calls older than ${cutoffDate.toISOString()}`);
 
     // Find calls to archive
     const callsToArchive = await db
