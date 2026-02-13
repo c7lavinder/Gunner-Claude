@@ -1047,6 +1047,7 @@ export async function processCall(callId: number): Promise<void> {
           redFlags: gradeResult.redFlags,
           summary: gradeResult.summary,
           rubricType: "admin_callback",
+          tenantId: call.tenantId ?? 1,
         });
         
         await updateCall(callId, {
@@ -1196,6 +1197,7 @@ export async function processCall(callId: number): Promise<void> {
       redFlags: gradeResult.redFlags,
       summary: gradeResult.summary,
       rubricType,
+      tenantId: call.tenantId ?? 1,
     });
 
     // Step 6: Mark complete and save outcome

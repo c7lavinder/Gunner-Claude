@@ -368,7 +368,7 @@ export async function fetchGHLCalls(params: {
 /**
  * Match a GHL user ID to a team member
  */
-async function matchTeamMember(ghlUserId?: string, userName?: string, tenantId?: number): Promise<{ id: number; name: string; role: string; tenantId: number | null } | null> {
+async function matchTeamMember(ghlUserId?: string, userName?: string, tenantId?: number): Promise<{ id: number; name: string; role: string; tenantId: number } | null> {
   if (!ghlUserId && !userName) return null;
 
   const teamMembers = await getTeamMembers(tenantId);
@@ -892,6 +892,7 @@ async function processNewDeal(opportunity: GHLOpportunity): Promise<boolean> {
       ghlOpportunityId: opportunity.id,
       ghlContactId: opportunity.contactId,
       dealValue: opportunity.monetaryValue ? opportunity.monetaryValue * 100 : null,
+      tenantId: 1, // Default tenant when no matching call found
     });
     return false;
   }
@@ -903,6 +904,7 @@ async function processNewDeal(opportunity: GHLOpportunity): Promise<boolean> {
     teamMemberId: matchingCall.teamMemberId,
     callId: matchingCall.id,
     dealValue: opportunity.monetaryValue ? opportunity.monetaryValue * 100 : null,
+    tenantId: matchingCall.tenantId ?? 1,
   });
   
   console.log(`[GHL Opportunities] New deal recorded for team member ${matchingCall.teamMemberId}`);

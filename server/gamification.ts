@@ -10,6 +10,14 @@ import {
 } from "../drizzle/schema";
 import { eq, and, desc, gte, sql, inArray } from "drizzle-orm";
 
+// Helper to resolve tenantId from a team member
+async function resolveTenantId(teamMemberId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 1;
+  const [member] = await db.select({ tenantId: teamMembers.tenantId }).from(teamMembers).where(eq(teamMembers.id, teamMemberId)).limit(1);
+  return member?.tenantId ?? 1;
+}
+
 // ============ BADGE DEFINITIONS ============
 
 export interface BadgeCriteria {
@@ -314,7 +322,8 @@ export async function getUserXp(teamMemberId: number): Promise<{ totalXp: number
   const [existing] = await db.select().from(userXp).where(eq(userXp.teamMemberId, teamMemberId));
   
   if (!existing) {
-    await db.insert(userXp).values({ teamMemberId, totalXp: 0 });
+    const tid = await resolveTenantId(teamMemberId);
+    await db.insert(userXp).values({ teamMemberId, totalXp: 0, tenantId: tid });
     return { totalXp: 0, ...getLevelFromXp(0) };
   }
   
@@ -328,12 +337,14 @@ export async function addXp(teamMemberId: number, amount: number, reason: string
   const db = await getDb();
   if (!db) return 0;
   
+  const tid = await resolveTenantId(teamMemberId);
   // Add transaction record
   await db.insert(xpTransactions).values({
     teamMemberId,
     amount,
     reason,
     callId: callId || null,
+    tenantId: tid,
   });
   
   // Update total XP
@@ -344,7 +355,7 @@ export async function addXp(teamMemberId: number, amount: number, reason: string
     await db.update(userXp).set({ totalXp: newTotal }).where(eq(userXp.teamMemberId, teamMemberId));
     return newTotal;
   } else {
-    await db.insert(userXp).values({ teamMemberId, totalXp: amount });
+    await db.insert(userXp).values({ teamMemberId, totalXp: amount, tenantId: tid });
     return amount;
   }
 }
@@ -363,7 +374,8 @@ export async function getUserStreaks(teamMemberId: number): Promise<{
   const [existing] = await db.select().from(userStreaks).where(eq(userStreaks.teamMemberId, teamMemberId));
   
   if (!existing) {
-    await db.insert(userStreaks).values({ teamMemberId });
+    const tid = await resolveTenantId(teamMemberId);
+    await db.insert(userStreaks).values({ teamMemberId, tenantId: tid });
     return { hotStreakCurrent: 0, hotStreakBest: 0, consistencyStreakCurrent: 0, consistencyStreakBest: 0 };
   }
   
@@ -419,6 +431,7 @@ export async function updateStreaks(teamMemberId: number, grade: string, callId:
   
   if (!existing) {
     // Create new streak record
+    const tid = await resolveTenantId(teamMemberId);
     await db.insert(userStreaks).values({
       teamMemberId,
       hotStreakCurrent: isPassingGrade ? 1 : 0,
@@ -427,6 +440,7 @@ export async function updateStreaks(teamMemberId: number, grade: string, callId:
       consistencyStreakCurrent: 1,
       consistencyStreakBest: 1,
       consistencyLastDate: getCSTDateString(callDate),
+      tenantId: tid,
     });
     result.hotStreakUpdated = isPassingGrade;
     result.consistencyUpdated = true;
@@ -568,7 +582,8 @@ export async function updateBadgeProgress(teamMemberId: number, badgeCode: strin
       .where(eq(badgeProgress.id, existing.id));
     return newCount;
   } else {
-    await db.insert(badgeProgress).values({ teamMemberId, badgeCode, currentCount: increment });
+    const tid = await resolveTenantId(teamMemberId);
+    await db.insert(badgeProgress).values({ teamMemberId, badgeCode, currentCount: increment, tenantId: tid });
     return increment;
   }
 }
@@ -625,12 +640,14 @@ export async function awardBadge(teamMemberId: number, badgeCode: string, tier: 
   
   // Award the badge - include all required fields
   try {
+    const tid = await resolveTenantId(teamMemberId);
     await db.insert(userBadges).values({ 
       teamMemberId, 
       badgeId: badge.id, 
       badgeCode,
       progress: currentProgress,
       triggerCallId: triggerCallId || null,
+      tenantId: tid,
     });
   } catch (err) {
     console.error(`[Gamification] Failed to insert badge ${badgeCode} (${tier}) for member ${teamMemberId}:`, err);
@@ -721,7 +738,8 @@ export async function processCallViewRewards(teamMemberId: number, callId: numbe
   result.streakUpdated = streakResult.hotStreakUpdated || streakResult.consistencyUpdated;
   
   // Record the view
-  await db.insert(rewardViews).values({ teamMemberId, callId, xpAwarded: xp });
+  const tid = await resolveTenantId(teamMemberId);
+  await db.insert(rewardViews).values({ teamMemberId, callId, xpAwarded: xp, tenantId: tid });
   
   // Note: Badge evaluation now happens at grading time (in processCall, Step 8)
   // to ensure badges are based on chronological call order, not view order.
@@ -968,11 +986,13 @@ export async function batchAwardXpForCalls(): Promise<{
     const memberId = call.teamMemberId;
     
     // Record the reward view
+    const memberTid = await resolveTenantId(memberId);
     await db.insert(rewardViews).values({
       teamMemberId: memberId,
       callId: call.callId,
       xpAwarded: xp,
       viewedAt: new Date(),
+      tenantId: memberTid,
     });
     
     // Record XP transaction
@@ -982,6 +1002,7 @@ export async function batchAwardXpForCalls(): Promise<{
       reason: `Graded call (${grade})`,
       callId: call.callId,
       createdAt: new Date(),
+      tenantId: memberTid,
     });
     
     // Track totals
@@ -1015,10 +1036,12 @@ export async function batchAwardXpForCalls(): Promise<{
         .set({ totalXp: newTotal, updatedAt: new Date() })
         .where(eq(userXp.teamMemberId, memberId));
     } else {
+      const upsertTid = await resolveTenantId(memberId);
       await db.insert(userXp).values({
         teamMemberId: memberId,
         totalXp: newTotal,
         updatedAt: new Date(),
+        tenantId: upsertTid,
       });
     }
     

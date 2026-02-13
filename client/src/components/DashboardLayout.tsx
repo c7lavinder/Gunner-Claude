@@ -71,8 +71,9 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
   }
   
   // Admin Dashboard is for super_admin users (platform owner)
-  if (isSuperAdmin) {
-    items.push({ icon: Shield, label: "Admin", path: "/admin-dashboard" });
+  const isPlatformOwner = openId === 'U3JEthPNs4UbYRrgRBbShj';
+  if (isSuperAdmin || isPlatformOwner) {
+    items.push({ icon: Shield, label: "Platform Admin", path: "/admin" });
   }
   
   return items;

@@ -269,7 +269,7 @@ export const appRouter = router({
           name: input.name,
           teamRole: input.teamRole,
           ghlUserId: input.ghlUserId,
-          tenantId: ctx.user?.tenantId || undefined,
+          tenantId: ctx.user!.tenantId!,
         });
       }),
 
@@ -486,7 +486,7 @@ export const appRouter = router({
         teamMemberName: z.string().optional(),
         callType: z.enum(["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback"]).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const call = await createCall({
           contactName: input.contactName,
           contactPhone: input.contactPhone,
@@ -498,6 +498,7 @@ export const appRouter = router({
           callType: input.callType || "qualification",
           status: "pending",
           callTimestamp: new Date(),
+          tenantId: ctx.user.tenantId!,
         });
 
         if (call) {
@@ -606,6 +607,7 @@ export const appRouter = router({
             callType: teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification",
             status: "pending",
             callTimestamp: input.callDate ? new Date(input.callDate) : new Date(),
+            tenantId: ctx.user.tenantId!,
           });
 
           if (call) {
@@ -930,7 +932,7 @@ export const appRouter = router({
           fileType: input.fileType,
           category: input.category || "other",
           applicableTo: input.applicableTo || "all",
-          tenantId: ctx.user?.tenantId || undefined,
+          tenantId: ctx.user.tenantId!,
         });
       }),
 
@@ -1023,6 +1025,7 @@ export const appRouter = router({
           explanation: input.explanation,
           correctBehavior: input.correctBehavior,
           status: "pending",
+          tenantId: ctx.user.tenantId!,
         });
       }),
 
@@ -1069,7 +1072,7 @@ export const appRouter = router({
           ruleText: input.ruleText,
           priority: input.priority || 0,
           applicableTo: input.applicableTo || "all",
-          tenantId: ctx.user?.tenantId || undefined,
+          tenantId: ctx.user.tenantId!,
         });
       }),
 
@@ -1496,7 +1499,7 @@ Keep it brief and actionable.`;
           teamMemberName: input.teamMemberName,
           meetingDate: input.meetingDate,
           status: "active",
-          tenantId: ctx.user?.tenantId || undefined,
+          tenantId: ctx.user.tenantId!,
         });
       }),
 
@@ -1612,8 +1615,11 @@ Keep it brief and actionable.`;
         fileSize: z.number().optional(),
         metadata: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
-        return await createBrandAsset(input);
+      .mutation(async ({ ctx, input }) => {
+        return await createBrandAsset({
+          ...input,
+          tenantId: ctx.user.tenantId!,
+        });
       }),
 
     update: protectedProcedure
@@ -1695,6 +1701,7 @@ Keep it brief and actionable.`;
         return await createSocialPost({
           ...input,
           createdBy: ctx.user?.id,
+          tenantId: ctx.user.tenantId!,
         });
       }),
 
@@ -1833,8 +1840,11 @@ Provide the content in JSON format with fields: title (optional for non-blog), c
         category: z.string().optional(),
         targetPlatform: z.enum(["x_twitter", "blog", "meta", "any"]).optional(),
       }))
-      .mutation(async ({ input }) => {
-        return await createContentIdea(input);
+      .mutation(async ({ ctx, input }) => {
+        return await createContentIdea({
+          ...input,
+          tenantId: ctx.user.tenantId!,
+        });
       }),
 
     update: protectedProcedure
@@ -1937,6 +1947,7 @@ Provide ${input.count} unique content ideas in JSON format.`,
               category: idea.category,
               targetPlatform: idea.targetPlatform as any,
               isAiGenerated: "true",
+              tenantId: ctx.user.tenantId!,
             });
             if (saved) savedIdeas.push(saved);
           }
@@ -2323,7 +2334,7 @@ Create content that:
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createKpiPeriod } = await import("./kpi");
-        return createKpiPeriod(input);
+        return createKpiPeriod({ ...input, tenantId: ctx.user.tenantId! });
       }),
 
     // Get team member KPIs for a period
@@ -2353,7 +2364,7 @@ Create content that:
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { upsertTeamMemberKpi } = await import("./kpi");
-        return upsertTeamMemberKpi(input);
+        return upsertTeamMemberKpi({ ...input, tenantId: ctx.user.tenantId! });
       }),
 
     // Get campaign KPIs for a period
@@ -2388,7 +2399,7 @@ Create content that:
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { upsertCampaignKpi } = await import("./kpi");
-        return upsertCampaignKpi(input);
+        return upsertCampaignKpi({ ...input, tenantId: ctx.user.tenantId! });
       }),
 
     // Get deals
@@ -2436,7 +2447,7 @@ Create content that:
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createKpiDeal } = await import("./kpi");
-        return createKpiDeal(input);
+        return createKpiDeal({ ...input, tenantId: ctx.user.tenantId! });
       }),
 
     // Update deal
@@ -2512,7 +2523,7 @@ Create content that:
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createLeadGenStaff } = await import("./kpi");
-        const id = await createLeadGenStaff(input);
+        const id = await createLeadGenStaff({ ...input, tenantId: ctx.user.tenantId! });
         return { id };
       }),
 
@@ -2562,7 +2573,7 @@ Create content that:
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createKpiMarket } = await import("./kpi");
-        const id = await createKpiMarket(input.name);
+        const id = await createKpiMarket(input.name, ctx.user.tenantId!);
         return { id };
       }),
 
@@ -2611,7 +2622,7 @@ Create content that:
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createKpiChannel } = await import("./kpi");
-        const id = await createKpiChannel(input.name, input.code);
+        const id = await createKpiChannel(input.name, input.code, ctx.user.tenantId!);
         return { id };
       }),
 

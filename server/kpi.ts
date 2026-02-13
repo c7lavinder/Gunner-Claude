@@ -34,6 +34,7 @@ export async function getKpiPeriodById(id: number) {
 }
 
 export async function createKpiPeriod(data: {
+  tenantId: number;
   periodType: "daily" | "weekly" | "monthly";
   periodStart: Date;
   periodEnd: Date;
@@ -63,6 +64,7 @@ export async function getTeamMemberKpis(periodId: number) {
 }
 
 export async function upsertTeamMemberKpi(data: {
+  tenantId: number;
   teamMemberId: number;
   periodId: number;
   roleType: "am" | "lm" | "lg_cold_caller" | "lg_sms";
@@ -139,6 +141,7 @@ export async function getCampaignKpis(periodId: number) {
 }
 
 export async function upsertCampaignKpi(data: {
+  tenantId: number;
   periodId: number;
   market: "tennessee" | "global";
   channel: "cold_calls" | "sms" | "forms" | "ppl" | "jv" | "ppc" | "postcards" | "referrals";
@@ -214,14 +217,15 @@ export async function getKpiDealById(id: number) {
 }
 
 export async function createKpiDeal(data: {
+  tenantId: number;
   periodId?: number;
   propertyAddress: string;
   inventoryStatus?: "for_sale" | "assigned" | "funded";
-  location?: "nashville" | "nash_sw" | "knoxville" | "chattanooga" | "global" | "nah";
+  location?: string;
   leadSource?: "cold_calls" | "sms" | "postcards" | "forms" | "ppl" | "ppc" | "jv" | "referrals";
-  lmName?: "chris" | "daniel";
-  amName?: "kyle";
-  dmName?: "esteban" | "steve";
+  lmName?: string;
+  amName?: string;
+  dmName?: string;
   revenue?: number;
   assignmentFee?: number;
   profit?: number;
@@ -342,6 +346,7 @@ export async function getKpiGoals(periodId?: number) {
 }
 
 export async function upsertKpiGoal(data: {
+  tenantId: number;
   periodId?: number;
   goalType: "campaign" | "team_member";
   channel?: "cold_calls" | "sms" | "forms" | "ppl" | "jv" | "ppc" | "postcards" | "referrals" | "total";
@@ -370,6 +375,7 @@ export async function getLeadGenStaff(activeOnly: boolean = true) {
 }
 
 export async function createLeadGenStaff(data: {
+  tenantId: number;
   name: string;
   roleType: "lg_cold_caller" | "lg_sms" | "am" | "lm";
 }) {
@@ -377,6 +383,7 @@ export async function createLeadGenStaff(data: {
   if (!db) return null;
   
   const [result] = await db.insert(leadGenStaff).values({
+    tenantId: data.tenantId,
     name: data.name,
     roleType: data.roleType,
     isActive: "true",
@@ -417,11 +424,11 @@ export async function getKpiMarkets(activeOnly: boolean = true) {
   return db.select().from(kpiMarkets).orderBy(kpiMarkets.name);
 }
 
-export async function createKpiMarket(name: string) {
+export async function createKpiMarket(name: string, tenantId: number) {
   const db = await getDb();
   if (!db) return null;
   
-  const [result] = await db.insert(kpiMarkets).values({ name, isActive: "true" });
+  const [result] = await db.insert(kpiMarkets).values({ name, isActive: "true", tenantId });
   return result.insertId;
 }
 
@@ -453,11 +460,11 @@ export async function getKpiChannels(activeOnly: boolean = true) {
   return db.select().from(kpiChannels).orderBy(kpiChannels.name);
 }
 
-export async function createKpiChannel(name: string, code: string) {
+export async function createKpiChannel(name: string, code: string, tenantId: number) {
   const db = await getDb();
   if (!db) return null;
   
-  const [result] = await db.insert(kpiChannels).values({ name, code, isActive: "true" });
+  const [result] = await db.insert(kpiChannels).values({ name, code, isActive: "true", tenantId });
   return result.insertId;
 }
 

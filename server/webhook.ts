@@ -185,6 +185,13 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
     const timestampRaw = extractField<string>(payload, "timestamp", "createdAt", "created_at", "dateAdded", "date_added");
     const callTimestamp = timestampRaw ? new Date(timestampRaw) : new Date();
 
+    // Ensure we have a tenantId before creating the call
+    if (!tenantId) {
+      console.error("[Webhook] Cannot create call without tenantId");
+      res.status(400).json({ error: "Could not determine tenant for this call" });
+      return;
+    }
+
     // Create the call record with tenantId from team member
     const call = await createCall({
       ghlCallId,

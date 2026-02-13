@@ -1823,3 +1823,10 @@
 - [x] #S17: Connection pool — switched to mysql2.createPool() with connectionLimit: 15, unlimited queue
 - [x] #S18: Nullable tenantId — backfilled all NULL tenantId values to tenant 1 across all tables
 - [x] #S19: Signal customization — added TODO markers for tenant-configurable pipeline stages (defaults work for all RE flipping clients)
+
+## Super-Admin Panel & NOT NULL Constraints
+- [x] Add NOT NULL constraints on all tenantId columns via schema migration
+- [x] Build super-admin tRPC endpoints (tenant CRUD, usage stats, feature toggles)
+- [x] Build super-admin UI page (tenant list, create/edit tenant, usage dashboard)
+- [x] Add super-admin route to sidebar (owner-only) — consolidated to /admin, visible for super_admin + platform owner
+- [x] Write tests for super-admin endpoints — 23 tests passing (access control, CRUD, analytics, plans)

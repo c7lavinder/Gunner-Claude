@@ -1967,10 +1967,9 @@ export async function assignLeadManagerToAcquisitionManager(
   await db.insert(teamAssignments).values({
     leadManagerId,
     acquisitionManagerId,
-    tenantId: tenantId ?? null,
+    tenantId: tenantId ?? 1,
   });
 }
-
 export async function removeLeadManagerAssignment(leadManagerId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;

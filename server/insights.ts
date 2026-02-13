@@ -421,6 +421,10 @@ Respond with a JSON object in this exact format:
 export async function saveGeneratedInsights(insights: InsightsResult, tenantId?: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
+  if (!tenantId) {
+    console.error('[Insights] Cannot save insights without tenantId');
+    return;
+  }
 
   // Get team member IDs for matching names (filtered by tenant)
   const conditions = [];
@@ -444,7 +448,7 @@ export async function saveGeneratedInsights(insights: InsightsResult, tenantId?:
     const teamMemberId = insight.teamMemberName ? memberMap.get(insight.teamMemberName) : null;
 
     await db.insert(teamTrainingItems).values({
-      tenantId: tenantId || null, // CRITICAL: Set tenantId for multi-tenant isolation
+      tenantId: tenantId!, // CRITICAL: Set tenantId for multi-tenant isolation (NOT NULL enforced)
       itemType: insight.itemType,
       title: insight.title,
       description: insight.description,

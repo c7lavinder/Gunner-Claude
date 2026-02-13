@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COUNT(*) as null_count FROM badge_progress WHERE tenantId IS NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COUNT(*) as null_count FROM badge_progress WHERE tenantId IS NULL;",
+  "rows": [
+    {
+      "null_count": "19"
+    }
+  ],
+  "messages": [],
+  "stdout": "null_count\n19\n",
+  "stderr": "",
+  "execution_time_ms": 381
+}

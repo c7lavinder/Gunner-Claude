@@ -246,6 +246,20 @@
       "when": 1770970046591,
       "tag": "0034_third_dark_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "5",
+      "when": 1770971662761,
+      "tag": "0035_yummy_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1770973454184,
+      "tag": "0036_ambiguous_talisman",
+      "breakpoints": true
     }
   ]
 }
