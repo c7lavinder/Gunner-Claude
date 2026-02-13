@@ -3795,7 +3795,7 @@ Team members: ${teamMemberNames.length > 0 ? teamMemberNames.join(", ") : "Unkno
 
 IMPORTANT: For actions that involve writing content, you MUST generate the FULL DRAFT TEXT upfront so the user can review and edit it before confirming:
 - For add_note_contact / add_note_opportunity: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note. If the user asks to summarize a call, use the RECENT CALL DATA provided below to write a real summary.
-- For send_sms: Write the complete SMS message text in params.message. Don't describe the SMS — write the actual message that will be sent.
+- For send_sms: Write the complete SMS message text in params.message. Don't describe the SMS — write the actual message that will be sent. CRITICAL: The SMS will be sent DIRECTLY to the contact, so always write it in SECOND PERSON ("you"/"your") as if speaking to them. The user may describe what to say in third person (e.g., "tell him we don't want his house") — you MUST convert this to direct address (e.g., "we're not interested in purchasing your house"). Never use "he/him/his/she/her" to refer to the recipient in the SMS body.
 - For create_task: Write a clear task title in params.title AND a detailed description in params.description.
 
 NEVER generate placeholder text like "Please provide the summary" or "Insert details here". You have access to real call data below — use it to write actual content.

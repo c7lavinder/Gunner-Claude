@@ -1939,3 +1939,7 @@
 ## Bug Fix: Update gamification rank titles from "Dialer"/"New Recruit" to better names
 - [x] Redesigned all 25 level rank titles with Gunner military/cannon theme
 - [x] TypeScript compiles clean (0 errors)
+
+## Bug Fix: AI Coach SMS drafts use third person instead of second person
+- [x] Found the LLM prompt in routers.ts parseIntent endpoint (line ~3798)
+- [x] Updated prompt with CRITICAL instruction to always convert third-person to second-person direct address in SMS drafts
