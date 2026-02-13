@@ -1830,3 +1830,8 @@
 - [x] Build super-admin UI page (tenant list, create/edit tenant, usage dashboard)
 - [x] Add super-admin route to sidebar (owner-only) — consolidated to /admin, visible for super_admin + platform owner
 - [x] Write tests for super-admin endpoints — 23 tests passing (access control, CRUD, analytics, plans)
+
+## Bug: call_grades INSERT Failing — Column Count Mismatch
+- [x] Diagnose column mismatch in call_grades INSERT — was from pre-deployment code, current Drizzle schema generates correct SQL
+- [x] Fix: added duplicate grade guard (getCallGradeByCallId check) to prevent double-grading on reprocess
+- [x] Reprocessed Kim Wooten (1890003) and Shirley Brackett (1890001) — both graded successfully (B and D)

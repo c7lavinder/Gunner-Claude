@@ -949,7 +949,7 @@ Respond with JSON only.`,
 
 // ============ PROCESS CALL FUNCTION ============
 
-import { getCallById, updateCall, createCallGrade, getTeamMemberById, getGradingContext } from "./db";
+import { getCallById, updateCall, createCallGrade, getCallGradeByCallId, getTeamMemberById, getGradingContext } from "./db";
 import { processCallViewRewards, evaluateBadgesForCall } from "./gamification";
 import { canProcessCall } from "./planLimits";
 import { getTenantById } from "./tenant";
@@ -964,6 +964,16 @@ export async function processCall(callId: number): Promise<void> {
   if (!call.recordingUrl) {
     console.error(`[ProcessCall] Call ${callId} has no recording URL`);
     await updateCall(callId, { status: "failed" });
+    return;
+  }
+
+  // Prevent duplicate grades
+  const existingGrade = await getCallGradeByCallId(callId);
+  if (existingGrade) {
+    console.log(`[ProcessCall] Call ${callId} already has a grade (id=${existingGrade.id}), skipping`);
+    if (call.status !== 'completed') {
+      await updateCall(callId, { status: 'completed' });
+    }
     return;
   }
 
