@@ -62,7 +62,9 @@ import {
   Send,
   X,
   SkipForward,
-  PhoneCall
+  PhoneCall,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -301,6 +303,8 @@ function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
+  const [showAll, setShowAll] = useState(false);
+  const DISPLAY_LIMIT = 5;
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -316,17 +320,28 @@ function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
     return (priorityOrder[a.priority as Priority] || 3) - (priorityOrder[b.priority as Priority] || 3);
   });
 
+  const displayItems = showAll ? sortedItems : sortedItems?.slice(0, DISPLAY_LIMIT);
+  const totalCount = sortedItems?.length || 0;
+  const hasMore = totalCount > DISPLAY_LIMIT;
+
   return (
     <Card className="border-red-200">
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-red-100 text-red-600"><AlertTriangle className="h-5 w-5" /></div>
-          <div><CardTitle className="text-lg">Issues to Address</CardTitle><CardDescription>Urgent incompetencies from call analysis</CardDescription></div>
+          <div><CardTitle className="text-lg">Issues to Address {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle><CardDescription>Urgent incompetencies from call analysis</CardDescription></div>
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}</div> : sortedItems && sortedItems.length > 0 ? (
-          <div className="space-y-1.5">{sortedItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}</div>
+        {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}</div> : displayItems && displayItems.length > 0 ? (
+          <div className="space-y-1.5">
+            {displayItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}
+            {hasMore && (
+              <Button variant="ghost" className="w-full text-muted-foreground hover:text-foreground" onClick={() => setShowAll(!showAll)}>
+                {showAll ? <><ChevronUp className="h-4 w-4 mr-2" /> Show less</> : <><ChevronDown className="h-4 w-4 mr-2" /> Show {totalCount - DISPLAY_LIMIT} more</>}
+              </Button>
+            )}
+          </div>
         ) : <div className="text-center py-8 text-muted-foreground"><AlertTriangle className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No issues to address</p></div>}
       </CardContent>
     </Card>
@@ -337,6 +352,8 @@ function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" |
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
+  const [showAll, setShowAll] = useState(false);
+  const DISPLAY_LIMIT = 5;
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -348,17 +365,28 @@ function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" |
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "win", status: "active", teamRole });
   const handleRefresh = () => utils.teamTraining.list.invalidate();
 
+  const displayItems = showAll ? items : items?.slice(0, DISPLAY_LIMIT);
+  const totalCount = items?.length || 0;
+  const hasMore = totalCount > DISPLAY_LIMIT;
+
   return (
     <Card className="border-green-200">
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-green-100 text-green-600"><Trophy className="h-5 w-5" /></div>
-          <div><CardTitle className="text-lg">Wins to Celebrate</CardTitle><CardDescription>Small victories to recognize</CardDescription></div>
+          <div><CardTitle className="text-lg">Wins to Celebrate {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle><CardDescription>Small victories to recognize</CardDescription></div>
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : items && items.length > 0 ? (
-          <div className="space-y-1.5">{items.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} showPriority={false} isAdmin={isAdmin} />)}</div>
+        {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : displayItems && displayItems.length > 0 ? (
+          <div className="space-y-1.5">
+            {displayItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} showPriority={false} isAdmin={isAdmin} />)}
+            {hasMore && (
+              <Button variant="ghost" className="w-full text-muted-foreground hover:text-foreground" onClick={() => setShowAll(!showAll)}>
+                {showAll ? <><ChevronUp className="h-4 w-4 mr-2" /> Show less</> : <><ChevronDown className="h-4 w-4 mr-2" /> Show {totalCount - DISPLAY_LIMIT} more</>}
+              </Button>
+            )}
+          </div>
         ) : <div className="text-center py-8 text-muted-foreground"><Trophy className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No wins recorded yet</p></div>}
       </CardContent>
     </Card>

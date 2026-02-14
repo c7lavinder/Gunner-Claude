@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Target, AlertTriangle, Trophy, Calendar, Plus, Check, Trash2, 
   Sparkles, RefreshCw, Bot, Play, MessageCircle, Users, HelpCircle,
-  FileText, Send, X, ChevronRight, Pause, SkipForward
+  FileText, Send, X, ChevronRight, Pause, SkipForward, ChevronDown, ChevronUp
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -420,6 +420,8 @@ function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
 function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
+  const [showAll, setShowAll] = useState(false);
+  const DISPLAY_LIMIT = 5;
   
   // Filter by role: non-admins only see their role's insights, admins can filter by selected role
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
@@ -453,6 +455,10 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
     return 0;
   });
 
+  const displayItems = showAll ? sortedItems : sortedItems?.slice(0, DISPLAY_LIMIT);
+  const totalCount = sortedItems?.length || 0;
+  const hasMore = totalCount > DISPLAY_LIMIT;
+
   return (
     <Card className="border-red-200">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -461,7 +467,7 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle className="text-lg">Issues to Address</CardTitle>
+            <CardTitle className="text-lg">Issues to Address {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
             <CardDescription>Urgent incompetencies from call analysis</CardDescription>
           </div>
         </div>
@@ -472,9 +478,9 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
           <div className="space-y-3">
             {[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
           </div>
-        ) : sortedItems && sortedItems.length > 0 ? (
+        ) : displayItems && displayItems.length > 0 ? (
           <div className="space-y-3">
-            {sortedItems.map((item) => (
+            {displayItems.map((item) => (
               <TrainingItemCard 
                 key={item.id} 
                 item={item as TrainingItem}
@@ -482,6 +488,19 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
                 onDelete={handleRefresh}
               />
             ))}
+            {hasMore && (
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAll(!showAll)}
+              >
+                {showAll ? (
+                  <><ChevronUp className="h-4 w-4 mr-2" /> Show less</>
+                ) : (
+                  <><ChevronDown className="h-4 w-4 mr-2" /> Show {totalCount - DISPLAY_LIMIT} more</>
+                )}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
@@ -498,6 +517,8 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
 function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
+  const [showAll, setShowAll] = useState(false);
+  const DISPLAY_LIMIT = 5;
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   
@@ -525,6 +546,10 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
     return 0;
   });
 
+  const displayItems = showAll ? sortedItems : sortedItems?.slice(0, DISPLAY_LIMIT);
+  const totalCount = sortedItems?.length || 0;
+  const hasMore = totalCount > DISPLAY_LIMIT;
+
   return (
     <Card className="border-green-200">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -533,7 +558,7 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
             <Trophy className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle className="text-lg">Wins to Celebrate</CardTitle>
+            <CardTitle className="text-lg">Wins to Celebrate {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
             <CardDescription>Small victories to recognize</CardDescription>
           </div>
         </div>
@@ -544,9 +569,9 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
           <div className="space-y-3">
             {[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
           </div>
-        ) : sortedItems && sortedItems.length > 0 ? (
+        ) : displayItems && displayItems.length > 0 ? (
           <div className="space-y-3">
-            {sortedItems.map((item) => (
+            {displayItems.map((item) => (
               <TrainingItemCard 
                 key={item.id} 
                 item={item as TrainingItem}
@@ -555,6 +580,19 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
                 showPriority={false}
               />
             ))}
+            {hasMore && (
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAll(!showAll)}
+              >
+                {showAll ? (
+                  <><ChevronUp className="h-4 w-4 mr-2" /> Show less</>
+                ) : (
+                  <><ChevronDown className="h-4 w-4 mr-2" /> Show {totalCount - DISPLAY_LIMIT} more</>
+                )}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
@@ -939,6 +977,8 @@ function MeetingFacilitator({
 function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const [showFacilitator, setShowFacilitator] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const DISPLAY_LIMIT = 5;
   const { user } = useAuth();
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
@@ -983,6 +1023,10 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
     description: item.description,
   })) || [];
 
+  const displayItems = showAll ? sortedItems : sortedItems?.slice(0, DISPLAY_LIMIT);
+  const totalCount = sortedItems?.length || 0;
+  const hasMore = totalCount > DISPLAY_LIMIT;
+
   return (
     <>
       {showFacilitator && agendaForFacilitator.length > 0 && (
@@ -998,7 +1042,7 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
               <Calendar className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">Weekly Team Call Agenda</CardTitle>
+              <CardTitle className="text-lg">Weekly Team Call Agenda {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
               <CardDescription>AI-suggested topics based on call analysis</CardDescription>
             </div>
           </div>
@@ -1019,9 +1063,9 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
           <div className="space-y-3">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
           </div>
-        ) : sortedItems && sortedItems.length > 0 ? (
+        ) : displayItems && displayItems.length > 0 ? (
           <div className="space-y-2">
-            {sortedItems.map((item, index) => (
+            {displayItems.map((item, index) => (
               <div 
                 key={item.id}
                 className={`flex items-center gap-3 p-3 rounded-lg border bg-card ${item.isAiGenerated === "true" ? "border-l-4 border-l-purple-500" : ""}`}
@@ -1054,6 +1098,19 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
                 </Button>
               </div>
             ))}
+            {hasMore && (
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAll(!showAll)}
+              >
+                {showAll ? (
+                  <><ChevronUp className="h-4 w-4 mr-2" /> Show less</>
+                ) : (
+                  <><ChevronDown className="h-4 w-4 mr-2" /> Show {totalCount - DISPLAY_LIMIT} more</>
+                )}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">

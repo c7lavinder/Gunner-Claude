@@ -1943,3 +1943,10 @@
 ## Bug Fix: AI Coach SMS drafts use third person instead of second person
 - [x] Found the LLM prompt in routers.ts parseIntent endpoint (line ~3798)
 - [x] Updated prompt with CRITICAL instruction to always convert third-person to second-person direct address in SMS drafts
+
+## Bug Fix: Too many issues and wins showing for admin and in meetings
+- [x] Limit issues list to show top 5 with "Show N more" expand button (TeamTraining.tsx + Training.tsx)
+- [x] Limit wins list to show top 5 with "Show N more" expand button (TeamTraining.tsx + Training.tsx)
+- [x] Limit meeting agenda to show top 5 with "Show N more" expand button (TeamTraining.tsx)
+- [x] Added total count badge in card headers (e.g., "Issues to Address (7)")
+- [x] TypeScript compiles clean (0 errors)
