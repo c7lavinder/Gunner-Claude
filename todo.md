@@ -1973,3 +1973,8 @@
 - [x] Backend enforces ALL_ROLES_LIMIT=5 in routers.ts teamTraining.list endpoint
 - [x] UI still shows top 3 with "Show 2 more" toggle (max 5 total from backend)
 - [x] TypeScript compiles clean (0 errors)
+
+## Bug Fix: Skipped calls tab showing no results
+- [x] Root cause: getCallsWithGrades filtered out ALL calls without grades (line 454), including skipped calls which intentionally have no grade
+- [x] Fix: When statuses filter includes 'skipped', skip the grade-null filter and return all matching results
+- [x] TypeScript compiles clean (0 errors)

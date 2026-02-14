@@ -451,10 +451,14 @@ export async function getCallsWithGrades(options: {
     })
   );
 
-  // Filter to only include calls with grades (exclude skipped/too_short)
-  const gradedOnly = result.filter(item => item.grade !== null);
+  // When explicitly querying for skipped calls, return all results (they won't have grades)
+  // Otherwise, filter to only include calls with grades
+  const isQueryingSkipped = options.statuses && options.statuses.includes('skipped');
+  const filtered = isQueryingSkipped 
+    ? result 
+    : result.filter(item => item.grade !== null);
 
-  return { items: gradedOnly, total: gradedOnly.length };
+  return { items: filtered, total: filtered.length };
 }
 
 // ============ LEADERBOARD FUNCTIONS ============
