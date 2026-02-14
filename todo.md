@@ -1959,3 +1959,11 @@
 - [x] Updated UI card descriptions to show "Top issues/wins this week · Refreshes every Monday"
 - [x] Changed DISPLAY_LIMIT from 5 to 3 in all sections (TeamTraining.tsx + Training.tsx)
 - [x] TypeScript compiles clean (0 errors)
+
+## Bug Fix: All Roles view and Long-Term Skills showing too many items
+- [x] Updated LLM prompt to generate only 2-3 skills per role with consolidation instruction
+- [x] Server-side limitPerRole() enforces max 3 per role for all categories including skills
+- [x] All Roles view shows top 3 with "Show more" toggle (same DISPLAY_LIMIT=3 pattern)
+- [x] Added DISPLAY_LIMIT and show more/less to Skills section in both TeamTraining.tsx and Training.tsx
+- [x] Updated skills card description to "Top development areas · Refreshes every Monday"
+- [x] TypeScript compiles clean (0 errors)

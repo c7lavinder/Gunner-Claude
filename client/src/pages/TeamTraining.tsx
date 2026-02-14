@@ -344,6 +344,8 @@ function GenerateInsightsButton({ onSuccess }: { onSuccess: () => void }) {
 function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
+  const [showAll, setShowAll] = useState(false);
+  const DISPLAY_LIMIT = 3;
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   
@@ -364,8 +366,14 @@ function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
     utils.teamTraining.list.invalidate();
   };
 
-  const aiItems = items?.filter(i => i.isAiGenerated === "true") || [];
-  const manualItems = items?.filter(i => i.isAiGenerated !== "true") || [];
+  // Sort by priority (urgent first, then high, medium, low)
+  const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+  const sortedItems = [...(items || [])].sort((a, b) => 
+    (priorityOrder[a.priority || 'medium'] || 2) - (priorityOrder[b.priority || 'medium'] || 2)
+  );
+  const displayItems = showAll ? sortedItems : sortedItems.slice(0, DISPLAY_LIMIT);
+  const totalCount = sortedItems.length;
+  const hasMore = totalCount > DISPLAY_LIMIT;
 
   return (
     <Card>
@@ -375,8 +383,8 @@ function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
             <Target className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle className="text-lg">Long-Term Skills</CardTitle>
-            <CardDescription>Skills the team is actively developing</CardDescription>
+            <CardTitle className="text-lg">Long-Term Skills {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
+            <CardDescription>Top development areas · Refreshes every Monday</CardDescription>
           </div>
         </div>
         <AddItemDialog itemType="skill" onSuccess={handleRefresh} />
@@ -386,9 +394,9 @@ function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
           <div className="space-y-3">
             {[1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
           </div>
-        ) : items && items.length > 0 ? (
+        ) : displayItems.length > 0 ? (
           <div className="space-y-3">
-            {aiItems.map((item) => (
+            {displayItems.map((item) => (
               <TrainingItemCard 
                 key={item.id} 
                 item={item as TrainingItem}
@@ -396,14 +404,19 @@ function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
                 onDelete={handleRefresh}
               />
             ))}
-            {manualItems.map((item) => (
-              <TrainingItemCard 
-                key={item.id} 
-                item={item as TrainingItem}
-                onComplete={handleRefresh}
-                onDelete={handleRefresh}
-              />
-            ))}
+            {hasMore && (
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAll(!showAll)}
+              >
+                {showAll ? (
+                  <><ChevronUp className="h-4 w-4 mr-2" /> Show less</>
+                ) : (
+                  <><ChevronDown className="h-4 w-4 mr-2" /> Show {totalCount - DISPLAY_LIMIT} more</>
+                )}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">

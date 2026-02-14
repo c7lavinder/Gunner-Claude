@@ -271,6 +271,8 @@ function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
+  const [showAll, setShowAll] = useState(false);
+  const DISPLAY_LIMIT = 3;
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -282,17 +284,32 @@ function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "skill", status: "active", teamRole });
   const handleRefresh = () => utils.teamTraining.list.invalidate();
 
+  const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+  const sortedItems = [...(items || [])].sort((a, b) => 
+    (priorityOrder[a.priority || 'medium'] || 2) - (priorityOrder[b.priority || 'medium'] || 2)
+  );
+  const displayItems = showAll ? sortedItems : sortedItems.slice(0, DISPLAY_LIMIT);
+  const totalCount = sortedItems.length;
+  const hasMore = totalCount > DISPLAY_LIMIT;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-blue-100 text-blue-600"><Target className="h-5 w-5" /></div>
-          <div><CardTitle className="text-lg">Long-Term Skills</CardTitle><CardDescription>Skills the team is actively developing</CardDescription></div>
+          <div><CardTitle className="text-lg">Long-Term Skills {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle><CardDescription>Top development areas · Refreshes every Monday</CardDescription></div>
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}</div> : items && items.length > 0 ? (
-          <div className="space-y-1.5">{items.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}</div>
+        {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}</div> : displayItems.length > 0 ? (
+          <div className="space-y-1.5">
+            {displayItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}
+            {hasMore && (
+              <Button variant="ghost" className="w-full text-muted-foreground hover:text-foreground" onClick={() => setShowAll(!showAll)}>
+                {showAll ? <><ChevronUp className="h-4 w-4 mr-2" /> Show less</> : <><ChevronDown className="h-4 w-4 mr-2" /> Show {totalCount - DISPLAY_LIMIT} more</>}
+              </Button>
+            )}
+          </div>
         ) : <div className="text-center py-8 text-muted-foreground"><Target className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No skills being tracked</p></div>}
       </CardContent>
     </Card>

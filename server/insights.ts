@@ -237,10 +237,14 @@ You MUST generate insights FOR EACH ROLE that has calls. The active roles with c
 For EACH active role, generate EXACTLY:
 - 2-3 ISSUES (the most critical/impactful ones only) specific to that role's performance
 - 2-3 WINS (the most noteworthy ones only) specific to that role's members
-- 2 SKILLS (long-term fixes) specific to that role
+- 2-3 SKILLS (long-term development areas) specific to that role
 - 2-3 AGENDA items for that role's team meeting
 
-CRITICAL: Do NOT generate more than 3 items per category per role. Quality over quantity — pick only the TOP issues and wins that matter most this week. If there are many issues, consolidate related ones into a single high-impact item.
+CRITICAL LIMITS:
+- Do NOT generate more than 3 items per category per role. MAXIMUM 3.
+- Quality over quantity — pick only the TOP issues, wins, and skills that matter most this week.
+- If there are many issues, consolidate related ones into a single high-impact item.
+- For SKILLS: focus on the 2-3 most important long-term development areas, not every possible skill gap. Consolidate overlapping skills into one.
 
 Every item MUST include a "teamRole" field set to one of: "lead_manager", "acquisition_manager", or "lead_generator".
 Every item MUST include a "teamMemberName" field (set to a specific team member name, or null for role-wide items).
