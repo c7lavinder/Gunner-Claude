@@ -2306,7 +2306,7 @@ Create content that:
         periodType: z.enum(["daily", "weekly", "monthly"]).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getKpiPeriods } = await import("./kpi");
@@ -2317,7 +2317,7 @@ Create content that:
     getPeriodById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getKpiPeriodById } = await import("./kpi");
@@ -2333,7 +2333,7 @@ Create content that:
         periodLabel: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createKpiPeriod } = await import("./kpi");
@@ -2344,7 +2344,7 @@ Create content that:
     getTeamMemberKpis: protectedProcedure
       .input(z.object({ periodId: z.number() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getTeamMemberKpis } = await import("./kpi");
@@ -2363,7 +2363,7 @@ Create content that:
         notes: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { upsertTeamMemberKpi } = await import("./kpi");
@@ -2374,7 +2374,7 @@ Create content that:
     getCampaignKpis: protectedProcedure
       .input(z.object({ periodId: z.number() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getCampaignKpis } = await import("./kpi");
@@ -2398,7 +2398,7 @@ Create content that:
         notes: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { upsertCampaignKpi } = await import("./kpi");
@@ -2409,7 +2409,7 @@ Create content that:
     getDeals: protectedProcedure
       .input(z.object({ periodId: z.number().optional() }).optional())
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getKpiDeals } = await import("./kpi");
@@ -2420,7 +2420,7 @@ Create content that:
     getDealById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getKpiDealById } = await import("./kpi");
@@ -2446,7 +2446,7 @@ Create content that:
         notes: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createKpiDeal } = await import("./kpi");
@@ -2473,7 +2473,7 @@ Create content that:
         notes: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { updateKpiDeal } = await import("./kpi");
@@ -2486,7 +2486,7 @@ Create content that:
     deleteDeal: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { deleteKpiDeal } = await import("./kpi");
@@ -2498,7 +2498,7 @@ Create content that:
     getScoreboard: protectedProcedure
       .input(z.object({ periodId: z.number() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getScoreboardData } = await import("./kpi");
@@ -2509,7 +2509,7 @@ Create content that:
     getLeadGenStaff: protectedProcedure
       .input(z.object({ activeOnly: z.boolean().optional() }).optional())
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getLeadGenStaff } = await import("./kpi");
@@ -2522,7 +2522,7 @@ Create content that:
         roleType: z.enum(["lg_cold_caller", "lg_sms", "am", "lm"]),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createLeadGenStaff } = await import("./kpi");
@@ -2538,7 +2538,7 @@ Create content that:
         isActive: z.enum(["true", "false"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { updateLeadGenStaff } = await import("./kpi");
@@ -2550,7 +2550,7 @@ Create content that:
     deleteLeadGenStaff: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { deleteLeadGenStaff } = await import("./kpi");
@@ -2562,7 +2562,7 @@ Create content that:
     getMarkets: protectedProcedure
       .input(z.object({ activeOnly: z.boolean().optional() }).optional())
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getKpiMarkets } = await import("./kpi");
@@ -2572,7 +2572,7 @@ Create content that:
     createMarket: protectedProcedure
       .input(z.object({ name: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createKpiMarket } = await import("./kpi");
@@ -2587,7 +2587,7 @@ Create content that:
         isActive: z.enum(["true", "false"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { updateKpiMarket } = await import("./kpi");
@@ -2599,7 +2599,7 @@ Create content that:
     deleteMarket: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { deleteKpiMarket } = await import("./kpi");
@@ -2611,7 +2611,7 @@ Create content that:
     getChannels: protectedProcedure
       .input(z.object({ activeOnly: z.boolean().optional() }).optional())
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { getKpiChannels } = await import("./kpi");
@@ -2621,7 +2621,7 @@ Create content that:
     createChannel: protectedProcedure
       .input(z.object({ name: z.string(), code: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { createKpiChannel } = await import("./kpi");
@@ -2637,7 +2637,7 @@ Create content that:
         isActive: z.enum(["true", "false"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { updateKpiChannel } = await import("./kpi");
@@ -2649,7 +2649,7 @@ Create content that:
     deleteChannel: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== 'admin') {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         const { deleteKpiChannel } = await import("./kpi");
@@ -2870,7 +2870,7 @@ Create content that:
         if (!ctx.user?.tenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
         }
-        if (ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         // Check plan limits before inviting
@@ -2893,7 +2893,7 @@ Create content that:
         if (!ctx.user?.tenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
         }
-        if (ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         // Prevent removing yourself
@@ -2915,7 +2915,7 @@ Create content that:
         if (!ctx.user?.tenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
         }
-        if (ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         return updateUserRole(ctx.user.tenantId, input.userId, input.role, input.teamRole);
@@ -2927,7 +2927,7 @@ Create content that:
       if (!ctx.user?.tenantId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
       }
-      if (ctx.user.role !== 'admin') {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       return getPendingInvitations(ctx.user.tenantId);
@@ -2941,7 +2941,7 @@ Create content that:
         if (!ctx.user?.tenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
         }
-        if (ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         return revokePendingInvitation(ctx.user.tenantId, input.invitationId);
@@ -3210,7 +3210,7 @@ Create content that:
 
     // Manual BatchLeads sync (property enrichment for recent calls)
     syncBatchLeads: protectedProcedure.mutation(async ({ ctx }) => {
-      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.isTenantAdmin !== 'true') {
+      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       const { syncBatchLeadsForTenant } = await import("./batchLeadsSync");
@@ -3222,7 +3222,7 @@ Create content that:
 
     // Get webhook retry queue status (admin only)
     getWebhookRetryQueueStatus: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.isTenantAdmin !== 'true') {
+      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       if (!ctx.user?.tenantId) {
@@ -3280,7 +3280,7 @@ Create content that:
       if (!ctx.user?.tenantId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
       }
-      if (ctx.user.role !== 'admin') {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       return cancelTenantSubscription(ctx.user.tenantId);
@@ -3292,7 +3292,7 @@ Create content that:
       if (!ctx.user?.tenantId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
       }
-      if (ctx.user.role !== 'admin') {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
       }
       return reactivateTenantSubscription(ctx.user.tenantId);
@@ -3309,7 +3309,7 @@ Create content that:
         if (!ctx.user?.tenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant associated with user' });
         }
-        if (ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         return changeTenantSubscription(ctx.user.tenantId, input.planCode, input.billingPeriod);

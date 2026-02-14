@@ -1978,3 +1978,6 @@
 - [x] Root cause: getCallsWithGrades filtered out ALL calls without grades (line 454), including skipped calls which intentionally have no grade
 - [x] Fix: When statuses filter includes 'skipped', skip the grade-null filter and return all matching results
 - [x] TypeScript compiles clean (0 errors)
+- [x] Promote Pablo Martin (velnomediagroup@gmail.com) to admin role and update name
+- [x] Fix inviteUser/removeUser role checks to also allow super_admin (not just admin)
+- [x] Fix all other role checks that only check for 'admin' but miss 'super_admin'

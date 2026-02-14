@@ -1,0 +1,46 @@
+{
+  "query": "SELECT id, name, email, role, isTenantAdmin, tenantId, loginMethod FROM users WHERE email = 'velnomediagroup@gmail.com' OR role = 'admin' OR role = 'super_admin' ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, email, role, isTenantAdmin, tenantId, loginMethod FROM users WHERE email = 'velnomediagroup@gmail.com' OR role = 'admin' OR role = 'super_admin' ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Corey Lavinder",
+      "email": "corey@newagainhouses.com",
+      "role": "super_admin",
+      "isTenantAdmin": "true",
+      "tenantId": "1",
+      "loginMethod": "google"
+    },
+    {
+      "id": "180239",
+      "name": "Xhaka Lavinder",
+      "email": "xhakalavinder@gmail.com",
+      "role": "admin",
+      "isTenantAdmin": "false",
+      "tenantId": "1",
+      "loginMethod": "google"
+    },
+    {
+      "id": "600044",
+      "name": "Velno",
+      "email": "velnomediagroup@gmail.com",
+      "role": "user",
+      "isTenantAdmin": "false",
+      "tenantId": "1",
+      "loginMethod": "google"
+    },
+    {
+      "id": "630004",
+      "name": "Jessica Guzman",
+      "email": "yamicead15@gmail.com",
+      "role": "admin",
+      "isTenantAdmin": "true",
+      "tenantId": "1",
+      "loginMethod": "email_password"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\trole\tisTenantAdmin\ttenantId\tloginMethod\n1\tCorey Lavinder\tcorey@newagainhouses.com\tsuper_admin\ttrue\t1\tgoogle\n180239\tXhaka Lavinder\txhakalavinder@gmail.com\tadmin\tfalse\t1\tgoogle\n600044\tVelno\tvelnomediagroup@gmail.com\tuser\tfalse\t1\tgoogle\n630004\tJessica Guzman\tyamicead15@gmail.com\tadmin\ttrue\t1\temail_password\n",
+  "stderr": "",
+  "execution_time_ms": 364
+}

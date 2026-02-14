@@ -79,7 +79,7 @@ export default function TenantSettings() {
   // Fetch pending invitations
   const { data: pendingInvitations, isLoading: invitationsLoading, refetch: refetchInvitations } = trpc.tenant.getPendingInvitations.useQuery(
     undefined,
-    { enabled: !!user?.tenantId && user?.role === 'admin' }
+    { enabled: !!user?.tenantId && (user?.role === 'admin' || user?.role === 'super_admin') }
   );
 
   // Fetch subscription status
@@ -725,7 +725,7 @@ export default function TenantSettings() {
           </Card>
 
           {/* Pending Invitations */}
-          {user?.role === 'admin' && (pendingInvitations || []).length > 0 && (
+          {(user?.role === 'admin' || user?.role === 'super_admin') && (pendingInvitations || []).length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
