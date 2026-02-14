@@ -1252,6 +1252,7 @@ export async function getTeamTrainingItems(options?: {
   teamRole?: "lead_manager" | "acquisition_manager" | "lead_generator";
   meetingDate?: Date;
   tenantId?: number; // For multi-tenant filtering
+  limit?: number; // Max items to return (used for "All Roles" view)
 }): Promise<TeamTrainingItem[]> {
   const db = await getDb();
   if (!db) return [];
@@ -1272,16 +1273,20 @@ export async function getTeamTrainingItems(options?: {
     
     conditions.push(eq(teamTrainingItems.teamRole, options.teamRole));
     
-    const query = db
+    let query = db
       .select()
       .from(teamTrainingItems)
       .where(and(...conditions))
-      .orderBy(desc(teamTrainingItems.createdAt));
+      .orderBy(teamTrainingItems.priority, desc(teamTrainingItems.createdAt));
+    
+    if (options?.limit) {
+      query = query.limit(options.limit) as any;
+    }
     
     return await query as any;
   }
   
-  // Original logic for non-role filtering
+  // "All Roles" view — no teamRole filter
   const conditions = [];
   
   // CRITICAL: Filter by tenant for multi-tenant isolation
@@ -1305,7 +1310,15 @@ export async function getTeamTrainingItems(options?: {
     query = query.where(and(...conditions)) as any;
   }
 
-  return await query.orderBy(desc(teamTrainingItems.createdAt));
+  // Sort by priority (urgent first) then by recency
+  query = query.orderBy(teamTrainingItems.priority, desc(teamTrainingItems.createdAt)) as any;
+
+  // For "All Roles" view, limit to top 5 items to keep it focused
+  if (!options?.teamRole && options?.limit) {
+    query = query.limit(options.limit) as any;
+  }
+
+  return await query;
 }
 
 export async function getTeamTrainingItemById(id: number): Promise<TeamTrainingItem | null> {

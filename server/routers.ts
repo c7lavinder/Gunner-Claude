@@ -1451,9 +1451,12 @@ Keep it brief and actionable.`;
       }).optional())
       .query(async ({ ctx, input }) => {
         // CRITICAL: Include tenantId for multi-tenant isolation
+        // When no teamRole is specified ("All Roles" view), limit to top 5 per category
+        const ALL_ROLES_LIMIT = 5;
         return await getTeamTrainingItems({
           ...input,
           tenantId: ctx.user?.tenantId || undefined,
+          limit: input?.teamRole ? undefined : ALL_ROLES_LIMIT,
         });
       }),
 

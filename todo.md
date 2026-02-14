@@ -1967,3 +1967,9 @@
 - [x] Added DISPLAY_LIMIT and show more/less to Skills section in both TeamTraining.tsx and Training.tsx
 - [x] Updated skills card description to "Top development areas · Refreshes every Monday"
 - [x] TypeScript compiles clean (0 errors)
+
+## Bug Fix: All Roles view still showing 10+ items (need 3-5 total)
+- [x] Added backend limit: when teamRole is undefined (All Roles), query returns only top 5 items per category sorted by priority (urgent first, then recency)
+- [x] Backend enforces ALL_ROLES_LIMIT=5 in routers.ts teamTraining.list endpoint
+- [x] UI still shows top 3 with "Show 2 more" toggle (max 5 total from backend)
+- [x] TypeScript compiles clean (0 errors)
