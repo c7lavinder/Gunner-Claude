@@ -234,11 +234,13 @@ ${Object.entries(byTeamMember).map(([name, memberCalls]) => {
 ## CRITICAL INSTRUCTIONS
 You MUST generate insights FOR EACH ROLE that has calls. The active roles with calls are: ${activeRoles.map(r => r === 'lead_manager' ? 'Lead Manager (lead_manager)' : r === 'acquisition_manager' ? 'Acquisition Manager (acquisition_manager)' : 'Lead Generator (lead_generator)').join(', ')}.
 
-For EACH active role, generate:
-- At least 2-3 ISSUES specific to that role's performance
-- At least 2 WINS specific to that role's members
-- At least 2 SKILLS (long-term fixes) specific to that role
-- At least 2-3 AGENDA items for that role's team meeting
+For EACH active role, generate EXACTLY:
+- 2-3 ISSUES (the most critical/impactful ones only) specific to that role's performance
+- 2-3 WINS (the most noteworthy ones only) specific to that role's members
+- 2 SKILLS (long-term fixes) specific to that role
+- 2-3 AGENDA items for that role's team meeting
+
+CRITICAL: Do NOT generate more than 3 items per category per role. Quality over quantity — pick only the TOP issues and wins that matter most this week. If there are many issues, consolidate related ones into a single high-impact item.
 
 Every item MUST include a "teamRole" field set to one of: "lead_manager", "acquisition_manager", or "lead_generator".
 Every item MUST include a "teamMemberName" field (set to a specific team member name, or null for role-wide items).
@@ -372,41 +374,66 @@ Respond with a JSON object in this exact format:
 
     const insights = JSON.parse(content);
 
-    // Transform to GeneratedInsight format
+    // Helper to enforce max items per role (keep top N by priority)
+    const MAX_PER_ROLE = 3;
+    const priorityWeight: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+    const limitPerRole = <T extends { teamRole?: string; priority?: string }>(items: T[]): T[] => {
+      const byRole: Record<string, T[]> = {};
+      for (const item of items) {
+        const role = item.teamRole || 'unknown';
+        if (!byRole[role]) byRole[role] = [];
+        byRole[role].push(item);
+      }
+      const limited: T[] = [];
+      for (const [, roleItems] of Object.entries(byRole)) {
+        roleItems.sort((a, b) => (priorityWeight[a.priority || 'medium'] || 2) - (priorityWeight[b.priority || 'medium'] || 2));
+        limited.push(...roleItems.slice(0, MAX_PER_ROLE));
+      }
+      return limited;
+    }
+
+    // Transform to GeneratedInsight format and enforce per-role limits
+    const rawIssues = insights.issues.map((i: any) => ({
+      itemType: "issue" as const,
+      title: i.title,
+      description: i.description,
+      priority: i.priority || "medium",
+      teamRole: i.teamRole || undefined,
+      teamMemberName: i.teamMemberName || undefined,
+      sourceCallIds: i.sourceCallIds || [],
+    }));
+    const rawWins = insights.wins.map((w: any) => ({
+      itemType: "win" as const,
+      title: w.title,
+      description: w.description,
+      priority: w.priority || "medium",
+      teamRole: w.teamRole || undefined,
+      teamMemberName: w.teamMemberName || undefined,
+    }));
+    const rawSkills = insights.skills.map((s: any) => ({
+      itemType: "skill" as const,
+      title: s.title,
+      description: s.description,
+      targetBehavior: s.targetBehavior,
+      priority: s.priority || "high",
+      teamRole: s.teamRole || undefined,
+    }));
+    const rawAgenda = insights.agenda.map((a: any, index: number) => ({
+      itemType: "agenda" as const,
+      title: a.title,
+      description: a.description,
+      priority: a.priority || "medium",
+      teamRole: a.teamRole || undefined,
+    }));
+
     const result: InsightsResult = {
-      issues: insights.issues.map((i: any) => ({
-        itemType: "issue" as const,
-        title: i.title,
-        description: i.description,
-        priority: i.priority || "medium",
-        teamRole: i.teamRole || undefined,
-        teamMemberName: i.teamMemberName || undefined,
-        sourceCallIds: i.sourceCallIds || [],
-      })),
-      wins: insights.wins.map((w: any) => ({
-        itemType: "win" as const,
-        title: w.title,
-        description: w.description,
-        priority: w.priority || "medium",
-        teamRole: w.teamRole || undefined,
-        teamMemberName: w.teamMemberName || undefined,
-      })),
-      skills: insights.skills.map((s: any) => ({
-        itemType: "skill" as const,
-        title: s.title,
-        description: s.description,
-        targetBehavior: s.targetBehavior,
-        priority: s.priority || "high",
-        teamRole: s.teamRole || undefined,
-      })),
-      agenda: insights.agenda.map((a: any, index: number) => ({
-        itemType: "agenda" as const,
-        title: a.title,
-        description: a.description,
-        priority: a.priority || "medium",
-        teamRole: a.teamRole || undefined,
-      })),
+      issues: limitPerRole(rawIssues),
+      wins: limitPerRole(rawWins),
+      skills: limitPerRole(rawSkills),
+      agenda: limitPerRole(rawAgenda),
     };
+
+    console.log(`[Insights] Generated: ${result.issues.length} issues, ${result.wins.length} wins, ${result.skills.length} skills, ${result.agenda.length} agenda (max ${MAX_PER_ROLE} per role)`);
 
     return result;
   } catch (error) {

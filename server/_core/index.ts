@@ -17,6 +17,7 @@ import { runEmailSequenceJobs } from "../emailSequenceJobs";
 import { startBatchDialerPolling } from "../batchDialerSync";
 import { startBatchLeadsPolling } from "../batchLeadsSync";
 import { startWebhookRetryQueue } from "../webhookRetryQueue";
+import { startWeeklyInsightsRefresh } from "../weeklyInsightsRefresh";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -107,8 +108,13 @@ async function startServer() {
       startWebhookRetryQueue();
     }, 25000);
     
+    // Start weekly insights refresh - checks every hour, runs Monday 6AM CT
+    setTimeout(() => {
+      startWeeklyInsightsRefresh();
+    }, 30000);
+    
     // Start email sequence job - runs every hour
-    // Initial run after 30 seconds, then every hour
+    // Initial run after 35 seconds, then every hour
     setTimeout(async () => {
       console.log('[EmailSequence] Running initial email sequence check...');
       try {

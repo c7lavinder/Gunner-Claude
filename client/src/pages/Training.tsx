@@ -304,7 +304,7 @@ function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
   const [showAll, setShowAll] = useState(false);
-  const DISPLAY_LIMIT = 5;
+  const DISPLAY_LIMIT = 3;
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -353,7 +353,7 @@ function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" |
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin';
   const [showAll, setShowAll] = useState(false);
-  const DISPLAY_LIMIT = 5;
+  const DISPLAY_LIMIT = 3;
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {

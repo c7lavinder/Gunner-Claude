@@ -1950,3 +1950,12 @@
 - [x] Limit meeting agenda to show top 5 with "Show N more" expand button (TeamTraining.tsx)
 - [x] Added total count badge in card headers (e.g., "Issues to Address (7)")
 - [x] TypeScript compiles clean (0 errors)
+
+## Feature: Limit issues/wins to 2-3 per team role with Monday auto-refresh
+- [x] Updated LLM prompt to generate EXACTLY 2-3 issues and 2-3 wins per team role (quality over quantity)
+- [x] Added post-processing limitPerRole() to enforce max 3 items per category per role (sorted by priority)
+- [x] Auto-archive: clearAiGeneratedInsights() runs before each weekly refresh, replacing old items
+- [x] Built Monday morning scheduled job (weeklyInsightsRefresh.ts) — checks hourly, runs at 6AM CT on Mondays
+- [x] Updated UI card descriptions to show "Top issues/wins this week · Refreshes every Monday"
+- [x] Changed DISPLAY_LIMIT from 5 to 3 in all sections (TeamTraining.tsx + Training.tsx)
+- [x] TypeScript compiles clean (0 errors)

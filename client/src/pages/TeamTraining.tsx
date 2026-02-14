@@ -421,7 +421,7 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const [showAll, setShowAll] = useState(false);
-  const DISPLAY_LIMIT = 5;
+  const DISPLAY_LIMIT = 3;
   
   // Filter by role: non-admins only see their role's insights, admins can filter by selected role
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
@@ -468,7 +468,7 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
           </div>
           <div>
             <CardTitle className="text-lg">Issues to Address {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
-            <CardDescription>Urgent incompetencies from call analysis</CardDescription>
+            <CardDescription>Top issues this week · Refreshes every Monday</CardDescription>
           </div>
         </div>
         <AddItemDialog itemType="issue" onSuccess={handleRefresh} />
@@ -518,7 +518,7 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const [showAll, setShowAll] = useState(false);
-  const DISPLAY_LIMIT = 5;
+  const DISPLAY_LIMIT = 3;
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   
@@ -559,7 +559,7 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
           </div>
           <div>
             <CardTitle className="text-lg">Wins to Celebrate {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
-            <CardDescription>Small victories to recognize</CardDescription>
+            <CardDescription>Top wins this week · Refreshes every Monday</CardDescription>
           </div>
         </div>
         <AddItemDialog itemType="win" onSuccess={handleRefresh} />
@@ -978,7 +978,7 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
   const utils = trpc.useUtils();
   const [showFacilitator, setShowFacilitator] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const DISPLAY_LIMIT = 5;
+  const DISPLAY_LIMIT = 3;
   const { user } = useAuth();
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
