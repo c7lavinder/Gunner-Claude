@@ -1984,3 +1984,4 @@
 - [x] Fix AI Coach to query actual team member data and call history instead of giving generic training material responses
 - [x] AI Coach should tell user when a team member name doesn't match anyone on the team
 - [x] Fix parseIntent to look up contact call history for ALL action types (tasks, notes, SMS) not just when call keywords are detected
+- [x] Fix AI Coach askQuestion to include actual call summaries and pipeline data in responses instead of generic training material advice

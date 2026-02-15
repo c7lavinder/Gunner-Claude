@@ -1166,18 +1166,46 @@ export const appRouter = router({
           .map(m => `### ${m.title}\n${m.content || ""}`)
           .join("\n\n");
 
-        // Get recent calls for general context
-        const recentCallsResult = await getCallsWithGrades({ limit: 10, tenantId });
+        // Get recent calls for general context — fetch more for a real picture
+        const recentCallsResult = await getCallsWithGrades({ limit: 25, tenantId });
         const recentCalls = recentCallsResult.items;
 
-        // Build team member context
+        // Build team member context with real stats
         const teamContext = teamMembersList.map(m => {
           const memberCalls = recentCalls.filter(c => c.teamMemberId === m.id);
-          const avgScore = memberCalls.length > 0
-            ? Math.round(memberCalls.reduce((sum, c) => sum + parseFloat(c.grade?.overallScore || "0"), 0) / memberCalls.length)
+          const gradedCalls = memberCalls.filter(c => c.grade);
+          const avgScore = gradedCalls.length > 0
+            ? Math.round(gradedCalls.reduce((sum, c) => sum + parseFloat(c.grade?.overallScore || "0"), 0) / gradedCalls.length)
             : null;
-          return `- ${m.name} (${(m.teamRole || 'unknown').replace('_', ' ')})${avgScore !== null ? ` — recent avg score: ${avgScore}%` : ''}`;
+          const outcomes = memberCalls.reduce((acc, c) => {
+            const outcome = c.callOutcome || 'unknown';
+            acc[outcome] = (acc[outcome] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          const outcomeStr = Object.entries(outcomes).map(([k, v]) => `${k}: ${v}`).join(', ');
+          return `- ${m.name} (${(m.teamRole || 'unknown').replace('_', ' ')}) — ${gradedCalls.length} graded calls${avgScore !== null ? `, avg score: ${avgScore}%` : ''}${outcomeStr ? `, outcomes: [${outcomeStr}]` : ''}`;
         }).join('\n');
+
+        // Build recent calls summary with real details
+        let recentCallsSummary = "";
+        if (recentCalls.length > 0) {
+          recentCallsSummary = "\n\nRECENT CALLS (real data — use this to answer questions):\n";
+          for (const call of recentCalls.slice(0, 15)) {
+            const grade = call.grade;
+            recentCallsSummary += `- ${call.contactName || 'Unknown'}`;
+            if (call.propertyAddress) recentCallsSummary += ` | Property: ${call.propertyAddress}`;
+            recentCallsSummary += ` | ${call.callType || 'unknown'} | ${call.callOutcome || 'no outcome'}`;
+            recentCallsSummary += ` | Team: ${call.teamMemberName || 'Unknown'}`;
+            recentCallsSummary += ` | ${call.callTimestamp ? new Date(call.callTimestamp).toLocaleDateString() : 'Unknown date'}`;
+            if (grade) {
+              recentCallsSummary += ` | Grade: ${grade.overallGrade} (${grade.overallScore}%)`;
+              if (grade.summary) recentCallsSummary += ` | ${grade.summary.substring(0, 150)}`;
+            }
+            recentCallsSummary += '\n';
+          }
+        } else {
+          recentCallsSummary = "\n\nNo recent calls found in the system.";
+        }
 
         // Build specific member call data if asked about someone
         let memberCallContext = "";
@@ -1193,6 +1221,8 @@ export const appRouter = router({
           for (const call of mentionedMemberCalls.slice(0, 5)) {
             const grade = call.grade;
             memberCallContext += `\n--- Call with ${call.contactName || "Unknown"} (${call.callTimestamp ? new Date(call.callTimestamp).toLocaleDateString() : 'Unknown date'}) ---\n`;
+            if (call.propertyAddress) memberCallContext += `Property: ${call.propertyAddress}\n`;
+            memberCallContext += `Type: ${call.callType || 'unknown'} | Outcome: ${call.callOutcome || 'none'}\n`;
             if (grade) {
               memberCallContext += `Grade: ${grade.overallGrade} (${grade.overallScore}%)\n`;
               memberCallContext += `Summary: ${grade.summary || 'N/A'}\n`;
@@ -1214,26 +1244,54 @@ export const appRouter = router({
           );
         } catch { /* preferences are optional */ }
 
-        const systemPrompt = `You are a supportive sales coach for a real estate wholesaling team.
+        const systemPrompt = `You are a data-driven sales coach for a real estate wholesaling team. You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
 
 TEAM MEMBERS (this is the COMPLETE list — no one else is on the team):
 ${teamContext}
+${recentCallsSummary}
+${memberCallContext}
 
 ${unknownNameMentioned ? `IMPORTANT: The user mentioned a name that does NOT match any team member above. You MUST tell them that person is not on the team and list the actual team members they can ask about.\n` : ''}
 
-Training context:
-${trainingContext.substring(0, 2000)}
-${memberCallContext}
+Training materials available: ${trainingMaterials.length > 0 ? trainingMaterials.map(m => m.title).join(', ') : 'None'}
+
+${(() => {
+  // Include relevant training material content based on the question
+  const q = input.question.toLowerCase();
+  const relevant = trainingMaterials.filter(m => {
+    const title = m.title.toLowerCase();
+    // Match training materials whose titles relate to keywords in the question
+    const keywords = q.split(/\s+/).filter(w => w.length > 3);
+    return keywords.some(kw => title.includes(kw)) ||
+      (q.includes('walkthrough') && title.includes('walkthrough')) ||
+      (q.includes('offer') && (title.includes('offer') || title.includes('closing'))) ||
+      (q.includes('objection') && title.includes('objection')) ||
+      (q.includes('script') && title.includes('script')) ||
+      (q.includes('appointment') && title.includes('appointment')) ||
+      (q.includes('follow') && title.includes('follow')) ||
+      (q.includes('cold call') && title.includes('cold call')) ||
+      (q.includes('disqualif') && title.includes('disqualif')) ||
+      (q.includes('motivation') && title.includes('motivation')) ||
+      (q.includes('transfer') && title.includes('transfer')) ||
+      (q.includes('sms') && title.includes('follow')) ||
+      (q.includes('brush') && title.includes('brush'));
+  });
+  if (relevant.length > 0) {
+    return `RELEVANT TRAINING MATERIAL (reference this when answering):\n${relevant.slice(0, 2).map(m => `### ${m.title}\n${(m.content || '').substring(0, 1500)}`).join('\n\n')}`;
+  }
+  return '';
+})()}
 ${coachingPrefs ? `\n${coachingPrefs}` : ""}
 
 CRITICAL RULES:
-1. NEVER make up or hallucinate information. Only reference data provided above.
-2. If asked about a person NOT in the team members list, say "I don't see [name] on your team. Your current team members are: ${teamMemberNames.join(', ')}." Then ask if they meant one of those people.
-3. If asked about a team member's performance, ONLY use the actual call data provided above. If no call data is available, say so honestly.
-4. Keep responses to 2-4 sentences. Be warm and encouraging.
-5. Give one specific, actionable tip when relevant.
-6. Do NOT write long explanations, bullet points, or lists.
-7. Do NOT invent scores, call details, or performance data that isn't in the context above.`;
+1. ALWAYS ground your answers in the REAL DATA above. Reference specific calls, scores, outcomes, contacts, and property addresses when relevant.
+2. If the user asks a question that requires data you don't have, say "Based on the data I can see..." and be honest about what's missing.
+3. If asked about a person NOT in the team members list, say "I don't see [name] on your team. Your current team members are: ${teamMemberNames.join(', ')}." Then ask if they meant one of those people.
+4. NEVER make up or hallucinate information. No fake names, scores, or details.
+5. When asked strategic questions (like "should we do X or Y?"), look at the actual call outcomes and data to give a data-backed recommendation. For example: "Looking at your recent calls, I see 3 contacts with appointments set — those are ready for walkthroughs. The 2 callbacks scheduled should get follow-up calls first."
+6. Keep responses to 3-5 sentences. Be specific and actionable.
+7. Reference training materials by name when they're relevant to the question (e.g., "Your Walkthrough Checklist covers this...").
+8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data.`;
 
         const response = await invokeLLM({
           messages: [
