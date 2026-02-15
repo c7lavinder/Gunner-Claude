@@ -1296,9 +1296,15 @@ export default function CallInbox() {
     limit: 100,
     statuses: ["pending", "transcribing", "grading", "failed"],
   });
+  const skippedStartDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(d.getHours() - 24);
+    return d.toISOString();
+  }, []);
   const { data: skippedData, refetch: refetchSkipped } = trpc.calls.withGrades.useQuery({
     limit: 100,
     statuses: ["skipped"],
+    startDate: skippedStartDate,
   });
 
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
@@ -1485,7 +1491,7 @@ export default function CallInbox() {
                 )}
                 <TabsTrigger value="skipped" className="text-xs sm:text-sm px-3 sm:px-4">
                   Skipped
-                  {skippedCalls.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{skippedCalls.length}</Badge>}
+                  {skippedCalls.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{skippedCalls.length >= 100 ? "100+" : skippedCalls.length}</Badge>}
                 </TabsTrigger>
               </TabsList>
             </div>

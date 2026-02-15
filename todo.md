@@ -1986,3 +1986,5 @@
 - [x] Fix parseIntent to look up contact call history for ALL action types (tasks, notes, SMS) not just when call keywords are detected
 - [x] Fix AI Coach askQuestion to include actual call summaries and pipeline data in responses instead of generic training material advice
 - [x] Add role-based visibility to AI Coach: all call data used for coaching insights/examples, but individual performance queries (scores, grades) restricted to admins and supervisors only
+- [x] Verify and ensure role-based call visibility on Call Inbox page matches AI Coach rules (admins see all, members see own + direct reports) — already implemented via getCallsWithPermissions
+- [x] Fix skipped call count in call history showing incorrect number (100 when there haven't been 100 calls in 24 hours)
