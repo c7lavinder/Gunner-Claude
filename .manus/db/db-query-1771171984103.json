@@ -1,0 +1,45 @@
+{
+  "query": "SELECT ta.id, ta.leadManagerId, lm.name as leadManagerName, ta.acquisitionManagerId, am.name as acquisitionManagerName FROM team_assignments ta JOIN team_members lm ON ta.leadManagerId = lm.id JOIN team_members am ON ta.acquisitionManagerId = am.id WHERE ta.tenantId = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT ta.id, ta.leadManagerId, lm.name as leadManagerName, ta.acquisitionManagerId, am.name as acquisitionManagerName FROM team_assignments ta JOIN team_members lm ON ta.leadManagerId = lm.id JOIN team_members am ON ta.acquisitionManagerId = am.id WHERE ta.tenantId = 1;",
+  "rows": [
+    {
+      "id": "90003",
+      "leadManagerId": "30003",
+      "leadManagerName": "Mirna Razo",
+      "acquisitionManagerId": "2",
+      "acquisitionManagerName": "Daniel Lozano"
+    },
+    {
+      "id": "90001",
+      "leadManagerId": "30002",
+      "leadManagerName": "Efren Valenzuala",
+      "acquisitionManagerId": "2",
+      "acquisitionManagerName": "Daniel Lozano"
+    },
+    {
+      "id": "90002",
+      "leadManagerId": "30001",
+      "leadManagerName": "Alex Diaz",
+      "acquisitionManagerId": "2",
+      "acquisitionManagerName": "Daniel Lozano"
+    },
+    {
+      "id": "60022",
+      "leadManagerId": "2",
+      "leadManagerName": "Daniel Lozano",
+      "acquisitionManagerId": "3",
+      "acquisitionManagerName": "Kyle Barks"
+    },
+    {
+      "id": "60015",
+      "leadManagerId": "1",
+      "leadManagerName": "Chris Segura",
+      "acquisitionManagerId": "3",
+      "acquisitionManagerName": "Kyle Barks"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tleadManagerId\tleadManagerName\tacquisitionManagerId\tacquisitionManagerName\n90003\t30003\tMirna Razo\t2\tDaniel Lozano\n90001\t30002\tEfren Valenzuala\t2\tDaniel Lozano\n90002\t30001\tAlex Diaz\t2\tDaniel Lozano\n60022\t2\tDaniel Lozano\t3\tKyle Barks\n60015\t1\tChris Segura\t3\tKyle Barks\n",
+  "stderr": "",
+  "execution_time_ms": 423
+}

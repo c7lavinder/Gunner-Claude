@@ -1148,8 +1148,41 @@ export const appRouter = router({
           }
         }
 
-        // If a team member is mentioned, fetch their recent calls
-        if (mentionedMember) {
+        // --- ROLE-BASED VISIBILITY ---
+        // Determine who the current user is on the team
+        const currentUserTeamMember = ctx.user?.id
+          ? await getTeamMemberByUserId(ctx.user.id)
+          : null;
+        const isAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'super_admin';
+
+        // Build set of team member IDs this user can see individual performance for
+        const visibleMemberIds = new Set<number>();
+        if (isAdmin) {
+          // Admins see everyone
+          teamMembersList.forEach(m => visibleMemberIds.add(m.id));
+        } else if (currentUserTeamMember) {
+          // Always can see yourself
+          visibleMemberIds.add(currentUserTeamMember.id);
+          // Get direct reports (people assigned to this user)
+          try {
+            const assignments = await getTeamAssignments(tenantId);
+            for (const a of assignments) {
+              // If current user is the "acquisitionManagerId" (supervisor), they can see the "leadManagerId" (report)
+              if (a.acquisitionManagerId === currentUserTeamMember.id) {
+                visibleMemberIds.add(a.leadManagerId);
+              }
+            }
+          } catch { /* assignment lookup is best-effort */ }
+        }
+
+        // Check if user is asking about someone they can't see
+        let accessDeniedForMember = false;
+        if (mentionedMember && !isAdmin && !visibleMemberIds.has(mentionedMember.id)) {
+          accessDeniedForMember = true;
+        }
+
+        // If a team member is mentioned AND the user has access, fetch their recent calls
+        if (mentionedMember && !accessDeniedForMember) {
           try {
             const memberCallsResult = await getCallsWithGrades({
               teamMemberId: mentionedMember.id,
@@ -1166,39 +1199,51 @@ export const appRouter = router({
           .map(m => `### ${m.title}\n${m.content || ""}`)
           .join("\n\n");
 
-        // Get recent calls for general context — fetch more for a real picture
+        // Get ALL recent calls for coaching insights (examples, patterns, objection handling)
+        // This is available to everyone for learning purposes
         const recentCallsResult = await getCallsWithGrades({ limit: 25, tenantId });
         const recentCalls = recentCallsResult.items;
 
-        // Build team member context with real stats
+        // Build team member context — admins see full stats, regular users see limited info
         const teamContext = teamMembersList.map(m => {
           const memberCalls = recentCalls.filter(c => c.teamMemberId === m.id);
           const gradedCalls = memberCalls.filter(c => c.grade);
-          const avgScore = gradedCalls.length > 0
-            ? Math.round(gradedCalls.reduce((sum, c) => sum + parseFloat(c.grade?.overallScore || "0"), 0) / gradedCalls.length)
-            : null;
-          const outcomes = memberCalls.reduce((acc, c) => {
-            const outcome = c.callOutcome || 'unknown';
-            acc[outcome] = (acc[outcome] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-          const outcomeStr = Object.entries(outcomes).map(([k, v]) => `${k}: ${v}`).join(', ');
-          return `- ${m.name} (${(m.teamRole || 'unknown').replace('_', ' ')}) — ${gradedCalls.length} graded calls${avgScore !== null ? `, avg score: ${avgScore}%` : ''}${outcomeStr ? `, outcomes: [${outcomeStr}]` : ''}`;
+          if (isAdmin || visibleMemberIds.has(m.id)) {
+            // Full stats for visible members
+            const avgScore = gradedCalls.length > 0
+              ? Math.round(gradedCalls.reduce((sum, c) => sum + parseFloat(c.grade?.overallScore || "0"), 0) / gradedCalls.length)
+              : null;
+            const outcomes = memberCalls.reduce((acc, c) => {
+              const outcome = c.callOutcome || 'unknown';
+              acc[outcome] = (acc[outcome] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+            const outcomeStr = Object.entries(outcomes).map(([k, v]) => `${k}: ${v}`).join(', ');
+            return `- ${m.name} (${(m.teamRole || 'unknown').replace('_', ' ')}) — ${gradedCalls.length} graded calls${avgScore !== null ? `, avg score: ${avgScore}%` : ''}${outcomeStr ? `, outcomes: [${outcomeStr}]` : ''}`;
+          } else {
+            // Just name and role for non-visible members
+            return `- ${m.name} (${(m.teamRole || 'unknown').replace('_', ' ')})`;
+          }
         }).join('\n');
 
-        // Build recent calls summary with real details
+        // Build recent calls summary — for coaching insights, include all calls but
+        // anonymize scores/grades for non-visible members (keep content for learning)
         let recentCallsSummary = "";
         if (recentCalls.length > 0) {
-          recentCallsSummary = "\n\nRECENT CALLS (real data — use this to answer questions):\n";
+          recentCallsSummary = "\n\nRECENT CALLS (use for coaching insights, examples, and patterns):\n";
           for (const call of recentCalls.slice(0, 15)) {
             const grade = call.grade;
+            const canSeeDetails = isAdmin || visibleMemberIds.has(call.teamMemberId || 0);
             recentCallsSummary += `- ${call.contactName || 'Unknown'}`;
             if (call.propertyAddress) recentCallsSummary += ` | Property: ${call.propertyAddress}`;
             recentCallsSummary += ` | ${call.callType || 'unknown'} | ${call.callOutcome || 'no outcome'}`;
             recentCallsSummary += ` | Team: ${call.teamMemberName || 'Unknown'}`;
             recentCallsSummary += ` | ${call.callTimestamp ? new Date(call.callTimestamp).toLocaleDateString() : 'Unknown date'}`;
             if (grade) {
-              recentCallsSummary += ` | Grade: ${grade.overallGrade} (${grade.overallScore}%)`;
+              if (canSeeDetails) {
+                recentCallsSummary += ` | Grade: ${grade.overallGrade} (${grade.overallScore}%)`;
+              }
+              // Always include summary for coaching/learning (how objections were handled, etc.)
               if (grade.summary) recentCallsSummary += ` | ${grade.summary.substring(0, 150)}`;
             }
             recentCallsSummary += '\n';
@@ -1209,7 +1254,9 @@ export const appRouter = router({
 
         // Build specific member call data if asked about someone
         let memberCallContext = "";
-        if (mentionedMember && mentionedMemberCalls.length > 0) {
+        if (accessDeniedForMember && mentionedMember) {
+          memberCallContext = `\n\nACCESS RESTRICTED: The current user does not have permission to view ${mentionedMember.name}'s individual performance data. They can only view their own data and data for people assigned to them.`;
+        } else if (mentionedMember && mentionedMemberCalls.length > 0) {
           memberCallContext = `\n\nDETAILED DATA FOR ${mentionedMember.name.toUpperCase()}:\n`;
           memberCallContext += `Role: ${(mentionedMember.teamRole || 'unknown').replace('_', ' ')}\n`;
           memberCallContext += `Recent graded calls: ${mentionedMemberCalls.length}\n`;
@@ -1291,7 +1338,9 @@ CRITICAL RULES:
 5. When asked strategic questions (like "should we do X or Y?"), look at the actual call outcomes and data to give a data-backed recommendation. For example: "Looking at your recent calls, I see 3 contacts with appointments set — those are ready for walkthroughs. The 2 callbacks scheduled should get follow-up calls first."
 6. Keep responses to 3-5 sentences. Be specific and actionable.
 7. Reference training materials by name when they're relevant to the question (e.g., "Your Walkthrough Checklist covers this...").
-8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data.`;
+8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data.
+9. ACCESS CONTROL: If you see "ACCESS RESTRICTED" for a team member, politely tell the user they don't have permission to view that person's individual performance. Suggest they ask their manager or an admin instead. However, you CAN still use that person's call examples for general coaching (e.g., "Here's a great example of handling that objection from a recent team call...") without revealing their scores or grades.
+10. When answering general coaching questions (objection handling, scripts, techniques), freely reference examples from ALL team calls — the call summaries and techniques are available for everyone to learn from. Only individual scores/grades are restricted.`;
 
         const response = await invokeLLM({
           messages: [
