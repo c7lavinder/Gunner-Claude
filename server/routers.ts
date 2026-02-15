@@ -101,6 +101,7 @@ import { runArchivalJob, getArchivalStats, archiveCall } from "./archival";
 import { verifyTenantOwnership } from "./tenantOwnership";
 import { checkRateLimit, trackUsage } from "./rateLimit";
 import { adminRouter } from "./adminRouter";
+import { PLATFORM_KNOWLEDGE, SECURITY_RULES, isPlatformQuestion, isSensitiveQuestion } from "./platformKnowledge";
 
 export const appRouter = router({
   system: systemRouter,
@@ -1313,41 +1314,47 @@ export const appRouter = router({
           memberCallContext = `\n\n${mentionedMember.name} has no recent graded calls to analyze.`;
         }
 
-        // Get active opportunities/pipeline data
+        // Get active opportunities/pipeline data — admin only
         let opportunityContext = "";
-        try {
-          const { getDb } = await import("./db");
-          const { opportunities } = await import("../drizzle/schema");
-          const { eq, and, desc } = await import("drizzle-orm");
-          const oppDb = await getDb();
-          if (!oppDb || !tenantId) throw new Error('no db');
-          const tid: number = tenantId;
-          const conditions = [eq(opportunities.tenantId, tid), eq(opportunities.status, "active" as const)];
-          const activeOpps = await oppDb
-            .select()
-            .from(opportunities)
-            .where(and(...conditions))
-            .orderBy(desc(opportunities.priorityScore))
-            .limit(20);
-          if (activeOpps.length > 0) {
-            const tierCounts: Record<string, number> = {};
-            for (const o of activeOpps) {
-              tierCounts[o.tier] = (tierCounts[o.tier] || 0) + 1;
+        if (isAdmin) {
+          try {
+            const { getDb } = await import("./db");
+            const { opportunities } = await import("../drizzle/schema");
+            const { eq, and, desc } = await import("drizzle-orm");
+            const oppDb = await getDb();
+            if (!oppDb || !tenantId) throw new Error('no db');
+            const tid: number = tenantId;
+            const conditions = [eq(opportunities.tenantId, tid), eq(opportunities.status, "active" as const)];
+            const activeOpps = await oppDb
+              .select()
+              .from(opportunities)
+              .where(and(...conditions))
+              .orderBy(desc(opportunities.priorityScore))
+              .limit(20);
+            if (activeOpps.length > 0) {
+              const tierCounts: Record<string, number> = {};
+              for (const o of activeOpps) {
+                tierCounts[o.tier] = (tierCounts[o.tier] || 0) + 1;
+              }
+              opportunityContext = `\n\nPIPELINE & OPPORTUNITIES (${activeOpps.length} active signals):\n`;
+              opportunityContext += `Signal breakdown: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(', ')}\n`;
+              for (const opp of activeOpps.slice(0, 10)) {
+                opportunityContext += `- ${opp.contactName || 'Unknown'}`;
+                if (opp.propertyAddress) opportunityContext += ` | ${opp.propertyAddress}`;
+                opportunityContext += ` | Tier: ${opp.tier} | Priority: ${opp.priorityScore}`;
+                if (opp.ghlPipelineStageName) opportunityContext += ` | Stage: ${opp.ghlPipelineStageName}`;
+                if (opp.teamMemberName) opportunityContext += ` | Assigned: ${opp.teamMemberName}`;
+                opportunityContext += ` | ${opp.reason.substring(0, 100)}`;
+                if (opp.suggestion) opportunityContext += ` → ${opp.suggestion.substring(0, 80)}`;
+                opportunityContext += '\n';
+              }
             }
-            opportunityContext = `\n\nPIPELINE & OPPORTUNITIES (${activeOpps.length} active signals):\n`;
-            opportunityContext += `Signal breakdown: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(', ')}\n`;
-            for (const opp of activeOpps.slice(0, 10)) {
-              opportunityContext += `- ${opp.contactName || 'Unknown'}`;
-              if (opp.propertyAddress) opportunityContext += ` | ${opp.propertyAddress}`;
-              opportunityContext += ` | Tier: ${opp.tier} | Priority: ${opp.priorityScore}`;
-              if (opp.ghlPipelineStageName) opportunityContext += ` | Stage: ${opp.ghlPipelineStageName}`;
-              if (opp.teamMemberName) opportunityContext += ` | Assigned: ${opp.teamMemberName}`;
-              opportunityContext += ` | ${opp.reason.substring(0, 100)}`;
-              if (opp.suggestion) opportunityContext += ` → ${opp.suggestion.substring(0, 80)}`;
-              opportunityContext += '\n';
-            }
-          }
-        } catch { /* opportunity data is best-effort */ }
+          } catch { /* opportunity data is best-effort */ }
+        }
+
+        // Detect platform and sensitive questions
+        const questionIsPlatform = isPlatformQuestion(input.question);
+        const questionIsSensitive = isSensitiveQuestion(input.question);
 
         // Get user's coaching tone preferences
         let coachingPrefs = "";
@@ -1361,6 +1368,9 @@ export const appRouter = router({
 
         const systemPrompt = `You are a data-driven sales coach for a real estate wholesaling team. You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
 
+${SECURITY_RULES}
+${questionIsPlatform ? PLATFORM_KNOWLEDGE : ''}
+${questionIsSensitive ? '\nSENSITIVE QUESTION DETECTED: The user is asking about restricted information. Follow the SECURITY RULES above strictly. Do NOT reveal any technical, infrastructure, cross-tenant, or implementation details.\n' : ''}
 TEAM MEMBERS (this is the COMPLETE list — no one else is on the team):
 ${teamContext}
 ${recentCallsSummary}
@@ -1427,7 +1437,9 @@ CRITICAL RULES:
 7. Reference training materials by name when they're relevant to the question (e.g., "Your Walkthrough Checklist covers this...").
 8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data.
 9. ACCESS CONTROL: If you see "ACCESS RESTRICTED" for a team member, politely tell the user they don't have permission to view that person's individual performance. Suggest they ask their manager or an admin instead. However, you CAN still use that person's call examples for general coaching (e.g., "Here's a great example of handling that objection from a recent team call...") without revealing their scores or grades.
-10. When answering general coaching questions (objection handling, scripts, techniques), freely reference examples from ALL team calls — the call summaries and techniques are available for everyone to learn from. Only individual scores/grades are restricted.`;
+10. When answering general coaching questions (objection handling, scripts, techniques), freely reference examples from ALL team calls — the call summaries and techniques are available for everyone to learn from. Only individual scores/grades are restricted.
+11. When answering questions about how Gunner features work (badges, XP, levels, streaks, grading, etc.), use the PLATFORM GUIDE above. Be helpful and specific — team members should feel empowered to use the platform.
+12. ${isAdmin ? 'This user is an ADMIN — they can see opportunity/signal details and detection rule specifics.' : 'This user is NOT an admin — do NOT reveal opportunity/signal details, detection rule thresholds, or pipeline data. If they ask about signals, tell them to ask their manager or admin.'}`;
 
         // Build messages with conversation history for context
         const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -1619,6 +1631,9 @@ RESPONSE FORMAT:
 - End with a question or action suggestion when appropriate
 - Use a warm, coach-like tone`;
         }
+
+        // Prepend security rules to all meeting facilitator prompts
+        systemPrompt = `${SECURITY_RULES}\n\n${systemPrompt}`;
 
         // Build conversation history
         const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [

@@ -1999,3 +1999,10 @@
 - [x] Fix #5: Add streaming responses to AI Coach for faster perceived response time
 - [x] Fix #6: Expand context windows for meeting facilitator and insights generator
 - [x] Fix #7: Map GHL user IDs to Gunner team member IDs in opportunity detection — all 15 detection rules now resolve opp.assignedTo to correct team member via getGhlUserIdMap(), with 3-tier fallback: detection-level → call history → GHL mapping
+
+## AI Coach Platform Knowledge
+- [x] Add platform knowledge base to AI Coach so team members can ask how Gunner features work (gamification, badges, opportunities, leaderboard, etc.)
+- [x] Include gamification rules (XP, levels, badges, streaks) in coach knowledge
+- [x] Include opportunity detection rules explanation in coach knowledge
+- [x] Include navigation/feature guide so coach can direct users to the right page
+- [x] Add security guardrails to AI Coach — blocks tech stack, code, cross-tenant data, infrastructure, prompt injection, billing internals, and detection rule thresholds (non-admin)
