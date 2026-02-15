@@ -1113,28 +1113,96 @@ export const appRouter = router({
         checkRateLimit(ctx.user?.tenantId, "ai");
         trackUsage(ctx.user?.tenantId, "ai_chat");
         
-        // Get training materials and recent successful calls for context (filtered by tenant)
-        const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
-        const recentCallsResult = await getCallsWithGrades({ limit: 20, tenantId: ctx.user?.tenantId || undefined });
-        const recentCalls = recentCallsResult.items;
-        
-        // Filter for high-scoring calls to use as examples
-        const successfulCalls = recentCalls
-          .filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 80)
-          .slice(0, 5);
+        const tenantId = ctx.user?.tenantId || undefined;
 
-        // Build context from training materials
+        // Get team members list (this is the source of truth for who's on the team)
+        const teamMembersList = await getTeamMembers(tenantId);
+        const teamMemberNames = teamMembersList.map(m => m.name);
+
+        // Detect if the user is asking about a specific team member
+        const questionLower = input.question.toLowerCase();
+        let mentionedMember: typeof teamMembersList[0] | null = null;
+        let mentionedMemberCalls: Array<any> = [];
+
+        // Try to match a team member name in the question
+        for (const member of teamMembersList) {
+          const nameParts = member.name.toLowerCase().split(' ');
+          const fullName = member.name.toLowerCase();
+          // Match full name or first name or last name
+          if (questionLower.includes(fullName) ||
+              nameParts.some(part => part.length > 2 && questionLower.includes(part))) {
+            mentionedMember = member;
+            break;
+          }
+        }
+
+        // Check if the user mentioned a name that doesn't match any team member
+        let unknownNameMentioned = false;
+        if (!mentionedMember) {
+          // Simple heuristic: look for capitalized words that could be names
+          const namePatterns = input.question.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b/g) || [];
+          const commonWords = new Set(['What', 'How', 'Why', 'When', 'Where', 'Who', 'Can', 'Could', 'Would', 'Should', 'Tell', 'Show', 'Give', 'Help', 'About', 'Team', 'Call', 'Last', 'Recent', 'Best', 'Worst', 'Good', 'Bad', 'Well', 'Today', 'Yesterday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'This', 'That', 'The', 'His', 'Her', 'Their', 'Score', 'Grade', 'Summary']);
+          const potentialNames = namePatterns.filter(n => !commonWords.has(n) && !commonWords.has(n.split(' ')[0]));
+          if (potentialNames.length > 0) {
+            unknownNameMentioned = true;
+          }
+        }
+
+        // If a team member is mentioned, fetch their recent calls
+        if (mentionedMember) {
+          try {
+            const memberCallsResult = await getCallsWithGrades({
+              teamMemberId: mentionedMember.id,
+              limit: 10,
+              tenantId,
+            });
+            mentionedMemberCalls = memberCallsResult.items;
+          } catch { /* call fetch is best-effort */ }
+        }
+
+        // Get training materials for context
+        const trainingMaterials = await getTrainingMaterials({ tenantId });
         const trainingContext = trainingMaterials
           .map(m => `### ${m.title}\n${m.content || ""}`)
           .join("\n\n");
 
-        // Build context from successful calls
-        const callExamples = successfulCalls
-          .map(c => {
-            const grade = c.grade;
-            return `### Call with ${c.contactName || "Unknown"} (Score: ${grade?.overallScore}%)\nSummary: ${grade?.summary || "N/A"}\nStrengths: ${JSON.stringify(grade?.strengths || [])}\nTranscript excerpt: ${c.transcript?.substring(0, 500) || "N/A"}...`;
-          })
-          .join("\n\n");
+        // Get recent calls for general context
+        const recentCallsResult = await getCallsWithGrades({ limit: 10, tenantId });
+        const recentCalls = recentCallsResult.items;
+
+        // Build team member context
+        const teamContext = teamMembersList.map(m => {
+          const memberCalls = recentCalls.filter(c => c.teamMemberId === m.id);
+          const avgScore = memberCalls.length > 0
+            ? Math.round(memberCalls.reduce((sum, c) => sum + parseFloat(c.grade?.overallScore || "0"), 0) / memberCalls.length)
+            : null;
+          return `- ${m.name} (${(m.teamRole || 'unknown').replace('_', ' ')})${avgScore !== null ? ` — recent avg score: ${avgScore}%` : ''}`;
+        }).join('\n');
+
+        // Build specific member call data if asked about someone
+        let memberCallContext = "";
+        if (mentionedMember && mentionedMemberCalls.length > 0) {
+          memberCallContext = `\n\nDETAILED DATA FOR ${mentionedMember.name.toUpperCase()}:\n`;
+          memberCallContext += `Role: ${(mentionedMember.teamRole || 'unknown').replace('_', ' ')}\n`;
+          memberCallContext += `Recent graded calls: ${mentionedMemberCalls.length}\n`;
+          const scores = mentionedMemberCalls.filter(c => c.grade).map(c => parseFloat(c.grade!.overallScore || "0"));
+          if (scores.length > 0) {
+            memberCallContext += `Average score: ${Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)}%\n`;
+            memberCallContext += `Score range: ${Math.round(Math.min(...scores))}% - ${Math.round(Math.max(...scores))}%\n`;
+          }
+          for (const call of mentionedMemberCalls.slice(0, 5)) {
+            const grade = call.grade;
+            memberCallContext += `\n--- Call with ${call.contactName || "Unknown"} (${call.callTimestamp ? new Date(call.callTimestamp).toLocaleDateString() : 'Unknown date'}) ---\n`;
+            if (grade) {
+              memberCallContext += `Grade: ${grade.overallGrade} (${grade.overallScore}%)\n`;
+              memberCallContext += `Summary: ${grade.summary || 'N/A'}\n`;
+              if (grade.strengths) memberCallContext += `Strengths: ${JSON.stringify(grade.strengths)}\n`;
+              if (grade.improvements) memberCallContext += `Areas to improve: ${JSON.stringify(grade.improvements)}\n`;
+            }
+          }
+        } else if (mentionedMember && mentionedMemberCalls.length === 0) {
+          memberCallContext = `\n\n${mentionedMember.name} has no recent graded calls to analyze.`;
+        }
 
         // Get user's coaching tone preferences
         let coachingPrefs = "";
@@ -1148,23 +1216,24 @@ export const appRouter = router({
 
         const systemPrompt = `You are a supportive sales coach for a real estate wholesaling team.
 
+TEAM MEMBERS (this is the COMPLETE list — no one else is on the team):
+${teamContext}
+
+${unknownNameMentioned ? `IMPORTANT: The user mentioned a name that does NOT match any team member above. You MUST tell them that person is not on the team and list the actual team members they can ask about.\n` : ''}
+
 Training context:
 ${trainingContext.substring(0, 2000)}
+${memberCallContext}
+${coachingPrefs ? `\n${coachingPrefs}` : ""}
 
-${successfulCalls.length > 0 ? `High-scoring call examples available.` : ""}${coachingPrefs ? `\n${coachingPrefs}` : ""}
-
-CRITICAL - YOUR RESPONSE MUST BE:
-1. EXACTLY 2-4 sentences total (NO MORE)
-2. Warm and encouraging tone
-3. One specific, actionable tip
-
-DO NOT:
-- Write long explanations
-- Include full scripts (just mention the key phrase)
-- Use bullet points or lists
-- Exceed 4 sentences under any circumstances
-
-Format: Start with brief encouragement, then give your one tip in 1-2 sentences.`;
+CRITICAL RULES:
+1. NEVER make up or hallucinate information. Only reference data provided above.
+2. If asked about a person NOT in the team members list, say "I don't see [name] on your team. Your current team members are: ${teamMemberNames.join(', ')}." Then ask if they meant one of those people.
+3. If asked about a team member's performance, ONLY use the actual call data provided above. If no call data is available, say so honestly.
+4. Keep responses to 2-4 sentences. Be warm and encouraging.
+5. Give one specific, actionable tip when relevant.
+6. Do NOT write long explanations, bullet points, or lists.
+7. Do NOT invent scores, call details, or performance data that isn't in the context above.`;
 
         const response = await invokeLLM({
           messages: [

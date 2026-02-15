@@ -1981,3 +1981,5 @@
 - [x] Promote Pablo Martin (velnomediagroup@gmail.com) to admin role and update name
 - [x] Fix inviteUser/removeUser role checks to also allow super_admin (not just admin)
 - [x] Fix all other role checks that only check for 'admin' but miss 'super_admin'
+- [x] Fix AI Coach to query actual team member data and call history instead of giving generic training material responses
+- [x] AI Coach should tell user when a team member name doesn't match anyone on the team
