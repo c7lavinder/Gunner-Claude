@@ -1310,3 +1310,24 @@ export const aiCoachPreferences = mysqlTable("ai_coach_preferences", {
 });
 export type AiCoachPreference = typeof aiCoachPreferences.$inferSelect;
 export type InsertAiCoachPreference = typeof aiCoachPreferences.$inferInsert;
+
+/**
+ * AI Coach Messages - persists Q&A exchanges for conversation memory.
+ * The UI always starts fresh, but the coach uses recent past messages
+ * as context to provide better coaching continuity.
+ * Each row is one message (user question or assistant answer).
+ */
+export const coachMessages = mysqlTable("coach_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  userId: int("userId").references(() => users.id).notNull(),
+  // "user" for questions, "assistant" for answers
+  role: mysqlEnum("coach_msg_role", ["user", "assistant"]).notNull(),
+  content: text("content").notNull(),
+  // Optional: link messages in the same exchange (question + answer share same exchangeId)
+  exchangeId: varchar("exchangeId", { length: 36 }).notNull(),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type CoachMessage = typeof coachMessages.$inferSelect;
+export type InsertCoachMessage = typeof coachMessages.$inferInsert;

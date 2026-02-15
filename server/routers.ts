@@ -90,6 +90,8 @@ import {
   getAllUsers,
   updateUserTeamRole,
   UserPermissionContext,
+  saveCoachExchange,
+  buildCoachMemoryContext,
 } from "./db";
 import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC, LEAD_GENERATOR_RUBRIC, FOLLOW_UP_RUBRIC, SELLER_CALLBACK_RUBRIC, ADMIN_CALLBACK_RUBRIC } from "./grading";
 import { processCall } from "./grading";
@@ -1388,12 +1390,21 @@ export const appRouter = router({
           );
         } catch { /* preferences are optional */ }
 
+        // Load conversation memory from past sessions
+        let conversationMemory = "";
+        try {
+          if (ctx.user?.tenantId && ctx.user?.id) {
+            conversationMemory = await buildCoachMemoryContext(ctx.user.tenantId, ctx.user.id, 8);
+          }
+        } catch { /* memory is best-effort */ }
+
         const systemPrompt = `You are a data-driven sales coach for a real estate wholesaling team. You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
 
 ${SECURITY_RULES}
 ${questionIsPlatform ? PLATFORM_KNOWLEDGE : ''}
 ${questionIsSensitive ? '\nSENSITIVE QUESTION DETECTED: The user is asking about restricted information. Follow the SECURITY RULES above strictly. Do NOT reveal any technical, infrastructure, cross-tenant, or implementation details.\n' : ''}
 ${computedStatsContext ? `\n${computedStatsContext}\n` : ''}
+${conversationMemory ? `\n${conversationMemory}\n` : ''}
 TEAM MEMBERS (this is the COMPLETE list — no one else is on the team):
 ${teamContext}
 ${recentCallsSummary}
@@ -1485,8 +1496,27 @@ CRITICAL RULES:
         const answer = typeof messageContent === "string" 
           ? messageContent 
           : "I apologize, I couldn't generate a response. Please try again.";
+
+        // Persist the exchange for conversation memory (fire-and-forget)
+        if (ctx.user?.tenantId && ctx.user?.id) {
+          const exchangeId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          saveCoachExchange(ctx.user.tenantId, ctx.user.id, exchangeId, input.question, answer).catch(() => {});
+        }
         
         return { answer };
+      }),
+
+    // Save a coach exchange from the streaming endpoint (called by frontend after stream completes)
+    saveExchange: protectedProcedure
+      .input(z.object({
+        question: z.string(),
+        answer: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId || !ctx.user?.id) return { saved: false };
+        const exchangeId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        await saveCoachExchange(ctx.user.tenantId, ctx.user.id, exchangeId, input.question, input.answer);
+        return { saved: true };
       }),
   }),
 

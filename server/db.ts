@@ -12,7 +12,8 @@ import {
   InsertBrandAsset, InsertSocialPost, InsertContentIdea,
   BrandAsset, SocialPost, ContentIdea, BrandProfile, InsertBrandProfile,
   teamAssignments, TeamAssignment, InsertTeamAssignment,
-  emailsSent, InsertEmailSent, EmailSent, tenants, tenantRubrics
+  emailsSent, InsertEmailSent, EmailSent, tenants, tenantRubrics,
+  coachMessages, InsertCoachMessage, CoachMessage
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2337,4 +2338,122 @@ export async function getUsersForEmailSequence(): Promise<UserForEmailSequence[]
   }
 
   return result;
+}
+
+
+// ============ COACH MESSAGE FUNCTIONS ============
+
+/**
+ * Save a Q&A exchange (user question + assistant answer) to the database.
+ * Both messages share the same exchangeId for grouping.
+ */
+export async function saveCoachExchange(
+  tenantId: number,
+  userId: number,
+  exchangeId: string,
+  userMessage: string,
+  assistantMessage: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.insert(coachMessages).values([
+    { tenantId, userId, role: "user", content: userMessage, exchangeId },
+    { tenantId, userId, role: "assistant", content: assistantMessage, exchangeId },
+  ]);
+}
+
+/**
+ * Get recent coach messages for a user, ordered newest first.
+ * Used to build conversation memory context for the system prompt.
+ * Returns up to `limit` exchanges (pairs of user+assistant messages).
+ */
+export async function getRecentCoachMessages(
+  tenantId: number,
+  userId: number,
+  limit: number = 10
+): Promise<Array<{ role: "user" | "assistant"; content: string; exchangeId: string; createdAt: Date }>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get the most recent N exchanges by finding distinct exchangeIds
+  const recentExchanges = await db
+    .select({ exchangeId: coachMessages.exchangeId })
+    .from(coachMessages)
+    .where(
+      and(
+        eq(coachMessages.tenantId, tenantId),
+        eq(coachMessages.userId, userId)
+      )
+    )
+    .groupBy(coachMessages.exchangeId)
+    .orderBy(desc(sql`MAX(${coachMessages.createdAt})`))
+    .limit(limit);
+
+  if (recentExchanges.length === 0) return [];
+
+  const exchangeIds = recentExchanges.map(e => e.exchangeId);
+
+  // Fetch all messages for those exchanges, ordered chronologically
+  const messages = await db
+    .select({
+      role: coachMessages.role,
+      content: coachMessages.content,
+      exchangeId: coachMessages.exchangeId,
+      createdAt: coachMessages.createdAt,
+    })
+    .from(coachMessages)
+    .where(
+      and(
+        eq(coachMessages.tenantId, tenantId),
+        eq(coachMessages.userId, userId),
+        inArray(coachMessages.exchangeId, exchangeIds)
+      )
+    )
+    .orderBy(coachMessages.createdAt);
+
+  return messages as Array<{ role: "user" | "assistant"; content: string; exchangeId: string; createdAt: Date }>;
+}
+
+/**
+ * Build a conversation memory context string from recent coach messages.
+ * This is injected into the system prompt so the coach can reference past discussions.
+ * Truncates long messages to keep the context window manageable.
+ */
+export async function buildCoachMemoryContext(
+  tenantId: number,
+  userId: number,
+  maxExchanges: number = 8
+): Promise<string> {
+  const messages = await getRecentCoachMessages(tenantId, userId, maxExchanges);
+  if (messages.length === 0) return "";
+
+  // Group by exchange and format
+  const exchanges: Array<{ question: string; answer: string; date: string }> = [];
+  let currentExchange: { question: string; answer: string; date: string } | null = null;
+
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      if (currentExchange) exchanges.push(currentExchange);
+      currentExchange = {
+        question: msg.content.length > 200 ? msg.content.slice(0, 200) + "..." : msg.content,
+        answer: "",
+        date: msg.createdAt.toISOString().split("T")[0],
+      };
+    } else if (msg.role === "assistant" && currentExchange) {
+      currentExchange.answer = msg.content.length > 300 ? msg.content.slice(0, 300) + "..." : msg.content;
+    }
+  }
+  if (currentExchange) exchanges.push(currentExchange);
+
+  if (exchanges.length === 0) return "";
+
+  const lines = exchanges.map((ex, i) => 
+    `${i + 1}. [${ex.date}] Q: "${ex.question}" → A: "${ex.answer}"`
+  );
+
+  return `CONVERSATION MEMORY (recent past discussions with this user — use for context and continuity):
+${lines.join("\n")}
+
+When the user references something discussed before, use this memory to provide continuity. You can say things like "As we discussed earlier..." or "Building on what we talked about..."`;
 }

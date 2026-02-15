@@ -281,6 +281,13 @@
       "when": 1771013412410,
       "tag": "0039_yellow_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "5",
+      "when": 1771178042024,
+      "tag": "0040_lucky_marvel_boy",
+      "breakpoints": true
     }
   ]
 }

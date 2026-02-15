@@ -9,7 +9,10 @@ import {
   getTrainingMaterials,
   getTeamMemberByUserId,
   getTeamAssignments,
+  buildCoachMemoryContext,
 } from "./db";
+import { SECURITY_RULES, PLATFORM_KNOWLEDGE, isSensitiveQuestion } from "./platformKnowledge";
+import { detectStatsIntent, computeStats } from "./coachStats";
 import type { User } from "../drizzle/schema";
 
 const coachStreamRouter = Router();
@@ -206,8 +209,44 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       coachingPrefs = await buildPreferenceContext(user.tenantId || 0, user.id);
     } catch { /* optional */ }
 
+    // Conversation memory from past sessions
+    let conversationMemory = "";
+    try {
+      if (user.tenantId && user.id) {
+        conversationMemory = await buildCoachMemoryContext(user.tenantId, user.id, 8);
+      }
+    } catch { /* memory is best-effort */ }
+
+    // Platform knowledge & security
+    const questionIsPlatform = /how (do|does|to)|what (is|are)|where (do|can|is)|explain|help me|badge|xp|level|streak|gamif|leaderboard|opportunity|signal|dashboard|analytics|kpi|training/i.test(question);
+    const questionIsSensitive = isSensitiveQuestion(question);
+
+    // Computed stats
+    let computedStatsContext = "";
+    try {
+      const statsIntent = detectStatsIntent(
+        question,
+        teamMembersList.map(m => ({ id: m.id, name: m.name })),
+        currentUserTeamMember?.id
+      );
+      if (statsIntent && user.tenantId) {
+        computedStatsContext = await computeStats(
+          statsIntent,
+          user.tenantId || 0,
+          visibleMemberIds,
+          isAdmin,
+          currentUserTeamMember?.id
+        );
+      }
+    } catch { /* stats are optional */ }
+
     const systemPrompt = `You are a data-driven sales coach for a real estate wholesaling team. You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
 
+${SECURITY_RULES}
+${questionIsPlatform ? PLATFORM_KNOWLEDGE : ''}
+${questionIsSensitive ? '\nSENSITIVE QUESTION DETECTED: The user is asking about restricted information. Follow the SECURITY RULES above strictly. Do NOT reveal any technical, infrastructure, cross-tenant, or implementation details.\n' : ''}
+${computedStatsContext ? `\n${computedStatsContext}\n` : ''}
+${conversationMemory ? `\n${conversationMemory}\n` : ''}
 TEAM MEMBERS (this is the COMPLETE list — no one else is on the team):
 ${teamContext}
 ${recentCallsSummary}
@@ -230,7 +269,9 @@ CRITICAL RULES:
 7. Reference training materials by name when they're relevant to the question.
 8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data.
 9. ACCESS CONTROL: If you see "ACCESS RESTRICTED" for a team member, politely tell the user they don't have permission to view that person's individual performance.
-10. When answering general coaching questions, freely reference examples from ALL team calls.`;
+10. When answering general coaching questions, freely reference examples from ALL team calls.
+11. When COMPUTED STATS are provided above, use those EXACT numbers. Do NOT estimate or calculate differently.
+12. When the user references something from CONVERSATION MEMORY, acknowledge the continuity naturally.`;
 
     // Build messages
     const messages: Array<{ role: string; content: string }> = [

@@ -375,6 +375,9 @@ function AICoachQA() {
   const [editingActionId, setEditingActionId] = useState<number | null>(null);
   const [editedContent, setEditedContent] = useState("");
   
+  // Fire-and-forget mutation to persist exchanges for conversation memory
+  const saveExchangeMutation = trpc.coach.saveExchange.useMutation();
+
   const askCoachMutation = trpc.coach.askQuestion.useMutation({
     onSuccess: (response) => {
       setConversation(prev => [...prev, { role: "assistant", content: response.answer }]);
@@ -427,6 +430,14 @@ function AICoachQA() {
           } catch { /* skip malformed */ }
         }
       }
+      // After streaming completes, persist the exchange for conversation memory (fire-and-forget)
+      setConversation(prev => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg && lastMsg.role === "assistant" && lastMsg.content) {
+          saveExchangeMutation.mutate({ question: userMessage, answer: lastMsg.content });
+        }
+        return prev;
+      });
       setIsAsking(false);
     } catch {
       // Fallback to non-streaming

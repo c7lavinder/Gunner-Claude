@@ -2015,3 +2015,11 @@
 - [x] Support trend queries (improving/declining, week-over-week)
 - [x] Support outcome queries (appointments set, offers made, conversion rates)
 - [x] Support team comparison queries (leaderboard position, ranking)
+
+## AI Coach Conversation Memory
+- [x] Create coach_messages database table for persisting chat exchanges
+- [x] Build tRPC procedure to save completed Q&A exchanges to DB
+- [x] Build tRPC procedure to load recent conversation history for system prompt context
+- [x] Update frontend to save messages after each exchange (fire-and-forget)
+- [x] Inject recent past conversation summaries into coach system prompt for continuity
+- [x] UI always starts fresh/clean — no loading old messages into the chat view
