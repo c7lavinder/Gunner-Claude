@@ -8,7 +8,7 @@
  * This engine thinks like an Acquisition Manager reviewing the pipeline,
  * NOT a call coach reviewing technique.
  */
-import { getDb } from "./db";
+import { getDb, getGhlUserIdMap } from "./db";
 import { calls, callGrades, opportunities, teamMembers } from "../drizzle/schema";
 import { eq, and, desc, gte, isNull, inArray, sql, not, lt } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
@@ -89,6 +89,25 @@ interface DetectedOpportunity {
   lastActivityAt: Date | null;
   lastStageChangeAt: Date | null;
   transcriptExcerpt: string;
+}
+
+// ============ GHL USER ID → TEAM MEMBER RESOLVER ============
+
+type GhlUserIdMap = Map<string, { id: number; name: string }>;
+
+/**
+ * Resolve a GHL assignedTo user ID to a Gunner team member.
+ * Returns { teamMemberId, teamMemberName } or nulls if not found.
+ */
+function resolveGhlAssignee(
+  ghlUserId: string | undefined | null,
+  ghlMap: GhlUserIdMap
+): { teamMemberId: number | null; teamMemberName: string | null } {
+  if (!ghlUserId || !ghlMap.has(ghlUserId)) {
+    return { teamMemberId: null, teamMemberName: null };
+  }
+  const member = ghlMap.get(ghlUserId)!;
+  return { teamMemberId: member.id, teamMemberName: member.name };
 }
 
 // ============ SALES PROCESS PIPELINE STAGE CLASSIFICATION ============
@@ -257,7 +276,8 @@ async function detectBackwardMovement(
   opp: GHLPipelineOpportunity,
   stageName: string,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity | null> {
   const stageClass = classifyStage(stageName);
   if (stageClass !== "follow_up") return null;
@@ -297,8 +317,7 @@ async function detectBackwardMovement(
     ghlPipelineStageId: opp.pipelineStageId,
     ghlPipelineStageName: stageName,
     relatedCallId: null,
-    teamMemberId: null,
-    teamMemberName: null,
+    ...resolveGhlAssignee(opp.assignedTo, ghlMap),
     assignedTo: opp.assignedTo || null,
     detectionSource: "pipeline",
     lastActivityAt: stageChangeAt,
@@ -312,7 +331,9 @@ async function detectRepeatInbound(
   conversation: GHLConversation,
   creds: GHLCredentials,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap,
+  opp: GHLPipelineOpportunity | null
 ): Promise<DetectedOpportunity | null> {
   if (conversation.lastMessageDirection !== "inbound") return null;
 
@@ -369,9 +390,8 @@ async function detectRepeatInbound(
     ghlPipelineStageId: null,
     ghlPipelineStageName: null,
     relatedCallId: latestInbound?.id || null,
-    teamMemberId: null,
-    teamMemberName: null,
-    assignedTo: null,
+    ...resolveGhlAssignee(opp?.assignedTo, ghlMap),
+    assignedTo: opp?.assignedTo || null,
     detectionSource: "conversation",
     lastActivityAt: new Date(conversation.lastMessageDate),
     lastStageChangeAt: null,
@@ -385,7 +405,8 @@ async function detectFollowUpInboundIgnored(
   opp: GHLPipelineOpportunity | null,
   stageName: string | null,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity | null> {
   if (conversation.lastMessageDirection !== "inbound") return null;
   if (!stageName || classifyStage(stageName) !== "follow_up") return null;
@@ -431,8 +452,7 @@ async function detectFollowUpInboundIgnored(
     ghlPipelineStageId: opp?.pipelineStageId || null,
     ghlPipelineStageName: stageName,
     relatedCallId: null,
-    teamMemberId: null,
-    teamMemberName: null,
+    ...resolveGhlAssignee(opp?.assignedTo, ghlMap),
     assignedTo: opp?.assignedTo || null,
     detectionSource: "conversation",
     lastActivityAt: lastMsgTime,
@@ -475,7 +495,8 @@ async function detectActiveNegotiationInFollowUp(
   stageName: string | null,
   creds: GHLCredentials,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity | null> {
   // Must be in a follow-up stage
   if (!stageName || classifyStage(stageName) !== "follow_up") return null;
@@ -539,8 +560,7 @@ async function detectActiveNegotiationInFollowUp(
     ghlPipelineStageId: opp?.pipelineStageId || null,
     ghlPipelineStageName: stageName,
     relatedCallId: null,
-    teamMemberId: null,
-    teamMemberName: null,
+    ...resolveGhlAssignee(opp?.assignedTo, ghlMap),
     assignedTo: opp?.assignedTo || null,
     detectionSource: "conversation",
     lastActivityAt: lastMsgTime,
@@ -554,7 +574,8 @@ async function detectOfferNoFollowUp(
   opp: GHLPipelineOpportunity,
   stageName: string,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity | null> {
   if (!isOfferOrBeyond(stageName)) return null;
 
@@ -592,8 +613,7 @@ async function detectOfferNoFollowUp(
     ghlPipelineStageId: opp.pipelineStageId,
     ghlPipelineStageName: stageName,
     relatedCallId: null,
-    teamMemberId: null,
-    teamMemberName: null,
+    ...resolveGhlAssignee(opp.assignedTo, ghlMap),
     assignedTo: opp.assignedTo || null,
     detectionSource: "pipeline",
     lastActivityAt: stageChangeAt,
@@ -607,7 +627,8 @@ async function detectNewLeadSLABreach(
   opp: GHLPipelineOpportunity,
   stageName: string,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity | null> {
   const lower = stageName.toLowerCase();
   if (!lower.includes("new lead")) return null;
@@ -647,8 +668,7 @@ async function detectNewLeadSLABreach(
     ghlPipelineStageId: opp.pipelineStageId,
     ghlPipelineStageName: stageName,
     relatedCallId: null,
-    teamMemberId: null,
-    teamMemberName: null,
+    ...resolveGhlAssignee(opp.assignedTo, ghlMap),
     assignedTo: opp.assignedTo || null,
     detectionSource: "pipeline",
     lastActivityAt: createdAt,
@@ -822,7 +842,8 @@ async function detectStaleActiveStage(
   opp: GHLPipelineOpportunity,
   stageName: string,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity | null> {
   const lower = stageName.toLowerCase();
   const isStaleCandidate = lower.includes("pending apt") || lower.includes("walkthrough");
@@ -860,8 +881,7 @@ async function detectStaleActiveStage(
     ghlPipelineStageId: opp.pipelineStageId,
     ghlPipelineStageName: stageName,
     relatedCallId: null,
-    teamMemberId: null,
-    teamMemberName: null,
+    ...resolveGhlAssignee(opp.assignedTo, ghlMap),
     assignedTo: opp.assignedTo || null,
     detectionSource: "pipeline",
     lastActivityAt: stageChangeAt,
@@ -875,7 +895,8 @@ async function detectDeadWithSignals(
   opp: GHLPipelineOpportunity,
   stageName: string,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity | null> {
   if (classifyStage(stageName) !== "dead") return null;
 
@@ -941,8 +962,9 @@ async function detectDeadWithSignals(
     ghlPipelineStageId: opp.pipelineStageId,
     ghlPipelineStageName: stageName,
     relatedCallId,
-    teamMemberId: contactCalls[0]?.teamMemberId || null,
-    teamMemberName: contactCalls[0]?.teamMemberName || null,
+    // Prefer call data for team member, fall back to GHL assignedTo mapping
+    teamMemberId: contactCalls[0]?.teamMemberId || resolveGhlAssignee(opp.assignedTo, ghlMap).teamMemberId,
+    teamMemberName: contactCalls[0]?.teamMemberName || resolveGhlAssignee(opp.assignedTo, ghlMap).teamMemberName,
     assignedTo: opp.assignedTo || null,
     detectionSource: "hybrid",
     lastActivityAt: stageChangeAt,
@@ -956,7 +978,8 @@ async function detectWalkthroughNoOffer(
   opp: GHLPipelineOpportunity,
   stageName: string,
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity | null> {
   if (!isWalkthroughStage(stageName)) return null;
 
@@ -981,8 +1004,7 @@ async function detectWalkthroughNoOffer(
     ghlPipelineStageId: opp.pipelineStageId,
     ghlPipelineStageName: stageName,
     relatedCallId: null,
-    teamMemberId: null,
-    teamMemberName: null,
+    ...resolveGhlAssignee(opp.assignedTo, ghlMap),
     assignedTo: opp.assignedTo || null,
     detectionSource: "pipeline",
     lastActivityAt: stageChangeAt,
@@ -994,7 +1016,8 @@ async function detectWalkthroughNoOffer(
 // Rule 11: Multiple leads from same property address
 async function detectDuplicateProperty(
   db: any,
-  tenantId: number
+  tenantId: number,
+  ghlMap: GhlUserIdMap
 ): Promise<DetectedOpportunity[]> {
   const results: DetectedOpportunity[] = [];
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -1045,8 +1068,8 @@ async function detectDuplicateProperty(
       ghlPipelineStageId: null,
       ghlPipelineStageName: null,
       relatedCallId: propertyCalls[0].id,
-      teamMemberId: null,
-      teamMemberName: null,
+      teamMemberId: propertyCalls[0].teamMemberId || null,
+      teamMemberName: propertyCalls[0].teamMemberName || null,
       assignedTo: null,
       detectionSource: "pipeline",
       lastActivityAt: propertyCalls[0].callTimestamp,
@@ -1623,6 +1646,10 @@ async function scanTenant(
 
   const detections: DetectedOpportunity[] = [];
 
+  // Build GHL user ID → team member mapping once per tenant scan
+  const ghlMap = await getGhlUserIdMap(tenantId);
+  console.log(`[OpportunityDetection] GHL user ID map: ${ghlMap.size} mapped team members for tenant ${tenantId}`);
+
   // ========== PHASE 1: GHL PIPELINE SCAN ==========
   console.log(`[OpportunityDetection] Phase 1: Scanning GHL pipelines for tenant ${tenantId}`);
 
@@ -1647,27 +1674,27 @@ async function scanTenant(
 
         // Rule 1: Backward movement — DISABLED (too noisy without GHL stage history)
         // Will revisit once we can reliably determine prior stage
-        // const backward = await detectBackwardMovement(opp, stageName, db, tenantId);
+        // const backward = await detectBackwardMovement(opp, stageName, db, tenantId, ghlMap);
         // if (backward) detections.push(backward);
 
         // Rule 4: Offer no follow-up
-        const offerStale = await detectOfferNoFollowUp(opp, stageName, db, tenantId);
+        const offerStale = await detectOfferNoFollowUp(opp, stageName, db, tenantId, ghlMap);
         if (offerStale) detections.push(offerStale);
 
         // Rule 5: New lead SLA breach
-        const slaBreach = await detectNewLeadSLABreach(opp, stageName, db, tenantId);
+        const slaBreach = await detectNewLeadSLABreach(opp, stageName, db, tenantId, ghlMap);
         if (slaBreach) detections.push(slaBreach);
 
         // Rule 8: Stale active stage
-        const stale = await detectStaleActiveStage(opp, stageName, db, tenantId);
+        const stale = await detectStaleActiveStage(opp, stageName, db, tenantId, ghlMap);
         if (stale) detections.push(stale);
 
         // Rule 9: Dead with signals
-        const deadSignals = await detectDeadWithSignals(opp, stageName, db, tenantId);
+        const deadSignals = await detectDeadWithSignals(opp, stageName, db, tenantId, ghlMap);
         if (deadSignals) detections.push(deadSignals);
 
         // Rule 10: Walkthrough no offer
-        const walkthrough = await detectWalkthroughNoOffer(opp, stageName, db, tenantId);
+        const walkthrough = await detectWalkthroughNoOffer(opp, stageName, db, tenantId, ghlMap);
         if (walkthrough) detections.push(walkthrough);
       }
     }
@@ -1726,7 +1753,7 @@ async function scanTenant(
       const oppInfo = contactOppMap.get(conv.contactId);
 
       // Rule 2: Repeat inbound
-      const repeat = await detectRepeatInbound(conv, creds, db, tenantId);
+      const repeat = await detectRepeatInbound(conv, creds, db, tenantId, ghlMap, oppInfo?.opp || null);
       if (repeat) detections.push(repeat);
 
       // Rule 3: Follow-up inbound ignored
@@ -1735,7 +1762,8 @@ async function scanTenant(
         oppInfo?.opp || null,
         oppInfo?.stageName || null,
         db,
-        tenantId
+        tenantId,
+        ghlMap
       );
       if (followUpIgnored) detections.push(followUpIgnored);
 
@@ -1746,7 +1774,8 @@ async function scanTenant(
         oppInfo?.stageName || null,
         creds,
         db,
-        tenantId
+        tenantId,
+        ghlMap
       );
       if (activeNegotiation) detections.push(activeNegotiation);
     }
@@ -1768,7 +1797,7 @@ async function scanTenant(
     detections.push(...motivatedDetections);
 
     // Rule 11: Duplicate property
-    const dupDetections = await detectDuplicateProperty(db, tenantId);
+    const dupDetections = await detectDuplicateProperty(db, tenantId, ghlMap);
     detections.push(...dupDetections);
 
     // Rule 12: Missed callback (now also checks GHL conversation for outbound follow-up)
@@ -1845,6 +1874,15 @@ async function scanTenant(
         if (contactCall.length > 0) {
           teamMemberId = contactCall[0].teamMemberId;
           teamMemberName = contactCall[0].teamMemberName;
+        }
+      }
+
+      // Final fallback: resolve from GHL assignedTo → team member mapping
+      if (!teamMemberId && detection.assignedTo) {
+        const resolved = resolveGhlAssignee(detection.assignedTo, ghlMap);
+        if (resolved.teamMemberId) {
+          teamMemberId = resolved.teamMemberId;
+          teamMemberName = resolved.teamMemberName;
         }
       }
 

@@ -228,6 +228,34 @@ export async function getTeamMemberByGhlUserId(ghlUserId: string): Promise<TeamM
   return result[0] || null;
 }
 
+/**
+ * Build a Map from GHL user IDs to Gunner team member {id, name} for a tenant.
+ * Used by opportunity detection to resolve opp.assignedTo → teamMemberId.
+ */
+export async function getGhlUserIdMap(tenantId: number): Promise<Map<string, { id: number; name: string }>> {
+  const db = await getDb();
+  const map = new Map<string, { id: number; name: string }>();
+  if (!db) return map;
+
+  const members = await db
+    .select({ id: teamMembers.id, name: teamMembers.name, ghlUserId: teamMembers.ghlUserId })
+    .from(teamMembers)
+    .where(
+      and(
+        eq(teamMembers.tenantId, tenantId),
+        eq(teamMembers.isActive, "true"),
+        sql`${teamMembers.ghlUserId} IS NOT NULL`
+      )
+    );
+
+  for (const m of members) {
+    if (m.ghlUserId) {
+      map.set(m.ghlUserId, { id: m.id, name: m.name });
+    }
+  }
+  return map;
+}
+
 export async function updateTeamMemberUserId(teamMemberId: number, userId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;

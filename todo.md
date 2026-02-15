@@ -1992,3 +1992,10 @@
 - [x] Add conversation memory to AI Coach — pass last 5-10 messages as history so follow-up questions work
 - [x] Increase AI Coach data window and add intelligent context filtering (more calls for specific member queries, outcome-specific filtering)
 - [x] Add role-based access control to AI Coach actions — team members can only assign tasks to themselves and direct reports, admins can assign to anyone
+- [x] Fix #1: Save objection handling data from grading to database (column exists but never populated)
+- [x] Fix #2: Add LLM retry/error recovery for all invokeLLM calls
+- [x] Fix #3: Add pipeline/opportunity data to AI Coach for strategic questions
+- [x] Fix #4: Improve training material matching beyond simple keyword matching
+- [x] Fix #5: Add streaming responses to AI Coach for faster perceived response time
+- [x] Fix #6: Expand context windows for meeting facilitator and insights generator
+- [x] Fix #7: Map GHL user IDs to Gunner team member IDs in opportunity detection — all 15 detection rules now resolve opp.assignedTo to correct team member via getGhlUserIdMap(), with 3-tier fallback: detection-level → call history → GHL mapping

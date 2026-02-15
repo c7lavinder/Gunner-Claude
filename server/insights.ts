@@ -1,6 +1,6 @@
 import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
-import { calls, callGrades, teamMembers, teamTrainingItems } from "../drizzle/schema";
+import { calls, callGrades, teamMembers, teamTrainingItems, trainingMaterials } from "../drizzle/schema";
 import { eq, desc, gte, and, isNotNull } from "drizzle-orm";
 
 interface CallWithGrade {
@@ -169,6 +169,23 @@ export async function generateTeamInsights(tenantId?: number): Promise<InsightsR
     }
   }
 
+  // Get training materials for context
+  let trainingContext = "";
+  if (db) {
+    const conditions = tenantId 
+      ? [eq(trainingMaterials.tenantId, tenantId), eq(trainingMaterials.isActive, "true")] 
+      : [eq(trainingMaterials.isActive, "true")];
+    const materials = await db
+      .select({ title: trainingMaterials.title, content: trainingMaterials.content, category: trainingMaterials.category })
+      .from(trainingMaterials)
+      .where(and(...conditions))
+      .limit(30);
+    if (materials.length > 0) {
+      trainingContext = `\n## Training Standards & SOPs\nThe team has ${materials.length} training materials that define expected behaviors:\n` +
+        materials.map(m => `- **${m.title}** (${m.category || "other"}): ${(m.content || "").substring(0, 500)}`).join("\n");
+    }
+  }
+
   // Build role summary for the prompt
   const roleGroups: Record<string, { members: string[], callCount: number, avgScore: number }> = {};
   for (const [member, memberCalls] of Object.entries(byTeamMember)) {
@@ -206,6 +223,7 @@ export async function generateTeamInsights(tenantId?: number): Promise<InsightsR
   const activeRoles = Object.keys(roleGroups).filter(r => roleGroups[r].callCount > 0);
 
   const prompt = `You are an AI sales coach analyzing call performance data for a real estate wholesaling team. Based on the following call data from the past week, generate actionable insights ORGANIZED BY TEAM ROLE.
+${trainingContext}
 
 ## Team Performance Summary
 - Total Calls Analyzed: ${teamStats.totalCalls}

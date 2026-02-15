@@ -1313,6 +1313,42 @@ export const appRouter = router({
           memberCallContext = `\n\n${mentionedMember.name} has no recent graded calls to analyze.`;
         }
 
+        // Get active opportunities/pipeline data
+        let opportunityContext = "";
+        try {
+          const { getDb } = await import("./db");
+          const { opportunities } = await import("../drizzle/schema");
+          const { eq, and, desc } = await import("drizzle-orm");
+          const oppDb = await getDb();
+          if (!oppDb || !tenantId) throw new Error('no db');
+          const tid: number = tenantId;
+          const conditions = [eq(opportunities.tenantId, tid), eq(opportunities.status, "active" as const)];
+          const activeOpps = await oppDb
+            .select()
+            .from(opportunities)
+            .where(and(...conditions))
+            .orderBy(desc(opportunities.priorityScore))
+            .limit(20);
+          if (activeOpps.length > 0) {
+            const tierCounts: Record<string, number> = {};
+            for (const o of activeOpps) {
+              tierCounts[o.tier] = (tierCounts[o.tier] || 0) + 1;
+            }
+            opportunityContext = `\n\nPIPELINE & OPPORTUNITIES (${activeOpps.length} active signals):\n`;
+            opportunityContext += `Signal breakdown: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(', ')}\n`;
+            for (const opp of activeOpps.slice(0, 10)) {
+              opportunityContext += `- ${opp.contactName || 'Unknown'}`;
+              if (opp.propertyAddress) opportunityContext += ` | ${opp.propertyAddress}`;
+              opportunityContext += ` | Tier: ${opp.tier} | Priority: ${opp.priorityScore}`;
+              if (opp.ghlPipelineStageName) opportunityContext += ` | Stage: ${opp.ghlPipelineStageName}`;
+              if (opp.teamMemberName) opportunityContext += ` | Assigned: ${opp.teamMemberName}`;
+              opportunityContext += ` | ${opp.reason.substring(0, 100)}`;
+              if (opp.suggestion) opportunityContext += ` → ${opp.suggestion.substring(0, 80)}`;
+              opportunityContext += '\n';
+            }
+          }
+        } catch { /* opportunity data is best-effort */ }
+
         // Get user's coaching tone preferences
         let coachingPrefs = "";
         try {
@@ -1329,34 +1365,53 @@ TEAM MEMBERS (this is the COMPLETE list — no one else is on the team):
 ${teamContext}
 ${recentCallsSummary}
 ${memberCallContext}
+${opportunityContext}
 
 ${unknownNameMentioned ? `IMPORTANT: The user mentioned a name that does NOT match any team member above. You MUST tell them that person is not on the team and list the actual team members they can ask about.\n` : ''}
 
 Training materials available: ${trainingMaterials.length > 0 ? trainingMaterials.map(m => m.title).join(', ') : 'None'}
 
 ${(() => {
-  // Include relevant training material content based on the question
+  // Semantic topic mapping — maps question concepts to training material topics
+  const topicMap: Record<string, string[]> = {
+    'walkthrough': ['walkthrough', 'property', 'inspection', 'visit', 'tour', 'checklist'],
+    'offer': ['offer', 'closing', 'price', 'arv', 'contract', 'deal', 'negotiate', 'counter'],
+    'objection': ['objection', 'pushback', 'concern', 'hesitat', 'think about', 'spouse', 'not sure', 'too low', 'no thanks', 'brush'],
+    'script': ['script', 'talk track', 'pitch', 'opening', 'intro', 'dialogue'],
+    'appointment': ['appointment', 'schedule', 'set', 'booking', 'meeting', 'calendar'],
+    'follow': ['follow', 'callback', 'call back', 'reach out', 'touch base', 'sms', 'text', 'message'],
+    'cold call': ['cold call', 'outbound', 'prospect', 'dial', 'first call', 'initial'],
+    'disqualif': ['disqualif', 'dead lead', 'not interested', 'remove', 'bad lead'],
+    'motivation': ['motivation', 'motivat', 'why sell', 'reason', 'distress', 'behind on', 'divorce', 'inherit', 'relocat'],
+    'transfer': ['transfer', 'hand off', 'handoff', 'warm transfer', 'escalat', 'pass to'],
+    'rapport': ['rapport', 'relationship', 'trust', 'connect', 'small talk', 'conversation'],
+    'closing': ['close', 'closing', 'seal', 'commit', 'agreement', 'sign', 'paperwork'],
+    'lead': ['lead', 'qualify', 'qualification', 'screening', 'criteria', 'hot lead', 'warm lead'],
+  };
   const q = input.question.toLowerCase();
-  const relevant = trainingMaterials.filter(m => {
-    const title = m.title.toLowerCase();
-    // Match training materials whose titles relate to keywords in the question
+  // Score each training material by how many topic matches it has
+  const scored = trainingMaterials.map(m => {
+    const title = (m.title || '').toLowerCase();
+    const content = (m.content || '').toLowerCase().substring(0, 500);
+    const text = title + ' ' + content;
+    let score = 0;
+    // Direct keyword match from question words
     const keywords = q.split(/\s+/).filter(w => w.length > 3);
-    return keywords.some(kw => title.includes(kw)) ||
-      (q.includes('walkthrough') && title.includes('walkthrough')) ||
-      (q.includes('offer') && (title.includes('offer') || title.includes('closing'))) ||
-      (q.includes('objection') && title.includes('objection')) ||
-      (q.includes('script') && title.includes('script')) ||
-      (q.includes('appointment') && title.includes('appointment')) ||
-      (q.includes('follow') && title.includes('follow')) ||
-      (q.includes('cold call') && title.includes('cold call')) ||
-      (q.includes('disqualif') && title.includes('disqualif')) ||
-      (q.includes('motivation') && title.includes('motivation')) ||
-      (q.includes('transfer') && title.includes('transfer')) ||
-      (q.includes('sms') && title.includes('follow')) ||
-      (q.includes('brush') && title.includes('brush'));
+    for (const kw of keywords) {
+      if (title.includes(kw)) score += 3;
+      if (content.includes(kw)) score += 1;
+    }
+    // Topic-based matching
+    for (const [, synonyms] of Object.entries(topicMap)) {
+      const questionHasTopic = synonyms.some(s => q.includes(s));
+      const materialHasTopic = synonyms.some(s => text.includes(s));
+      if (questionHasTopic && materialHasTopic) score += 2;
+    }
+    return { material: m, score };
   });
+  const relevant = scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score);
   if (relevant.length > 0) {
-    return `RELEVANT TRAINING MATERIAL (reference this when answering):\n${relevant.slice(0, 2).map(m => `### ${m.title}\n${(m.content || '').substring(0, 1500)}`).join('\n\n')}`;
+    return `RELEVANT TRAINING MATERIAL (reference this when answering):\n${relevant.slice(0, 3).map(s => `### ${s.material.title}\n${(s.material.content || '').substring(0, 1500)}`).join('\n\n')}`;
   }
   return '';
 })()}
@@ -1367,7 +1422,7 @@ CRITICAL RULES:
 2. If the user asks a question that requires data you don't have, say "Based on the data I can see..." and be honest about what's missing.
 3. If asked about a person NOT in the team members list, say "I don't see [name] on your team. Your current team members are: ${teamMemberNames.join(', ')}." Then ask if they meant one of those people.
 4. NEVER make up or hallucinate information. No fake names, scores, or details.
-5. When asked strategic questions (like "should we do X or Y?"), look at the actual call outcomes and data to give a data-backed recommendation. For example: "Looking at your recent calls, I see 3 contacts with appointments set — those are ready for walkthroughs. The 2 callbacks scheduled should get follow-up calls first."
+5. When asked strategic questions (like "should we do X or Y?"), look at the actual call outcomes, pipeline data, and opportunity signals to give a data-backed recommendation. Reference specific contacts, pipeline stages, and priority scores when available. For example: "Looking at your pipeline, you have 3 missed-tier signals that need immediate attention — [contact name] at [address] hasn't been followed up in 5 days."
 6. Keep responses to 3-5 sentences. Be specific and actionable.
 7. Reference training materials by name when they're relevant to the question (e.g., "Your Walkthrough Checklist covers this...").
 8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data.
@@ -1414,11 +1469,11 @@ CRITICAL RULES:
         // Get training materials for context (filtered by tenant)
         const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
         const trainingContext = trainingMaterials
-          .map(m => `${m.title}: ${m.content?.substring(0, 500) || ""}`)
+          .map(m => `${m.title}: ${m.content?.substring(0, 1500) || ""}`)
           .join("\n");
 
         // Get recent calls for examples (filtered by tenant)
-        const recentCallsResult = await getCallsWithGrades({ limit: 30, tenantId: ctx.user?.tenantId || undefined });
+        const recentCallsResult = await getCallsWithGrades({ limit: 50, tenantId: ctx.user?.tenantId || undefined });
         const recentCalls = recentCallsResult.items;
         const goodCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 75).slice(0, 5);
         const badCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") < 60).slice(0, 5);
@@ -1461,11 +1516,11 @@ CRITICAL RULES:
         // Get training materials (filtered by tenant)
         const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
         const trainingContext = trainingMaterials
-          .map(m => `### ${m.title}\n${m.content?.substring(0, 800) || ""}`)
+          .map(m => `### ${m.title}\n${m.content?.substring(0, 2000) || ""}`)
           .join("\n\n");
 
         // Get recent calls for examples (filtered by tenant)
-        const recentCallsResult = await getCallsWithGrades({ limit: 30, tenantId: ctx.user?.tenantId || undefined });
+        const recentCallsResult = await getCallsWithGrades({ limit: 50, tenantId: ctx.user?.tenantId || undefined });
         const recentCalls = recentCallsResult.items;
         const goodCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") >= 75).slice(0, 5);
         const badCalls = recentCalls.filter(c => c.grade && parseFloat(c.grade.overallScore || "0") < 60).slice(0, 5);
@@ -1514,7 +1569,7 @@ RECENT CALL EXAMPLES:
 ${callExamples}
 
 TRAINING CONTEXT:
-${trainingContext.substring(0, 2000)}
+${trainingContext.substring(0, 5000)}
 
 Your role:
 1. When asked, share relevant examples from the calls above
@@ -1529,7 +1584,7 @@ Be encouraging but honest about areas for improvement.`;
           systemPrompt = `You are a sales coach for a real estate wholesaling team, answering questions during a team meeting.
 
 TRAINING MATERIALS:
-${trainingContext.substring(0, 3000)}
+${trainingContext.substring(0, 6000)}
 
 Current agenda topic: "${input.currentAgendaItem?.title || "General discussion"}"
 ${input.currentAgendaItem?.description ? `Topic details: ${input.currentAgendaItem.description}` : ""}
@@ -1550,7 +1605,7 @@ Current agenda item: "${input.currentAgendaItem?.title || "Meeting start"}"
 ${input.currentAgendaItem?.description ? `Details: ${input.currentAgendaItem.description}` : ""}
 
 TRAINING CONTEXT:
-${trainingContext.substring(0, 1500)}
+${trainingContext.substring(0, 4000)}
 
 Your role:
 1. Guide discussion on the current agenda topic

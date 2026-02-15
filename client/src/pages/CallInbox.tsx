@@ -386,6 +386,54 @@ function AICoachQA() {
     },
   });
 
+  const streamCoachQuestion = async (userMessage: string, chatHistory: Array<{ role: "user" | "assistant"; content: string }>) => {
+    // Add a placeholder assistant message that we'll stream into
+    setConversation(prev => [...prev, { role: "assistant", content: "" }]);
+    try {
+      const response = await fetch("/api/coach/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: userMessage, history: chatHistory }),
+      });
+      if (!response.ok) throw new Error("Stream request failed");
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const data = trimmed.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === "chunk" && parsed.content) {
+              setConversation(prev => {
+                const updated = [...prev];
+                const lastMsg = updated[updated.length - 1];
+                if (lastMsg && lastMsg.role === "assistant") {
+                  updated[updated.length - 1] = { ...lastMsg, content: lastMsg.content + parsed.content };
+                }
+                return updated;
+              });
+            } else if (parsed.type === "error") {
+              toast.error("Coach error: " + parsed.message);
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+      setIsAsking(false);
+    } catch {
+      // Fallback to non-streaming
+      askCoachMutation.mutate({ question: userMessage, history: chatHistory });
+    }
+  };
+
   const parseIntentMutation = trpc.coachActions.parseIntent.useMutation();
   const searchContactsMutation = trpc.coachActions.searchContacts.useMutation();
   const createPendingMutation = trpc.coachActions.createPending.useMutation();
@@ -429,15 +477,14 @@ function AICoachQA() {
           await createActionCard(intent, userMessage);
         }
       } else {
-        // Regular coaching question
-        // Send conversation history (only user/assistant messages, not action cards)
+        // Regular coaching question — stream the response
         const chatHistory = conversation
           .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
             msg.role === "user" || msg.role === "assistant"
           )
           .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
-        askCoachMutation.mutate({ question: userMessage, history: chatHistory });
-        return; // Don't setIsAsking(false) here, the mutation callback handles it
+        await streamCoachQuestion(userMessage, chatHistory);
+        return;
       }
     } catch (error: any) {
       toast.error("Failed to process: " + error.message);
@@ -634,7 +681,7 @@ function AICoachQA() {
                       setQuestion(prompt);
                       setConversation([{ role: "user", content: prompt }]);
                       setIsAsking(true);
-                      askCoachMutation.mutate({ question: prompt, history: [] });
+                      streamCoachQuestion(prompt, []);
                     }}
                     className="text-xs text-left px-3 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
                   >

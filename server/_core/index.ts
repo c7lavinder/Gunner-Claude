@@ -14,6 +14,7 @@ import { initializeBadges } from "../gamification";
 import { handleStripeWebhook } from "../stripe/webhook";
 import selfServeAuthRoutes from "../selfServeAuthRoutes";
 import { runEmailSequenceJobs } from "../emailSequenceJobs";
+import { coachStreamRouter } from "../coachStream";
 import { startBatchDialerPolling } from "../batchDialerSync";
 import { startBatchLeadsPolling } from "../batchLeadsSync";
 import { startWebhookRetryQueue } from "../webhookRetryQueue";
@@ -56,6 +57,9 @@ async function startServer() {
   
   // Self-serve auth routes (email/password)
   app.use("/api/auth", selfServeAuthRoutes);
+
+  // AI Coach streaming endpoint
+  app.use(coachStreamRouter);
   
   // Seed team members on startup
   seedTeamMembers().catch(err => console.error("Failed to seed team members:", err));
