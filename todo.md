@@ -1983,3 +1983,4 @@
 - [x] Fix all other role checks that only check for 'admin' but miss 'super_admin'
 - [x] Fix AI Coach to query actual team member data and call history instead of giving generic training material responses
 - [x] AI Coach should tell user when a team member name doesn't match anyone on the team
+- [x] Fix parseIntent to look up contact call history for ALL action types (tasks, notes, SMS) not just when call keywords are detected
