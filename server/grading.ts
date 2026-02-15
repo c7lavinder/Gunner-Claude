@@ -547,7 +547,7 @@ ${callType === "qualification" ? `DISQUALIFICATION TARGET: ${LEAD_MANAGER_RUBRIC
 
 Analyze the transcript and provide:
 1. A score for each criterion (0 to max points)
-2. Specific feedback for each criterion
+2. Specific feedback for each criterion — MUST include direct quotes from the transcript
 3. Overall strengths (what they did well)
 4. Areas for improvement
 5. Specific coaching tips based on the training methodology
@@ -556,7 +556,18 @@ Analyze the transcript and provide:
 8. A brief summary of the call performance
 9. The call outcome - determine what happened at the end of the call
 
-Be specific and reference actual quotes from the transcript when possible.`;
+CRITICAL REQUIREMENT — TRANSCRIPT-REFERENCED FEEDBACK:
+Every piece of feedback MUST reference specific details from the actual transcript. Do NOT give generic coaching advice.
+
+- **Summary**: Must mention specific dollar amounts, property details, timelines, and outcomes discussed. Example: "Kyle followed up on the previous $85,000 offer on the Elm St property. The seller mentioned needing at least $120,000 but Kyle did not counter or anchor."
+- **Strengths**: Each strength MUST include a direct quote or specific moment. Example: "Kyle built rapport by acknowledging the seller's emotional attachment: 'I understand this has been in your family for years, and that means something.'"
+- **Areas for Improvement**: Each improvement MUST cite the exact moment where the rep fell short, including what the seller said and what the rep should have said instead. Example: "When the seller said 'I'll think about it and maybe reach out later,' Kyle responded with 'Sounds good, feel free to call anytime.' Instead, he should have said: 'I totally understand — what specifically do you need to think about? Is it the price, the timeline, or something else?'"
+- **Coaching Tips**: Must reference the specific situation from THIS call, not generic advice. Include the exact quote that triggered the coaching moment.
+- **Criteria Feedback**: Must quote the relevant transcript section that justifies the score given.
+
+If a dollar amount, property address, timeline, or specific number was mentioned in the call, it MUST appear in the relevant feedback sections. Never say "the seller mentioned a price concern" — say "the seller said 'I was hoping for at least $200,000' but the rep's offer was $150,000, a $50,000 gap."
+
+Do NOT use placeholder examples. Use ONLY actual content from the transcript provided.`;
 
   const userPrompt = `Please analyze this call transcript and provide a detailed grade:
 
@@ -568,9 +579,9 @@ Respond with a JSON object in this exact format:
   "criteriaScores": [
     {"name": "criterion name", "score": number, "maxPoints": number, "feedback": "specific feedback"}
   ],
-  "strengths": ["strength 1", "strength 2"],
-  "improvements": ["improvement 1", "improvement 2"],
-  "coachingTips": ["tip 1", "tip 2"],
+  "strengths": ["Kyle effectively anchored the previous offer early: 'Last time we talked, we were at $85,000 — has anything changed on your end?'", "strength with quote 2"],
+  "improvements": ["When the seller said 'I need to talk to my wife,' Kyle said 'No problem, take your time.' He should have said: 'Absolutely — would it help if I put together the numbers so you can show her exactly what this looks like?'", "improvement with quote 2"],
+  "coachingTips": ["At 1:45 when the seller mentioned '$120,000 minimum,' Kyle went silent. Script: 'I hear you at $120k. Help me understand — is that based on what you owe, what a neighbor sold for, or what you need to walk away with?'", "tip with quote 2"],
   "redFlags": ["red flag 1"] or [],
   "objectionHandling": [
     {"objection": "Price too high", "context": "Seller said: 'I was hoping for at least $200k'", "suggestedResponses": ["Response 1", "Response 2"]}

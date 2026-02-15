@@ -2023,3 +2023,9 @@
 - [x] Update frontend to save messages after each exchange (fire-and-forget)
 - [x] Inject recent past conversation summaries into coach system prompt for continuity
 - [x] UI always starts fresh/clean — no loading old messages into the chat view
+
+## Call Grading — Transcript-Referenced Feedback
+- [x] Update grading LLM prompts to require exact quotes from transcript in summary
+- [x] Update strengths to reference specific things said with quoted text
+- [x] Update areas for improvement to cite specific missed moments with quotes
+- [x] Include dollar amounts, property details, and specific numbers mentioned in the call
