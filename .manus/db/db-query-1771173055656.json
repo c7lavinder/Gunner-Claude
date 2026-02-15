@@ -1,0 +1,18 @@
+{
+  "query": "SELECT \n  COUNT(*) as total_grades,\n  SUM(CASE WHEN objectionHandling IS NOT NULL AND objectionHandling != '[]' AND objectionHandling != 'null' THEN 1 ELSE 0 END) as with_objections,\n  SUM(CASE WHEN strengths IS NOT NULL AND strengths != '[]' AND strengths != 'null' THEN 1 ELSE 0 END) as with_strengths,\n  SUM(CASE WHEN improvements IS NOT NULL AND improvements != '[]' AND improvements != 'null' THEN 1 ELSE 0 END) as with_improvements,\n  SUM(CASE WHEN coachingTips IS NOT NULL AND coachingTips != '[]' AND coachingTips != 'null' THEN 1 ELSE 0 END) as with_tips,\n  SUM(CASE WHEN summary IS NOT NULL AND summary != '' THEN 1 ELSE 0 END) as with_summary\nFROM call_grades",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT \n  COUNT(*) as total_grades,\n  SUM(CASE WHEN objectionHandling IS NOT NULL AND objectionHandling != '[]' AND objectionHandling != 'null' THEN 1 ELSE 0 END) as with_objections,\n  SUM(CASE WHEN strengths IS NOT NULL AND strengths != '[]' AND strengths != 'null' THEN 1 ELSE 0 END) as with_strengths,\n  SUM(CASE WHEN improvements IS NOT NULL AND improvements != '[]' AND improvements != 'null' THEN 1 ELSE 0 END) as with_improvements,\n  SUM(CASE WHEN coachingTips IS NOT NULL AND coachingTips != '[]' AND coachingTips != 'null' THEN 1 ELSE 0 END) as with_tips,\n  SUM(CASE WHEN summary IS NOT NULL AND summary != '' THEN 1 ELSE 0 END) as with_summary\nFROM call_grades",
+  "rows": [
+    {
+      "total_grades": "194",
+      "with_objections": "0",
+      "with_strengths": "194",
+      "with_improvements": "194",
+      "with_tips": "194",
+      "with_summary": "194"
+    }
+  ],
+  "messages": [],
+  "stdout": "total_grades\twith_objections\twith_strengths\twith_improvements\twith_tips\twith_summary\n194\t0\t194\t194\t194\t194\n",
+  "stderr": "",
+  "execution_time_ms": 370
+}

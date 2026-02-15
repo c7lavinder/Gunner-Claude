@@ -1107,7 +1107,13 @@ export const appRouter = router({
   // ============ AI COACH ============
   coach: router({
     askQuestion: protectedProcedure
-      .input(z.object({ question: z.string() }))
+      .input(z.object({
+        question: z.string(),
+        history: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+        })).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         // Rate limit AI operations
         checkRateLimit(ctx.user?.tenantId, "ai");
@@ -1181,17 +1187,7 @@ export const appRouter = router({
           accessDeniedForMember = true;
         }
 
-        // If a team member is mentioned AND the user has access, fetch their recent calls
-        if (mentionedMember && !accessDeniedForMember) {
-          try {
-            const memberCallsResult = await getCallsWithGrades({
-              teamMemberId: mentionedMember.id,
-              limit: 10,
-              tenantId,
-            });
-            mentionedMemberCalls = memberCallsResult.items;
-          } catch { /* call fetch is best-effort */ }
-        }
+        // Member-specific calls are now fetched above in the smart data window section
 
         // Get training materials for context
         const trainingMaterials = await getTrainingMaterials({ tenantId });
@@ -1201,7 +1197,42 @@ export const appRouter = router({
 
         // Get ALL recent calls for coaching insights (examples, patterns, objection handling)
         // This is available to everyone for learning purposes
-        const recentCallsResult = await getCallsWithGrades({ limit: 25, tenantId });
+        // Smart data window: pull more data when asking about specific topics or members
+        const isAskingAboutMember = !!mentionedMember;
+        const isAskingAboutPerformance = /\b(performance|score|grade|average|trend|improv|progress|week|month|compare|rank|best|worst)\b/i.test(input.question);
+        const isAskingAboutOutcome = /\b(walkthrough|appointment|callback|follow.?up|offer|close|no.?show|skip|disqualif)\b/i.test(input.question);
+        
+        // Base limit: 25 for general questions, 50 for performance/trend questions
+        let callLimit = isAskingAboutPerformance ? 50 : 25;
+        
+        // For specific member queries, also fetch their dedicated calls with higher limit
+        if (isAskingAboutMember && !accessDeniedForMember) {
+          try {
+            const memberCallsResult = await getCallsWithGrades({
+              teamMemberId: mentionedMember!.id,
+              limit: 20, // Up from 10 — more data for better analysis
+              tenantId,
+            });
+            mentionedMemberCalls = memberCallsResult.items;
+          } catch { /* call fetch is best-effort */ }
+        }
+        
+        // For outcome-specific questions, filter by relevant outcomes
+        let outcomeFilter: string[] | undefined;
+        if (isAskingAboutOutcome) {
+          const q = input.question.toLowerCase();
+          if (q.includes('walkthrough') || q.includes('appointment')) outcomeFilter = ['appointment_set', 'walkthrough_scheduled'];
+          else if (q.includes('callback') || q.includes('follow')) outcomeFilter = ['callback_scheduled', 'follow_up_needed'];
+          else if (q.includes('offer') || q.includes('close')) outcomeFilter = ['offer_made', 'deal_closed'];
+          else if (q.includes('no show') || q.includes('no-show')) outcomeFilter = ['no_show'];
+          else if (q.includes('skip') || q.includes('disqualif')) outcomeFilter = ['not_interested', 'wrong_number', 'do_not_call'];
+        }
+        
+        const recentCallsResult = await getCallsWithGrades({
+          limit: callLimit,
+          tenantId,
+          ...(outcomeFilter ? { outcomes: outcomeFilter } : {}),
+        });
         const recentCalls = recentCallsResult.items;
 
         // Build team member context — admins see full stats, regular users see limited info
@@ -1230,8 +1261,9 @@ export const appRouter = router({
         // anonymize scores/grades for non-visible members (keep content for learning)
         let recentCallsSummary = "";
         if (recentCalls.length > 0) {
-          recentCallsSummary = "\n\nRECENT CALLS (use for coaching insights, examples, and patterns):\n";
-          for (const call of recentCalls.slice(0, 15)) {
+          const displayLimit = isAskingAboutPerformance ? 30 : 20;
+          recentCallsSummary = `\n\nRECENT CALLS (${recentCalls.length} loaded, showing ${Math.min(recentCalls.length, displayLimit)} — use for coaching insights, examples, and patterns):\n`;
+          for (const call of recentCalls.slice(0, displayLimit)) {
             const grade = call.grade;
             const canSeeDetails = isAdmin || visibleMemberIds.has(call.teamMemberId || 0);
             recentCallsSummary += `- ${call.contactName || 'Unknown'}`;
@@ -1342,12 +1374,21 @@ CRITICAL RULES:
 9. ACCESS CONTROL: If you see "ACCESS RESTRICTED" for a team member, politely tell the user they don't have permission to view that person's individual performance. Suggest they ask their manager or an admin instead. However, you CAN still use that person's call examples for general coaching (e.g., "Here's a great example of handling that objection from a recent team call...") without revealing their scores or grades.
 10. When answering general coaching questions (objection handling, scripts, techniques), freely reference examples from ALL team calls — the call summaries and techniques are available for everyone to learn from. Only individual scores/grades are restricted.`;
 
-        const response = await invokeLLM({
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: input.question },
-          ],
-        });
+        // Build messages with conversation history for context
+        const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+          { role: "system", content: systemPrompt },
+        ];
+        // Include up to last 10 conversation turns for memory
+        if (input.history && input.history.length > 0) {
+          const recentHistory = input.history.slice(-10);
+          for (const msg of recentHistory) {
+            messages.push({ role: msg.role, content: msg.content });
+          }
+        }
+        // Add the current question
+        messages.push({ role: "user", content: input.question });
+
+        const response = await invokeLLM({ messages });
 
         const messageContent = response.choices?.[0]?.message?.content;
         const answer = typeof messageContent === "string" 
@@ -3874,9 +3915,41 @@ Create content that:
 
         // Get team members list for assignee resolution
         let teamMemberNames: string[] = [];
+        let allMembers: Awaited<ReturnType<typeof getTeamMembers>> = [];
+        let allowedAssigneeNames: string[] = [];
         try {
-          const members = await getTeamMembers(tenantId);
-          teamMemberNames = members.map(m => m.name);
+          allMembers = await getTeamMembers(tenantId);
+          teamMemberNames = allMembers.map(m => m.name);
+          
+          // Determine who this user can assign tasks to (same hierarchy as AI Coach visibility)
+          const isAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'super_admin';
+          if (isAdmin) {
+            allowedAssigneeNames = teamMemberNames;
+          } else {
+            // Can assign to self + direct reports
+            const currentUserTeamMember = ctx.user?.id
+              ? await getTeamMemberByUserId(ctx.user.id)
+              : null;
+            const allowedIds = new Set<number>();
+            if (currentUserTeamMember) {
+              allowedIds.add(currentUserTeamMember.id);
+              try {
+                const assignments = await getTeamAssignments(tenantId);
+                for (const a of assignments) {
+                  if (a.acquisitionManagerId === currentUserTeamMember.id) {
+                    allowedIds.add(a.leadManagerId);
+                  }
+                }
+              } catch { /* assignment lookup is best-effort */ }
+            }
+            allowedAssigneeNames = allMembers
+              .filter(m => allowedIds.has(m.id))
+              .map(m => m.name);
+            // Always include self
+            if (ctx.user?.name && !allowedAssigneeNames.includes(ctx.user.name)) {
+              allowedAssigneeNames.push(ctx.user.name);
+            }
+          }
         } catch { /* team list is optional */ }
 
         // Always look up recent call data for the contact mentioned in the message
@@ -4007,6 +4080,8 @@ Context: ${input.contextContactId ? `Currently viewing contact: ${input.contextC
 The current user is: ${ctx.user!.name || "Unknown"}
 Team members: ${teamMemberNames.length > 0 ? teamMemberNames.join(", ") : "Unknown"}
 
+ASSIGNEE RESTRICTION: For create_task, the assignee MUST be one of these people ONLY: ${allowedAssigneeNames.length > 0 ? allowedAssigneeNames.join(", ") : ctx.user!.name || "Unknown"}. If the user tries to assign to someone not on this list, set assigneeName to "${ctx.user!.name || "Unknown"}" (the current user) and include a note in the summary that the task was assigned to them instead because they don't have permission to assign to the requested person.
+
 IMPORTANT: For actions that involve writing content, you MUST generate the FULL DRAFT TEXT upfront so the user can review and edit it before confirming:
 - For add_note_contact / add_note_opportunity: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note. If the user asks to summarize a call, use the RECENT CALL DATA provided below to write a real summary.
 - For send_sms: Write the complete SMS message text in params.message. Don't describe the SMS — write the actual message that will be sent. CRITICAL: The SMS will be sent DIRECTLY to the contact, so always write it in SECOND PERSON ("you"/"your") as if speaking to them. The user may describe what to say in third person (e.g., "tell him we don't want his house") — you MUST convert this to direct address (e.g., "we're not interested in purchasing your house"). Never use "he/him/his/she/her" to refer to the recipient in the SMS body.
@@ -4118,6 +4193,51 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
 
         const { confirmAction, executeAction } = await import("./ghlActions");
         const { recordEdit } = await import("./coachPreferences");
+
+        // Validate assignee permissions for task creation
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (db) {
+          const { coachActionLog } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          const [actionRecord] = await db.select().from(coachActionLog).where(eq(coachActionLog.id, input.actionId));
+          if (actionRecord?.actionType === "create_task") {
+            const finalPayload = input.editedPayload || actionRecord.payload as any;
+            const assigneeName = finalPayload?.assigneeName;
+            if (assigneeName) {
+              const isAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'super_admin';
+              if (!isAdmin) {
+                // Validate the assignee is in the user's allowed list
+                const currentUserTeamMember = ctx.user?.id
+                  ? await getTeamMemberByUserId(ctx.user.id)
+                  : null;
+                const allowedIds = new Set<number>();
+                if (currentUserTeamMember) {
+                  allowedIds.add(currentUserTeamMember.id);
+                  try {
+                    const assignments = await getTeamAssignments(tenantId);
+                    for (const a of assignments) {
+                      if (a.acquisitionManagerId === currentUserTeamMember.id) {
+                        allowedIds.add(a.leadManagerId);
+                      }
+                    }
+                  } catch { /* best-effort */ }
+                }
+                const allMembers = await getTeamMembers(tenantId);
+                const assigneeMember = allMembers.find(m =>
+                  m.name.toLowerCase().includes(assigneeName.toLowerCase()) ||
+                  assigneeName.toLowerCase().includes(m.name.split(" ")[0].toLowerCase())
+                );
+                if (assigneeMember && !allowedIds.has(assigneeMember.id)) {
+                  throw new TRPCError({
+                    code: "FORBIDDEN",
+                    message: `You don't have permission to assign tasks to ${assigneeMember.name}. You can only assign tasks to yourself and your direct reports.`,
+                  });
+                }
+              }
+            }
+          }
+        }
 
         // If user edited the payload, update the action log before executing
         if (input.editedPayload) {

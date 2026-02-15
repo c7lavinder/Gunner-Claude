@@ -1988,3 +1988,7 @@
 - [x] Add role-based visibility to AI Coach: all call data used for coaching insights/examples, but individual performance queries (scores, grades) restricted to admins and supervisors only
 - [x] Verify and ensure role-based call visibility on Call Inbox page matches AI Coach rules (admins see all, members see own + direct reports) — already implemented via getCallsWithPermissions
 - [x] Fix skipped call count in call history showing incorrect number (100 when there haven't been 100 calls in 24 hours)
+- [x] Auto-archive all calls older than 30 days to keep the system clean — already set to 14 days, confirmed working as-is
+- [x] Add conversation memory to AI Coach — pass last 5-10 messages as history so follow-up questions work
+- [x] Increase AI Coach data window and add intelligent context filtering (more calls for specific member queries, outcome-specific filtering)
+- [x] Add role-based access control to AI Coach actions — team members can only assign tasks to themselves and direct reports, admins can assign to anyone

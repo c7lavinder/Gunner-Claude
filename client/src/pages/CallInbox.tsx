@@ -430,7 +430,13 @@ function AICoachQA() {
         }
       } else {
         // Regular coaching question
-        askCoachMutation.mutate({ question: userMessage });
+        // Send conversation history (only user/assistant messages, not action cards)
+        const chatHistory = conversation
+          .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+            msg.role === "user" || msg.role === "assistant"
+          )
+          .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+        askCoachMutation.mutate({ question: userMessage, history: chatHistory });
         return; // Don't setIsAsking(false) here, the mutation callback handles it
       }
     } catch (error: any) {
@@ -628,7 +634,7 @@ function AICoachQA() {
                       setQuestion(prompt);
                       setConversation([{ role: "user", content: prompt }]);
                       setIsAsking(true);
-                      askCoachMutation.mutate({ question: prompt });
+                      askCoachMutation.mutate({ question: prompt, history: [] });
                     }}
                     className="text-xs text-left px-3 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
                   >
