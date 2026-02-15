@@ -2006,3 +2006,12 @@
 - [x] Include opportunity detection rules explanation in coach knowledge
 - [x] Include navigation/feature guide so coach can direct users to the right page
 - [x] Add security guardrails to AI Coach — blocks tech stack, code, cross-tenant data, infrastructure, prompt injection, billing internals, and detection rule thresholds (non-admin)
+
+## AI Coach Stats Queries
+- [x] Add computed stats engine to AI Coach — detect stats questions and inject precise calculated answers
+- [x] Support call count queries (today, this week, this month, by member)
+- [x] Support average score queries (by period, by member, by call type)
+- [x] Support streak/XP/level/badge queries from gamification data
+- [x] Support trend queries (improving/declining, week-over-week)
+- [x] Support outcome queries (appointments set, offers made, conversion rates)
+- [x] Support team comparison queries (leaderboard position, ranking)

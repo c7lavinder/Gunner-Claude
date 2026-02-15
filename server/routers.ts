@@ -102,6 +102,7 @@ import { verifyTenantOwnership } from "./tenantOwnership";
 import { checkRateLimit, trackUsage } from "./rateLimit";
 import { adminRouter } from "./adminRouter";
 import { PLATFORM_KNOWLEDGE, SECURITY_RULES, isPlatformQuestion, isSensitiveQuestion } from "./platformKnowledge";
+import { detectStatsIntent, computeStats } from "./coachStats";
 
 export const appRouter = router({
   system: systemRouter,
@@ -1356,6 +1357,27 @@ export const appRouter = router({
         const questionIsPlatform = isPlatformQuestion(input.question);
         const questionIsSensitive = isSensitiveQuestion(input.question);
 
+        // Detect and compute stats queries for precise answers
+        let computedStatsContext = "";
+        const statsIntent = detectStatsIntent(
+          input.question,
+          teamMembersList.map(m => ({ id: m.id, name: m.name })),
+          currentUserTeamMember?.id
+        );
+        if (statsIntent) {
+          try {
+            computedStatsContext = await computeStats(
+              statsIntent,
+              tenantId || 0,
+              visibleMemberIds,
+              isAdmin,
+              currentUserTeamMember?.id
+            );
+          } catch (err) {
+            console.error("[Coach] Stats computation error:", err);
+          }
+        }
+
         // Get user's coaching tone preferences
         let coachingPrefs = "";
         try {
@@ -1371,6 +1393,7 @@ export const appRouter = router({
 ${SECURITY_RULES}
 ${questionIsPlatform ? PLATFORM_KNOWLEDGE : ''}
 ${questionIsSensitive ? '\nSENSITIVE QUESTION DETECTED: The user is asking about restricted information. Follow the SECURITY RULES above strictly. Do NOT reveal any technical, infrastructure, cross-tenant, or implementation details.\n' : ''}
+${computedStatsContext ? `\n${computedStatsContext}\n` : ''}
 TEAM MEMBERS (this is the COMPLETE list — no one else is on the team):
 ${teamContext}
 ${recentCallsSummary}
@@ -1439,7 +1462,8 @@ CRITICAL RULES:
 9. ACCESS CONTROL: If you see "ACCESS RESTRICTED" for a team member, politely tell the user they don't have permission to view that person's individual performance. Suggest they ask their manager or an admin instead. However, you CAN still use that person's call examples for general coaching (e.g., "Here's a great example of handling that objection from a recent team call...") without revealing their scores or grades.
 10. When answering general coaching questions (objection handling, scripts, techniques), freely reference examples from ALL team calls — the call summaries and techniques are available for everyone to learn from. Only individual scores/grades are restricted.
 11. When answering questions about how Gunner features work (badges, XP, levels, streaks, grading, etc.), use the PLATFORM GUIDE above. Be helpful and specific — team members should feel empowered to use the platform.
-12. ${isAdmin ? 'This user is an ADMIN — they can see opportunity/signal details and detection rule specifics.' : 'This user is NOT an admin — do NOT reveal opportunity/signal details, detection rule thresholds, or pipeline data. If they ask about signals, tell them to ask their manager or admin.'}`;
+12. ${isAdmin ? 'This user is an ADMIN — they can see opportunity/signal details and detection rule specifics.' : 'This user is NOT an admin — do NOT reveal opportunity/signal details, detection rule thresholds, or pipeline data. If they ask about signals, tell them to ask their manager or admin.'}
+13. When you see a "COMPUTED STATS" block above, those numbers are EXACT — calculated directly from the database. You MUST use those exact numbers in your response. Do NOT estimate, round differently, or contradict the computed stats. Present them naturally in your answer (e.g., "You've made 12 calls this week with an average score of 78.3%").`;
 
         // Build messages with conversation history for context
         const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
