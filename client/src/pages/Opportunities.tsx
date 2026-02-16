@@ -495,6 +495,24 @@ export default function Opportunities() {
                             <p className="text-sm mt-2 text-foreground/80">
                               {opp.reason || "Signal detected from pipeline activity."}
                             </p>
+
+                            {/* Missed Items — what the rep should have done */}
+                            {(opp as any).missedItems && Array.isArray((opp as any).missedItems) && (opp as any).missedItems.length > 0 && (
+                              <div className="mt-2 bg-amber-500/5 border border-amber-500/20 rounded-lg p-2.5">
+                                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mb-1.5 flex items-center gap-1">
+                                  <Eye className="h-3 w-3" />
+                                  What They Missed
+                                </p>
+                                <ul className="space-y-1">
+                                  {((opp as any).missedItems as string[]).map((item: string, idx: number) => (
+                                    <li key={idx} className="text-xs text-foreground/70 flex items-start gap-1.5">
+                                      <span className="text-amber-500 mt-0.5 shrink-0">•</span>
+                                      <span>{item}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </div>
 

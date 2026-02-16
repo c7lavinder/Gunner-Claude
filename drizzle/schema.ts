@@ -1224,6 +1224,8 @@ export const opportunities = mysqlTable("opportunities", {
   dismissNote: text("dismissNote"),
   resolvedBy: int("resolvedBy").references(() => users.id),
   resolvedAt: timestamp("resolvedAt"),
+  // Specific missed items (phrases, questions, techniques the rep should have used)
+  missedItems: json("missedItems").$type<string[]>(),
   // Price data extracted from transcripts
   ourOffer: int("ourOffer"),
   sellerAsk: int("sellerAsk"),

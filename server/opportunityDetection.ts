@@ -2128,7 +2128,7 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
   },
 };
 
-async function generateAIReason(detection: DetectedOpportunity, db: any, tenantId: number): Promise<{ reason: string; suggestion: string }> {
+async function generateAIReason(detection: DetectedOpportunity, db: any, tenantId: number): Promise<{ reason: string; suggestion: string; missedItems?: string[] }> {
   const ruleDesc = RULE_DESCRIPTIONS[detection.triggerRules[0]];
   const tierLabel = ruleDesc?.tier === "missed" ? "Missed (urgent)" : ruleDesc?.tier === "at_risk" ? "At Risk" : "Worth a Look";
   
@@ -2303,7 +2303,22 @@ SPECIFICITY REQUIREMENTS:
 - Reference the contact by name.
 - Reason: 1-2 factual, specific sentences. Lead with the most important detail (motivation, price, or situation).
 - Suggestion: 1 sentence with a specific next action.
-- Keep it concise and professional.`
+- Keep it concise and professional.
+
+MISSED ITEMS (CRITICAL — the owner needs these so they don't have to read the full transcript):
+- Analyze the transcript excerpt for specific things the rep missed, failed to ask, or should have said differently.
+- Each item should be a short, specific, actionable phrase the owner can immediately understand.
+- Examples of good missed items:
+  • "Didn't ask about seller's timeline or urgency"
+  • "Seller said 'small developer' — rep didn't probe what that means or ask about other properties"
+  • "Seller showed hesitation ('I'm not sure') — rep moved to DQ instead of exploring the objection"
+  • "No follow-up question after seller mentioned the property needs work"
+  • "Rep didn't ask about the seller's motivation for selling"
+  • "Seller mentioned a price — rep didn't counter or anchor with a range"
+  • "Rep ended the call without scheduling a next step"
+  • "Didn't ask who else is on the title or if there's a mortgage"
+- Only include items that are clearly supported by the transcript. If no transcript is available, return an empty array.
+- Return 1-4 items maximum. Quality over quantity.`
         },
         {
           role: "user",
@@ -2316,7 +2331,7 @@ ${facts.join("\n")}
 
 Transcript excerpt (if available): ${detection.transcriptExcerpt ? detection.transcriptExcerpt.substring(0, 600) : "No transcript available"}
 
-Generate JSON with "reason" and "suggestion" fields. Be SPECIFIC — name the exact motivation, dollar amounts, and situation from the transcript. Never use generic phrases like "showed motivation signals" or "mentioned a specific price."`
+Generate JSON with "reason", "suggestion", and "missedItems" fields. Be SPECIFIC — name the exact motivation, dollar amounts, and situation from the transcript. Never use generic phrases like "showed motivation signals" or "mentioned a specific price." For missedItems, list 1-4 specific things the rep missed or should have done differently based on the transcript. If no transcript is available, return an empty array.`
         }
       ],
       response_format: {
@@ -2328,9 +2343,14 @@ Generate JSON with "reason" and "suggestion" fields. Be SPECIFIC — name the ex
             type: "object",
             properties: {
               reason: { type: "string", description: "1-2 specific factual sentences with exact details from transcript" },
-              suggestion: { type: "string", description: "1 sentence specific next action" }
+              suggestion: { type: "string", description: "1 sentence specific next action" },
+              missedItems: {
+                type: "array",
+                items: { type: "string" },
+                description: "1-4 specific things the rep missed or should have said/asked, based on the transcript. Empty array if no transcript available."
+              }
             },
-            required: ["reason", "suggestion"],
+            required: ["reason", "suggestion", "missedItems"],
             additionalProperties: false
           }
         }
@@ -2348,7 +2368,8 @@ Generate JSON with "reason" and "suggestion" fields. Be SPECIFIC — name the ex
   // Fallback: use the factual context string directly
   return {
     reason: ruleDesc?.context || `${detection.triggerRules[0]} detected for ${detection.contactName || "this lead"}.`,
-    suggestion: `Review ${detection.contactName || "this lead"} and determine if follow-up is needed.`
+    suggestion: `Review ${detection.contactName || "this lead"} and determine if follow-up is needed.`,
+    missedItems: []
   };
 }
 
@@ -2496,7 +2517,7 @@ async function reEvaluateActiveOpportunities(db: any, tenantId: number): Promise
         }
 
         // Re-generate the AI reason with full timeline context
-        const { reason, suggestion } = await generateAIReason(detection, db, tenantId);
+        const { reason, suggestion, missedItems } = await generateAIReason(detection, db, tenantId);
 
         // Only update if the reason actually changed meaningfully
         if (reason !== opp.reason) {
@@ -2504,6 +2525,7 @@ async function reEvaluateActiveOpportunities(db: any, tenantId: number): Promise
             .set({
               reason,
               suggestion,
+              missedItems: missedItems && missedItems.length > 0 ? missedItems : undefined,
               lastActivityAt: detection.lastActivityAt,
             })
             .where(eq(opportunities.id, opp.id));
@@ -2785,7 +2807,7 @@ async function scanTenant(
       }
 
       // Generate AI reason
-      const { reason, suggestion } = await generateAIReason(detection, db, tenantId);
+      const { reason, suggestion, missedItems } = await generateAIReason(detection, db, tenantId);
 
       // Enrich with property address from calls if missing
       let propertyAddress = detection.propertyAddress;
@@ -2850,6 +2872,7 @@ async function scanTenant(
         triggerRules: detection.triggerRules,
         reason,
         suggestion,
+        missedItems: missedItems && missedItems.length > 0 ? missedItems : undefined,
         detectionSource: detection.detectionSource,
         relatedCallId: detection.relatedCallId,
         teamMemberId,

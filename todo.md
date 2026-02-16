@@ -2138,3 +2138,13 @@
 - [x] 12 new vitest tests covering multi-action parsing, empty arrays, context preservation, and sequential creation
 ## AI Coach Multi-Action Batch Counters
 - [x] Add "Action 1 of 3" visual indicator on each confirmation card in a multi-action batch
+
+## Opportunity Card Description Enhancement
+- [x] Update opportunity detection AI to include specific missed phrases/questions in the description
+- [x] Show what the rep should have said or asked (e.g., "Rep didn't ask about timeline" or "Should have probed on 'small developer' comment")
+- [x] Make descriptions actionable so admin doesn't need to read the full transcript
+- [x] Added missedItems JSON column to opportunities schema
+- [x] Updated LLM prompt with detailed missed-items extraction instructions and examples
+- [x] Updated re-evaluation to refresh missedItems on active opportunities
+- [x] Added amber "What They Missed" section to opportunity cards (visible on all cards, not just expanded)
+- [x] 15 vitest tests covering schema, prompt quality, frontend rendering, and data flow
