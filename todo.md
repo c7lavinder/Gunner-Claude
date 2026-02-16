@@ -2175,3 +2175,12 @@
 - [x] Custom date range via dual-month calendar popover
 - [x] Clear button to reset to All Time
 - [x] All 10 existing tests still passing
+
+## Bug Fix: actionType undefined STILL happening (Daniel's report #2)
+- [x] Deep investigate why actionType is still undefined after previous filtering fix
+- [x] Trace the full code path: parseIntent → handleAsk → createActionCard → createPending
+- [x] Find and fix the root cause
+- [x] Made createPending accept optional actionType (no more Zod crash on undefined)
+- [x] Added server-side VALID_ACTION_TYPES validation with friendly TRPCError message
+- [x] Frontend catch block now shows friendly message instead of raw Zod error JSON
+- [x] Root cause: likely stale cached frontend from before the guard was added; now both server and client handle it gracefully

@@ -4458,8 +4458,8 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
     // Create a pending action (before confirmation)
     createPending: protectedProcedure
       .input(z.object({
-        actionType: z.string(),
-        requestText: z.string(),
+        actionType: z.string().optional().default(""),
+        requestText: z.string().optional().default(""),
         targetContactId: z.string().optional(),
         targetContactName: z.string().optional(),
         targetOpportunityId: z.string().optional(),
@@ -4468,6 +4468,15 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
       .mutation(async ({ ctx, input }) => {
         const tenantId = ctx.user?.tenantId;
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
+
+        // Validate actionType server-side with a friendly error
+        const VALID_ACTION_TYPES = ["add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field"];
+        if (!input.actionType || !VALID_ACTION_TYPES.includes(input.actionType)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `I couldn't determine the action type. Please try rephrasing your request. (Received: ${input.actionType || "empty"})`,
+          });
+        }
 
         const { createActionLog } = await import("./ghlActions");
         const actionId = await createActionLog({

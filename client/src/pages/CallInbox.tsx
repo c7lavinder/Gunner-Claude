@@ -553,7 +553,13 @@ function AICoachQA() {
         ...(batchTotal && batchTotal > 1 ? { batchIndex, batchTotal } : {}),
       }]);
     } catch (error: any) {
-      setConversation(prev => [...prev, { role: "assistant", content: `Failed to create action: ${error.message}` }]);
+      // Show a friendly error message instead of raw Zod/tRPC errors
+      const msg = error?.message || "Unknown error";
+      const isZodError = msg.includes("expected") && msg.includes("received");
+      const friendlyMsg = isZodError
+        ? "I couldn't process that action. Please try rephrasing your request."
+        : msg;
+      setConversation(prev => [...prev, { role: "assistant", content: friendlyMsg }]);
     }
   };
 
