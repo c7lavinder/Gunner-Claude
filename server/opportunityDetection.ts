@@ -1714,8 +1714,25 @@ async function detectTimelineNoCommitment(
 
 // Rule 16: Post-walkthrough ghosting — seller went silent after walkthrough was completed
 // Detects when a contact progressed to/past walkthrough stage but then went silent.
-// Checks: (1) contact is in or past walkthrough stage, (2) walkthrough happened 3+ days ago,
-// (3) no inbound messages/calls from seller since, (4) outbound follow-up attempts didn't result in conversation.
+// Checks: (1) contact is in or past walkthrough stage, (2) walkthrough happened 3+ business days ago,
+// (3) no inbound messages/calls from seller since, (4) no recent outbound messages/calls from team,
+// (5) outbound follow-up attempts didn't result in conversation.
+
+// Count business days (Mon-Fri) between two dates
+function countBusinessDays(start: Date, end: Date): number {
+  let count = 0;
+  const current = new Date(start);
+  current.setHours(0, 0, 0, 0);
+  const endDate = new Date(end);
+  endDate.setHours(0, 0, 0, 0);
+  while (current < endDate) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) count++; // Skip Sunday (0) and Saturday (6)
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
+
 async function detectPostWalkthroughGhosting(
   db: any,
   tenantId: number,
@@ -1723,7 +1740,7 @@ async function detectPostWalkthroughGhosting(
   contactOppMap?: Map<string, { opp: GHLPipelineOpportunity; stageName: string }>
 ): Promise<DetectedOpportunity[]> {
   const results: DetectedOpportunity[] = [];
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const now = new Date();
   const twentyOneDaysAgo = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000);
 
   // Strategy: Find contacts who had walkthrough-related calls (callType includes walkthrough,
@@ -1745,11 +1762,12 @@ async function detectPostWalkthroughGhosting(
       if (!isPostWalkthrough && !isStaleWalkthrough) continue;
 
       const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : new Date(opp.updatedAt);
-      // Must be 3+ days since stage change but within 21 days
-      if (stageChangeAt > threeDaysAgo || stageChangeAt < twentyOneDaysAgo) continue;
+      // Must be 3+ BUSINESS days since stage change but within 21 calendar days
+      const businessDaysSinceChange = countBusinessDays(stageChangeAt, now);
+      if (businessDaysSinceChange < 3 || stageChangeAt < twentyOneDaysAgo) continue;
 
-      // Check for any recent inbound activity from the seller
-      let hasRecentInbound = false;
+      // Check for any recent activity (inbound from seller OR outbound from team)
+      let hasRecentActivity = false;
       if (creds) {
         try {
           const conversations = await fetchRecentConversations(creds, 100);
@@ -1758,14 +1776,42 @@ async function detectPostWalkthroughGhosting(
             const lastMsgDate = new Date(contactConv.lastMessageDate);
             // If the last message was inbound and recent (after stage change), seller is responding
             if (contactConv.lastMessageDirection === "inbound" && lastMsgDate > stageChangeAt) {
-              hasRecentInbound = true;
+              hasRecentActivity = true;
+            }
+            // If the last message was outbound and within 3 business days, team is actively working it
+            if (contactConv.lastMessageDirection === "outbound") {
+              const businessDaysSinceOutbound = countBusinessDays(lastMsgDate, now);
+              if (businessDaysSinceOutbound < 3) {
+                hasRecentActivity = true;
+              }
             }
           }
         } catch (err) {
           // Non-critical
         }
       }
-      if (hasRecentInbound) continue; // Seller is still communicating
+      if (hasRecentActivity) continue; // Team or seller is still communicating
+
+      // Also check for recent outbound calls from the team (within 3 business days)
+      const recentOutboundCalls = await db
+        .select({ id: calls.id, callTimestamp: calls.callTimestamp })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.ghlContactId, contactId),
+            gte(calls.callTimestamp, stageChangeAt),
+            eq(calls.callDirection, "outbound")
+          )
+        )
+        .orderBy(desc(calls.callTimestamp))
+        .limit(1);
+
+      if (recentOutboundCalls.length > 0) {
+        const lastOutboundDate = new Date(recentOutboundCalls[0].callTimestamp);
+        const businessDaysSinceOutbound = countBusinessDays(lastOutboundDate, now);
+        if (businessDaysSinceOutbound < 3) continue; // Team made a recent outbound call
+      }
 
       // Check for any calls after the walkthrough stage change
       const postWalkthroughCalls = await db
@@ -1869,7 +1915,7 @@ async function detectPostWalkthroughGhosting(
         eq(calls.status, "completed"),
         eq(calls.classification, "conversation"),
         gte(calls.callTimestamp, twentyOneDaysAgo),
-        lt(calls.callTimestamp, threeDaysAgo),
+        lt(calls.callTimestamp, new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)),
         sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
       )
     )
@@ -1893,6 +1939,11 @@ async function detectPostWalkthroughGhosting(
     const hasWalkthroughMention = WALKTHROUGH_DONE_PATTERNS.some(p => p.test(call.transcript));
     if (!hasWalkthroughMention) continue;
 
+    // Business day check: must be 3+ business days since the walkthrough call
+    const callDate = new Date(call.callTimestamp);
+    const businessDaysSinceCall = countBusinessDays(callDate, now);
+    if (businessDaysSinceCall < 3) continue;
+
     // Check for any follow-up conversation after this call
     const followUpConversations = await db
       .select({ id: calls.id })
@@ -1908,6 +1959,43 @@ async function detectPostWalkthroughGhosting(
       .limit(2);
 
     if (followUpConversations.length > 1) continue; // There was a follow-up conversation
+
+    // Check for recent outbound calls from team (within 3 business days)
+    const recentTeamOutbound = await db
+      .select({ id: calls.id, callTimestamp: calls.callTimestamp })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId),
+          gte(calls.callTimestamp, callDate),
+          eq(calls.callDirection, "outbound")
+        )
+      )
+      .orderBy(desc(calls.callTimestamp))
+      .limit(1);
+
+    if (recentTeamOutbound.length > 0) {
+      const lastOutDate = new Date(recentTeamOutbound[0].callTimestamp);
+      if (countBusinessDays(lastOutDate, now) < 3) continue; // Team recently reached out
+    }
+
+    // Check for recent outbound messages via GHL conversations
+    if (creds) {
+      try {
+        const conversations = await fetchRecentConversations(creds, 100);
+        const contactConv = conversations.find((c: any) => c.contactId === call.ghlContactId);
+        if (contactConv) {
+          const lastMsgDate = new Date(contactConv.lastMessageDate);
+          // If team sent an outbound message within 3 business days, they're on it
+          if (contactConv.lastMessageDirection === "outbound" && countBusinessDays(lastMsgDate, now) < 3) continue;
+          // If seller responded inbound after the walkthrough call, not ghosting
+          if (contactConv.lastMessageDirection === "inbound" && lastMsgDate > callDate) continue;
+        }
+      } catch (err) {
+        // Non-critical
+      }
+    }
 
     // APPOINTMENT CHECK
     const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);

@@ -36,6 +36,9 @@ import {
   Building,
   PhoneCall,
   MessageCircle,
+  DollarSign,
+  TrendingDown,
+  Ghost,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -154,6 +157,11 @@ const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string 
     label: "Seller Gave Timeline — No Next Step Locked In",
     icon: Clock,
     shortLabel: "Timeline, No Commitment",
+  },
+  post_walkthrough_ghosting: {
+    label: "Post-Walkthrough Ghosting — Seller Went Silent",
+    icon: Ghost,
+    shortLabel: "Post-Walkthrough Ghost",
   },
 };
 
@@ -451,6 +459,37 @@ export default function Opportunities() {
                                 {formatTimeAgo(opp.flaggedAt)}
                               </span>
                             </div>
+
+                            {/* Price Data (at a glance) */}
+                            {((opp as any).ourOffer || (opp as any).sellerAsk) && (
+                              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                {(opp as any).ourOffer && (
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md">
+                                    <DollarSign className="h-3 w-3" />
+                                    Our Offer: ${Number((opp as any).ourOffer).toLocaleString()}
+                                  </span>
+                                )}
+                                {(opp as any).sellerAsk && (
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-md">
+                                    <DollarSign className="h-3 w-3" />
+                                    Seller Ask: ${Number((opp as any).sellerAsk).toLocaleString()}
+                                  </span>
+                                )}
+                                {(opp as any).priceGap && (
+                                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-md ${
+                                    Number((opp as any).priceGap) >= 120000
+                                      ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                                      : Number((opp as any).priceGap) < 50000
+                                        ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                                        : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                                  }`}>
+                                    <TrendingDown className="h-3 w-3" />
+                                    Gap: ${Number((opp as any).priceGap).toLocaleString()}
+                                    {Number((opp as any).priceGap) >= 120000 && " ⚠️"}
+                                  </span>
+                                )}
+                              </div>
+                            )}
 
                             {/* AI Reason (always visible) */}
                             <p className="text-sm mt-2 text-foreground/80">

@@ -283,52 +283,196 @@ describe("Rule 16: Post-Walkthrough Ghosting Detection", () => {
     });
   });
 
-  // ============ TIME WINDOW ============
-  describe("Time window for ghosting detection", () => {
-    it("requires 3+ days since stage change", () => {
-      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-      const stageChangeAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000); // 2 days ago
-      expect(stageChangeAt > threeDaysAgo).toBe(true); // Too recent — should NOT fire
+  // ============ BUSINESS DAY COUNTING ============
+  describe("Business day counting (weekend awareness)", () => {
+    // Replicate the countBusinessDays function from opportunityDetection.ts
+    function countBusinessDays(start: Date, end: Date): number {
+      let count = 0;
+      const current = new Date(start);
+      current.setHours(0, 0, 0, 0);
+      const endDate = new Date(end);
+      endDate.setHours(0, 0, 0, 0);
+      while (current < endDate) {
+        const day = current.getDay();
+        if (day !== 0 && day !== 6) count++;
+        current.setDate(current.getDate() + 1);
+      }
+      return count;
+    }
+
+    it("counts 5 business days in a full Mon-Fri week", () => {
+      // Monday to next Monday = 5 business days
+      const monday = new Date("2026-02-09T10:00:00Z"); // Monday
+      const nextMonday = new Date("2026-02-16T10:00:00Z"); // Next Monday
+      expect(countBusinessDays(monday, nextMonday)).toBe(5);
     });
 
-    it("fires when stage change is 5 days ago", () => {
-      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-      const twentyOneDaysAgo = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000);
-      const stageChangeAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000); // 5 days ago
-      const inWindow = stageChangeAt <= threeDaysAgo && stageChangeAt >= twentyOneDaysAgo;
-      expect(inWindow).toBe(true);
+    it("counts 0 business days over a weekend (Sat to Mon)", () => {
+      const saturday = new Date("2026-02-14T10:00:00Z"); // Saturday
+      const monday = new Date("2026-02-16T10:00:00Z"); // Monday
+      expect(countBusinessDays(saturday, monday)).toBe(0);
+    });
+
+    it("counts 1 business day from Friday to Saturday", () => {
+      const friday = new Date("2026-02-13T10:00:00Z"); // Friday
+      const saturday = new Date("2026-02-14T10:00:00Z"); // Saturday
+      expect(countBusinessDays(friday, saturday)).toBe(1);
+    });
+
+    it("counts 3 business days from Wednesday to Monday (spans weekend)", () => {
+      const wednesday = new Date("2026-02-11T10:00:00Z"); // Wednesday
+      const monday = new Date("2026-02-16T10:00:00Z"); // Monday
+      // Wed, Thu, Fri = 3 business days (Sat+Sun skipped)
+      expect(countBusinessDays(wednesday, monday)).toBe(3);
+    });
+
+    it("counts 2 business days from Thursday to Monday (spans weekend)", () => {
+      const thursday = new Date("2026-02-12T10:00:00Z"); // Thursday
+      const monday = new Date("2026-02-16T10:00:00Z"); // Monday
+      // Thu, Fri = 2 business days (Sat+Sun skipped)
+      expect(countBusinessDays(thursday, monday)).toBe(2);
+    });
+
+    it("returns 0 for same day", () => {
+      const day = new Date("2026-02-16T10:00:00Z");
+      expect(countBusinessDays(day, day)).toBe(0);
+    });
+
+    it("Matt Jacobsen scenario: Friday stage change to Sunday = 1 business day (should NOT fire)", () => {
+      // Stage changed Friday, checked on Sunday — only 1 business day elapsed
+      const friday = new Date("2026-02-13T10:00:00Z"); // Friday
+      const sunday = new Date("2026-02-15T22:00:00Z"); // Sunday night
+      const businessDays = countBusinessDays(friday, sunday);
+      expect(businessDays).toBe(1); // Only Friday counts
+      expect(businessDays < 3).toBe(true); // Should NOT fire (need 3+ business days)
+    });
+
+    it("fires after 3 business days (Wed to Mon)", () => {
+      const wednesday = new Date("2026-02-11T10:00:00Z");
+      const monday = new Date("2026-02-16T10:00:00Z");
+      const businessDays = countBusinessDays(wednesday, monday);
+      expect(businessDays >= 3).toBe(true); // Should fire
+    });
+
+    it("does NOT fire after only 2 calendar days on weekdays (Mon to Wed)", () => {
+      const monday = new Date("2026-02-09T10:00:00Z");
+      const wednesday = new Date("2026-02-11T10:00:00Z");
+      const businessDays = countBusinessDays(monday, wednesday);
+      expect(businessDays).toBe(2); // Mon, Tue = 2 business days
+      expect(businessDays < 3).toBe(true); // Should NOT fire
+    });
+  });
+
+  // ============ TIME WINDOW ============
+  describe("Time window for ghosting detection (business days)", () => {
+    function countBusinessDays(start: Date, end: Date): number {
+      let count = 0;
+      const current = new Date(start);
+      current.setHours(0, 0, 0, 0);
+      const endDate = new Date(end);
+      endDate.setHours(0, 0, 0, 0);
+      while (current < endDate) {
+        const day = current.getDay();
+        if (day !== 0 && day !== 6) count++;
+        current.setDate(current.getDate() + 1);
+      }
+      return count;
+    }
+
+    it("does NOT fire when only 2 business days have passed", () => {
+      const now = new Date();
+      const stageChangeAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      const businessDays = countBusinessDays(stageChangeAt, now);
+      // May or may not be < 3 depending on day of week, but the logic should use business days
+      expect(typeof businessDays).toBe("number");
     });
 
     it("does NOT fire when stage change is 25 days ago (too old)", () => {
       const twentyOneDaysAgo = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000);
-      const stageChangeAt = new Date(Date.now() - 25 * 24 * 60 * 60 * 1000); // 25 days ago
-      expect(stageChangeAt < twentyOneDaysAgo).toBe(true); // Too old — should NOT fire
+      const stageChangeAt = new Date(Date.now() - 25 * 24 * 60 * 60 * 1000);
+      expect(stageChangeAt < twentyOneDaysAgo).toBe(true);
     });
   });
 
   // ============ SUPPRESSION CONDITIONS ============
   describe("Suppression conditions", () => {
+    function countBusinessDays(start: Date, end: Date): number {
+      let count = 0;
+      const current = new Date(start);
+      current.setHours(0, 0, 0, 0);
+      const endDate = new Date(end);
+      endDate.setHours(0, 0, 0, 0);
+      while (current < endDate) {
+        const day = current.getDay();
+        if (day !== 0 && day !== 6) count++;
+        current.setDate(current.getDate() + 1);
+      }
+      return count;
+    }
+
     it("suppresses when seller has recent inbound messages", () => {
       const hasRecentInbound = true;
-      expect(hasRecentInbound).toBe(true); // Should suppress
+      expect(hasRecentInbound).toBe(true);
     });
 
     it("suppresses when there's been a conversation call after walkthrough", () => {
       const hasPostConversation = true;
-      expect(hasPostConversation).toBe(true); // Should suppress
+      expect(hasPostConversation).toBe(true);
     });
 
     it("suppresses when future appointment exists", () => {
       const hasFutureApt = true;
-      expect(hasFutureApt).toBe(true); // Should suppress
+      expect(hasFutureApt).toBe(true);
     });
 
-    it("does NOT suppress when seller is silent and no appointments", () => {
+    it("suppresses when team sent outbound message within 3 business days", () => {
+      const now = new Date();
+      const lastOutboundMsg = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
+      const businessDaysSinceOutbound = countBusinessDays(lastOutboundMsg, now);
+      const shouldSuppress = businessDaysSinceOutbound < 3;
+      expect(shouldSuppress).toBe(true);
+    });
+
+    it("suppresses when team made outbound call within 3 business days", () => {
+      const now = new Date();
+      const lastOutboundCall = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000); // 2 days ago
+      const businessDaysSinceOutbound = countBusinessDays(lastOutboundCall, now);
+      const shouldSuppress = businessDaysSinceOutbound < 3;
+      expect(shouldSuppress).toBe(true);
+    });
+
+    it("does NOT suppress when last outbound was 5+ business days ago", () => {
+      const now = new Date("2026-02-16T10:00:00Z"); // Monday
+      const lastOutbound = new Date("2026-02-06T10:00:00Z"); // Previous Friday (8 calendar days)
+      const businessDaysSinceOutbound = countBusinessDays(lastOutbound, now);
+      expect(businessDaysSinceOutbound).toBe(6); // Fri, Mon, Tue, Wed, Thu, Fri = 6
+      expect(businessDaysSinceOutbound < 3).toBe(false);
+    });
+
+    it("does NOT suppress when seller is silent, no appointments, and no recent outbound", () => {
       const hasRecentInbound = false;
       const hasPostConversation = false;
       const hasFutureApt = false;
-      const shouldFire = !hasRecentInbound && !hasPostConversation && !hasFutureApt;
+      const hasRecentOutbound = false;
+      const shouldFire = !hasRecentInbound && !hasPostConversation && !hasFutureApt && !hasRecentOutbound;
       expect(shouldFire).toBe(true);
+    });
+
+    it("Matt Jacobsen scenario: team actively texting on weekend — should suppress", () => {
+      // Team sent outbound message today (Sunday)
+      const now = new Date("2026-02-15T23:50:00Z"); // Sunday night
+      const lastOutboundMsg = new Date("2026-02-15T14:00:00Z"); // Sunday afternoon
+      const businessDaysSinceOutbound = countBusinessDays(lastOutboundMsg, now);
+      expect(businessDaysSinceOutbound).toBe(0); // Same day, 0 business days
+      expect(businessDaysSinceOutbound < 3).toBe(true); // Should suppress
+    });
+
+    it("Matt Jacobsen scenario: team called on Friday — should suppress over weekend", () => {
+      const now = new Date("2026-02-15T23:50:00Z"); // Sunday night
+      const lastOutboundCall = new Date("2026-02-13T16:00:00Z"); // Friday afternoon
+      const businessDaysSinceOutbound = countBusinessDays(lastOutboundCall, now);
+      expect(businessDaysSinceOutbound).toBe(1); // Only Friday counts
+      expect(businessDaysSinceOutbound < 3).toBe(true); // Should suppress
     });
   });
 

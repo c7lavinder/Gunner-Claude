@@ -2063,3 +2063,12 @@
 - [x] Contact timeline enrichment: feed full timeline into AI reason generator for richer context
 - [x] Contact timeline enrichment: AI reasons should specify exact motivation type from transcript
 - [x] Write vitest tests for price gap logic, post-walkthrough ghosting, and timeline enrichment
+- [x] Opportunity UI: Show ourOffer, sellerAsk, priceGap on opportunity cards at a glance
+- [x] Opportunity UI: Update backend router to return price fields in opportunity list query
+- [x] Opportunity UI: Design price display component (formatted dollar amounts, gap indicator)
+- [x] Opportunity UI: Write vitest tests for price display
+- [x] Fix Rule 16 false positive: Matt Jacobsen flagged as ghosting but team is actively working him
+- [x] Rule 16: Add weekend awareness — don't count Sat/Sun as silence days
+- [x] Rule 16: Check for recent outbound calls/texts from team before flagging ghosting
+- [x] Rule 16: Increase silence threshold to account for weekends (business days, not calendar days)
+- [x] Write vitest tests for Rule 16 weekend awareness and outbound activity checking
