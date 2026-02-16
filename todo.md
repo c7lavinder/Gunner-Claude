@@ -2102,3 +2102,10 @@
 - [x] Trigger manual GHL sync for Zac's tenant (450029) — 0 calls found (new tenant, auto-link will happen on first real call)
 - [x] Build dual role support: isTenantAdmin flag on users table, separate from teamRole for call grading. Updated 10+ frontend files to check isTenantAdmin alongside teamRole for admin access
 - [x] Build customizable rubrics: tenant admins can edit grading criteria, point values, and descriptions per call type
+
+## Wire Tenant Rubrics into Grading Pipeline
+- [x] Audit getGradingContext to verify tenant rubrics are fetched correctly
+- [x] Audit gradeCall to verify tenant rubrics override hardcoded defaults when present
+- [x] Audit the LLM prompt construction to ensure custom criteria/points/redFlags are injected
+- [x] Fix any gaps where hardcoded rubrics still take precedence over tenant rubrics — fixed admin_callback shortcut path, getContext endpoint missing tenantId, keyPhrases normalization, and disqualificationTarget hardcoded reference
+- [x] Write vitest tests verifying tenant rubrics flow through the grading pipeline (14 tests)

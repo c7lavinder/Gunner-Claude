@@ -1776,8 +1776,8 @@ Keep it brief and actionable.`;
 
     getContext: protectedProcedure
       .input(z.object({ callType: z.enum(["qualification", "offer", "lead_generation", "follow_up", "seller_callback", "admin_callback"]) }))
-      .query(async ({ input }) => {
-        return await getGradingContext(input.callType);
+      .query(async ({ ctx, input }) => {
+        return await getGradingContext(input.callType, ctx.user?.tenantId ?? undefined);
       }),
 
     // ============ TENANT RUBRIC CRUD ============

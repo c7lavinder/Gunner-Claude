@@ -463,12 +463,17 @@ export async function gradeCall(
     if (tenantRubric) {
       try {
         const parsedCriteria = JSON.parse(tenantRubric.criteria);
+        // Ensure each criterion has keyPhrases array (tenant rubrics may not include them)
+        const normalizedCriteria = parsedCriteria.map((c: any) => ({
+          ...c,
+          keyPhrases: Array.isArray(c.keyPhrases) ? c.keyPhrases : [],
+        }));
         const parsedRedFlags = tenantRubric.redFlags ? JSON.parse(tenantRubric.redFlags) : undefined;
         rubric = {
           ...rubric,
           name: tenantRubric.name,
           description: tenantRubric.description || rubric.description,
-          criteria: parsedCriteria,
+          criteria: normalizedCriteria,
           ...(parsedRedFlags ? { redFlags: parsedRedFlags } : {}),
         };
         console.log(`[Grading] Using tenant-specific rubric: ${tenantRubric.name} (callType: ${tenantRubric.callType || 'name-match'})`);
@@ -547,7 +552,7 @@ If this pattern is detected:
 - Add it as a COACHING TIP with a specific script alternative. For example: "When a seller says 'I'll be in town in March,' don't say 'feel free to reach out.' Instead say: 'Perfect — let me put something on the calendar for the first week of March so we can connect when you're here. Does March 3rd or 4th work better?' Always convert a seller's timeline into a calendar commitment."
 - Penalize the Call Outcome criterion — the call should NOT get full marks if the seller gave an opening and the agent didn't lock it down.
 
-${callType === "qualification" ? `DISQUALIFICATION TARGET: ${LEAD_MANAGER_RUBRIC.disqualificationTarget}` : ""}${trainingContext}${rulesContext}${feedbackContext}
+${callType === "qualification" ? `DISQUALIFICATION TARGET: ${(rubric as any).disqualificationTarget || LEAD_MANAGER_RUBRIC.disqualificationTarget}` : ""}${trainingContext}${rulesContext}${feedbackContext}
 
 Analyze the transcript and provide:
 1. A score for each criterion (0 to max points)
@@ -1106,14 +1111,35 @@ export async function processCall(callId: number): Promise<void> {
           if (teamMember) teamMemberName = teamMember.name;
         }
         
-        // Get tenant company name
+        // Get tenant company name and grading context (including tenant rubrics)
         let companyName: string | undefined;
         if (call.tenantId) {
           const tenant = await getTenantById(call.tenantId);
           if (tenant) companyName = tenant.name;
         }
         
-        const gradeResult = await gradeCall(transcript, "admin_callback", teamMemberName, { companyName });
+        // Fetch grading context so tenant-specific rubrics are used for admin_callback too
+        const adminGradingContext = await getGradingContext("qualification", call.tenantId ?? undefined);
+        
+        const gradeResult = await gradeCall(transcript, "admin_callback", teamMemberName, {
+          companyName,
+          trainingMaterials: adminGradingContext.trainingMaterials.map(m => ({
+            title: m.title,
+            content: m.content,
+            category: m.category,
+          })),
+          gradingRules: adminGradingContext.gradingRules.map(r => ({
+            title: r.title,
+            ruleText: r.ruleText,
+            priority: r.priority,
+          })),
+          recentFeedback: adminGradingContext.recentFeedback.map(f => ({
+            feedbackType: f.feedbackType,
+            explanation: f.explanation,
+            correctBehavior: f.correctBehavior,
+          })),
+          tenantRubrics: adminGradingContext.tenantRubrics,
+        });
         
         await createCallGrade({
           callId: call.id,
