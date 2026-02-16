@@ -228,7 +228,7 @@ function TeamMemberShowcase({
           
           <div className="flex-1 min-w-0 flex flex-col justify-center py-2">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-xl sm:text-2xl font-bold truncate">{member.name}</h3>
+              <h3 className="text-lg sm:text-2xl font-bold leading-tight break-words">{member.name}</h3>
               {hotStreak > 0 && (
                 <span className="text-xs sm:text-sm bg-white/25 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-1 shadow-sm shrink-0">
                   <Flame className="h-3 w-3" /> {hotStreak}
