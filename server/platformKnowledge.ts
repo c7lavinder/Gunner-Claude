@@ -39,31 +39,31 @@ Every graded call earns XP:
 • Earning a badge: +25 XP
 
 **Levels & Titles**
-XP accumulates into levels. Each level has a military-themed title:
-• Level 1 (0 XP): Cadet
-• Level 2 (500 XP): Rifleman
-• Level 3 (1,000 XP): Rifleman
-• Level 4 (1,750 XP): Sharpshooter
-• Level 5 (2,500 XP): Sharpshooter
-• Level 6 (4,000 XP): Gunner
-• Level 7 (6,000 XP): Gunner
-• Level 8 (9,000 XP): Heavy Gunner
-• Level 9 (12,000 XP): Heavy Gunner
-• Level 10 (15,000 XP): Heavy Gunner
-• Level 11 (20,000 XP): Bombardier
-• Level 12 (27,000 XP): Bombardier
-• Level 13 (35,000 XP): Artillery Captain
-• Level 14 (42,000 XP): Artillery Captain
-• Level 15 (50,000 XP): Artillery Captain
-• Level 16 (62,500 XP): Siege Commander
-• Level 17 (77,500 XP): Siege Commander
-• Level 18 (95,000 XP): Siege Commander
-• Level 19 (110,000 XP): War Machine
-• Level 20 (125,000 XP): War Machine
-• Level 21 (150,000 XP): Cannon King
-• Level 22 (180,000 XP): Cannon King
-• Level 23 (220,000 XP): Legend
-• Level 24 (270,000 XP): Legend
+XP accumulates into levels. Each level has a sports-themed title:
+• Level 1 (0 XP): Rookie
+• Level 2 (500 XP): Starter
+• Level 3 (1,000 XP): Starter
+• Level 4 (1,750 XP): Playmaker
+• Level 5 (2,500 XP): Playmaker
+• Level 6 (4,000 XP): All-Star
+• Level 7 (6,000 XP): All-Star
+• Level 8 (9,000 XP): Captain
+• Level 9 (12,000 XP): Captain
+• Level 10 (15,000 XP): Captain
+• Level 11 (20,000 XP): MVP
+• Level 12 (27,000 XP): MVP
+• Level 13 (35,000 XP): Champion
+• Level 14 (42,000 XP): Champion
+• Level 15 (50,000 XP): Champion
+• Level 16 (62,500 XP): Elite
+• Level 17 (77,500 XP): Elite
+• Level 18 (95,000 XP): Elite
+• Level 19 (110,000 XP): Dynasty
+• Level 20 (125,000 XP): Dynasty
+• Level 21 (150,000 XP): Legend
+• Level 22 (180,000 XP): Legend
+• Level 23 (220,000 XP): GOAT
+• Level 24 (270,000 XP): GOAT
 • Level 25 (350,000 XP): Hall of Fame
 
 **Streaks**

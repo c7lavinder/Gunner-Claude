@@ -18,9 +18,9 @@ describe("Platform Knowledge", () => {
     });
 
     it("should contain level titles", () => {
-      expect(PLATFORM_KNOWLEDGE).toContain("Cadet");
-      expect(PLATFORM_KNOWLEDGE).toContain("Rifleman");
-      expect(PLATFORM_KNOWLEDGE).toContain("Gunner");
+      expect(PLATFORM_KNOWLEDGE).toContain("Rookie");
+      expect(PLATFORM_KNOWLEDGE).toContain("Starter");
+      expect(PLATFORM_KNOWLEDGE).toContain("All-Star");
       expect(PLATFORM_KNOWLEDGE).toContain("Hall of Fame");
     });
 

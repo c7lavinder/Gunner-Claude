@@ -2072,3 +2072,4 @@
 - [x] Rule 16: Check for recent outbound calls/texts from team before flagging ghosting
 - [x] Rule 16: Increase silence threshold to account for weekends (business days, not calendar days)
 - [x] Write vitest tests for Rule 16 weekend awareness and outbound activity checking
+- [x] Change gamification level titles to sports-themed names (Rookie, Starter, Playmaker, All-Star, Captain, MVP, Champion, Elite, Dynasty, Legend, GOAT, Hall of Fame)
