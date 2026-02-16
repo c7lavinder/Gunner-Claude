@@ -2127,3 +2127,12 @@
 - [x] Fix amber banner not rendering — switched from localStorage to auth.me backend response, fixed cookie sameSite/secure settings
 - [x] Fix sidebar still showing Platform Admin — DashboardLayout now overrides role to 'admin' during super_admin impersonation
 - [x] Fix greeting showing "Corey" — now shows "Viewing: [Tenant Name]" during impersonation
+
+## AI Coach Multi-Action Support
+- [x] Fix AI Coach not recognizing CRM actions when multiple are requested in one message
+- [x] Update parseIntent to return an array of actions instead of a single action
+- [x] Update frontend to render multiple action confirmation cards from a single message
+- [x] Each action should be independently confirmable/dismissable
+- [x] Contact resolution caching — resolved contacts reused across actions in same batch
+- [x] Remaining actions queue — if contact disambiguation needed, remaining actions queued for after selection
+- [x] 12 new vitest tests covering multi-action parsing, empty arrays, context preservation, and sequential creation

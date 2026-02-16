@@ -4340,8 +4340,9 @@ Create content that:
             {
               role: "system",
               content: `You are an AI assistant that parses user requests into structured CRM actions.
-The user is a real estate wholesaling team member. Parse their natural language request into one of these action types:
+The user is a real estate wholesaling team member. Parse their natural language request into CRM actions.
 
+Available action types:
 1. add_note_contact - Add a note to a contact
 2. add_note_opportunity - Add a note to an opportunity/deal
 3. change_pipeline_stage - Move a deal to a different pipeline stage
@@ -4351,7 +4352,9 @@ The user is a real estate wholesaling team member. Parse their natural language 
 7. remove_tag - Remove a tag from a contact
 8. update_field - Update a custom field on a contact
 
-If the message is NOT a CRM action request (it's a coaching question, greeting, etc.), return actionType as "none".
+MULTI-ACTION SUPPORT: A user may request MULTIPLE actions in a single message (e.g., "Add a note to Jose Ruiz, then create a task for 3 months from now, then move it to the 4 month stage"). You MUST detect ALL actions and return each one as a separate item in the "actions" array. Parse each action independently with its own contactName, params, and summary.
+
+If the message contains NO CRM action requests (it's a coaching question, greeting, etc.), return an empty actions array.
 
 Context: ${input.contextContactId ? `Currently viewing contact: ${input.contextContactName} (ID: ${input.contextContactId})` : "No contact context"}
 
@@ -4368,9 +4371,9 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
 CRITICAL: You have REAL call data below. You MUST use it to write specific, accurate content. Reference actual property addresses, discussion topics, outcomes, and details from the transcripts. NEVER generate vague or placeholder text like "regarding his property" or "Please provide the summary" or "Insert details here".
 ${callContext}
 
-Return JSON with:
-- actionType: one of the types above or "none"
-- contactName: the contact name mentioned (or from context)
+Return JSON with an "actions" array. Each action object has:
+- actionType: one of the types above
+- contactName: the contact name mentioned (or from context). If multiple actions reference the same contact, use the same name for all.
 - contactId: the contact ID if known from context
 - assigneeName: for create_task, the team member name to assign the task to. If the user mentions a specific team member by name, use that name. If no specific person is mentioned, use the current user's name ("${ctx.user!.name || "Unknown"}"). For non-task actions, use empty string.
 - params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, fieldKey, fieldValue)
@@ -4383,38 +4386,48 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
           response_format: {
             type: "json_schema",
             json_schema: {
-              name: "action_intent",
+              name: "action_intents",
               strict: true,
               schema: {
                 type: "object",
                 properties: {
-                  actionType: { type: "string" },
-                  contactName: { type: "string" },
-                  contactId: { type: "string" },
-                  params: {
-                    type: "object",
-                    properties: {
-                      noteBody: { type: "string" },
-                      message: { type: "string" },
-                      title: { type: "string" },
-                      description: { type: "string" },
-                      dueDate: { type: "string" },
-                      tags: { type: "string" },
-                      stageName: { type: "string" },
-                      fieldKey: { type: "string" },
-                      fieldValue: { type: "string" },
-                      opportunityId: { type: "string" },
-                      pipelineId: { type: "string" },
-                      stageId: { type: "string" },
-                    },
-                    required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId"],
-                    additionalProperties: false
-                  },
-                  assigneeName: { type: "string" },
-                  summary: { type: "string" },
-                  needsContactSearch: { type: "boolean" }
+                  actions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        actionType: { type: "string" },
+                        contactName: { type: "string" },
+                        contactId: { type: "string" },
+                        params: {
+                          type: "object",
+                          properties: {
+                            noteBody: { type: "string" },
+                            message: { type: "string" },
+                            title: { type: "string" },
+                            description: { type: "string" },
+                            dueDate: { type: "string" },
+                            tags: { type: "string" },
+                            stageName: { type: "string" },
+                            fieldKey: { type: "string" },
+                            fieldValue: { type: "string" },
+                            opportunityId: { type: "string" },
+                            pipelineId: { type: "string" },
+                            stageId: { type: "string" },
+                          },
+                          required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId"],
+                          additionalProperties: false
+                        },
+                        assigneeName: { type: "string" },
+                        summary: { type: "string" },
+                        needsContactSearch: { type: "boolean" }
+                      },
+                      required: ["actionType", "contactName", "contactId", "assigneeName", "params", "summary", "needsContactSearch"],
+                      additionalProperties: false
+                    }
+                  }
                 },
-                required: ["actionType", "contactName", "contactId", "assigneeName", "params", "summary", "needsContactSearch"],
+                required: ["actions"],
                 additionalProperties: false
               }
             }
@@ -4423,9 +4436,18 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
 
         const content = response.choices?.[0]?.message?.content;
         if (content && typeof content === "string") {
-          return JSON.parse(content);
+          const parsed = JSON.parse(content);
+          // Return the actions array, or wrap legacy single-action format for backwards compatibility
+          if (parsed.actions && Array.isArray(parsed.actions)) {
+            return { actions: parsed.actions };
+          }
+          // Legacy fallback: single action format
+          if (parsed.actionType && parsed.actionType !== "none") {
+            return { actions: [parsed] };
+          }
+          return { actions: [] };
         }
-        return { actionType: "none", contactName: "", contactId: "", assigneeName: "", params: {}, summary: "", needsContactSearch: false };
+        return { actions: [] };
       }),
 
     // Create a pending action (before confirmation)

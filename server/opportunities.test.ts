@@ -287,24 +287,30 @@ describe("AI Coach Actions", () => {
       ).rejects.toThrow();
     });
 
-    it("parses an action intent from natural language", async () => {
+    it("parses an action intent from natural language (returns actions array)", async () => {
       const caller = appRouter.createCaller(createAuthenticatedContext());
       const result = await caller.coachActions.parseIntent({
         message: "Add a note to John Smith saying he wants to sell his house",
       });
-      expect(result).toHaveProperty("actionType");
-      expect(result).toHaveProperty("summary");
-      expect(result).toHaveProperty("needsContactSearch");
-      expect(typeof result.actionType).toBe("string");
+      expect(result).toHaveProperty("actions");
+      expect(Array.isArray(result.actions)).toBe(true);
+      expect(result.actions.length).toBeGreaterThanOrEqual(1);
+      if (result.actions.length > 0) {
+        expect(result.actions[0]).toHaveProperty("actionType");
+        expect(result.actions[0]).toHaveProperty("summary");
+        expect(result.actions[0]).toHaveProperty("needsContactSearch");
+        expect(typeof result.actions[0].actionType).toBe("string");
+      }
     }, 30000);
 
-    it("returns 'none' for non-action messages", async () => {
+    it("returns empty actions array for non-action messages", async () => {
       const caller = appRouter.createCaller(createAuthenticatedContext());
       const result = await caller.coachActions.parseIntent({
         message: "What is the best way to handle objections?",
       });
-      expect(result).toHaveProperty("actionType");
-      expect(typeof result.actionType).toBe("string");
+      expect(result).toHaveProperty("actions");
+      expect(Array.isArray(result.actions)).toBe(true);
+      expect(result.actions.length).toBe(0);
     }, 30000);
 
     it("accepts optional context parameters", async () => {
@@ -314,8 +320,11 @@ describe("AI Coach Actions", () => {
         contextContactId: "abc123",
         contextContactName: "John Smith",
       });
-      expect(result).toHaveProperty("actionType");
-      expect(result).toHaveProperty("contactId");
+      expect(result).toHaveProperty("actions");
+      expect(Array.isArray(result.actions)).toBe(true);
+      if (result.actions.length > 0) {
+        expect(result.actions[0]).toHaveProperty("contactId");
+      }
     }, 30000);
   });
 

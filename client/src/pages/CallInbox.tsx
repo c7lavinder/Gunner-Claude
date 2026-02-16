@@ -370,7 +370,7 @@ function AICoachQA() {
   const [isAsking, setIsAsking] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [contactSearchResults, setContactSearchResults] = useState<Array<{id: string; name: string; phone?: string; email?: string}>>([]);
-  const [pendingAction, setPendingAction] = useState<{intent: any; message: string} | null>(null);
+  const [pendingAction, setPendingAction] = useState<{intent: any; message: string; remainingActions?: any[]} | null>(null);
   // Track which action card is being edited and its edited content
   const [editingActionId, setEditingActionId] = useState<number | null>(null);
   const [editedContent, setEditedContent] = useState("");
@@ -459,36 +459,56 @@ function AICoachQA() {
     setQuestion("");
 
     try {
-      // First, parse the intent to see if it's an action command
-      const intent = await parseIntentMutation.mutateAsync({ message: userMessage });
+      // Parse the intent — now returns { actions: [...] }
+      const result = await parseIntentMutation.mutateAsync({ message: userMessage });
+      const actions = result.actions || [];
       
-      if (intent.actionType !== "none") {
-        // It's an action command!
-        if (intent.needsContactSearch && intent.contactName) {
-          // Need to search for the contact first
-          const contacts = await searchContactsMutation.mutateAsync({ query: intent.contactName });
-          if (contacts.length === 0) {
-            setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${intent.contactName}" in GHL. Please check the name and try again.` }]);
-            setIsAsking(false);
-            return;
-          } else if (contacts.length === 1) {
-            // Auto-select the only match
-            intent.contactId = contacts[0].id;
-            intent.contactName = contacts[0].name || intent.contactName;
-            await createActionCard(intent, userMessage);
+      if (actions.length > 0) {
+        // Show a summary message if multiple actions detected
+        if (actions.length > 1) {
+          setConversation(prev => [...prev, { role: "assistant", content: `I detected **${actions.length} actions** in your request. Creating each one for your review:` }]);
+        }
+
+        // Process each action sequentially
+        // We need to resolve contacts for the first action that needs it, then reuse for others with the same name
+        const resolvedContacts: Record<string, { id: string; name: string }> = {};
+
+        for (let i = 0; i < actions.length; i++) {
+          const action = actions[i];
+          
+          if (action.needsContactSearch && action.contactName) {
+            // Check if we already resolved this contact name
+            const cached = resolvedContacts[action.contactName.toLowerCase()];
+            if (cached) {
+              action.contactId = cached.id;
+              action.contactName = cached.name;
+              await createActionCard(action, userMessage);
+            } else {
+              // Need to search for the contact
+              const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
+              if (contacts.length === 0) {
+                setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in GHL. Skipping action: ${action.summary}` }]);
+                continue;
+              } else if (contacts.length === 1) {
+                action.contactId = contacts[0].id;
+                action.contactName = contacts[0].name || action.contactName;
+                resolvedContacts[action.contactName.toLowerCase()] = { id: contacts[0].id, name: contacts[0].name || action.contactName };
+                await createActionCard(action, userMessage);
+              } else {
+                // Multiple matches — pause for user selection, queue remaining actions
+                setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
+                setPendingAction({ intent: action, message: userMessage, remainingActions: actions.slice(i + 1) });
+                setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${action.contactName}". Please select the right one (for action: ${action.summary}):` }]);
+                setIsAsking(false);
+                return;
+              }
+            }
           } else {
-            // Multiple matches — show selection
-            setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
-            setPendingAction({ intent, message: userMessage });
-            setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${intent.contactName}". Please select the right one:` }]);
-            setIsAsking(false);
-            return;
+            await createActionCard(action, userMessage);
           }
-        } else {
-          await createActionCard(intent, userMessage);
         }
       } else {
-        // Regular coaching question — stream the response
+        // No actions detected — regular coaching question, stream the response
         const chatHistory = conversation
           .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
             msg.role === "user" || msg.role === "assistant"
@@ -533,7 +553,51 @@ function AICoachQA() {
     setIsAsking(true);
     const intent = { ...pendingAction.intent, contactId, contactName };
     await createActionCard(intent, pendingAction.message);
+    
+    // Continue processing remaining actions if any
+    const remaining = pendingAction.remainingActions || [];
+    const userMessage = pendingAction.message;
     setPendingAction(null);
+    
+    if (remaining.length > 0) {
+      // Cache the resolved contact for reuse
+      const resolvedContacts: Record<string, { id: string; name: string }> = {
+        [contactName.toLowerCase()]: { id: contactId, name: contactName }
+      };
+      
+      for (let i = 0; i < remaining.length; i++) {
+        const action = remaining[i];
+        
+        if (action.needsContactSearch && action.contactName) {
+          const cached = resolvedContacts[action.contactName.toLowerCase()];
+          if (cached) {
+            action.contactId = cached.id;
+            action.contactName = cached.name;
+            await createActionCard(action, userMessage);
+          } else {
+            const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
+            if (contacts.length === 0) {
+              setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in GHL. Skipping action: ${action.summary}` }]);
+              continue;
+            } else if (contacts.length === 1) {
+              action.contactId = contacts[0].id;
+              action.contactName = contacts[0].name || action.contactName;
+              resolvedContacts[action.contactName.toLowerCase()] = { id: contacts[0].id, name: contacts[0].name || action.contactName };
+              await createActionCard(action, userMessage);
+            } else {
+              setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
+              setPendingAction({ intent: action, message: userMessage, remainingActions: remaining.slice(i + 1) });
+              setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${action.contactName}". Please select the right one (for action: ${action.summary}):` }]);
+              setIsAsking(false);
+              return;
+            }
+          }
+        } else {
+          await createActionCard(action, userMessage);
+        }
+      }
+    }
+    
     setIsAsking(false);
   };
 
