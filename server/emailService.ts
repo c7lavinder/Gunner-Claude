@@ -94,20 +94,20 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         subject: `You've been invited to join ${data.tenantName} on Gunner`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #8B1A1A;">You're Invited! 🎯</h2>
-            <p><strong>${data.inviterName}</strong> has invited you to join <strong>${data.tenantName}</strong> on Gunner.</p>
-            <p>You'll be joining as: <strong>${data.role}</strong></p>
+            <h2 style="color: #8B1A1A;">You're Invited to Gunner</h2>
+            <p><strong>${data.inviterName}</strong> has invited you to join <strong>${data.tenantName}</strong> on Gunner — AI-powered call coaching for real estate teams.</p>
+            <p>Your role: <strong>${data.role}</strong></p>
             <p style="margin: 24px 0;">
-              <a href="${data.loginLink}" style="background-color: #8B1A1A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                Accept Invitation
+              <a href="${data.loginLink}" style="background-color: #8B1A1A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                Create Your Account
               </a>
             </p>
-            <p style="color: #666; font-size: 14px;">Sign in with Google or create an account using this email address (${data.email}) to join the team.</p>
+            <p style="color: #666; font-size: 14px;">Create an account using this email address (<strong>${data.email}</strong>) or sign in with Google to join the team. Already have an account? <a href="${data.loginLink.replace('/signup', '/login')}" style="color: #8B1A1A;">Sign in here</a>.</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
-            <p style="color: #999; font-size: 12px;">© Gunner - AI-Powered Call Coaching</p>
+            <p style="color: #999; font-size: 12px;">Gunner - AI-Powered Call Coaching for Real Estate Teams</p>
           </div>
         `,
-        text: `You're Invited!\n\n${data.inviterName} has invited you to join ${data.tenantName} on Gunner.\n\nRole: ${data.role}\n\nLogin Link: ${data.loginLink}\n\nSign in with Google or create an account using this email address (${data.email}) to join the team.`
+        text: `You're Invited to Gunner!\n\n${data.inviterName} has invited you to join ${data.tenantName} on Gunner — AI-powered call coaching for real estate teams.\n\nYour role: ${data.role}\n\nCreate your account: ${data.loginLink}\n\nSign up using this email address (${data.email}) or sign in with Google to join the team.\n\nAlready have an account? Sign in at: ${data.loginLink.replace('/signup', '/login')}`
       };
     
     case "welcome":
@@ -729,7 +729,9 @@ export async function sendTeamInviteEmail(
   role: string,
   baseUrl: string
 ): Promise<boolean> {
-  const loginLink = `${baseUrl}/login`;
+  // Link to signup page so new users can create an account
+  // Existing users can click "Already have an account? Sign in" on the signup page
+  const loginLink = `${baseUrl}/signup`;
   
   return sendEmail({
     to: inviteeEmail,

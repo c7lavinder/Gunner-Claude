@@ -1216,6 +1216,7 @@ export default function SuperAdmin() {
                         { id: 'call_recording', label: 'Call Recording Storage', description: 'Store and access call recordings for review and training. Includes searchable transcripts and highlight clips.' },
                         { id: 'coaching_insights', label: 'Coaching Insights', description: 'AI-powered recommendations for improving each rep\'s performance. Personalized coaching tips based on call analysis.' },
                         { id: 'leaderboards', label: 'Team Leaderboards', description: 'Gamify performance with competitive rankings. Track daily, weekly, and monthly leaders across key metrics.' },
+                        { id: 'signals', label: 'Signals', description: 'Real-time deal signals and opportunity detection. Automatically identify hot leads, stalled deals, and coaching moments from call activity.' },
                         { id: 'export_reports', label: 'Export Reports', description: 'Download detailed reports in PDF or CSV format. Share insights with stakeholders or archive for compliance.' },
                         { id: 'white_label', label: 'White Label', description: 'Fully rebrand the entire platform as your own. Remove all Gunner branding for a seamless client experience.' },
                       ].map((feature) => (

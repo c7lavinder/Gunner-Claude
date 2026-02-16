@@ -494,6 +494,8 @@ export async function setupTenant(data: {
     name: string;
     teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
     phone?: string;
+    email?: string;
+    isTenantAdmin?: boolean;
   }>;
 }) {
   const db = await getDb();
@@ -518,23 +520,48 @@ export async function setupTenant(data: {
 
   const tenantId = newTenant.id;
 
-  // Create team members if provided
+  // Create team members and send invites if provided
+  const invitesSent: string[] = [];
   if (data.teamMembers && data.teamMembers.length > 0) {
     for (const member of data.teamMembers) {
+      // Create team member record
       await db.insert(teamMembers).values({
         name: member.name,
         teamRole: member.teamRole,
         tenantId,
         isActive: 'true',
       });
+
+      // If email provided, send an invite
+      if (member.email) {
+        try {
+          // Determine the role for the invitation
+          const inviteRole = member.isTenantAdmin ? 'admin' as const : 'user' as const;
+          
+          await inviteUserToTenant(
+            tenantId,
+            member.email,
+            inviteRole,
+            member.teamRole,
+            undefined // invitedBy - platform owner, no specific user ID needed
+          );
+          invitesSent.push(member.email);
+          console.log(`[Tenant] Invite sent to ${member.email} for tenant ${data.name} (role: ${member.teamRole}, admin: ${member.isTenantAdmin})`);
+        } catch (e) {
+          console.warn(`[Tenant] Failed to send invite to ${member.email}:`, e);
+        }
+      }
     }
   }
 
   // Notify platform owner
   try {
+    const inviteInfo = invitesSent.length > 0 
+      ? ` Invites sent to: ${invitesSent.join(', ')}.`
+      : '';
     await notifyOwner({
       title: `New Tenant Setup: ${data.name}`,
-      content: `Tenant "${data.name}" has been set up with ${data.teamMembers?.length || 0} team members. CRM: ${data.crmType || 'none'}.`,
+      content: `Tenant "${data.name}" has been set up with ${data.teamMembers?.length || 0} team members. CRM: ${data.crmType || 'none'}.${inviteInfo}`,
     });
   } catch (e) {
     console.error('[Tenant] Failed to notify owner:', e);
@@ -701,7 +728,8 @@ export async function inviteUserToTenant(
 
   // Send team invite email notification
   try {
-    const baseUrl = process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai';
+    // Use the deployed domain for invite links so users sign in at getgunner.ai
+    const baseUrl = 'https://getgunner.ai';
     await sendTeamInviteEmail(
       email,
       inviterName,

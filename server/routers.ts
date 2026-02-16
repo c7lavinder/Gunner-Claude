@@ -3085,6 +3085,8 @@ Create content that:
           name: z.string().min(1),
           teamRole: z.enum(['admin', 'lead_manager', 'acquisition_manager', 'lead_generator']),
           phone: z.string().optional(),
+          email: z.string().email().optional(),
+          isTenantAdmin: z.boolean().optional(),
         })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {

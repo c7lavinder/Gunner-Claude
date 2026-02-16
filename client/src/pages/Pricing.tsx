@@ -24,7 +24,8 @@ import {
   Trophy, 
   Download, 
   Building2,
-  Info
+  Info,
+  Bell
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -106,6 +107,11 @@ const FEATURE_CONFIG: Record<string, { label: string; icon: React.ElementType; d
     label: "Team Leaderboards", 
     icon: Trophy, 
     description: "Gamify performance with competitive rankings. Track daily, weekly, and monthly leaders across key metrics." 
+  },
+  signals: {
+    label: "Signals",
+    icon: Bell,
+    description: "Real-time deal signals and opportunity detection. Automatically identify hot leads, stalled deals, and coaching moments from call activity."
   },
   export_reports: { 
     label: "Export Reports", 

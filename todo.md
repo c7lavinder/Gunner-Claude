@@ -2083,3 +2083,16 @@
 - [x] Fix New Customer Setup page dropdown showing correct prices ($199/$499/$999)
 - [x] Fix pipeline stage mapping: mappings persist per-pipeline when switching between pipelines
 - [x] Add pipelineMappings support to TenantCrmConfig for multi-pipeline stage mapping storage
+- [ ] Support dual roles (admin + acquisition manager) for one-man operations in team member setup
+- [x] Add email invite section to Team Members step during tenant creation — enter emails so members/admin get signup invites
+- [x] Build email/password authentication for external customers (independent of Manus OAuth) — already existed
+- [x] Create login page at getgunner.ai (email + password) — already existed at /login
+- [x] Create registration page with invite token support — already existed at /signup
+- [x] Create forgot password / reset password flow — already existed
+- [x] Auto-associate new users with their tenant and team member record by email — pending invitations system handles this
+- [x] Build invite email system: admin sends invite during tenant creation, user receives link to set up account
+- [x] Ensure Manus OAuth still works for platform owner (Corey) alongside email/password auth — context.ts falls through to Manus OAuth
+- [ ] Set up Zac Chrisman as admin + acquisition manager for his tenant
+- [x] Fix View as Tenant impersonation: context.ts now reads session cookie for JWT impersonation tokens and overrides tenantId
+- [x] Add "Signals" checkbox to plan features editor in SuperAdmin
+- [ ] Make rubric/methodology editable: allow admins to add/remove grading criteria, change point values, and edit descriptions (customizable rubrics)

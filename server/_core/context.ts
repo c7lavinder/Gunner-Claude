@@ -3,6 +3,9 @@ import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { verifySessionToken, getUserById } from "../selfServeAuth";
 import { parse as parseCookieHeader } from "cookie";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -22,40 +25,71 @@ export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
   let user: User | null = null;
-  let isImpersonating = false;
 
-  // Check for impersonation header (super admin viewing as another tenant)
+  // Check for impersonation header (admin viewing as another team member)
   const impersonationHeader = opts.req.headers['x-impersonate-user-id'] as string | undefined;
 
-  // First, try self-serve auth (auth_token cookie) - for email/password and Google OAuth users
-  try {
-    const cookies = parseCookies(opts.req.headers.cookie);
-    const authToken = cookies.get('auth_token');
-    
-    if (authToken) {
-      const decoded = verifySessionToken(authToken);
+  const cookies = parseCookies(opts.req.headers.cookie);
+
+  // 1. Check for JWT session cookie (used by super admin impersonation)
+  const sessionToken = cookies.get('session');
+  if (sessionToken) {
+    try {
+      const decoded = jwt.verify(sessionToken, JWT_SECRET) as any;
       if (decoded && decoded.userId) {
-        const selfServeUser = await getUserById(decoded.userId);
-        if (selfServeUser) {
-          user = selfServeUser;
+        const dbUser = await getUserById(decoded.userId);
+        if (dbUser) {
+          if (decoded.type === 'impersonation' && decoded.tenantId) {
+            // Super admin impersonation: override the user's tenantId with the impersonated tenant
+            user = {
+              ...dbUser,
+              tenantId: decoded.tenantId,
+              // @ts-ignore - custom property for tracking impersonation
+              _isImpersonating: true,
+              // @ts-ignore
+              _impersonatedTenantName: decoded.impersonatedTenantName,
+              // @ts-ignore
+              _originalTenantId: decoded.originalTenantId,
+            };
+          } else {
+            user = dbUser;
+          }
         }
       }
+    } catch {
+      // Session token invalid or expired, continue to other auth methods
     }
-  } catch (error) {
-    // Self-serve auth failed, will try Manus OAuth next
   }
 
-  // If self-serve auth didn't work, try Manus OAuth (app_session_id cookie)
+  // 2. Try self-serve auth (auth_token cookie) - for email/password and Google OAuth users
+  if (!user) {
+    try {
+      const authToken = cookies.get('auth_token');
+      if (authToken) {
+        const decoded = verifySessionToken(authToken);
+        if (decoded && decoded.userId) {
+          const selfServeUser = await getUserById(decoded.userId);
+          if (selfServeUser) {
+            user = selfServeUser;
+          }
+        }
+      }
+    } catch {
+      // Self-serve auth failed, will try Manus OAuth next
+    }
+  }
+
+  // 3. If self-serve auth didn't work, try Manus OAuth (app_session_id cookie)
   if (!user) {
     try {
       user = await sdk.authenticateRequest(opts.req);
-    } catch (error) {
+    } catch {
       // Authentication is optional for public procedures.
       user = null;
     }
   }
 
-  // Handle impersonation - admin and super_admin can impersonate
+  // Handle admin impersonation header - admin can impersonate users within the same tenant
   if (user && (user.role === 'super_admin' || user.role === 'admin') && impersonationHeader) {
     try {
       const targetUserId = parseInt(impersonationHeader, 10);
@@ -66,11 +100,8 @@ export async function createContext(
           if (user.role === 'admin' && impersonatedUser.tenantId !== user.tenantId) {
             console.warn(`[Impersonation] Admin ${user.id} tried to impersonate user ${targetUserId} from a different tenant`);
           } else {
-            // Store original admin info and switch to impersonated user
-            isImpersonating = true;
             user = {
               ...impersonatedUser,
-              // Keep a reference to original admin for audit purposes
               // @ts-ignore - adding custom property for impersonation tracking
               _originalAdminId: user.id,
             };

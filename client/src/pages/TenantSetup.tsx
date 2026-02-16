@@ -6,11 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
   Check, Building2, Link2, Users, Rocket, ArrowRight, ArrowLeft,
-  Plus, Loader2, Trash2, Copy, Wifi, WifiOff, GitBranch
+  Plus, Loader2, Trash2, Copy, Wifi, WifiOff, GitBranch, Mail, Shield
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -43,6 +44,8 @@ interface TeamMemberEntry {
   name: string;
   teamRole: "admin" | "lead_manager" | "acquisition_manager" | "lead_generator";
   phone: string;
+  email: string;
+  isTenantAdmin: boolean;
 }
 
 interface PipelineStage {
@@ -91,7 +94,7 @@ export default function TenantSetup() {
     newDealStageName: "",
     // Team
     teamMembers: [
-      { name: "", teamRole: "lead_generator" as const, phone: "" },
+      { name: "", teamRole: "lead_generator" as const, phone: "", email: "", isTenantAdmin: false },
     ] as TeamMemberEntry[],
     // Bulk paste
     bulkPaste: "",
@@ -114,11 +117,11 @@ export default function TenantSetup() {
   const addTeamMember = () => {
     setFormData({
       ...formData,
-      teamMembers: [...formData.teamMembers, { name: "", teamRole: "lead_generator", phone: "" }],
+      teamMembers: [...formData.teamMembers, { name: "", teamRole: "lead_generator", phone: "", email: "", isTenantAdmin: false }],
     });
   };
 
-  const updateTeamMember = (index: number, field: keyof TeamMemberEntry, value: string) => {
+  const updateTeamMember = (index: number, field: keyof TeamMemberEntry, value: string | boolean) => {
     const updated = [...formData.teamMembers];
     updated[index] = { ...updated[index], [field]: value };
     setFormData({ ...formData, teamMembers: updated });
@@ -161,7 +164,8 @@ export default function TenantSetup() {
       }
 
       const phone = parts[2] || "";
-      parsed.push({ name, teamRole, phone });
+      const email = parts[3] || "";
+      parsed.push({ name, teamRole, phone, email, isTenantAdmin: false });
     }
 
     if (parsed.length > 0) {
@@ -304,7 +308,13 @@ export default function TenantSetup() {
         crmConfig.pipelineMappings = allMappings;
       }
 
-      const validMembers = formData.teamMembers.filter(m => m.name.trim());
+      const validMembers = formData.teamMembers.filter(m => m.name.trim()).map(m => ({
+        name: m.name,
+        teamRole: m.teamRole,
+        phone: m.phone || undefined,
+        email: m.email.trim() || undefined,
+        isTenantAdmin: m.isTenantAdmin,
+      }));
 
       await setupTenantMutation.mutateAsync({
         name: formData.companyName,
@@ -315,7 +325,9 @@ export default function TenantSetup() {
         teamMembers: validMembers.length > 0 ? validMembers : undefined,
       });
 
-      toast.success(`Tenant "${formData.companyName}" created successfully with ${validMembers.length} team members!`);
+      const inviteCount = validMembers.filter(m => m.email).length;
+      const inviteMsg = inviteCount > 0 ? ` ${inviteCount} invite(s) sent.` : '';
+      toast.success(`Tenant "${formData.companyName}" created successfully with ${validMembers.length} team members!${inviteMsg}`);
       setLocation("/admin");
     } catch (error: any) {
       console.error("Failed to create tenant:", error);
@@ -644,6 +656,7 @@ export default function TenantSetup() {
           <div className="space-y-6">
             <p className="text-muted-foreground text-center text-sm">
               Add team members who make calls. Their names must match what appears in GHL/BatchDialer for auto-matching.
+              Include their email to send an invite so they can sign in.
             </p>
 
             {/* Bulk paste section */}
@@ -653,14 +666,14 @@ export default function TenantSetup() {
                 Quick Import (Paste)
               </Label>
               <Textarea
-                placeholder={"Paste team members here, one per line:\nJohn Smith, Lead Manager\nJane Doe, Lead Generator\nMike Johnson, Acquisition Manager"}
+                placeholder={"Paste team members here, one per line:\nJohn Smith, Lead Manager, 555-1234, john@email.com\nJane Doe, Lead Generator\nMike Johnson, Acquisition Manager, , mike@email.com"}
                 value={formData.bulkPaste}
                 onChange={(e) => setFormData({ ...formData, bulkPaste: e.target.value })}
                 rows={4}
               />
               <div className="flex justify-between items-center">
                 <p className="text-xs text-muted-foreground">
-                  Format: Name, Role, Phone (Role and Phone are optional)
+                  Format: Name, Role, Phone, Email (Role, Phone, Email are optional)
                 </p>
                 <Button variant="outline" size="sm" onClick={parseBulkPaste} disabled={!formData.bulkPaste.trim()}>
                   Parse & Import
@@ -669,40 +682,71 @@ export default function TenantSetup() {
             </div>
 
             {/* Individual entries */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               <Label>Team Members ({validMemberCount})</Label>
               {formData.teamMembers.map((member, index) => (
-                <div key={index} className="flex gap-2 items-start">
-                  <Input
-                    placeholder="Full name (as in CRM)"
-                    value={member.name}
-                    onChange={(e) => updateTeamMember(index, "name", e.target.value)}
-                    className="flex-1"
-                  />
-                  <Select
-                    value={member.teamRole}
-                    onValueChange={(value) => updateTeamMember(index, "teamRole", value)}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ROLE_OPTIONS.map((role) => (
-                        <SelectItem key={role.value} value={role.value}>
-                          {role.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {formData.teamMembers.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeTeamMember(index)}
-                      className="text-muted-foreground hover:text-destructive shrink-0"
+                <div key={index} className="p-3 rounded-lg border bg-card space-y-2">
+                  <div className="flex gap-2 items-start">
+                    <Input
+                      placeholder="Full name (as in CRM)"
+                      value={member.name}
+                      onChange={(e) => updateTeamMember(index, "name", e.target.value)}
+                      className="flex-1"
+                    />
+                    <Select
+                      value={member.teamRole}
+                      onValueChange={(value) => updateTeamMember(index, "teamRole", value)}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLE_OPTIONS.map((role) => (
+                          <SelectItem key={role.value} value={role.value}>
+                            {role.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {formData.teamMembers.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeTeamMember(index)}
+                        className="text-muted-foreground hover:text-destructive shrink-0"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1 relative">
+                      <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Email (for invite)"
+                        type="email"
+                        value={member.email}
+                        onChange={(e) => updateTeamMember(index, "email", e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md border bg-background">
+                      <Checkbox
+                        id={`admin-${index}`}
+                        checked={member.isTenantAdmin}
+                        onCheckedChange={(checked) => updateTeamMember(index, "isTenantAdmin", !!checked)}
+                      />
+                      <label htmlFor={`admin-${index}`} className="text-sm flex items-center gap-1 cursor-pointer whitespace-nowrap">
+                        <Shield className="h-3.5 w-3.5" />
+                        Admin Access
+                      </label>
+                    </div>
+                  </div>
+                  {member.email && member.isTenantAdmin && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                      <Shield className="h-3 w-3" />
+                      This member will have full admin access to the dashboard, settings, and team management.
+                    </p>
                   )}
                 </div>
               ))}
@@ -711,6 +755,19 @@ export default function TenantSetup() {
                 Add Team Member
               </Button>
             </div>
+
+            {/* Invite summary */}
+            {formData.teamMembers.some(m => m.email.trim()) && (
+              <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-primary" />
+                  {formData.teamMembers.filter(m => m.email.trim()).length} invite(s) will be sent
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Team members with emails will receive an invitation to create their account and sign in at getgunner.ai.
+                </p>
+              </div>
+            )}
           </div>
         );
 
@@ -801,15 +858,34 @@ export default function TenantSetup() {
                 </CardHeader>
                 <CardContent>
                   {validMemberCount > 0 ? (
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {formData.teamMembers.filter(m => m.name.trim()).map((member, i) => (
                         <div key={i} className="flex items-center justify-between text-sm">
-                          <span>{member.name}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {ROLE_OPTIONS.find(r => r.value === member.teamRole)?.label || member.teamRole}
-                          </Badge>
+                          <div>
+                            <span className="font-medium">{member.name}</span>
+                            {member.email && (
+                              <span className="text-muted-foreground ml-2 text-xs">({member.email})</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {member.isTenantAdmin && (
+                              <Badge variant="default" className="text-xs bg-amber-600">
+                                <Shield className="h-3 w-3 mr-0.5" />
+                                Admin
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">
+                              {ROLE_OPTIONS.find(r => r.value === member.teamRole)?.label || member.teamRole}
+                            </Badge>
+                          </div>
                         </div>
                       ))}
+                      {formData.teamMembers.some(m => m.email.trim()) && (
+                        <div className="pt-2 border-t text-xs text-muted-foreground flex items-center gap-1">
+                          <Mail className="h-3 w-3" />
+                          {formData.teamMembers.filter(m => m.email.trim()).length} invite(s) will be sent on creation
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">No team members added (can add later)</p>
