@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
 import {
   ArrowLeft,
   Bot,
@@ -25,6 +28,9 @@ import {
   ListTodo,
   FileEdit,
   Loader2,
+  CalendarDays,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -84,9 +90,75 @@ export default function CoachActivityLog() {
   const [searchQuery, setSearchQuery] = useState("");
   const [actionTypeFilter, setActionTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [datePreset, setDatePreset] = useState<string>("this_week");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    return { from: startOfWeek, to: now };
+  });
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const applyPreset = useCallback((preset: string) => {
+    setDatePreset(preset);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    switch (preset) {
+      case "today": {
+        setDateRange({ from: today, to: now });
+        break;
+      }
+      case "this_week": {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        setDateRange({ from: startOfWeek, to: now });
+        break;
+      }
+      case "last_week": {
+        const thisWeekStart = new Date(today);
+        thisWeekStart.setDate(today.getDate() - today.getDay());
+        const lastWeekStart = new Date(thisWeekStart);
+        lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+        const lastWeekEnd = new Date(thisWeekStart);
+        lastWeekEnd.setMilliseconds(-1);
+        setDateRange({ from: lastWeekStart, to: lastWeekEnd });
+        break;
+      }
+      case "this_month": {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        setDateRange({ from: startOfMonth, to: now });
+        break;
+      }
+      case "last_month": {
+        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        setDateRange({ from: startOfLastMonth, to: endOfLastMonth });
+        break;
+      }
+      case "last_30": {
+        const thirtyAgo = new Date(today);
+        thirtyAgo.setDate(today.getDate() - 30);
+        setDateRange({ from: thirtyAgo, to: now });
+        break;
+      }
+      case "all": {
+        setDateRange(undefined);
+        break;
+      }
+    }
+    setCalendarOpen(false);
+  }, []);
+
+  const dateFromStr = dateRange?.from ? dateRange.from.toISOString() : undefined;
+  const dateToStr = dateRange?.to ? dateRange.to.toISOString() : undefined;
 
   const { data, isLoading } = trpc.coachActions.adminActivityLog.useQuery(
-    { limit: 200 },
+    {
+      limit: 200,
+      ...(dateFromStr ? { dateFrom: dateFromStr } : {}),
+      ...(dateToStr ? { dateTo: dateToStr } : {}),
+    },
     { enabled: isAdmin }
   );
 
@@ -285,7 +357,71 @@ export default function CoachActivityLog() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-3 sm:p-4">
+        <CardContent className="p-3 sm:p-4 space-y-3">
+          {/* Date range presets */}
+          <div className="flex flex-wrap items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            {[
+              { key: "today", label: "Today" },
+              { key: "this_week", label: "This Week" },
+              { key: "last_week", label: "Last Week" },
+              { key: "this_month", label: "This Month" },
+              { key: "last_month", label: "Last Month" },
+              { key: "last_30", label: "Last 30 Days" },
+              { key: "all", label: "All Time" },
+            ].map(({ key, label }) => (
+              <Button
+                key={key}
+                variant={datePreset === key ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs px-2.5"
+                onClick={() => applyPreset(key)}
+              >
+                {label}
+              </Button>
+            ))}
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button variant={datePreset === "custom" ? "default" : "outline"} size="sm" className="h-7 text-xs px-2.5 gap-1">
+                  <CalendarDays className="h-3 w-3" />
+                  {datePreset === "custom" && dateRange?.from ? (
+                    <span>
+                      {dateRange.from.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      {dateRange.to ? ` – ${dateRange.to.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                    </span>
+                  ) : (
+                    "Custom"
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="range"
+                  selected={dateRange}
+                  onSelect={(range) => {
+                    setDateRange(range);
+                    setDatePreset("custom");
+                    if (range?.from && range?.to) {
+                      setCalendarOpen(false);
+                    }
+                  }}
+                  numberOfMonths={2}
+                  disabled={{ after: new Date() }}
+                />
+              </PopoverContent>
+            </Popover>
+            {dateRange && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-1.5 text-muted-foreground hover:text-foreground"
+                onClick={() => { setDateRange(undefined); setDatePreset("all"); }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+          {/* Search and type/status filters */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

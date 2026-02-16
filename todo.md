@@ -2167,3 +2167,11 @@
 - [x] Team usage breakdown showing per-member activity counts
 - [x] Expandable AI responses for coaching questions
 - [x] 10 vitest tests covering admin access, non-admin rejection, filtering, and data shape
+
+## Coach Activity Log - Date Range Picker
+- [x] Add calendar-based date range picker with quick presets (Today, This Week, Last Week, This Month, Last Month, Last 30 Days, All Time)
+- [x] Wire date range to the adminActivityLog query's dateFrom/dateTo params
+- [x] Default to "This Week" per dashboard statistics preference
+- [x] Custom date range via dual-month calendar popover
+- [x] Clear button to reset to All Time
+- [x] All 10 existing tests still passing
