@@ -2261,3 +2261,9 @@
 ## Bug Fix: tRPC error on home page for unauthenticated users
 - [x] Home page tRPC query returns HTML instead of JSON for unauthenticated users — caused by 502 proxy returning HTML
 - [x] Fix: added non-JSON response guard in tRPC client fetch wrapper — converts HTML error pages to proper JSON error responses
+
+## Feature: Detect actionable content in Too Short / skipped calls as signals
+- [x] Investigate how opportunity detection currently handles Too Short and skipped calls — ALL 16 rules filter on status=completed & classification=conversation, so short/skipped calls are completely invisible
+- [x] Add Rule 17: Scan short/skipped calls for actionable content (email, phone, referral, scheduling intent, property details)
+- [x] Example: Gary Tallman call (0:47, Too Short, skipped) — wife provided husband's email for follow-up
+- [x] Test with real examples — 30/30 pattern matching tests pass

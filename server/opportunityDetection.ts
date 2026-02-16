@@ -2126,6 +2126,11 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
     context: "A walkthrough was completed (the contact moved through or past the walkthrough stage) but the seller has gone silent. No inbound messages or calls have been received from the seller in 72+ hours after the walkthrough, and outbound follow-up attempts have not resulted in a conversation.",
     tier: "at_risk"
   },
+  short_call_actionable_intel: {
+    label: "Short Call — Actionable Info Captured",
+    context: "A short call (under 60 seconds) was auto-skipped from grading, but the transcript contains actionable intelligence: contact info for an alternate person (email, phone), a referral to a decision-maker (spouse, partner, attorney), a callback/scheduling request, or clear interest signals. This call needs manual review to capture the lead.",
+    tier: "possible"
+  },
 };
 
 async function generateAIReason(detection: DetectedOpportunity, db: any, tenantId: number): Promise<{ reason: string; suggestion: string; missedItems?: string[] }> {
@@ -2371,6 +2376,182 @@ Generate JSON with "reason", "suggestion", and "missedItems" fields. Be SPECIFIC
     suggestion: `Review ${detection.contactName || "this lead"} and determine if follow-up is needed.`,
     missedItems: []
   };
+}
+
+// Rule 17: Short Call — Actionable Intel
+// Scans too_short / skipped calls for actionable content that would otherwise be missed:
+// - Contact info provided (email, phone for alternate person)
+// - Referral to decision-maker (spouse, partner, attorney)
+// - Callback / scheduling requests
+// - Interest signals in brief exchanges
+
+const EMAIL_PATTERN = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
+const PHONE_PATTERN = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/;
+
+const REFERRAL_PATTERNS = [
+  // Redirect to another person
+  /(?:talk|speak|call|reach|contact|email|text|send)\s+(?:to|with)?\s*(?:my|her|his|the)\s+(?:husband|wife|spouse|partner|son|daughter|brother|sister|attorney|lawyer|agent|realtor|mom|mother|dad|father)/i,
+  /(?:my|her|his|the)\s+(?:husband|wife|spouse|partner|son|daughter|brother|sister|attorney|lawyer|agent|realtor|mom|mother|dad|father)\s+(?:handles|manages|deals with|takes care of|makes|is\s+(?:the|in\s+charge))/i,
+  // "Email him/her instead"
+  /(?:email|call|text|contact|reach out to)\s+(?:him|her|them)\s+(?:instead|rather|about)/i,
+  // "He/she is the one you need to talk to"
+  /(?:he|she|they)\s+(?:is|are)\s+(?:the\s+one|who)\s+(?:you\s+(?:need|should|want)\s+to|to)\s+(?:talk|speak|deal)/i,
+  // "Let me give you his/her number/email"
+  /(?:let\s+me|here's|here\s+is|i'll)\s+(?:give\s+you|send\s+you)?\s*(?:his|her|their|my\s+(?:husband|wife|spouse|partner)'s)\s+(?:number|email|contact|phone)/i,
+  // Suggested emailing someone ("suggested emailing her husband")
+  /(?:suggest(?:ed)?|try|better|best)\s+(?:to\s+)?(?:email(?:ing)?|call(?:ing)?|text(?:ing)?|contact(?:ing)?|reach(?:ing)?)\s+(?:my|her|his|the)/i,
+  // "emailing her husband instead" — participle form
+  /(?:email(?:ing)?|call(?:ing)?|text(?:ing)?)\s+(?:my|her|his|the)\s+(?:husband|wife|spouse|partner|son|daughter|brother|sister|attorney|lawyer|agent|realtor|mom|mother|dad|father)/i,
+];
+
+const CALLBACK_PATTERNS = [
+  /(?:call|try|reach)\s+(?:me|us|back|again)\s+(?:later|tomorrow|next\s+week|in\s+the\s+morning|in\s+the\s+afternoon|in\s+the\s+evening|tonight|this\s+weekend|on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))/i,
+  /(?:i'm|i\s+am)\s+(?:busy|at\s+work|driving|in\s+a\s+meeting|not\s+available)\s+(?:right\s+now|now|at\s+the\s+moment)/i,
+  /(?:can\s+you|could\s+you|would\s+you)\s+(?:call|try|reach)\s+(?:me|us|back)\s+(?:at|around|after|before|in|on|later|tomorrow)/i,
+  /(?:not\s+a\s+good\s+time|bad\s+time|give\s+me\s+a\s+(?:call|ring)\s+(?:later|back|tomorrow))/i,
+  // "Call me back on Monday" — direct request with day
+  /call\s+(?:me\s+)?back\s+on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+  // "try me again tomorrow" — retry request
+  /(?:try|call|reach)\s+(?:me|us)\s+(?:again|back)\s+(?:later|tomorrow|next|in\s+the|on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))/i,
+];
+
+const INTEREST_PATTERNS = [
+  /(?:i\s+might|i\s+may|i'm\s+(?:thinking|considering)|we're\s+(?:thinking|considering))\s+(?:be\s+)?(?:interested|selling|looking\s+to\s+sell)/i,
+  // "I'm thinking about selling"
+  /(?:i'm|i\s+am|we're|we\s+are)\s+(?:thinking|considering)\s+(?:about|of)\s+(?:selling|listing|getting\s+rid)/i,
+  /(?:send|give)\s+(?:me|us)\s+(?:some\s+)?(?:info|information|details|an\s+offer|a\s+number|your\s+offer)/i,
+  /(?:what\s+(?:would|could|can)\s+you)\s+(?:offer|pay|give\s+me)/i,
+  /(?:how\s+much|what's\s+it\s+worth|what\s+do\s+you\s+think)/i,
+];
+
+async function detectShortCallActionableIntel(
+  db: any,
+  tenantId: number,
+  creds: GHLCredentials | null
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Get recent short/skipped calls that have transcripts
+  const shortCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.classification, "too_short"),
+        gte(calls.callTimestamp, sevenDaysAgo),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(50);
+
+  for (const call of shortCalls) {
+    if (!call.ghlContactId) continue;
+    const transcript = call.transcript;
+    if (!transcript || transcript.length < 20) continue;
+
+    // Check for actionable patterns
+    const signals: string[] = [];
+    let priorityBoost = 0;
+
+    // 1. Email address provided
+    const emailMatch = transcript.match(EMAIL_PATTERN);
+    if (emailMatch) {
+      signals.push(`Email provided: ${emailMatch[0]}`);
+      priorityBoost += 15;
+    }
+
+    // 2. Phone number for alternate contact (look for a phone number in the context of a referral)
+    const hasReferral = REFERRAL_PATTERNS.some(p => p.test(transcript));
+    const phoneMatch = transcript.match(PHONE_PATTERN);
+    if (hasReferral) {
+      signals.push("Referred to another person (decision-maker/family member)");
+      priorityBoost += 10;
+      if (phoneMatch) {
+        signals.push(`Alternate phone provided: ${phoneMatch[0]}`);
+        priorityBoost += 5;
+      }
+    }
+
+    // 3. Callback / scheduling request
+    const hasCallback = CALLBACK_PATTERNS.some(p => p.test(transcript));
+    if (hasCallback) {
+      signals.push("Callback or scheduling request detected");
+      priorityBoost += 5;
+    }
+
+    // 4. Interest signals
+    const hasInterest = INTEREST_PATTERNS.some(p => p.test(transcript));
+    if (hasInterest) {
+      signals.push("Interest or selling intent mentioned");
+      priorityBoost += 10;
+    }
+
+    // Only flag if we found at least one actionable signal
+    if (signals.length === 0) continue;
+
+    // Check if there's been a follow-up call or outbound activity since this short call
+    const followUpCalls = await db
+      .select({ id: calls.id })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId),
+          gte(calls.callTimestamp, call.callTimestamp),
+          not(eq(calls.id, call.id))
+        )
+      )
+      .limit(1);
+
+    if (followUpCalls.length > 0) continue; // There's been follow-up activity
+
+    // Check GHL conversations for outbound follow-up
+    if (creds) {
+      try {
+        const conversations = await fetchRecentConversations(creds, 100);
+        const contactConv = conversations.find((c: any) => c.contactId === call.ghlContactId);
+        if (contactConv) {
+          const lastMsgDate = new Date(contactConv.lastMessageDate);
+          const callDate = new Date(call.callTimestamp);
+          // If team sent an outbound message after the short call, they're on it
+          if (contactConv.lastMessageDirection === "outbound" && lastMsgDate > callDate) continue;
+        }
+      } catch (err) {
+        // Non-critical
+      }
+    }
+
+    // Build excerpt with the classification reason (AI summary) and signals
+    const summary = call.classificationReason || "";
+    const excerpt = `[Short call ${call.duration || "?"}s — ${signals.join("; ")}] ${summary}`.substring(0, 500);
+
+    results.push({
+      tier: "possible",
+      triggerRules: ["short_call_actionable_intel"],
+      priorityScore: Math.min(50 + priorityBoost, 80),
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "transcript",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: excerpt,
+      ...NO_PRICE_DATA,
+    });
+  }
+
+  return results;
 }
 
 // ============ DEDUPLICATION ============
@@ -2734,6 +2915,13 @@ async function scanTenant(
     // Rule 16: Post-walkthrough ghosting — seller went silent after walkthrough
     const ghostingDetections = await detectPostWalkthroughGhosting(db, tenantId, creds, contactOppMap);
     detections.push(...ghostingDetections);
+
+    // Rule 17: Short call actionable intel — scan too_short calls for emails, referrals, callbacks
+    const shortCallDetections = await detectShortCallActionableIntel(db, tenantId, creds);
+    detections.push(...shortCallDetections);
+    if (shortCallDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 17: Found ${shortCallDetections.length} short calls with actionable intel`);
+    }
   } catch (transcriptError) {
     console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
     result.errors++;
