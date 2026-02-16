@@ -2204,3 +2204,13 @@
 - [x] Added pipelineName to LLM JSON schema
 - [x] Friendly error messages: "No opportunity found for this contact" and "Could not find a pipeline stage matching..."
 - [x] 16 vitest tests covering stage name resolution, case insensitivity, partial matching, pipeline filtering, and code path verification
+
+## Bug Fix: Pipeline stage fuzzy matching for abbreviations
+- [x] Fix stage matching to handle abbreviations (e.g., "Pending Apt(3)" should match "pending appointment")
+- [x] Strip parenthetical numbers from stage names before matching (e.g., "(3)" in "Pending Apt(3)")
+- [x] Add common real estate abbreviation mappings (apt/appointment, appt/appointment, dq/disqualified, sched/scheduled, etc.)
+- [x] Add word-level fuzzy matching with abbreviation expansion
+- [x] Add compound word normalization (followup/follow up, callback/call back, etc.)
+- [x] Add filler word filtering ("stage", "the", "to", etc.)
+- [x] Prevent false positives with strict bidirectional matching and prefix-only short-word matching
+- [x] 19 vitest tests covering Daniel's exact scenarios, abbreviations, parenthetical stripping, and edge cases

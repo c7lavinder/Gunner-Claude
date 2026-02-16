@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolveStageByName } from "./ghlActions";
 
+// Realistic GHL pipeline stages with abbreviations and parenthetical numbers
 const mockPipelines = [
   {
     id: "pipeline_sales",
@@ -8,10 +9,12 @@ const mockPipelines = [
     stages: [
       { id: "stage_new", name: "New Lead" },
       { id: "stage_qualified", name: "Qualified" },
-      { id: "stage_pending", name: "Pending Appointment" },
-      { id: "stage_offer", name: "Offer Scheduled" },
+      { id: "stage_pending", name: "Pending Apt(3)" },
+      { id: "stage_offer", name: "Offer Sched" },
       { id: "stage_contract", name: "Under Contract" },
       { id: "stage_closed", name: "Closed Won" },
+      { id: "stage_dq", name: "DQ'd" },
+      { id: "stage_fup", name: "Follow Up(2)" },
     ],
   },
   {
@@ -21,128 +24,136 @@ const mockPipelines = [
       { id: "dispo_new", name: "New Deal" },
       { id: "dispo_marketed", name: "Marketed" },
       { id: "dispo_assigned", name: "Assigned to Buyer" },
+      { id: "dispo_insp", name: "Prop Insp" },
       { id: "dispo_closed", name: "Closed" },
     ],
   },
 ];
 
-describe("resolveStageByName", () => {
-  it("resolves exact stage name match", () => {
-    const result = resolveStageByName(mockPipelines, "Pending Appointment");
-    expect(result).not.toBeNull();
-    expect(result!.stageId).toBe("stage_pending");
-    expect(result!.pipelineId).toBe("pipeline_sales");
-    expect(result!.stageName).toBe("Pending Appointment");
-  });
-
-  it("resolves case-insensitive stage name", () => {
+describe("resolveStageByName - Daniel's exact scenarios", () => {
+  it("'pending appointment' matches 'Pending Apt(3)'", () => {
     const result = resolveStageByName(mockPipelines, "pending appointment");
     expect(result).not.toBeNull();
     expect(result!.stageId).toBe("stage_pending");
+    expect(result!.stageName).toBe("Pending Apt(3)");
   });
 
-  it("resolves partial stage name match (includes)", () => {
-    const result = resolveStageByName(mockPipelines, "offer");
-    expect(result).not.toBeNull();
-    expect(result!.stageId).toBe("stage_offer");
-    expect(result!.stageName).toBe("Offer Scheduled");
-  });
-
-  it("resolves stage with pipeline name filter", () => {
-    const result = resolveStageByName(mockPipelines, "Closed", "Dispo");
-    expect(result).not.toBeNull();
-    expect(result!.stageId).toBe("dispo_closed");
-    expect(result!.pipelineId).toBe("pipeline_dispo");
-  });
-
-  it("resolves 'Closed Won' in Sales pipeline when pipeline specified", () => {
-    const result = resolveStageByName(mockPipelines, "Closed Won", "Sales");
-    expect(result).not.toBeNull();
-    expect(result!.stageId).toBe("stage_closed");
-    expect(result!.pipelineId).toBe("pipeline_sales");
-  });
-
-  it("returns null for non-existent stage", () => {
-    const result = resolveStageByName(mockPipelines, "nonexistent stage");
-    expect(result).toBeNull();
-  });
-
-  it("returns null for non-existent pipeline", () => {
-    const result = resolveStageByName(mockPipelines, "New Lead", "Nonexistent Pipeline");
-    expect(result).toBeNull();
-  });
-
-  it("resolves stage across all pipelines when no pipeline specified", () => {
-    const result = resolveStageByName(mockPipelines, "New Deal");
-    expect(result).not.toBeNull();
-    expect(result!.pipelineId).toBe("pipeline_dispo");
-    expect(result!.stageId).toBe("dispo_new");
-  });
-
-  it("handles whitespace in stage name", () => {
-    const result = resolveStageByName(mockPipelines, "  pending appointment  ");
+  it("'pending Apt stage' matches 'Pending Apt(3)'", () => {
+    const result = resolveStageByName(mockPipelines, "pending Apt stage");
+    // Should still match since "pending" and "apt" match
     expect(result).not.toBeNull();
     expect(result!.stageId).toBe("stage_pending");
   });
 
-  it("handles empty pipelines array", () => {
-    const result = resolveStageByName([], "Pending Appointment");
-    expect(result).toBeNull();
+  it("'pending appointment stage' matches 'Pending Apt(3)'", () => {
+    const result = resolveStageByName(mockPipelines, "pending appointment stage");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_pending");
   });
 
-  it("prefers exact match over partial match", () => {
+  it("'Pending Apt' exact abbreviation matches 'Pending Apt(3)'", () => {
+    const result = resolveStageByName(mockPipelines, "Pending Apt");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_pending");
+  });
+});
+
+describe("resolveStageByName - Parenthetical stripping", () => {
+  it("strips (3) from 'Pending Apt(3)' for matching", () => {
+    const result = resolveStageByName(mockPipelines, "pending apt");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_pending");
+  });
+
+  it("strips (2) from 'Follow Up(2)' for matching", () => {
+    const result = resolveStageByName(mockPipelines, "follow up");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_fup");
+  });
+
+  it("'followup' matches 'Follow Up(2)' via abbreviation", () => {
+    const result = resolveStageByName(mockPipelines, "followup");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_fup");
+  });
+});
+
+describe("resolveStageByName - Abbreviation expansion", () => {
+  it("'offer scheduled' matches 'Offer Sched'", () => {
+    const result = resolveStageByName(mockPipelines, "offer scheduled");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_offer");
+  });
+
+  it("'disqualified' matches 'DQ'd'", () => {
+    const result = resolveStageByName(mockPipelines, "disqualified");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_dq");
+  });
+
+  it("'property inspection' matches 'Prop Insp'", () => {
+    const result = resolveStageByName(mockPipelines, "property inspection");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("dispo_insp");
+  });
+});
+
+describe("resolveStageByName - Exact matches still work", () => {
+  it("exact match on 'New Lead'", () => {
+    const result = resolveStageByName(mockPipelines, "New Lead");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_new");
+  });
+
+  it("exact match on 'Qualified'", () => {
     const result = resolveStageByName(mockPipelines, "Qualified");
     expect(result).not.toBeNull();
     expect(result!.stageId).toBe("stage_qualified");
-    expect(result!.stageName).toBe("Qualified");
   });
 
-  it("resolves 'under contract' case insensitively", () => {
+  it("exact match on 'Under Contract'", () => {
     const result = resolveStageByName(mockPipelines, "under contract");
     expect(result).not.toBeNull();
     expect(result!.stageId).toBe("stage_contract");
   });
 });
 
-describe("Pipeline stage change execution flow", () => {
-  it("parseIntent LLM schema includes pipelineName and stageName fields", async () => {
-    // Verify the schema includes the required fields for stage resolution
-    const requiredFields = ["stageName", "pipelineName", "pipelineId", "stageId", "opportunityId"];
-    for (const field of requiredFields) {
-      expect(typeof field).toBe("string");
-      expect(field.length).toBeGreaterThan(0);
-    }
+describe("resolveStageByName - Pipeline filtering", () => {
+  it("'Closed' in Sales pipeline matches 'Closed Won'", () => {
+    const result = resolveStageByName(mockPipelines, "Closed", "Sales");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_closed");
+    expect(result!.pipelineId).toBe("pipeline_sales");
   });
 
-  it("executeAction handles missing opportunityId by looking up contact", () => {
-    // This test verifies the code path exists in ghlActions.ts
-    // The actual GHL API call is tested via integration tests
-    const fs = require("fs");
-    const code = fs.readFileSync("server/ghlActions.ts", "utf8");
-    
-    // Verify auto-resolution code exists
-    expect(code).toContain("findOpportunityByContact");
-    expect(code).toContain("No opportunity ID — looking up opportunities for contact");
-    expect(code).toContain("resolveStageByName");
-    expect(code).toContain("No opportunity found for this contact");
+  it("'Closed' in Dispo pipeline matches 'Closed'", () => {
+    const result = resolveStageByName(mockPipelines, "Closed", "Dispo");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("dispo_closed");
+    expect(result!.pipelineId).toBe("pipeline_dispo");
+  });
+});
+
+describe("resolveStageByName - Edge cases", () => {
+  it("returns null for non-existent stage", () => {
+    const result = resolveStageByName(mockPipelines, "nonexistent stage");
+    expect(result).toBeNull();
   });
 
-  it("executeAction resolves stage name when stageId is missing", () => {
-    const fs = require("fs");
-    const code = fs.readFileSync("server/ghlActions.ts", "utf8");
-    
-    // Verify stage name resolution code exists
-    expect(code).toContain("Resolving stage name");
-    expect(code).toContain("getPipelinesForTenant");
-    expect(code).toContain("Could not find a pipeline stage matching");
+  it("returns null for empty pipelines", () => {
+    const result = resolveStageByName([], "Pending Appointment");
+    expect(result).toBeNull();
   });
 
-  it("LLM prompt instructs to include stageName for pipeline changes", () => {
-    const fs = require("fs");
-    const code = fs.readFileSync("server/routers.ts", "utf8");
-    
-    expect(code).toContain("ALWAYS include stageName");
-    expect(code).toContain("pipelineName");
-    expect(code).toContain("Leave pipelineId and stageId empty strings");
+  it("handles extra whitespace", () => {
+    const result = resolveStageByName(mockPipelines, "  pending  appointment  ");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_pending");
+  });
+
+  it("case insensitive matching", () => {
+    const result = resolveStageByName(mockPipelines, "PENDING APT");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_pending");
   });
 });

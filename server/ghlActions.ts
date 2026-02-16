@@ -184,6 +184,139 @@ export async function getPipelinesForTenant(
   }
 }
 
+// Common abbreviation mappings for real estate pipeline stages
+const ABBREVIATION_MAP: Record<string, string[]> = {
+  "apt": ["appointment", "appt"],
+  "appt": ["appointment", "apt"],
+  "appointment": ["apt", "appt"],
+  "qual": ["qualified", "qualification"],
+  "qualified": ["qual"],
+  "dq": ["disqualified", "disqualify", "dq'd"],
+  "dq'd": ["disqualified", "disqualify", "dq"],
+  "disqualified": ["dq", "dq'd"],
+  "disqualify": ["dq", "dq'd"],
+  "sched": ["scheduled"],
+  "scheduled": ["sched"],
+  "cxl": ["cancelled", "canceled"],
+  "cancelled": ["cxl"],
+  "canceled": ["cxl"],
+  "prop": ["property"],
+  "property": ["prop"],
+  "neg": ["negotiation", "negotiating"],
+  "negotiation": ["neg"],
+  "insp": ["inspection"],
+  "inspection": ["insp"],
+  "ctr": ["contract"],
+  "contract": ["ctr"],
+  "pend": ["pending"],
+  "pending": ["pend"],
+  "fup": ["follow up", "followup"],
+  "follow up": ["fup", "followup"],
+  "followup": ["fup", "follow up"],
+};
+
+/**
+ * Strip parenthetical content like "(3)" or "(New)" from stage names
+ */
+function stripParenthetical(name: string): string {
+  return name.replace(/\s*\([^)]*\)\s*/g, "").trim();
+}
+
+/**
+ * Expand a word into all its possible abbreviation variants
+ */
+function expandWord(word: string): string[] {
+  const lower = word.toLowerCase();
+  const variants = [lower];
+  if (ABBREVIATION_MAP[lower]) {
+    variants.push(...ABBREVIATION_MAP[lower]);
+  }
+  return variants;
+}
+
+/**
+ * Check if two strings are a fuzzy match considering abbreviations.
+ * Splits both into words, expands abbreviations, and checks if all words
+ * from one string have a match in the other.
+ */
+/**
+ * Check if two words match, allowing substring matching only for short abbreviations (<=4 chars)
+ * to prevent false positives like "disqualified" matching "qualified"
+ */
+function wordsMatch(word1: string, word2: string): boolean {
+  if (word1 === word2) return true;
+  // Only allow substring matching for short abbreviations
+  const minLen = Math.min(word1.length, word2.length);
+  if (minLen <= 4) {
+    // Short word: allow it to be a prefix of the longer word
+    const shorter = word1.length <= word2.length ? word1 : word2;
+    const longer = word1.length <= word2.length ? word2 : word1;
+    return longer.startsWith(shorter);
+  }
+  return false;
+}
+
+// Compound words that should be treated as equivalent
+const COMPOUND_NORMALIZATIONS: Record<string, string> = {
+  "followup": "follow up",
+  "follow-up": "follow up",
+  "setup": "set up",
+  "set-up": "set up",
+  "callback": "call back",
+  "call-back": "call back",
+  "walkthrough": "walk through",
+  "walk-through": "walk through",
+};
+
+function normalizeCompounds(text: string): string {
+  let result = text.toLowerCase();
+  for (const [compound, expanded] of Object.entries(COMPOUND_NORMALIZATIONS)) {
+    result = result.replace(new RegExp(`\\b${compound}\\b`, "g"), expanded);
+  }
+  return result;
+}
+
+function fuzzyStageMatch(userInput: string, actualName: string): boolean {
+  // Normalize compound words before splitting
+  const normalizedInput = normalizeCompounds(userInput);
+  const normalizedActual = normalizeCompounds(actualName);
+  
+  const inputWords = normalizedInput.split(/\s+/).filter(Boolean);
+  const actualWords = normalizedActual.split(/\s+/).filter(Boolean);
+
+  // Filter out common filler words that shouldn't affect matching
+  const fillerWords = new Set(["stage", "the", "to", "in", "a", "an"]);
+  const filteredInput = inputWords.filter(w => !fillerWords.has(w));
+  const filteredActual = actualWords.filter(w => !fillerWords.has(w));
+
+  if (filteredInput.length === 0 || filteredActual.length === 0) return false;
+
+  // Check if every actual word (or its abbreviation) matches some input word (or its abbreviation)
+  const actualMatchesInput = filteredActual.every(aw => {
+    const aVariants = expandWord(aw);
+    return aVariants.some(av => {
+      return filteredInput.some(iw => {
+        const iVariants = expandWord(iw);
+        return iVariants.some(iv => wordsMatch(av, iv));
+      });
+    });
+  });
+
+  // Check if every input word (or its abbreviation) matches some actual word (or its abbreviation)
+  const inputMatchesActual = filteredInput.every(iw => {
+    const iVariants = expandWord(iw);
+    return iVariants.some(iv => {
+      return filteredActual.some(aw => {
+        const aVariants = expandWord(aw);
+        return aVariants.some(av => wordsMatch(iv, av));
+      });
+    });
+  });
+
+  // Both directions must match to prevent false positives
+  return actualMatchesInput && inputMatchesActual;
+}
+
 export function resolveStageByName(
   pipelines: Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>,
   stageName: string,
@@ -197,22 +330,46 @@ export function resolveStageByName(
     ? pipelines.filter(p => p.name.toLowerCase().includes(normalizedPipeline))
     : pipelines;
 
+  // Pass 1: Exact match on raw name
   for (const pipeline of targetPipelines) {
-    // Try exact match first
-    let stage = pipeline.stages.find(s => s.name.toLowerCase() === normalizedStage);
-    // Then try includes match
-    if (!stage) {
-      stage = pipeline.stages.find(s => s.name.toLowerCase().includes(normalizedStage) || normalizedStage.includes(s.name.toLowerCase()));
-    }
+    const stage = pipeline.stages.find(s => s.name.toLowerCase() === normalizedStage);
     if (stage) {
-      return {
-        pipelineId: pipeline.id,
-        stageId: stage.id,
-        pipelineName: pipeline.name,
-        stageName: stage.name,
-      };
+      return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };
     }
   }
+
+  // Pass 2: Exact match after stripping parenthetical content (e.g., "Pending Apt(3)" → "Pending Apt")
+  for (const pipeline of targetPipelines) {
+    const stage = pipeline.stages.find(s => stripParenthetical(s.name).toLowerCase() === normalizedStage);
+    if (stage) {
+      return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };
+    }
+  }
+
+  // Pass 3: Fuzzy match with abbreviation expansion (e.g., "pending appointment" ↔ "Pending Apt(3)")
+  // This runs BEFORE substring includes to prevent false positives like "disqualified" matching "Qualified"
+  for (const pipeline of targetPipelines) {
+    const stage = pipeline.stages.find(s => {
+      const strippedActual = stripParenthetical(s.name);
+      return fuzzyStageMatch(normalizedStage, strippedActual);
+    });
+    if (stage) {
+      return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };
+    }
+  }
+
+  // Pass 4: Includes match (either direction) on stripped names — broadest match, last resort
+  for (const pipeline of targetPipelines) {
+    const strippedInput = stripParenthetical(normalizedStage);
+    const stage = pipeline.stages.find(s => {
+      const strippedActual = stripParenthetical(s.name).toLowerCase();
+      return strippedActual.includes(strippedInput) || strippedInput.includes(strippedActual);
+    });
+    if (stage) {
+      return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };
+    }
+  }
+
   return null;
 }
 
