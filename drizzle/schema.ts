@@ -1220,6 +1220,10 @@ export const opportunities = mysqlTable("opportunities", {
   dismissNote: text("dismissNote"),
   resolvedBy: int("resolvedBy").references(() => users.id),
   resolvedAt: timestamp("resolvedAt"),
+  // Price data extracted from transcripts
+  ourOffer: int("ourOffer"),
+  sellerAsk: int("sellerAsk"),
+  priceGap: int("priceGap"),
   lastActivityAt: timestamp("lastActivityAt"),
   lastStageChangeAt: timestamp("lastStageChangeAt"),
   flaggedAt: timestamp("flaggedAt").defaultNow().notNull(),

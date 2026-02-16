@@ -2040,12 +2040,12 @@
 - [x] AI reasons should reflect what actually happened: scheduled offer call, attempted contact, no answer, etc.
 - [x] Build dynamic re-evaluation system to refresh active opportunity summaries as new data comes in
 - [x] Opportunity summaries should update over time (e.g., "2 attempts no response" → "3 attempts, still ghosting")
-- [ ] Add price gap logic — large gaps ($120k+) should downgrade priority, not flag as Missed
-- [ ] AI reason should specify exact motivation type from transcript (divorce, tax lien, timeline, property condition, financial pressure) — not generic "showed motivation signals"
-- [ ] Build contact timeline enrichment — fetch full call history + pipeline stage progression for each detection
-- [ ] Feed full timeline (initial call → walkthrough set → walkthrough done → ghosting) into AI reason generator
+- [x] Add price gap logic — large gaps ($120k+) should downgrade priority, not flag as Missed
+- [x] AI reason should specify exact motivation type from transcript (divorce, tax lien, timeline, property condition, financial pressure) — not generic "showed motivation signals"
+- [x] Build contact timeline enrichment — fetch full call history + pipeline stage progression for each detection
+- [x] Feed full timeline (initial call → walkthrough set → walkthrough done → ghosting) into AI reason generator
 - [x] Suppress wrong rules when pipeline tells a different story (e.g., don't say "Only 1 Call" when walkthrough was completed)
-- [ ] Detect post-walkthrough ghosting as its own signal type
+- [x] Detect post-walkthrough ghosting as its own signal type
 - [x] Fix walkthrough_no_offer: don't fire when stage is "Walkthrough Apt Scheduled" (upcoming, not completed)
 - [x] Fix walkthrough_no_offer: check if offer was already discussed on call transcript before flagging "no offer"
 - [x] Fix motivated_one_and_done: check pipeline stage — if contact progressed past initial (walkthrough, offer), suppress rule
@@ -2053,3 +2053,13 @@
 - [x] Build dynamic re-evaluation system — refresh active opportunity summaries hourly with latest data
 - [x] Add transcript-based offer detection — check if offer was discussed in transcript, not just callOutcome field
 - [x] Write vitest tests for false positive suppression, re-evaluation, and appointment checking
+- [x] Price gap logic: downgrade priority when gap between our offer and seller ask is $120k+ (Missed → Worth a Look)
+- [x] Price gap logic: include actual dollar amounts (our offer, seller ask, gap) in opportunity summaries/reasons
+- [x] Price gap logic: update extractPricesFromTranscript to be more robust and extract both sides
+- [x] Post-walkthrough ghosting: new Rule 16 — detect when walkthrough was completed but seller went silent
+- [x] Post-walkthrough ghosting: check for outbound follow-up attempts after walkthrough
+- [x] Post-walkthrough ghosting: classify as Tier 2 (At Risk) with appropriate priority score
+- [x] Contact timeline enrichment: fetch full call history + pipeline stage progression for each detection
+- [x] Contact timeline enrichment: feed full timeline into AI reason generator for richer context
+- [x] Contact timeline enrichment: AI reasons should specify exact motivation type from transcript
+- [x] Write vitest tests for price gap logic, post-walkthrough ghosting, and timeline enrichment

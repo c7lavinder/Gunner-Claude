@@ -1712,6 +1712,249 @@ async function detectTimelineNoCommitment(
   return results;
 }
 
+// Rule 16: Post-walkthrough ghosting — seller went silent after walkthrough was completed
+// Detects when a contact progressed to/past walkthrough stage but then went silent.
+// Checks: (1) contact is in or past walkthrough stage, (2) walkthrough happened 3+ days ago,
+// (3) no inbound messages/calls from seller since, (4) outbound follow-up attempts didn't result in conversation.
+async function detectPostWalkthroughGhosting(
+  db: any,
+  tenantId: number,
+  creds: GHLCredentials | null,
+  contactOppMap?: Map<string, { opp: GHLPipelineOpportunity; stageName: string }>
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const twentyOneDaysAgo = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000);
+
+  // Strategy: Find contacts who had walkthrough-related calls (callType includes walkthrough,
+  // or transcript mentions walkthrough) in the last 21 days but 3+ days ago,
+  // then check if the seller has gone silent.
+
+  // Approach 1: Check pipeline — contacts in offer-related stages (post-walkthrough)
+  // who have gone silent
+  if (contactOppMap) {
+    for (const [contactId, { opp, stageName }] of Array.from(contactOppMap.entries())) {
+      const lower = stageName.toLowerCase();
+      // Look for stages that indicate walkthrough was done: "Offer" stages, "Under Contract", etc.
+      // Also check "Walkthrough Completed" or similar
+      const isPostWalkthrough = lower.includes("offer") || lower.includes("under contract") ||
+        lower.includes("walkthrough completed") || lower.includes("walkthrough done");
+      // Also check: contact is in walkthrough stage but walkthrough happened a while ago
+      const isStaleWalkthrough = (lower.includes("walkthrough") && !lower.includes("scheduled"));
+
+      if (!isPostWalkthrough && !isStaleWalkthrough) continue;
+
+      const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : new Date(opp.updatedAt);
+      // Must be 3+ days since stage change but within 21 days
+      if (stageChangeAt > threeDaysAgo || stageChangeAt < twentyOneDaysAgo) continue;
+
+      // Check for any recent inbound activity from the seller
+      let hasRecentInbound = false;
+      if (creds) {
+        try {
+          const conversations = await fetchRecentConversations(creds, 100);
+          const contactConv = conversations.find((c: any) => c.contactId === contactId);
+          if (contactConv) {
+            const lastMsgDate = new Date(contactConv.lastMessageDate);
+            // If the last message was inbound and recent (after stage change), seller is responding
+            if (contactConv.lastMessageDirection === "inbound" && lastMsgDate > stageChangeAt) {
+              hasRecentInbound = true;
+            }
+          }
+        } catch (err) {
+          // Non-critical
+        }
+      }
+      if (hasRecentInbound) continue; // Seller is still communicating
+
+      // Check for any calls after the walkthrough stage change
+      const postWalkthroughCalls = await db
+        .select({
+          id: calls.id,
+          classification: calls.classification,
+          callOutcome: calls.callOutcome,
+          callTimestamp: calls.callTimestamp,
+        })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.ghlContactId, contactId),
+            gte(calls.callTimestamp, stageChangeAt)
+          )
+        )
+        .orderBy(desc(calls.callTimestamp));
+
+      // If there's been a conversation call after walkthrough, seller isn't ghosting
+      const hasPostConversation = postWalkthroughCalls.some(
+        (c: any) => c.classification === "conversation"
+      );
+      if (hasPostConversation) continue;
+
+      // Count outbound attempts that didn't result in conversation (no answer, voicemail)
+      const outboundAttempts = postWalkthroughCalls.filter(
+        (c: any) => c.classification !== "conversation"
+      ).length;
+
+      // APPOINTMENT CHECK: If there's a future appointment, they're not ghosting
+      const hasFutureApt = await hasUpcomingAppointment(creds, contactId);
+      if (hasFutureApt) continue;
+
+      // Get the most recent transcript for context
+      const latestTranscript = await db
+        .select({ transcript: calls.transcript, id: calls.id })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.ghlContactId, contactId),
+            sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
+          )
+        )
+        .orderBy(desc(calls.callTimestamp))
+        .limit(1);
+
+      const excerpt = latestTranscript.length > 0
+        ? `[Post-walkthrough: ${outboundAttempts} follow-up attempt(s) with no conversation since ${stageChangeAt.toLocaleDateString()}] ` +
+          latestTranscript[0].transcript.substring(0, 400)
+        : `Post-walkthrough: ${outboundAttempts} follow-up attempt(s) with no conversation since ${stageChangeAt.toLocaleDateString()}`;
+
+      // Get the latest call for this contact for team member info
+      const latestCall = await db
+        .select({ teamMemberId: calls.teamMemberId, teamMemberName: calls.teamMemberName })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.ghlContactId, contactId)
+          )
+        )
+        .orderBy(desc(calls.callTimestamp))
+        .limit(1);
+
+      const ghlMap = await getGhlUserIdMap(tenantId);
+
+      results.push({
+        tier: "warning",
+        triggerRules: ["post_walkthrough_ghosting"],
+        priorityScore: 70,
+        contactName: opp.name || opp.contact?.name || null,
+        contactPhone: opp.contact?.phone || null,
+        propertyAddress: null,
+        ghlContactId: contactId,
+        ghlOpportunityId: opp.id,
+        ghlPipelineStageId: opp.pipelineStageId,
+        ghlPipelineStageName: stageName,
+        relatedCallId: latestTranscript.length > 0 ? latestTranscript[0].id : null,
+        teamMemberId: latestCall.length > 0 ? latestCall[0].teamMemberId : null,
+        teamMemberName: latestCall.length > 0 ? latestCall[0].teamMemberName : null,
+        assignedTo: opp.assignedTo || null,
+        detectionSource: "hybrid",
+        lastActivityAt: stageChangeAt,
+        lastStageChangeAt: stageChangeAt,
+        transcriptExcerpt: excerpt,
+        ...extractPricesFromTranscript(latestTranscript.length > 0 ? latestTranscript[0].transcript : ""),
+      });
+    }
+  }
+
+  // Approach 2: Check transcript-based — find calls where walkthrough was discussed
+  // but no follow-up conversation happened
+  const walkthroughCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, "completed"),
+        eq(calls.classification, "conversation"),
+        gte(calls.callTimestamp, twentyOneDaysAgo),
+        lt(calls.callTimestamp, threeDaysAgo),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(50);
+
+  const WALKTHROUGH_DONE_PATTERNS = [
+    /(?:walked|walk)\s+(?:through|thru)\s+(?:the|your|this|that)\s+(?:house|property|home|place)/i,
+    /(?:walkthrough|walk-through)\s+(?:was|went|looked|is)\s+(?:good|great|fine|done|complete)/i,
+    /(?:saw|seen|looked at|checked out|inspected)\s+(?:the|your|this|that)\s+(?:house|property|home|place)/i,
+    /(?:after|since|from)\s+(?:the|our|my)\s+(?:walkthrough|walk-through|walk\s+through|visit|inspection)/i,
+    /(?:we|i)\s+(?:came|went|drove|stopped)\s+(?:out|by|over)\s+(?:to|and)\s+(?:see|look|check|inspect|walk)/i,
+  ];
+
+  // Track contacts already detected via pipeline approach to avoid duplicates
+  const alreadyDetected = new Set(results.map(r => r.ghlContactId));
+
+  for (const call of walkthroughCalls) {
+    if (!call.ghlContactId || alreadyDetected.has(call.ghlContactId)) continue;
+
+    const hasWalkthroughMention = WALKTHROUGH_DONE_PATTERNS.some(p => p.test(call.transcript));
+    if (!hasWalkthroughMention) continue;
+
+    // Check for any follow-up conversation after this call
+    const followUpConversations = await db
+      .select({ id: calls.id })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId),
+          gte(calls.callTimestamp, call.callTimestamp),
+          eq(calls.classification, "conversation")
+        )
+      )
+      .limit(2);
+
+    if (followUpConversations.length > 1) continue; // There was a follow-up conversation
+
+    // APPOINTMENT CHECK
+    const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
+    if (hasFutureApt) continue;
+
+    // Count outbound attempts
+    const outboundAttempts = await db
+      .select({ id: calls.id })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId),
+          gte(calls.callTimestamp, call.callTimestamp),
+          sql`${calls.classification} != 'conversation'`
+        )
+      );
+
+    alreadyDetected.add(call.ghlContactId);
+
+    results.push({
+      tier: "warning",
+      triggerRules: ["post_walkthrough_ghosting"],
+      priorityScore: 68,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "hybrid",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: `[Post-walkthrough: ${outboundAttempts.length} follow-up attempt(s) with no conversation since ${new Date(call.callTimestamp).toLocaleDateString()}] ` +
+        call.transcript.substring(0, 400),
+      ...extractPricesFromTranscript(call.transcript),
+    });
+  }
+
+  return results;
+}
+
 // ============ AI REASON GENERATION ============
 
 const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: string }> = {
@@ -1790,6 +2033,11 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
     context: "During a call, the seller offered a concrete timeline or availability window (e.g., 'I'll be in town in March,' 'after my mother passes,' 'in a few weeks'). The agent responded with open-ended language ('feel free to reach out,' 'I can be on standby') instead of locking in a specific follow-up date, appointment, or calendar commitment. No follow-up call has been logged since.",
     tier: "at_risk"
   },
+  post_walkthrough_ghosting: {
+    label: "Post-Walkthrough Ghosting — Seller Went Silent",
+    context: "A walkthrough was completed (the contact moved through or past the walkthrough stage) but the seller has gone silent. No inbound messages or calls have been received from the seller in 72+ hours after the walkthrough, and outbound follow-up attempts have not resulted in a conversation.",
+    tier: "at_risk"
+  },
 };
 
 async function generateAIReason(detection: DetectedOpportunity, db: any, tenantId: number): Promise<{ reason: string; suggestion: string }> {
@@ -1817,9 +2065,10 @@ async function generateAIReason(detection: DetectedOpportunity, db: any, tenantI
   if (detection.priceGap) facts.push(`Price gap: $${detection.priceGap.toLocaleString()}`);
 
   // ===== CONTACT TIMELINE ENRICHMENT =====
-  // Fetch full call history for this contact to give the LLM the complete picture
+  // Fetch full call history + pipeline stage + appointments + motivation extraction
   if (detection.ghlContactId) {
     try {
+      // 1. Full call history with transcript snippets for motivation extraction
       const contactCalls = await db
         .select({
           callType: calls.callType,
@@ -1828,7 +2077,7 @@ async function generateAIReason(detection: DetectedOpportunity, db: any, tenantI
           classification: calls.classification,
           teamMemberName: calls.teamMemberName,
           duration: calls.duration,
-          // direction not in schema — infer from callType
+          transcript: calls.transcript,
         })
         .from(calls)
         .where(
@@ -1851,11 +2100,96 @@ async function generateAIReason(detection: DetectedOpportunity, db: any, tenantI
           return `  ${i + 1}. ${date}: ${direction} ${type} call by ${who} (${dur}, outcome: ${outcome}, classified: ${cls})`;
         });
         facts.push(`\nFull call timeline (${contactCalls.length} calls):\n${timelineEntries.join("\n")}`);
+
+        // 2. Extract specific motivations from ALL transcripts
+        const MOTIVATION_MAP: Record<string, string> = {
+          "divorce": "going through a divorce",
+          "foreclosure": "facing foreclosure",
+          "inherited": "inherited the property",
+          "estate": "dealing with an estate/probate situation",
+          "relocating": "relocating",
+          "tired of landlording": "tired of being a landlord",
+          "bad tenants": "dealing with problem tenants",
+          "code violations": "has code violations on the property",
+          "fire damage": "property has fire damage",
+          "tax lien": "has a tax lien on the property",
+          "back taxes": "behind on property taxes",
+          "health issues": "dealing with health issues",
+          "downsizing": "looking to downsize",
+          "job loss": "experienced job loss",
+          "need to sell fast": "needs to sell quickly",
+          "can't afford": "can't afford the property",
+          "behind on payments": "behind on mortgage payments",
+          "passed away": "a family member passed away",
+          "death": "dealing with a death in the family",
+          "vacant": "property is vacant",
+          "condemned": "property is condemned",
+          "medical bills": "facing medical bills",
+          "financial hardship": "experiencing financial hardship",
+        };
+
+        const detectedMotivations: string[] = [];
+        for (const c of contactCalls) {
+          if (!c.transcript) continue;
+          const lower = c.transcript.toLowerCase();
+          for (const [keyword, description] of Object.entries(MOTIVATION_MAP)) {
+            if (lower.includes(keyword) && !detectedMotivations.includes(description)) {
+              detectedMotivations.push(description);
+            }
+          }
+        }
+        if (detectedMotivations.length > 0) {
+          facts.push(`\nSeller motivations detected in transcripts: ${detectedMotivations.join(", ")}`);
+        }
+
+        // 3. Extract key negotiation moments from transcripts
+        const negotiationMoments: string[] = [];
+        for (const c of contactCalls) {
+          if (!c.transcript) continue;
+          const lower = c.transcript.toLowerCase();
+          if (lower.includes("send me an offer") || lower.includes("what can you offer") || lower.includes("what would you pay")) {
+            negotiationMoments.push(`Seller asked for an offer on ${new Date(c.callTimestamp).toLocaleDateString()}`);
+          }
+          if (lower.includes("i'd take") || lower.includes("i would take") || lower.includes("bottom line") || lower.includes("at least")) {
+            negotiationMoments.push(`Seller stated their price on ${new Date(c.callTimestamp).toLocaleDateString()}`);
+          }
+          if (lower.includes("walkthrough") || lower.includes("walk through") || lower.includes("come look") || lower.includes("come see")) {
+            negotiationMoments.push(`Walkthrough discussed on ${new Date(c.callTimestamp).toLocaleDateString()}`);
+          }
+        }
+        if (negotiationMoments.length > 0) {
+          facts.push(`\nKey negotiation moments:\n${negotiationMoments.map(m => `  - ${m}`).join("\n")}`);
+        }
       } else {
         facts.push("No calls found in system for this contact.");
       }
     } catch (err) {
       // Non-critical — continue without timeline
+    }
+
+    // 4. GHL pipeline stage progression (if we have creds from the calling context)
+    // Note: We can't access creds here directly, but the pipeline stage is already in the detection.
+    // Add stage context interpretation
+    if (detection.ghlPipelineStageName) {
+      const stage = detection.ghlPipelineStageName.toLowerCase();
+      if (stage.includes("offer") && stage.includes("scheduled")) {
+        facts.push("Pipeline context: Offer appointment is scheduled — team is actively working this deal.");
+      } else if (stage.includes("walkthrough") && stage.includes("scheduled")) {
+        facts.push("Pipeline context: Walkthrough appointment is scheduled — team has a next step planned.");
+      } else if (stage.includes("under contract")) {
+        facts.push("Pipeline context: Property is under contract.");
+      } else if (stage.includes("follow up") || stage.includes("followup")) {
+        facts.push("Pipeline context: Lead is in follow-up stage — not actively being worked.");
+      } else if (stage.includes("dead") || stage.includes("ghost") || stage.includes("dq")) {
+        facts.push("Pipeline context: Lead has been marked as dead/DQ'd.");
+      }
+    }
+
+    // 5. Price gap context
+    if (detection.priceGap && detection.priceGap >= 120_000) {
+      facts.push(`\nPrice gap analysis: The $${detection.priceGap.toLocaleString()} gap between our offer and seller's ask is significant ($120k+ threshold). This deal may require creative structuring or may not be viable at current numbers.`);
+    } else if (detection.priceGap && detection.priceGap < 50_000) {
+      facts.push(`\nPrice gap analysis: The $${detection.priceGap.toLocaleString()} gap is relatively small — this deal may be closeable with negotiation.`);
     }
   }
   
@@ -2286,6 +2620,10 @@ async function scanTenant(
     // Rule 15: Timeline offered, no commitment set
     const timelineDetections = await detectTimelineNoCommitment(db, tenantId, creds);
     detections.push(...timelineDetections);
+
+    // Rule 16: Post-walkthrough ghosting — seller went silent after walkthrough
+    const ghostingDetections = await detectPostWalkthroughGhosting(db, tenantId, creds, contactOppMap);
+    detections.push(...ghostingDetections);
   } catch (transcriptError) {
     console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
     result.errors++;
@@ -2307,6 +2645,55 @@ async function scanTenant(
 
       if (await isAlreadyFlagged(db, tenantId, detection.ghlContactId, primaryRule)) {
         continue;
+      }
+
+      // ===== PRICE GAP LOGIC =====
+      // If we have price data, enrich the detection from ALL transcripts for this contact
+      if (detection.ghlContactId && (!detection.ourOffer || !detection.sellerAsk)) {
+        try {
+          const allTranscripts = await db
+            .select({ transcript: calls.transcript })
+            .from(calls)
+            .where(
+              and(
+                eq(calls.tenantId, tenantId),
+                eq(calls.ghlContactId, detection.ghlContactId),
+                sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
+              )
+            )
+            .orderBy(desc(calls.callTimestamp))
+            .limit(5);
+
+          // Merge price data from all transcripts (latest takes priority)
+          for (const row of allTranscripts) {
+            const prices = extractPricesFromTranscript(row.transcript);
+            if (!detection.ourOffer && prices.ourOffer) detection.ourOffer = prices.ourOffer;
+            if (!detection.sellerAsk && prices.sellerAsk) detection.sellerAsk = prices.sellerAsk;
+          }
+          // Recalculate gap
+          if (detection.ourOffer && detection.sellerAsk) {
+            detection.priceGap = Math.abs(detection.sellerAsk - detection.ourOffer);
+          }
+        } catch (err) {
+          // Non-critical — continue without price enrichment
+        }
+      }
+
+      // PRICE GAP DOWNGRADE: If the gap between our offer and seller's ask is $120k+,
+      // the deal is likely unrealistic — downgrade from Missed to Possible, reduce priority.
+      // This prevents high-gap deals from cluttering the urgent tier.
+      const LARGE_GAP_THRESHOLD = 120_000;
+      if (detection.priceGap && detection.priceGap >= LARGE_GAP_THRESHOLD) {
+        if (detection.tier === "missed") {
+          detection.tier = "possible";
+          detection.priorityScore = Math.max(detection.priorityScore - 30, 30);
+        } else if (detection.tier === "warning") {
+          detection.tier = "possible";
+          detection.priorityScore = Math.max(detection.priorityScore - 20, 30);
+        } else {
+          // Already "possible" — just reduce priority
+          detection.priorityScore = Math.max(detection.priorityScore - 10, 25);
+        }
       }
 
       // Generate AI reason
@@ -2380,6 +2767,9 @@ async function scanTenant(
         teamMemberId,
         teamMemberName,
         assignedTo: detection.assignedTo,
+        ourOffer: detection.ourOffer,
+        sellerAsk: detection.sellerAsk,
+        priceGap: detection.priceGap,
         lastActivityAt: detection.lastActivityAt,
         lastStageChangeAt: detection.lastStageChangeAt,
       });
