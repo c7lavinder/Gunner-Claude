@@ -4437,12 +4437,17 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
         const content = response.choices?.[0]?.message?.content;
         if (content && typeof content === "string") {
           const parsed = JSON.parse(content);
+          const VALID_ACTION_TYPES = ["add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field"];
           // Return the actions array, or wrap legacy single-action format for backwards compatibility
           if (parsed.actions && Array.isArray(parsed.actions)) {
-            return { actions: parsed.actions };
+            // Filter out any actions with missing, empty, or invalid actionType
+            const validActions = parsed.actions.filter((a: any) =>
+              a && typeof a.actionType === "string" && a.actionType.trim() !== "" && a.actionType !== "none" && VALID_ACTION_TYPES.includes(a.actionType)
+            );
+            return { actions: validActions };
           }
           // Legacy fallback: single action format
-          if (parsed.actionType && parsed.actionType !== "none") {
+          if (parsed.actionType && parsed.actionType !== "none" && VALID_ACTION_TYPES.includes(parsed.actionType)) {
             return { actions: [parsed] };
           }
           return { actions: [] };

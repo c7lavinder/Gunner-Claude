@@ -2148,3 +2148,11 @@
 - [x] Updated re-evaluation to refresh missedItems on active opportunities
 - [x] Added amber "What They Missed" section to opportunity cards (visible on all cards, not just expanded)
 - [x] 15 vitest tests covering schema, prompt quality, frontend rendering, and data flow
+
+## Bug Fix: AI Coach actionType undefined error
+- [x] Fix "Invalid input: expected string, received undefined" on actionType when creating actions from multi-action parsing
+- [x] Investigate why actionType is undefined in the createAction mutation input
+- [x] Added VALID_ACTION_TYPES whitelist filter on backend parseIntent response
+- [x] Added defensive actionType validation in frontend createActionCard
+- [x] Added frontend filter to strip invalid actions before processing
+- [x] 2 new vitest tests: validation filter + Daniel's exact pipeline+note request (14/14 passing)

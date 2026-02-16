@@ -179,6 +179,35 @@ describe("Multi-Action Parsing", () => {
         caller.coachActions.parseIntent({ message: "Add a note to John Smith" })
       ).rejects.toThrow();
     });
+
+    it("filters out actions with invalid actionType from LLM response", async () => {
+      const caller = appRouter.createCaller(createAuthenticatedContext());
+      // This message should produce valid actions, not "none" or empty types
+      const result = await caller.coachActions.parseIntent({
+        message: "For Kashundra Brown, can you move her to offer scheduled in the sales process pipeline and add notes of summary conversation",
+      });
+      expect(result).toHaveProperty("actions");
+      expect(Array.isArray(result.actions)).toBe(true);
+      // Every returned action must have a valid actionType
+      for (const action of result.actions) {
+        expect(action.actionType).toBeDefined();
+        expect(typeof action.actionType).toBe("string");
+        expect(action.actionType.trim()).not.toBe("");
+        expect(action.actionType).not.toBe("none");
+        expect(["add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field"]).toContain(action.actionType);
+      }
+    }, 30000);
+
+    it("handles pipeline stage + note combo (Daniel's exact request)", async () => {
+      const caller = appRouter.createCaller(createAuthenticatedContext());
+      const result = await caller.coachActions.parseIntent({
+        message: "For Kashundra Brown, can you move her to offer scheduled in the sales process pipeline and add notes of summary conversation",
+      });
+      expect(result.actions.length).toBeGreaterThanOrEqual(2);
+      const actionTypes = result.actions.map((a: any) => a.actionType);
+      expect(actionTypes).toContain("change_pipeline_stage");
+      expect(actionTypes).toContain("add_note_contact");
+    }, 30000);
   });
 
   describe("createPending still works with individual actions", () => {

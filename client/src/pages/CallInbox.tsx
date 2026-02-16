@@ -461,7 +461,8 @@ function AICoachQA() {
     try {
       // Parse the intent — now returns { actions: [...] }
       const result = await parseIntentMutation.mutateAsync({ message: userMessage });
-      const actions = result.actions || [];
+      // Filter out any actions with missing or invalid actionType (defensive)
+      const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
       
       if (actions.length > 0) {
         // Show a summary message if multiple actions detected
@@ -528,6 +529,10 @@ function AICoachQA() {
 
   const createActionCard = async (intent: any, userMessage: string, batchIndex?: number, batchTotal?: number) => {
     try {
+      if (!intent.actionType || typeof intent.actionType !== "string" || intent.actionType.trim() === "") {
+        setConversation(prev => [...prev, { role: "assistant", content: `I couldn't determine the action type for: ${intent.summary || "unknown action"}. Please try rephrasing your request.` }]);
+        return;
+      }
       const result = await createPendingMutation.mutateAsync({
         actionType: intent.actionType,
         requestText: userMessage,
