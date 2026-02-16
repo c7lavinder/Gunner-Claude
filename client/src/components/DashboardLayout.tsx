@@ -30,8 +30,8 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { useImpersonation } from "./ImpersonationBanner";
 
-const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string) => {
-  const isAdmin = teamRole === 'admin';
+const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string, isTenantAdmin?: string | null) => {
+  const isAdmin = teamRole === 'admin' || isTenantAdmin === 'true';
   const isSuperAdmin = userRole === 'super_admin';
   const isLeadGenerator = teamRole === 'lead_generator';
   
@@ -244,7 +244,7 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const menuItems = getMenuItems(user?.teamRole, user?.openId, user?.role);
+  const menuItems = getMenuItems(user?.teamRole, user?.openId, user?.role, user?.isTenantAdmin);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

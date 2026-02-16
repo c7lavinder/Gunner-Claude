@@ -249,7 +249,7 @@ export async function signInWithGoogle(params: {
           emailVerified: 'true',
           role: invitation.role || 'user',
           teamRole: invitation.teamRole,
-          isTenantAdmin: 'false',
+          isTenantAdmin: invitation.role === 'admin' ? 'true' : 'false',
           profilePicture: picture,
         }).$returningId();
 
@@ -283,7 +283,7 @@ export async function signInWithGoogle(params: {
             tenantId: invitation.tenantId,
             role: invitation.role || 'user',
             teamRole: invitation.teamRole,
-            isTenantAdmin: false,
+            isTenantAdmin: invitation.role === 'admin',
           },
           isNewUser: false, // Not a "new user" in the signup sense - they're joining existing tenant
           needsOnboarding: false, // Team members don't need onboarding

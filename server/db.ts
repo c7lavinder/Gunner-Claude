@@ -1222,7 +1222,7 @@ export async function getGradingContext(callType: "qualification" | "offer" | "l
   trainingMaterials: TrainingMaterial[];
   gradingRules: GradingRule[];
   recentFeedback: AIFeedback[];
-  tenantRubrics: { name: string; description: string | null; criteria: string }[];
+  tenantRubrics: { name: string; description: string | null; criteria: string; callType?: string | null; redFlags?: string | null }[];
 }> {
   // follow_up, seller_callback, admin_callback all use lead_manager training context
   const applicableTo = (callType === "qualification" || callType === "follow_up" || callType === "seller_callback" || callType === "admin_callback") ? "lead_manager" : (callType === "offer" ? "acquisition_manager" : "lead_generator");
@@ -1253,7 +1253,7 @@ export async function getGradingContext(callType: "qualification" | "offer" | "l
           eq(tenantRubrics.isActive, "true")
         )
       );
-      tenantRubricsList = rubrics.map(r => ({ name: r.name, description: r.description, criteria: r.criteria }));
+      tenantRubricsList = rubrics.map(r => ({ name: r.name, description: r.description, criteria: r.criteria, callType: r.callType, redFlags: r.redFlags }));
     }
   }
 

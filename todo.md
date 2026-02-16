@@ -2083,7 +2083,7 @@
 - [x] Fix New Customer Setup page dropdown showing correct prices ($199/$499/$999)
 - [x] Fix pipeline stage mapping: mappings persist per-pipeline when switching between pipelines
 - [x] Add pipelineMappings support to TenantCrmConfig for multi-pipeline stage mapping storage
-- [ ] Support dual roles (admin + acquisition manager) for one-man operations in team member setup
+- [x] Support dual roles via isTenantAdmin flag: user keeps teamRole=acquisition_manager for call grading + isTenantAdmin=true for admin access
 - [x] Add email invite section to Team Members step during tenant creation — enter emails so members/admin get signup invites
 - [x] Build email/password authentication for external customers (independent of Manus OAuth) — already existed
 - [x] Create login page at getgunner.ai (email + password) — already existed at /login
@@ -2095,7 +2095,10 @@
 - [x] Set up Zac Chrisman as admin for his tenant (team_members id=300037, tenantId=450029)
 - [x] Fix View as Tenant impersonation: context.ts now reads session cookie for JWT impersonation tokens and overrides tenantId
 - [x] Add "Signals" checkbox to plan features editor in SuperAdmin
-- [ ] Make rubric/methodology editable: allow admins to add/remove grading criteria, change point values, and edit descriptions (customizable rubrics)
+- [x] Make rubric/methodology editable: allow admins to add/remove grading criteria, change point values, and edit descriptions (customizable rubrics)
 - [x] Fix GHL sync to use name matching fallback when ghlUserId is not set — pass user name from GHL API to matchTeamMember
 - [x] Auto-persist ghlUserId on team member record after first successful name match
 - [x] Add GHL users API lookup during tenant setup to pre-link team members
+- [x] Trigger manual GHL sync for Zac's tenant (450029) — 0 calls found (new tenant, auto-link will happen on first real call)
+- [x] Build dual role support: isTenantAdmin flag on users table, separate from teamRole for call grading. Updated 10+ frontend files to check isTenantAdmin alongside teamRole for admin access
+- [x] Build customizable rubrics: tenant admins can edit grading criteria, point values, and descriptions per call type

@@ -432,7 +432,7 @@ export async function gradeCall(
     gradingRules?: { title: string; ruleText: string | null; priority: number | null }[];
     recentFeedback?: { feedbackType: string | null; explanation: string | null; correctBehavior: string | null }[];
     companyName?: string;
-    tenantRubrics?: { name: string; description: string | null; criteria: string }[];
+    tenantRubrics?: { name: string; description: string | null; criteria: string; callType?: string | null; redFlags?: string | null }[];
   }
 ): Promise<GradingResult> {
   // Rubric mapping (6 call types → 6 rubrics):
@@ -454,20 +454,24 @@ export async function gradeCall(
 
   // S13: Override with tenant-specific rubric if available
   if (context?.tenantRubrics && context.tenantRubrics.length > 0) {
-    const tenantRubric = context.tenantRubrics.find(r => 
-      r.name.toLowerCase().includes(callType.replace('_', ' ')) ||
-      r.name.toLowerCase().includes(callType.replace('_', '-'))
-    );
+    // First try exact callType match, then fall back to name-based matching
+    const tenantRubric = context.tenantRubrics.find(r => r.callType === callType) ||
+      context.tenantRubrics.find(r => 
+        r.name.toLowerCase().includes(callType.replace('_', ' ')) ||
+        r.name.toLowerCase().includes(callType.replace('_', '-'))
+      );
     if (tenantRubric) {
       try {
         const parsedCriteria = JSON.parse(tenantRubric.criteria);
+        const parsedRedFlags = tenantRubric.redFlags ? JSON.parse(tenantRubric.redFlags) : undefined;
         rubric = {
           ...rubric,
           name: tenantRubric.name,
           description: tenantRubric.description || rubric.description,
           criteria: parsedCriteria,
+          ...(parsedRedFlags ? { redFlags: parsedRedFlags } : {}),
         };
-        console.log(`[Grading] Using tenant-specific rubric: ${tenantRubric.name}`);
+        console.log(`[Grading] Using tenant-specific rubric: ${tenantRubric.name} (callType: ${tenantRubric.callType || 'name-match'})`);
       } catch (e) {
         console.error(`[Grading] Failed to parse tenant rubric criteria, using default`);
       }

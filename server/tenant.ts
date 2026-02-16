@@ -971,6 +971,7 @@ export async function checkAndAcceptPendingInvitation(
       tenantId: invitation.tenantId,
       role: invitation.role,
       teamRole: invitation.teamRole,
+      isTenantAdmin: invitation.role === 'admin' ? 'true' : 'false',
     })
     .where(eq(users.id, userId));
 

@@ -6,7 +6,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 
 export function BatchDialerSyncStatus({ onSyncComplete }: { onSyncComplete?: () => void }) {
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
 
   const syncMutation = trpc.calls.syncBatchDialer.useMutation({
     onSuccess: (stats) => {

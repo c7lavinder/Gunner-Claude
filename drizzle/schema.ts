@@ -171,8 +171,12 @@ export const tenantRubrics = mysqlTable("tenant_rubrics", {
   tenantId: int("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  // Criteria as JSON array: [{name, description, weight, maxScore}]
+  // Maps to grading call type: qualification, offer, cold_call, follow_up, seller_callback, admin_callback
+  callType: varchar("callType", { length: 50 }),
+  // Criteria as JSON array: [{name, description, maxPoints, keyPhrases}]
   criteria: text("criteria").notNull(),
+  // Red flags as JSON array: ["flag1", "flag2"]
+  redFlags: text("redFlags"),
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

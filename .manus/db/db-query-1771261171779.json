@@ -1,0 +1,19 @@
+{
+  "query": "SELECT id, tenantId, email, role, teamRole, status, inviteToken FROM pending_invitations WHERE email = 'zchrisman@newagainhouses.com';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, tenantId, email, role, teamRole, status, inviteToken FROM pending_invitations WHERE email = 'zchrisman@newagainhouses.com';",
+  "rows": [
+    {
+      "id": "1",
+      "tenantId": "450029",
+      "email": "zchrisman@newagainhouses.com",
+      "role": "admin",
+      "teamRole": "admin",
+      "status": "pending",
+      "inviteToken": "6a0af4525851483aab8d7dd4d0e165b1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\temail\trole\tteamRole\tstatus\tinviteToken\n1\t450029\tzchrisman@newagainhouses.com\tadmin\tadmin\tpending\t6a0af4525851483aab8d7dd4d0e165b1\n",
+  "stderr": "",
+  "execution_time_ms": 358
+}

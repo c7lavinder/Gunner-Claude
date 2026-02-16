@@ -1779,6 +1779,120 @@ Keep it brief and actionable.`;
       .query(async ({ input }) => {
         return await getGradingContext(input.callType);
       }),
+
+    // ============ TENANT RUBRIC CRUD ============
+    getTenantRubrics: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+      const { getDb } = await import("./db");
+      const { tenantRubrics } = await import("../drizzle/schema");
+      const { and, eq } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return [];
+      return await db.select().from(tenantRubrics).where(
+        and(eq(tenantRubrics.tenantId, ctx.user.tenantId), eq(tenantRubrics.isActive, "true"))
+      );
+    }),
+
+    createTenantRubric: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        callType: z.string().optional(),
+        criteria: z.string(), // JSON string
+        redFlags: z.string().optional(), // JSON string
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getDb } = await import("./db");
+        const { tenantRubrics } = await import("../drizzle/schema");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const result = await db.insert(tenantRubrics).values({
+          tenantId: ctx.user.tenantId,
+          name: input.name,
+          description: input.description || null,
+          callType: input.callType || null,
+          criteria: input.criteria,
+          redFlags: input.redFlags || null,
+        });
+        return { id: result[0].insertId };
+      }),
+
+    updateTenantRubric: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        callType: z.string().optional(),
+        criteria: z.string().optional(), // JSON string
+        redFlags: z.string().optional(), // JSON string
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getDb } = await import("./db");
+        const { tenantRubrics } = await import("../drizzle/schema");
+        const { and, eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const updates: Record<string, any> = {};
+        if (input.name !== undefined) updates.name = input.name;
+        if (input.description !== undefined) updates.description = input.description;
+        if (input.callType !== undefined) updates.callType = input.callType;
+        if (input.criteria !== undefined) updates.criteria = input.criteria;
+        if (input.redFlags !== undefined) updates.redFlags = input.redFlags;
+        await db.update(tenantRubrics).set(updates).where(
+          and(eq(tenantRubrics.id, input.id), eq(tenantRubrics.tenantId, ctx.user.tenantId))
+        );
+        return { success: true };
+      }),
+
+    deleteTenantRubric: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getDb } = await import("./db");
+        const { tenantRubrics } = await import("../drizzle/schema");
+        const { and, eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(tenantRubrics).set({ isActive: "false" }).where(
+          and(eq(tenantRubrics.id, input.id), eq(tenantRubrics.tenantId, ctx.user.tenantId))
+        );
+        return { success: true };
+      }),
+
+    seedDefaults: protectedProcedure.mutation(async ({ ctx }) => {
+      if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+      const { getDb } = await import("./db");
+      const { tenantRubrics } = await import("../drizzle/schema");
+      const { and, eq } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Check if tenant already has rubrics
+      const existing = await db.select().from(tenantRubrics).where(
+        and(eq(tenantRubrics.tenantId, ctx.user.tenantId), eq(tenantRubrics.isActive, "true"))
+      );
+      if (existing.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Tenant already has custom rubrics. Delete existing ones first." });
+      const defaults = [
+        { callType: "qualification", rubric: LEAD_MANAGER_RUBRIC },
+        { callType: "offer", rubric: ACQUISITION_MANAGER_RUBRIC },
+        { callType: "cold_call", rubric: LEAD_GENERATOR_RUBRIC },
+        { callType: "follow_up", rubric: FOLLOW_UP_RUBRIC },
+        { callType: "seller_callback", rubric: SELLER_CALLBACK_RUBRIC },
+        { callType: "admin_callback", rubric: ADMIN_CALLBACK_RUBRIC },
+      ];
+      for (const d of defaults) {
+        await db.insert(tenantRubrics).values({
+          tenantId: ctx.user.tenantId,
+          name: d.rubric.name,
+          description: d.rubric.description,
+          callType: d.callType,
+          criteria: JSON.stringify(d.rubric.criteria),
+          redFlags: JSON.stringify(d.rubric.redFlags),
+        });
+      }
+      return { seeded: defaults.length };
+    }),
   }),
 
   // ============ TEAM TRAINING ITEMS ============

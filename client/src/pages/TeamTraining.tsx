@@ -347,7 +347,7 @@ function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true';
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -437,7 +437,7 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
   const DISPLAY_LIMIT = 3;
   
   // Filter by role: non-admins only see their role's insights, admins can filter by selected role
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true';
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -533,7 +533,7 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true';
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -994,7 +994,7 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
   const DISPLAY_LIMIT = 3;
   const { user } = useAuth();
   
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true';
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -1143,7 +1143,7 @@ export default function TeamTraining() {
   const { user } = useAuth();
   const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator">("all");
   
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true';
 
   const handleInsightsGenerated = () => {
     utils.teamTraining.list.invalidate();

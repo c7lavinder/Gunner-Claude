@@ -64,9 +64,14 @@ import {
   SkipForward,
   PhoneCall,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Save,
+  Copy,
+  Undo2,
+  GripVertical,
+  PenLine
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 
@@ -270,7 +275,7 @@ function GenerateInsightsBtn({ onSuccess }: { onSuccess: () => void }) {
 function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
@@ -319,7 +324,7 @@ function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
 function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
@@ -368,7 +373,7 @@ function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
 function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
@@ -582,7 +587,7 @@ function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   const utils = trpc.useUtils();
   const [showFacilitator, setShowFacilitator] = useState(false);
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -637,7 +642,7 @@ function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
 function TeamTrainingContent() {
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
   const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator">("all");
   const handleInsightsGenerated = () => utils.teamTraining.list.invalidate();
 
@@ -1154,95 +1159,16 @@ export default function Training() {
 
         {/* Methodology Tab */}
         <TabsContent value="methodology" className="space-y-6">
-          {rubricsLoading ? (
-            <div className="space-y-6">
-              <Skeleton className="h-48" />
-              <Skeleton className="h-96" />
-            </div>
-          ) : (
-            <Tabs defaultValue="lead_manager" className="space-y-6">
-              <TabsList className="flex flex-wrap gap-1 w-full max-w-4xl">
-                <TabsTrigger value="lead_manager" className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Qualification
-                </TabsTrigger>
-                <TabsTrigger value="acquisition_manager" className="flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Offer
-                </TabsTrigger>
-                <TabsTrigger value="follow_up" className="flex items-center gap-2">
-                  <PhoneCall className="h-4 w-4" />
-                  Follow-Up
-                </TabsTrigger>
-                <TabsTrigger value="seller_callback" className="flex items-center gap-2">
-                  <PhoneCall className="h-4 w-4" />
-                  Seller Callback
-                </TabsTrigger>
-                <TabsTrigger value="admin_callback" className="flex items-center gap-2">
-                  <PhoneCall className="h-4 w-4" />
-                  Admin Callback
-                </TabsTrigger>
-                <TabsTrigger value="lead_generator" className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Lead Generator
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="lead_manager" className="space-y-6">
-                <RubricDisplay 
-                  rubric={rubrics?.leadManager} 
-                  context={qualificationContext}
-                  title="Lead Manager — Qualification Rubric"
-                  description="First-touch qualification calls to qualify leads and set appointments. Used by Lead Managers."
-                />
-              </TabsContent>
-
-              <TabsContent value="acquisition_manager" className="space-y-6">
-                <RubricDisplay 
-                  rubric={rubrics?.acquisitionManager} 
-                  context={offerContext}
-                  title="Acquisition Manager — Offer Rubric"
-                  description="Offer presentation calls where numbers are presented to the seller. Used by Acquisition Managers."
-                />
-              </TabsContent>
-
-              <TabsContent value="follow_up" className="space-y-6">
-                <RubricDisplay 
-                  rubric={(rubrics as any)?.followUp} 
-                  context={followUpContext}
-                  title="Follow-Up Call Rubric"
-                  description="Second and subsequent touches after initial qualification. Focuses on re-engagement, urgency building, and appointment setting."
-                />
-              </TabsContent>
-
-              <TabsContent value="seller_callback" className="space-y-6">
-                <RubricDisplay 
-                  rubric={(rubrics as any)?.sellerCallback} 
-                  context={sellerCallbackContext}
-                  title="Seller Callback Rubric"
-                  description="Inbound calls where the seller is calling back. Focuses on capitalizing on seller initiative, qualifying motivation, and locking in next steps."
-                />
-              </TabsContent>
-
-              <TabsContent value="admin_callback" className="space-y-6">
-                <RubricDisplay 
-                  rubric={(rubrics as any)?.adminCallback} 
-                  context={adminCallbackContext}
-                  title="Admin Callback Rubric"
-                  description="Administrative follow-up calls for scheduling, document collection, and process management. Focuses on professionalism and task completion."
-                />
-              </TabsContent>
-
-              <TabsContent value="lead_generator" className="space-y-6">
-                <RubricDisplay 
-                  rubric={(rubrics as any)?.leadGenerator} 
-                  context={leadGenContext}
-                  title="Lead Generator Rubric"
-                  description="Cold calls to generate seller interest — Lead Generators do NOT set appointments."
-                />
-              </TabsContent>
-            </Tabs>
-          )}
+          <MethodologyTab 
+            rubrics={rubrics}
+            rubricsLoading={rubricsLoading}
+            qualificationContext={qualificationContext}
+            offerContext={offerContext}
+            leadGenContext={leadGenContext}
+            followUpContext={followUpContext}
+            sellerCallbackContext={sellerCallbackContext}
+            adminCallbackContext={adminCallbackContext}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -1423,6 +1349,605 @@ function RubricDisplay({
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+
+// ============ CALL TYPE CONFIG FOR METHODOLOGY TAB ============
+const CALL_TYPE_CONFIG = [
+  { callType: "qualification", tabValue: "lead_manager", label: "Qualification", icon: Users, rubricKey: "leadManager", contextKey: "qualification" as const, title: "Lead Manager \u2014 Qualification Rubric", description: "First-touch qualification calls to qualify leads and set appointments. Used by Lead Managers." },
+  { callType: "offer", tabValue: "acquisition_manager", label: "Offer", icon: Target, rubricKey: "acquisitionManager", contextKey: "offer" as const, title: "Acquisition Manager \u2014 Offer Rubric", description: "Offer presentation calls where numbers are presented to the seller. Used by Acquisition Managers." },
+  { callType: "follow_up", tabValue: "follow_up", label: "Follow-Up", icon: PhoneCall, rubricKey: "followUp", contextKey: "follow_up" as const, title: "Follow-Up Call Rubric", description: "Second and subsequent touches after initial qualification. Focuses on re-engagement, urgency building, and appointment setting." },
+  { callType: "seller_callback", tabValue: "seller_callback", label: "Seller Callback", icon: PhoneCall, rubricKey: "sellerCallback", contextKey: "seller_callback" as const, title: "Seller Callback Rubric", description: "Inbound calls where the seller is calling back. Focuses on capitalizing on seller initiative, qualifying motivation, and locking in next steps." },
+  { callType: "admin_callback", tabValue: "admin_callback", label: "Admin Callback", icon: PhoneCall, rubricKey: "adminCallback", contextKey: "admin_callback" as const, title: "Admin Callback Rubric", description: "Administrative follow-up calls for scheduling, document collection, and process management. Focuses on professionalism and task completion." },
+  { callType: "cold_call", tabValue: "lead_generator", label: "Lead Generator", icon: Users, rubricKey: "leadGenerator", contextKey: "lead_generation" as const, title: "Lead Generator Rubric", description: "Cold calls to generate seller interest \u2014 Lead Generators do NOT set appointments." },
+];
+
+interface CriterionEdit {
+  name: string;
+  maxPoints: number;
+  description: string;
+  keyPhrases?: string[];
+}
+
+interface RubricEditState {
+  id?: number; // tenant_rubrics.id if editing existing
+  name: string;
+  description: string;
+  callType: string;
+  criteria: CriterionEdit[];
+  redFlags: string[];
+}
+
+function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerContext, leadGenContext, followUpContext, sellerCallbackContext, adminCallbackContext }: {
+  rubrics: any;
+  rubricsLoading: boolean;
+  qualificationContext: any;
+  offerContext: any;
+  leadGenContext: any;
+  followUpContext: any;
+  sellerCallbackContext: any;
+  adminCallbackContext: any;
+}) {
+  const { user } = useAuth();
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
+  const utils = trpc.useUtils();
+
+  // Fetch tenant-specific rubrics
+  const { data: tenantRubrics, isLoading: tenantRubricsLoading } = trpc.rubrics.getTenantRubrics.useQuery(undefined, {
+    enabled: !!user?.tenantId,
+  });
+
+  const hasCustomRubrics = tenantRubrics && tenantRubrics.length > 0;
+
+  // Editing state
+  const [editingCallType, setEditingCallType] = useState<string | null>(null);
+  const [editState, setEditState] = useState<RubricEditState | null>(null);
+  const [newRedFlag, setNewRedFlag] = useState("");
+
+  // Mutations
+  const seedMutation = trpc.rubrics.seedDefaults.useMutation({
+    onSuccess: () => {
+      toast.success("Default rubrics copied to your account. You can now customize them.");
+      utils.rubrics.getTenantRubrics.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateMutation = trpc.rubrics.updateTenantRubric.useMutation({
+    onSuccess: () => {
+      toast.success("Rubric saved successfully");
+      setEditingCallType(null);
+      setEditState(null);
+      utils.rubrics.getTenantRubrics.invalidate();
+    },
+    onError: (err) => toast.error("Failed to save: " + err.message),
+  });
+
+  const createMutation = trpc.rubrics.createTenantRubric.useMutation({
+    onSuccess: () => {
+      toast.success("Rubric created successfully");
+      setEditingCallType(null);
+      setEditState(null);
+      utils.rubrics.getTenantRubrics.invalidate();
+    },
+    onError: (err) => toast.error("Failed to create: " + err.message),
+  });
+
+  const deleteMutation = trpc.rubrics.deleteTenantRubric.useMutation({
+    onSuccess: () => {
+      toast.success("Custom rubric removed. Default rubric will be used for grading.");
+      utils.rubrics.getTenantRubrics.invalidate();
+    },
+    onError: (err) => toast.error("Failed to delete: " + err.message),
+  });
+
+  // Get the rubric to display for a given call type
+  const getRubricForCallType = useCallback((callType: string, rubricKey: string) => {
+    if (hasCustomRubrics) {
+      const custom = tenantRubrics.find((r: any) => r.callType === callType);
+      if (custom) {
+        try {
+          return {
+            id: custom.id,
+            name: custom.name,
+            description: custom.description,
+            criteria: JSON.parse(custom.criteria),
+            redFlags: custom.redFlags ? JSON.parse(custom.redFlags) : [],
+            isCustom: true,
+          };
+        } catch { /* fall through to default */ }
+      }
+    }
+    // Fall back to hardcoded defaults
+    const defaultRubric = (rubrics as any)?.[rubricKey];
+    return defaultRubric ? { ...defaultRubric, isCustom: false } : null;
+  }, [hasCustomRubrics, tenantRubrics, rubrics]);
+
+  const getContextForCallType = useCallback((contextKey: string) => {
+    const contextMap: Record<string, any> = {
+      qualification: qualificationContext,
+      offer: offerContext,
+      lead_generation: leadGenContext,
+      follow_up: followUpContext,
+      seller_callback: sellerCallbackContext,
+      admin_callback: adminCallbackContext,
+    };
+    return contextMap[contextKey];
+  }, [qualificationContext, offerContext, leadGenContext, followUpContext, sellerCallbackContext, adminCallbackContext]);
+
+  // Start editing a rubric
+  const startEditing = useCallback((callType: string, rubricKey: string, config: typeof CALL_TYPE_CONFIG[0]) => {
+    const rubric = getRubricForCallType(callType, rubricKey);
+    if (!rubric) return;
+    setEditingCallType(callType);
+    setEditState({
+      id: rubric.isCustom ? rubric.id : undefined,
+      name: rubric.name || config.title,
+      description: rubric.description || config.description,
+      callType,
+      criteria: (rubric.criteria || []).map((c: any) => ({
+        name: c.name,
+        maxPoints: c.maxPoints,
+        description: c.description,
+        keyPhrases: c.keyPhrases || [],
+      })),
+      redFlags: rubric.redFlags || [],
+    });
+  }, [getRubricForCallType]);
+
+  const cancelEditing = () => {
+    setEditingCallType(null);
+    setEditState(null);
+    setNewRedFlag("");
+  };
+
+  const saveEditing = () => {
+    if (!editState) return;
+    const criteriaJson = JSON.stringify(editState.criteria);
+    const redFlagsJson = JSON.stringify(editState.redFlags);
+
+    if (editState.id) {
+      // Update existing tenant rubric
+      updateMutation.mutate({
+        id: editState.id,
+        name: editState.name,
+        description: editState.description,
+        callType: editState.callType,
+        criteria: criteriaJson,
+        redFlags: redFlagsJson,
+      });
+    } else {
+      // Create new tenant rubric (customizing from default)
+      createMutation.mutate({
+        name: editState.name,
+        description: editState.description,
+        callType: editState.callType,
+        criteria: criteriaJson,
+        redFlags: redFlagsJson,
+      });
+    }
+  };
+
+  // Criterion editing helpers
+  const updateCriterion = (index: number, field: keyof CriterionEdit, value: any) => {
+    if (!editState) return;
+    const newCriteria = [...editState.criteria];
+    newCriteria[index] = { ...newCriteria[index], [field]: value };
+    setEditState({ ...editState, criteria: newCriteria });
+  };
+
+  const addCriterion = () => {
+    if (!editState) return;
+    setEditState({
+      ...editState,
+      criteria: [...editState.criteria, { name: "New Criterion", maxPoints: 10, description: "Describe what this criterion evaluates" }],
+    });
+  };
+
+  const removeCriterion = (index: number) => {
+    if (!editState) return;
+    const newCriteria = editState.criteria.filter((_, i) => i !== index);
+    setEditState({ ...editState, criteria: newCriteria });
+  };
+
+  // Red flag helpers
+  const addRedFlag = () => {
+    if (!editState || !newRedFlag.trim()) return;
+    setEditState({ ...editState, redFlags: [...editState.redFlags, newRedFlag.trim()] });
+    setNewRedFlag("");
+  };
+
+  const removeRedFlag = (index: number) => {
+    if (!editState) return;
+    const newFlags = editState.redFlags.filter((_, i) => i !== index);
+    setEditState({ ...editState, redFlags: newFlags });
+  };
+
+  const updateRedFlag = (index: number, value: string) => {
+    if (!editState) return;
+    const newFlags = [...editState.redFlags];
+    newFlags[index] = value;
+    setEditState({ ...editState, redFlags: newFlags });
+  };
+
+  if (rubricsLoading || tenantRubricsLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-48" />
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Customization Banner for Admins */}
+      {isAdmin && (
+        <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400">
+                <PenLine className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-medium text-blue-900 dark:text-blue-100">Customize Your Grading Rubrics</h3>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                  {hasCustomRubrics
+                    ? "You have custom rubrics. Click the edit button on any rubric below to modify criteria, point values, and red flags. Changes affect future call grades only."
+                    : "Your calls are graded using the default rubrics. Click \"Customize Rubrics\" to copy the defaults into your account so you can edit them."}
+                </p>
+              </div>
+              {!hasCustomRubrics && (
+                <Button
+                  onClick={() => seedMutation.mutate()}
+                  disabled={seedMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                >
+                  {seedMutation.isPending ? (
+                    <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Copying...</>
+                  ) : (
+                    <><Copy className="h-4 w-4 mr-2" />Customize Rubrics</>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Call Type Tabs */}
+      <Tabs defaultValue="lead_manager" className="space-y-6">
+        <TabsList className="flex flex-wrap gap-1 w-full max-w-4xl">
+          {CALL_TYPE_CONFIG.map((config) => {
+            const IconComponent = config.icon;
+            return (
+              <TabsTrigger key={config.tabValue} value={config.tabValue} className="flex items-center gap-2">
+                <IconComponent className="h-4 w-4" />
+                {config.label}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+
+        {CALL_TYPE_CONFIG.map((config) => {
+          const rubric = getRubricForCallType(config.callType, config.rubricKey);
+          const context = getContextForCallType(config.contextKey);
+          const isEditing = editingCallType === config.callType;
+
+          return (
+            <TabsContent key={config.tabValue} value={config.tabValue} className="space-y-6">
+              {isEditing && editState ? (
+                // ============ EDIT MODE ============
+                <div className="space-y-6">
+                  {/* Edit Header */}
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <PenLine className="h-5 w-5 text-blue-500" />
+                            Editing: {config.label} Rubric
+                          </CardTitle>
+                          <CardDescription>Modify criteria, point values, descriptions, and red flags</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={cancelEditing}>
+                            <Undo2 className="h-4 w-4 mr-1" />Cancel
+                          </Button>
+                          <Button size="sm" onClick={saveEditing} disabled={updateMutation.isPending || createMutation.isPending} className="bg-green-600 hover:bg-green-700 text-white">
+                            <Save className="h-4 w-4 mr-1" />{updateMutation.isPending || createMutation.isPending ? "Saving..." : "Save Changes"}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Rubric Name</Label>
+                            <Input
+                              value={editState.name}
+                              onChange={(e) => setEditState({ ...editState, name: e.target.value })}
+                              placeholder="e.g., Qualification Call Rubric"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Total Points</Label>
+                            <div className="p-2 bg-muted/50 rounded-md text-center font-bold text-lg">
+                              {editState.criteria.reduce((sum, c) => sum + c.maxPoints, 0)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Description</Label>
+                          <Textarea
+                            value={editState.description}
+                            onChange={(e) => setEditState({ ...editState, description: e.target.value })}
+                            placeholder="Describe when this rubric is used..."
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Editable Criteria */}
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                            Grading Criteria ({editState.criteria.length})
+                          </CardTitle>
+                          <CardDescription>Each call is scored on these criteria. Drag to reorder.</CardDescription>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={addCriterion}>
+                          <Plus className="h-4 w-4 mr-1" />Add Criterion
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {editState.criteria.map((criterion, index) => (
+                          <div key={index} className="p-4 border rounded-lg bg-card hover:border-blue-300 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <div className="flex items-center gap-1 pt-2 text-muted-foreground">
+                                <GripVertical className="h-4 w-4" />
+                                <span className="text-xs font-mono w-4 text-center">{index + 1}</span>
+                              </div>
+                              <div className="flex-1 space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <Input
+                                    value={criterion.name}
+                                    onChange={(e) => updateCriterion(index, "name", e.target.value)}
+                                    className="font-medium"
+                                    placeholder="Criterion name"
+                                  />
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Input
+                                      type="number"
+                                      value={criterion.maxPoints}
+                                      onChange={(e) => updateCriterion(index, "maxPoints", parseInt(e.target.value) || 0)}
+                                      className="w-20 text-center"
+                                      min={0}
+                                      max={100}
+                                    />
+                                    <span className="text-sm text-muted-foreground">pts</span>
+                                  </div>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                                    onClick={() => removeCriterion(index)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <Textarea
+                                  value={criterion.description}
+                                  onChange={(e) => updateCriterion(index, "description", e.target.value)}
+                                  placeholder="Describe what this criterion evaluates..."
+                                  rows={2}
+                                  className="text-sm"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {editState.criteria.length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <CheckCircle className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                            <p>No criteria yet. Click "Add Criterion" to start building your rubric.</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Editable Red Flags */}
+                  <Card className="border-red-200 dark:border-red-900">
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
+                        <AlertTriangle className="h-5 w-5" />
+                        Red Flags ({editState.redFlags.length})
+                      </CardTitle>
+                      <CardDescription>Issues that will be flagged during grading</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {editState.redFlags.map((flag, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <span className="text-red-500 shrink-0">&bull;</span>
+                            <Input
+                              value={flag}
+                              onChange={(e) => updateRedFlag(index, e.target.value)}
+                              className="text-sm"
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                              onClick={() => removeRedFlag(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <div className="flex items-center gap-2 mt-3">
+                          <Input
+                            value={newRedFlag}
+                            onChange={(e) => setNewRedFlag(e.target.value)}
+                            placeholder="Add a new red flag..."
+                            className="text-sm"
+                            onKeyDown={(e) => e.key === "Enter" && addRedFlag()}
+                          />
+                          <Button size="sm" variant="outline" onClick={addRedFlag} disabled={!newRedFlag.trim()}>
+                            <Plus className="h-4 w-4 mr-1" />Add
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Bottom Save Bar */}
+                  <div className="flex items-center justify-end gap-2 sticky bottom-4 bg-background/95 backdrop-blur-sm p-4 rounded-lg border shadow-lg">
+                    <Button variant="outline" onClick={cancelEditing}>Cancel</Button>
+                    <Button onClick={saveEditing} disabled={updateMutation.isPending || createMutation.isPending} className="bg-green-600 hover:bg-green-700 text-white">
+                      <Save className="h-4 w-4 mr-2" />{updateMutation.isPending || createMutation.isPending ? "Saving..." : "Save Rubric Changes"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                // ============ VIEW MODE ============
+                <div className="space-y-6">
+                  {/* Rubric Overview */}
+                  {rubric && (
+                    <>
+                      <Card>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle className="flex items-center gap-2">
+                                <Scale className="h-5 w-5" />
+                                {rubric.name || config.title}
+                                {rubric.isCustom && (
+                                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-xs">
+                                    <PenLine className="h-3 w-3 mr-1" />Custom
+                                  </Badge>
+                                )}
+                              </CardTitle>
+                              <CardDescription>{rubric.description || config.description}</CardDescription>
+                            </div>
+                            {isAdmin && (hasCustomRubrics || rubric.isCustom) && (
+                              <div className="flex items-center gap-2">
+                                <Button size="sm" variant="outline" onClick={() => startEditing(config.callType, config.rubricKey, config)}>
+                                  <Edit className="h-4 w-4 mr-1" />Edit
+                                </Button>
+                                {rubric.isCustom && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300">
+                                        <Undo2 className="h-4 w-4 mr-1" />Reset to Default
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Reset to Default Rubric?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          This will remove your custom {config.label} rubric and revert to the built-in default. Future calls will be graded using the default criteria. This cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Keep Custom</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => rubric.id && deleteMutation.mutate({ id: rubric.id })}
+                                          className="bg-red-600 text-white hover:bg-red-700"
+                                        >
+                                          Reset to Default
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid gap-4 sm:grid-cols-3">
+                            <div className="p-4 bg-muted/50 rounded-lg text-center">
+                              <p className="text-2xl font-bold">{rubric.criteria?.length || 0}</p>
+                              <p className="text-sm text-muted-foreground">Grading Criteria</p>
+                            </div>
+                            <div className="p-4 bg-muted/50 rounded-lg text-center">
+                              <p className="text-2xl font-bold">{rubric.criteria?.reduce((sum: number, c: any) => sum + c.maxPoints, 0) || 100}</p>
+                              <p className="text-sm text-muted-foreground">Total Points</p>
+                            </div>
+                            <div className="p-4 bg-muted/50 rounded-lg text-center">
+                              <p className="text-2xl font-bold">{context?.trainingMaterials?.length || 0}</p>
+                              <p className="text-sm text-muted-foreground">Training Materials</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Criteria List */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                            Grading Criteria
+                          </CardTitle>
+                          <CardDescription>Each call is evaluated on these criteria</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {rubric.criteria?.map((criterion: any, index: number) => (
+                              <div key={index} className="p-4 border rounded-lg">
+                                <div className="flex items-start justify-between mb-2">
+                                  <h4 className="font-medium">{criterion.name}</h4>
+                                  <Badge variant="secondary">{criterion.maxPoints} pts</Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground">{criterion.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Red Flags */}
+                      {rubric.redFlags && rubric.redFlags.length > 0 && (
+                        <Card className="border-red-200 dark:border-red-900">
+                          <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
+                              <AlertTriangle className="h-5 w-5" />
+                              Red Flags
+                            </CardTitle>
+                            <CardDescription>Issues that will be flagged during grading</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <ul className="space-y-2">
+                              {rubric.redFlags.map((flag: string, index: number) => (
+                                <li key={index} className="flex items-start gap-2 text-sm">
+                                  <span className="text-red-500 mt-0.5">&bull;</span>
+                                  {flag}
+                                </li>
+                              ))}
+                            </ul>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          );
+        })}
+      </Tabs>
     </div>
   );
 }

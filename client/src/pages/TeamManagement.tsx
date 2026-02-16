@@ -35,7 +35,7 @@ export default function TeamManagement() {
   const utils = trpc.useUtils();
   
   // Only admin can access this page
-  if (user && user.teamRole !== 'admin') {
+  if (user && user.teamRole !== 'admin' && user.isTenantAdmin !== 'true') {
     return <Redirect to="/" />;
   }
 
