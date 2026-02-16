@@ -2184,3 +2184,12 @@
 - [x] Added server-side VALID_ACTION_TYPES validation with friendly TRPCError message
 - [x] Frontend catch block now shows friendly message instead of raw Zod error JSON
 - [x] Root cause: likely stale cached frontend from before the guard was added; now both server and client handle it gracefully
+
+## AI Coach Knowledge Base: Seller Backing Out Playbook
+- [x] Add seller-backing-out playbook content to the AI Coach's knowledge/context system
+- [x] Ensure AMs can ask questions like "seller wants to back out, what do I say?" and get playbook-based answers
+- [x] Include the 4 objection types, talk tracks, key moves, universal principles, and escalation criteria
+- [x] Inserted playbook into training_materials DB (category: objection_handling, scope: acquisition_manager)
+- [x] Added backing_out topic with 20 keywords to both routers.ts and coachStream.ts topic maps
+- [x] Increased training material content limit from 1500 to 4000 chars so full playbook is available to AI
+- [x] 14 vitest tests covering topic mapping, keyword coverage, content limits, and question matching

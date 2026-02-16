@@ -178,6 +178,7 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       'cold call': ['cold call', 'outbound', 'prospect', 'dial', 'first call', 'initial'],
       'rapport': ['rapport', 'relationship', 'trust', 'connect', 'small talk', 'conversation'],
       'lead': ['lead', 'qualify', 'qualification', 'screening', 'criteria', 'hot lead', 'warm lead'],
+      'backing_out': ['back out', 'backing out', 'cancel', 'changed mind', 'cold feet', 'back away', 'pull out', 'withdraw', 'renege', 'second thoughts', 'not sure anymore', 'family says', 'spouse says', 'another offer', 'list with agent', 'want more money', 'price too low', 'seller backing', 'seller cancel', 'under contract'],
     };
     const q = question.toLowerCase();
     const scored = trainingMaterials.map(m => {
@@ -199,7 +200,7 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
     });
     const relevantMaterials = scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score);
     const trainingContext = relevantMaterials.length > 0
-      ? `RELEVANT TRAINING MATERIAL:\n${relevantMaterials.slice(0, 3).map(s => `### ${s.material.title}\n${(s.material.content || '').substring(0, 1500)}`).join('\n\n')}`
+      ? `RELEVANT TRAINING MATERIAL (use the talk tracks and key moves below when coaching):\n${relevantMaterials.slice(0, 3).map(s => `### ${s.material.title}\n${(s.material.content || '').substring(0, 4000)}`).join('\n\n')}`
       : '';
 
     // Coaching preferences

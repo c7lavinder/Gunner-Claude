@@ -1444,6 +1444,7 @@ ${(() => {
     'rapport': ['rapport', 'relationship', 'trust', 'connect', 'small talk', 'conversation'],
     'closing': ['close', 'closing', 'seal', 'commit', 'agreement', 'sign', 'paperwork'],
     'lead': ['lead', 'qualify', 'qualification', 'screening', 'criteria', 'hot lead', 'warm lead'],
+    'backing_out': ['back out', 'backing out', 'cancel', 'changed mind', 'cold feet', 'back away', 'pull out', 'withdraw', 'renege', 'second thoughts', 'not sure anymore', 'family says', 'spouse says', 'another offer', 'list with agent', 'want more money', 'price too low', 'seller backing', 'seller cancel', 'under contract'],
   };
   const q = input.question.toLowerCase();
   // Score each training material by how many topic matches it has
@@ -1468,7 +1469,7 @@ ${(() => {
   });
   const relevant = scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score);
   if (relevant.length > 0) {
-    return `RELEVANT TRAINING MATERIAL (reference this when answering):\n${relevant.slice(0, 3).map(s => `### ${s.material.title}\n${(s.material.content || '').substring(0, 1500)}`).join('\n\n')}`;
+    return `RELEVANT TRAINING MATERIAL (use the talk tracks and key moves below when coaching):\n${relevant.slice(0, 3).map(s => `### ${s.material.title}\n${(s.material.content || '').substring(0, 4000)}`).join('\n\n')}`;
   }
   return '';
 })()}

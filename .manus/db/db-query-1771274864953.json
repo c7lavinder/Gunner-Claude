@@ -1,0 +1,19 @@
+{
+  "query": "SELECT id, tenantId, title, category, applicableTo, isActive, LENGTH(content) as contentLength FROM training_materials WHERE title = 'Handling Sellers Who Want to Back Out';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, tenantId, title, category, applicableTo, isActive, LENGTH(content) as contentLength FROM training_materials WHERE title = 'Handling Sellers Who Want to Back Out';",
+  "rows": [
+    {
+      "id": "90001",
+      "tenantId": "1",
+      "title": "Handling Sellers Who Want to Back Out",
+      "category": "objection_handling",
+      "applicableTo": "acquisition_manager",
+      "isActive": "true",
+      "contentLength": "5236"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\ttitle\tcategory\tapplicableTo\tisActive\tcontentLength\n90001\t1\tHandling Sellers Who Want to Back Out\tobjection_handling\tacquisition_manager\ttrue\t5236\n",
+  "stderr": "",
+  "execution_time_ms": 350
+}
