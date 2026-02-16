@@ -2257,3 +2257,7 @@
 - [x] Update frontend action card rendering for unified add_note
 - [x] Run DB migration
 - [x] Test end-to-end — all 72 unit tests pass, 107 opportunities tests pass
+
+## Bug Fix: tRPC error on home page for unauthenticated users
+- [x] Home page tRPC query returns HTML instead of JSON for unauthenticated users — caused by 502 proxy returning HTML
+- [x] Fix: added non-JSON response guard in tRPC client fetch wrapper — converts HTML error pages to proper JSON error responses

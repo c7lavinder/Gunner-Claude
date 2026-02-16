@@ -61,7 +61,7 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
-      fetch(input, init) {
+      async fetch(input, init) {
         const impersonateUserId = getImpersonationUserId();
         const headers: Record<string, string> = {
           ...(init?.headers as Record<string, string> || {}),
@@ -72,11 +72,31 @@ const trpcClient = trpc.createClient({
           headers['X-Impersonate-User-Id'] = impersonateUserId;
         }
         
-        return globalThis.fetch(input, {
+        const response = await globalThis.fetch(input, {
           ...(init ?? {}),
           headers,
           credentials: "include",
         });
+
+        // Guard against non-JSON responses (e.g. 502 HTML error pages from proxy)
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok && !contentType.includes('application/json')) {
+          // Return a synthetic JSON error response so tRPC doesn't crash parsing HTML
+          const errorBody = JSON.stringify({
+            error: {
+              message: `Server error (${response.status}). Please try again.`,
+              code: -32603,
+              data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: response.status },
+            },
+          });
+          return new Response(errorBody, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        return response;
       },
     }),
   ],
