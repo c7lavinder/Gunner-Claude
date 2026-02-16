@@ -2233,3 +2233,18 @@
 ## Bug Fix: Add Note to Opportunity fails with "No opportunity ID available"
 - [x] When multi-action batch runs (e.g., change stage + add note), the second action doesn't have the opportunity ID
 - [x] Fix add_note_opportunity to auto-resolve opportunity from contact ID (same as change_pipeline_stage does)
+
+## Audit: All action types for missing-ID auto-resolution
+- [x] Audit add_note_contact — OK, requires contactId (resolved during contact search step)
+- [x] Audit add_note_opportunity — FIXED in previous checkpoint, auto-resolves from contactId
+- [x] Audit change_pipeline_stage — OK, auto-resolves opportunity + fuzzy stage matching
+- [x] Audit send_sms — OK, requires contactId + routes from requesting user's GHL number
+- [x] Audit create_task — OK, requires contactId + resolves assignee from team members
+- [x] Audit add_tag — OK, requires contactId, merges with existing tags
+- [x] Audit remove_tag — OK, requires contactId, filters from existing tags
+- [x] Audit update_field — OK, requires contactId, updates custom fields
+- [x] Compile complete list of all action types for Corey
+
+## Bug Fix: Add Note to Opportunity returns 404 from GHL API
+- [x] GHL API returns 404 on POST /opportunities/{id}/notes — endpoint doesn't exist in GHL API
+- [x] Fix: merge add_note_opportunity to use contact notes endpoint (POST /contacts/{contactId}/notes) since they're the same thing in GHL

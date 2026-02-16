@@ -105,22 +105,14 @@ export async function addNoteToContact(
 
 // ============ ACTION 2: ADD NOTE TO OPPORTUNITY ============
 
+// GHL has no separate opportunity notes API — notes are always on contacts.
+// This function adds a note to the contact (same as addNoteToContact).
 export async function addNoteToOpportunity(
   tenantId: number,
-  opportunityId: string,
+  contactId: string,
   noteBody: string
 ): Promise<{ success: boolean; noteId?: string }> {
-  const creds = await getCredentialsForTenant(tenantId);
-  if (!creds) throw new Error("No GHL credentials configured");
-
-  const data = await ghlFetch(
-    creds,
-    `/opportunities/${opportunityId}/notes`,
-    "POST",
-    { body: noteBody }
-  );
-
-  return { success: true, noteId: data.note?.id || data.id };
+  return addNoteToContact(tenantId, contactId, noteBody);
 }
 
 // ============ OPPORTUNITY LOOKUP BY CONTACT ============
@@ -661,21 +653,11 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
         result = await addNoteToContact(action.tenantId, contactId, payload.noteBody);
         break;
-      case "add_note_opportunity": {
-        let resolvedNoteOppId = opportunityId;
-        // Auto-resolve opportunity ID from contact if not provided
-        if (!resolvedNoteOppId && contactId) {
-          console.log(`[GHLActions] add_note_opportunity: No opportunity ID — looking up for contact ${contactId}`);
-          const opp = await findOpportunityByContact(action.tenantId, contactId);
-          if (opp) {
-            resolvedNoteOppId = opp.opportunityId;
-            console.log(`[GHLActions] add_note_opportunity: Found opportunity ${resolvedNoteOppId}`);
-          }
-        }
-        if (!resolvedNoteOppId) throw new Error("No opportunity found for this contact. The contact may not have a deal in any pipeline yet.");
-        result = await addNoteToOpportunity(action.tenantId, resolvedNoteOppId, payload.noteBody);
+      case "add_note_opportunity":
+        // GHL has no separate opportunity notes API — notes are always on the contact
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        result = await addNoteToOpportunity(action.tenantId, contactId, payload.noteBody);
         break;
-      }
       case "change_pipeline_stage": {
         let resolvedOppId = opportunityId;
         let resolvedPipelineId = payload.pipelineId;
