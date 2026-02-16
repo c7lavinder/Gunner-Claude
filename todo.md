@@ -2136,3 +2136,5 @@
 - [x] Contact resolution caching — resolved contacts reused across actions in same batch
 - [x] Remaining actions queue — if contact disambiguation needed, remaining actions queued for after selection
 - [x] 12 new vitest tests covering multi-action parsing, empty arrays, context preservation, and sequential creation
+## AI Coach Multi-Action Batch Counters
+- [x] Add "Action 1 of 3" visual indicator on each confirmation card in a multi-action batch

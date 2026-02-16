@@ -341,7 +341,7 @@ function FeedbackCard({
 type ConversationMessage = 
   | { role: "user"; content: string }
   | { role: "assistant"; content: string }
-  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any };
+  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number };
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
   add_note_contact: "Add Note to Contact",
@@ -370,7 +370,7 @@ function AICoachQA() {
   const [isAsking, setIsAsking] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [contactSearchResults, setContactSearchResults] = useState<Array<{id: string; name: string; phone?: string; email?: string}>>([]);
-  const [pendingAction, setPendingAction] = useState<{intent: any; message: string; remainingActions?: any[]} | null>(null);
+  const [pendingAction, setPendingAction] = useState<{intent: any; message: string; remainingActions?: any[]; batchIndex?: number; batchTotal?: number} | null>(null);
   // Track which action card is being edited and its edited content
   const [editingActionId, setEditingActionId] = useState<number | null>(null);
   const [editedContent, setEditedContent] = useState("");
@@ -473,8 +473,11 @@ function AICoachQA() {
         // We need to resolve contacts for the first action that needs it, then reuse for others with the same name
         const resolvedContacts: Record<string, { id: string; name: string }> = {};
 
+        const batchTotal = actions.length;
+
         for (let i = 0; i < actions.length; i++) {
           const action = actions[i];
+          const batchIndex = i + 1; // 1-based
           
           if (action.needsContactSearch && action.contactName) {
             // Check if we already resolved this contact name
@@ -482,7 +485,7 @@ function AICoachQA() {
             if (cached) {
               action.contactId = cached.id;
               action.contactName = cached.name;
-              await createActionCard(action, userMessage);
+              await createActionCard(action, userMessage, batchIndex, batchTotal);
             } else {
               // Need to search for the contact
               const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
@@ -493,18 +496,18 @@ function AICoachQA() {
                 action.contactId = contacts[0].id;
                 action.contactName = contacts[0].name || action.contactName;
                 resolvedContacts[action.contactName.toLowerCase()] = { id: contacts[0].id, name: contacts[0].name || action.contactName };
-                await createActionCard(action, userMessage);
+                await createActionCard(action, userMessage, batchIndex, batchTotal);
               } else {
                 // Multiple matches — pause for user selection, queue remaining actions
                 setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
-                setPendingAction({ intent: action, message: userMessage, remainingActions: actions.slice(i + 1) });
+                setPendingAction({ intent: action, message: userMessage, remainingActions: actions.slice(i + 1), batchIndex, batchTotal });
                 setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${action.contactName}". Please select the right one (for action: ${action.summary}):` }]);
                 setIsAsking(false);
                 return;
               }
             }
           } else {
-            await createActionCard(action, userMessage);
+            await createActionCard(action, userMessage, batchIndex, batchTotal);
           }
         }
       } else {
@@ -523,7 +526,7 @@ function AICoachQA() {
     setIsAsking(false);
   };
 
-  const createActionCard = async (intent: any, userMessage: string) => {
+  const createActionCard = async (intent: any, userMessage: string, batchIndex?: number, batchTotal?: number) => {
     try {
       const result = await createPendingMutation.mutateAsync({
         actionType: intent.actionType,
@@ -541,6 +544,7 @@ function AICoachQA() {
         contactName: intent.contactName || "",
         status: "pending",
         payload: { ...intent.params, assigneeName: intent.assigneeName || "" },
+        ...(batchTotal && batchTotal > 1 ? { batchIndex, batchTotal } : {}),
       }]);
     } catch (error: any) {
       setConversation(prev => [...prev, { role: "assistant", content: `Failed to create action: ${error.message}` }]);
@@ -552,7 +556,9 @@ function AICoachQA() {
     setContactSearchResults([]);
     setIsAsking(true);
     const intent = { ...pendingAction.intent, contactId, contactName };
-    await createActionCard(intent, pendingAction.message);
+    const currentBatchIndex = pendingAction.batchIndex;
+    const currentBatchTotal = pendingAction.batchTotal;
+    await createActionCard(intent, pendingAction.message, currentBatchIndex, currentBatchTotal);
     
     // Continue processing remaining actions if any
     const remaining = pendingAction.remainingActions || [];
@@ -567,13 +573,15 @@ function AICoachQA() {
       
       for (let i = 0; i < remaining.length; i++) {
         const action = remaining[i];
+        // Continue the batch index from where we left off
+        const batchIdx = (currentBatchIndex || 0) + 1 + i;
         
         if (action.needsContactSearch && action.contactName) {
           const cached = resolvedContacts[action.contactName.toLowerCase()];
           if (cached) {
             action.contactId = cached.id;
             action.contactName = cached.name;
-            await createActionCard(action, userMessage);
+            await createActionCard(action, userMessage, batchIdx, currentBatchTotal);
           } else {
             const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
             if (contacts.length === 0) {
@@ -583,17 +591,17 @@ function AICoachQA() {
               action.contactId = contacts[0].id;
               action.contactName = contacts[0].name || action.contactName;
               resolvedContacts[action.contactName.toLowerCase()] = { id: contacts[0].id, name: contacts[0].name || action.contactName };
-              await createActionCard(action, userMessage);
+              await createActionCard(action, userMessage, batchIdx, currentBatchTotal);
             } else {
               setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
-              setPendingAction({ intent: action, message: userMessage, remainingActions: remaining.slice(i + 1) });
+              setPendingAction({ intent: action, message: userMessage, remainingActions: remaining.slice(i + 1), batchIndex: batchIdx, batchTotal: currentBatchTotal });
               setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${action.contactName}". Please select the right one (for action: ${action.summary}):` }]);
               setIsAsking(false);
               return;
             }
           }
         } else {
-          await createActionCard(action, userMessage);
+          await createActionCard(action, userMessage, batchIdx, currentBatchTotal);
         }
       }
     }
@@ -808,6 +816,11 @@ function AICoachQA() {
                             <span className="text-xs font-semibold">
                               {ACTION_TYPE_LABELS[msg.actionType] || msg.actionType}
                             </span>
+                            {msg.batchTotal && msg.batchTotal > 1 && msg.batchIndex && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                                {msg.batchIndex} of {msg.batchTotal}
+                              </span>
+                            )}
                             <span className="text-[10px] text-muted-foreground">
                               {statusIcons[msg.status]} {msg.status}
                             </span>
