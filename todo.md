@@ -2029,3 +2029,27 @@
 - [x] Update strengths to reference specific things said with quoted text
 - [x] Update areas for improvement to cite specific missed moments with quotes
 - [x] Include dollar amounts, property details, and specific numbers mentioned in the call
+
+## Opportunity Detection — Exact Numbers & Price Gap Logic
+- [ ] Include actual dollar amounts (our offer, seller's ask, gap) in opportunity summaries
+- [ ] Update LLM opportunity detection prompt to extract and return specific prices from transcripts
+- [ ] Add price gap logic — if gap is too large (e.g., $120k+), downgrade from Missed to Worth a Look or lower
+- [ ] Ensure "Seller Stated Price — No Follow Up" rule includes the actual price stated
+- [x] Suppress "Offer Made — Team Went Silent" when pipeline stage shows appointment already scheduled (e.g., "Offer Apt Scheduled")
+- [x] Improve AI reason generation to check actual call history and pipeline stage — not just detection rule template
+- [x] AI reasons should reflect what actually happened: scheduled offer call, attempted contact, no answer, etc.
+- [x] Build dynamic re-evaluation system to refresh active opportunity summaries as new data comes in
+- [x] Opportunity summaries should update over time (e.g., "2 attempts no response" → "3 attempts, still ghosting")
+- [ ] Add price gap logic — large gaps ($120k+) should downgrade priority, not flag as Missed
+- [ ] AI reason should specify exact motivation type from transcript (divorce, tax lien, timeline, property condition, financial pressure) — not generic "showed motivation signals"
+- [ ] Build contact timeline enrichment — fetch full call history + pipeline stage progression for each detection
+- [ ] Feed full timeline (initial call → walkthrough set → walkthrough done → ghosting) into AI reason generator
+- [x] Suppress wrong rules when pipeline tells a different story (e.g., don't say "Only 1 Call" when walkthrough was completed)
+- [ ] Detect post-walkthrough ghosting as its own signal type
+- [x] Fix walkthrough_no_offer: don't fire when stage is "Walkthrough Apt Scheduled" (upcoming, not completed)
+- [x] Fix walkthrough_no_offer: check if offer was already discussed on call transcript before flagging "no offer"
+- [x] Fix motivated_one_and_done: check pipeline stage — if contact progressed past initial (walkthrough, offer), suppress rule
+- [x] Add GHL appointment checking — suppress "no follow-up" rules when future appointment exists
+- [x] Build dynamic re-evaluation system — refresh active opportunity summaries hourly with latest data
+- [x] Add transcript-based offer detection — check if offer was discussed in transcript, not just callOutcome field
+- [x] Write vitest tests for false positive suppression, re-evaluation, and appointment checking

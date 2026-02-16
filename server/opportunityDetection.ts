@@ -89,6 +89,75 @@ interface DetectedOpportunity {
   lastActivityAt: Date | null;
   lastStageChangeAt: Date | null;
   transcriptExcerpt: string;
+  // Price data extracted from transcripts
+  ourOffer: number | null;
+  sellerAsk: number | null;
+  priceGap: number | null;
+}
+
+/** Default price fields for detections that don't have price data */
+const NO_PRICE_DATA = { ourOffer: null, sellerAsk: null, priceGap: null };
+
+/**
+ * Extract dollar amounts from a transcript.
+ * Returns { ourOffer, sellerAsk, priceGap } with values in whole dollars.
+ * Uses heuristics: amounts near "offer/we/our" = our offer, amounts near "want/need/asking/take" = seller ask.
+ */
+function extractPricesFromTranscript(transcript: string): { ourOffer: number | null; sellerAsk: number | null; priceGap: number | null } {
+  if (!transcript) return NO_PRICE_DATA;
+
+  // Find all dollar amounts in the transcript
+  const amountPattern = /\$([\d,]+(?:\.\d{2})?)|([\d,]+(?:\.\d{2})?)\s*(?:thousand|k\b)/gi;
+  const amounts: { value: number; context: string; index: number }[] = [];
+
+  let match;
+  while ((match = amountPattern.exec(transcript)) !== null) {
+    let raw = match[1] || match[2];
+    if (!raw) continue;
+    let value = parseFloat(raw.replace(/,/g, ""));
+    // Handle "thousand" / "k" suffix
+    if (match[0].toLowerCase().includes("thousand") || match[0].toLowerCase().endsWith("k")) {
+      value *= 1000;
+    }
+    if (value < 1000 || value > 100_000_000) continue; // Filter unrealistic amounts
+    const start = Math.max(0, match.index - 120);
+    const end = Math.min(transcript.length, match.index + match[0].length + 120);
+    const context = transcript.substring(start, end).toLowerCase();
+    amounts.push({ value, context, index: match.index });
+  }
+
+  if (amounts.length === 0) return NO_PRICE_DATA;
+
+  let ourOffer: number | null = null;
+  let sellerAsk: number | null = null;
+
+  // Classify each amount based on surrounding context
+  const ourPatterns = /\b(offer|we(?:'d| would| can| could)?|our|i(?:'d| would| can| could) (?:do|go|offer|pay|come in at))/;
+  const sellerPatterns = /\b(want|need|asking|take|looking for|hoping|at least|minimum|bottom line|won't go below|i(?:'d| would) take|my price|i want|i need)/;
+
+  for (const amt of amounts) {
+    if (sellerPatterns.test(amt.context) && !sellerAsk) {
+      sellerAsk = amt.value;
+    } else if (ourPatterns.test(amt.context) && !ourOffer) {
+      ourOffer = amt.value;
+    }
+  }
+
+  // If we only found one amount, try to classify by position (seller usually states first in follow-ups)
+  if (amounts.length === 1 && !ourOffer && !sellerAsk) {
+    sellerAsk = amounts[0].value; // Default single amount to seller ask
+  }
+
+  // If we found two amounts but couldn't classify, assume lower = our offer, higher = seller ask
+  if (amounts.length >= 2 && !ourOffer && !sellerAsk) {
+    const sorted = [...amounts].sort((a, b) => a.value - b.value);
+    ourOffer = sorted[0].value;
+    sellerAsk = sorted[sorted.length - 1].value;
+  }
+
+  const priceGap = (ourOffer !== null && sellerAsk !== null) ? Math.abs(sellerAsk - ourOffer) : null;
+
+  return { ourOffer, sellerAsk, priceGap };
 }
 
 // ============ GHL USER ID → TEAM MEMBER RESOLVER ============
@@ -262,6 +331,115 @@ async function fetchContactById(creds: GHLCredentials, contactId: string): Promi
   }
 }
 
+// ============ APPOINTMENT & OFFER AWARENESS HELPERS ============
+
+/**
+ * Fetch appointments for a contact from GHL.
+ * Returns an array of appointment objects with startTime.
+ */
+async function fetchContactAppointments(creds: GHLCredentials, contactId: string): Promise<any[]> {
+  try {
+    const data = await ghlFetch(creds, `/contacts/${contactId}/appointments`);
+    return data.events || data.appointments || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Check if a contact has any upcoming (future) appointments.
+ * Returns true if there's at least one appointment scheduled in the future.
+ */
+async function hasUpcomingAppointment(creds: GHLCredentials | null, contactId: string | null): Promise<boolean> {
+  if (!creds || !contactId) return false;
+  try {
+    const appointments = await fetchContactAppointments(creds, contactId);
+    const now = Date.now();
+    return appointments.some((apt: any) => {
+      const startTime = apt.startTime || apt.start_time || apt.appointmentDate || apt.date;
+      if (!startTime) return false;
+      return new Date(startTime).getTime() > now;
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if any call transcript for a contact mentions an offer being discussed.
+ * This catches cases where an offer was discussed verbally but not recorded
+ * in the callOutcome field (e.g., "we offered $230,000" in transcript).
+ */
+async function hasOfferInTranscripts(db: any, tenantId: number, ghlContactId: string): Promise<boolean> {
+  try {
+    const contactCalls = await db
+      .select({ transcript: calls.transcript })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, ghlContactId),
+          sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
+        )
+      )
+      .orderBy(sql`${calls.callTimestamp} DESC`)
+      .limit(5);
+
+    const OFFER_PATTERNS = [
+      /(?:we|i|our team)\s+(?:offered|can offer|could offer|would offer|came in at|put in an offer)/i,
+      /(?:offer|offered)\s+(?:of\s+)?\$[\d,]+/i,
+      /\$[\d,]+\s+(?:offer|was our offer)/i,
+      /(?:send|sent|sending)\s+(?:you\s+)?(?:an\s+)?offer/i,
+      /(?:put|putting)\s+(?:together|in)\s+(?:an\s+)?offer/i,
+      /(?:present|presented|presenting)\s+(?:an\s+)?offer/i,
+      /(?:made|make|making)\s+(?:an\s+)?offer/i,
+      /(?:verbal|written)\s+offer/i,
+      /offer\s+(?:price|amount|number)\s+(?:is|was|of)/i,
+    ];
+
+    for (const call of contactCalls) {
+      if (!call.transcript) continue;
+      if (OFFER_PATTERNS.some(p => p.test(call.transcript))) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a contact has progressed through the pipeline beyond initial stages.
+ * Returns the highest stage reached (e.g., "walkthrough", "offer", "under_contract").
+ * Used to suppress false positives like "only 1 call" when the deal has actually progressed.
+ */
+async function getContactPipelineProgression(
+  creds: GHLCredentials | null,
+  contactId: string | null,
+  contactOppMap?: Map<string, { opp: GHLPipelineOpportunity; stageName: string }>
+): Promise<{ hasProgressed: boolean; currentStage: string | null; isWalkthroughOrBeyond: boolean; isOfferOrBeyond: boolean }> {
+  const noProgression = { hasProgressed: false, currentStage: null, isWalkthroughOrBeyond: false, isOfferOrBeyond: false };
+  if (!contactId) return noProgression;
+
+  // Check from the pre-built map if available
+  if (contactOppMap && contactOppMap.has(contactId)) {
+    const info = contactOppMap.get(contactId)!;
+    const stageName = info.stageName;
+    const lower = stageName.toLowerCase();
+    const isWalkthrough = lower.includes("walkthrough") || lower.includes("pending apt");
+    const isOffer = lower.includes("offer") || lower.includes("made offer") || lower.includes("under contract") || lower.includes("purchased");
+    return {
+      hasProgressed: isWalkthrough || isOffer || lower.includes("hot lead"),
+      currentStage: stageName,
+      isWalkthroughOrBeyond: isWalkthrough || isOffer,
+      isOfferOrBeyond: isOffer,
+    };
+  }
+
+  return noProgression;
+}
+
 // ============ DETECTION RULES ============
 
 /**
@@ -323,6 +501,7 @@ async function detectBackwardMovement(
     lastActivityAt: stageChangeAt,
     lastStageChangeAt: stageChangeAt,
     transcriptExcerpt: "",
+    ...NO_PRICE_DATA,
   };
 }
 
@@ -396,6 +575,7 @@ async function detectRepeatInbound(
     lastActivityAt: new Date(conversation.lastMessageDate),
     lastStageChangeAt: null,
     transcriptExcerpt: "",
+    ...NO_PRICE_DATA,
   };
 }
 
@@ -458,6 +638,7 @@ async function detectFollowUpInboundIgnored(
     lastActivityAt: lastMsgTime,
     lastStageChangeAt: null,
     transcriptExcerpt: conversation.lastMessageBody || "",
+    ...NO_PRICE_DATA,
   };
 }
 
@@ -566,6 +747,7 @@ async function detectActiveNegotiationInFollowUp(
     lastActivityAt: lastMsgTime,
     lastStageChangeAt: opp?.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null,
     transcriptExcerpt: excerpt,
+    ...NO_PRICE_DATA,
   };
 }
 
@@ -575,15 +757,26 @@ async function detectOfferNoFollowUp(
   stageName: string,
   db: any,
   tenantId: number,
-  ghlMap: GhlUserIdMap
+  ghlMap: GhlUserIdMap,
+  creds: GHLCredentials | null
 ): Promise<DetectedOpportunity | null> {
   if (!isOfferOrBeyond(stageName)) return null;
+
+  // If the stage explicitly says an appointment is scheduled, the team is actively on it — skip
+  const lower = stageName.toLowerCase();
+  if (lower.includes("apt scheduled") || lower.includes("appointment scheduled") || lower.includes("under contract") || lower.includes("purchased")) {
+    return null;
+  }
 
   const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null;
   if (!stageChangeAt) return null;
 
   const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
   if (stageChangeAt > fortyEightHoursAgo) return null; // Still within window
+
+  // APPOINTMENT CHECK: If there's a future appointment, the team has a next step planned
+  const hasFutureApt = await hasUpcomingAppointment(creds, opp.contactId);
+  if (hasFutureApt) return null; // Appointment scheduled — team is working it
 
   // Check if there's been any outbound activity since the offer
   const recentOutbound = await db
@@ -619,6 +812,7 @@ async function detectOfferNoFollowUp(
     lastActivityAt: stageChangeAt,
     lastStageChangeAt: stageChangeAt,
     transcriptExcerpt: "",
+    ...NO_PRICE_DATA,
   };
 }
 
@@ -674,13 +868,16 @@ async function detectNewLeadSLABreach(
     lastActivityAt: createdAt,
     lastStageChangeAt: null,
     transcriptExcerpt: "",
+    ...NO_PRICE_DATA,
   };
 }
 
 // Rule 6: Seller stated price but no follow-up within 48h (transcript-enriched)
 async function detectPriceStatedNoFollowUp(
   db: any,
-  tenantId: number
+  tenantId: number,
+  creds: GHLCredentials | null,
+  contactOppMap?: Map<string, { opp: GHLPipelineOpportunity; stageName: string }>
 ): Promise<DetectedOpportunity[]> {
   const results: DetectedOpportunity[] = [];
   const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
@@ -732,6 +929,17 @@ async function detectPriceStatedNoFollowUp(
 
     if (followUp.length > 1) continue; // There was a follow-up
 
+    // APPOINTMENT CHECK: If there's a future appointment, the team has a next step planned
+    const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
+    if (hasFutureApt) continue; // Appointment scheduled — team is working it
+
+    // PIPELINE CHECK: If contact is in an advanced stage, suppress
+    const progression = await getContactPipelineProgression(creds, call.ghlContactId, contactOppMap);
+    if (progression.isOfferOrBeyond) continue; // Already in offer stage — price discussion led to action
+
+    // Extract actual dollar amounts from the transcript
+    const priceData = extractPricesFromTranscript(call.transcript);
+
     results.push({
       tier: "missed",
       triggerRules: ["price_stated_no_followup"],
@@ -751,6 +959,7 @@ async function detectPriceStatedNoFollowUp(
       lastActivityAt: call.callTimestamp,
       lastStageChangeAt: null,
       transcriptExcerpt: call.transcript.substring(0, 500),
+      ...priceData,
     });
   }
 
@@ -764,7 +973,9 @@ async function detectPriceStatedNoFollowUp(
 // Rule 7: Motivated seller with only 1 call, no 2nd attempt in 72h
 async function detectMotivatedOneDone(
   db: any,
-  tenantId: number
+  tenantId: number,
+  creds: GHLCredentials | null,
+  contactOppMap?: Map<string, { opp: GHLPipelineOpportunity; stageName: string }>
 ): Promise<DetectedOpportunity[]> {
   const results: DetectedOpportunity[] = [];
   const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
@@ -799,18 +1010,53 @@ async function detectMotivatedOneDone(
     const hasMotivation = MOTIVATION_KEYWORDS.some(k => lower.includes(k));
     if (!hasMotivation) continue;
 
-    // Check total calls to this contact
+    // Check total calls to this contact — get full history with details
     const allCalls = await db
-      .select({ id: calls.id })
+      .select({
+        id: calls.id,
+        callType: calls.callType,
+        callOutcome: calls.callOutcome,
+        callTimestamp: calls.callTimestamp,
+        classification: calls.classification,
+        teamMemberName: calls.teamMemberName,
+      })
       .from(calls)
       .where(
         and(
           eq(calls.tenantId, tenantId),
           eq(calls.ghlContactId, call.ghlContactId)
         )
-      );
+      )
+      .orderBy(calls.callTimestamp);
 
-    if (allCalls.length > 1) continue; // Multiple calls exist
+    // If there are multiple calls with conversations, this isn't a "one and done" situation
+    const conversationCalls = allCalls.filter((c: any) => c.classification === "conversation");
+    if (conversationCalls.length > 1) continue;
+
+    // Check if any call had a positive outcome (appointment, offer, callback) — means they're working it
+    const hasPositiveOutcome = allCalls.some((c: any) => 
+      ["appointment_set", "offer_made", "callback_scheduled", "interested"].includes(c.callOutcome)
+    );
+    if (hasPositiveOutcome) continue; // Team is actively working this lead
+
+    // PIPELINE PROGRESSION CHECK: If the contact has moved to walkthrough/offer/advanced stage
+    // in GHL, the team IS working this deal even if only 1 call is logged in Gunner.
+    // This is the William Thompson fix — he had walkthrough scheduled, so not "one and done".
+    const progression = await getContactPipelineProgression(creds, call.ghlContactId, contactOppMap);
+    if (progression.hasProgressed) continue; // Deal has progressed in pipeline
+
+    // APPOINTMENT CHECK: If there's a future appointment, the team has a next step planned
+    const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
+    if (hasFutureApt) continue; // Appointment scheduled — team is working it
+
+    // Check if any call was an offer or walkthrough type
+    const hasAdvancedCallType = allCalls.some((c: any) => 
+      ["offer", "seller_callback"].includes(c.callType)
+    );
+    if (hasAdvancedCallType) continue; // Deal has progressed beyond initial call
+
+    // Find the specific motivation keywords that matched for the summary
+    const matchedMotivations = MOTIVATION_KEYWORDS.filter(k => lower.includes(k));
 
     results.push({
       tier: "warning",
@@ -822,7 +1068,7 @@ async function detectMotivatedOneDone(
       ghlContactId: call.ghlContactId,
       ghlOpportunityId: null,
       ghlPipelineStageId: null,
-      ghlPipelineStageName: null,
+      ghlPipelineStageName: progression.currentStage || null,
       relatedCallId: call.id,
       teamMemberId: call.teamMemberId,
       teamMemberName: call.teamMemberName,
@@ -830,7 +1076,9 @@ async function detectMotivatedOneDone(
       detectionSource: "hybrid",
       lastActivityAt: call.callTimestamp,
       lastStageChangeAt: null,
-      transcriptExcerpt: call.transcript.substring(0, 500),
+      // Include motivation keywords in transcript excerpt so AI reason can be specific
+      transcriptExcerpt: `[Motivation signals detected: ${matchedMotivations.join(", ")}] ` + call.transcript.substring(0, 500),
+      ...extractPricesFromTranscript(call.transcript),
     });
   }
 
@@ -843,7 +1091,8 @@ async function detectStaleActiveStage(
   stageName: string,
   db: any,
   tenantId: number,
-  ghlMap: GhlUserIdMap
+  ghlMap: GhlUserIdMap,
+  creds: GHLCredentials | null
 ): Promise<DetectedOpportunity | null> {
   const lower = stageName.toLowerCase();
   const isStaleCandidate = lower.includes("pending apt") || lower.includes("walkthrough");
@@ -853,6 +1102,10 @@ async function detectStaleActiveStage(
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
   
   if (stageChangeAt > fiveDaysAgo) return null; // Not stale yet
+
+  // APPOINTMENT CHECK: If there's a future appointment, the stage isn't really stale
+  const hasFutureApt = await hasUpcomingAppointment(creds, opp.contactId);
+  if (hasFutureApt) return null; // Appointment scheduled — stage is active
 
   // Check for any recent activity (calls)
   const recentActivity = await db
@@ -887,6 +1140,7 @@ async function detectStaleActiveStage(
     lastActivityAt: stageChangeAt,
     lastStageChangeAt: stageChangeAt,
     transcriptExcerpt: "",
+    ...NO_PRICE_DATA,
   };
 }
 
@@ -970,6 +1224,7 @@ async function detectDeadWithSignals(
     lastActivityAt: stageChangeAt,
     lastStageChangeAt: stageChangeAt,
     transcriptExcerpt: excerpt,
+    ...NO_PRICE_DATA,
   };
 }
 
@@ -979,18 +1234,59 @@ async function detectWalkthroughNoOffer(
   stageName: string,
   db: any,
   tenantId: number,
-  ghlMap: GhlUserIdMap
+  ghlMap: GhlUserIdMap,
+  creds: GHLCredentials | null
 ): Promise<DetectedOpportunity | null> {
   if (!isWalkthroughStage(stageName)) return null;
 
+  // STAGE AWARENESS: "Walkthrough Apt Scheduled" means the walkthrough is UPCOMING.
+  // Only fire if the walkthrough has actually been completed OR enough time has passed.
+  const lowerStage = stageName.toLowerCase();
+  const isScheduledNotDone = lowerStage.includes("scheduled") || lowerStage.includes("apt scheduled");
+  
   const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null;
   if (!stageChangeAt) return null;
 
-  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  if (stageChangeAt > twentyFourHoursAgo) return null; // Still within window
+  if (isScheduledNotDone) {
+    // APPOINTMENT CHECK: If there's a future appointment, the team has a plan — suppress.
+    const hasFutureApt = await hasUpcomingAppointment(creds, opp.contactId);
+    if (hasFutureApt) return null; // Walkthrough is scheduled for the future — not a problem
 
-  // Check if they've moved to offer stage or beyond — if so, no issue
-  // Since we're checking the current stage and it's still walkthrough, that means no progression
+    // For scheduled walkthroughs with no future appointment, only flag if 5+ days have passed
+    // (increased from 3 to reduce false positives — gives time for walkthrough + offer prep)
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    if (stageChangeAt > fiveDaysAgo) return null; // Walkthrough likely hasn't happened yet
+  } else {
+    // For completed walkthrough stages, use the 48-hour window (increased from 24h)
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    if (stageChangeAt > fortyEightHoursAgo) return null;
+  }
+
+  // CHECK 1: Offer in callOutcome or callType fields
+  if (opp.contactId) {
+    const offerCalls = await db
+      .select({ id: calls.id, callOutcome: calls.callOutcome, callType: calls.callType })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, opp.contactId),
+          sql`(${calls.callOutcome} = 'offer_made' OR ${calls.callType} = 'offer')`
+        )
+      )
+      .limit(1);
+    
+    if (offerCalls.length > 0) return null; // Offer already discussed/made
+  }
+
+  // CHECK 2: Offer discussed in transcript content (catches verbal offers not recorded in fields)
+  if (opp.contactId) {
+    const offerInTranscript = await hasOfferInTranscripts(db, tenantId, opp.contactId);
+    if (offerInTranscript) return null; // Offer was discussed on a call — not a valid signal
+  }
+
+  // CHECK 3: Pipeline stage already at or beyond offer stage
+  if (isOfferOrBeyond(stageName)) return null; // Already in offer stage
 
   return {
     tier: "warning",
@@ -1010,6 +1306,7 @@ async function detectWalkthroughNoOffer(
     lastActivityAt: stageChangeAt,
     lastStageChangeAt: stageChangeAt,
     transcriptExcerpt: "",
+    ...NO_PRICE_DATA,
   };
 }
 
@@ -1075,6 +1372,7 @@ async function detectDuplicateProperty(
       lastActivityAt: propertyCalls[0].callTimestamp,
       lastStageChangeAt: null,
       transcriptExcerpt: `${dup.count} different contacts called about this property`,
+    ...NO_PRICE_DATA,
     });
   }
 
@@ -1171,6 +1469,10 @@ async function detectMissedCallback(
 
     if (hasOutboundFollowUp) continue; // Team followed up via GHL (calls/SMS)
 
+    // APPOINTMENT CHECK: If there's a future appointment, the callback was effectively handled
+    const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
+    if (hasFutureApt) continue; // Appointment scheduled — callback was addressed
+
     results.push({
       tier: "possible",
       triggerRules: ["missed_callback_request"],
@@ -1190,6 +1492,7 @@ async function detectMissedCallback(
       lastActivityAt: call.callTimestamp,
       lastStageChangeAt: null,
       transcriptExcerpt: call.transcript.substring(0, 500),
+    ...extractPricesFromTranscript(call.transcript),
     });
   }
 
@@ -1259,6 +1562,7 @@ async function detectHighTalkTimeDQ(
       lastActivityAt: call.callTimestamp,
       lastStageChangeAt: null,
       transcriptExcerpt: call.transcript.substring(0, 500),
+    ...NO_PRICE_DATA,
     });
   }
 
@@ -1307,7 +1611,8 @@ const COMMITMENT_PATTERNS = [
 
 async function detectTimelineNoCommitment(
   db: any,
-  tenantId: number
+  tenantId: number,
+  creds: GHLCredentials | null
 ): Promise<DetectedOpportunity[]> {
   const results: DetectedOpportunity[] = [];
   const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
@@ -1363,6 +1668,10 @@ async function detectTimelineNoCommitment(
 
     if (followUp.length > 1) continue; // A follow-up call was made
 
+    // APPOINTMENT CHECK: If there's a future appointment, the team locked in a next step
+    const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
+    if (hasFutureApt) continue; // Appointment scheduled — commitment was made
+
     // Extract the timeline mention for the excerpt
     let timelineExcerpt = "";
     for (const pattern of TIMELINE_PATTERNS) {
@@ -1396,6 +1705,7 @@ async function detectTimelineNoCommitment(
       lastActivityAt: call.callTimestamp,
       lastStageChangeAt: null,
       transcriptExcerpt: timelineExcerpt || transcript.substring(0, 500),
+    ...NO_PRICE_DATA,
     });
   }
 
@@ -1482,11 +1792,11 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
   },
 };
 
-async function generateAIReason(detection: DetectedOpportunity): Promise<{ reason: string; suggestion: string }> {
+async function generateAIReason(detection: DetectedOpportunity, db: any, tenantId: number): Promise<{ reason: string; suggestion: string }> {
   const ruleDesc = RULE_DESCRIPTIONS[detection.triggerRules[0]];
   const tierLabel = ruleDesc?.tier === "missed" ? "Missed (urgent)" : ruleDesc?.tier === "at_risk" ? "At Risk" : "Worth a Look";
   
-  // Build a factual timeline from available data
+  // Build a rich factual timeline from available data
   const facts: string[] = [];
   if (detection.contactName) facts.push(`Contact: ${detection.contactName}`);
   if (detection.ghlPipelineStageName) facts.push(`Current pipeline stage: ${detection.ghlPipelineStageName}`);
@@ -1500,13 +1810,61 @@ async function generateAIReason(detection: DetectedOpportunity): Promise<{ reaso
     facts.push(`Stage changed: ${daysAgo} days ago`);
   }
   if (detection.propertyAddress) facts.push(`Property: ${detection.propertyAddress}`);
+
+  // Add price data if available
+  if (detection.ourOffer) facts.push(`Our offer: $${detection.ourOffer.toLocaleString()}`);
+  if (detection.sellerAsk) facts.push(`Seller's asking price: $${detection.sellerAsk.toLocaleString()}`);
+  if (detection.priceGap) facts.push(`Price gap: $${detection.priceGap.toLocaleString()}`);
+
+  // ===== CONTACT TIMELINE ENRICHMENT =====
+  // Fetch full call history for this contact to give the LLM the complete picture
+  if (detection.ghlContactId) {
+    try {
+      const contactCalls = await db
+        .select({
+          callType: calls.callType,
+          callOutcome: calls.callOutcome,
+          callTimestamp: calls.callTimestamp,
+          classification: calls.classification,
+          teamMemberName: calls.teamMemberName,
+          duration: calls.duration,
+          // direction not in schema — infer from callType
+        })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.ghlContactId, detection.ghlContactId)
+          )
+        )
+        .orderBy(calls.callTimestamp);
+
+      if (contactCalls.length > 0) {
+        const timelineEntries = contactCalls.map((c: any, i: number) => {
+          const date = new Date(c.callTimestamp).toLocaleDateString();
+          const direction = c.callType === "seller_callback" ? "Inbound" : "Outbound";
+          const type = c.callType ? c.callType.replace(/_/g, " ") : "unknown";
+          const outcome = c.callOutcome ? c.callOutcome.replace(/_/g, " ") : "unknown";
+          const who = c.teamMemberName || "team";
+          const dur = c.duration ? `${Math.round(c.duration / 60)}min` : "";
+          const cls = c.classification || "";
+          return `  ${i + 1}. ${date}: ${direction} ${type} call by ${who} (${dur}, outcome: ${outcome}, classified: ${cls})`;
+        });
+        facts.push(`\nFull call timeline (${contactCalls.length} calls):\n${timelineEntries.join("\n")}`);
+      } else {
+        facts.push("No calls found in system for this contact.");
+      }
+    } catch (err) {
+      // Non-critical — continue without timeline
+    }
+  }
   
   try {
     const response = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: `You write brief signal descriptions for a real estate wholesaling team's pipeline review tool.
+          content: `You write brief, specific signal descriptions for a real estate wholesaling team's pipeline review tool.
 
 CRITICAL RULES:
 - ONLY state facts that are provided in the data below. NEVER assume or infer what happened.
@@ -1514,7 +1872,14 @@ CRITICAL RULES:
 - If you don't know whether the team took action, say "no activity was logged" — do NOT say they failed or missed it.
 - The tone should be neutral and informative, like a CRM status update — not accusatory or dramatic.
 - Tier context: "${tierLabel}" — ${ruleDesc?.tier === "missed" ? "This appears to be a gap that needs attention." : ruleDesc?.tier === "at_risk" ? "This lead may need re-engagement." : "This is flagged for the owner to review and potentially help the team."}
-- Reason: 1-2 factual sentences about what the data shows. Reference the contact name.
+
+SPECIFICITY REQUIREMENTS:
+- If the transcript mentions a MOTIVATION (divorce, foreclosure, tax lien, death in family, job relocation, inheritance, vacant property, code violations, financial hardship, medical bills, behind on payments, tired landlord, etc.), you MUST name the specific motivation in the reason. Say "seller mentioned going through a divorce" NOT "seller showed motivation signals."
+- If dollar amounts are provided (our offer, seller's ask, price gap), you MUST include the exact numbers. Say "we offered $230,000, seller is asking $350,000 — a $120,000 gap" NOT "a specific price was mentioned."
+- If the pipeline stage indicates an appointment was scheduled, acknowledge it. Say "offer appointment was scheduled" NOT "no follow-up logged" when the stage shows otherwise.
+- If call attempts are mentioned, be specific: "Daniel attempted to reach Greg but got no answer" NOT "only one call attempt."
+- Reference the contact by name.
+- Reason: 1-2 factual, specific sentences. Lead with the most important detail (motivation, price, or situation).
 - Suggestion: 1 sentence with a specific next action.
 - Keep it concise and professional.`
         },
@@ -1527,9 +1892,9 @@ Tier: ${tierLabel}
 Facts from the system:
 ${facts.join("\n")}
 
-Transcript excerpt (if available): ${detection.transcriptExcerpt ? detection.transcriptExcerpt.substring(0, 400) : "No transcript available"}
+Transcript excerpt (if available): ${detection.transcriptExcerpt ? detection.transcriptExcerpt.substring(0, 600) : "No transcript available"}
 
-Generate JSON with "reason" and "suggestion" fields. Remember: ONLY state what the data shows, never assume.`
+Generate JSON with "reason" and "suggestion" fields. Be SPECIFIC — name the exact motivation, dollar amounts, and situation from the transcript. Never use generic phrases like "showed motivation signals" or "mentioned a specific price."`
         }
       ],
       response_format: {
@@ -1540,7 +1905,7 @@ Generate JSON with "reason" and "suggestion" fields. Remember: ONLY state what t
           schema: {
             type: "object",
             properties: {
-              reason: { type: "string", description: "1-2 factual sentences about what the data shows" },
+              reason: { type: "string", description: "1-2 specific factual sentences with exact details from transcript" },
               suggestion: { type: "string", description: "1 sentence specific next action" }
             },
             required: ["reason", "suggestion"],
@@ -1612,6 +1977,11 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
     for (const tenant of tenantsToScan) {
       try {
         await scanTenant(db, tenant.id, result);
+        // After scanning for new opportunities, re-evaluate existing active ones
+        const refreshed = await reEvaluateActiveOpportunities(db, tenant.id);
+        if (refreshed > 0) {
+          console.log(`[OpportunityDetection] Refreshed ${refreshed} active opportunity summaries for tenant ${tenant.id}`);
+        }
       } catch (tenantError) {
         console.error(`[OpportunityDetection] Error scanning tenant ${tenant.id}:`, tenantError);
         result.errors++;
@@ -1624,6 +1994,111 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
 
   console.log(`[OpportunityDetection] Scan complete. Detected: ${result.detected}, Errors: ${result.errors}`);
   return result;
+}
+
+// ============ DYNAMIC RE-EVALUATION ============
+// Refreshes active opportunity summaries with the latest call history, pipeline data, and pricing
+
+async function reEvaluateActiveOpportunities(db: any, tenantId: number): Promise<number> {
+  let refreshed = 0;
+  try {
+    // Get all active opportunities for this tenant
+    const activeOpps = await db
+      .select()
+      .from(opportunities)
+      .where(
+        and(
+          eq(opportunities.tenantId, tenantId),
+          eq(opportunities.status, "active")
+        )
+      );
+
+    if (activeOpps.length === 0) return 0;
+    console.log(`[OpportunityDetection] Re-evaluating ${activeOpps.length} active opportunities for tenant ${tenantId}`);
+
+    for (const opp of activeOpps) {
+      try {
+        // Build a DetectedOpportunity-like object from the stored data
+        const detection: DetectedOpportunity = {
+          tier: opp.tier as "missed" | "warning" | "possible",
+          triggerRules: opp.triggerRules || [],
+          priorityScore: opp.priorityScore,
+          contactName: opp.contactName,
+          contactPhone: opp.contactPhone,
+          propertyAddress: opp.propertyAddress,
+          ghlContactId: opp.ghlContactId,
+          ghlOpportunityId: opp.ghlOpportunityId,
+          ghlPipelineStageId: opp.ghlPipelineStageId,
+          ghlPipelineStageName: opp.ghlPipelineStageName,
+          relatedCallId: opp.relatedCallId,
+          teamMemberId: opp.teamMemberId,
+          teamMemberName: opp.teamMemberName,
+          assignedTo: opp.assignedTo,
+          detectionSource: opp.detectionSource as any,
+          lastActivityAt: opp.lastActivityAt,
+          lastStageChangeAt: opp.lastStageChangeAt,
+          transcriptExcerpt: "",
+          ...NO_PRICE_DATA,
+        };
+
+        // Fetch the latest transcript excerpt from the most recent call
+        if (opp.ghlContactId) {
+          const latestCall = await db
+            .select({
+              transcript: calls.transcript,
+              callTimestamp: calls.callTimestamp,
+            })
+            .from(calls)
+            .where(
+              and(
+                eq(calls.tenantId, tenantId),
+                eq(calls.ghlContactId, opp.ghlContactId),
+                sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
+              )
+            )
+            .orderBy(sql`${calls.callTimestamp} DESC`)
+            .limit(1);
+
+          if (latestCall.length > 0) {
+            detection.transcriptExcerpt = latestCall[0].transcript.substring(0, 500);
+            // Update lastActivityAt if there's a newer call
+            if (latestCall[0].callTimestamp && (!detection.lastActivityAt || new Date(latestCall[0].callTimestamp) > new Date(detection.lastActivityAt))) {
+              detection.lastActivityAt = latestCall[0].callTimestamp;
+            }
+            // Extract prices from latest transcript
+            const prices = extractPricesFromTranscript(latestCall[0].transcript);
+            detection.ourOffer = prices.ourOffer;
+            detection.sellerAsk = prices.sellerAsk;
+            detection.priceGap = prices.priceGap;
+          }
+        }
+
+        // Re-generate the AI reason with full timeline context
+        const { reason, suggestion } = await generateAIReason(detection, db, tenantId);
+
+        // Only update if the reason actually changed meaningfully
+        if (reason !== opp.reason) {
+          await db.update(opportunities)
+            .set({
+              reason,
+              suggestion,
+              lastActivityAt: detection.lastActivityAt,
+            })
+            .where(eq(opportunities.id, opp.id));
+          refreshed++;
+        }
+      } catch (oppError) {
+        console.error(`[OpportunityDetection] Error re-evaluating opportunity ${opp.id}:`, oppError);
+      }
+    }
+
+    if (refreshed > 0) {
+      console.log(`[OpportunityDetection] Refreshed ${refreshed}/${activeOpps.length} opportunity summaries for tenant ${tenantId}`);
+    }
+  } catch (error) {
+    console.error(`[OpportunityDetection] Error in re-evaluation for tenant ${tenantId}:`, error);
+  }
+  return refreshed;
 }
 
 async function scanTenant(
@@ -1678,7 +2153,7 @@ async function scanTenant(
         // if (backward) detections.push(backward);
 
         // Rule 4: Offer no follow-up
-        const offerStale = await detectOfferNoFollowUp(opp, stageName, db, tenantId, ghlMap);
+        const offerStale = await detectOfferNoFollowUp(opp, stageName, db, tenantId, ghlMap, creds);
         if (offerStale) detections.push(offerStale);
 
         // Rule 5: New lead SLA breach
@@ -1686,7 +2161,7 @@ async function scanTenant(
         if (slaBreach) detections.push(slaBreach);
 
         // Rule 8: Stale active stage
-        const stale = await detectStaleActiveStage(opp, stageName, db, tenantId, ghlMap);
+        const stale = await detectStaleActiveStage(opp, stageName, db, tenantId, ghlMap, creds);
         if (stale) detections.push(stale);
 
         // Rule 9: Dead with signals
@@ -1694,7 +2169,7 @@ async function scanTenant(
         if (deadSignals) detections.push(deadSignals);
 
         // Rule 10: Walkthrough no offer
-        const walkthrough = await detectWalkthroughNoOffer(opp, stageName, db, tenantId, ghlMap);
+        const walkthrough = await detectWalkthroughNoOffer(opp, stageName, db, tenantId, ghlMap, creds);
         if (walkthrough) detections.push(walkthrough);
       }
     }
@@ -1788,12 +2263,12 @@ async function scanTenant(
   console.log(`[OpportunityDetection] Phase 3: Transcript-enriched detection for tenant ${tenantId}`);
 
   try {
-    // Rule 6: Price stated no follow-up
-    const priceDetections = await detectPriceStatedNoFollowUp(db, tenantId);
+    // Rule 6: Price stated no follow-up (now checks appointments + pipeline)
+    const priceDetections = await detectPriceStatedNoFollowUp(db, tenantId, creds, contactOppMap);
     detections.push(...priceDetections);
 
-    // Rule 7: Motivated one-and-done
-    const motivatedDetections = await detectMotivatedOneDone(db, tenantId);
+    // Rule 7: Motivated one-and-done (now checks GHL pipeline progression + appointments)
+    const motivatedDetections = await detectMotivatedOneDone(db, tenantId, creds, contactOppMap);
     detections.push(...motivatedDetections);
 
     // Rule 11: Duplicate property
@@ -1809,7 +2284,7 @@ async function scanTenant(
     detections.push(...talkTimeDetections);
 
     // Rule 15: Timeline offered, no commitment set
-    const timelineDetections = await detectTimelineNoCommitment(db, tenantId);
+    const timelineDetections = await detectTimelineNoCommitment(db, tenantId, creds);
     detections.push(...timelineDetections);
   } catch (transcriptError) {
     console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
@@ -1835,7 +2310,7 @@ async function scanTenant(
       }
 
       // Generate AI reason
-      const { reason, suggestion } = await generateAIReason(detection);
+      const { reason, suggestion } = await generateAIReason(detection, db, tenantId);
 
       // Enrich with property address from calls if missing
       let propertyAddress = detection.propertyAddress;
