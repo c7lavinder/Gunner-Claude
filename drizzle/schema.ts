@@ -1037,7 +1037,7 @@ export const subscriptionPlans = mysqlTable("subscription_plans", {
   code: varchar("code", { length: 50 }).notNull().unique(), // "starter", "growth", "scale"
   description: text("description"),
   // Pricing
-  priceMonthly: int("priceMonthly").notNull(), // in cents (e.g., 9900 = $99)
+  priceMonthly: int("priceMonthly").notNull(), // in cents (e.g., 19900 = $199)
   priceYearly: int("priceYearly"), // in cents (optional annual discount)
   // Trial configuration
   trialDays: int("trialDays").notNull().default(14),

@@ -2074,3 +2074,12 @@
 - [x] Write vitest tests for Rule 16 weekend awareness and outbound activity checking
 - [x] Change gamification level titles to sports-themed names (Rookie, Starter, Playmaker, All-Star, Captain, MVP, Champion, Elite, Dynasty, Legend, GOAT, Hall of Fame)
 - [x] Fix leaderboard cards: show full names instead of truncating (e.g., "Dani..." → "Daniel", "Chris Se..." → full name)
+- [x] Create Stripe 100% off coupon with code CHRISMAN, limited to 1 redemption
+- [x] Verify Stripe live keys are configured in Gunner
+- [x] Verify live Stripe products/prices exist and match $199/$499/$999
+- [x] Recreate CHRISMAN coupon in live Stripe (100% off, 1 use)
+- [x] Verify checkout flow works with live keys
+- [x] Fix all hardcoded pricing references across codebase to match current plans ($199/$499/$999)
+- [x] Fix New Customer Setup page dropdown showing correct prices ($199/$499/$999)
+- [x] Fix pipeline stage mapping: mappings persist per-pipeline when switching between pipelines
+- [x] Add pipelineMappings support to TenantCrmConfig for multi-pipeline stage mapping storage

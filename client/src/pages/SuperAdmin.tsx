@@ -581,9 +581,9 @@ export default function SuperAdmin() {
                 ) : (
                   filteredTenants.map((tenant) => {
                     const planPrices: Record<string, number> = {
-                      starter: 99,
-                      growth: 249,
-                      scale: 499,
+                      starter: 199,
+                      growth: 499,
+                      scale: 999,
                     };
                     const mrr = tenant.subscriptionStatus === 'active' 
                       ? planPrices[tenant.subscriptionTier || 'starter'] || 0 
@@ -649,9 +649,9 @@ export default function SuperAdmin() {
                 <div className="space-y-4">
                   {['starter', 'growth', 'scale'].map((plan) => {
                     const planPrices: Record<string, number> = {
-                      starter: 99,
-                      growth: 249,
-                      scale: 499,
+                      starter: 199,
+                      growth: 499,
+                      scale: 999,
                     };
                     const tenantsOnPlan = (tenants || []).filter(
                       t => t.subscriptionTier === plan && t.subscriptionStatus === 'active'
@@ -1122,7 +1122,7 @@ export default function SuperAdmin() {
                       type="number"
                       value={planFormData.priceMonthly / 100}
                       onChange={(e) => setPlanFormData(prev => ({ ...prev, priceMonthly: Math.round(parseFloat(e.target.value) * 100) }))}
-                      placeholder="99.00"
+                      placeholder="199.00"
                     />
                   </div>
                   <div>
@@ -1131,7 +1131,7 @@ export default function SuperAdmin() {
                       type="number"
                       value={planFormData.priceYearly / 100}
                       onChange={(e) => setPlanFormData(prev => ({ ...prev, priceYearly: Math.round(parseFloat(e.target.value) * 100) }))}
-                      placeholder="990.00"
+                      placeholder="1990.00"
                     />
                   </div>
                   <div>

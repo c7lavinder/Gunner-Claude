@@ -1,0 +1,37 @@
+{
+  "query": "SELECT id, name, code, priceMonthly, priceYearly, stripePriceIdMonthly, stripePriceIdYearly FROM subscription_plans;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, code, priceMonthly, priceYearly, stripePriceIdMonthly, stripePriceIdYearly FROM subscription_plans;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Starter",
+      "code": "starter",
+      "priceMonthly": "19900",
+      "priceYearly": "199000",
+      "stripePriceIdMonthly": "price_1SxJXJRaMVJCSBSAo0PF0gDs",
+      "stripePriceIdYearly": "price_1SxJXJRaMVJCSBSAoTzd65DL"
+    },
+    {
+      "id": "2",
+      "name": "Growth",
+      "code": "growth",
+      "priceMonthly": "49900",
+      "priceYearly": "499000",
+      "stripePriceIdMonthly": "price_1SxJXrRaMVJCSBSAFBrZW9eB",
+      "stripePriceIdYearly": "price_1SxJXrRaMVJCSBSAYr6yhxEJ"
+    },
+    {
+      "id": "3",
+      "name": "Scale",
+      "code": "scale",
+      "priceMonthly": "99900",
+      "priceYearly": "999000",
+      "stripePriceIdMonthly": "price_1SxJYURaMVJCSBSAxHRP1RZl",
+      "stripePriceIdYearly": "price_1SxJYURaMVJCSBSA0gF3ds3o"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcode\tpriceMonthly\tpriceYearly\tstripePriceIdMonthly\tstripePriceIdYearly\n1\tStarter\tstarter\t19900\t199000\tprice_1SxJXJRaMVJCSBSAo0PF0gDs\tprice_1SxJXJRaMVJCSBSAoTzd65DL\n2\tGrowth\tgrowth\t49900\t499000\tprice_1SxJXrRaMVJCSBSAFBrZW9eB\tprice_1SxJXrRaMVJCSBSAYr6yhxEJ\n3\tScale\tscale\t99900\t999000\tprice_1SxJYURaMVJCSBSAxHRP1RZl\tprice_1SxJYURaMVJCSBSA0gF3ds3o\n",
+  "stderr": "",
+  "execution_time_ms": 413
+}

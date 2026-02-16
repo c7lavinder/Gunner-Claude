@@ -124,8 +124,8 @@ const FALLBACK_PLANS = [
   {
     id: "starter",
     name: "Starter",
-    priceMonthly: 99,
-    priceYearly: 990,
+    priceMonthly: 199,
+    priceYearly: 1990,
     description: "Perfect for small teams getting started with AI call coaching",
     features: ["call_grading", "basic_analytics", "team_dashboard"],
     maxUsers: 3,
@@ -134,8 +134,8 @@ const FALLBACK_PLANS = [
   {
     id: "growth",
     name: "Growth",
-    priceMonthly: 249,
-    priceYearly: 2490,
+    priceMonthly: 499,
+    priceYearly: 4990,
     description: "For growing teams that need more users and advanced features",
     features: ["call_grading", "advanced_analytics", "team_dashboard", "custom_rubrics", "training_materials"],
     maxUsers: 10,
@@ -144,8 +144,8 @@ const FALLBACK_PLANS = [
   {
     id: "scale",
     name: "Scale",
-    priceMonthly: 499,
-    priceYearly: 4990,
+    priceMonthly: 999,
+    priceYearly: 9990,
     description: "Enterprise-grade features for large organizations",
     features: ["call_grading", "advanced_analytics", "team_dashboard", "custom_rubrics", "training_materials", "api_access", "priority_support", "custom_branding"],
     maxUsers: -1,

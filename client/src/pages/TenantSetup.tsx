@@ -76,6 +76,8 @@ export default function TenantSetup() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState("");
   const [stageMapping, setStageMapping] = useState<Record<string, string>>({});
+  // Per-pipeline mapping cache so switching pipelines doesn't lose mappings
+  const [pipelineMappingCache, setPipelineMappingCache] = useState<Record<string, Record<string, string>>>({});
 
   const [formData, setFormData] = useState({
     companyName: "",
@@ -274,10 +276,32 @@ export default function TenantSetup() {
       if (formData.newDealStageName) {
         crmConfig.newDealStageName = formData.newDealStageName;
       }
-      // Save stage mapping if any stages are mapped
-      const mappedStages = Object.entries(stageMapping).filter(([, v]) => v);
+      // Save stage mapping for the currently selected pipeline
+      const mappedStages = Object.entries(stageMapping).filter(([, v]) => v && v !== "unmapped");
       if (mappedStages.length > 0) {
         crmConfig.stageMapping = Object.fromEntries(mappedStages);
+      }
+
+      // Merge all pipeline mappings (cached + current) into pipelineMappings
+      const allMappings: Record<string, { name: string; stageMapping: Record<string, string> }> = {};
+      // First, add all cached pipeline mappings
+      for (const [pipelineId, mapping] of Object.entries(pipelineMappingCache)) {
+        const filtered = Object.fromEntries(Object.entries(mapping).filter(([, v]) => v && v !== "unmapped"));
+        if (Object.keys(filtered).length > 0) {
+          const pipeline = pipelines.find(p => p.id === pipelineId);
+          allMappings[pipelineId] = { name: pipeline?.name || pipelineId, stageMapping: filtered };
+        }
+      }
+      // Then add/overwrite with the currently selected pipeline's mapping
+      if (selectedPipelineId && mappedStages.length > 0) {
+        const currentPipeline = pipelines.find(p => p.id === selectedPipelineId);
+        allMappings[selectedPipelineId] = {
+          name: currentPipeline?.name || selectedPipelineId,
+          stageMapping: Object.fromEntries(mappedStages),
+        };
+      }
+      if (Object.keys(allMappings).length > 0) {
+        crmConfig.pipelineMappings = allMappings;
       }
 
       const validMembers = formData.teamMembers.filter(m => m.name.trim());
@@ -346,9 +370,9 @@ export default function TenantSetup() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="trial">Trial (14 days free)</SelectItem>
-                  <SelectItem value="starter">Starter ($99/mo)</SelectItem>
-                  <SelectItem value="growth">Growth ($249/mo)</SelectItem>
-                  <SelectItem value="scale">Scale ($499/mo)</SelectItem>
+                  <SelectItem value="starter">Starter ($199/mo)</SelectItem>
+                  <SelectItem value="growth">Growth ($499/mo)</SelectItem>
+                  <SelectItem value="scale">Scale ($999/mo)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -457,12 +481,17 @@ export default function TenantSetup() {
                       <Select
                         value={selectedPipelineId}
                         onValueChange={(value) => {
+                          // Save current mappings to cache before switching
+                          if (selectedPipelineId) {
+                            setPipelineMappingCache(prev => ({ ...prev, [selectedPipelineId]: stageMapping }));
+                          }
                           setSelectedPipelineId(value);
                           const pipeline = pipelines.find(p => p.id === value);
                           if (pipeline) {
                             setFormData({ ...formData, dispoPipelineName: pipeline.name });
                           }
-                          setStageMapping({});
+                          // Restore cached mappings for the newly selected pipeline
+                          setStageMapping(pipelineMappingCache[value] || {});
                         }}
                       >
                         <SelectTrigger>
@@ -686,7 +715,22 @@ export default function TenantSetup() {
         );
 
       case 4: {
-        const mappedStageCount = Object.values(stageMapping).filter(v => v && v !== "unmapped").length;
+        // Count total mapped stages across all pipelines (cached + current)
+        const currentMappedCount = Object.values(stageMapping).filter(v => v && v !== "unmapped").length;
+        const cachedMappedCount = Object.values(pipelineMappingCache).reduce((sum, mapping) => {
+          return sum + Object.values(mapping).filter(v => v && v !== "unmapped").length;
+        }, 0);
+        // Subtract current pipeline's cached count to avoid double-counting
+        const currentPipelineCachedCount = selectedPipelineId && pipelineMappingCache[selectedPipelineId]
+          ? Object.values(pipelineMappingCache[selectedPipelineId]).filter(v => v && v !== "unmapped").length
+          : 0;
+        const mappedStageCount = currentMappedCount + cachedMappedCount - currentPipelineCachedCount;
+        const mappedPipelineCount = new Set([
+          ...Object.keys(pipelineMappingCache).filter(pid => 
+            Object.values(pipelineMappingCache[pid]).some(v => v && v !== "unmapped")
+          ),
+          ...(currentMappedCount > 0 && selectedPipelineId ? [selectedPipelineId] : []),
+        ]).size;
         return (
           <div className="space-y-6">
             <div className="text-center mb-4">
@@ -734,7 +778,9 @@ export default function TenantSetup() {
                         <div><span className="text-muted-foreground">New Deal Stage:</span> {formData.newDealStageName}</div>
                       )}
                       {mappedStageCount > 0 && (
-                        <div><span className="text-muted-foreground">Mapped Stages:</span> {mappedStageCount} stage(s)</div>
+                        <div>
+                          <span className="text-muted-foreground">Mapped Stages:</span> {mappedStageCount} stage(s) across {mappedPipelineCount} pipeline(s)
+                        </div>
                       )}
                     </>
                   ) : (

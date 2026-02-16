@@ -48,9 +48,9 @@ describe('Stripe Products', () => {
     const growth = getPlanByCode('growth')!;
     const scale = getPlanByCode('scale')!;
     
-    expect(starter.priceMonthly).toBe(9900); // $99 in cents
-    expect(growth.priceMonthly).toBe(24900); // $249 in cents
-    expect(scale.priceMonthly).toBe(49900); // $499 in cents
+    expect(starter.priceMonthly).toBe(19900); // $199 in cents
+    expect(growth.priceMonthly).toBe(49900); // $499 in cents
+    expect(scale.priceMonthly).toBe(99900); // $999 in cents
   });
 
   it('should have correct features for starter plan', async () => {
@@ -84,9 +84,9 @@ describe('Stripe Products', () => {
   it('should format price correctly', async () => {
     const { formatPrice } = await import('./products');
     
-    expect(formatPrice(9900)).toBe('$99');
-    expect(formatPrice(24900)).toBe('$249');
+    expect(formatPrice(19900)).toBe('$199');
     expect(formatPrice(49900)).toBe('$499');
+    expect(formatPrice(99900)).toBe('$999');
   });
 
   it('should have trial days defined', async () => {

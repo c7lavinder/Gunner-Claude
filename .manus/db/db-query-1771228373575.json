@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE subscription_plans SET stripePriceIdMonthly = 'price_1T1MZ4LdcMYGIM9Xm0UXP71S', stripePriceIdYearly = 'price_1T1MbnLdcMYGIM9XvmDtUgkm' WHERE code = 'starter'; UPDATE subscription_plans SET stripePriceIdMonthly = 'price_1T1MZ5LdcMYGIM9X5wAfUYFB', stripePriceIdYearly = 'price_1T1MboLdcMYGIM9XJ4gqBGQc' WHERE code = 'growth'; UPDATE subscription_plans SET stripePriceIdMonthly = 'price_1T1MZ6LdcMYGIM9X8EFSmKPu', stripePriceIdYearly = 'price_1T1MbpLdcMYGIM9XqBZF8pqb' WHERE code = 'scale';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute UPDATE subscription_plans SET stripePriceIdMonthly = 'price_1T1MZ4LdcMYGIM9Xm0UXP71S', stripePriceIdYearly = 'price_1T1MbnLdcMYGIM9XvmDtUgkm' WHERE code = 'starter'; UPDATE subscription_plans SET stripePriceIdMonthly = 'price_1T1MZ5LdcMYGIM9X5wAfUYFB', stripePriceIdYearly = 'price_1T1MboLdcMYGIM9XJ4gqBGQc' WHERE code = 'growth'; UPDATE subscription_plans SET stripePriceIdMonthly = 'price_1T1MZ6LdcMYGIM9X8EFSmKPu', stripePriceIdYearly = 'price_1T1MbpLdcMYGIM9XqBZF8pqb' WHERE code = 'scale';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 470
+}

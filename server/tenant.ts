@@ -108,6 +108,8 @@ export interface TenantCrmConfig {
   newDealStageName?: string;
   newDealStageId?: string;
   stageMapping?: Record<string, string>;
+  // Per-pipeline stage mappings: { pipelineId: { stageId: callType } }
+  pipelineMappings?: Record<string, { name: string; stageMapping: Record<string, string> }>;
 }
 
 export function parseCrmConfig(tenant: { crmConfig: string | null }): TenantCrmConfig {
@@ -197,9 +199,9 @@ export async function getPlatformMetrics() {
   
   // Calculate MRR based on subscription tiers
   const planPrices: Record<string, number> = {
-    starter: 99,
-    growth: 249,
-    scale: 499,
+    starter: 199,
+    growth: 499,
+    scale: 999,
   };
 
   let totalMrr = 0;

@@ -59,9 +59,9 @@ export const adminRouter = router({
     // Calculate MRR (simplified - based on tier pricing)
     const tierPricing: Record<string, number> = {
       trial: 0,
-      starter: 9900, // $99
-      growth: 19900, // $199
-      scale: 49900, // $499
+      starter: 19900, // $199
+      growth: 49900, // $499
+      scale: 99900, // $999
     };
 
     const tenantTiers = await db
@@ -494,8 +494,8 @@ export const adminRouter = router({
         name: "Starter",
         code: "starter",
         description: "Perfect for small teams getting started with AI call coaching",
-        priceMonthly: 9900,
-        priceYearly: 99000,
+        priceMonthly: 19900,
+        priceYearly: 199000,
         trialDays: 14,
         maxUsers: 3,
         maxCallsPerMonth: 500,
@@ -518,8 +518,8 @@ export const adminRouter = router({
         name: "Growth",
         code: "growth",
         description: "For growing teams that need more users and advanced features",
-        priceMonthly: 24900,
-        priceYearly: 249000,
+        priceMonthly: 49900,
+        priceYearly: 499000,
         trialDays: 14,
         maxUsers: 10,
         maxCallsPerMonth: 2000,
@@ -543,8 +543,8 @@ export const adminRouter = router({
         name: "Scale",
         code: "scale",
         description: "Enterprise-grade features for large organizations",
-        priceMonthly: 49900,
-        priceYearly: 499000,
+        priceMonthly: 99900,
+        priceYearly: 999000,
         trialDays: 14,
         maxUsers: 999,
         maxCallsPerMonth: -1,

@@ -23,8 +23,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     name: "Starter",
     code: "starter",
     description: "Perfect for small teams getting started with AI call coaching",
-    priceMonthly: 9900, // $99
-    priceYearly: 99000, // $990 (2 months free)
+    priceMonthly: 19900, // $199
+    priceYearly: 199000, // $1,990 (2 months free)
     maxUsers: 3,
     maxCallsPerMonth: 500,
     maxCrmIntegrations: 1,
@@ -42,8 +42,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     name: "Growth",
     code: "growth",
     description: "For growing teams that need more users and advanced features",
-    priceMonthly: 24900, // $249
-    priceYearly: 249000, // $2,490 (2 months free)
+    priceMonthly: 49900, // $499
+    priceYearly: 499000, // $4,990 (2 months free)
     maxUsers: 10,
     maxCallsPerMonth: 2000,
     maxCrmIntegrations: 2,
@@ -63,8 +63,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     name: "Scale",
     code: "scale",
     description: "Enterprise-grade features for large organizations",
-    priceMonthly: 49900, // $499
-    priceYearly: 499000, // $4,990 (2 months free)
+    priceMonthly: 99900, // $999
+    priceYearly: 999000, // $9,990 (2 months free)
     maxUsers: 999, // Unlimited
     maxCallsPerMonth: -1, // Unlimited
     maxCrmIntegrations: 5,
