@@ -34,6 +34,7 @@ import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LeadGenDashboard from "./pages/LeadGenDashboard";
 import Opportunities from "./pages/Opportunities";
+import CoachActivityLog from "./pages/CoachActivityLog";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 
 // Public routes that don't need DashboardLayout
@@ -67,6 +68,7 @@ function ProtectedRouter() {
       <Route path="/dashboard" component={Home} />
       <Route path="/lead-gen-dashboard" component={LeadGenDashboard} />
       <Route path="/calls" component={CallInbox} />
+      <Route path="/coach-log" component={CoachActivityLog} />
       <Route path="/calls/:id" component={CallDetail} />
       <Route path="/team" component={TeamMembers} />
       <Route path="/analytics" component={Analytics} />

@@ -4643,6 +4643,158 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
         return results;
       }),
 
+    // Admin: Get all coach activity across the team (actions + questions)
+    adminActivityLog: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(200).default(100),
+        offset: z.number().min(0).default(0),
+        teamMemberId: z.number().optional(),
+        actionType: z.string().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const isAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'super_admin' || ctx.user?.isTenantAdmin === 'true';
+        if (!isAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) throw new TRPCError({ code: 'FORBIDDEN' });
+
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return { actions: [], questions: [], total: 0 };
+
+        const { coachActionLog, coachMessages, users } = await import("../drizzle/schema");
+        const { eq, desc, and, gte, lte, sql, count } = await import("drizzle-orm");
+
+        const limit = input?.limit || 100;
+        const offset = input?.offset || 0;
+
+        // Build conditions for actions
+        const actionConditions: any[] = [eq(coachActionLog.tenantId, tenantId)];
+        if (input?.teamMemberId) {
+          actionConditions.push(eq(coachActionLog.requestedBy, input.teamMemberId));
+        }
+        if (input?.actionType) {
+          actionConditions.push(eq(coachActionLog.actionType, input.actionType as any));
+        }
+        if (input?.dateFrom) {
+          actionConditions.push(gte(coachActionLog.createdAt, new Date(input.dateFrom)));
+        }
+        if (input?.dateTo) {
+          actionConditions.push(lte(coachActionLog.createdAt, new Date(input.dateTo)));
+        }
+
+        // Fetch actions with user info
+        const actions = await db
+          .select({
+            id: coachActionLog.id,
+            requestedBy: coachActionLog.requestedBy,
+            requestedByName: coachActionLog.requestedByName,
+            actionType: coachActionLog.actionType,
+            requestText: coachActionLog.requestText,
+            targetContactName: coachActionLog.targetContactName,
+            targetContactId: coachActionLog.targetContactId,
+            payload: coachActionLog.payload,
+            status: coachActionLog.status,
+            error: coachActionLog.error,
+            confirmedAt: coachActionLog.confirmedAt,
+            executedAt: coachActionLog.executedAt,
+            createdAt: coachActionLog.createdAt,
+          })
+          .from(coachActionLog)
+          .where(and(...actionConditions))
+          .orderBy(desc(coachActionLog.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        // Build conditions for questions
+        const questionConditions: any[] = [
+          eq(coachMessages.tenantId, tenantId),
+          eq(coachMessages.role, "user"),
+        ];
+        if (input?.teamMemberId) {
+          questionConditions.push(eq(coachMessages.userId, input.teamMemberId));
+        }
+        if (input?.dateFrom) {
+          questionConditions.push(gte(coachMessages.createdAt, new Date(input.dateFrom)));
+        }
+        if (input?.dateTo) {
+          questionConditions.push(lte(coachMessages.createdAt, new Date(input.dateTo)));
+        }
+
+        // Fetch questions with user info
+        const questions = await db
+          .select({
+            id: coachMessages.id,
+            userId: coachMessages.userId,
+            content: coachMessages.content,
+            exchangeId: coachMessages.exchangeId,
+            createdAt: coachMessages.createdAt,
+          })
+          .from(coachMessages)
+          .where(and(...questionConditions))
+          .orderBy(desc(coachMessages.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        // Get user names for questions
+        const userIds = Array.from(new Set(questions.map(q => q.userId)));
+        let userMap: Record<number, string> = {};
+        if (userIds.length > 0) {
+          const userRows = await db
+            .select({ id: users.id, name: users.name })
+            .from(users)
+            .where(sql`${users.id} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`);
+          for (const u of userRows) {
+            userMap[u.id] = u.name || "Unknown";
+          }
+        }
+
+        // Get AI responses for each exchange
+        const exchangeIds = Array.from(new Set(questions.map(q => q.exchangeId)));
+        let responseMap: Record<string, string> = {};
+        if (exchangeIds.length > 0) {
+          const responses = await db
+            .select({
+              exchangeId: coachMessages.exchangeId,
+              content: coachMessages.content,
+            })
+            .from(coachMessages)
+            .where(and(
+              eq(coachMessages.tenantId, tenantId),
+              eq(coachMessages.role, "assistant"),
+              sql`${coachMessages.exchangeId} IN (${sql.join(exchangeIds.map(id => sql`${id}`), sql`, `)})`
+            ));
+          for (const r of responses) {
+            responseMap[r.exchangeId] = r.content;
+          }
+        }
+
+        const enrichedQuestions = questions.map(q => ({
+          ...q,
+          userName: userMap[q.userId] || "Unknown",
+          aiResponse: responseMap[q.exchangeId] || null,
+        }));
+
+        // Get total counts
+        const [actionCount] = await db
+          .select({ count: count() })
+          .from(coachActionLog)
+          .where(and(...actionConditions));
+        const [questionCount] = await db
+          .select({ count: count() })
+          .from(coachMessages)
+          .where(and(...questionConditions));
+
+        return {
+          actions,
+          questions: enrichedQuestions,
+          totalActions: actionCount?.count || 0,
+          totalQuestions: questionCount?.count || 0,
+        };
+      }),
+
     // Get current user's learned preferences
     getPreferences: protectedProcedure
       .query(async ({ ctx }) => {

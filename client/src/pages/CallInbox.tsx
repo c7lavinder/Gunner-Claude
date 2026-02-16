@@ -36,9 +36,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Tag,
-  Pencil
+  Pencil,
+  ClipboardList
 } from "lucide-react";
-import { Link, useSearch, useLocation } from "wouter";
+import { Link, useSearch, useLocation, useRoute } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -1603,6 +1604,14 @@ export default function CallInbox() {
           <GHLSyncStatus onSyncComplete={handleRefresh} />
           <BatchDialerSyncButton onSyncComplete={handleRefresh} />
           <ManualUploadDialog onSuccess={handleRefresh} />
+          {(user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true') && (
+            <Link href="/coach-log">
+              <Button variant="outline" size="sm" className="h-8 sm:h-9 gap-1.5">
+                <ClipboardList className="h-4 w-4" />
+                <span className="hidden sm:inline">Coach Log</span>
+              </Button>
+            </Link>
+          )}
           <Button 
             variant="outline" 
             size="sm"

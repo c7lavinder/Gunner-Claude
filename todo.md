@@ -2156,3 +2156,14 @@
 - [x] Added defensive actionType validation in frontend createActionCard
 - [x] Added frontend filter to strip invalid actions before processing
 - [x] 2 new vitest tests: validation filter + Daniel's exact pipeline+note request (14/14 passing)
+
+## AI Coach Activity Log (Admin)
+- [x] Create backend endpoint to fetch all coach interactions across team (actions + questions)
+- [x] Build AI Coach Log page with filterable list of all team interactions
+- [x] Add admin-only button in top-right corner of Call Inbox to access the log
+- [x] Show who asked, what they asked, what actions were created, and outcomes
+- [x] Add filtering by team member, date range, and action type
+- [x] Stats cards: total actions, total questions, executed, failed
+- [x] Team usage breakdown showing per-member activity counts
+- [x] Expandable AI responses for coaching questions
+- [x] 10 vitest tests covering admin access, non-admin rejection, filtering, and data shape
