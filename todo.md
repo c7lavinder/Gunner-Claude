@@ -2193,3 +2193,14 @@
 - [x] Added backing_out topic with 20 keywords to both routers.ts and coachStream.ts topic maps
 - [x] Increased training material content limit from 1500 to 4000 chars so full playbook is available to AI
 - [x] 14 vitest tests covering topic mapping, keyword coverage, content limits, and question matching
+
+## Bug Fix: "No opportunity ID available" when changing pipeline stage
+- [x] Fix pipeline stage change failing with "No opportunity ID available" when contact exists but opportunity record isn't found
+- [x] Investigate how opportunity ID is resolved for change_pipeline_stage action
+- [x] Add fallback to search GHL for the contact's opportunity if not found locally
+- [x] Added findOpportunityByContact() — auto-searches GHL for contact's opportunities when no ID provided
+- [x] Added getPipelinesForTenant() and resolveStageByName() — resolves human-readable stage names to pipeline/stage IDs
+- [x] Updated LLM prompt to always include stageName and pipelineName, leave IDs empty for auto-resolution
+- [x] Added pipelineName to LLM JSON schema
+- [x] Friendly error messages: "No opportunity found for this contact" and "Could not find a pipeline stage matching..."
+- [x] 16 vitest tests covering stage name resolution, case insensitivity, partial matching, pipeline filtering, and code path verification

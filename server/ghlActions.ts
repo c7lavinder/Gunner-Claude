@@ -123,6 +123,99 @@ export async function addNoteToOpportunity(
   return { success: true, noteId: data.note?.id || data.id };
 }
 
+// ============ OPPORTUNITY LOOKUP BY CONTACT ============
+
+export async function findOpportunityByContact(
+  tenantId: number,
+  contactId: string
+): Promise<{ opportunityId: string; pipelineId: string; stageId: string; name: string } | null> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return null;
+
+  try {
+    // GHL API: search opportunities filtered by contact_id
+    const data = await ghlFetch(
+      creds,
+      `/opportunities/search?location_id=${creds.locationId}&contact_id=${contactId}&limit=10`,
+      "GET"
+    );
+    const opps = data.opportunities || [];
+    if (opps.length === 0) return null;
+
+    // Return the most recently updated opportunity
+    const sorted = opps.sort((a: any, b: any) => 
+      new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime()
+    );
+    const opp = sorted[0];
+    return {
+      opportunityId: opp.id,
+      pipelineId: opp.pipelineId,
+      stageId: opp.pipelineStageId,
+      name: opp.name || opp.contactName || "Unknown",
+    };
+  } catch (error) {
+    console.error("[GHLActions] Opportunity lookup by contact error:", error);
+    return null;
+  }
+}
+
+// ============ PIPELINE & STAGE RESOLUTION ============
+
+export async function getPipelinesForTenant(
+  tenantId: number
+): Promise<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return [];
+
+  try {
+    const data = await ghlFetch(
+      creds,
+      `/opportunities/pipelines?locationId=${creds.locationId}`,
+      "GET"
+    );
+    return (data.pipelines || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      stages: (p.stages || []).map((s: any) => ({ id: s.id, name: s.name })),
+    }));
+  } catch (error) {
+    console.error("[GHLActions] Pipeline fetch error:", error);
+    return [];
+  }
+}
+
+export function resolveStageByName(
+  pipelines: Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>,
+  stageName: string,
+  pipelineName?: string
+): { pipelineId: string; stageId: string; pipelineName: string; stageName: string } | null {
+  const normalizedStage = stageName.toLowerCase().trim();
+  const normalizedPipeline = pipelineName?.toLowerCase().trim();
+
+  // If pipeline name is specified, search only that pipeline
+  const targetPipelines = normalizedPipeline
+    ? pipelines.filter(p => p.name.toLowerCase().includes(normalizedPipeline))
+    : pipelines;
+
+  for (const pipeline of targetPipelines) {
+    // Try exact match first
+    let stage = pipeline.stages.find(s => s.name.toLowerCase() === normalizedStage);
+    // Then try includes match
+    if (!stage) {
+      stage = pipeline.stages.find(s => s.name.toLowerCase().includes(normalizedStage) || normalizedStage.includes(s.name.toLowerCase()));
+    }
+    if (stage) {
+      return {
+        pipelineId: pipeline.id,
+        stageId: stage.id,
+        pipelineName: pipeline.name,
+        stageName: stage.name,
+      };
+    }
+  }
+  return null;
+}
+
 // ============ ACTION 3: CHANGE PIPELINE STAGE ============
 
 export async function changePipelineStage(
@@ -375,10 +468,48 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         if (!opportunityId) throw new Error("No opportunity ID available.");
         result = await addNoteToOpportunity(action.tenantId, opportunityId, payload.noteBody);
         break;
-      case "change_pipeline_stage":
-        if (!opportunityId) throw new Error("No opportunity ID available.");
-        result = await changePipelineStage(action.tenantId, opportunityId, payload.pipelineId, payload.stageId);
+      case "change_pipeline_stage": {
+        let resolvedOppId = opportunityId;
+        let resolvedPipelineId = payload.pipelineId;
+        let resolvedStageId = payload.stageId;
+
+        // Auto-resolve opportunity ID from contact if not provided
+        if (!resolvedOppId && contactId) {
+          console.log(`[GHLActions] No opportunity ID — looking up opportunities for contact ${contactId}`);
+          const opp = await findOpportunityByContact(action.tenantId, contactId);
+          if (opp) {
+            resolvedOppId = opp.opportunityId;
+            // Use the opportunity's current pipeline if no pipeline specified
+            if (!resolvedPipelineId) resolvedPipelineId = opp.pipelineId;
+            console.log(`[GHLActions] Found opportunity ${resolvedOppId} in pipeline ${resolvedPipelineId}`);
+          }
+        }
+
+        if (!resolvedOppId) {
+          throw new Error("No opportunity found for this contact. The contact may not have a deal in any pipeline yet.");
+        }
+
+        // Auto-resolve stage ID from stage name if not provided or if LLM gave a name instead of ID
+        if ((!resolvedStageId || !resolvedPipelineId) && payload.stageName) {
+          console.log(`[GHLActions] Resolving stage name "${payload.stageName}" to pipeline/stage IDs`);
+          const pipelines = await getPipelinesForTenant(action.tenantId);
+          const resolved = resolveStageByName(pipelines, payload.stageName, payload.pipelineName);
+          if (resolved) {
+            resolvedPipelineId = resolved.pipelineId;
+            resolvedStageId = resolved.stageId;
+            console.log(`[GHLActions] Resolved to pipeline "${resolved.pipelineName}" stage "${resolved.stageName}"`);
+          } else {
+            throw new Error(`Could not find a pipeline stage matching "${payload.stageName}". Please check the stage name and try again.`);
+          }
+        }
+
+        if (!resolvedPipelineId || !resolvedStageId) {
+          throw new Error("Could not determine the target pipeline stage. Please specify the stage name more clearly.");
+        }
+
+        result = await changePipelineStage(action.tenantId, resolvedOppId, resolvedPipelineId, resolvedStageId);
         break;
+      }
       case "send_sms":
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
         result = await sendSms(action.tenantId, contactId, payload.message, requestingUserGhlId);

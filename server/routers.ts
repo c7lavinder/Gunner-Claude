@@ -4377,7 +4377,8 @@ Return JSON with an "actions" array. Each action object has:
 - contactName: the contact name mentioned (or from context). If multiple actions reference the same contact, use the same name for all.
 - contactId: the contact ID if known from context
 - assigneeName: for create_task, the team member name to assign the task to. If the user mentions a specific team member by name, use that name. If no specific person is mentioned, use the current user's name ("${ctx.user!.name || "Unknown"}"). For non-task actions, use empty string.
-- params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, fieldKey, fieldValue)
+- params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, pipelineName, fieldKey, fieldValue)
+- For change_pipeline_stage: ALWAYS include stageName (the human-readable stage name the user mentioned, e.g. "pending appointment", "offer scheduled", "qualified"). Also include pipelineName if the user mentions a specific pipeline (e.g. "sales pipeline", "acquisition pipeline"). Leave pipelineId and stageId empty strings — the system will resolve the actual IDs automatically.
 - summary: a SHORT one-line summary of the action (e.g. "Send SMS to John" or "Add note to Kimberly"). The full content will be shown separately.
 - needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID
 ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descriptions), match this user's established style:\n${preferenceContext}` : ""}`
@@ -4410,13 +4411,14 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
                             dueDate: { type: "string" },
                             tags: { type: "string" },
                             stageName: { type: "string" },
+                            pipelineName: { type: "string" },
                             fieldKey: { type: "string" },
                             fieldValue: { type: "string" },
                             opportunityId: { type: "string" },
                             pipelineId: { type: "string" },
                             stageId: { type: "string" },
                           },
-                          required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId"],
+                          required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId"],
                           additionalProperties: false
                         },
                         assigneeName: { type: "string" },
