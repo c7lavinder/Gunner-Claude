@@ -2092,7 +2092,10 @@
 - [x] Auto-associate new users with their tenant and team member record by email — pending invitations system handles this
 - [x] Build invite email system: admin sends invite during tenant creation, user receives link to set up account
 - [x] Ensure Manus OAuth still works for platform owner (Corey) alongside email/password auth — context.ts falls through to Manus OAuth
-- [ ] Set up Zac Chrisman as admin + acquisition manager for his tenant
+- [x] Set up Zac Chrisman as admin for his tenant (team_members id=300037, tenantId=450029)
 - [x] Fix View as Tenant impersonation: context.ts now reads session cookie for JWT impersonation tokens and overrides tenantId
 - [x] Add "Signals" checkbox to plan features editor in SuperAdmin
 - [ ] Make rubric/methodology editable: allow admins to add/remove grading criteria, change point values, and edit descriptions (customizable rubrics)
+- [x] Fix GHL sync to use name matching fallback when ghlUserId is not set — pass user name from GHL API to matchTeamMember
+- [x] Auto-persist ghlUserId on team member record after first successful name match
+- [x] Add GHL users API lookup during tenant setup to pre-link team members

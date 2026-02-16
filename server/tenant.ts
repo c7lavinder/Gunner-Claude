@@ -520,16 +520,60 @@ export async function setupTenant(data: {
 
   const tenantId = newTenant.id;
 
+  // Fetch GHL users for auto-linking if CRM is connected
+  let ghlUserMap = new Map<string, string>(); // name -> ghlUserId
+  if (data.crmConfig?.ghlApiKey && data.crmConfig?.ghlLocationId) {
+    try {
+      const GHL_API_BASE = "https://services.leadconnectorhq.com";
+      const url = new URL(`${GHL_API_BASE}/users/search`);
+      url.searchParams.set("locationId", data.crmConfig.ghlLocationId);
+      const response = await fetch(url.toString(), {
+        headers: {
+          "Authorization": `Bearer ${data.crmConfig.ghlApiKey}`,
+          "Version": "2021-07-28",
+        },
+      });
+      if (response.ok) {
+        const ghlData = await response.json() as { users?: Array<{ id: string; name?: string; firstName?: string; lastName?: string }> };
+        if (ghlData.users) {
+          for (const u of ghlData.users) {
+            const name = u.name || [u.firstName, u.lastName].filter(Boolean).join(" ");
+            if (name && u.id) {
+              ghlUserMap.set(name.toLowerCase(), u.id);
+            }
+          }
+          console.log(`[Tenant] Fetched ${ghlUserMap.size} GHL users for auto-linking`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[Tenant] Failed to fetch GHL users for auto-linking:`, e);
+    }
+  }
+
   // Create team members and send invites if provided
   const invitesSent: string[] = [];
   if (data.teamMembers && data.teamMembers.length > 0) {
     for (const member of data.teamMembers) {
+      // Auto-link GHL user by name matching
+      let ghlUserId: string | undefined;
+      const memberNameLower = member.name.toLowerCase();
+      const ghlEntries = Array.from(ghlUserMap.entries());
+      for (let i = 0; i < ghlEntries.length; i++) {
+        const [ghlName, ghlId] = ghlEntries[i];
+        if (ghlName.includes(memberNameLower) || memberNameLower.includes(ghlName)) {
+          ghlUserId = ghlId;
+          console.log(`[Tenant] Auto-linked "${member.name}" to GHL userId ${ghlId}`);
+          break;
+        }
+      }
+
       // Create team member record
       await db.insert(teamMembers).values({
         name: member.name,
         teamRole: member.teamRole,
         tenantId,
         isActive: 'true',
+        ...(ghlUserId ? { ghlUserId } : {}),
       });
 
       // If email provided, send an invite

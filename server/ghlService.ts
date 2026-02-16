@@ -123,7 +123,78 @@ interface ProcessedGHLCall {
   duration: number;
   hasRecording: boolean;
   userId?: string;
+  userName?: string; // GHL user's display name for name-based matching
   dateAdded: string;
+}
+
+// Cache of GHL user ID → name mappings per tenant
+const ghlUserNameCache = new Map<number, Map<string, string>>();
+
+/**
+ * Fetch GHL users for a location to get userId → name mappings.
+ * Uses the GHL Users API: GET /users/search?locationId=xxx
+ */
+async function fetchGHLUserNames(tenantId: number): Promise<Map<string, string>> {
+  // Return cached if available
+  if (ghlUserNameCache.has(tenantId)) {
+    return ghlUserNameCache.get(tenantId)!;
+  }
+
+  const creds = getActiveCredentials();
+  const userMap = new Map<string, string>();
+
+  try {
+    const url = new URL(`${GHL_API_BASE}/users/search`);
+    url.searchParams.set("locationId", creds.locationId);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        "Authorization": `Bearer ${creds.apiKey}`,
+        "Version": "2021-07-28",
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json() as { users?: Array<{ id: string; name?: string; firstName?: string; lastName?: string }> };
+      if (data.users) {
+        for (const user of data.users) {
+          const name = user.name || [user.firstName, user.lastName].filter(Boolean).join(" ");
+          if (name && user.id) {
+            userMap.set(user.id, name);
+          }
+        }
+        console.log(`[GHL] Fetched ${userMap.size} user names for tenant ${tenantId}`);
+      }
+    } else {
+      console.warn(`[GHL] Failed to fetch users for tenant ${tenantId}: ${response.status}`);
+    }
+  } catch (e) {
+    console.warn(`[GHL] Error fetching users for tenant ${tenantId}:`, e);
+  }
+
+  ghlUserNameCache.set(tenantId, userMap);
+  // Clear cache after 10 minutes
+  setTimeout(() => ghlUserNameCache.delete(tenantId), 10 * 60 * 1000);
+  return userMap;
+}
+
+/**
+ * Persist ghlUserId on a team member after a successful name match.
+ * This ensures future lookups are instant by GHL user ID.
+ * Uses dynamic imports to avoid circular dependency with schema imports.
+ */
+async function linkTeamMemberGhlUserId(teamMemberId: number, ghlUserId: string): Promise<void> {
+  try {
+    const { getDb: getDatabase } = await import("./db");
+    const { teamMembers: teamMembersTable } = await import("../drizzle/schema");
+    const { eq: eqOp } = await import("drizzle-orm");
+    const db = await getDatabase();
+    if (!db) return;
+    await db.update(teamMembersTable).set({ ghlUserId }).where(eqOp(teamMembersTable.id, teamMemberId));
+    console.log(`[GHL] Auto-linked team member ${teamMemberId} to GHL userId ${ghlUserId}`);
+  } catch (e) {
+    console.warn(`[GHL] Failed to persist ghlUserId for team member ${teamMemberId}:`, e);
+  }
 }
 
 // Store last poll timestamp in memory (could be persisted to DB for production)
@@ -402,10 +473,24 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
   }
 
   // Match team member (scoped to the active tenant)
+  // Try by GHL user ID first, then fall back to name matching
   const creds = getActiveCredentials();
-  const teamMember = await matchTeamMember(ghlCall.userId, undefined, creds.tenantId);
+  let teamMember = await matchTeamMember(ghlCall.userId, undefined, creds.tenantId);
+  
+  // If no match by userId, try name matching using the GHL user's display name
+  if (!teamMember && ghlCall.userId) {
+    const userName = ghlCall.userName || (await fetchGHLUserNames(creds.tenantId)).get(ghlCall.userId);
+    if (userName) {
+      teamMember = await matchTeamMember(undefined, userName, creds.tenantId);
+      // Auto-persist the ghlUserId so future lookups are instant
+      if (teamMember) {
+        await linkTeamMemberGhlUserId(teamMember.id, ghlCall.userId);
+      }
+    }
+  }
+  
   if (!teamMember) {
-    console.log(`[GHL] Could not match team member for call ${ghlCall.id} (userId: ${ghlCall.userId})`);
+    console.log(`[GHL] Could not match team member for call ${ghlCall.id} (userId: ${ghlCall.userId}, userName: ${ghlCall.userName || 'unknown'})`);
     return { success: true, skipped: true, reason: "Could not match team member" };
   }
 
@@ -784,7 +869,7 @@ export function setLastPollTimestamp(timestamp: Date): void {
 
 // ============ OPPORTUNITY POLLING FOR CLOSER BADGE ============
 
-import { deals, calls } from "../drizzle/schema";
+import { deals, calls, teamMembers } from "../drizzle/schema";
 import { getDb } from "./db";
 import { eq } from "drizzle-orm";
 import { updateBadgeProgress, awardBadge, ALL_BADGES } from "./gamification";

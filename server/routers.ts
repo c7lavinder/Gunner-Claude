@@ -3358,6 +3358,39 @@ Create content that:
         }
       }),
 
+    // Fetch GHL users for a location to auto-link team members
+    fetchGhlUsers: protectedProcedure
+      .input(z.object({
+        apiKey: z.string().min(1),
+        locationId: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const GHL_API_BASE = "https://services.leadconnectorhq.com";
+        try {
+          const url = new URL(`${GHL_API_BASE}/users/search`);
+          url.searchParams.set("locationId", input.locationId);
+          const response = await fetch(url.toString(), {
+            headers: {
+              "Authorization": `Bearer ${input.apiKey}`,
+              "Version": "2021-07-28",
+            },
+          });
+          if (!response.ok) {
+            return { success: false, users: [], error: `Failed to fetch users (${response.status})` };
+          }
+          const data = await response.json() as { users?: Array<{ id: string; name?: string; firstName?: string; lastName?: string; email?: string; role?: string }> };
+          const users = (data.users || []).map((u: any) => ({
+            id: u.id,
+            name: u.name || [u.firstName, u.lastName].filter(Boolean).join(" "),
+            email: u.email || "",
+            role: u.role || "",
+          }));
+          return { success: true, users };
+        } catch (error: any) {
+          return { success: false, users: [], error: error.message };
+        }
+      }),
+
     // Save pipeline stage mapping for a tenant
     savePipelineMapping: protectedProcedure
       .input(z.object({
