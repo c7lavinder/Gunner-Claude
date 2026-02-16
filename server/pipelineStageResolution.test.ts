@@ -134,6 +134,42 @@ describe("resolveStageByName - Pipeline filtering", () => {
   });
 });
 
+describe("resolveStageByName - Fuzzy pipeline name matching (Daniel's bug)", () => {
+  it("'sales pipeline' matches pipeline 'Sales Process' (word overlap)", () => {
+    const result = resolveStageByName(mockPipelines, "pending apt", "sales pipeline");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_pending");
+    expect(result!.pipelineId).toBe("pipeline_sales");
+  });
+
+  it("'pending appointment' with 'sales pipeline' matches 'Pending Apt(3)' in 'Sales Process'", () => {
+    const result = resolveStageByName(mockPipelines, "pending appointment", "sales pipeline");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_pending");
+    expect(result!.pipelineId).toBe("pipeline_sales");
+  });
+
+  it("'dispo' matches pipeline 'Dispo Pipeline'", () => {
+    const result = resolveStageByName(mockPipelines, "New Deal", "dispo");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("dispo_new");
+    expect(result!.pipelineId).toBe("pipeline_dispo");
+  });
+
+  it("completely wrong pipeline name falls back to all pipelines", () => {
+    const result = resolveStageByName(mockPipelines, "New Lead", "nonexistent pipeline");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_new");
+  });
+
+  it("'sales' alone matches 'Sales Process'", () => {
+    const result = resolveStageByName(mockPipelines, "Qualified", "sales");
+    expect(result).not.toBeNull();
+    expect(result!.stageId).toBe("stage_qualified");
+    expect(result!.pipelineId).toBe("pipeline_sales");
+  });
+});
+
 describe("resolveStageByName - Edge cases", () => {
   it("returns null for non-existent stage", () => {
     const result = resolveStageByName(mockPipelines, "nonexistent stage");

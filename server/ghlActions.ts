@@ -326,12 +326,27 @@ export function resolveStageByName(
   const normalizedPipeline = pipelineName?.toLowerCase().trim();
 
   // If pipeline name is specified, search only that pipeline
+  // Use fuzzy word matching: "sales pipeline" should match "Sales Process" (both contain "sales")
+  // Also handles exact substring match as fallback
   const targetPipelines = normalizedPipeline
-    ? pipelines.filter(p => p.name.toLowerCase().includes(normalizedPipeline))
+    ? pipelines.filter(p => {
+        const pName = p.name.toLowerCase();
+        // Exact substring match
+        if (pName.includes(normalizedPipeline) || normalizedPipeline.includes(pName)) return true;
+        // Fuzzy word match: check if any significant word from the input matches any word in the pipeline name
+        const inputWords = normalizedPipeline.split(/\s+/).filter(w => !['pipeline', 'pipe', 'the', 'a', 'in'].includes(w));
+        const pipelineWords = pName.split(/\s+/).filter(w => !['pipeline', 'pipe', 'the', 'a', 'in'].includes(w));
+        // At least one significant word must match
+        return inputWords.some(iw => pipelineWords.some(pw => pw.includes(iw) || iw.includes(pw)));
+      })
     : pipelines;
 
+  // If pipeline filter returned no results but a name was specified, fall back to searching all pipelines
+  // This prevents complete failure when the LLM gives an incorrect pipeline name
+  const searchPipelines = targetPipelines.length > 0 ? targetPipelines : pipelines;
+
   // Pass 1: Exact match on raw name
-  for (const pipeline of targetPipelines) {
+  for (const pipeline of searchPipelines) {
     const stage = pipeline.stages.find(s => s.name.toLowerCase() === normalizedStage);
     if (stage) {
       return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };
@@ -339,7 +354,7 @@ export function resolveStageByName(
   }
 
   // Pass 2: Exact match after stripping parenthetical content (e.g., "Pending Apt(3)" → "Pending Apt")
-  for (const pipeline of targetPipelines) {
+  for (const pipeline of searchPipelines) {
     const stage = pipeline.stages.find(s => stripParenthetical(s.name).toLowerCase() === normalizedStage);
     if (stage) {
       return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };
@@ -348,7 +363,7 @@ export function resolveStageByName(
 
   // Pass 3: Fuzzy match with abbreviation expansion (e.g., "pending appointment" ↔ "Pending Apt(3)")
   // This runs BEFORE substring includes to prevent false positives like "disqualified" matching "Qualified"
-  for (const pipeline of targetPipelines) {
+  for (const pipeline of searchPipelines) {
     const stage = pipeline.stages.find(s => {
       const strippedActual = stripParenthetical(s.name);
       return fuzzyStageMatch(normalizedStage, strippedActual);
@@ -360,7 +375,7 @@ export function resolveStageByName(
 
   // Pass 4: Abbreviation-expanded exact word match — check if input abbreviation matches a stage
   // e.g., "disqualified" → abbreviation "dq" matches stage "DQ'd" → abbreviation "dq"
-  for (const pipeline of targetPipelines) {
+  for (const pipeline of searchPipelines) {
     const inputVariants = new Set(normalizedStage.split(/\s+/).flatMap(w => expandWord(w)));
     const stage = pipeline.stages.find(s => {
       const strippedActual = stripParenthetical(s.name).toLowerCase();
@@ -378,7 +393,7 @@ export function resolveStageByName(
 
   // Pass 5: Includes match — only allow when the shorter string is a meaningful prefix/substring
   // Require the shorter string to be at least 60% the length of the longer to prevent false positives
-  for (const pipeline of targetPipelines) {
+  for (const pipeline of searchPipelines) {
     const strippedInput = stripParenthetical(normalizedStage);
     const stage = pipeline.stages.find(s => {
       const strippedActual = stripParenthetical(s.name).toLowerCase();

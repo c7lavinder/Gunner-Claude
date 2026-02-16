@@ -1,0 +1,27 @@
+{
+  "query": "SELECT * FROM users WHERE name LIKE '%Daniel%' OR name LIKE '%Lozano%' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT * FROM users WHERE name LIKE '%Daniel%' OR name LIKE '%Lozano%' LIMIT 5;",
+  "rows": [
+    {
+      "id": "840050",
+      "tenantId": "1",
+      "openId": "google_102548071968977930576",
+      "name": "Daniel Lozano",
+      "email": "Alvarez.lozano@hotmail.com",
+      "loginMethod": "google",
+      "role": "user",
+      "createdAt": "2026-02-12 20:28:06",
+      "updatedAt": "2026-02-13 17:07:06",
+      "lastSignedIn": "2026-02-13 17:07:07",
+      "teamRole": "lead_manager",
+      "profilePicture": "https://lh3.googleusercontent.com/a/ACg8ocLA5lRXYW6JfCrnXBHqCrq-dTsRt620lDo1Czfee1gy3synuhTy=s96-c",
+      "isTenantAdmin": "false",
+      "passwordHash": "$2b$12$y/d1kgndIixGo.n31Gnhyu2lwde61L96gdJEctQePyMLeTUTbEC9K",
+      "emailVerified": "false"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\topenId\tname\temail\tloginMethod\trole\tcreatedAt\tupdatedAt\tlastSignedIn\tteamRole\tprofilePicture\tisTenantAdmin\tpasswordHash\temailVerified\n840050\t1\tgoogle_102548071968977930576\tDaniel Lozano\tAlvarez.lozano@hotmail.com\tgoogle\tuser\t2026-02-12 20:28:06\t2026-02-13 17:07:06\t2026-02-13 17:07:07\tlead_manager\thttps://lh3.googleusercontent.com/a/ACg8ocLA5lRXYW6JfCrnXBHqCrq-dTsRt620lDo1Czfee1gy3synuhTy=s96-c\tfalse\t$2b$12$y/d1kgndIixGo.n31Gnhyu2lwde61L96gdJEctQePyMLeTUTbEC9K\tfalse\n",
+  "stderr": "",
+  "execution_time_ms": 345
+}

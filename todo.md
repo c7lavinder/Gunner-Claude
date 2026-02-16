@@ -2223,3 +2223,9 @@
 - [x] Fixed "disqualified" → "DQ'd" matching with abbreviation-expanded exact word match (Pass 4)
 - [x] Added 60% length ratio guard on substring includes (Pass 5) to prevent false positives
 - [x] All 19 pipeline stage resolution tests pass
+
+## Bug Fix: Pipeline stage matching fails in production for Daniel
+- [x] "pending appointment" and "pending apt" both fail with "Could not find a pipeline stage matching" error
+- [x] Tests pass but production execution fails — ROOT CAUSE: LLM returns pipelineName="sales pipeline" but actual GHL name is "Sales Process". Pipeline filter used exact substring match which failed.
+- [x] Traced executeAction path — pipeline filter on line 330 was using .includes() which fails for "sales pipeline" vs "Sales Process"
+- [x] Fixed: Pipeline name matching now uses fuzzy word overlap ("sales" matches "Sales Process") + fallback to all pipelines if no match. 24/24 tests pass.
