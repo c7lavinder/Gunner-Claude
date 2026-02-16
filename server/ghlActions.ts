@@ -661,10 +661,21 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
         result = await addNoteToContact(action.tenantId, contactId, payload.noteBody);
         break;
-      case "add_note_opportunity":
-        if (!opportunityId) throw new Error("No opportunity ID available.");
-        result = await addNoteToOpportunity(action.tenantId, opportunityId, payload.noteBody);
+      case "add_note_opportunity": {
+        let resolvedNoteOppId = opportunityId;
+        // Auto-resolve opportunity ID from contact if not provided
+        if (!resolvedNoteOppId && contactId) {
+          console.log(`[GHLActions] add_note_opportunity: No opportunity ID — looking up for contact ${contactId}`);
+          const opp = await findOpportunityByContact(action.tenantId, contactId);
+          if (opp) {
+            resolvedNoteOppId = opp.opportunityId;
+            console.log(`[GHLActions] add_note_opportunity: Found opportunity ${resolvedNoteOppId}`);
+          }
+        }
+        if (!resolvedNoteOppId) throw new Error("No opportunity found for this contact. The contact may not have a deal in any pipeline yet.");
+        result = await addNoteToOpportunity(action.tenantId, resolvedNoteOppId, payload.noteBody);
         break;
+      }
       case "change_pipeline_stage": {
         let resolvedOppId = opportunityId;
         let resolvedPipelineId = payload.pipelineId;
