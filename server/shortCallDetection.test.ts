@@ -43,7 +43,11 @@ function detectSignals(transcript: string): string[] {
   if (hasReferral) signals.push("referral");
   
   const phoneMatch = transcript.match(PHONE_PATTERN);
-  if (hasReferral && phoneMatch) signals.push(`phone:${phoneMatch[0]}`);
+  if (hasReferral && phoneMatch) {
+    signals.push(`phone:${phoneMatch[0]}`);
+  } else if (phoneMatch) {
+    signals.push(`phone:${phoneMatch[0]}`);
+  }
   
   const hasCallback = CALLBACK_PATTERNS.some(p => p.test(transcript));
   if (hasCallback) signals.push("callback");
@@ -226,6 +230,54 @@ describe("Rule 17: Short Call — Actionable Intel", () => {
       const signals = detectSignals(transcript);
       expect(signals).toContain("referral");
       expect(signals.some(s => s.startsWith("phone:"))).toBe(true);
+    });
+  });
+
+  describe("Voicemail signals", () => {
+    it("should detect email in a voicemail transcript", () => {
+      const transcript = "Hi, this is Mary. I got your letter about my house on Oak Street. You can reach me at mary.jones@gmail.com. Thanks.";
+      const signals = detectSignals(transcript);
+      expect(signals.some(s => s.startsWith("email:"))).toBe(true);
+    });
+
+    it("should detect callback number in a voicemail", () => {
+      const transcript = "Hey this is Bob. Talk to my wife about the house, her number is 615-555-9876.";
+      const signals = detectSignals(transcript);
+      expect(signals).toContain("referral");
+      expect(signals.some(s => s.startsWith("phone:"))).toBe(true);
+    });
+
+    it("should detect standalone phone number in a voicemail", () => {
+      const transcript = "Hi, this is Bob returning your call about the property on Main. You can reach me at 615-555-9876 when you get a chance.";
+      const signals = detectSignals(transcript);
+      // Standalone phone without referral context — still detected as a phone signal
+      expect(signals.some(s => s.startsWith("phone:"))).toBe(true);
+    });
+
+    it("should detect interest signal in a voicemail", () => {
+      const transcript = "I got your postcard about buying houses. I might be interested in selling my place. Call me back.";
+      const signals = detectSignals(transcript);
+      expect(signals).toContain("interest");
+    });
+
+    it("should detect referral in a voicemail", () => {
+      const transcript = "Hi, my mother owns the house at 456 Elm. She's thinking about selling. You should talk to my mother about it. Her name is Susan.";
+      const signals = detectSignals(transcript);
+      expect(signals).toContain("referral");
+    });
+
+    it("should detect callback request in a voicemail", () => {
+      const transcript = "This is Jim. I saw your sign. Can you call me back on Tuesday? I want to discuss the offer.";
+      const signals = detectSignals(transcript);
+      expect(signals).toContain("callback");
+    });
+
+    it("should detect multiple signals in a voicemail", () => {
+      const transcript = "Hi this is Linda. I'm thinking about selling my house on Maple Drive. My husband handles all the paperwork though. His email is rhenderson@yahoo.com. Call us back when you can.";
+      const signals = detectSignals(transcript);
+      expect(signals.length).toBeGreaterThanOrEqual(2);
+      expect(signals).toContain("interest");
+      expect(signals.some(s => s.startsWith("email:"))).toBe(true);
     });
   });
 

@@ -2127,8 +2127,8 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
     tier: "at_risk"
   },
   short_call_actionable_intel: {
-    label: "Short Call — Actionable Info Captured",
-    context: "A short call (under 60 seconds) was auto-skipped from grading, but the transcript contains actionable intelligence: contact info for an alternate person (email, phone), a referral to a decision-maker (spouse, partner, attorney), a callback/scheduling request, or clear interest signals. This call needs manual review to capture the lead.",
+    label: "Short Call / Voicemail \u2014 Actionable Info Captured",
+    context: "A short call, voicemail, or callback request was auto-skipped from grading, but the transcript contains actionable intelligence: contact info for an alternate person (email, phone), a referral to a decision-maker (spouse, partner, attorney), a callback/scheduling request, or clear interest signals. This call needs manual review to capture the lead.",
     tier: "possible"
   },
 };
@@ -2432,14 +2432,14 @@ async function detectShortCallActionableIntel(
   const results: DetectedOpportunity[] = [];
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  // Get recent short/skipped calls that have transcripts
+  // Get recent short/skipped calls AND voicemails that have transcripts
   const shortCalls = await db
     .select()
     .from(calls)
     .where(
       and(
         eq(calls.tenantId, tenantId),
-        eq(calls.classification, "too_short"),
+        sql`${calls.classification} IN ('too_short', 'voicemail', 'callback_request')`,
         gte(calls.callTimestamp, sevenDaysAgo),
         sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
       )
@@ -2463,7 +2463,7 @@ async function detectShortCallActionableIntel(
       priorityBoost += 15;
     }
 
-    // 2. Phone number for alternate contact (look for a phone number in the context of a referral)
+    // 2. Phone number for alternate contact or callback number
     const hasReferral = REFERRAL_PATTERNS.some(p => p.test(transcript));
     const phoneMatch = transcript.match(PHONE_PATTERN);
     if (hasReferral) {
@@ -2473,6 +2473,10 @@ async function detectShortCallActionableIntel(
         signals.push(`Alternate phone provided: ${phoneMatch[0]}`);
         priorityBoost += 5;
       }
+    } else if (phoneMatch) {
+      // Standalone phone number in voicemail — seller left a callback number
+      signals.push(`Callback phone provided: ${phoneMatch[0]}`);
+      priorityBoost += 5;
     }
 
     // 3. Callback / scheduling request
@@ -2526,9 +2530,8 @@ async function detectShortCallActionableIntel(
 
     // Build excerpt with the classification reason (AI summary) and signals
     const summary = call.classificationReason || "";
-    const excerpt = `[Short call ${call.duration || "?"}s — ${signals.join("; ")}] ${summary}`.substring(0, 500);
-
-    results.push({
+    const callTypeLabel = call.classification === "voicemail" ? "Voicemail" : call.classification === "callback_request" ? "Callback" : `Short call ${call.duration || "?"}s`;
+    const excerpt = `[${callTypeLabel} \u2014 ${signals.join("; ")}] ${summary}`.substring(0, 500); results.push({
       tier: "possible",
       triggerRules: ["short_call_actionable_intel"],
       priorityScore: Math.min(50 + priorityBoost, 80),

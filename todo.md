@@ -2267,3 +2267,10 @@
 - [x] Add Rule 17: Scan short/skipped calls for actionable content (email, phone, referral, scheduling intent, property details)
 - [x] Example: Gary Tallman call (0:47, Too Short, skipped) — wife provided husband's email for follow-up
 - [x] Test with real examples — 30/30 pattern matching tests pass
+
+## Feature: Extend Rule 17 to voicemail classifications
+- [x] Update Rule 17 query to include voicemail-classified calls alongside too_short/skipped (also includes callback_request)
+- [x] Voicemails may contain callback numbers, interest signals, or referrals
+- [x] Added standalone phone number detection for voicemails where seller leaves a callback number
+- [x] Updated excerpt labels: "Voicemail", "Callback", or "Short call Xs" depending on classification
+- [x] Update tests to cover voicemail scenarios — 37/37 tests pass (7 new voicemail-specific tests)
