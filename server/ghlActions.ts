@@ -358,12 +358,37 @@ export function resolveStageByName(
     }
   }
 
-  // Pass 4: Includes match (either direction) on stripped names — broadest match, last resort
+  // Pass 4: Abbreviation-expanded exact word match — check if input abbreviation matches a stage
+  // e.g., "disqualified" → abbreviation "dq" matches stage "DQ'd" → abbreviation "dq"
+  for (const pipeline of targetPipelines) {
+    const inputVariants = new Set(normalizedStage.split(/\s+/).flatMap(w => expandWord(w)));
+    const stage = pipeline.stages.find(s => {
+      const strippedActual = stripParenthetical(s.name).toLowerCase();
+      const actualVariants = new Set(strippedActual.split(/\s+/).flatMap(w => expandWord(w)));
+      // Check if any input variant exactly matches any actual variant
+      for (const iv of Array.from(inputVariants)) {
+        if (actualVariants.has(iv)) return true;
+      }
+      return false;
+    });
+    if (stage) {
+      return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };
+    }
+  }
+
+  // Pass 5: Includes match — only allow when the shorter string is a meaningful prefix/substring
+  // Require the shorter string to be at least 60% the length of the longer to prevent false positives
   for (const pipeline of targetPipelines) {
     const strippedInput = stripParenthetical(normalizedStage);
     const stage = pipeline.stages.find(s => {
       const strippedActual = stripParenthetical(s.name).toLowerCase();
-      return strippedActual.includes(strippedInput) || strippedInput.includes(strippedActual);
+      if (strippedActual.includes(strippedInput) || strippedInput.includes(strippedActual)) {
+        const shorter = Math.min(strippedActual.length, strippedInput.length);
+        const longer = Math.max(strippedActual.length, strippedInput.length);
+        // Only match if the shorter string is at least 60% the length of the longer
+        return shorter / longer >= 0.6;
+      }
+      return false;
     });
     if (stage) {
       return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };

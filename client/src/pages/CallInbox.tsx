@@ -342,7 +342,7 @@ function FeedbackCard({
 type ConversationMessage = 
   | { role: "user"; content: string }
   | { role: "assistant"; content: string }
-  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number };
+  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number; resolvedStage?: { pipelineName: string; stageName: string } };
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
   add_note_contact: "Add Note to Contact",
@@ -451,6 +451,7 @@ function AICoachQA() {
   const createPendingMutation = trpc.coachActions.createPending.useMutation();
   const confirmExecuteMutation = trpc.coachActions.confirmAndExecute.useMutation();
   const cancelActionMutation = trpc.coachActions.cancel.useMutation();
+  const coachUtils = trpc.useUtils();
 
   const handleAsk = async () => {
     if (!question.trim()) return;
@@ -534,6 +535,25 @@ function AICoachQA() {
         setConversation(prev => [...prev, { role: "assistant", content: `I couldn't determine the action type for: ${intent.summary || "unknown action"}. Please try rephrasing your request.` }]);
         return;
       }
+
+      // For pipeline stage changes, pre-resolve the stage name for confirmation
+      let resolvedStage: { pipelineName: string; stageName: string } | undefined;
+      if (intent.actionType === "change_pipeline_stage" && intent.params?.stageName) {
+        try {
+          const stageResult = await coachUtils.coachActions.resolveStage.fetch({
+            stageName: intent.params.stageName,
+            pipelineName: intent.params.pipelineName || undefined,
+            contactId: intent.contactId || undefined,
+          });
+          if (stageResult.resolved) {
+            resolvedStage = { pipelineName: stageResult.pipelineName!, stageName: stageResult.stageName! };
+          }
+        } catch (e) {
+          // Non-blocking — if resolution fails, card still shows without resolved name
+          console.warn("Stage resolution failed:", e);
+        }
+      }
+
       const result = await createPendingMutation.mutateAsync({
         actionType: intent.actionType,
         requestText: userMessage,
@@ -551,6 +571,7 @@ function AICoachQA() {
         status: "pending",
         payload: { ...intent.params, assigneeName: intent.assigneeName || "" },
         ...(batchTotal && batchTotal > 1 ? { batchIndex, batchTotal } : {}),
+        ...(resolvedStage ? { resolvedStage } : {}),
       }]);
     } catch (error: any) {
       // Show a friendly error message instead of raw Zod/tRPC errors
@@ -839,6 +860,18 @@ function AICoachQA() {
                           </div>
                           {msg.contactName && (
                             <p className="text-xs text-muted-foreground mt-0.5">Contact: {msg.contactName}</p>
+                          )}
+                          {/* Show resolved pipeline stage for confirmation */}
+                          {msg.actionType === "change_pipeline_stage" && msg.resolvedStage && (
+                            <div className="mt-1 flex items-center gap-1.5 text-xs bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md px-2 py-1">
+                              <span className="text-blue-600 dark:text-blue-400">→</span>
+                              <span className="font-medium text-blue-700 dark:text-blue-300">{msg.resolvedStage.stageName}</span>
+                              <span className="text-blue-500 dark:text-blue-500">in</span>
+                              <span className="font-medium text-blue-700 dark:text-blue-300">{msg.resolvedStage.pipelineName}</span>
+                            </div>
+                          )}
+                          {msg.actionType === "change_pipeline_stage" && !msg.resolvedStage && msg.status === "pending" && (
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">⚠ Stage will be resolved when executed</p>
                           )}
                           {/* Show draft content preview */}
                           {msg.status === "pending" && isEditableAction(msg.actionType) && msg.payload ? (

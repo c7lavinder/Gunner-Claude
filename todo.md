@@ -2214,3 +2214,12 @@
 - [x] Add filler word filtering ("stage", "the", "to", etc.)
 - [x] Prevent false positives with strict bidirectional matching and prefix-only short-word matching
 - [x] 19 vitest tests covering Daniel's exact scenarios, abbreviations, parenthetical stripping, and edge cases
+
+## Confirmation with Resolved Stage Name
+- [x] Before executing pipeline stage change, resolve the stage name and show actual matched name on confirmation card
+- [x] Show "→ Pending Apt(3) in Sales Process" blue pill on confirmation card
+- [x] Added resolveStage backend endpoint to pre-resolve stage names
+- [x] Amber warning if stage can't be pre-resolved
+- [x] Fixed "disqualified" → "DQ'd" matching with abbreviation-expanded exact word match (Pass 4)
+- [x] Added 60% length ratio guard on substring includes (Pass 5) to prevent false positives
+- [x] All 19 pipeline stage resolution tests pass

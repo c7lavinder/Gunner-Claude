@@ -4630,6 +4630,30 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
         return { success: true };
       }),
 
+    // Resolve a stage name to the actual GHL pipeline/stage for confirmation
+    resolveStage: protectedProcedure
+      .input(z.object({
+        stageName: z.string(),
+        pipelineName: z.string().optional(),
+        contactId: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) return { resolved: false as const };
+        const { getPipelinesForTenant, resolveStageByName } = await import("./ghlActions");
+        const pipelines = await getPipelinesForTenant(tenantId);
+        if (!pipelines.length) return { resolved: false as const, error: "No pipelines found" };
+        const result = resolveStageByName(pipelines, input.stageName, input.pipelineName);
+        if (!result) return { resolved: false as const, error: `Could not find a stage matching "${input.stageName}"` };
+        return {
+          resolved: true as const,
+          pipelineId: result.pipelineId,
+          pipelineName: result.pipelineName,
+          stageId: result.stageId,
+          stageName: result.stageName,
+        };
+      }),
+
     // Get action history (audit log)
     history: protectedProcedure
       .input(z.object({
