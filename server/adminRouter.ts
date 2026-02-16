@@ -296,7 +296,7 @@ export const adminRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
       const { startImpersonation } = await import("./impersonation");
-      const { getSessionCookieOptions } = await import("./_core/cookies");
+      const { getImpersonationCookieOptions } = await import("./_core/cookies");
       // Get the tenant to impersonate
       const [tenant] = await db
         .select()
@@ -320,7 +320,7 @@ export const adminRouter = router({
       if (!result.success || !result.token) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'Failed to start impersonation' });
       }
-      ctx.res.cookie('session', result.token, getSessionCookieOptions(ctx.req));
+      ctx.res.cookie('session', result.token, getImpersonationCookieOptions(ctx.req));
       // Return the impersonation data - the client will store this in localStorage for the banner
       return {
         success: true,
@@ -646,19 +646,12 @@ export const adminRouter = router({
 
   // Stop impersonating a tenant - clears the session cookie
   stopImpersonation: superAdminProcedure.mutation(async ({ ctx }) => {
-    const { stopImpersonation } = await import("./impersonation");
-    const { getSessionCookieOptions } = await import("./_core/cookies");
     if (!ctx.user?.id) {
       throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' });
     }
-    const result = await stopImpersonation(ctx.user.id);
-    if (result.token) {
-      // Set the regular (non-impersonation) session token
-      ctx.res.cookie('session', result.token, getSessionCookieOptions(ctx.req));
-    } else {
-      // Clear the session cookie entirely
-      ctx.res.clearCookie('session');
-    }
+    // Clear the impersonation session cookie entirely
+    // The user's original auth (auth_token or app_session_id) will take over
+    ctx.res.clearCookie('session', { path: '/' });
     return { success: true };
   }),
 });

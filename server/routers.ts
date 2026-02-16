@@ -111,7 +111,20 @@ export const appRouter = router({
   admin: adminRouter,
   
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(opts => {
+      const user = opts.ctx.user;
+      if (!user) return null;
+      // Expose impersonation metadata as proper fields (set by context.ts during super_admin impersonation)
+      const isImpersonating = (user as any)._isImpersonating === true;
+      const impersonatedTenantName = (user as any)._impersonatedTenantName || null;
+      const originalTenantId = (user as any)._originalTenantId || null;
+      return {
+        ...user,
+        _isImpersonating: isImpersonating,
+        _impersonatedTenantName: impersonatedTenantName,
+        _originalTenantId: originalTenantId,
+      };
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -3856,20 +3869,12 @@ Create content that:
 
     // Super Admin: Stop impersonating and return to normal view
     stopImpersonation: protectedProcedure.mutation(async ({ ctx }) => {
-      const { stopImpersonation } = await import("./impersonation");
-      
       if (!ctx.user?.id) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' });
       }
-      
-      const result = await stopImpersonation(ctx.user.id);
-      if (!result.success) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'Failed to stop impersonation' });
-      }
-      
-      // Set the regular session token as a cookie
-      ctx.res.cookie('session', result.token, getSessionCookieOptions(ctx.req));
-      
+      // Clear the impersonation session cookie entirely
+      // The user's original auth (auth_token or app_session_id) will take over
+      ctx.res.clearCookie('session', { path: '/' });
       return { success: true };
     }),
 

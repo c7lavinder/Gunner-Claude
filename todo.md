@@ -2122,3 +2122,8 @@
 - [x] Fix context.ts double-impersonation conflict — skip X-Impersonate-User-Id header when session cookie already handles impersonation
 - [x] Fix stopImpersonation resilience — reads user's real tenantId from database instead of in-memory map
 - [x] Fix onboarding redirect blocking super_admin impersonation of new tenants
+
+## Fix Tenant Impersonation (Round 2)
+- [x] Fix amber banner not rendering — switched from localStorage to auth.me backend response, fixed cookie sameSite/secure settings
+- [x] Fix sidebar still showing Platform Admin — DashboardLayout now overrides role to 'admin' during super_admin impersonation
+- [x] Fix greeting showing "Corey" — now shows "Viewing: [Tenant Name]" during impersonation

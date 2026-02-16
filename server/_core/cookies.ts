@@ -42,7 +42,23 @@ export function getSessionCookieOptions(
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
+    sameSite: "none" as const,
     secure: isSecureRequest(req),
+  };
+}
+
+/**
+ * Cookie options specifically for impersonation session cookies.
+ * Uses sameSite=lax (more compatible) and a 2-hour maxAge.
+ */
+export function getImpersonationCookieOptions(
+  req: Request
+): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure" | "maxAge"> {
+  return {
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax" as const,
+    secure: isSecureRequest(req),
+    maxAge: 2 * 60 * 60 * 1000, // 2 hours (matches impersonation token expiry)
   };
 }

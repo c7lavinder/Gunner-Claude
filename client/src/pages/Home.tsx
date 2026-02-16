@@ -76,6 +76,8 @@ export default function Home() {
   }, [searchString]);
   
   const firstName = user?.name?.split(' ')[0] || 'there';
+  const isImpersonatingTenant = (user as any)?._isImpersonating === true;
+  const impersonatedTenantName = (user as any)?._impersonatedTenantName;
   
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
   const [todayStart] = useState(() => {
@@ -119,18 +121,22 @@ export default function Home() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            {isAdmin 
-              ? ((signalCounts?.missed ?? 0) + (signalCounts?.warning ?? 0) > 0
-                ? `${(signalCounts?.missed ?? 0) + (signalCounts?.warning ?? 0)} signals need attention`
-                : `All clear, ${firstName}`)
-              : (stats?.gradedToday && stats.gradedToday > 0
-                ? `${stats.callsToday ?? 0} calls today — ${stats.gradedToday} graded${stats.averageScore ? `, avg ${Math.round(stats.averageScore)}%` : ''}`
-                : `Welcome back, ${firstName}`)}
+            {isImpersonatingTenant
+              ? `Viewing: ${impersonatedTenantName || 'Tenant'}`
+              : isAdmin 
+                ? ((signalCounts?.missed ?? 0) + (signalCounts?.warning ?? 0) > 0
+                  ? `${(signalCounts?.missed ?? 0) + (signalCounts?.warning ?? 0)} signals need attention`
+                  : `All clear, ${firstName}`)
+                : (stats?.gradedToday && stats.gradedToday > 0
+                  ? `${stats.callsToday ?? 0} calls today — ${stats.gradedToday} graded${stats.averageScore ? `, avg ${Math.round(stats.averageScore)}%` : ''}`
+                  : `Welcome back, ${firstName}`)}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
-            {isAdmin 
-              ? `Team made ${stats?.callsToday ?? 0} calls today — ${stats?.gradedToday ?? 0} graded, ${stats?.skippedToday ?? 0} skipped`
-              : "Here's how you're performing"}
+            {isImpersonatingTenant
+              ? `Viewing as ${user?.name || 'admin'} — Team made ${stats?.callsToday ?? 0} calls today`
+              : isAdmin 
+                ? `Team made ${stats?.callsToday ?? 0} calls today — ${stats?.gradedToday ?? 0} graded, ${stats?.skippedToday ?? 0} skipped`
+                : "Here's how you're performing"}
           </p>
         </div>
         <div className="flex items-center gap-3">

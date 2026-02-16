@@ -151,12 +151,10 @@ export default function AdminDashboard() {
   // Start impersonation mutation
   const startImpersonation = trpc.admin.startImpersonation.useMutation({
     onSuccess: (data) => {
-      // Store impersonation data in localStorage
+      // Store impersonation data in localStorage (backup)
       localStorage.setItem('gunner_impersonation', JSON.stringify(data.impersonation));
-      toast.success(`Now viewing as ${data.impersonation.targetTenantName}`);
-      // Refresh auth and redirect to dashboard
-      refresh();
-      setLocation('/dashboard');
+      // Full page reload to ensure the new session cookie is picked up by all queries
+      window.location.href = '/dashboard';
     },
     onError: (error: { message: string }) => {
       toast.error(error.message);

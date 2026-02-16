@@ -90,11 +90,13 @@ describe("Impersonation Service", () => {
       expect(result.error).toBe("Database not available");
     });
 
-    it("should fail if no active impersonation session", async () => {
+    it("should fail if user not found in database", async () => {
+      // Mock where() to resolve to empty array (user not found)
+      mockDb.where.mockResolvedValueOnce([]);
       const result = await stopImpersonation(999);
       
       expect(result.success).toBe(false);
-      expect(result.error).toBe("No active impersonation session");
+      expect(result.error).toBe("User not found");
     });
   });
 

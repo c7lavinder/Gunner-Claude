@@ -1,18 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { UserCheck, LogOut, Eye } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-
-// Super admin impersonation data (viewing as another tenant)
-interface SuperAdminImpersonationData {
-  originalUserId: number;
-  originalTenantId: number;
-  targetUserId: number;
-  targetTenantId: number;
-  targetTenantName: string;
-  targetUserName: string;
-  targetUserEmail: string;
-}
+import { useAuth } from "@/_core/hooks/useAuth";
 
 // Admin impersonation data (viewing as another team member within same tenant)
 interface AdminImpersonationData {
@@ -23,8 +13,7 @@ interface AdminImpersonationData {
 type ImpersonationType = 'super_admin' | 'admin' | null;
 
 export function ImpersonationBanner() {
-  const [impersonationType, setImpersonationType] = useState<ImpersonationType>(null);
-  const [superAdminData, setSuperAdminData] = useState<SuperAdminImpersonationData | null>(null);
+  const { user } = useAuth();
   const [adminData, setAdminData] = useState<AdminImpersonationData | null>(null);
 
   // Backend mutation to clear the session cookie when ending super_admin impersonation
@@ -40,54 +29,40 @@ export function ImpersonationBanner() {
     },
   });
 
+  // Check for admin impersonation (team member viewing) via localStorage
   useEffect(() => {
-    // Check localStorage for impersonation data
-    const checkImpersonation = () => {
+    const checkAdminImpersonation = () => {
       try {
-        // Check for super admin impersonation first
-        const superAdminRaw = localStorage.getItem('gunner_impersonation');
-        if (superAdminRaw) {
-          setSuperAdminData(JSON.parse(superAdminRaw));
-          setImpersonationType('super_admin');
-          setAdminData(null);
-          return;
-        }
-
-        // Check for admin impersonation (viewing as team member)
         const userId = localStorage.getItem('impersonateUserId');
         const userName = localStorage.getItem('impersonateUserName');
         if (userId) {
           setAdminData({ userId, userName: userName || 'User' });
-          setImpersonationType('admin');
-          setSuperAdminData(null);
-          return;
+        } else {
+          setAdminData(null);
         }
-
-        // No impersonation active
-        setImpersonationType(null);
-        setSuperAdminData(null);
-        setAdminData(null);
       } catch {
-        setImpersonationType(null);
-        setSuperAdminData(null);
         setAdminData(null);
       }
     };
 
-    // Check on mount
-    checkImpersonation();
-
-    // Listen for storage changes (in case impersonation starts/ends in another tab)
-    window.addEventListener('storage', checkImpersonation);
-    
-    // Also check periodically in case localStorage changes in same tab
-    const interval = setInterval(checkImpersonation, 1000);
+    checkAdminImpersonation();
+    window.addEventListener('storage', checkAdminImpersonation);
+    const interval = setInterval(checkAdminImpersonation, 1000);
 
     return () => {
-      window.removeEventListener('storage', checkImpersonation);
+      window.removeEventListener('storage', checkAdminImpersonation);
       clearInterval(interval);
     };
   }, []);
+
+  // Determine impersonation type from auth data (super_admin) or localStorage (admin)
+  const isSuperAdminImpersonating = (user as any)?._isImpersonating === true;
+  const impersonatedTenantName = (user as any)?._impersonatedTenantName;
+  const impersonationType: ImpersonationType = isSuperAdminImpersonating
+    ? 'super_admin'
+    : adminData
+    ? 'admin'
+    : null;
 
   const handleEndImpersonation = () => {
     if (impersonationType === 'super_admin') {
@@ -115,11 +90,11 @@ export function ImpersonationBanner() {
           )}
           <div className="flex items-center gap-2">
             <span className="font-semibold">Viewing as:</span>
-            {impersonationType === 'super_admin' && superAdminData && (
+            {impersonationType === 'super_admin' && (
               <>
-                <span>{superAdminData.targetTenantName}</span>
+                <span>{impersonatedTenantName || 'Another Tenant'}</span>
                 <span className="text-amber-800">•</span>
-                <span className="text-sm">{superAdminData.targetUserName}</span>
+                <span className="text-sm">{user?.name}</span>
               </>
             )}
             {impersonationType === 'admin' && adminData && (
@@ -142,59 +117,52 @@ export function ImpersonationBanner() {
   );
 }
 
-// Hook to check if currently impersonating
+// Hook to check if currently impersonating — reads from auth.me for super_admin, localStorage for admin
 export function useImpersonation() {
-  const [isImpersonating, setIsImpersonating] = useState(false);
-  const [impersonationType, setImpersonationType] = useState<ImpersonationType>(null);
-  const [impersonationData, setImpersonationData] = useState<SuperAdminImpersonationData | null>(null);
+  const { user } = useAuth();
   const [adminImpersonationData, setAdminImpersonationData] = useState<AdminImpersonationData | null>(null);
 
+  // Check for admin impersonation via localStorage
   useEffect(() => {
-    const checkImpersonation = () => {
+    const checkAdminImpersonation = () => {
       try {
-        // Check for super admin impersonation first
-        const superAdminRaw = localStorage.getItem('gunner_impersonation');
-        if (superAdminRaw) {
-          setImpersonationData(JSON.parse(superAdminRaw));
-          setImpersonationType('super_admin');
-          setIsImpersonating(true);
-          setAdminImpersonationData(null);
-          return;
-        }
-
-        // Check for admin impersonation
         const userId = localStorage.getItem('impersonateUserId');
         const userName = localStorage.getItem('impersonateUserName');
         if (userId) {
           setAdminImpersonationData({ userId, userName: userName || 'User' });
-          setImpersonationType('admin');
-          setIsImpersonating(true);
-          setImpersonationData(null);
-          return;
+        } else {
+          setAdminImpersonationData(null);
         }
-
-        // No impersonation
-        setImpersonationData(null);
-        setAdminImpersonationData(null);
-        setImpersonationType(null);
-        setIsImpersonating(false);
       } catch {
-        setImpersonationData(null);
         setAdminImpersonationData(null);
-        setImpersonationType(null);
-        setIsImpersonating(false);
       }
     };
 
-    checkImpersonation();
-    window.addEventListener('storage', checkImpersonation);
-    const interval = setInterval(checkImpersonation, 1000);
+    checkAdminImpersonation();
+    window.addEventListener('storage', checkAdminImpersonation);
+    const interval = setInterval(checkAdminImpersonation, 1000);
 
     return () => {
-      window.removeEventListener('storage', checkImpersonation);
+      window.removeEventListener('storage', checkAdminImpersonation);
       clearInterval(interval);
     };
   }, []);
 
-  return { isImpersonating, impersonationType, impersonationData, adminImpersonationData };
+  // Derive impersonation state from auth.me response
+  const isSuperAdminImpersonating = (user as any)?._isImpersonating === true;
+  const impersonatedTenantName = (user as any)?._impersonatedTenantName || null;
+
+  const isImpersonating = isSuperAdminImpersonating || !!adminImpersonationData;
+  const impersonationType: ImpersonationType = isSuperAdminImpersonating
+    ? 'super_admin'
+    : adminImpersonationData
+    ? 'admin'
+    : null;
+
+  return useMemo(() => ({
+    isImpersonating,
+    impersonationType,
+    impersonatedTenantName,
+    adminImpersonationData,
+  }), [isImpersonating, impersonationType, impersonatedTenantName, adminImpersonationData]);
 }
