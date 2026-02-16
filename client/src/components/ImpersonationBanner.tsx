@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { UserCheck, LogOut, Eye } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 // Super admin impersonation data (viewing as another tenant)
 interface SuperAdminImpersonationData {
@@ -25,6 +26,19 @@ export function ImpersonationBanner() {
   const [impersonationType, setImpersonationType] = useState<ImpersonationType>(null);
   const [superAdminData, setSuperAdminData] = useState<SuperAdminImpersonationData | null>(null);
   const [adminData, setAdminData] = useState<AdminImpersonationData | null>(null);
+
+  // Backend mutation to clear the session cookie when ending super_admin impersonation
+  const stopImpersonationMutation = trpc.admin.stopImpersonation.useMutation({
+    onSuccess: () => {
+      localStorage.removeItem('gunner_impersonation');
+      window.location.href = '/admin-dashboard';
+    },
+    onError: () => {
+      // Even if backend fails, clear localStorage and redirect
+      localStorage.removeItem('gunner_impersonation');
+      window.location.href = '/admin-dashboard';
+    },
+  });
 
   useEffect(() => {
     // Check localStorage for impersonation data
@@ -77,8 +91,8 @@ export function ImpersonationBanner() {
 
   const handleEndImpersonation = () => {
     if (impersonationType === 'super_admin') {
-      localStorage.removeItem('gunner_impersonation');
-      window.location.href = '/admin-dashboard';
+      // Call backend to clear session cookie, then redirect
+      stopImpersonationMutation.mutate();
     } else if (impersonationType === 'admin') {
       localStorage.removeItem('impersonateUserId');
       localStorage.removeItem('impersonateUserName');
@@ -91,7 +105,7 @@ export function ImpersonationBanner() {
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-amber-950 shadow-lg">
+    <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-500 text-amber-950 shadow-lg">
       <div className="container flex items-center justify-between py-2 px-4">
         <div className="flex items-center gap-3">
           {impersonationType === 'super_admin' ? (
@@ -117,10 +131,11 @@ export function ImpersonationBanner() {
           variant="ghost"
           size="sm"
           onClick={handleEndImpersonation}
+          disabled={stopImpersonationMutation.isPending}
           className="text-amber-950 hover:bg-amber-600 hover:text-amber-950"
         >
           <LogOut className="h-4 w-4 mr-2" />
-          Stop Viewing
+          {stopImpersonationMutation.isPending ? 'Ending...' : 'Stop Viewing'}
         </Button>
       </div>
     </div>

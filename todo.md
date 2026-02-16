@@ -2109,3 +2109,16 @@
 - [x] Audit the LLM prompt construction to ensure custom criteria/points/redFlags are injected
 - [x] Fix any gaps where hardcoded rubrics still take precedence over tenant rubrics — fixed admin_callback shortcut path, getContext endpoint missing tenantId, keyPhrases normalization, and disqualificationTarget hardcoded reference
 - [x] Write vitest tests verifying tenant rubrics flow through the grading pipeline (14 tests)
+
+## Dashboard Recent Calls Fix
+- [x] Fix Recent Calls widget to show last 5 graded calls from today (was only showing 2)
+- [x] Add tenant impersonation banner at top of page when using "View as Tenant" (similar to team member impersonation banner)
+
+## Fix Tenant Impersonation
+- [x] Fix amber impersonation banner not showing when viewing as another tenant — raised z-index to z-[100], added trpc mutation for stop
+- [x] Fix data not switching to impersonated tenant — admin.startImpersonation now sets JWT session cookie, context.ts processes it for tenant override
+- [x] Ensure admin.startImpersonation also sets session cookie for backend tenant switching
+- [x] Fix sidebar showing super_admin items during impersonation — now shows admin-level items
+- [x] Fix context.ts double-impersonation conflict — skip X-Impersonate-User-Id header when session cookie already handles impersonation
+- [x] Fix stopImpersonation resilience — reads user's real tenantId from database instead of in-memory map
+- [x] Fix onboarding redirect blocking super_admin impersonation of new tenants

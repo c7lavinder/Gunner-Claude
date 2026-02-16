@@ -187,12 +187,22 @@ export default function AdminDashboard() {
     },
   });
 
+  // Stop impersonation mutation - clears session cookie on backend
+  const stopImpersonationMutation = trpc.admin.stopImpersonation.useMutation({
+    onSuccess: () => {
+      localStorage.removeItem('gunner_impersonation');
+      toast.success('Impersonation ended');
+      window.location.reload();
+    },
+    onError: () => {
+      // Even if backend fails, clear localStorage and reload
+      localStorage.removeItem('gunner_impersonation');
+      window.location.reload();
+    },
+  });
   // Handle stop impersonation
   const handleStopImpersonation = () => {
-    localStorage.removeItem('gunner_impersonation');
-    toast.success('Impersonation ended');
-    refresh();
-    window.location.reload();
+    stopImpersonationMutation.mutate();
   };
 
   // Check if currently impersonating

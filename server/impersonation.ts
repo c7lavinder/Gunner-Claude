@@ -10,17 +10,6 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
-interface ImpersonationSession {
-  originalUserId: number;
-  originalTenantId: number | null;
-  impersonatedTenantId: number;
-  impersonatedTenantName: string;
-  createdAt: number;
-}
-
-// Store active impersonation sessions (in production, use Redis)
-const activeSessions = new Map<number, ImpersonationSession>();
-
 /**
  * Start impersonating a tenant
  * Only super_admin users can impersonate
@@ -44,17 +33,6 @@ export async function startImpersonation(
     return { success: false, error: "Tenant not found" };
   }
 
-  // Create impersonation session
-  const session: ImpersonationSession = {
-    originalUserId: userId,
-    originalTenantId: user.tenantId,
-    impersonatedTenantId: targetTenantId,
-    impersonatedTenantName: tenant.name,
-    createdAt: Date.now(),
-  };
-
-  activeSessions.set(userId, session);
-
   // Create a special impersonation token
   const token = jwt.sign(
     {
@@ -75,6 +53,7 @@ export async function startImpersonation(
 
 /**
  * Stop impersonating and return to original identity
+ * Reads the user's actual tenantId from the database (resilient to server restarts)
  */
 export async function stopImpersonation(
   userId: number
@@ -82,26 +61,24 @@ export async function stopImpersonation(
   const db = await getDb();
   if (!db) return { success: false, error: "Database not available" };
 
-  const session = activeSessions.get(userId);
-  if (!session) {
-    return { success: false, error: "No active impersonation session" };
+  // Get the user's actual tenantId from the database (not from in-memory state)
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user) {
+    return { success: false, error: "User not found" };
   }
 
-  // Remove the session
-  activeSessions.delete(userId);
-
-  // Create a regular session token
+  // Create a regular session token with the user's real tenantId
   const token = jwt.sign(
     {
       userId,
-      tenantId: session.originalTenantId,
+      tenantId: user.tenantId,
       type: "session",
     },
     JWT_SECRET,
     { expiresIn: "7d" }
   );
 
-  console.log(`[Impersonation] User ${userId} stopped impersonating tenant ${session.impersonatedTenantId}`);
+  console.log(`[Impersonation] User ${userId} stopped impersonating`);
 
   return { success: true, token };
 }

@@ -78,7 +78,17 @@ export default function Home() {
   const firstName = user?.name?.split(' ')[0] || 'there';
   
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
-  const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ limit: 5 });
+  const [todayStart] = useState(() => {
+    const now = new Date();
+    const cst = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+    cst.setHours(0, 0, 0, 0);
+    return cst.toISOString();
+  });
+  const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ 
+    limit: 5, 
+    statuses: ["completed"],
+    startDate: todayStart,
+  });
   const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery({ dateRange });
   const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
   const isAdmin = user?.role === "admin" || user?.role === "super_admin" || user?.isTenantAdmin === "true";
@@ -378,7 +388,7 @@ export default function Home() {
           <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6 pb-2 sm:pb-2">
             <div>
               <CardTitle className="text-base sm:text-lg">Recent Calls</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Latest graded calls</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Today's graded calls</CardDescription>
             </div>
             <Link href="/calls">
               <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm">View All</Button>
@@ -436,8 +446,8 @@ export default function Home() {
             ) : (
               <div className="text-center py-6 text-muted-foreground">
                 <Phone className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm font-medium">No calls yet</p>
-                <p className="text-xs mt-1">Upload your first call recording to get started</p>
+                <p className="text-sm font-medium">No graded calls today</p>
+                <p className="text-xs mt-1">Calls will appear here once they're graded</p>
               </div>
             )}
           </CardContent>

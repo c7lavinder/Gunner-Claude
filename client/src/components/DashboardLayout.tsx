@@ -201,7 +201,8 @@ export default function DashboardLayout({
   }
   
   // 3. If onboarding NOT completed, redirect to onboarding
-  if (!onboardingCompleted && tenantSettings) {
+  // Super admins bypass this check (they may be impersonating a tenant)
+  if (!onboardingCompleted && tenantSettings && !isSuperAdmin) {
     return <Redirect to="/onboarding" />;
   }
   
@@ -244,7 +245,12 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const menuItems = getMenuItems(user?.teamRole, user?.openId, user?.role, user?.isTenantAdmin);
+  const { isImpersonating: isTenantImpersonating, impersonationType: impType } = useImpersonation();
+  // When impersonating a tenant as super_admin, show admin-level sidebar items (not super_admin items)
+  const effectiveRole = (isTenantImpersonating && impType === 'super_admin') ? 'admin' : user?.role;
+  const effectiveTeamRole = (isTenantImpersonating && impType === 'super_admin') ? 'admin' : user?.teamRole;
+  const effectiveIsTenantAdmin = (isTenantImpersonating && impType === 'super_admin') ? 'true' : user?.isTenantAdmin;
+  const menuItems = getMenuItems(effectiveTeamRole, user?.openId, effectiveRole, effectiveIsTenantAdmin);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

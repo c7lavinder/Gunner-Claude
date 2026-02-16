@@ -90,7 +90,9 @@ export async function createContext(
   }
 
   // Handle admin impersonation header - admin can impersonate users within the same tenant
-  if (user && (user.role === 'super_admin' || user.role === 'admin') && impersonationHeader) {
+  // Skip if already impersonating via session cookie (super admin tenant impersonation)
+  const isAlreadyImpersonating = (user as any)?._isImpersonating;
+  if (user && !isAlreadyImpersonating && (user.role === 'super_admin' || user.role === 'admin') && impersonationHeader) {
     try {
       const targetUserId = parseInt(impersonationHeader, 10);
       if (!isNaN(targetUserId)) {

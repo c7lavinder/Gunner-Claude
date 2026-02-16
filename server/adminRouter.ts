@@ -290,22 +290,21 @@ export const adminRouter = router({
     }),
 
   // Start impersonating a tenant
-  startImpersonation: superAdminProcedure
+    startImpersonation: superAdminProcedure
     .input(z.object({ tenantId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
-
+      const { startImpersonation } = await import("./impersonation");
+      const { getSessionCookieOptions } = await import("./_core/cookies");
       // Get the tenant to impersonate
       const [tenant] = await db
         .select()
         .from(tenants)
         .where(eq(tenants.id, input.tenantId));
-
       if (!tenant) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
       }
-
       // Get the first admin user of the tenant (or any user)
       const [targetUser] = await db
         .select()
@@ -313,12 +312,16 @@ export const adminRouter = router({
         .where(eq(users.tenantId, input.tenantId))
         .orderBy(desc(users.isTenantAdmin))
         .limit(1);
-
       if (!targetUser) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No users found in this tenant' });
       }
-
-      // Return the impersonation data - the client will store this
+      // Create impersonation session and set JWT cookie for backend tenant switching
+      const result = await startImpersonation(ctx.user!.id, input.tenantId);
+      if (!result.success || !result.token) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'Failed to start impersonation' });
+      }
+      ctx.res.cookie('session', result.token, getSessionCookieOptions(ctx.req));
+      // Return the impersonation data - the client will store this in localStorage for the banner
       return {
         success: true,
         impersonation: {
@@ -639,5 +642,23 @@ export const adminRouter = router({
   runEmailSequence: superAdminProcedure.mutation(async () => {
     const result = await runEmailSequenceJobs();
     return result;
+  }),
+
+  // Stop impersonating a tenant - clears the session cookie
+  stopImpersonation: superAdminProcedure.mutation(async ({ ctx }) => {
+    const { stopImpersonation } = await import("./impersonation");
+    const { getSessionCookieOptions } = await import("./_core/cookies");
+    if (!ctx.user?.id) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' });
+    }
+    const result = await stopImpersonation(ctx.user.id);
+    if (result.token) {
+      // Set the regular (non-impersonation) session token
+      ctx.res.cookie('session', result.token, getSessionCookieOptions(ctx.req));
+    } else {
+      // Clear the session cookie entirely
+      ctx.res.clearCookie('session');
+    }
+    return { success: true };
   }),
 });
