@@ -22,6 +22,7 @@ type PrefCategory = "sms_style" | "note_style" | "task_style";
 function actionTypeToEditCategory(actionType: string): EditCategory | null {
   switch (actionType) {
     case "send_sms": return "sms";
+    case "add_note":
     case "add_note_contact":
     case "add_note_opportunity": return "note";
     case "create_task": return "task";
@@ -40,6 +41,7 @@ function extractContent(actionType: string, payload: any): string | null {
   if (!payload) return null;
   switch (actionType) {
     case "send_sms": return payload.message || null;
+    case "add_note":
     case "add_note_contact":
     case "add_note_opportunity": return payload.noteBody || null;
     case "create_task":

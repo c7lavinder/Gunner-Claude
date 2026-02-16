@@ -64,7 +64,7 @@ describe("Multi-Action Parsing", () => {
         expect(result.actions[0]).toHaveProperty("actionType");
         expect(result.actions[0]).toHaveProperty("summary");
         expect(result.actions[0]).toHaveProperty("needsContactSearch");
-        expect(result.actions[0].actionType).toBe("add_note_contact");
+        expect(["add_note", "add_note_contact", "add_note_opportunity"]).toContain(result.actions[0].actionType);
       }
     }, 30000);
 
@@ -98,7 +98,8 @@ describe("Multi-Action Parsing", () => {
       
       // Verify we got different action types
       const actionTypes = result.actions.map((a: any) => a.actionType);
-      expect(actionTypes).toContain("add_note_contact");
+      const hasNote = actionTypes.some((t: string) => ["add_note", "add_note_contact", "add_note_opportunity"].includes(t));
+      expect(hasNote).toBe(true);
       // Should have at least one of create_task or change_pipeline_stage
       const hasTask = actionTypes.includes("create_task");
       const hasPipeline = actionTypes.includes("change_pipeline_stage");
@@ -113,7 +114,8 @@ describe("Multi-Action Parsing", () => {
       expect(result.actions.length).toBeGreaterThanOrEqual(2);
       
       const actionTypes = result.actions.map((a: any) => a.actionType);
-      expect(actionTypes).toContain("add_note_contact");
+      const hasNote = actionTypes.some((t: string) => ["add_note", "add_note_contact", "add_note_opportunity"].includes(t));
+      expect(hasNote).toBe(true);
       expect(actionTypes).toContain("send_sms");
       
       // Both actions should reference the same contact
@@ -133,7 +135,7 @@ describe("Multi-Action Parsing", () => {
         expect(action.params).toBeDefined();
         expect(typeof action.params).toBe("object");
         
-        if (action.actionType === "add_note_contact") {
+        if (["add_note", "add_note_contact", "add_note_opportunity"].includes(action.actionType)) {
           expect(action.params.noteBody).toBeTruthy();
           expect(action.params.noteBody.length).toBeGreaterThan(5);
         }
@@ -194,7 +196,7 @@ describe("Multi-Action Parsing", () => {
         expect(typeof action.actionType).toBe("string");
         expect(action.actionType.trim()).not.toBe("");
         expect(action.actionType).not.toBe("none");
-        expect(["add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field"]).toContain(action.actionType);
+        expect(["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field"]).toContain(action.actionType);
       }
     }, 30000);
 
@@ -206,7 +208,8 @@ describe("Multi-Action Parsing", () => {
       expect(result.actions.length).toBeGreaterThanOrEqual(2);
       const actionTypes = result.actions.map((a: any) => a.actionType);
       expect(actionTypes).toContain("change_pipeline_stage");
-      expect(actionTypes).toContain("add_note_contact");
+      const hasNote = actionTypes.some((t: string) => ["add_note", "add_note_contact", "add_note_opportunity"].includes(t));
+      expect(hasNote).toBe(true);
     }, 30000);
   });
 

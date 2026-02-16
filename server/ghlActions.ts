@@ -649,14 +649,12 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
     let result: any;
 
     switch (action.actionType) {
+      case "add_note":
       case "add_note_contact":
+      case "add_note_opportunity":
+        // All note types use the same GHL endpoint: POST /contacts/{contactId}/notes
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
         result = await addNoteToContact(action.tenantId, contactId, payload.noteBody);
-        break;
-      case "add_note_opportunity":
-        // GHL has no separate opportunity notes API — notes are always on the contact
-        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
-        result = await addNoteToOpportunity(action.tenantId, contactId, payload.noteBody);
         break;
       case "change_pipeline_stage": {
         let resolvedOppId = opportunityId;

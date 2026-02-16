@@ -345,8 +345,9 @@ type ConversationMessage =
   | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number; resolvedStage?: { pipelineName: string; stageName: string } };
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
-  add_note_contact: "Add Note to Contact",
-  add_note_opportunity: "Add Note to Opportunity",
+  add_note: "Add Note",
+  add_note_contact: "Add Note",
+  add_note_opportunity: "Add Note",
   change_pipeline_stage: "Change Pipeline Stage",
   send_sms: "Send SMS",
   create_task: "Create Task",
@@ -356,6 +357,7 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
 };
 
 const ACTION_ICONS: Record<string, string> = {
+  add_note: "📝",
   add_note_contact: "📝",
   add_note_opportunity: "📝",
   change_pipeline_stage: "🔄",
@@ -647,6 +649,7 @@ function AICoachQA() {
     if (!payload) return "";
     switch (actionType) {
       case "send_sms": return payload.message || "";
+      case "add_note":
       case "add_note_contact":
       case "add_note_opportunity": return payload.noteBody || "";
       case "create_task": return payload.title || "";
@@ -656,7 +659,7 @@ function AICoachQA() {
 
   // Check if an action type has editable content
   const isEditableAction = (actionType: string): boolean => {
-    return ["send_sms", "add_note_contact", "add_note_opportunity", "create_task"].includes(actionType);
+    return ["send_sms", "add_note", "add_note_contact", "add_note_opportunity", "create_task"].includes(actionType);
   };
 
   // Start editing an action card
@@ -676,6 +679,7 @@ function AICoachQA() {
     const edited = { ...originalPayload };
     switch (actionType) {
       case "send_sms": edited.message = newContent; break;
+      case "add_note":
       case "add_note_contact":
       case "add_note_opportunity": edited.noteBody = newContent; break;
       case "create_task": edited.title = newContent; break;

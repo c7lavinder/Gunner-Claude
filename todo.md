@@ -2248,3 +2248,12 @@
 ## Bug Fix: Add Note to Opportunity returns 404 from GHL API
 - [x] GHL API returns 404 on POST /opportunities/{id}/notes — endpoint doesn't exist in GHL API
 - [x] Fix: merge add_note_opportunity to use contact notes endpoint (POST /contacts/{contactId}/notes) since they're the same thing in GHL
+
+## Consolidate: Merge add_note_contact + add_note_opportunity into single add_note
+- [x] Find all references to add_note_contact and add_note_opportunity across codebase
+- [x] Update drizzle schema enum to include add_note (keep old values for backward compat)
+- [x] Update executeAction switch to handle add_note (and legacy types)
+- [x] Update LLM prompt to use add_note instead of two separate note actions
+- [x] Update frontend action card rendering for unified add_note
+- [x] Run DB migration
+- [x] Test end-to-end — all 72 unit tests pass, 107 opportunities tests pass

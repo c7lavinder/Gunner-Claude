@@ -1225,6 +1225,7 @@ describe("Opportunity Detection V2 — Pipeline Manager Rules", () => {
 
 describe("GHL Action Types", () => {
   const validActionTypes = [
+    "add_note",
     "add_note_contact",
     "add_note_opportunity",
     "change_pipeline_stage",
@@ -1235,8 +1236,8 @@ describe("GHL Action Types", () => {
     "update_field",
   ];
 
-  it("supports all 8 action types", () => {
-    expect(validActionTypes).toHaveLength(8);
+  it("supports all 9 action types (including unified add_note)", () => {
+    expect(validActionTypes).toHaveLength(9);
   });
 
   it("each action type is a valid string", () => {
@@ -1249,7 +1250,7 @@ describe("GHL Action Types", () => {
 
   it("action types match schema enum values", () => {
     const schemaEnumValues = [
-      "add_note_contact", "add_note_opportunity", "change_pipeline_stage",
+      "add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage",
       "send_sms", "create_task", "add_tag", "remove_tag", "update_field"
     ];
     expect(validActionTypes).toEqual(schemaEnumValues);

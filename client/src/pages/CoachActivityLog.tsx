@@ -38,8 +38,9 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Redirect } from "wouter";
 
 const ACTION_TYPE_LABELS: Record<string, { label: string; icon: any; color: string }> = {
+  add_note: { label: "Add Note", icon: StickyNote, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
   add_note_contact: { label: "Add Note", icon: StickyNote, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  add_note_opportunity: { label: "Note (Deal)", icon: StickyNote, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  add_note_opportunity: { label: "Add Note", icon: StickyNote, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
   change_pipeline_stage: { label: "Move Stage", icon: ArrowRightLeft, color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
   send_sms: { label: "Send SMS", icon: Send, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
   create_task: { label: "Create Task", icon: ListTodo, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },

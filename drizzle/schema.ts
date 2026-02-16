@@ -1247,7 +1247,7 @@ export const coachActionLog = mysqlTable("coach_action_log", {
   requestedBy: int("requestedBy").references(() => users.id).notNull(),
   requestedByName: varchar("requestedByName", { length: 255 }),
   actionType: mysqlEnum("actionType", [
-    "add_note_contact", "add_note_opportunity", "change_pipeline_stage",
+    "add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage",
     "send_sms", "create_task", "add_tag", "remove_tag", "update_field"
   ]).notNull(),
   requestText: text("requestText").notNull(),
