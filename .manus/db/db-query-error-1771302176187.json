@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, contact_name, contact_phone, call_type, status, classification, call_timestamp, duration, team_member_name FROM calls WHERE status IN ('pending', 'transcribing', 'classifying', 'grading') ORDER BY call_timestamp DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contact_name, contact_phone, call_type, status, classification, call_timestamp, duration, team_member_name FROM calls WHERE status IN ('pending', 'transcribing', 'classifying', 'grading') ORDER BY call_timestamp DESC;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'contact_name' in 'field list'"
+  ]
+}

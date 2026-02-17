@@ -4400,14 +4400,26 @@ Team members: ${teamMemberNames.length > 0 ? teamMemberNames.join(", ") : "Unkno
 ASSIGNEE RESTRICTION: For create_task, the assignee MUST be one of these people ONLY: ${allowedAssigneeNames.length > 0 ? allowedAssigneeNames.join(", ") : ctx.user!.name || "Unknown"}. If the user tries to assign to someone not on this list, set assigneeName to "${ctx.user!.name || "Unknown"}" (the current user) and include a note in the summary that the task was assigned to them instead because they don't have permission to assign to the requested person.
 
 IMPORTANT: For actions that involve writing content, you MUST generate the FULL DRAFT TEXT upfront so the user can review and edit it before confirming:
-- For add_note: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note. If the user asks to summarize a call, use the RECENT CALL DATA provided below to write a DETAILED, COMPREHENSIVE summary. Call summaries MUST be at least 3-5 paragraphs and include:
-  * Call overview (date, duration, team member, contact name)
-  * Seller's motivation and emotional drivers (e.g., inherited property, financial pressure, tired landlord, divorce, relocation)
-  * Property details discussed (address, condition, repairs needed, ARV, asking price)
-  * Key discussion points and objections raised
-  * Outcome and agreed-upon next steps
-  * Any notable quotes or commitments from the seller
-  A 14-minute call should produce a 200-400 word summary. NEVER write a one-line summary for a call that has transcript data available.
+- For add_note: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note. You are writing internal CRM notes for a real estate investor who purchases homes for cash. Follow these rules EXACTLY:
+  1. Write in clear paragraph form ONLY. Do NOT use bullet points or lists.
+  2. Be detailed without being overly summarized. A 14-minute call should produce a 200-400 word note. NEVER write a one-line summary.
+  3. Do NOT use the word "features."
+  4. Do NOT assume property condition. Only record condition details explicitly stated by the owner.
+  5. Do NOT add opinions, sales language, explanations, or filler.
+  6. Do NOT include acknowledgments such as thanking the owner or expressing appreciation.
+  7. Do NOT invent motivation, urgency, or intent. Only document information directly stated or clearly confirmed by the owner.
+  8. If information was not discussed or is unclear, explicitly state that it is unknown.
+  9. Maintain a neutral, factual tone appropriate for internal CRM documentation.
+  10. Include the following information ONLY if it was mentioned in the call:
+      - Who was contacted and by what method (call or text)
+      - Owner's stated plans for the property
+      - Condition details provided by the owner
+      - Renovations or updates mentioned, including timing if stated
+      - Rental status if applicable
+      - Price expectations if a specific number was provided
+      - Decision makers involved
+      - Next steps discussed, or note that no next steps were established
+  Write the CRM note based ONLY on the transcript/call data below. Do NOT infer or add context beyond what is stated.
 - For send_sms: Write the complete SMS message text in params.message. Don't describe the SMS — write the actual message that will be sent. CRITICAL: The SMS will be sent DIRECTLY to the contact, so always write it in SECOND PERSON ("you"/"your") as if speaking to them. The user may describe what to say in third person (e.g., "tell him we don't want his house") — you MUST convert this to direct address (e.g., "we're not interested in purchasing your house"). Never use "he/him/his/she/her" to refer to the recipient in the SMS body.
 - For create_task: Write a clear task title in params.title AND a detailed description in params.description. The description MUST reference specific details from the call data below (property address, what was discussed, outcome, next steps). Never write vague descriptions like "call them about their property" — instead write something like "Follow up on 123 Main St. Last call on 2/10 discussed ARV of $180k, seller wants $150k. Need to present offer."
 

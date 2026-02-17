@@ -164,24 +164,58 @@ describe("AI Coach CRM Action Awareness", () => {
     });
   });
 
-  describe("Detailed call summary requirements", () => {
-    it("should require 3-5 paragraph summaries with specific content sections", () => {
+  describe("CRM note writing style (Daniel Lozano format)", () => {
+    it("should require paragraph form only with no bullet points", () => {
       const routersPath = path.join(__dirname, "routers.ts");
       const content = fs.readFileSync(routersPath, "utf-8");
 
-      expect(content).toContain("DETAILED, COMPREHENSIVE summary");
-      expect(content).toContain("at least 3-5 paragraphs");
-      expect(content).toContain("motivation and emotional drivers");
-      expect(content).toContain("Property details discussed");
-      expect(content).toContain("Key discussion points and objections");
-      expect(content).toContain("Outcome and agreed-upon next steps");
+      expect(content).toContain("clear paragraph form ONLY");
+      expect(content).toContain("Do NOT use bullet points or lists");
     });
 
-    it("should specify minimum word count for call summaries", () => {
+    it("should prohibit assumptions, opinions, and filler", () => {
       const routersPath = path.join(__dirname, "routers.ts");
       const content = fs.readFileSync(routersPath, "utf-8");
 
-      expect(content).toContain("200-400 word summary");
+      expect(content).toContain("Do NOT assume property condition");
+      expect(content).toContain("Do NOT add opinions, sales language, explanations, or filler");
+      expect(content).toContain("Do NOT invent motivation, urgency, or intent");
+      expect(content).toContain("Do NOT include acknowledgments");
+    });
+
+    it("should require neutral factual tone for internal CRM documentation", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("neutral, factual tone appropriate for internal CRM documentation");
+      expect(content).toContain("real estate investor who purchases homes for cash");
+    });
+
+    it("should specify the exact content categories to include if mentioned", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("Owner's stated plans for the property");
+      expect(content).toContain("Condition details provided by the owner");
+      expect(content).toContain("Renovations or updates mentioned");
+      expect(content).toContain("Rental status if applicable");
+      expect(content).toContain("Price expectations if a specific number was provided");
+      expect(content).toContain("Decision makers involved");
+      expect(content).toContain("Next steps discussed");
+    });
+
+    it("should require stating unknown info explicitly", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("explicitly state that it is unknown");
+    });
+
+    it("should specify minimum word count and prohibit one-liners", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("200-400 word note");
       expect(content).toContain("NEVER write a one-line summary");
     });
 

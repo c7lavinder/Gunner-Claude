@@ -1,0 +1,112 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'calls' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'calls' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "tenantId"
+    },
+    {
+      "COLUMN_NAME": "callSource"
+    },
+    {
+      "COLUMN_NAME": "ghlCallId"
+    },
+    {
+      "COLUMN_NAME": "ghlContactId"
+    },
+    {
+      "COLUMN_NAME": "ghlLocationId"
+    },
+    {
+      "COLUMN_NAME": "batchDialerCallId"
+    },
+    {
+      "COLUMN_NAME": "batchDialerCampaignId"
+    },
+    {
+      "COLUMN_NAME": "batchDialerCampaignName"
+    },
+    {
+      "COLUMN_NAME": "batchDialerAgentName"
+    },
+    {
+      "COLUMN_NAME": "contactName"
+    },
+    {
+      "COLUMN_NAME": "contactPhone"
+    },
+    {
+      "COLUMN_NAME": "propertyAddress"
+    },
+    {
+      "COLUMN_NAME": "recordingUrl"
+    },
+    {
+      "COLUMN_NAME": "duration"
+    },
+    {
+      "COLUMN_NAME": "callDirection"
+    },
+    {
+      "COLUMN_NAME": "teamMemberId"
+    },
+    {
+      "COLUMN_NAME": "teamMemberName"
+    },
+    {
+      "COLUMN_NAME": "callType"
+    },
+    {
+      "COLUMN_NAME": "status"
+    },
+    {
+      "COLUMN_NAME": "transcript"
+    },
+    {
+      "COLUMN_NAME": "callTimestamp"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    },
+    {
+      "COLUMN_NAME": "updatedAt"
+    },
+    {
+      "COLUMN_NAME": "classification"
+    },
+    {
+      "COLUMN_NAME": "classificationReason"
+    },
+    {
+      "COLUMN_NAME": "callOutcome"
+    },
+    {
+      "COLUMN_NAME": "transcriptUrl"
+    },
+    {
+      "COLUMN_NAME": "isArchived"
+    },
+    {
+      "COLUMN_NAME": "archivedAt"
+    },
+    {
+      "COLUMN_NAME": "tenantCallTypeId"
+    },
+    {
+      "COLUMN_NAME": "errorMessage"
+    },
+    {
+      "COLUMN_NAME": "callTypeSource"
+    },
+    {
+      "COLUMN_NAME": "batchLeadsEnrichment"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ntenantId\ncallSource\nghlCallId\nghlContactId\nghlLocationId\nbatchDialerCallId\nbatchDialerCampaignId\nbatchDialerCampaignName\nbatchDialerAgentName\ncontactName\ncontactPhone\npropertyAddress\nrecordingUrl\nduration\ncallDirection\nteamMemberId\nteamMemberName\ncallType\nstatus\ntranscript\ncallTimestamp\ncreatedAt\nupdatedAt\nclassification\nclassificationReason\ncallOutcome\ntranscriptUrl\nisArchived\narchivedAt\ntenantCallTypeId\nerrorMessage\ncallTypeSource\nbatchLeadsEnrichment\n",
+  "stderr": "",
+  "execution_time_ms": 359
+}

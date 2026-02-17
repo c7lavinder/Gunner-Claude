@@ -2297,3 +2297,8 @@
 - [x] Investigate transcript truncation limit and prompt instructions for note content
 - [x] Increase transcript context and add explicit instructions for detailed, multi-paragraph summaries
 - [x] Ensure summaries highlight motivation type, key discussion points, property details, and next steps
+
+## Update: CRM Note Writing Style (Daniel Lozano's format)
+- [x] Replace generic note instructions with Daniel's specific CRM note writing rules
+- [x] Ensure notes use paragraph form only, no bullets, no assumptions, neutral factual tone
+- [x] Update vitest tests for the new note style requirements

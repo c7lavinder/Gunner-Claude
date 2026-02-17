@@ -1,0 +1,58 @@
+{
+  "query": "SELECT id, contactName, contactPhone, status, classification, duration, teamMemberName, LEFT(recordingUrl, 50) as recording_preview, CASE WHEN transcript IS NOT NULL THEN 'YES' ELSE 'NO' END as has_transcript, callTimestamp FROM calls WHERE status IN ('pending', 'transcribing', 'classifying', 'grading');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, contactPhone, status, classification, duration, teamMemberName, LEFT(recordingUrl, 50) as recording_preview, CASE WHEN transcript IS NOT NULL THEN 'YES' ELSE 'NO' END as has_transcript, callTimestamp FROM calls WHERE status IN ('pending', 'transcribing', 'classifying', 'grading');",
+  "rows": [
+    {
+      "id": "1920032",
+      "contactName": "Zala Safi",
+      "contactPhone": "+16154739797",
+      "status": "grading",
+      "classification": "admin_call",
+      "duration": "115",
+      "teamMemberName": "Kyle Barks",
+      "recording_preview": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328",
+      "has_transcript": "YES",
+      "callTimestamp": "2026-02-13 20:14:46"
+    },
+    {
+      "id": "2010008",
+      "contactName": "Jack Brewster",
+      "contactPhone": "+18655563767",
+      "status": "classifying",
+      "classification": "pending",
+      "duration": "74",
+      "teamMemberName": "Kyle Barks",
+      "recording_preview": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328",
+      "has_transcript": "YES",
+      "callTimestamp": "2026-02-16 16:30:32"
+    },
+    {
+      "id": "2010009",
+      "contactName": "Gary Tallman",
+      "contactPhone": "+14805450277",
+      "status": "transcribing",
+      "classification": "pending",
+      "duration": "39",
+      "teamMemberName": "Daniel Lozano",
+      "recording_preview": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328",
+      "has_transcript": "NO",
+      "callTimestamp": "2026-02-16 16:28:52"
+    },
+    {
+      "id": "2010011",
+      "contactName": "Richard Jeronimus",
+      "contactPhone": "+16154066793",
+      "status": "classifying",
+      "classification": "pending",
+      "duration": "91",
+      "teamMemberName": "Daniel Lozano",
+      "recording_preview": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328",
+      "has_transcript": "YES",
+      "callTimestamp": "2026-02-16 16:45:04"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tcontactPhone\tstatus\tclassification\tduration\tteamMemberName\trecording_preview\thas_transcript\tcallTimestamp\n1920032\tZala Safi\t+16154739797\tgrading\tadmin_call\t115\tKyle Barks\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328\tYES\t2026-02-13 20:14:46\n2010008\tJack Brewster\t+18655563767\tclassifying\tpending\t74\tKyle Barks\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328\tYES\t2026-02-16 16:30:32\n2010009\tGary Tallman\t+14805450277\ttranscribing\tpending\t39\tDaniel Lozano\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328\tNO\t2026-02-16 16:28:52\n2010011\tRichard Jeronimus\t+16154066793\tclassifying\tpending\t91\tDaniel Lozano\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328\tYES\t2026-02-16 16:45:04\n",
+  "stderr": "",
+  "execution_time_ms": 349
+}
