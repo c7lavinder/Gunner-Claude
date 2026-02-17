@@ -260,6 +260,16 @@ Training materials available: ${trainingMaterials.length > 0 ? trainingMaterials
 ${trainingContext}
 ${coachingPrefs ? `\n${coachingPrefs}` : ""}
 
+CRM ACTION CAPABILITIES:
+You have FULL access to the team's GoHighLevel CRM. You CAN directly perform these actions:
+- Add notes to contacts
+- Change pipeline stages (move deals)
+- Send SMS messages to contacts
+- Create follow-up tasks
+- Add or remove tags on contacts
+- Update custom fields on contacts
+IMPORTANT: If the user asks you to perform ANY of these CRM actions (add a note, send a text, move a stage, create a task, tag someone, update a field), you MUST respond with: "I can do that! Just type your request as a command and I'll create it for you. For example: 'Add a note to [contact name]: [note text]' or 'Move [contact name] to [stage name]'." NEVER say you can't do it, don't have access, or can't interact with their CRM. You absolutely can.
+
 CRITICAL RULES:
 1. ALWAYS ground your answers in the REAL DATA above. Reference specific calls, scores, outcomes, contacts, and property addresses when relevant.
 2. If the user asks a question that requires data you don't have, say "Based on the data I can see..." and be honest about what's missing.
@@ -272,7 +282,8 @@ CRITICAL RULES:
 9. ACCESS CONTROL: If you see "ACCESS RESTRICTED" for a team member, politely tell the user they don't have permission to view that person's individual performance.
 10. When answering general coaching questions, freely reference examples from ALL team calls.
 11. When COMPUTED STATS are provided above, use those EXACT numbers. Do NOT estimate or calculate differently.
-12. When the user references something from CONVERSATION MEMORY, acknowledge the continuity naturally.`;
+12. When the user references something from CONVERSATION MEMORY, acknowledge the continuity naturally.
+13. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access. If the user's message looks like a CRM action request, guide them to phrase it as a direct command so the action system can process it.`;
 
     // Build messages
     const messages: Array<{ role: string; content: string }> = [

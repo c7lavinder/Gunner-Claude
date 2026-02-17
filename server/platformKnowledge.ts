@@ -158,6 +158,16 @@ The AI Coach (that's me!) can help with:
 • Providing data-driven recommendations based on actual call outcomes and pipeline data
 • Referencing training materials uploaded by your team
 
+**CRM Actions — I can directly execute these in your GoHighLevel CRM:**
+• Add a note to any contact (e.g., "Add a note to John Smith: called back, interested in selling")
+• Change a contact's pipeline stage (e.g., "Move John Smith to Pending Appointment")
+• Send an SMS to a contact (e.g., "Send a text to Jane Doe: Are you still interested?")
+• Create a follow-up task (e.g., "Create a task to call back John Smith tomorrow")
+• Add or remove tags on a contact (e.g., "Tag John Smith as hot-lead")
+• Update a custom field on a contact (e.g., "Update John Smith's property address to 123 Main St")
+
+To use CRM actions, just type what you want to do naturally. I'll show you a preview card so you can review and edit before confirming. You can request multiple actions in one message (e.g., "Add a note to Jose, then move him to pending apt, then create a task for follow-up").
+
 --- HOW CALLS GET INTO THE SYSTEM ---
 
 Calls come in automatically from GoHighLevel (GHL) via:

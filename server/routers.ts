@@ -1475,6 +1475,16 @@ ${(() => {
 })()}
 ${coachingPrefs ? `\n${coachingPrefs}` : ""}
 
+CRM ACTION CAPABILITIES:
+You have FULL access to the team's GoHighLevel CRM. You CAN directly perform these actions:
+- Add notes to contacts
+- Change pipeline stages (move deals)
+- Send SMS messages to contacts
+- Create follow-up tasks
+- Add or remove tags on contacts
+- Update custom fields on contacts
+IMPORTANT: If the user asks you to perform ANY of these CRM actions (add a note, send a text, move a stage, create a task, tag someone, update a field), you MUST respond with: "I can do that! Just type your request as a command and I'll create it for you. For example: 'Add a note to [contact name]: [note text]' or 'Move [contact name] to [stage name]'." NEVER say you can't do it, don't have access, or can't interact with their CRM. You absolutely can.
+
 CRITICAL RULES:
 1. ALWAYS ground your answers in the REAL DATA above. Reference specific calls, scores, outcomes, contacts, and property addresses when relevant.
 2. If the user asks a question that requires data you don't have, say "Based on the data I can see..." and be honest about what's missing.
@@ -1488,7 +1498,8 @@ CRITICAL RULES:
 10. When answering general coaching questions (objection handling, scripts, techniques), freely reference examples from ALL team calls — the call summaries and techniques are available for everyone to learn from. Only individual scores/grades are restricted.
 11. When answering questions about how Gunner features work (badges, XP, levels, streaks, grading, etc.), use the PLATFORM GUIDE above. Be helpful and specific — team members should feel empowered to use the platform.
 12. ${isAdmin ? 'This user is an ADMIN — they can see opportunity/signal details and detection rule specifics.' : 'This user is NOT an admin — do NOT reveal opportunity/signal details, detection rule thresholds, or pipeline data. If they ask about signals, tell them to ask their manager or admin.'}
-13. When you see a "COMPUTED STATS" block above, those numbers are EXACT — calculated directly from the database. You MUST use those exact numbers in your response. Do NOT estimate, round differently, or contradict the computed stats. Present them naturally in your answer (e.g., "You've made 12 calls this week with an average score of 78.3%").`;
+13. When you see a "COMPUTED STATS" block above, those numbers are EXACT — calculated directly from the database. You MUST use those exact numbers in your response. Do NOT estimate, round differently, or contradict the computed stats. Present them naturally in your answer (e.g., "You've made 12 calls this week with an average score of 78.3%").
+14. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access. If the user's message looks like a CRM action request, guide them to phrase it as a direct command so the action system can process it.`;
 
         // Build messages with conversation history for context
         const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -4355,6 +4366,18 @@ Available action types:
 MULTI-ACTION SUPPORT: A user may request MULTIPLE actions in a single message (e.g., "Add a note to Jose Ruiz, then create a task for 3 months from now, then move it to the 4 month stage"). You MUST detect ALL actions and return each one as a separate item in the "actions" array. Parse each action independently with its own contactName, params, and summary.
 
 If the message contains NO CRM action requests (it's a coaching question, greeting, etc.), return an empty actions array.
+
+IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions conversationally rather than as direct commands. ALL of these are action requests and MUST be parsed into actions:
+- "Can you add a note to John?" → add_note
+- "I need to update the stage for this contact" → change_pipeline_stage
+- "Could you send a text to Jane?" → send_sms
+- "I want to create a follow-up task" → create_task
+- "Tag this contact as hot-lead" → add_tag
+- "Can you move this deal to pending appointment?" → change_pipeline_stage
+- "Please note that the seller called back" → add_note
+- "Text the seller and ask if they're still interested" → send_sms
+- "Set a reminder to call back tomorrow" → create_task
+Do NOT return empty actions for these — they are action requests even if phrased as questions.
 
 Context: ${input.contextContactId ? `Currently viewing contact: ${input.contextContactName} (ID: ${input.contextContactId})` : "No contact context"}
 

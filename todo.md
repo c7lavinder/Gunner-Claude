@@ -2274,3 +2274,10 @@
 - [x] Added standalone phone number detection for voicemails where seller leaves a callback number
 - [x] Updated excerpt labels: "Voicemail", "Callback", or "Short call Xs" depending on classification
 - [x] Update tests to cover voicemail scenarios — 37/37 tests pass (7 new voicemail-specific tests)
+
+## Fix: AI Coach Persistent CRM Action Awareness
+- [x] Investigate frontend message routing — how it decides action vs Q&A path
+- [x] Fix coaching Q&A system prompt to always include CRM action capabilities
+- [x] Add action-awareness redirect — when user asks to do a CRM action in Q&A mode, coach should tell them to phrase it as a command (or auto-route it)
+- [x] Ensure the LLM never says "I can't add notes" or "I don't have access to your CRM" when those actions are fully implemented
+- [x] Write vitest tests for capability awareness and action routing
