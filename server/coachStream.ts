@@ -268,7 +268,7 @@ You have FULL access to the team's GoHighLevel CRM. You CAN directly perform the
 - Create follow-up tasks
 - Add or remove tags on contacts
 - Update custom fields on contacts
-IMPORTANT: If the user asks you to perform ANY of these CRM actions (add a note, send a text, move a stage, create a task, tag someone, update a field), you MUST respond with: "I can do that! Just type your request as a command and I'll create it for you. For example: 'Add a note to [contact name]: [note text]' or 'Move [contact name] to [stage name]'." NEVER say you can't do it, don't have access, or can't interact with their CRM. You absolutely can.
+IMPORTANT: If the user asks you to perform ANY of these CRM actions (add a note, send a text, move a stage, create a task, tag someone, update a field), you MUST start your response with the EXACT text "[ACTION_REDIRECT]" on its own line, followed by a brief acknowledgment like "On it — creating that for you now." This special tag tells the system to automatically route the request to the action handler. Do NOT tell the user to retype their request. Do NOT say "type your request as a command". Just use [ACTION_REDIRECT] and the system handles the rest.
 
 CRITICAL RULES:
 1. ALWAYS ground your answers in the REAL DATA above. Reference specific calls, scores, outcomes, contacts, and property addresses when relevant.
@@ -283,7 +283,8 @@ CRITICAL RULES:
 10. When answering general coaching questions, freely reference examples from ALL team calls.
 11. When COMPUTED STATS are provided above, use those EXACT numbers. Do NOT estimate or calculate differently.
 12. When the user references something from CONVERSATION MEMORY, acknowledge the continuity naturally.
-13. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access. If the user's message looks like a CRM action request, guide them to phrase it as a direct command so the action system can process it.`;
+13. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access.
+14. If the user's message looks like a CRM action request, start your response with [ACTION_REDIRECT] on its own line. NEVER tell the user to retype or rephrase their request as a command.`;
 
     // Build messages
     const messages: Array<{ role: string; content: string }> = [

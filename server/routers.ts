@@ -1483,7 +1483,7 @@ You have FULL access to the team's GoHighLevel CRM. You CAN directly perform the
 - Create follow-up tasks
 - Add or remove tags on contacts
 - Update custom fields on contacts
-IMPORTANT: If the user asks you to perform ANY of these CRM actions (add a note, send a text, move a stage, create a task, tag someone, update a field), you MUST respond with: "I can do that! Just type your request as a command and I'll create it for you. For example: 'Add a note to [contact name]: [note text]' or 'Move [contact name] to [stage name]'." NEVER say you can't do it, don't have access, or can't interact with their CRM. You absolutely can.
+IMPORTANT: If the user asks you to perform ANY of these CRM actions (add a note, send a text, move a stage, create a task, tag someone, update a field), you MUST start your response with the EXACT text "[ACTION_REDIRECT]" on its own line, followed by a brief acknowledgment like "On it — creating that for you now." This special tag tells the system to automatically route the request to the action handler. Do NOT tell the user to retype their request. Do NOT say "type your request as a command". Just use [ACTION_REDIRECT] and the system handles the rest.
 
 CRITICAL RULES:
 1. ALWAYS ground your answers in the REAL DATA above. Reference specific calls, scores, outcomes, contacts, and property addresses when relevant.
@@ -1499,7 +1499,8 @@ CRITICAL RULES:
 11. When answering questions about how Gunner features work (badges, XP, levels, streaks, grading, etc.), use the PLATFORM GUIDE above. Be helpful and specific — team members should feel empowered to use the platform.
 12. ${isAdmin ? 'This user is an ADMIN — they can see opportunity/signal details and detection rule specifics.' : 'This user is NOT an admin — do NOT reveal opportunity/signal details, detection rule thresholds, or pipeline data. If they ask about signals, tell them to ask their manager or admin.'}
 13. When you see a "COMPUTED STATS" block above, those numbers are EXACT — calculated directly from the database. You MUST use those exact numbers in your response. Do NOT estimate, round differently, or contradict the computed stats. Present them naturally in your answer (e.g., "You've made 12 calls this week with an average score of 78.3%").
-14. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access. If the user's message looks like a CRM action request, guide them to phrase it as a direct command so the action system can process it.`;
+14. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access.
+15. If the user's message looks like a CRM action request, start your response with [ACTION_REDIRECT] on its own line. NEVER tell the user to retype or rephrase their request as a command.`;
 
         // Build messages with conversation history for context
         const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [

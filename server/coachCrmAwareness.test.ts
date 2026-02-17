@@ -43,7 +43,7 @@ describe("AI Coach CRM Action Awareness", () => {
     });
   });
 
-  describe("Streaming coach prompt includes CRM awareness", () => {
+  describe("Streaming coach prompt includes CRM awareness with ACTION_REDIRECT", () => {
     it("should contain CRM ACTION CAPABILITIES block in coachStream.ts", () => {
       const coachStreamPath = path.join(__dirname, "coachStream.ts");
       const content = fs.readFileSync(coachStreamPath, "utf-8");
@@ -68,15 +68,26 @@ describe("AI Coach CRM Action Awareness", () => {
       expect(content).toContain("I don't have access to your CRM");
     });
 
-    it("should instruct the LLM to guide users to phrase action commands", () => {
+    it("should use ACTION_REDIRECT signal instead of telling user to retype", () => {
       const coachStreamPath = path.join(__dirname, "coachStream.ts");
       const content = fs.readFileSync(coachStreamPath, "utf-8");
 
-      expect(content).toContain("guide them to phrase it as a direct command");
+      expect(content).toContain("[ACTION_REDIRECT]");
+      expect(content).toContain("automatically route the request to the action handler");
+      // Must NOT contain the old "retype as command" instruction
+      expect(content).not.toContain("Just type your request as a command");
+      expect(content).not.toContain("type your request as a command and I'll create it for you");
+    });
+
+    it("should explicitly prohibit telling users to retype", () => {
+      const coachStreamPath = path.join(__dirname, "coachStream.ts");
+      const content = fs.readFileSync(coachStreamPath, "utf-8");
+
+      expect(content).toContain("NEVER tell the user to retype or rephrase their request as a command");
     });
   });
 
-  describe("tRPC askQuestion prompt includes CRM awareness", () => {
+  describe("tRPC askQuestion prompt includes CRM awareness with ACTION_REDIRECT", () => {
     it("should contain CRM ACTION CAPABILITIES block in routers.ts", () => {
       const routersPath = path.join(__dirname, "routers.ts");
       const content = fs.readFileSync(routersPath, "utf-8");
@@ -93,6 +104,15 @@ describe("AI Coach CRM Action Awareness", () => {
       // The routers.ts should also have the anti-denial rule
       expect(content).toContain("NEVER say");
       expect(content).toContain("I don't have access to your CRM");
+    });
+
+    it("should use ACTION_REDIRECT signal in routers.ts instead of retype instruction", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("[ACTION_REDIRECT]");
+      // Must NOT contain the old instruction
+      expect(content).not.toContain("Just type your request as a command and I'll create it for you");
     });
   });
 
@@ -113,6 +133,34 @@ describe("AI Coach CRM Action Awareness", () => {
       const content = fs.readFileSync(routersPath, "utf-8");
 
       expect(content).toContain("Do NOT return empty actions for these");
+    });
+  });
+
+  describe("Frontend ACTION_REDIRECT handling", () => {
+    it("should detect ACTION_REDIRECT in streaming response and re-route to parseIntent", () => {
+      const callInboxPath = path.join(__dirname, "../client/src/pages/CallInbox.tsx");
+      const content = fs.readFileSync(callInboxPath, "utf-8");
+
+      // Must check for ACTION_REDIRECT in streamed content
+      expect(content).toContain('[ACTION_REDIRECT]');
+      expect(content).toContain('actionRedirectDetected');
+      // Must re-route through parseIntent when detected
+      expect(content).toContain('parseIntentMutation.mutateAsync');
+    });
+
+    it("should handle ACTION_REDIRECT in non-streaming fallback", () => {
+      const callInboxPath = path.join(__dirname, "../client/src/pages/CallInbox.tsx");
+      const content = fs.readFileSync(callInboxPath, "utf-8");
+
+      // Non-streaming fallback should also check for ACTION_REDIRECT
+      expect(content).toContain('response.answer.includes("[ACTION_REDIRECT]")');
+    });
+
+    it("should show processing message during ACTION_REDIRECT re-routing", () => {
+      const callInboxPath = path.join(__dirname, "../client/src/pages/CallInbox.tsx");
+      const content = fs.readFileSync(callInboxPath, "utf-8");
+
+      expect(content).toContain('creating that for you now');
     });
   });
 });

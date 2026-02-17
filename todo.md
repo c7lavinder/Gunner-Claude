@@ -2281,3 +2281,9 @@
 - [x] Add action-awareness redirect — when user asks to do a CRM action in Q&A mode, coach should tell them to phrase it as a command (or auto-route it)
 - [x] Ensure the LLM never says "I can't add notes" or "I don't have access to your CRM" when those actions are fully implemented
 - [x] Write vitest tests for capability awareness and action routing
+
+## Fix: Auto-route action requests instead of asking user to retype
+- [x] Remove "retype as command" instruction from coaching prompts — coach should never ask user to rephrase
+- [x] Make parseIntent more aggressive at detecting conversational action requests so they never fall through to Q&A
+- [x] Update streaming coach prompt to stop suggesting users retype commands
+- [x] Write vitest tests for auto-routing behavior

@@ -59,7 +59,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Streamdown } from "streamdown";
@@ -381,8 +381,55 @@ function AICoachQA() {
   // Fire-and-forget mutation to persist exchanges for conversation memory
   const saveExchangeMutation = trpc.coach.saveExchange.useMutation();
 
+  // Track the last user message for ACTION_REDIRECT re-routing in non-streaming fallback
+  const lastUserMessageRef = useRef<string>("");
+
   const askCoachMutation = trpc.coach.askQuestion.useMutation({
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
+      // Check if the non-streaming response contains ACTION_REDIRECT
+      if (response.answer.includes("[ACTION_REDIRECT]")) {
+        setConversation(prev => [...prev, { role: "assistant", content: "On it \u2014 creating that for you now..." }]);
+        try {
+          const result = await parseIntentMutation.mutateAsync({ message: lastUserMessageRef.current });
+          const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
+          if (actions.length > 0) {
+            const resolvedContacts: Record<string, { id: string; name: string }> = {};
+            const batchTotal = actions.length;
+            for (let i = 0; i < actions.length; i++) {
+              const action = actions[i];
+              const batchIndex = i + 1;
+              if (action.needsContactSearch && action.contactName) {
+                const cached = resolvedContacts[action.contactName.toLowerCase()];
+                if (cached) {
+                  action.contactId = cached.id;
+                  action.contactName = cached.name;
+                  await createActionCard(action, lastUserMessageRef.current, batchIndex, batchTotal);
+                } else {
+                  const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
+                  if (contacts.length === 1) {
+                    action.contactId = contacts[0].id;
+                    action.contactName = contacts[0].name || action.contactName;
+                    resolvedContacts[action.contactName.toLowerCase()] = { id: contacts[0].id, name: contacts[0].name || action.contactName };
+                    await createActionCard(action, lastUserMessageRef.current, batchIndex, batchTotal);
+                  } else if (contacts.length > 1) {
+                    setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
+                    setPendingAction({ intent: action, message: lastUserMessageRef.current, remainingActions: actions.slice(i + 1), batchIndex, batchTotal });
+                    setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${action.contactName}". Please select the right one:` }]);
+                    setIsAsking(false);
+                    return;
+                  }
+                }
+              } else {
+                await createActionCard(action, lastUserMessageRef.current, batchIndex, batchTotal);
+              }
+            }
+          }
+        } catch (error: any) {
+          toast.error("Failed to process action: " + error.message);
+        }
+        setIsAsking(false);
+        return;
+      }
       setConversation(prev => [...prev, { role: "assistant", content: response.answer }]);
       setIsAsking(false);
     },
@@ -406,6 +453,8 @@ function AICoachQA() {
       if (!reader) throw new Error("No response body");
       const decoder = new TextDecoder();
       let buffer = "";
+      let fullResponse = "";
+      let actionRedirectDetected = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -419,6 +468,14 @@ function AICoachQA() {
           try {
             const parsed = JSON.parse(data);
             if (parsed.type === "chunk" && parsed.content) {
+              fullResponse += parsed.content;
+              // Check for ACTION_REDIRECT signal in the accumulated response
+              if (fullResponse.includes("[ACTION_REDIRECT]")) {
+                actionRedirectDetected = true;
+                // Cancel the reader — we're going to re-route
+                reader.cancel();
+                break;
+              }
               setConversation(prev => {
                 const updated = [...prev];
                 const lastMsg = updated[updated.length - 1];
@@ -432,7 +489,78 @@ function AICoachQA() {
             }
           } catch { /* skip malformed */ }
         }
+        if (actionRedirectDetected) break;
       }
+
+      // If ACTION_REDIRECT was detected, re-route through parseIntent
+      if (actionRedirectDetected) {
+        // Replace the streaming message with a processing indicator
+        setConversation(prev => {
+          const updated = [...prev];
+          const lastMsg = updated[updated.length - 1];
+          if (lastMsg && lastMsg.role === "assistant") {
+            updated[updated.length - 1] = { ...lastMsg, content: "On it \u2014 creating that for you now..." };
+          }
+          return updated;
+        });
+        try {
+          const result = await parseIntentMutation.mutateAsync({ message: userMessage });
+          const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
+          if (actions.length > 0) {
+            if (actions.length > 1) {
+              setConversation(prev => [...prev, { role: "assistant", content: `I detected **${actions.length} actions** in your request. Creating each one for your review:` }]);
+            }
+            const resolvedContacts: Record<string, { id: string; name: string }> = {};
+            const batchTotal = actions.length;
+            for (let i = 0; i < actions.length; i++) {
+              const action = actions[i];
+              const batchIndex = i + 1;
+              if (action.needsContactSearch && action.contactName) {
+                const cached = resolvedContacts[action.contactName.toLowerCase()];
+                if (cached) {
+                  action.contactId = cached.id;
+                  action.contactName = cached.name;
+                  await createActionCard(action, userMessage, batchIndex, batchTotal);
+                } else {
+                  const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
+                  if (contacts.length === 0) {
+                    setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in GHL. Skipping action: ${action.summary}` }]);
+                    continue;
+                  } else if (contacts.length === 1) {
+                    action.contactId = contacts[0].id;
+                    action.contactName = contacts[0].name || action.contactName;
+                    resolvedContacts[action.contactName.toLowerCase()] = { id: contacts[0].id, name: contacts[0].name || action.contactName };
+                    await createActionCard(action, userMessage, batchIndex, batchTotal);
+                  } else {
+                    setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
+                    setPendingAction({ intent: action, message: userMessage, remainingActions: actions.slice(i + 1), batchIndex, batchTotal });
+                    setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${action.contactName}". Please select the right one (for action: ${action.summary}):` }]);
+                    setIsAsking(false);
+                    return;
+                  }
+                }
+              } else {
+                await createActionCard(action, userMessage, batchIndex, batchTotal);
+              }
+            }
+          } else {
+            // parseIntent also returned empty — show a helpful message
+            setConversation(prev => {
+              const updated = [...prev];
+              const lastMsg = updated[updated.length - 1];
+              if (lastMsg && lastMsg.role === "assistant") {
+                updated[updated.length - 1] = { ...lastMsg, content: "I tried to process that as a CRM action but couldn't determine the details. Could you specify the contact name and what you'd like to do? For example: 'Add a note to Jackson James: [note text]'" };
+              }
+              return updated;
+            });
+          }
+        } catch (error: any) {
+          toast.error("Failed to process action: " + error.message);
+        }
+        setIsAsking(false);
+        return;
+      }
+
       // After streaming completes, persist the exchange for conversation memory (fire-and-forget)
       setConversation(prev => {
         const lastMsg = prev[prev.length - 1];
@@ -443,7 +571,8 @@ function AICoachQA() {
       });
       setIsAsking(false);
     } catch {
-      // Fallback to non-streaming
+      // Fallback to non-streaming — set ref so ACTION_REDIRECT handler can access the message
+      lastUserMessageRef.current = userMessage;
       askCoachMutation.mutate({ question: userMessage, history: chatHistory });
     }
   };
