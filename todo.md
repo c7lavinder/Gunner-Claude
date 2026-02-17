@@ -2292,3 +2292,8 @@
 - [x] Investigate why parseIntent returns empty actions for "Can you create summary for the last call with Jackson James and add that summary as a note?"
 - [x] Fix parseIntent to reliably detect these compound action requests on the first pass
 - [x] Improve fallback handling when ACTION_REDIRECT re-route also fails
+
+## Fix: AI Coach generates too-short call summaries for notes
+- [x] Investigate transcript truncation limit and prompt instructions for note content
+- [x] Increase transcript context and add explicit instructions for detailed, multi-paragraph summaries
+- [x] Ensure summaries highlight motivation type, key discussion points, property details, and next steps

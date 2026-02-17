@@ -164,6 +164,36 @@ describe("AI Coach CRM Action Awareness", () => {
     });
   });
 
+  describe("Detailed call summary requirements", () => {
+    it("should require 3-5 paragraph summaries with specific content sections", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("DETAILED, COMPREHENSIVE summary");
+      expect(content).toContain("at least 3-5 paragraphs");
+      expect(content).toContain("motivation and emotional drivers");
+      expect(content).toContain("Property details discussed");
+      expect(content).toContain("Key discussion points and objections");
+      expect(content).toContain("Outcome and agreed-upon next steps");
+    });
+
+    it("should specify minimum word count for call summaries", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("200-400 word summary");
+      expect(content).toContain("NEVER write a one-line summary");
+    });
+
+    it("should include up to 8000 chars of transcript for context", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("8000");
+      expect(content).not.toMatch(/transcript\.length > 2000/);
+    });
+  });
+
   describe("Frontend ACTION_REDIRECT handling", () => {
     it("should detect ACTION_REDIRECT in streaming response and re-route to parseIntent", () => {
       const callInboxPath = path.join(__dirname, "../client/src/pages/CallInbox.tsx");
