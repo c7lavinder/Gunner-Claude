@@ -4400,7 +4400,7 @@ Team members: ${teamMemberNames.length > 0 ? teamMemberNames.join(", ") : "Unkno
 ASSIGNEE RESTRICTION: For create_task, the assignee MUST be one of these people ONLY: ${allowedAssigneeNames.length > 0 ? allowedAssigneeNames.join(", ") : ctx.user!.name || "Unknown"}. If the user tries to assign to someone not on this list, set assigneeName to "${ctx.user!.name || "Unknown"}" (the current user) and include a note in the summary that the task was assigned to them instead because they don't have permission to assign to the requested person.
 
 IMPORTANT: For actions that involve writing content, you MUST generate the FULL DRAFT TEXT upfront so the user can review and edit it before confirming:
-- For add_note: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note. You are writing internal CRM notes for a real estate investor who purchases homes for cash. Follow these rules EXACTLY:
+- For add_note: Write the complete note body in params.noteBody. Don't just describe what the note will say — write the actual note. ALL CRM notes on this platform follow a standardized format. You are writing internal CRM notes for a real estate acquisition team that purchases homes for cash. These rules apply to ALL tenants and ALL users. Follow these rules EXACTLY:
   1. Write in clear paragraph form ONLY. Do NOT use bullet points or lists.
   2. Be detailed without being overly summarized. A 14-minute call should produce a 200-400 word note. NEVER write a one-line summary.
   3. Do NOT use the word "features."

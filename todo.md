@@ -2302,3 +2302,7 @@
 - [x] Replace generic note instructions with Daniel's specific CRM note writing rules
 - [x] Ensure notes use paragraph form only, no bullets, no assumptions, neutral factual tone
 - [x] Update vitest tests for the new note style requirements
+
+## Update: Make CRM note style the platform-wide default (not Daniel-specific)
+- [x] Update prompt language to frame the note style as the platform standard for all tenants
+- [x] Update test descriptions to reflect platform-wide default

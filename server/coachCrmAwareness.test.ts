@@ -164,7 +164,7 @@ describe("AI Coach CRM Action Awareness", () => {
     });
   });
 
-  describe("CRM note writing style (Daniel Lozano format)", () => {
+  describe("CRM note writing style (platform-wide default)", () => {
     it("should require paragraph form only with no bullet points", () => {
       const routersPath = path.join(__dirname, "routers.ts");
       const content = fs.readFileSync(routersPath, "utf-8");
@@ -188,7 +188,8 @@ describe("AI Coach CRM Action Awareness", () => {
       const content = fs.readFileSync(routersPath, "utf-8");
 
       expect(content).toContain("neutral, factual tone appropriate for internal CRM documentation");
-      expect(content).toContain("real estate investor who purchases homes for cash");
+      expect(content).toContain("real estate acquisition team that purchases homes for cash");
+      expect(content).toContain("ALL tenants and ALL users");
     });
 
     it("should specify the exact content categories to include if mentioned", () => {
