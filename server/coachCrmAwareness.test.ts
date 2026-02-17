@@ -134,6 +134,34 @@ describe("AI Coach CRM Action Awareness", () => {
 
       expect(content).toContain("Do NOT return empty actions for these");
     });
+
+    it("should contain compound request examples like 'create summary and add as note'", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      expect(content).toContain("create summary for the last call with Jackson James and add that summary as a note");
+      expect(content).toContain("Summarize the call with [Name] and save it as a note");
+      expect(content).toContain("COMPOUND REQUESTS");
+    });
+  });
+
+  describe("Name extraction patterns for call context lookup", () => {
+    it("should have patterns for 'call with [Name]' and 'summary for [Name]'", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      // Should have the expanded regex patterns
+      expect(content).toContain("call|conversation|chat|summary|talk");
+      expect(content).toContain("with|for|about");
+    });
+
+    it("should have a broad fallback pattern for capitalized name pairs", () => {
+      const routersPath = path.join(__dirname, "routers.ts");
+      const content = fs.readFileSync(routersPath, "utf-8");
+
+      // Broad fallback regex for two capitalized words
+      expect(content).toContain("Broad fallback");
+    });
   });
 
   describe("Frontend ACTION_REDIRECT handling", () => {

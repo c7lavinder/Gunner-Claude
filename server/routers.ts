@@ -4246,6 +4246,7 @@ Create content that:
         // Always look up recent call data for the contact mentioned in the message
         // This provides real context for tasks, notes, SMS, and any other action
         let callContext = "";
+        let contactNameForLookup = input.contextContactName || "";
         try {
           const { getDb } = await import("./db");
           const db = await getDb();
@@ -4255,7 +4256,7 @@ Create content that:
             
             // Try to extract a contact name from the message for lookup
             // First use explicit context, then try to parse from the message
-            let contactNameForLookup = input.contextContactName || "";
+            if (!contactNameForLookup) contactNameForLookup = "";
             
             if (!contactNameForLookup) {
               // Try to extract potential contact name from the message
@@ -4264,6 +4265,12 @@ Create content that:
               const nameExtractPatterns = [
                 /(?:call\s+back|callback|follow\s*up\s+with|text|sms\s+to|message|contact|reach\s+out\s+to|note\s+(?:to|for|about|on))\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
                 /(?:to\s+call|to\s+text|to\s+contact|to\s+reach)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+                // Match "call with [Name]", "summary for [Name]", "conversation with [Name]"
+                /(?:call|conversation|chat|summary|talk)\s+(?:with|for|about)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+                // Match "[Name]'s call" or "[Name]'s last call"
+                /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)(?:'s|\u2019s)\s+(?:call|conversation|last\s+call)/i,
+                // Broad fallback: any two capitalized words that look like a name (first + last)
+                /(?:^|\s)([A-Z][a-z]{1,15}\s+[A-Z][a-z]{1,15})(?:\s|$|[.,!?])/,
               ];
               for (const pattern of nameExtractPatterns) {
                 const match = input.message.match(pattern);
@@ -4378,7 +4385,12 @@ IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions co
 - "Please note that the seller called back" → add_note
 - "Text the seller and ask if they're still interested" → send_sms
 - "Set a reminder to call back tomorrow" → create_task
+- "Can you create summary for the last call with Jackson James and add that summary as a note?" → add_note (use the RECENT CALL DATA to write the full summary as the noteBody)
+- "Summarize the call with [Name] and save it as a note" → add_note (write the complete summary in noteBody)
+- "Write up what happened on the last call and add it to their notes" → add_note
+- "Create a summary of my call and note it" → add_note
 Do NOT return empty actions for these — they are action requests even if phrased as questions.
+COMPOUND REQUESTS: When a user asks to "create a summary AND add it as a note", this is ONE action (add_note) where you write the full summary as the noteBody. Do NOT treat this as two separate actions. Use the RECENT CALL DATA below to write the actual summary content.
 
 Context: ${input.contextContactId ? `Currently viewing contact: ${input.contextContactName} (ID: ${input.contextContactId})` : "No contact context"}
 
@@ -4461,6 +4473,9 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
         });
 
         const content = response.choices?.[0]?.message?.content;
+        console.log(`[parseIntent] User message: "${input.message.substring(0, 100)}"`);
+        console.log(`[parseIntent] Contact lookup name: "${contactNameForLookup || 'none'}"`);
+        console.log(`[parseIntent] Call context available: ${callContext.length > 0 ? 'yes (' + callContext.length + ' chars)' : 'no'}`);
         if (content && typeof content === "string") {
           const parsed = JSON.parse(content);
           const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field"];
@@ -4470,14 +4485,18 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
             const validActions = parsed.actions.filter((a: any) =>
               a && typeof a.actionType === "string" && a.actionType.trim() !== "" && a.actionType !== "none" && VALID_ACTION_TYPES.includes(a.actionType)
             );
+            console.log(`[parseIntent] LLM returned ${parsed.actions.length} actions, ${validActions.length} valid. Types: ${validActions.map((a: any) => a.actionType).join(', ') || 'none'}`);
             return { actions: validActions };
           }
           // Legacy fallback: single action format
           if (parsed.actionType && parsed.actionType !== "none" && VALID_ACTION_TYPES.includes(parsed.actionType)) {
+            console.log(`[parseIntent] Legacy format detected: ${parsed.actionType}`);
             return { actions: [parsed] };
           }
+          console.log(`[parseIntent] No valid actions detected. Raw response: ${content.substring(0, 200)}`);
           return { actions: [] };
         }
+        console.log(`[parseIntent] No content in LLM response`);
         return { actions: [] };
       }),
 

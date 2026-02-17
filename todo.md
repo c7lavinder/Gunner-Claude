@@ -2287,3 +2287,8 @@
 - [x] Make parseIntent more aggressive at detecting conversational action requests so they never fall through to Q&A
 - [x] Update streaming coach prompt to stop suggesting users retype commands
 - [x] Write vitest tests for auto-routing behavior
+
+## Fix: parseIntent returns empty for conversational action requests
+- [x] Investigate why parseIntent returns empty actions for "Can you create summary for the last call with Jackson James and add that summary as a note?"
+- [x] Fix parseIntent to reliably detect these compound action requests on the first pass
+- [x] Improve fallback handling when ACTION_REDIRECT re-route also fails
