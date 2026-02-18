@@ -2347,3 +2347,7 @@
 
 ## Fix: Automatic stuck call retry
 - [x] Add automatic retry for calls stuck in transcribing/classifying/grading for more than 1 hour — retryStuckCalls() runs every 30 min
+
+## Fix: Add system role (Admin/User) management to Edit Team Member dialog
+- [x] Add system role (User/Admin) dropdown to Edit Team Member dialog — "System Access" selector added with User/Admin options
+- [x] Ensure backend supports updating user role — backend already accepts role param, dialog now passes editingMember.role instead of hardcoded 'user'

@@ -62,7 +62,7 @@ export default function TenantSettings() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'starter' | 'growth' | 'scale'>('growth');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
-  const [editingMember, setEditingMember] = useState<{ id: number; name: string; teamRole: string | null } | null>(null);
+  const [editingMember, setEditingMember] = useState<{ id: number; name: string; teamRole: string | null; role: string } | null>(null);
 
   // Fetch tenant settings
   const { data: settings, isLoading: settingsLoading, refetch: refetchSettings } = trpc.tenant.getSettings.useQuery(
@@ -697,7 +697,8 @@ export default function TenantSettings() {
                               onClick={() => setEditingMember({ 
                                 id: member.id, 
                                 name: member.name || '', 
-                                teamRole: member.teamRole || null 
+                                teamRole: member.teamRole || null,
+                                role: member.role || 'user'
                               })}
                             >
                               <Edit className="h-4 w-4" />
@@ -2012,6 +2013,24 @@ export default function TenantSettings() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>System Access</Label>
+              <Select 
+                value={editingMember?.role || 'user'} 
+                onValueChange={(value) => setEditingMember(prev => prev ? { ...prev, role: value } : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select access level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Admins can manage team members, view all calls, and access settings.
+              </p>
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditingMember(null)}>Cancel</Button>
               <Button 
@@ -2019,7 +2038,7 @@ export default function TenantSettings() {
                   if (editingMember) {
                     updateUserRoleMutation.mutate({ 
                       userId: editingMember.id, 
-                      role: 'user',
+                      role: editingMember.role as 'admin' | 'user',
                       teamRole: editingMember.teamRole as 'admin' | 'acquisition_manager' | 'lead_manager' 
                     });
                     setEditingMember(null);
