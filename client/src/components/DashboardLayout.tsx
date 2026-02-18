@@ -30,7 +30,7 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { useImpersonation } from "./ImpersonationBanner";
 
-const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string, isTenantAdmin?: string | null) => {
+const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string, isTenantAdmin?: string | null, isDemo?: boolean) => {
   const isAdmin = teamRole === 'admin' || isTenantAdmin === 'true';
   const isSuperAdmin = userRole === 'super_admin';
   const isLeadGenerator = teamRole === 'lead_generator';
@@ -65,14 +65,14 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
   // Team page now includes My Profile tab
   items.push({ icon: Users, label: "Team", path: "/team" });
   
-  // Company Settings (includes Team Management) is admin-only
-  if (isAdmin) {
+  // Company Settings (includes Team Management) is admin-only — hidden in demo
+  if (isAdmin && !isDemo) {
     items.push({ icon: Building2, label: "Settings", path: "/settings" });
   }
   
-  // Admin Dashboard is for super_admin users (platform owner)
+  // Admin Dashboard is for super_admin users (platform owner) — hidden in demo
   const isPlatformOwner = openId === 'U3JEthPNs4UbYRrgRBbShj';
-  if (isSuperAdmin || isPlatformOwner) {
+  if ((isSuperAdmin || isPlatformOwner) && !isDemo) {
     items.push({ icon: Shield, label: "Platform Admin", path: "/admin" });
   }
   
@@ -200,16 +200,18 @@ export default function DashboardLayout({
     );
   }
   
+  // Demo users bypass onboarding and paywall
+  const isDemo = Boolean((user as any)?._isDemo);
+  
   // 3. If onboarding NOT completed, redirect to onboarding
-  // Super admins bypass this check (they may be impersonating a tenant)
-  if (!onboardingCompleted && tenantSettings && !isSuperAdmin) {
+  // Super admins and demo users bypass this check
+  if (!onboardingCompleted && tenantSettings && !isSuperAdmin && !isDemo) {
     return <Redirect to="/onboarding" />;
   }
   
   // 4. If onboarding completed but no subscription, redirect to paywall
-  // Super admins bypass this check
-  // Also bypass if user just completed checkout (webhook may not have processed yet)
-  if (onboardingCompleted && !hasActiveSubscription && tenantSettings && !isSuperAdmin && !justCompletedCheckout) {
+  // Super admins and demo users bypass this check
+  if (onboardingCompleted && !hasActiveSubscription && tenantSettings && !isSuperAdmin && !justCompletedCheckout && !isDemo) {
     return <Redirect to="/paywall" />;
   }
 
@@ -221,7 +223,16 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <div className={`flex min-h-svh w-full ${isImpersonating ? "pt-12" : ""}`}>
+      {isDemo && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-center py-2.5 px-4 text-sm font-medium shadow-md">
+          <span>You're viewing a demo of Gunner AI</span>
+          <span className="mx-2">—</span>
+          <a href="https://getgunner.ai" target="_blank" rel="noopener noreferrer" className="underline font-semibold hover:text-white/90 transition-colors">
+            Start your free trial →
+          </a>
+        </div>
+      )}
+      <div className={`flex min-h-svh w-full ${isImpersonating ? "pt-12" : isDemo ? "pt-10" : ""}`}>
         <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
           {children}
         </DashboardLayoutContent>
@@ -250,7 +261,8 @@ function DashboardLayoutContent({
   const effectiveRole = (isTenantImpersonating && impType === 'super_admin') ? 'admin' : user?.role;
   const effectiveTeamRole = (isTenantImpersonating && impType === 'super_admin') ? 'admin' : user?.teamRole;
   const effectiveIsTenantAdmin = (isTenantImpersonating && impType === 'super_admin') ? 'true' : user?.isTenantAdmin;
-  const menuItems = getMenuItems(effectiveTeamRole, user?.openId, effectiveRole, effectiveIsTenantAdmin);
+  const isDemo = Boolean((user as any)?._isDemo);
+  const menuItems = getMenuItems(effectiveTeamRole, user?.openId, effectiveRole, effectiveIsTenantAdmin, isDemo);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

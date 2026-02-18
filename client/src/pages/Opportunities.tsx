@@ -41,6 +41,7 @@ import {
   Ghost,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useDemo } from "@/hooks/useDemo";
 
 const tierConfig = {
   missed: {
@@ -173,6 +174,7 @@ const sourceConfig: Record<string, { label: string; icon: any; color: string }> 
 };
 
 export default function Opportunities() {
+  const { isDemo, guardAction: guardDemoAction } = useDemo();
   const [activeTab, setActiveTab] = useState("all");
   const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
   const [showDismissed, setShowDismissed] = useState(false);
@@ -214,6 +216,7 @@ export default function Opportunities() {
   };
 
   const handleResolve = (id: number, status: "handled" | "dismissed") => {
+    if (guardDemoAction("Pipeline actions")) return;
     if (status === "dismissed") {
       setDismissDialogId(id);
       setDismissReason("not_a_deal");
@@ -224,6 +227,7 @@ export default function Opportunities() {
   };
 
   const confirmDismiss = () => {
+    if (guardDemoAction("Pipeline actions")) return;
     if (dismissDialogId === null) return;
     resolveMutation.mutate({
       id: dismissDialogId,

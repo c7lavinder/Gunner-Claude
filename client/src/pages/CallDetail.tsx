@@ -29,6 +29,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import { Zap } from "lucide-react";
+import { useDemo } from "@/hooks/useDemo";
 // Badge confetti removed - badges are now awarded at grading time, not view time
 
 const FEEDBACK_TYPES = [
@@ -69,6 +70,7 @@ export default function CallDetail() {
   const callId = parseInt(params.id || "0", 10);
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [reclassifyDialogOpen, setReclassifyDialogOpen] = useState(false);
+  const { isDemo, guardAction: guardDemoAction } = useDemo();
   const [selectedClassification, setSelectedClassification] = useState("");
   const [feedbackForm, setFeedbackForm] = useState({
     feedbackType: "general_correction",
@@ -157,6 +159,7 @@ export default function CallDetail() {
   });
 
   const handleSubmitFeedback = () => {
+    if (guardDemoAction("Submitting feedback")) return;
     if (!feedbackForm.explanation.trim()) {
       toast.error("Please provide an explanation");
       return;
@@ -363,14 +366,15 @@ export default function CallDetail() {
           {call.status === "failed" && (
             <Button 
               variant="outline"
-              onClick={() => reprocessMutation.mutate({ callId })}
-              disabled={reprocessMutation.isPending}
+              onClick={() => { if (!guardDemoAction("Reprocessing")) reprocessMutation.mutate({ callId }); }}
+              disabled={reprocessMutation.isPending || isDemo}
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${reprocessMutation.isPending ? "animate-spin" : ""}`} />
               Retry
             </Button>
           )}
-          {/* Reclassify Dialog */}
+          {/* Reclassify Dialog - hidden in demo */}
+          {!isDemo && (
           <Dialog open={reclassifyDialogOpen} onOpenChange={setReclassifyDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -435,6 +439,7 @@ export default function CallDetail() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
@@ -488,8 +493,8 @@ export default function CallDetail() {
                 {call.status === "failed" && (
                   <Button 
                     className="mt-4"
-                    onClick={() => reprocessMutation.mutate({ callId })}
-                    disabled={reprocessMutation.isPending}
+                    onClick={() => { if (!guardDemoAction("Reprocessing")) reprocessMutation.mutate({ callId }); }}
+                    disabled={reprocessMutation.isPending || isDemo}
                   >
                     Retry Processing
                   </Button>

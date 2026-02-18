@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useDemo } from "@/hooks/useDemo";
 
 // Tier badge colors for team display
 const tierColors: Record<string, string> = {
@@ -639,6 +640,7 @@ function MyProfileContent() {
 // Team Members Tab Content
 function TeamMembersContent() {
   const { user } = useAuth();
+  const { isDemo, guardAction: guardDemoAction } = useDemo();
   const utils = trpc.useUtils();
   
   const { data: teamMembers, isLoading: membersLoading, refetch } = trpc.team.list.useQuery();
@@ -703,8 +705,8 @@ function TeamMembersContent() {
       {(!teamMembers || teamMembers.length === 0) && (
         <div className="flex justify-end">
           <Button 
-            onClick={() => seedMutation.mutate()}
-            disabled={seedMutation.isPending}
+            onClick={() => { if (!guardDemoAction("Team management")) seedMutation.mutate(); }}
+            disabled={seedMutation.isPending || isDemo}
           >
             <UserPlus className="h-4 w-4 mr-2" />
             Initialize Team

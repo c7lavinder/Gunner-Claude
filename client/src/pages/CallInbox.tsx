@@ -63,6 +63,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useDemo } from "@/hooks/useDemo";
 import { Streamdown } from "streamdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -377,6 +378,7 @@ const ACTION_ICONS: Record<string, string> = {
 };
 
 function AICoachQA() {
+  const { guardAction: guardDemoAction, isDemo } = useDemo();
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
@@ -825,6 +827,7 @@ function AICoachQA() {
   };
 
   const handleConfirmAction = async (actionId: number) => {
+    if (guardDemoAction("CRM actions")) return;
     // Find the action card to check if it was edited
     const actionCard = conversation.find(
       (msg): msg is Extract<ConversationMessage, { role: "action_card" }> =>
@@ -877,6 +880,7 @@ function AICoachQA() {
   };
 
   const handleCancelAction = async (actionId: number) => {
+    if (guardDemoAction("CRM actions")) return;
     try {
       await cancelActionMutation.mutateAsync({ actionId });
       setConversation(prev => prev.map(msg => 
@@ -1539,6 +1543,7 @@ const PAGE_SIZE = 25;
 
 export default function CallInbox() {
   const { user } = useAuth();
+  const { isDemo, guardAction: guardDemoAction } = useDemo();
   const searchString = useSearch();
   const [, setLocation] = useLocation();
 
@@ -1792,12 +1797,16 @@ export default function CallInbox() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuItem asChild>
-                  <div className="w-full">
-                    <BatchDialerSyncButton onSyncComplete={handleRefresh} />
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                {!isDemo && (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <div className="w-full">
+                        <BatchDialerSyncButton onSyncComplete={handleRefresh} />
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem asChild>
                   <div className="w-full">
                     <ManualUploadDialog onSuccess={handleRefresh} />

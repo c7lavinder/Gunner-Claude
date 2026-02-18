@@ -2368,3 +2368,10 @@
 - [ ] Add GHL task querying to AI Coach — allow coach to answer "what leads are due on [date]" by fetching tasks from GHL API
 - [x] Fix AI Coach responses being cut off / truncated in Admin Activity Log view
 - [x] Merge 'Seller Callback', 'Admin Callback', and admin calls into a single 'Admin' call type in the Call Type filter
+- [x] Build demo account — separate login, realistic fake data, read-only access
+- [x] Create demo tenant with 5 team members (2 cold callers, 2 lead managers, 1 AM)
+- [x] Seed realistic call/grade data with upward trends on analytics
+- [x] Demo auth system with dedicated login credentials
+- [x] Demo mode restrictions — disable all action buttons, block rubric details, block CRM actions
+- [x] Auto-delete uploaded calls after 15 minutes in demo mode
+- [x] Demo banner with "Start your free trial" CTA

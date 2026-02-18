@@ -74,6 +74,7 @@ import {
 import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useDemo } from "@/hooks/useDemo";
 
 const CATEGORIES = [
   { value: "script", label: "Script", icon: FileText },
@@ -703,6 +704,7 @@ function TeamTrainingContent() {
 }
 
 export default function Training() {
+  const { isDemo, guardAction: guardDemoAction } = useDemo();
   const [mainTab, setMainTab] = useState("team");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<any>(null);
@@ -891,7 +893,7 @@ export default function Training() {
             }
           }}>
             <DialogTrigger asChild>
-              <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Button onClick={() => { if (guardDemoAction("Adding training materials")) return; setIsAddDialogOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Material
               </Button>
@@ -1105,7 +1107,7 @@ export default function Training() {
                   Add your training scripts, methodology, and best practices to help the AI 
                   grade calls according to your standards.
                 </p>
-                <Button onClick={() => setIsAddDialogOpen(true)}>
+                <Button onClick={() => { if (guardDemoAction("Adding training materials")) return; setIsAddDialogOpen(true); }}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Your First Material
                 </Button>
@@ -1391,6 +1393,7 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
   adminCallbackContext: any;
 }) {
   const { user } = useAuth();
+  const { isDemo } = useDemo();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
   const utils = trpc.useUtils();
 
@@ -1841,7 +1844,7 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                               </CardTitle>
                               <CardDescription>{rubric.description || config.description}</CardDescription>
                             </div>
-                            {isAdmin && (hasCustomRubrics || rubric.isCustom) && (
+                            {isAdmin && !isDemo && (hasCustomRubrics || rubric.isCustom) && (
                               <div className="flex items-center gap-2">
                                 <Button size="sm" variant="outline" onClick={() => startEditing(config.callType, config.rubricKey, config)}>
                                   <Edit className="h-4 w-4 mr-1" />Edit

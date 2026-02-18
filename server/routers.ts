@@ -111,18 +111,31 @@ export const appRouter = router({
   admin: adminRouter,
   
   auth: router({
-    me: publicProcedure.query(opts => {
+    me: publicProcedure.query(async opts => {
       const user = opts.ctx.user;
       if (!user) return null;
       // Expose impersonation metadata as proper fields (set by context.ts during super_admin impersonation)
       const isImpersonating = (user as any)._isImpersonating === true;
       const impersonatedTenantName = (user as any)._impersonatedTenantName || null;
       const originalTenantId = (user as any)._originalTenantId || null;
+      // Check if this is a demo tenant
+      let isDemo = false;
+      if (user.tenantId) {
+        const { getDb } = await import("./db");
+        const { tenants } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (db) {
+          const [tenant] = await db.select({ slug: tenants.slug }).from(tenants).where(eq(tenants.id, user.tenantId)).limit(1);
+          isDemo = tenant?.slug === 'demo-apex';
+        }
+      }
       return {
         ...user,
         _isImpersonating: isImpersonating,
         _impersonatedTenantName: impersonatedTenantName,
         _originalTenantId: originalTenantId,
+        _isDemo: isDemo,
       };
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -665,6 +678,33 @@ export const appRouter = router({
             processCall(call.id).catch(err => {
               console.error("[ManualUpload] Error processing call:", err);
             });
+
+            // Auto-delete demo uploads after 15 minutes
+            const { tenants: tenantsTable } = await import("../drizzle/schema");
+            const { eq: eqOp } = await import("drizzle-orm");
+            const { getDb: getDbFn } = await import("./db");
+            const dbConn = await getDbFn();
+            if (dbConn && ctx.user.tenantId) {
+              const [tenant] = await dbConn.select({ slug: tenantsTable.slug }).from(tenantsTable).where(eqOp(tenantsTable.id, ctx.user.tenantId)).limit(1);
+              if (tenant?.slug === 'demo-apex') {
+                console.log(`[DemoUpload] Scheduling auto-delete for call ${call.id} in 15 minutes`);
+                setTimeout(async () => {
+                  try {
+                    const { calls: callsT, callGrades: gradesT } = await import("../drizzle/schema");
+                    const { eq: eqDel } = await import("drizzle-orm");
+                    const { getDb: getDbDel } = await import("./db");
+                    const dbDel = await getDbDel();
+                    if (dbDel) {
+                      await dbDel.delete(gradesT).where(eqDel(gradesT.callId, call.id));
+                      await dbDel.delete(callsT).where(eqDel(callsT.id, call.id));
+                      console.log(`[DemoUpload] Auto-deleted demo call ${call.id}`);
+                    }
+                  } catch (err) {
+                    console.error(`[DemoUpload] Failed to auto-delete call ${call.id}:`, err);
+                  }
+                }, 15 * 60 * 1000); // 15 minutes
+              }
+            }
           }
 
           return { success: true, callId: call?.id };
