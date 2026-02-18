@@ -37,7 +37,8 @@ import {
   ChevronRight,
   Tag,
   Pencil,
-  ClipboardList
+  ClipboardList,
+  MoreVertical
 } from "lucide-react";
 import { Link, useSearch, useLocation, useRoute } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,13 @@ import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Streamdown } from "streamdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 
 function GradeBadge({ grade }: { grade: string }) {
@@ -1772,30 +1780,47 @@ export default function CallInbox() {
             Review calls, provide feedback, and get coaching advice
           </p>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <GHLSyncStatus onSyncComplete={handleRefresh} />
-          <BatchDialerSyncButton onSyncComplete={handleRefresh} />
-          {(user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true') && (
-            <ManualUploadDialog onSuccess={handleRefresh} />
-          )}
-          {(user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true') && (
-            <Link href="/coach-log">
-              <Button variant="outline" size="sm" className="h-8 sm:h-9 gap-1.5">
-                <ClipboardList className="h-4 w-4" />
-                <span className="hidden sm:inline">Coach Log</span>
-              </Button>
-            </Link>
-          )}
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="sm"
             onClick={handleRefresh}
             disabled={isRefetching}
-            className="h-8 sm:h-9"
+            className="h-8 w-8 p-0"
+            title="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline ml-2">Refresh</span>
           </Button>
+          {(user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true') && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="More actions">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem asChild>
+                  <div className="w-full">
+                    <BatchDialerSyncButton onSyncComplete={handleRefresh} />
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <div className="w-full">
+                    <ManualUploadDialog onSuccess={handleRefresh} />
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/coach-log" className="flex items-center gap-2 cursor-pointer">
+                    <ClipboardList className="h-4 w-4" />
+                    Coach Log
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 

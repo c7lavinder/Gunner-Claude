@@ -460,6 +460,74 @@ export async function sendSms(
   return { success: true, messageId: data.messageId || data.id };
 }
 
+// ============ HELPER: Parse relative date strings ============
+
+function parseRelativeDate(dateStr: string): string {
+  const now = new Date();
+  const lower = dateStr.toLowerCase().trim();
+  
+  // Handle "next monday", "next tuesday", etc.
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  for (let i = 0; i < dayNames.length; i++) {
+    if (lower.includes(dayNames[i])) {
+      const target = new Date(now);
+      const currentDay = target.getDay();
+      let daysUntil = i - currentDay;
+      if (daysUntil <= 0) daysUntil += 7; // Always go to NEXT occurrence
+      target.setDate(target.getDate() + daysUntil);
+      target.setHours(10, 0, 0, 0); // Default to 10am
+      return target.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    }
+  }
+  
+  // Handle "tomorrow"
+  if (lower.includes('tomorrow')) {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    return tomorrow.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }
+  
+  // Handle "X days/weeks/months from now"
+  const relMatch = lower.match(/(\d+)\s*(day|week|month)s?\s*(from\s*now|later|out)?/);
+  if (relMatch) {
+    const amount = parseInt(relMatch[1]);
+    const unit = relMatch[2];
+    const target = new Date(now);
+    if (unit === 'day') target.setDate(target.getDate() + amount);
+    else if (unit === 'week') target.setDate(target.getDate() + amount * 7);
+    else if (unit === 'month') target.setMonth(target.getMonth() + amount);
+    target.setHours(10, 0, 0, 0);
+    return target.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }
+  
+  // Handle "in X days/weeks/months"
+  const inMatch = lower.match(/in\s*(\d+)\s*(day|week|month)s?/);
+  if (inMatch) {
+    const amount = parseInt(inMatch[1]);
+    const unit = inMatch[2];
+    const target = new Date(now);
+    if (unit === 'day') target.setDate(target.getDate() + amount);
+    else if (unit === 'week') target.setDate(target.getDate() + amount * 7);
+    else if (unit === 'month') target.setMonth(target.getMonth() + amount);
+    target.setHours(10, 0, 0, 0);
+    return target.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }
+  
+  // Fallback: try Date.parse one more time, or default to tomorrow
+  const lastTry = new Date(dateStr);
+  if (!isNaN(lastTry.getTime())) {
+    return lastTry.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }
+  
+  // Ultimate fallback: tomorrow at 10am
+  const fallback = new Date(now);
+  fallback.setDate(fallback.getDate() + 1);
+  fallback.setHours(10, 0, 0, 0);
+  console.warn(`[createTask] Could not parse dueDate "${dateStr}", defaulting to tomorrow`);
+  return fallback.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 // ============ ACTION 5: CREATE TASK ============
 
 export async function createTask(
@@ -473,10 +541,33 @@ export async function createTask(
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured");
 
+  // Normalize dueDate to ISO 8601 format required by GHL: YYYY-MM-DDTHH:mm:ssZ
+  let normalizedDueDate: string;
+  if (dueDate && dueDate.trim()) {
+    try {
+      const parsed = new Date(dueDate);
+      if (!isNaN(parsed.getTime())) {
+        // Valid date — format without milliseconds for GHL
+        normalizedDueDate = parsed.toISOString().replace(/\.\d{3}Z$/, 'Z');
+      } else {
+        // Could not parse — try relative date parsing
+        normalizedDueDate = parseRelativeDate(dueDate);
+      }
+    } catch {
+      normalizedDueDate = parseRelativeDate(dueDate);
+    }
+  } else {
+    // Default: tomorrow at 10am UTC
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    normalizedDueDate = tomorrow.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }
+
   const body: any = {
     title,
-    body: description,
-    dueDate: dueDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    body: description || "",
+    dueDate: normalizedDueDate,
     completed: false,
   };
   // Assign to specific GHL user if provided
@@ -484,14 +575,20 @@ export async function createTask(
     body.assignedTo = assignedTo;
   }
 
-  const data = await ghlFetch(
-    creds,
-    `/contacts/${contactId}/tasks`,
-    "POST",
-    body
-  );
+  console.log(`[createTask] Creating task for contact ${contactId}: title="${title}", dueDate=${normalizedDueDate}, assignedTo=${assignedTo || "none"}`);
 
-  return { success: true, taskId: data.task?.id || data.id };
+  try {
+    const data = await ghlFetch(
+      creds,
+      `/contacts/${contactId}/tasks`,
+      "POST",
+      body
+    );
+    return { success: true, taskId: data.task?.id || data.id };
+  } catch (err: any) {
+    console.error(`[createTask] GHL API error: ${err.message}. Body sent:`, JSON.stringify(body));
+    throw err;
+  }
 }
 
 // ============ ACTION 6: ADD TAG ============

@@ -2319,3 +2319,22 @@
 - [x] Investigate how callType is determined during call processing (classification step)
 - [x] Fix classifier to distinguish admin/scheduling calls from actual offer calls — updated AI detection prompt, fixed role-based fallback across 4 files
 - [x] Ensure calls where no offer is discussed are classified as 'admin' not 'offer' — role-based fallback now defaults to 'qualification' for acquisition managers, AI determines actual type
+
+## Fix: Create Task GHL API 422 date format error
+- [x] Investigate how task due dates are formatted when sent to GHL API
+- [x] Fix date format to include timezone offset (e.g., 2020-10-25T10:00:00Z) — already using ISO 8601, added better error logging
+- [x] Fix task assignee parsing — contact name should not be treated as assignee — improved LLM prompt to clearly distinguish contact vs assignee
+
+## Cleanup: Call Inbox toolbar layout
+- [x] Clean up the toolbar buttons — consolidated into icon-only Refresh + three-dot dropdown menu with BatchDialer sync, Upload Call, and Coach Log
+
+## Fix: Stale deal detection not counting calls/texts as activity
+- [x] Investigate stale deal detection logic — what counts as "activity"
+- [x] Fix to include call records and SMS as activity — added GHL conversation check to detectStaleActiveStage, checks for recent outbound messages
+- [x] Improve signal descriptions to reflect actual story — when activity found, description now says "team is actively working" with details
+- [x] Fix Micah Hensley false positive — GHL conversation check catches recent calls/texts, suppresses stale signal when team is active
+- [x] Investigate price extraction accuracy — rewrote extractPricesFromTranscript with keyword-based classification
+- [x] Improve price extraction: added SMS conversation scanning for price mentions in both new detection and re-evaluation flows
+- [x] Fix price extraction heuristics — now requires explicit keyword context ("asking", "want", "offer", "we can do") to classify, never guesses
+- [x] Frances Rolin: Fixed — SMS conversations now scanned for price data, conservative classification prevents wrong labeling
+- [x] Navery Moore: Fixed — price extraction now requires keyword context, won't grab random dollar amounts from transcripts

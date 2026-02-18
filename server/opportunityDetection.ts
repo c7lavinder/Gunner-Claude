@@ -101,13 +101,14 @@ const NO_PRICE_DATA = { ourOffer: null, sellerAsk: null, priceGap: null };
 /**
  * Extract dollar amounts from a transcript.
  * Returns { ourOffer, sellerAsk, priceGap } with values in whole dollars.
- * Uses heuristics: amounts near "offer/we/our" = our offer, amounts near "want/need/asking/take" = seller ask.
+ * CONSERVATIVE approach: only classify when context CLEARLY indicates an offer or asking price.
+ * Never guess — it's better to show no price than a wrong price.
  */
 function extractPricesFromTranscript(transcript: string): { ourOffer: number | null; sellerAsk: number | null; priceGap: number | null } {
   if (!transcript) return NO_PRICE_DATA;
 
   // Find all dollar amounts in the transcript
-  const amountPattern = /\$([\d,]+(?:\.\d{2})?)|([\d,]+(?:\.\d{2})?)\s*(?:thousand|k\b)/gi;
+  const amountPattern = /\$(\d[\d,]*(?:\.\d{2})?)|(\d[\d,]*(?:\.\d{2})?)\s*(?:thousand|k\b)/gi;
   const amounts: { value: number; context: string; index: number }[] = [];
 
   let match;
@@ -119,10 +120,18 @@ function extractPricesFromTranscript(transcript: string): { ourOffer: number | n
     if (match[0].toLowerCase().includes("thousand") || match[0].toLowerCase().endsWith("k")) {
       value *= 1000;
     }
-    if (value < 1000 || value > 100_000_000) continue; // Filter unrealistic amounts
-    const start = Math.max(0, match.index - 120);
-    const end = Math.min(transcript.length, match.index + match[0].length + 120);
+    // Filter unrealistic property prices (too low or too high)
+    if (value < 10_000 || value > 10_000_000) continue;
+    const start = Math.max(0, match.index - 100);
+    const end = Math.min(transcript.length, match.index + match[0].length + 100);
     const context = transcript.substring(start, end).toLowerCase();
+    
+    // EXCLUDE amounts that appear in non-price contexts (taxes, repairs, rent, income, etc.)
+    const nonPriceContext = /\b(tax|taxes|rent|rental|income|mortgage|payment|repair|renovation|assessment|insurance|hoa|fee|dues|deposit|earnest|closing cost|commission|arv|after repair|monthly|per month|year|annual|square foot|per sq)\b/;
+    if (nonPriceContext.test(context) && !/(asking|offer|want|need|take|pay|price|worth|value|sell for|buy for|looking for)/.test(context)) {
+      continue; // Skip amounts in non-price contexts
+    }
+    
     amounts.push({ value, context, index: match.index });
   }
 
@@ -131,9 +140,11 @@ function extractPricesFromTranscript(transcript: string): { ourOffer: number | n
   let ourOffer: number | null = null;
   let sellerAsk: number | null = null;
 
-  // Classify each amount based on surrounding context
-  const ourPatterns = /\b(offer|we(?:'d| would| can| could)?|our|i(?:'d| would| can| could) (?:do|go|offer|pay|come in at))/;
-  const sellerPatterns = /\b(want|need|asking|take|looking for|hoping|at least|minimum|bottom line|won't go below|i(?:'d| would) take|my price|i want|i need)/;
+  // STRICT classification: only assign when context CLEARLY indicates offer or ask
+  // Our offer patterns — must be clearly from the buyer's side
+  const ourPatterns = /\b((?:we|our|i)(?:'d| would| can| could)? (?:offer|pay|do|go|come in at)|our offer|we offered|offered (?:him|her|them)|came in at|we(?:'re| are) at)/;
+  // Seller ask patterns — must be clearly from the seller's side
+  const sellerPatterns = /\b((?:want|need|asking|looking for|hoping for|at least|minimum|bottom line|won't go below|won't take less|i(?:'d| would) take|my price|i want|i need|they want|(?:he|she) wants?|(?:he|she) (?:is |was )?asking|seller(?:'s)? ask|asking price))/;
 
   for (const amt of amounts) {
     if (sellerPatterns.test(amt.context) && !sellerAsk) {
@@ -143,17 +154,10 @@ function extractPricesFromTranscript(transcript: string): { ourOffer: number | n
     }
   }
 
-  // If we only found one amount, try to classify by position (seller usually states first in follow-ups)
-  if (amounts.length === 1 && !ourOffer && !sellerAsk) {
-    sellerAsk = amounts[0].value; // Default single amount to seller ask
-  }
-
-  // If we found two amounts but couldn't classify, assume lower = our offer, higher = seller ask
-  if (amounts.length >= 2 && !ourOffer && !sellerAsk) {
-    const sorted = [...amounts].sort((a, b) => a.value - b.value);
-    ourOffer = sorted[0].value;
-    sellerAsk = sorted[sorted.length - 1].value;
-  }
+  // DO NOT guess when context is unclear.
+  // Previous logic defaulted single amounts to "seller ask" and guessed lower/higher for two amounts.
+  // This caused wrong prices (e.g., property values, tax amounts being labeled as offers).
+  // Only return prices that were explicitly classified by context patterns above.
 
   const priceGap = (ourOffer !== null && sellerAsk !== null) ? Math.abs(sellerAsk - ourOffer) : null;
 
@@ -1107,9 +1111,15 @@ async function detectStaleActiveStage(
   const hasFutureApt = await hasUpcomingAppointment(creds, opp.contactId);
   if (hasFutureApt) return null; // Appointment scheduled — stage is active
 
-  // Check for any recent activity (calls)
-  const recentActivity = await db
-    .select()
+  // Check for any recent activity (calls in Gunner DB)
+  const recentCalls = await db
+    .select({
+      callTimestamp: calls.callTimestamp,
+      teamMemberName: calls.teamMemberName,
+      callType: calls.callType,
+      classification: calls.classification,
+      duration: calls.duration,
+    })
     .from(calls)
     .where(
       and(
@@ -1118,9 +1128,69 @@ async function detectStaleActiveStage(
         gte(calls.callTimestamp, fiveDaysAgo)
       )
     )
-    .limit(1);
+    .orderBy(desc(calls.callTimestamp));
 
-  if (recentActivity.length > 0) return null; // There's been activity
+  if (recentCalls.length > 0) return null; // There's been call activity in Gunner DB
+
+  // CHECK GHL CONVERSATIONS for recent outbound activity (calls, SMS, emails)
+  // This catches activity that isn't in Gunner's call DB (e.g., outbound texts, short calls not recorded)
+  let ghlActivitySummary: string | null = null;
+  let lastGhlActivityAt: Date | null = null;
+  if (creds) {
+    try {
+      const conversations = await ghlFetch(
+        creds,
+        `/conversations/search?locationId=${creds.locationId}&contactId=${opp.contactId}`
+      );
+      const convList = conversations.conversations || [];
+      if (convList.length > 0) {
+        const conv = convList[0];
+        const lastMsgDate = new Date(conv.lastMessageDate);
+        
+        // If there's been ANY message activity since the stage was set, this isn't truly stale
+        if (lastMsgDate > stageChangeAt) {
+          // Check the actual messages to build an activity summary
+          const messages = await fetchConversationMessages(creds, conv.id, 20);
+          const recentMessages = messages.filter((m: GHLMessageDetail) => {
+            const msgDate = new Date(m.dateAdded);
+            return msgDate > stageChangeAt;
+          });
+          
+          if (recentMessages.length > 0) {
+            const outboundCount = recentMessages.filter((m: GHLMessageDetail) => m.direction === "outbound").length;
+            const inboundCount = recentMessages.filter((m: GHLMessageDetail) => m.direction === "inbound").length;
+            
+            // If there's been outbound activity within the last 3 business days, suppress entirely
+            const lastOutbound = recentMessages.find((m: GHLMessageDetail) => m.direction === "outbound");
+            if (lastOutbound) {
+              const lastOutDate = new Date(lastOutbound.dateAdded);
+              const businessDaysSinceOut = countBusinessDays(lastOutDate, new Date());
+              if (businessDaysSinceOut < 3) {
+                return null; // Team is actively working this — not stale
+              }
+            }
+            
+            // There's been activity but it's been more than 3 business days since last outbound
+            // Still flag it, but with accurate activity description
+            const activityParts: string[] = [];
+            if (outboundCount > 0) activityParts.push(`${outboundCount} outbound message${outboundCount > 1 ? "s" : ""}`);
+            if (inboundCount > 0) activityParts.push(`${inboundCount} inbound message${inboundCount > 1 ? "s" : ""}`);
+            ghlActivitySummary = `GHL conversation shows ${activityParts.join(" and ")} since stage was set, but no outbound activity in 3+ business days.`;
+            lastGhlActivityAt = lastMsgDate;
+          }
+        }
+      }
+    } catch (err) {
+      // Non-critical — continue without GHL conversation check
+      console.error(`[OpportunityDetection] Error checking GHL conversations for stale stage:`, err);
+    }
+  }
+
+  // Build transcript excerpt with activity context
+  let excerpt = "";
+  if (ghlActivitySummary) {
+    excerpt = ghlActivitySummary;
+  }
 
   return {
     tier: "warning",
@@ -1137,9 +1207,9 @@ async function detectStaleActiveStage(
     ...resolveGhlAssignee(opp.assignedTo, ghlMap),
     assignedTo: opp.assignedTo || null,
     detectionSource: "pipeline",
-    lastActivityAt: stageChangeAt,
+    lastActivityAt: lastGhlActivityAt || stageChangeAt,
     lastStageChangeAt: stageChangeAt,
-    transcriptExcerpt: "",
+    transcriptExcerpt: excerpt,
     ...NO_PRICE_DATA,
   };
 }
@@ -2083,7 +2153,7 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
   },
   stale_active_stage: {
     label: "Stale in Active Stage",
-    context: "This lead has been in an active stage (Pending Apt or Walkthrough) for 5+ days. No recent activity has been logged.",
+    context: "This lead has been in an active stage (Pending Apt or Walkthrough) for 5+ days with no recent outbound activity in the last 3 business days. Check GHL conversations and call logs for the full picture.",
     tier: "at_risk"
   },
   dead_with_selling_signals: {
@@ -2604,8 +2674,18 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
     for (const tenant of tenantsToScan) {
       try {
         await scanTenant(db, tenant.id, result);
+        // Build creds for re-evaluation (SMS price scanning needs GHL API access)
+        const allTenantsForCreds = await getTenantsWithCrm();
+        const tenantForCreds = allTenantsForCreds.find(t => t.id === tenant.id);
+        let reEvalCreds: GHLCredentials | null = null;
+        if (tenantForCreds) {
+          const cfg = parseCrmConfig(tenantForCreds);
+          if (cfg.ghlApiKey && cfg.ghlLocationId) {
+            reEvalCreds = { apiKey: cfg.ghlApiKey, locationId: cfg.ghlLocationId };
+          }
+        }
         // After scanning for new opportunities, re-evaluate existing active ones
-        const refreshed = await reEvaluateActiveOpportunities(db, tenant.id);
+        const refreshed = await reEvaluateActiveOpportunities(db, tenant.id, reEvalCreds);
         if (refreshed > 0) {
           console.log(`[OpportunityDetection] Refreshed ${refreshed} active opportunity summaries for tenant ${tenant.id}`);
         }
@@ -2626,7 +2706,7 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
 // ============ DYNAMIC RE-EVALUATION ============
 // Refreshes active opportunity summaries with the latest call history, pipeline data, and pricing
 
-async function reEvaluateActiveOpportunities(db: any, tenantId: number): Promise<number> {
+async function reEvaluateActiveOpportunities(db: any, tenantId: number, creds: GHLCredentials | null = null): Promise<number> {
   let refreshed = 0;
   try {
     // Get all active opportunities for this tenant
@@ -2697,6 +2777,37 @@ async function reEvaluateActiveOpportunities(db: any, tenantId: number): Promise
             detection.ourOffer = prices.ourOffer;
             detection.sellerAsk = prices.sellerAsk;
             detection.priceGap = prices.priceGap;
+          }
+        }
+
+        // Also scan GHL SMS conversations for price data (negotiations often happen over text)
+        if (creds && detection.ghlContactId && (!detection.ourOffer || !detection.sellerAsk)) {
+          try {
+            const convSearch = await ghlFetch(
+              creds,
+              `/conversations/search?locationId=${creds.locationId}&contactId=${detection.ghlContactId}`
+            );
+            const convList = convSearch.conversations || [];
+            if (convList.length > 0) {
+              const messages = await fetchConversationMessages(creds, convList[0].id, 30);
+              const smsText = messages
+                .filter((m: GHLMessageDetail) => m.body && m.body.trim())
+                .map((m: GHLMessageDetail) => {
+                  const prefix = m.direction === "outbound" ? "[our team]:" : "[seller]:";
+                  return `${prefix} ${m.body}`;
+                })
+                .join("\n");
+              if (smsText) {
+                const smsPrices = extractPricesFromTranscript(smsText);
+                if (smsPrices.ourOffer) detection.ourOffer = smsPrices.ourOffer;
+                if (smsPrices.sellerAsk) detection.sellerAsk = smsPrices.sellerAsk;
+                if (detection.ourOffer && detection.sellerAsk) {
+                  detection.priceGap = Math.abs(detection.sellerAsk - detection.ourOffer);
+                }
+              }
+            }
+          } catch (smsErr) {
+            // Non-critical
           }
         }
 
@@ -2971,6 +3082,38 @@ async function scanTenant(
             if (!detection.ourOffer && prices.ourOffer) detection.ourOffer = prices.ourOffer;
             if (!detection.sellerAsk && prices.sellerAsk) detection.sellerAsk = prices.sellerAsk;
           }
+
+          // Also scan GHL SMS conversations for price mentions
+          // Real negotiations often happen over text, not just phone calls
+          if (creds && (!detection.ourOffer || !detection.sellerAsk)) {
+            try {
+              const convSearch = await ghlFetch(
+                creds,
+                `/conversations/search?locationId=${creds.locationId}&contactId=${detection.ghlContactId}`
+              );
+              const convList = convSearch.conversations || [];
+              if (convList.length > 0) {
+                const messages = await fetchConversationMessages(creds, convList[0].id, 30);
+                // Combine all message bodies into a single text for price extraction
+                const smsText = messages
+                  .filter((m: GHLMessageDetail) => m.body && m.body.trim())
+                  .map((m: GHLMessageDetail) => {
+                    const prefix = m.direction === "outbound" ? "[our team]:" : "[seller]:";
+                    return `${prefix} ${m.body}`;
+                  })
+                  .join("\n");
+                if (smsText) {
+                  const smsPrices = extractPricesFromTranscript(smsText);
+                  // SMS prices override transcript prices since SMS negotiations are more recent/explicit
+                  if (smsPrices.ourOffer) detection.ourOffer = smsPrices.ourOffer;
+                  if (smsPrices.sellerAsk) detection.sellerAsk = smsPrices.sellerAsk;
+                }
+              }
+            } catch (smsErr) {
+              // Non-critical — continue without SMS price enrichment
+            }
+          }
+
           // Recalculate gap
           if (detection.ourOffer && detection.sellerAsk) {
             detection.priceGap = Math.abs(detection.sellerAsk - detection.ourOffer);
