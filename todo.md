@@ -2388,3 +2388,7 @@
 
 ## Filter Simplification
 - [x] Simplify "All Types" filter dropdown — remove duplicates (3x "Add Note") and reduce clutter
+
+## BatchDialer Integration Fix
+- [x] Investigate BatchDialer API timeout issues and find workaround
+- [x] Implement fix to get call syncing working reliably

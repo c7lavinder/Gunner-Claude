@@ -22,7 +22,7 @@ describe("BatchDialer Service", () => {
     it("should include X-ApiKey header in requests", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ items: [], page: 1, totalPages: 1 }),
+        json: () => Promise.resolve({ items: [], nextPage: null }),
       });
 
       await fetchRecentCalls({ page: 1, pagelength: 50 });
@@ -33,23 +33,22 @@ describe("BatchDialer Service", () => {
       expect(options.headers["Accept"]).toBe("application/json");
     });
 
-    it("should construct URL with all query parameters including callDateEnd", async () => {
+    it("should use V2 endpoint URL", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ items: [], page: 1, totalPages: 1 }),
+        json: () => Promise.resolve({ items: [], nextPage: null }),
       });
 
       await fetchRecentCalls({
         callDate: "2026-02-10T00:00:00.000Z",
         callDateEnd: "2026-02-10T00:15:00.000Z",
-        page: 1,
         pagelength: 50,
       });
 
       const [url] = mockFetch.mock.calls[0];
+      expect(url).toContain("/api/v2/cdrs");
       expect(url).toContain("callDate=");
       expect(url).toContain("callDateEnd=");
-      expect(url).toContain("page=1");
       expect(url).toContain("pagelength=50");
     });
 
@@ -60,7 +59,7 @@ describe("BatchDialer Service", () => {
         statusText: "Unauthorized",
       });
 
-      await expect(fetchRecentCalls({ page: 1 })).rejects.toThrow("BatchDialer API error: 401 Unauthorized");
+      await expect(fetchRecentCalls({ page: 1 })).rejects.toThrow("BatchDialer V2 API error: 401 Unauthorized");
     });
 
     it("should throw on 500 server error", async () => {
@@ -70,36 +69,22 @@ describe("BatchDialer Service", () => {
         statusText: "Internal Server Error",
       });
 
-      await expect(fetchRecentCalls({ page: 1 })).rejects.toThrow("BatchDialer API error: 500");
+      await expect(fetchRecentCalls({ page: 1 })).rejects.toThrow("BatchDialer V2 API error: 500");
     });
 
-    it("should use page size of 50 by default", async () => {
+    it("should support direction filter", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ items: [], page: 1, totalPages: 1 }),
-      });
-
-      await fetchRecentCalls({ page: 1, pagelength: 50 });
-
-      const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain("pagelength=50");
-    });
-
-    it("should support direction and disposition filters", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ items: [], page: 1, totalPages: 1 }),
+        json: () => Promise.resolve({ items: [], nextPage: null }),
       });
 
       await fetchRecentCalls({
         direction: "outbound",
-        disposition: "answered",
         page: 1,
       });
 
       const [url] = mockFetch.mock.calls[0];
       expect(url).toContain("direction=outbound");
-      expect(url).toContain("disposition=answered");
     });
 
     it("should use AbortController for timeout", async () => {
@@ -109,7 +94,7 @@ describe("BatchDialer Service", () => {
         expect(options.signal).toBeInstanceOf(AbortSignal);
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ items: [], page: 1, totalPages: 1 }),
+          json: () => Promise.resolve({ items: [], nextPage: null }),
         });
       });
 
@@ -125,20 +110,22 @@ describe("BatchDialer Service", () => {
 
       await expect(fetchRecentCalls({ page: 1 })).rejects.toThrow("timed out");
     });
+
+    it("should return backward-compatible response shape", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ items: [{ id: 1 }], nextPage: "abc123" }),
+      });
+
+      const result = await fetchRecentCalls({ page: 1 });
+      expect(result.items).toHaveLength(1);
+      expect(result.page).toBe(1);
+      expect(result.totalPages).toBe(2); // nextPage exists, so totalPages > 1
+    });
   });
 
-  describe("getCallsSince - time windowing logic", () => {
-    // These tests verify the windowing math without actually calling the API
-    // by testing the configuration constants
-
-    it("should use 15-minute time windows", async () => {
-      // Read the module source to verify the constant
-      const fs = await import("fs");
-      const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
-      expect(source).toContain("MAX_TIME_WINDOW_MS = 15 * 60 * 1000");
-    });
-
-    it("should use 30-second request timeout (shorter than server 120s)", async () => {
+  describe("V2 API configuration", () => {
+    it("should use 30-second request timeout", async () => {
       const fs = await import("fs");
       const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
       expect(source).toContain("REQUEST_TIMEOUT_MS = 30_000");
@@ -156,31 +143,37 @@ describe("BatchDialer Service", () => {
       expect(source).toContain("RETRY_BASE_DELAY_MS = 2_000");
     });
 
-    it("should use page size of 50", async () => {
+    it("should use page size of 100 (v2 max)", async () => {
       const fs = await import("fs");
       const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
-      expect(source).toContain("PAGE_SIZE = 50");
+      expect(source).toContain("PAGE_SIZE = 100");
     });
 
-    it("should pass callDateEnd parameter to bound time windows", async () => {
+    it("should use cursor-based pagination via next_page param", async () => {
       const fs = await import("fs");
       const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
-      // Verify the fetchAllPagesForWindow function passes callDateEnd
-      expect(source).toContain("callDateEnd: endStr");
+      expect(source).toContain('params.append("next_page"');
+      expect(source).toContain("nextPageCursor");
+    });
+
+    it("should use daily windows for ranges > 7 days", async () => {
+      const fs = await import("fs");
+      const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
+      expect(source).toContain("ONE_DAY_MS");
+      expect(source).toContain("rangeDays <= 7");
     });
 
     it("should continue to next window on failure (not abort entire sync)", async () => {
       const fs = await import("fs");
       const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
-      // Verify the try/catch in the window loop continues on error
       expect(source).toContain("Continuing with next window");
     });
 
-    it("should add delays between pages (500ms) and windows (1000ms)", async () => {
+    it("should add delays between pages (300ms) and windows (500ms)", async () => {
       const fs = await import("fs");
       const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
+      expect(source).toContain("await sleep(300)");
       expect(source).toContain("await sleep(500)");
-      expect(source).toContain("await sleep(1000)");
     });
   });
 
