@@ -521,7 +521,8 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
       callDirection: ghlCall.direction || "outbound",
       teamMemberId: teamMember.id,
       teamMemberName: teamMember.name,
-      callType: teamMember.role === "acquisition_manager" ? "offer" : "qualification",
+      // Don't pre-assign "offer" based on role — AI detection in processCall will determine the real type.
+      callType: teamMember.role === "lead_generator" ? "cold_call" : "qualification",
       status: "pending",
       callTimestamp: new Date(ghlCall.dateAdded),
       tenantId: teamMember.tenantId, // Inherit tenantId from team member

@@ -2314,3 +2314,8 @@
 - [x] Restrict manual call upload to admin-only on the backend
 - [x] Hide manual upload UI for non-admin users on the frontend
 - [x] Add deduplication check for manual uploads
+
+## Fix: Call classification incorrectly labels admin calls as 'offer'
+- [x] Investigate how callType is determined during call processing (classification step)
+- [x] Fix classifier to distinguish admin/scheduling calls from actual offer calls — updated AI detection prompt, fixed role-based fallback across 4 files
+- [x] Ensure calls where no offer is discussed are classified as 'admin' not 'offer' — role-based fallback now defaults to 'qualification' for acquisition managers, AI determines actual type

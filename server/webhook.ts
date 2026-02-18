@@ -147,7 +147,9 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
       if (teamMember) {
         teamMemberId = teamMember.id;
         resolvedTeamMemberName = teamMember.name;
-        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification";
+        // Don't pre-assign "offer" based on role — AI detection in processCall will determine the real type.
+        // Acquisition managers make many call types (callbacks, scheduling, qualification) not just offers.
+        callType = teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification";
         tenantId = teamMember.tenantId;
         console.log(`[Webhook] Matched team member by GHL User ID: ${teamMember.name} (${ghlUserId})`);
       }
@@ -175,7 +177,8 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
       const teamMember = await getTeamMemberByName(teamMemberName, tenantId ?? undefined);
       if (teamMember) {
         teamMemberId = teamMember.id;
-        callType = teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification";
+        // Don't pre-assign "offer" based on role — AI detection in processCall will determine the real type.
+        callType = teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification";
         if (!tenantId) tenantId = teamMember.tenantId;
         console.log(`[Webhook] Matched team member by name: ${teamMember.name} (tenant: ${tenantId})`);
       }

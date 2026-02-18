@@ -907,13 +907,20 @@ CALL TYPES:
 
 3. "follow_up" - Re-engaging a known lead after a previous conversation where an offer was already discussed. The caller is checking in, referencing a previous offer, or trying to get a decision. Signs: "just following up", "checking in", references to previous offer amount, "last time we spoke", anchoring a previous price.
 
-4. "offer" - Presenting a formal offer to the seller for the FIRST TIME. The caller is delivering a specific price, discussing terms, and trying to close. Signs: specific dollar amounts, "walk away with", contract discussion, closing language, first-time price presentation.
+4. "offer" - Presenting a formal offer to the seller for the FIRST TIME. The caller is delivering a SPECIFIC DOLLAR AMOUNT as an offer price. Signs: specific dollar amounts stated as an offer ("we can offer you $X", "walk away with $X"), contract discussion, closing language, first-time price presentation. CRITICAL: The word "offer" appearing in the transcript does NOT automatically make this an offer call. The rep must actually STATE A SPECIFIC PRICE as a formal offer.
 
 5. "seller_callback" - INBOUND call where the seller called the company back. High-intent signal. Signs: seller says "I got your letter/postcard/voicemail", "you called me earlier", seller is asking questions, seller initiated the contact. The rep should acknowledge the callback and capitalize on momentum.
 
-6. "admin_callback" - OUTBOUND operational call about documents, scheduling, closing details, title info, walkthrough times. NOT a sales call. Signs: discussing DocuSign, purchase agreements, scheduling inspections, coordinating closing dates, helping with paperwork, vendor coordination. No active selling happening.
+6. "admin_callback" - OUTBOUND operational call about documents, scheduling, closing details, title info, walkthrough times, or scheduling a callback. NOT a sales call. Signs: discussing DocuSign, purchase agreements, scheduling inspections, coordinating closing dates, helping with paperwork, vendor coordination, or simply scheduling a time to call back because the person is busy/unavailable. No active selling happening.
 
-The team member's role is: ${teamMemberRole || "unknown"}. Use this as a hint but let the transcript content be the primary signal.
+CRITICAL RULES FOR CALL TYPE:
+- "offer" requires a SPECIFIC DOLLAR AMOUNT to be presented as a formal offer. If no price is stated, it is NOT an offer call.
+- If the person is busy/unavailable and the rep just schedules a callback, this is "admin_callback" — NOT "offer", "qualification", or "follow_up".
+- If the call is very short (under 2 minutes) and consists only of scheduling a callback time, it is "admin_callback".
+- If the rep mentions wanting to "discuss an offer" but the other person is unavailable and no offer is actually presented, it is "admin_callback".
+- The team member's role should NOT determine the call type. A call by an acquisition manager where no offer is presented is NOT an offer call.
+
+The team member's role is: ${teamMemberRole || "unknown"}. Use this as a WEAK hint only — the transcript content MUST be the primary signal. Do NOT default to "offer" just because the team member is an acquisition manager.
 
 Respond with JSON only.`,
         },
@@ -1261,13 +1268,22 @@ export async function processCall(callId: number): Promise<void> {
         // High confidence: use AI suggestion
         callType = aiDetection.callType;
         callTypeSource = "ai_suggested";
+      } else if (aiDetection.confidence >= 0.4) {
+        // Medium confidence: use AI suggestion but log it
+        callType = aiDetection.callType;
+        callTypeSource = "ai_suggested";
+        console.log(`[ProcessCall] Using medium-confidence AI detection for call ${callId}: ${aiDetection.callType} (${aiDetection.confidence})`);
       } else {
         // Low confidence: fall back to role-based inference
-        if (teamMemberRole === "acquisition_manager") {
-          callType = "offer";
-        } else if (teamMemberRole === "lead_generator") {
+        // IMPORTANT: Never default to "offer" based on role alone.
+        // "offer" requires a specific dollar amount to be presented.
+        // If AI couldn't detect an offer, the role shouldn't override that.
+        if (teamMemberRole === "lead_generator") {
           callType = "cold_call";
         } else {
+          // Default to qualification for both lead_managers AND acquisition_managers
+          // when AI can't determine the type. This is safer than assuming "offer"
+          // because an offer call requires a specific price to be stated.
           callType = "qualification";
         }
         callTypeSource = "auto";

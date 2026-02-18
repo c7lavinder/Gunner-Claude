@@ -653,7 +653,8 @@ export const appRouter = router({
             duration: input.duration,
             teamMemberId: teamMember.id,
             teamMemberName: teamMember.name,
-            callType: teamMember.teamRole === "acquisition_manager" ? "offer" : teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification",
+            // Don't pre-assign "offer" based on role — AI detection in processCall will determine the real type.
+            callType: teamMember.teamRole === "lead_generator" ? "cold_call" : "qualification",
             status: "pending",
             callTimestamp: input.callDate ? new Date(input.callDate) : new Date(),
             tenantId: ctx.user.tenantId!,

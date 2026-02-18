@@ -65,12 +65,12 @@ async function findTeamMemberByAgentName(agentName: string, tenantId?: number): 
 /**
  * Determine call type based on team member's role (not hardcoded names)
  */
-function getCallTypeForRole(teamRole: string | null): "cold_call" | "qualification" | "offer" {
+function getCallTypeForRole(teamRole: string | null): "cold_call" | "qualification" {
+  // Don't pre-assign "offer" based on role — AI detection in processCall will determine the real type.
+  // Acquisition managers make many call types (callbacks, scheduling, qualification) not just offers.
   switch (teamRole) {
     case "lead_generator":
       return "cold_call";
-    case "acquisition_manager":
-      return "offer";
     case "lead_manager":
     default:
       return "qualification";
@@ -125,7 +125,7 @@ async function syncBatchDialerCallsForTenant(
         // Find team member by agent name, scoped to this tenant
         let teamMemberId: number | null = null;
         let teamMemberName = "Unknown";
-        let callType: "cold_call" | "qualification" | "offer" = "qualification";
+        let callType: "cold_call" | "qualification" = "qualification";
 
         if (bdCall.agent) {
           const match = await findTeamMemberByAgentName(bdCall.agent, tenantId);
