@@ -2360,3 +2360,7 @@
 - [x] Fix root cause — added afterAll cleanup to opportunities.test.ts that deletes John Smith test data after tests run
 - [x] Clean up existing test data — deleted 173 John Smith test actions from production database
 - [x] Simplify date filter to just "Today" and "All Time" — removed all extra options and Custom calendar from CoachActivityLog
+
+- [x] Delete ALL test data from production database (Jose Ruiz, John Smith, Multi-action entries, etc.)
+- [x] Fix test file to use mocks/stubs instead of writing to real database
+- [x] Verify no test entries remain in production
