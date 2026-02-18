@@ -38,6 +38,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Redirect } from "wouter";
 
+// Full map for rendering action items (maps all backend keys to display config)
 const ACTION_TYPE_LABELS: Record<string, { label: string; icon: any; color: string }> = {
   add_note: { label: "Add Note", icon: StickyNote, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
   add_note_contact: { label: "Add Note", icon: StickyNote, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
@@ -49,6 +50,18 @@ const ACTION_TYPE_LABELS: Record<string, { label: string; icon: any; color: stri
   remove_tag: { label: "Remove Tag", icon: Tag, color: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400" },
   update_field: { label: "Update Field", icon: FileEdit, color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" },
 };
+
+// Deduplicated filter options for the dropdown (one entry per visible label)
+// The value maps to a group of backend keys that should match
+const ACTION_TYPE_FILTER_OPTIONS: { value: string; label: string; keys: string[] }[] = [
+  { value: "add_note", label: "Add Note", keys: ["add_note", "add_note_contact", "add_note_opportunity"] },
+  { value: "change_pipeline_stage", label: "Move Stage", keys: ["change_pipeline_stage"] },
+  { value: "send_sms", label: "Send SMS", keys: ["send_sms"] },
+  { value: "create_task", label: "Create Task", keys: ["create_task"] },
+  { value: "add_tag", label: "Add Tag", keys: ["add_tag"] },
+  { value: "remove_tag", label: "Remove Tag", keys: ["remove_tag"] },
+  { value: "update_field", label: "Update Field", keys: ["update_field"] },
+];
 
 const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
   pending: { label: "Pending", icon: Clock, color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
@@ -242,9 +255,11 @@ export default function CoachActivityLog() {
       );
     }
 
-    // Action type filter
+    // Action type filter (groups related action types, e.g. add_note covers add_note_contact/add_note_opportunity)
     if (actionTypeFilter !== "all") {
-      items = items.filter(i => i.type === "question" || i.actionType === actionTypeFilter);
+      const filterGroup = ACTION_TYPE_FILTER_OPTIONS.find(o => o.value === actionTypeFilter);
+      const matchKeys = filterGroup ? filterGroup.keys : [actionTypeFilter];
+      items = items.filter(i => i.type === "question" || (i.actionType && matchKeys.includes(i.actionType)));
     }
 
     // Status filter
@@ -394,8 +409,8 @@ export default function CoachActivityLog() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {Object.entries(ACTION_TYPE_LABELS).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                {ACTION_TYPE_FILTER_OPTIONS.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

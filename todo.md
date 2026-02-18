@@ -2385,3 +2385,6 @@
 - [x] Ensure lower-scored calls have rich coaching feedback (strengths, improvements, coaching tips)
 - [x] Maintain upward trend over the 6-week period
 - [x] Verify grade letter distribution matches new scores
+
+## Filter Simplification
+- [x] Simplify "All Types" filter dropdown — remove duplicates (3x "Add Note") and reduce clutter
