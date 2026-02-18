@@ -89,7 +89,6 @@ export default function Home() {
   const { data: recentCalls, isLoading: callsLoading } = trpc.calls.withGrades.useQuery({ 
     limit: 5, 
     statuses: ["completed"],
-    startDate: todayStart,
   });
   const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery({ dateRange });
   const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
@@ -394,7 +393,7 @@ export default function Home() {
           <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6 pb-2 sm:pb-2">
             <div>
               <CardTitle className="text-base sm:text-lg">Recent Calls</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Today's graded calls</CardDescription>
+             <CardDescription className="text-xs sm:text-sm">Last 5 graded calls</CardDescription>
             </div>
             <Link href="/calls">
               <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm">View All</Button>

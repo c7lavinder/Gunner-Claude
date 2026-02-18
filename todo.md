@@ -2375,3 +2375,6 @@
 - [x] Demo mode restrictions — disable all action buttons, block rubric details, block CRM actions
 - [x] Auto-delete uploaded calls after 15 minutes in demo mode
 - [x] Demo banner with "Start your free trial" CTA
+- [x] Fix demo login — user getting 'invalid login' error (was not published yet)
+- [x] Change Recent Calls on dashboard to show last 5 graded calls instead of only today's calls
+- [x] Change Call History default date filter from "Today" to "All Time" so calls show on load

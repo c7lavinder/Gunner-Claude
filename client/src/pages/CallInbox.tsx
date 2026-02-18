@@ -1557,7 +1557,7 @@ export default function CallInbox() {
       types: sp.get('types') ? sp.get('types')!.split(',') : [],
       outcomes: sp.get('outcomes') ? sp.get('outcomes')!.split(',') : [],
       scores: sp.get('scores') ? sp.get('scores')!.split(',') : [],
-      date: sp.get('date') || '1d',
+      date: sp.get('date') || 'all',
     };
   }, []); // Only parse once on mount
 
@@ -1575,7 +1575,7 @@ export default function CallInbox() {
   const [showFilters, setShowFilters] = useState(
     initialParams.team.length > 0 || initialParams.types.length > 0 || 
     initialParams.outcomes.length > 0 || initialParams.scores.length > 0 || 
-    initialParams.date !== '1d'
+    initialParams.date !== 'all'
   );
 
   // Sync filter state to URL query params (replaceState to avoid polluting history)
@@ -1587,7 +1587,7 @@ export default function CallInbox() {
     if (selectedCallTypes.length > 0) sp.set('types', selectedCallTypes.join(','));
     if (selectedOutcomes.length > 0) sp.set('outcomes', selectedOutcomes.join(','));
     if (selectedScoreRanges.length > 0) sp.set('scores', selectedScoreRanges.join(','));
-    if (dateRange !== '1d') sp.set('date', dateRange);
+    if (dateRange !== 'all') sp.set('date', dateRange);
     const qs = sp.toString();
     const newUrl = qs ? `/calls?${qs}` : '/calls';
     window.history.replaceState(null, '', newUrl);
