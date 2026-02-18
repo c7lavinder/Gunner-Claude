@@ -528,15 +528,15 @@ export default function CallDetail() {
                     call.callType === 'qualification' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200' :
                     call.callType === 'follow_up' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' :
                     call.callType === 'offer' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' :
-                    call.callType === 'seller_callback' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200' :
+                    call.callType === 'seller_callback' ? 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200' :
                     call.callType === 'admin_callback' ? 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200' : ''
                   }`}>
                     {call.callType === 'cold_call' ? 'Cold Call' :
                      call.callType === 'qualification' ? 'Qualification' :
                      call.callType === 'follow_up' ? 'Follow-Up' :
                      call.callType === 'offer' ? 'Offer' :
-                     call.callType === 'seller_callback' ? 'Seller Callback' :
-                     call.callType === 'admin_callback' ? 'Admin Callback' :
+                     call.callType === 'seller_callback' ? 'Admin' :
+                     call.callType === 'admin_callback' ? 'Admin' :
                      String(call.callType || '').replace(/_/g, ' ') || 'Unknown'}
                   </Badge>
                   {(call as any).callOutcome && (call as any).callOutcome !== 'pending' && (

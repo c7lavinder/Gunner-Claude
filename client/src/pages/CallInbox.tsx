@@ -101,8 +101,8 @@ const CALL_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   qualification: { label: "Qualification", color: "bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800" },
   follow_up: { label: "Follow-Up", color: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800" },
   offer: { label: "Offer", color: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800" },
-  seller_callback: { label: "Seller Callback", color: "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800" },
-  admin_callback: { label: "Admin Callback", color: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800" },
+  seller_callback: { label: "Admin", color: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800" },
+  admin_callback: { label: "Admin", color: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800" },
 };
 
 const OUTCOME_LABELS: Record<string, { label: string; color: string }> = {
@@ -1361,8 +1361,7 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
               <option value="qualification">Qualification</option>
               <option value="follow_up">Follow-Up</option>
               <option value="offer">Offer</option>
-              <option value="seller_callback">Seller Callback</option>
-              <option value="admin_callback">Admin Callback</option>
+              <option value="admin_callback">Admin</option>
             </select>
           </div>
         </div>
@@ -1612,7 +1611,7 @@ export default function CallInbox() {
     offset: page * PAGE_SIZE,
     startDate: dateFilter.startDate,
     statuses: ["completed"],
-    callTypes: selectedCallTypes.length > 0 ? selectedCallTypes : undefined,
+    callTypes: selectedCallTypes.length > 0 ? selectedCallTypes.flatMap(t => t === "admin" ? ["seller_callback", "admin_callback"] : [t]) : undefined,
     outcomes: selectedOutcomes.length > 0 ? selectedOutcomes : undefined,
     teamMembers: selectedTeamMembers.length > 0 ? selectedTeamMembers : undefined,
   }), [page, dateFilter, selectedCallTypes, selectedOutcomes, selectedTeamMembers]);
@@ -1716,8 +1715,7 @@ export default function CallInbox() {
     { value: "qualification", label: "Qualification" },
     { value: "follow_up", label: "Follow-Up" },
     { value: "offer", label: "Offer" },
-    { value: "seller_callback", label: "Seller Callback" },
-    { value: "admin_callback", label: "Admin Callback" },
+    { value: "admin", label: "Admin" },
   ];
 
   // Outcome options
