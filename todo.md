@@ -2354,3 +2354,9 @@
 
 ## Fix: Your Gunner URL field shows non-working URL
 - [x] Fix "Your Gunner URL" field — TenantSettings now shows actual app URL (window.location.origin) with working link button; TenantSetup fixed to show getgunner.ai/ prefix
+
+## Bug: John Smith test actions being auto-created in coach action log
+- [x] Investigate what is generating 173 "John Smith" test actions — caused by vitest tests writing to production DB with user ID 1
+- [x] Fix root cause — added afterAll cleanup to opportunities.test.ts that deletes John Smith test data after tests run
+- [x] Clean up existing test data — deleted 173 John Smith test actions from production database
+- [x] Simplify date filter to just "Today" and "All Time" — removed all extra options and Custom calendar from CoachActivityLog

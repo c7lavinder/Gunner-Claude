@@ -91,13 +91,11 @@ export default function CoachActivityLog() {
   const [searchQuery, setSearchQuery] = useState("");
   const [actionTypeFilter, setActionTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [datePreset, setDatePreset] = useState<string>("this_week");
+  const [datePreset, setDatePreset] = useState<string>("today");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    return { from: startOfWeek, to: now };
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return { from: today, to: now };
   });
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -364,11 +362,6 @@ export default function CoachActivityLog() {
             <CalendarDays className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             {[
               { key: "today", label: "Today" },
-              { key: "this_week", label: "This Week" },
-              { key: "last_week", label: "Last Week" },
-              { key: "this_month", label: "This Month" },
-              { key: "last_month", label: "Last Month" },
-              { key: "last_30", label: "Last 30 Days" },
               { key: "all", label: "All Time" },
             ].map(({ key, label }) => (
               <Button
@@ -381,46 +374,7 @@ export default function CoachActivityLog() {
                 {label}
               </Button>
             ))}
-            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-              <PopoverTrigger asChild>
-                <Button variant={datePreset === "custom" ? "default" : "outline"} size="sm" className="h-7 text-xs px-2.5 gap-1">
-                  <CalendarDays className="h-3 w-3" />
-                  {datePreset === "custom" && dateRange?.from ? (
-                    <span>
-                      {dateRange.from.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      {dateRange.to ? ` – ${dateRange.to.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
-                    </span>
-                  ) : (
-                    "Custom"
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="range"
-                  selected={dateRange}
-                  onSelect={(range) => {
-                    setDateRange(range);
-                    setDatePreset("custom");
-                    if (range?.from && range?.to) {
-                      setCalendarOpen(false);
-                    }
-                  }}
-                  numberOfMonths={2}
-                  disabled={{ after: new Date() }}
-                />
-              </PopoverContent>
-            </Popover>
-            {dateRange && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs px-1.5 text-muted-foreground hover:text-foreground"
-                onClick={() => { setDateRange(undefined); setDatePreset("all"); }}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            )}
+
           </div>
           {/* Search and type/status filters */}
           <div className="flex flex-col sm:flex-row gap-3">

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -272,6 +272,23 @@ describe("Opportunities Dashboard", () => {
 // ============ AI COACH ACTIONS ENDPOINTS ============
 
 describe("AI Coach Actions", () => {
+  // Clean up test data after each test to prevent polluting the production database
+  const createdActionIds: number[] = [];
+
+  afterAll(async () => {
+    // Delete all John Smith test actions created by tests
+    try {
+      const { db } = await import("./db");
+      const { coachActionLog } = await import("../drizzle/schema");
+      const { sql } = await import("drizzle-orm");
+      await db.delete(coachActionLog).where(
+        sql`${coachActionLog.targetContactName} IN ('John Smith', 'John') AND ${coachActionLog.requestText} IN ('Add note to John Smith', 'Send SMS to John about appointment', 'Tag John as hot-lead', 'Add note to John')`
+      );
+    } catch (e) {
+      // Cleanup is best-effort
+    }
+  });
+
   describe("coachActions.parseIntent", () => {
     it("rejects unauthenticated users", async () => {
       const caller = appRouter.createCaller(createUnauthenticatedContext());
