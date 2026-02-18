@@ -276,13 +276,19 @@ describe("AI Coach Actions", () => {
   const createdActionIds: number[] = [];
 
   afterAll(async () => {
-    // Delete all John Smith test actions created by tests
+    // Delete ALL test data created by these tests to prevent polluting the production database
     try {
       const { db } = await import("./db");
       const { coachActionLog } = await import("../drizzle/schema");
       const { sql } = await import("drizzle-orm");
       await db.delete(coachActionLog).where(
-        sql`${coachActionLog.targetContactName} IN ('John Smith', 'John') AND ${coachActionLog.requestText} IN ('Add note to John Smith', 'Send SMS to John about appointment', 'Tag John as hot-lead', 'Add note to John')`
+        sql`${coachActionLog.targetContactName} IN ('John Smith', 'John')
+          OR ${coachActionLog.requestText} LIKE '%John Smith%'
+          OR ${coachActionLog.requestText} LIKE '%John%appointment%'
+          OR ${coachActionLog.requestText} LIKE '%Tag John%'
+          OR ${coachActionLog.requestText} LIKE '%Multi-action test%'
+          OR ${coachActionLog.requestText} LIKE '%Test task%'
+          OR ${coachActionLog.targetContactId} = 'ghl_contact_123'`
       );
     } catch (e) {
       // Cleanup is best-effort
