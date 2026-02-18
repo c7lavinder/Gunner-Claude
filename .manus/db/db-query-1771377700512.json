@@ -1,0 +1,54 @@
+{
+  "query": "SELECT id, contactName, ghlContactId, ghlCallId, teamMemberName, duration, status, propertyAddress, createdAt FROM calls WHERE contactName LIKE '%Alex Martin%' ORDER BY id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, ghlContactId, ghlCallId, teamMemberName, duration, status, propertyAddress, createdAt FROM calls WHERE contactName LIKE '%Alex Martin%' ORDER BY id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "2130001",
+      "contactName": "Alex Martin",
+      "ghlContactId": "VEzEWXNose3EUBc2lMBI",
+      "ghlCallId": "D3uvlhgEIdY19tFbdvje",
+      "teamMemberName": "Daniel Lozano",
+      "duration": "649",
+      "status": "completed",
+      "propertyAddress": "NULL",
+      "createdAt": "2026-02-18 01:12:10"
+    },
+    {
+      "id": "2100029",
+      "contactName": "Alex Martin",
+      "ghlContactId": "VEzEWXNose3EUBc2lMBI",
+      "ghlCallId": "NULL",
+      "teamMemberName": "Daniel Lozano",
+      "duration": "NULL",
+      "status": "completed",
+      "propertyAddress": "430 APT 1601 Walton Ferry Rd",
+      "createdAt": "2026-02-17 23:35:40"
+    },
+    {
+      "id": "2100028",
+      "contactName": "Alex Martin",
+      "ghlContactId": "VEzEWXNose3EUBc2lMBI",
+      "ghlCallId": "NULL",
+      "teamMemberName": "Daniel Lozano",
+      "duration": "NULL",
+      "status": "completed",
+      "propertyAddress": "430 APT 1601 Walton Ferry Rd",
+      "createdAt": "2026-02-17 23:19:48"
+    },
+    {
+      "id": "2070009",
+      "contactName": "Alex Martin",
+      "ghlContactId": "VEzEWXNose3EUBc2lMBI",
+      "ghlCallId": "aGGlGe1NmW4xvH3uLeHx",
+      "teamMemberName": "Daniel Lozano",
+      "duration": "33",
+      "status": "skipped",
+      "propertyAddress": "NULL",
+      "createdAt": "2026-02-17 16:45:06"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tghlContactId\tghlCallId\tteamMemberName\tduration\tstatus\tpropertyAddress\tcreatedAt\n2130001\tAlex Martin\tVEzEWXNose3EUBc2lMBI\tD3uvlhgEIdY19tFbdvje\tDaniel Lozano\t649\tcompleted\tNULL\t2026-02-18 01:12:10\n2100029\tAlex Martin\tVEzEWXNose3EUBc2lMBI\tNULL\tDaniel Lozano\tNULL\tcompleted\t430 APT 1601 Walton Ferry Rd\t2026-02-17 23:35:40\n2100028\tAlex Martin\tVEzEWXNose3EUBc2lMBI\tNULL\tDaniel Lozano\tNULL\tcompleted\t430 APT 1601 Walton Ferry Rd\t2026-02-17 23:19:48\n2070009\tAlex Martin\tVEzEWXNose3EUBc2lMBI\taGGlGe1NmW4xvH3uLeHx\tDaniel Lozano\t33\tskipped\tNULL\t2026-02-17 16:45:06\n",
+  "stderr": "",
+  "execution_time_ms": 345
+}

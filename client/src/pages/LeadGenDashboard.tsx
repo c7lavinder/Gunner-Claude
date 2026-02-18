@@ -181,6 +181,7 @@ export default function LeadGenDashboard() {
             Welcome back, {user?.name || 'Lead Generator'}!
           </p>
         </div>
+        {(user?.role === 'admin' || user?.role === 'super_admin') && (
         <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -237,6 +238,7 @@ export default function LeadGenDashboard() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Stats Grid */}

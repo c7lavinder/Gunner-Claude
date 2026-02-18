@@ -2306,3 +2306,11 @@
 ## Update: Make CRM note style the platform-wide default (not Daniel-specific)
 - [x] Update prompt language to frame the note style as the platform standard for all tenants
 - [x] Update test descriptions to reflect platform-wide default
+
+## Bug: Duplicate call entries appearing for same contact (Alex Martin)
+- [x] Investigate duplicate call records in database for Alex Martin / Daniel Lozano
+- [x] Identify root cause — manual uploads with no dedup, not GHL sync issue
+- [x] Fix deduplication logic — added 30-min window check for same contact manual uploads
+- [x] Restrict manual call upload to admin-only on the backend
+- [x] Hide manual upload UI for non-admin users on the frontend
+- [x] Add deduplication check for manual uploads

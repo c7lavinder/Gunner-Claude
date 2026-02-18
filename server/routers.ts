@@ -583,7 +583,7 @@ export const appRouter = router({
         return { success: true, resetCount };
       }),
 
-    // Manual call upload with audio file
+    // Manual call upload with audio file (ADMIN ONLY)
     uploadManual: protectedProcedure
       .input(z.object({
         audioData: z.string(), // Base64 encoded audio
@@ -596,7 +596,39 @@ export const appRouter = router({
         callDate: z.string().optional(), // ISO date string
       }))
       .mutation(async ({ ctx, input }) => {
+        // Admin-only restriction
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only admins can manually upload calls" });
+        }
+
         try {
+          // Deduplication: Check if a manual upload for the same contact was created in the last 30 minutes
+          if (input.contactName) {
+            const { calls: callsTable } = await import("../drizzle/schema");
+            const { eq, and, isNull, gte } = await import("drizzle-orm");
+            const { getDb } = await import("./db");
+            const db = await getDb();
+            if (db) {
+              const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+              const recentDuplicates = await db.select({ id: callsTable.id, createdAt: callsTable.createdAt })
+                .from(callsTable)
+                .where(
+                  and(
+                    eq(callsTable.contactName, input.contactName),
+                    eq(callsTable.tenantId, ctx.user.tenantId!),
+                    isNull(callsTable.ghlCallId),
+                    isNull(callsTable.batchDialerCallId),
+                    gte(callsTable.createdAt, thirtyMinAgo)
+                  )
+                )
+                .limit(1);
+              if (recentDuplicates.length > 0) {
+                console.log(`[ManualUpload] Duplicate detected for ${input.contactName} - existing call ${recentDuplicates[0].id} created at ${recentDuplicates[0].createdAt}`);
+                throw new TRPCError({ code: "CONFLICT", message: `A call for ${input.contactName} was already uploaded in the last 30 minutes (call #${recentDuplicates[0].id}). If this is a different call, please wait or change the contact name.` });
+              }
+            }
+          }
+
           // Upload audio to S3
           const buffer = Buffer.from(input.audioData, "base64");
           const timestamp = Date.now();

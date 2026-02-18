@@ -1775,7 +1775,9 @@ export default function CallInbox() {
         <div className="flex items-center gap-2 sm:gap-3">
           <GHLSyncStatus onSyncComplete={handleRefresh} />
           <BatchDialerSyncButton onSyncComplete={handleRefresh} />
-          <ManualUploadDialog onSuccess={handleRefresh} />
+          {(user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true') && (
+            <ManualUploadDialog onSuccess={handleRefresh} />
+          )}
           {(user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true') && (
             <Link href="/coach-log">
               <Button variant="outline" size="sm" className="h-8 sm:h-9 gap-1.5">
