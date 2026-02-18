@@ -362,7 +362,7 @@ export default function TenantSetup() {
             <div className="space-y-2">
               <Label htmlFor="companySlug">URL Slug</Label>
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground text-sm whitespace-nowrap">gunner.app/</span>
+                <span className="text-muted-foreground text-sm whitespace-nowrap">getgunner.ai/</span>
                 <Input
                   id="companySlug"
                   value={formData.companySlug}

@@ -2351,3 +2351,6 @@
 ## Fix: Add system role (Admin/User) management to Edit Team Member dialog
 - [x] Add system role (User/Admin) dropdown to Edit Team Member dialog — "System Access" selector added with User/Admin options
 - [x] Ensure backend supports updating user role — backend already accepts role param, dialog now passes editingMember.role instead of hardcoded 'user'
+
+## Fix: Your Gunner URL field shows non-working URL
+- [x] Fix "Your Gunner URL" field — TenantSettings now shows actual app URL (window.location.origin) with working link button; TenantSetup fixed to show getgunner.ai/ prefix

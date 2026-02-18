@@ -571,8 +571,8 @@ export default function TenantSettings() {
                   <div className="space-y-2">
                     <Label>Your Gunner URL</Label>
                     <div className="flex items-center gap-2">
-                      <Input value={`gunner.app/${settings?.slug || ''}`} disabled />
-                      <Button variant="outline" size="icon">
+                      <Input value={window.location.origin} disabled />
+                      <Button variant="outline" size="icon" onClick={() => window.open(window.location.origin, '_blank')}>
                         <ExternalLink className="h-4 w-4" />
                       </Button>
                     </div>
