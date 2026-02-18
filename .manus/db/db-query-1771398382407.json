@@ -1,0 +1,18 @@
+{
+  "query": "SELECT COUNT(*) as total_calls, \n  SUM(CASE WHEN cg.overallGrade = 'A' THEN 1 ELSE 0 END) as grade_a,\n  SUM(CASE WHEN cg.overallGrade = 'B' THEN 1 ELSE 0 END) as grade_b,\n  SUM(CASE WHEN cg.overallGrade = 'C' THEN 1 ELSE 0 END) as grade_c,\n  SUM(CASE WHEN cg.overallGrade = 'D' THEN 1 ELSE 0 END) as grade_d,\n  SUM(CASE WHEN cg.overallGrade = 'F' THEN 1 ELSE 0 END) as grade_f\nFROM calls c\nLEFT JOIN call_grades cg ON c.id = cg.callId\nWHERE c.tenantId = 540044;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COUNT(*) as total_calls, \n  SUM(CASE WHEN cg.overallGrade = 'A' THEN 1 ELSE 0 END) as grade_a,\n  SUM(CASE WHEN cg.overallGrade = 'B' THEN 1 ELSE 0 END) as grade_b,\n  SUM(CASE WHEN cg.overallGrade = 'C' THEN 1 ELSE 0 END) as grade_c,\n  SUM(CASE WHEN cg.overallGrade = 'D' THEN 1 ELSE 0 END) as grade_d,\n  SUM(CASE WHEN cg.overallGrade = 'F' THEN 1 ELSE 0 END) as grade_f\nFROM calls c\nLEFT JOIN call_grades cg ON c.id = cg.callId\nWHERE c.tenantId = 540044;",
+  "rows": [
+    {
+      "total_calls": "102",
+      "grade_a": "10",
+      "grade_b": "23",
+      "grade_c": "21",
+      "grade_d": "28",
+      "grade_f": "20"
+    }
+  ],
+  "messages": [],
+  "stdout": "total_calls\tgrade_a\tgrade_b\tgrade_c\tgrade_d\tgrade_f\n102\t10\t23\t21\t28\t20\n",
+  "stderr": "",
+  "execution_time_ms": 364
+}

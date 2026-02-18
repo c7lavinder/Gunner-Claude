@@ -1,0 +1,8 @@
+{
+  "query": "SELECT COUNT(*) as total_calls, \n  SUM(CASE WHEN cg.letterGrade = 'A' THEN 1 ELSE 0 END) as grade_a,\n  SUM(CASE WHEN cg.letterGrade = 'B' THEN 1 ELSE 0 END) as grade_b,\n  SUM(CASE WHEN cg.letterGrade = 'C' THEN 1 ELSE 0 END) as grade_c,\n  SUM(CASE WHEN cg.letterGrade = 'D' THEN 1 ELSE 0 END) as grade_d,\n  SUM(CASE WHEN cg.letterGrade = 'F' THEN 1 ELSE 0 END) as grade_f\nFROM calls c\nLEFT JOIN call_grades cg ON c.id = cg.callId\nWHERE c.tenantId = 540044;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COUNT(*) as total_calls, \n  SUM(CASE WHEN cg.letterGrade = 'A' THEN 1 ELSE 0 END) as grade_a,\n  SUM(CASE WHEN cg.letterGrade = 'B' THEN 1 ELSE 0 END) as grade_b,\n  SUM(CASE WHEN cg.letterGrade = 'C' THEN 1 ELSE 0 END) as grade_c,\n  SUM(CASE WHEN cg.letterGrade = 'D' THEN 1 ELSE 0 END) as grade_d,\n  SUM(CASE WHEN cg.letterGrade = 'F' THEN 1 ELSE 0 END) as grade_f\nFROM calls c\nLEFT JOIN call_grades cg ON c.id = cg.callId\nWHERE c.tenantId = 540044;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'cg.lettergrade' in 'where clause'"
+  ]
+}

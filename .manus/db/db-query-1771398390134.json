@@ -1,0 +1,18 @@
+{
+  "query": "SELECT \n  (SELECT COUNT(*) FROM calls WHERE tenantId = 540044) as total_calls,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'A') as grade_a,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'B') as grade_b,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'C') as grade_c,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'D') as grade_d,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'F') as grade_f;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT \n  (SELECT COUNT(*) FROM calls WHERE tenantId = 540044) as total_calls,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'A') as grade_a,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'B') as grade_b,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'C') as grade_c,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'D') as grade_d,\n  (SELECT COUNT(*) FROM call_grades WHERE tenantId = 540044 AND overallGrade = 'F') as grade_f;",
+  "rows": [
+    {
+      "total_calls": "102",
+      "grade_a": "10",
+      "grade_b": "23",
+      "grade_c": "21",
+      "grade_d": "28",
+      "grade_f": "20"
+    }
+  ],
+  "messages": [],
+  "stdout": "total_calls\tgrade_a\tgrade_b\tgrade_c\tgrade_d\tgrade_f\n102\t10\t23\t21\t28\t20\n",
+  "stderr": "",
+  "execution_time_ms": 370
+}

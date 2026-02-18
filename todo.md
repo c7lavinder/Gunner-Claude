@@ -2378,3 +2378,10 @@
 - [x] Fix demo login — user getting 'invalid login' error (was not published yet)
 - [x] Change Recent Calls on dashboard to show last 5 graded calls instead of only today's calls
 - [x] Change Call History default date filter from "Today" to "All Time" so calls show on load
+- [x] Replace demo seed data with real calls from production — modify names, add variety, ensure analysis trends look good
+
+## Demo Score Adjustment
+- [x] Adjust demo call grades to average 75-80 with wider spread (some in 40-60s, some higher)
+- [x] Ensure lower-scored calls have rich coaching feedback (strengths, improvements, coaching tips)
+- [x] Maintain upward trend over the 6-week period
+- [x] Verify grade letter distribution matches new scores
