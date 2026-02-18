@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { Streamdown } from "streamdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -593,8 +594,8 @@ function QuestionItem({ item }: { item: any }) {
                   {expanded ? "Hide AI response" : "Show AI response"}
                 </button>
                 {expanded && (
-                  <div className="mt-1.5 p-2.5 rounded-md bg-muted/50 text-xs text-muted-foreground break-words whitespace-pre-wrap">
-                    {item.aiResponse.substring(0, 500)}{item.aiResponse.length > 500 ? "..." : ""}
+                  <div className="mt-1.5 p-2.5 rounded-md bg-muted/50 text-xs text-muted-foreground break-words prose prose-xs max-w-none dark:prose-invert">
+                    <Streamdown>{item.aiResponse}</Streamdown>
                   </div>
                 )}
               </div>

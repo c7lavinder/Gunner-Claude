@@ -2364,3 +2364,6 @@
 - [x] Delete ALL test data from production database (Jose Ruiz, John Smith, Multi-action entries, etc.)
 - [x] Fix test file to use mocks/stubs instead of writing to real database
 - [x] Verify no test entries remain in production
+
+- [ ] Add GHL task querying to AI Coach — allow coach to answer "what leads are due on [date]" by fetching tasks from GHL API
+- [x] Fix AI Coach responses being cut off / truncated in Admin Activity Log view
