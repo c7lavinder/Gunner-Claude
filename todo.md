@@ -2338,3 +2338,12 @@
 - [x] Fix price extraction heuristics — now requires explicit keyword context ("asking", "want", "offer", "we can do") to classify, never guesses
 - [x] Frances Rolin: Fixed — SMS conversations now scanned for price data, conservative classification prevents wrong labeling
 - [x] Navery Moore: Fixed — price extraction now requires keyword context, won't grab random dollar amounts from transcripts
+
+## Fix: 6 calls stuck in Queued status
+- [x] Investigate what the 6 queued calls are — found 3 stuck in transcribing, 2 in classifying, 1 in grading
+- [x] Determine why they're stuck — server restart/LLM timeout left them in intermediate states, no auto-retry existed
+- [x] Fix stuck calls — added automatic retry every 30 minutes for calls stuck >1 hour in transcribing/classifying/grading
+- [x] Add shared date filter to Needs Review and Skipped tabs — date filter now shared across all tabs, extra filters (team, type, outcome, score) still only on All Calls tab
+
+## Fix: Automatic stuck call retry
+- [x] Add automatic retry for calls stuck in transcribing/classifying/grading for more than 1 hour — retryStuckCalls() runs every 30 min

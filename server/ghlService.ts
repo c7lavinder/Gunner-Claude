@@ -4,7 +4,7 @@
  */
 
 import { ENV } from "./_core/env";
-import { createCall, getTeamMembers, updateCall, getCallById, getCallByGhlId } from "./db";
+import { createCall, getTeamMembers, updateCall, getCallById, getCallByGhlId, getCalls } from "./db";
 import { processCall } from "./grading";
 import PQueue from "p-queue";
 
@@ -661,6 +661,48 @@ let lastInsightsTime: Date | null = null;
 let opportunityDetectionInterval: ReturnType<typeof setInterval> | null = null;
 let lastOpportunityDetectionTime: Date | null = null;
 
+// Stuck call retry interval
+let stuckCallRetryInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Automatically retry calls stuck in intermediate processing states (transcribing, classifying, grading)
+ * for more than 1 hour. Resets them to pending and re-triggers processing.
+ */
+async function retryStuckCalls(): Promise<void> {
+  try {
+    const allTenants = await getAllTenants();
+    let totalReset = 0;
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    for (const tenant of allTenants) {
+      // Get all non-completed calls for this tenant (high limit to catch all stuck ones)
+      const allCalls = await getCalls({ tenantId: tenant.id, limit: 500 });
+      const stuckCalls = allCalls.filter((call: any) =>
+        (call.status === 'transcribing' || call.status === 'classifying' || call.status === 'grading') &&
+        call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+      );
+
+      for (const call of stuckCalls) {
+        console.log(`[StuckCallRetry] Resetting stuck call ${call.id} (${call.contactName}, status: ${call.status}, updated: ${call.updatedAt})`);
+        await updateCall(call.id, {
+          status: 'pending',
+          classificationReason: `Auto-reset from stuck '${call.status}' state — retrying processing`,
+        });
+        callProcessingQueue.add(() => processCall(call.id)).catch((err: any) => {
+          console.error(`[StuckCallRetry] Error reprocessing call ${call.id}:`, err);
+        });
+        totalReset++;
+      }
+    }
+
+    if (totalReset > 0) {
+      console.log(`[StuckCallRetry] Reset and requeued ${totalReset} stuck calls`);
+    }
+  } catch (error) {
+    console.error("[StuckCallRetry] Error:", error);
+  }
+}
+
 /**
  * Check if it's Monday morning (6 AM) and run insights generation
  */
@@ -790,6 +832,20 @@ export function startPolling(intervalMinutes: number = 30): void {
     }, 60 * 60 * 1000); // 1 hour
   }
 
+  // Start stuck call retry (every 30 minutes)
+  if (!stuckCallRetryInterval) {
+    console.log("[StuckCallRetry] Starting automatic stuck call retry (every 30 minutes)");
+    // Run initial check after 2 minutes
+    setTimeout(() => {
+      retryStuckCalls().catch(err => console.error("[StuckCallRetry] Initial run error:", err));
+    }, 2 * 60 * 1000);
+
+    // Then run every 30 minutes
+    stuckCallRetryInterval = setInterval(() => {
+      retryStuckCalls().catch(err => console.error("[StuckCallRetry] Scheduled run error:", err));
+    }, 30 * 60 * 1000); // 30 minutes
+  }
+
   // Start hourly opportunity detection
   if (!opportunityDetectionInterval) {
     console.log("[OpportunityDetection] Starting hourly opportunity detection scheduler");
@@ -840,6 +896,11 @@ export function stopPolling(): void {
     clearInterval(opportunityDetectionInterval);
     opportunityDetectionInterval = null;
     console.log("[OpportunityDetection] Hourly detection stopped");
+  }
+  if (stuckCallRetryInterval) {
+    clearInterval(stuckCallRetryInterval);
+    stuckCallRetryInterval = null;
+    console.log("[StuckCallRetry] Stopped");
   }
 }
 

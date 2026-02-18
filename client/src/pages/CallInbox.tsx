@@ -1619,19 +1619,16 @@ export default function CallInbox() {
   const { data: callsData, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery(queryParams);
   
   // Separate query for needs review (pending + flagged) and skipped
+  // Both use the shared dateFilter for consistent filtering across tabs
   const { data: reviewData, refetch: refetchReview } = trpc.calls.withGrades.useQuery({
     limit: 100,
     statuses: ["pending", "transcribing", "grading", "failed"],
+    startDate: dateFilter.startDate,
   });
-  const skippedStartDate = useMemo(() => {
-    const d = new Date();
-    d.setHours(d.getHours() - 24);
-    return d.toISOString();
-  }, []);
   const { data: skippedData, refetch: refetchSkipped } = trpc.calls.withGrades.useQuery({
     limit: 100,
     statuses: ["skipped"],
-    startDate: skippedStartDate,
+    startDate: dateFilter.startDate,
   });
 
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
@@ -1850,68 +1847,69 @@ export default function CallInbox() {
               </TabsList>
             </div>
 
-            {/* Filters - shown only on calls tab */}
-            {activeTab === "calls" && (
-              <div className="mb-4">
-                {/* Mobile: Collapsible filter button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="sm:hidden w-full justify-between mb-2"
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <span className="flex items-center gap-2">
-                    <Filter className="h-4 w-4" />
-                    Filters {hasActiveFilters && `(${selectedTeamMembers.length + selectedCallTypes.length + selectedScoreRanges.length + selectedOutcomes.length})`}
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-                </Button>
-                
-                {/* Filter content - always visible on desktop, collapsible on mobile */}
-                <div className={`${showFilters ? 'block' : 'hidden'} sm:block`}>
-                  <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/30 rounded-lg border">
-                    {/* Date range selector */}
-                    <Select value={dateRange} onValueChange={(v) => { setDateRange(v); setPage(0); }}>
-                      <SelectTrigger className="h-8 w-auto min-w-[130px] border-dashed text-sm">
-                        <Calendar className="h-3.5 w-3.5 mr-2 opacity-50" />
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dateRangeOptions.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+            {/* Shared date filter - visible on all tabs */}
+            <div className="mb-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Date range selector - shared across all tabs */}
+                <Select value={dateRange} onValueChange={(v) => { setDateRange(v); setPage(0); }}>
+                  <SelectTrigger className="h-8 w-auto min-w-[130px] border-dashed text-sm">
+                    <Calendar className="h-3.5 w-3.5 mr-2 opacity-50" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dateRangeOptions.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
+                {/* Additional filters - only on All Calls tab */}
+                {activeTab === "calls" && (
+                  <>
                     <div className="hidden sm:block w-px h-6 bg-border" />
 
-                    <MultiSelectFilter
-                      label="Team Member"
-                      options={teamMemberOptions}
-                      selected={selectedTeamMembers}
-                      onChange={handleFilterChange(setSelectedTeamMembers)}
-                      icon={User}
-                    />
-                    <MultiSelectFilter
-                      label="Call Type"
-                      options={callTypeOptions}
-                      selected={selectedCallTypes}
-                      onChange={handleFilterChange(setSelectedCallTypes)}
-                      icon={Phone}
-                    />
-                    <MultiSelectFilter
-                      label="Outcome"
-                      options={outcomeOptions}
-                      selected={selectedOutcomes}
-                      onChange={handleFilterChange(setSelectedOutcomes)}
-                      icon={Tag}
-                    />
-                    <MultiSelectFilter
-                      label="Score"
-                      options={scoreRangeOptions}
-                      selected={selectedScoreRanges}
-                      onChange={handleFilterChange(setSelectedScoreRanges)}
-                    />
+                    {/* Mobile: Collapsible filter button for extra filters */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="sm:hidden h-8"
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      <Filter className="h-3.5 w-3.5 mr-1" />
+                      Filters {hasActiveFilters && `(${selectedTeamMembers.length + selectedCallTypes.length + selectedScoreRanges.length + selectedOutcomes.length})`}
+                      <ChevronDown className={`h-3.5 w-3.5 ml-1 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                    </Button>
+
+                    {/* Extra filter chips - always visible on desktop, collapsible on mobile */}
+                    <div className={`${showFilters ? 'flex' : 'hidden'} sm:flex flex-wrap items-center gap-2`}>
+                      <MultiSelectFilter
+                        label="Team Member"
+                        options={teamMemberOptions}
+                        selected={selectedTeamMembers}
+                        onChange={handleFilterChange(setSelectedTeamMembers)}
+                        icon={User}
+                      />
+                      <MultiSelectFilter
+                        label="Call Type"
+                        options={callTypeOptions}
+                        selected={selectedCallTypes}
+                        onChange={handleFilterChange(setSelectedCallTypes)}
+                        icon={Phone}
+                      />
+                      <MultiSelectFilter
+                        label="Outcome"
+                        options={outcomeOptions}
+                        selected={selectedOutcomes}
+                        onChange={handleFilterChange(setSelectedOutcomes)}
+                        icon={Tag}
+                      />
+                      <MultiSelectFilter
+                        label="Score"
+                        options={scoreRangeOptions}
+                        selected={selectedScoreRanges}
+                        onChange={handleFilterChange(setSelectedScoreRanges)}
+                      />
+                    </div>
 
                     {hasActiveFilters && (
                       <Button
@@ -1924,10 +1922,10 @@ export default function CallInbox() {
                         Clear all
                       </Button>
                     )}
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
-            )}
+            </div>
 
             {/* === TAB: All Calls (paginated, filtered) === */}
             <TabsContent value="calls" className="space-y-4">
