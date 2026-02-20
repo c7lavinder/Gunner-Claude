@@ -363,6 +363,9 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   add_tag: "Add Tag",
   remove_tag: "Remove Tag",
   update_field: "Update Field",
+  update_task: "Update Task",
+  add_to_workflow: "Add to Workflow",
+  remove_from_workflow: "Remove from Workflow",
 };
 
 const ACTION_ICONS: Record<string, string> = {
@@ -375,9 +378,13 @@ const ACTION_ICONS: Record<string, string> = {
   add_tag: "🏷️",
   remove_tag: "🏷️",
   update_field: "✏️",
+  update_task: "🔄",
+  add_to_workflow: "⚡",
+  remove_from_workflow: "🚫",
 };
 
 function AICoachQA() {
+  const { user: currentUser } = useAuth();
   const { guardAction: guardDemoAction, isDemo } = useDemo();
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
@@ -438,6 +445,13 @@ function AICoachQA() {
               } else {
                 await createActionCard(action, lastUserMessageRef.current, batchIndex, batchTotal);
               }
+            }
+          } else {
+            // Non-streaming fallback: parseIntent returned empty after ACTION_REDIRECT
+            // Show the original Q&A response instead of a generic error
+            const cleanAnswer = response.answer.replace(/\[ACTION_REDIRECT\]/g, "").trim();
+            if (cleanAnswer) {
+              setConversation(prev => [...prev, { role: "assistant", content: cleanAnswer }]);
             }
           }
         } catch (error: any) {
@@ -573,15 +587,25 @@ function AICoachQA() {
               }
             }
           } else {
-            // parseIntent also returned empty — show a helpful message
+            // parseIntent returned empty after ACTION_REDIRECT — this was likely a conversational message
+            // (feedback, complaint, question about previous action) that was incorrectly flagged as an action.
+            // Fall through to the Q&A coach to handle it conversationally.
+            const chatHistory = conversation
+              .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+                msg.role === "user" || msg.role === "assistant"
+              )
+              .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+            // Remove the "On it" placeholder and re-stream as a conversational response
             setConversation(prev => {
               const updated = [...prev];
-              const lastMsg = updated[updated.length - 1];
-              if (lastMsg && lastMsg.role === "assistant") {
-                updated[updated.length - 1] = { ...lastMsg, content: "I tried to process that as a CRM action but couldn't determine the details. Could you specify the contact name and what you'd like to do? For example: 'Add a note to Jackson James: [note text]'" };
+              // Remove the last assistant message (the "On it" placeholder)
+              if (updated.length > 0 && updated[updated.length - 1].role === "assistant") {
+                updated.pop();
               }
               return updated;
             });
+            await streamCoachQuestion(userMessage, chatHistory);
+            return;
           }
         } catch (error: any) {
           toast.error("Failed to process action: " + error.message);
@@ -1031,6 +1055,33 @@ function AICoachQA() {
                           {msg.contactName && (
                             <p className="text-xs text-muted-foreground mt-0.5">Contact: {msg.contactName}</p>
                           )}
+                          {/* Show sender info for SMS */}
+                          {msg.actionType === "send_sms" && msg.status === "pending" && currentUser?.name && (
+                            <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
+                              📤 Sending from: {currentUser.name}'s line
+                            </p>
+                          )}
+                          {/* Show workflow name for workflow actions */}
+                          {(msg.actionType === "add_to_workflow" || msg.actionType === "remove_from_workflow") && msg.payload?.workflowName && (
+                            <div className="mt-1 flex items-center gap-1.5 text-xs bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-md px-2 py-1">
+                              <span className="text-purple-600 dark:text-purple-400">{msg.actionType === "add_to_workflow" ? "→" : "←"}</span>
+                              <span className="font-medium text-purple-700 dark:text-purple-300">{msg.payload.workflowName}</span>
+                            </div>
+                          )}
+                          {/* Show update_task details */}
+                          {msg.actionType === "update_task" && msg.payload && (
+                            <div className="mt-1 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-1 space-y-0.5">
+                              {msg.payload.title && (
+                                <p><span className="text-amber-600 dark:text-amber-400">Task:</span> <span className="font-medium text-amber-700 dark:text-amber-300">{msg.payload.title}</span></p>
+                              )}
+                              {msg.payload.dueDate && (
+                                <p><span className="text-amber-600 dark:text-amber-400">New due date:</span> <span className="font-medium text-amber-700 dark:text-amber-300">{new Date(msg.payload.dueDate).toLocaleDateString()}</span></p>
+                              )}
+                              {msg.payload.taskStatus && (
+                                <p><span className="text-amber-600 dark:text-amber-400">Status:</span> <span className="font-medium text-amber-700 dark:text-amber-300">{msg.payload.taskStatus}</span></p>
+                              )}
+                            </div>
+                          )}
                           {/* Show resolved pipeline stage for confirmation */}
                           {msg.actionType === "change_pipeline_stage" && msg.resolvedStage && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md px-2 py-1">
@@ -1047,7 +1098,7 @@ function AICoachQA() {
                           {msg.status === "pending" && isEditableAction(msg.actionType) && msg.payload ? (
                             <div className="mt-1">
                               <p className="text-xs font-medium text-muted-foreground mb-1">
-                                {msg.actionType === "send_sms" ? "SMS Draft:" : msg.actionType === "create_task" ? "Task:" : "Note Draft:"}
+                                {msg.actionType === "send_sms" ? "SMS Draft:" : msg.actionType === "create_task" ? "Task:" : msg.actionType === "update_task" ? "Update Task:" : "Note Draft:"}
                               </p>
                               {editingActionId === msg.actionId ? (
                                 <>

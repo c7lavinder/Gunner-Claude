@@ -2410,3 +2410,37 @@
 - [x] Inject explicit preferences into AI Coach prompts (coaching, actions, SMS, notes)
 - [x] Apply default pipeline preference during stage resolution
 - [x] Support preference types: pipeline default, response tone/format, task assignment defaults, etc.
+
+## AI Coach: Add/Remove Contact from Workflow
+- [x] Research GHL workflow API endpoints (add contact to workflow, remove contact from workflow)
+- [x] Add add_to_workflow and remove_from_workflow action types to schema and backend
+- [x] Implement GHL API calls for workflow add/remove
+- [x] Update AI Coach LLM prompt to recognize workflow commands
+- [x] Add workflow name resolution (fuzzy match workflow names from GHL)
+- [x] Wire up frontend confirmation cards for workflow actions
+- [x] Write vitest tests
+
+## AI Coach: Update Existing Task (due date, title, etc.)
+- [x] Add update_task action type to schema enum
+- [x] Implement GHL API: list tasks for contact, update task by ID
+- [x] Add update_task case to executeAction switch
+- [x] Update AI Coach LLM prompt to recognize task update commands ("move task to Monday", "change due date", "reschedule task")
+- [x] Add task matching logic (find the right task by title/keyword when contact has multiple tasks)
+- [x] Wire up frontend confirmation card for task updates
+- [x] Write vitest tests for update_task
+
+## AI Coach: SMS Sender Routing Fix
+- [x] Fix SMS to always send from the Gunner user's GHL userId (not the opportunity assignee's) — verified code already uses requestingUserGhlId correctly
+- [x] Show which phone number/user the SMS will send from in the confirmation card — added "Sending from: [name]'s line" display
+- [x] Added detailed logging to trace SMS userId routing for debugging
+
+## AI Coach: Conversation vs Action Routing Fix
+- [x] Fix AI Coach to properly route conversational messages (feedback, complaints, questions about previous actions) to the Q&A coach instead of trying to parse them as CRM actions
+- [x] "That was not sent from my number" should get a conversational response, not "I couldn't determine the action"
+- [x] Updated parseIntent prompt with CONVERSATIONAL MESSAGES ARE NOT ACTIONS section
+- [x] Updated Q&A coach prompt (both streaming and non-streaming) with CONVERSATIONAL FEEDBACK vs CRM ACTIONS section
+- [x] Fixed ACTION_REDIRECT empty fallback to fall through to Q&A coach instead of showing generic error
+
+## AI Coach: SMS Phone Number Fix
+- [x] Investigate GHL API fromNumber parameter for explicit phone number routing — GHL uses userId parameter to route from user's assigned number; no separate fromNumber param found
+- [x] Ensure SMS sends from the requesting user's actual phone line, not the contact's assigned user — code verified correct; GHL may override based on conversation thread

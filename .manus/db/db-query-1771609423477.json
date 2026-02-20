@@ -1,0 +1,40 @@
+{
+  "query": "SELECT tm.id, tm.name, tm.teamRole, tm.ghlUserId, tm.userId, u.name as userName, u.email, u.id as uid\nFROM team_members tm \nLEFT JOIN users u ON tm.userId = u.id \nWHERE tm.tenantId = (SELECT id FROM tenants WHERE slug = 'nah' LIMIT 1)\nAND tm.name LIKE '%Kyle%' OR tm.name LIKE '%Chris%'\nORDER BY tm.name;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT tm.id, tm.name, tm.teamRole, tm.ghlUserId, tm.userId, u.name as userName, u.email, u.id as uid\nFROM team_members tm \nLEFT JOIN users u ON tm.userId = u.id \nWHERE tm.tenantId = (SELECT id FROM tenants WHERE slug = 'nah' LIMIT 1)\nAND tm.name LIKE '%Kyle%' OR tm.name LIKE '%Chris%'\nORDER BY tm.name;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Chris Segura",
+      "teamRole": "lead_manager",
+      "ghlUserId": "nJVGO9byJSmD8O32UF9Z",
+      "userId": "390001",
+      "userName": "Christian Segura",
+      "email": "c.segura9393@gmail.com",
+      "uid": "390001"
+    },
+    {
+      "id": "3",
+      "name": "Kyle Barks",
+      "teamRole": "acquisition_manager",
+      "ghlUserId": "InPGvGL7iu5TCnYJLMEx",
+      "userId": "90493",
+      "userName": "Kyle Barks",
+      "email": "kbarks@newagainhouses.com",
+      "uid": "90493"
+    },
+    {
+      "id": "300037",
+      "name": "Zac Chrisman",
+      "teamRole": "acquisition_manager",
+      "ghlUserId": "NULL",
+      "userId": "NULL",
+      "userName": "NULL",
+      "email": "NULL",
+      "uid": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tteamRole\tghlUserId\tuserId\tuserName\temail\tuid\n1\tChris Segura\tlead_manager\tnJVGO9byJSmD8O32UF9Z\t390001\tChristian Segura\tc.segura9393@gmail.com\t390001\n3\tKyle Barks\tacquisition_manager\tInPGvGL7iu5TCnYJLMEx\t90493\tKyle Barks\tkbarks@newagainhouses.com\t90493\n300037\tZac Chrisman\tacquisition_manager\tNULL\tNULL\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 354
+}

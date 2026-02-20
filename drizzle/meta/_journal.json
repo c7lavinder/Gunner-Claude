@@ -323,6 +323,20 @@
       "when": 1771607892624,
       "tag": "0045_zippy_elektra",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "5",
+      "when": 1771609064716,
+      "tag": "0046_loose_lethal_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1771609233033,
+      "tag": "0047_wealthy_blue_blade",
+      "breakpoints": true
     }
   ]
 }

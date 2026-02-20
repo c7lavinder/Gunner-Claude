@@ -1554,9 +1554,19 @@ You have FULL access to the team's GoHighLevel CRM. You CAN directly perform the
 - Change pipeline stages (move deals)
 - Send SMS messages to contacts
 - Create follow-up tasks
+- Update existing tasks (change due dates, mark complete)
 - Add or remove tags on contacts
 - Update custom fields on contacts
-IMPORTANT: If the user asks you to perform ANY of these CRM actions (add a note, send a text, move a stage, create a task, tag someone, update a field), you MUST start your response with the EXACT text "[ACTION_REDIRECT]" on its own line, followed by a brief acknowledgment like "On it — creating that for you now." This special tag tells the system to automatically route the request to the action handler. Do NOT tell the user to retype their request. Do NOT say "type your request as a command". Just use [ACTION_REDIRECT] and the system handles the rest.
+- Add or remove contacts from workflows/automations
+IMPORTANT: If the user asks you to perform ANY of these CRM actions (add a note, send a text, move a stage, create a task, update a task, tag someone, update a field, add/remove from workflow), you MUST start your response with the EXACT text "[ACTION_REDIRECT]" on its own line, followed by a brief acknowledgment like "On it — creating that for you now." This special tag tells the system to automatically route the request to the action handler. Do NOT tell the user to retype their request. Do NOT say "type your request as a command". Just use [ACTION_REDIRECT] and the system handles the rest.
+
+CONVERSATIONAL FEEDBACK vs CRM ACTIONS:
+Do NOT use [ACTION_REDIRECT] for these types of messages — they are CONVERSATIONS, not CRM actions:
+- Complaints or feedback about a previous action (e.g., "That was not sent from my number", "That note was wrong", "That went to the wrong person")
+- Questions about how something worked (e.g., "Why did it send from Chris's number?", "Which number did that go from?")
+- Confirmations or acknowledgments (e.g., "Thanks", "Got it", "OK")
+- General conversation or follow-up about a previous interaction
+For these, respond conversationally. Acknowledge the issue, explain what you know, and offer to help fix it.
 
 CRITICAL RULES:
 1. ALWAYS ground your answers in the REAL DATA above. Reference specific calls, scores, outcomes, contacts, and property addresses when relevant.
@@ -1573,7 +1583,8 @@ CRITICAL RULES:
 12. ${isAdmin ? 'This user is an ADMIN — they can see opportunity/signal details and detection rule specifics.' : 'This user is NOT an admin — do NOT reveal opportunity/signal details, detection rule thresholds, or pipeline data. If they ask about signals, tell them to ask their manager or admin.'}
 13. When you see a "COMPUTED STATS" block above, those numbers are EXACT — calculated directly from the database. You MUST use those exact numbers in your response. Do NOT estimate, round differently, or contradict the computed stats. Present them naturally in your answer (e.g., "You've made 12 calls this week with an average score of 78.3%").
 14. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access.
-15. If the user's message looks like a CRM action request, start your response with [ACTION_REDIRECT] on its own line. NEVER tell the user to retype or rephrase their request as a command.`;
+15. If the user's message looks like a CRM action request, start your response with [ACTION_REDIRECT] on its own line. NEVER tell the user to retype or rephrase their request as a command.
+16. If the user is giving feedback about a PREVIOUS action (like "that was wrong" or "not from my number"), respond conversationally — do NOT use [ACTION_REDIRECT]. Acknowledge the issue and offer to help.`;
 
         // Build messages with conversation history for context
         const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -4469,10 +4480,22 @@ Available action types:
 5. add_tag - Add a tag to a contact
 6. remove_tag - Remove a tag from a contact
 7. update_field - Update a custom field on a contact
+8. update_task - Update an existing task (change due date, title, description, or status)
+9. add_to_workflow - Add a contact to a GHL workflow/automation
+10. remove_from_workflow - Remove a contact from a GHL workflow/automation
 
 MULTI-ACTION SUPPORT: A user may request MULTIPLE actions in a single message (e.g., "Add a note to Jose Ruiz, then create a task for 3 months from now, then move it to the 4 month stage"). You MUST detect ALL actions and return each one as a separate item in the "actions" array. Parse each action independently with its own contactName, params, and summary.
 
 If the message contains NO CRM action requests (it's a coaching question, greeting, etc.), return an empty actions array.
+
+CRITICAL — CONVERSATIONAL MESSAGES ARE NOT ACTIONS:
+These types of messages are NOT CRM actions and MUST return an empty actions array:
+- Feedback or complaints about a previous action (e.g., "That was not sent from my number", "That note was wrong", "That went to the wrong person")
+- Questions about how something worked (e.g., "Why did it send from Chris's number?", "Which number did that go from?")
+- Confirmations or acknowledgments (e.g., "Thanks", "Got it", "OK", "Perfect")
+- General conversation or follow-up about a previous interaction
+- Greetings (e.g., "Hey", "Hello", "What's up")
+Do NOT try to parse these as CRM actions. Return an empty actions array so the coaching system can handle them conversationally.
 
 IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions conversationally rather than as direct commands. ALL of these are action requests and MUST be parsed into actions:
 - "Can you add a note to John?" → add_note
@@ -4484,6 +4507,15 @@ IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions co
 - "Please note that the seller called back" → add_note
 - "Text the seller and ask if they're still interested" → send_sms
 - "Set a reminder to call back tomorrow" → create_task
+- "Move the pending task for John to due on Monday" → update_task
+- "Change the task due date for Jane to next Friday" → update_task
+- "Update the task for Greg to be due in 2 weeks" → update_task
+- "Push back the task for Mike to next month" → update_task
+- "Mark the task for Sarah as completed" → update_task
+- "Add John to the follow-up workflow" → add_to_workflow
+- "Remove Jane from the drip campaign" → remove_from_workflow
+- "Put this contact in the nurture sequence" → add_to_workflow
+- "Take him out of the cold calling workflow" → remove_from_workflow
 - "Can you create summary for the last call with Jackson James and add that summary as a note?" → add_note (use the RECENT CALL DATA to write the full summary as the noteBody)
 - "Summarize the call with [Name] and save it as a note" → add_note (write the complete summary in noteBody)
 - "Write up what happened on the last call and add it to their notes" → add_note
@@ -4522,6 +4554,9 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
 - For send_sms: Write the complete SMS message text in params.message. Don't describe the SMS — write the actual message that will be sent. CRITICAL: The SMS will be sent DIRECTLY to the contact, so always write it in SECOND PERSON ("you"/"your") as if speaking to them. The user may describe what to say in third person (e.g., "tell him we don't want his house") — you MUST convert this to direct address (e.g., "we're not interested in purchasing your house"). Never use "he/him/his/she/her" to refer to the recipient in the SMS body.
 - For create_task: Write a clear task title in params.title AND a detailed description in params.description. The description MUST reference specific details from the call data below (property address, what was discussed, outcome, next steps). Never write vague descriptions like "call them about their property" — instead write something like "Follow up on 123 Main St. Last call on 2/10 discussed ARV of $180k, seller wants $150k. Need to present offer."
   IMPORTANT for dueDate: Convert the user's requested date to ISO 8601 format: YYYY-MM-DDTHH:mm:ssZ (e.g., "2026-02-24T10:00:00Z"). Today is ${new Date().toISOString().split('T')[0]}. If the user says "next Monday", calculate the actual date. If the user says "3 months from now", calculate 3 months ahead. If no date is specified, use tomorrow's date. Always include the time (default 10:00:00) and Z timezone suffix. NEVER return relative strings like "next monday" or "3 months" — always return the calculated ISO date.
+- For update_task: Set params.title to a keyword describing which task to update (e.g. "pending", "follow up", "call back"). Set params.dueDate to the new due date in ISO 8601 format if the user wants to change the due date. Set params.description to the new description if the user wants to change it. The system will search the contact's existing tasks and find the best match. If the user says "mark as completed", set params.taskStatus to "completed".
+- For add_to_workflow: Set params.workflowName to the workflow name the user mentioned (e.g. "follow-up", "drip campaign", "nurture sequence"). The system will fuzzy-match to the actual GHL workflow.
+- For remove_from_workflow: Set params.workflowName to the workflow name to remove from. The system will fuzzy-match to the actual GHL workflow.
 
 CRITICAL: You have REAL call data below. You MUST use it to write specific, accurate content. Reference actual property addresses, discussion topics, outcomes, and details from the transcripts. NEVER generate vague or placeholder text like "regarding his property" or "Please provide the summary" or "Insert details here".
 ${callContext}
@@ -4531,7 +4566,7 @@ Return JSON with an "actions" array. Each action object has:
 - contactName: the contact name mentioned (or from context). If multiple actions reference the same contact, use the same name for all.
 - contactId: the contact ID if known from context
 - assigneeName: for create_task ONLY, the TEAM MEMBER name to assign the task to. IMPORTANT: The assignee is the person who will DO the task, NOT the contact the task is about. The contact name goes in contactName. If the user says "make a task for Daniel to call John", Daniel is the assigneeName and John is the contactName. If the user says "create a task to follow up with Greg", Greg is the contactName and the assigneeName should be the current user ("${ctx.user!.name || "Unknown"}") since no specific team member was mentioned. For non-task actions, use empty string.
-- params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, pipelineName, fieldKey, fieldValue)
+- params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, pipelineName, fieldKey, fieldValue, workflowName, taskStatus)
 - For change_pipeline_stage: ALWAYS include stageName (the human-readable stage name the user mentioned, e.g. "pending appointment", "offer scheduled", "qualified"). Also include pipelineName if the user mentions a specific pipeline (e.g. "sales pipeline", "acquisition pipeline"). Leave pipelineId and stageId empty strings — the system will resolve the actual IDs automatically.
 - summary: a SHORT one-line summary of the action (e.g. "Send SMS to John" or "Add note to Kimberly"). The full content will be shown separately.
 - needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID
@@ -4572,8 +4607,10 @@ ${instructionContext}`
                             opportunityId: { type: "string" },
                             pipelineId: { type: "string" },
                             stageId: { type: "string" },
+                            workflowName: { type: "string" },
+                            taskStatus: { type: "string" },
                           },
-                          required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId"],
+                          required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus"],
                           additionalProperties: false
                         },
                         assigneeName: { type: "string" },
@@ -4598,7 +4635,7 @@ ${instructionContext}`
         console.log(`[parseIntent] Call context available: ${callContext.length > 0 ? 'yes (' + callContext.length + ' chars)' : 'no'}`);
         if (content && typeof content === "string") {
           const parsed = JSON.parse(content);
-          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field"];
+          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow"];
           // Return the actions array, or wrap legacy single-action format for backwards compatibility
           if (parsed.actions && Array.isArray(parsed.actions)) {
             // Filter out any actions with missing, empty, or invalid actionType
@@ -4635,7 +4672,7 @@ ${instructionContext}`
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
         // Validate actionType server-side with a friendly error
-        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field"];
+        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow"];
         if (!input.actionType || !VALID_ACTION_TYPES.includes(input.actionType)) {
           throw new TRPCError({
             code: "BAD_REQUEST",

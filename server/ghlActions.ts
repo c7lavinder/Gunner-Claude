@@ -450,6 +450,8 @@ export async function sendSms(
     body.userId = userId;
   }
 
+  console.log(`[sendSms] Sending SMS to contact ${contactId} with userId=${userId || 'none (will use contact assigned user)'}`);
+
   const data = await ghlFetch(
     creds,
     `/conversations/messages`,
@@ -661,6 +663,231 @@ export async function updateContactField(
   return { success: true };
 }
 
+// ============ ACTION 9: LIST TASKS FOR CONTACT ============
+
+export async function getTasksForContact(
+  tenantId: number,
+  contactId: string
+): Promise<Array<{ id: string; title: string; body: string; dueDate: string; completed: boolean; assignedTo?: string }>> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) throw new Error("No GHL credentials configured");
+
+  const data = await ghlFetch(
+    creds,
+    `/contacts/${contactId}/tasks`,
+    "GET"
+  );
+
+  return (data.tasks || []).map((t: any) => ({
+    id: t.id,
+    title: t.title || "",
+    body: t.body || "",
+    dueDate: t.dueDate || "",
+    completed: !!t.completed,
+    assignedTo: t.assignedTo,
+  }));
+}
+
+// ============ ACTION 10: UPDATE TASK ============
+
+export async function updateTask(
+  tenantId: number,
+  contactId: string,
+  taskId: string,
+  updates: { title?: string; body?: string; dueDate?: string; completed?: boolean }
+): Promise<{ success: boolean }> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) throw new Error("No GHL credentials configured");
+
+  const body: any = {};
+  if (updates.title !== undefined) body.title = updates.title;
+  if (updates.body !== undefined) body.body = updates.body;
+  if (updates.dueDate !== undefined) {
+    // Normalize the due date
+    try {
+      const parsed = new Date(updates.dueDate);
+      if (!isNaN(parsed.getTime())) {
+        body.dueDate = parsed.toISOString().replace(/\.\d{3}Z$/, 'Z');
+      } else {
+        body.dueDate = parseRelativeDate(updates.dueDate);
+      }
+    } catch {
+      body.dueDate = parseRelativeDate(updates.dueDate);
+    }
+  }
+  if (updates.completed !== undefined) body.completed = updates.completed;
+
+  await ghlFetch(
+    creds,
+    `/contacts/${contactId}/tasks/${taskId}`,
+    "PUT",
+    body
+  );
+
+  return { success: true };
+}
+
+/**
+ * Find the best matching task for a contact given a keyword/title hint.
+ * Returns the task ID and details, or null if no match.
+ */
+export async function findTaskByKeyword(
+  tenantId: number,
+  contactId: string,
+  keyword?: string
+): Promise<{ id: string; title: string; dueDate: string } | null> {
+  const tasks = await getTasksForContact(tenantId, contactId);
+  if (tasks.length === 0) return null;
+
+  // Filter to incomplete tasks only
+  const incomplete = tasks.filter(t => !t.completed);
+  const searchPool = incomplete.length > 0 ? incomplete : tasks;
+
+  if (!keyword || keyword.trim() === "") {
+    // No keyword — return the most recent incomplete task (or the first task)
+    // Sort by dueDate descending to get the most relevant upcoming task
+    const sorted = [...searchPool].sort((a, b) => {
+      const da = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const db = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return da - db; // earliest due date first
+    });
+    const t = sorted[0];
+    return { id: t.id, title: t.title, dueDate: t.dueDate };
+  }
+
+  const lower = keyword.toLowerCase();
+
+  // Exact title match
+  const exact = searchPool.find(t => t.title.toLowerCase() === lower);
+  if (exact) return { id: exact.id, title: exact.title, dueDate: exact.dueDate };
+
+  // Substring match
+  const sub = searchPool.find(t => t.title.toLowerCase().includes(lower) || lower.includes(t.title.toLowerCase()));
+  if (sub) return { id: sub.id, title: sub.title, dueDate: sub.dueDate };
+
+  // Word overlap match
+  const keywordWords = lower.split(/\s+/).filter(w => w.length > 2);
+  let bestMatch: typeof searchPool[0] | null = null;
+  let bestScore = 0;
+  for (const task of searchPool) {
+    const titleWords = task.title.toLowerCase().split(/\s+/);
+    const overlap = keywordWords.filter(kw => titleWords.some(tw => tw.includes(kw) || kw.includes(tw))).length;
+    if (overlap > bestScore) {
+      bestScore = overlap;
+      bestMatch = task;
+    }
+  }
+  if (bestMatch && bestScore > 0) {
+    return { id: bestMatch.id, title: bestMatch.title, dueDate: bestMatch.dueDate };
+  }
+
+  // Fallback: return the first incomplete task
+  const t = searchPool[0];
+  return { id: t.id, title: t.title, dueDate: t.dueDate };
+}
+
+// ============ ACTION 11: ADD CONTACT TO WORKFLOW ============
+
+export async function addContactToWorkflow(
+  tenantId: number,
+  contactId: string,
+  workflowId: string
+): Promise<{ success: boolean }> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) throw new Error("No GHL credentials configured");
+
+  await ghlFetch(
+    creds,
+    `/contacts/${contactId}/workflow/${workflowId}`,
+    "POST"
+  );
+
+  return { success: true };
+}
+
+// ============ ACTION 12: REMOVE CONTACT FROM WORKFLOW ============
+
+export async function removeContactFromWorkflow(
+  tenantId: number,
+  contactId: string,
+  workflowId: string
+): Promise<{ success: boolean }> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) throw new Error("No GHL credentials configured");
+
+  await ghlFetch(
+    creds,
+    `/contacts/${contactId}/workflow/${workflowId}`,
+    "DELETE"
+  );
+
+  return { success: true };
+}
+
+// ============ WORKFLOW RESOLUTION ============
+
+export async function getWorkflowsForTenant(
+  tenantId: number
+): Promise<Array<{ id: string; name: string }>> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return [];
+
+  try {
+    const data = await ghlFetch(
+      creds,
+      `/workflows/?locationId=${creds.locationId}`,
+      "GET"
+    );
+    return (data.workflows || []).map((w: any) => ({
+      id: w.id,
+      name: w.name || "Unnamed Workflow",
+    }));
+  } catch (error) {
+    console.error("[GHLActions] Workflow fetch error:", error);
+    return [];
+  }
+}
+
+/**
+ * Fuzzy-match a workflow name to a workflow ID.
+ * Similar to stage resolution but simpler — just name matching.
+ */
+export function resolveWorkflowByName(
+  workflows: Array<{ id: string; name: string }>,
+  workflowName: string
+): { workflowId: string; workflowName: string } | null {
+  const normalized = workflowName.toLowerCase().trim();
+
+  // Pass 1: Exact match
+  const exact = workflows.find(w => w.name.toLowerCase() === normalized);
+  if (exact) return { workflowId: exact.id, workflowName: exact.name };
+
+  // Pass 2: Substring match (either direction)
+  const sub = workflows.find(w => {
+    const wName = w.name.toLowerCase();
+    return wName.includes(normalized) || normalized.includes(wName);
+  });
+  if (sub) return { workflowId: sub.id, workflowName: sub.name };
+
+  // Pass 3: Word overlap — at least 50% of input words must match
+  const inputWords = normalized.split(/\s+/).filter(w => w.length > 2 && !['the', 'a', 'an', 'to', 'for', 'and'].includes(w));
+  let bestMatch: typeof workflows[0] | null = null;
+  let bestScore = 0;
+  for (const wf of workflows) {
+    const wfWords = wf.name.toLowerCase().split(/\s+/);
+    const overlap = inputWords.filter(iw => wfWords.some(ww => ww.includes(iw) || iw.includes(ww))).length;
+    if (overlap > bestScore) {
+      bestScore = overlap;
+      bestMatch = wf;
+    }
+  }
+  if (bestMatch && bestScore > 0 && bestScore >= inputWords.length * 0.5) {
+    return { workflowId: bestMatch.id, workflowName: bestMatch.name };
+  }
+
+  return null;
+}
+
 // ============ ACTION LOG HELPERS ============
 
 export async function createActionLog(params: {
@@ -837,6 +1064,7 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
       }
       case "send_sms":
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        console.log(`[GHLActions] SMS action: requestedBy=${action.requestedBy} (${action.requestedByName}), resolved GHL userId=${requestingUserGhlId || 'NONE'}`);
         result = await sendSms(action.tenantId, contactId, payload.message, requestingUserGhlId);
         break;
       case "create_task":
@@ -855,6 +1083,60 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
         result = await updateContactField(action.tenantId, contactId, payload.fieldKey, payload.fieldValue);
         break;
+      case "update_task": {
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        
+        // Find the task to update
+        let taskId = payload.taskId;
+        if (!taskId) {
+          // Auto-resolve task by keyword/title
+          const matched = await findTaskByKeyword(action.tenantId, contactId, payload.taskKeyword || payload.title);
+          if (!matched) throw new Error("No tasks found for this contact.");
+          taskId = matched.id;
+          console.log(`[GHLActions] Resolved task: "${matched.title}" (${taskId})`);
+        }
+
+        const updates: { title?: string; body?: string; dueDate?: string; completed?: boolean } = {};
+        if (payload.newDueDate) updates.dueDate = payload.newDueDate;
+        if (payload.newTitle) updates.title = payload.newTitle;
+        if (payload.newBody !== undefined) updates.body = payload.newBody;
+        if (payload.completed !== undefined) updates.completed = payload.completed;
+
+        result = await updateTask(action.tenantId, contactId, taskId, updates);
+        break;
+      }
+      case "add_to_workflow": {
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        
+        let workflowId = payload.workflowId;
+        if (!workflowId && payload.workflowName) {
+          const workflows = await getWorkflowsForTenant(action.tenantId);
+          const resolved = resolveWorkflowByName(workflows, payload.workflowName);
+          if (!resolved) throw new Error(`Could not find a workflow matching "${payload.workflowName}". Please check the workflow name.`);
+          workflowId = resolved.workflowId;
+          console.log(`[GHLActions] Resolved workflow: "${resolved.workflowName}" (${workflowId})`);
+        }
+        if (!workflowId) throw new Error("No workflow specified. Please provide a workflow name.");
+        
+        result = await addContactToWorkflow(action.tenantId, contactId, workflowId);
+        break;
+      }
+      case "remove_from_workflow": {
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        
+        let workflowId = payload.workflowId;
+        if (!workflowId && payload.workflowName) {
+          const workflows = await getWorkflowsForTenant(action.tenantId);
+          const resolved = resolveWorkflowByName(workflows, payload.workflowName);
+          if (!resolved) throw new Error(`Could not find a workflow matching "${payload.workflowName}". Please check the workflow name.`);
+          workflowId = resolved.workflowId;
+          console.log(`[GHLActions] Resolved workflow: "${resolved.workflowName}" (${workflowId})`);
+        }
+        if (!workflowId) throw new Error("No workflow specified. Please provide a workflow name.");
+        
+        result = await removeContactFromWorkflow(action.tenantId, contactId, workflowId);
+        break;
+      }
       default:
         throw new Error(`Unknown action type: ${action.actionType}`);
     }
