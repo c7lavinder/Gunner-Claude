@@ -2489,3 +2489,6 @@
 - [x] Calculate percentage change for each metric (calls, conversations, appointments, offer calls, avg score)
 - [x] Add green/red percentage badge to top corner of each stat card
 - [x] Handle edge cases (prior period zero, no data, same value)
+
+## BUG: Avg Score stat card comparison badge overflows card
+- [x] Fix badge text overflow — "25%pt" is too wide and clips outside the card boundary

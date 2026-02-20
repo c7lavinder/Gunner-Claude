@@ -50,19 +50,26 @@ function StatCard({
   
   const change = getChange();
   
+  // Format the badge label
+  const badgeLabel = change && change.direction !== 'flat'
+    ? `${change.pct}${isPercentage ? 'pt' : '%'}`
+    : null;
+  
   return (
-    <Card className="p-3 sm:p-4 relative">
+    <Card className="p-3 sm:p-4 relative overflow-hidden">
       {/* Comparison badge in top-right corner */}
-      {change && change.direction !== 'flat' && (
-        <div className={`absolute top-1.5 right-1.5 sm:top-2 sm:right-2 flex items-center gap-0.5 text-[10px] sm:text-xs font-semibold ${
-          change.direction === 'up' ? 'text-emerald-600' : 'text-red-500'
+      {badgeLabel && change && (
+        <div className={`absolute top-1.5 right-1.5 sm:top-2 sm:right-2 flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] sm:text-xs font-semibold ${
+          change.direction === 'up' 
+            ? 'text-emerald-700 bg-emerald-50' 
+            : 'text-red-600 bg-red-50'
         }`}>
           {change.direction === 'up' ? (
-            <ArrowUpRight className="h-3 w-3" />
+            <ArrowUpRight className="h-3 w-3 shrink-0" />
           ) : (
-            <ArrowDownRight className="h-3 w-3" />
+            <ArrowDownRight className="h-3 w-3 shrink-0" />
           )}
-          {change.pct}%{isPercentage ? 'pt' : ''}
+          {badgeLabel}
         </div>
       )}
       <div className="flex items-center gap-2 sm:gap-3">
