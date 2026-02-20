@@ -401,6 +401,12 @@ function AICoachQA() {
         setConversation(prev => [...prev, { role: "assistant", content: "On it \u2014 creating that for you now..." }]);
         try {
           const result = await parseIntentMutation.mutateAsync({ message: lastUserMessageRef.current });
+          // Handle instruction/preference saved
+          if ((result as any).instructionSaved) {
+            setConversation(prev => [...prev, { role: "assistant", content: (result as any).instructionConfirmation || "Got it — I'll remember that preference!" }]);
+            setIsAsking(false);
+            return;
+          }
           const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
           if (actions.length > 0) {
             const resolvedContacts: Record<string, { id: string; name: string }> = {};
@@ -515,6 +521,19 @@ function AICoachQA() {
         });
         try {
           const result = await parseIntentMutation.mutateAsync({ message: userMessage });
+          // Handle instruction/preference saved
+          if ((result as any).instructionSaved) {
+            setConversation(prev => {
+              const updated = [...prev];
+              const lastMsg = updated[updated.length - 1];
+              if (lastMsg && lastMsg.role === "assistant") {
+                updated[updated.length - 1] = { ...lastMsg, content: (result as any).instructionConfirmation || "Got it \u2014 I'll remember that preference!" };
+              }
+              return updated;
+            });
+            setIsAsking(false);
+            return;
+          }
           const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
           if (actions.length > 0) {
             if (actions.length > 1) {
@@ -604,6 +623,12 @@ function AICoachQA() {
     try {
       // Parse the intent — now returns { actions: [...] }
       const result = await parseIntentMutation.mutateAsync({ message: userMessage });
+      // Handle instruction/preference saved
+      if ((result as any).instructionSaved) {
+        setConversation(prev => [...prev, { role: "assistant", content: (result as any).instructionConfirmation || "Got it \u2014 I'll remember that preference!" }]);
+        setIsAsking(false);
+        return;
+      }
       // Filter out any actions with missing or invalid actionType (defensive)
       const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
       

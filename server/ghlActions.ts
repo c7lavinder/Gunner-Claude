@@ -757,6 +757,7 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         let resolvedOppId = opportunityId;
         let resolvedPipelineId = payload.pipelineId;
         let resolvedStageId = payload.stageId;
+        let currentPipelineName: string | undefined;
 
         // Auto-resolve opportunity ID from contact if not provided
         if (!resolvedOppId && contactId) {
@@ -778,7 +779,46 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         if ((!resolvedStageId || !resolvedPipelineId) && payload.stageName) {
           console.log(`[GHLActions] Resolving stage name "${payload.stageName}" to pipeline/stage IDs`);
           const pipelines = await getPipelinesForTenant(action.tenantId);
-          const resolved = resolveStageByName(pipelines, payload.stageName, payload.pipelineName);
+
+          // IMPORTANT: When we already know the contact's current pipeline from the opportunity lookup,
+          // prefer searching that pipeline first. Only use the LLM's pipelineName if no pipeline was
+          // resolved from the opportunity. This prevents moving contacts to the wrong pipeline when
+          // multiple pipelines have stages with the same name (e.g. "Made Offer" in both Sales Process
+          // and Buyer Pipeline).
+          let preferredPipelineName = payload.pipelineName;
+
+          // Check for user's stored pipeline preference if no pipeline specified
+          if (!preferredPipelineName && action.requestedBy) {
+            try {
+              const { getDefaultPipeline } = await import("./userInstructions");
+              const userDefaultPipeline = await getDefaultPipeline(action.requestedBy);
+              if (userDefaultPipeline) {
+                preferredPipelineName = userDefaultPipeline;
+                console.log(`[GHLActions] Using user's stored pipeline preference: "${userDefaultPipeline}"`);
+              }
+            } catch { /* preference lookup is optional */ }
+          }
+
+          if (resolvedPipelineId && !payload.pipelineName) {
+            // Look up the current pipeline's name to pass to resolveStageByName
+            const currentPipeline = pipelines.find(p => p.id === resolvedPipelineId);
+            if (currentPipeline) {
+              preferredPipelineName = currentPipeline.name;
+              currentPipelineName = currentPipeline.name;
+              console.log(`[GHLActions] Preferring contact's current pipeline: "${preferredPipelineName}"`);
+            }
+          }
+
+          // First try: resolve within the preferred pipeline (contact's current pipeline)
+          let resolved = resolveStageByName(pipelines, payload.stageName, preferredPipelineName);
+
+          // If the stage wasn't found in the preferred pipeline but was found elsewhere,
+          // and the user didn't explicitly specify a pipeline, try all pipelines as fallback
+          if (!resolved && preferredPipelineName && !payload.pipelineName) {
+            console.log(`[GHLActions] Stage "${payload.stageName}" not found in current pipeline "${preferredPipelineName}", searching all pipelines`);
+            resolved = resolveStageByName(pipelines, payload.stageName);
+          }
+
           if (resolved) {
             resolvedPipelineId = resolved.pipelineId;
             resolvedStageId = resolved.stageId;

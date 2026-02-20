@@ -1341,3 +1341,27 @@ export const coachMessages = mysqlTable("coach_messages", {
 });
 export type CoachMessage = typeof coachMessages.$inferSelect;
 export type InsertCoachMessage = typeof coachMessages.$inferInsert;
+
+/**
+ * User Instructions - Persistent explicit preferences/instructions from users.
+ * When a user tells the AI Coach something like "always use sales process pipeline"
+ * or "reply in bullet points" or "use professional tone", it's stored here permanently
+ * and injected into every AI Coach prompt for that user.
+ * 
+ * These are per-user (not per-tenant) and persist across sessions/logins forever.
+ * Users can view, update, or delete their instructions.
+ */
+export const userInstructions = mysqlTable("user_instructions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").references(() => users.id).notNull(),
+  // The raw instruction text as the user stated it
+  instruction: text("instruction").notNull(),
+  // Category for grouping/display: general, pipeline, tone, format, assignment, etc.
+  category: varchar("category", { length: 50 }).notNull().default("general"),
+  // Whether this instruction is currently active
+  isActive: varchar("isActive", { length: 5 }).notNull().default("true"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type UserInstruction = typeof userInstructions.$inferSelect;
+export type InsertUserInstruction = typeof userInstructions.$inferInsert;

@@ -2392,3 +2392,21 @@
 ## BatchDialer Integration Fix
 - [x] Investigate BatchDialer API timeout issues and find workaround
 - [x] Implement fix to get call syncing working reliably
+
+## BatchDialer Sync Not Working After V2 Switch
+- [x] Debug why BatchDialer calls are not importing after v2 endpoint switch
+- [x] Fix sync issue and verify calls flow in
+- [x] Filter BatchDialer sync to only import calls with dispositions: Interested in Selling, Follow Up, Not Selling, Call Back
+- [x] Handle recording 404s gracefully (skip call, don't error)
+
+## AI Coach Pipeline Stage Move Bug
+- [x] Fix AI Coach moving contacts to wrong pipeline — should stay in contact's current pipeline
+- [x] Fix "move that back" undo command not working in AI Coach
+
+## Per-User Explicit Preferences for AI Coach
+- [x] Add DB table/column for explicit user preferences (per-user, not per-tenant)
+- [x] Detect preference-setting messages ("always use X", "default to Y", "use Z tone")
+- [x] Store preferences per-user and confirm back to user
+- [x] Inject explicit preferences into AI Coach prompts (coaching, actions, SMS, notes)
+- [x] Apply default pipeline preference during stage resolution
+- [x] Support preference types: pipeline default, response tone/format, task assignment defaults, etc.

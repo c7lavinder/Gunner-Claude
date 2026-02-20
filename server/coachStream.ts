@@ -210,6 +210,13 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       coachingPrefs = await buildPreferenceContext(user.tenantId || 0, user.id);
     } catch { /* optional */ }
 
+    // User's explicit persistent instructions
+    let userInstructionContext = "";
+    try {
+      const { buildInstructionContext } = await import("./userInstructions");
+      userInstructionContext = await buildInstructionContext(user.id);
+    } catch { /* instructions are optional */ }
+
     // Conversation memory from past sessions
     let conversationMemory = "";
     try {
@@ -259,7 +266,7 @@ Training materials available: ${trainingMaterials.length > 0 ? trainingMaterials
 
 ${trainingContext}
 ${coachingPrefs ? `\n${coachingPrefs}` : ""}
-
+${userInstructionContext}
 CRM ACTION CAPABILITIES:
 You have FULL access to the team's GoHighLevel CRM. You CAN directly perform these actions:
 - Add notes to contacts

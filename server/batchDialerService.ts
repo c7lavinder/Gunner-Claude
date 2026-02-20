@@ -29,7 +29,7 @@ export interface BatchDialerCall {
   mood: string;
   duration: number;
   status: string;
-  agent: string | null;
+  agent: { id: number; firstname: string; lastname: string } | string | null;
   contact: {
     id: number;
     firstname: string;
@@ -313,6 +313,68 @@ export async function getCallsSince(since: Date, apiKey?: string): Promise<Batch
 
   console.log(`[BatchDialer] Total calls fetched: ${allCalls.length} across ${windowIndex} windows`);
   return allCalls;
+}
+
+/**
+ * Fetch latest CDRs since last poll using the /v2/cdrs/last endpoint.
+ * This endpoint is designed for polling integrations - it returns up to 100 CDRs
+ * that are newer than the last-seen CDR ID for this API key.
+ * Returns a flat array (not wrapped in {items: []}).
+ */
+export async function fetchLatestCalls(apiKey?: string): Promise<BatchDialerCall[]> {
+  return withRetry(async () => {
+    const url = `${BATCHDIALER_API_BASE}/v2/cdrs/last`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "X-ApiKey": apiKey || ENV.batchDialerApiKey,
+          "Accept": "application/json",
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`BatchDialer V2 /last API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      // /v2/cdrs/last returns a flat array, not {items: [...]}
+      if (Array.isArray(data)) {
+        return data as BatchDialerCall[];
+      }
+      // Fallback in case response shape changes
+      if (data.items && Array.isArray(data.items)) {
+        return data.items as BatchDialerCall[];
+      }
+      return [];
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`BatchDialer V2 /last API request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds`);
+      }
+      throw error;
+    }
+  }, "Fetch latest CDRs");
+}
+
+/**
+ * Helper to extract agent name from the agent field.
+ * BatchDialer V2 returns agent as an object { id, firstname, lastname }
+ * but older data or V1 may have it as a plain string.
+ */
+export function getAgentName(agent: BatchDialerCall["agent"]): string | null {
+  if (!agent) return null;
+  if (typeof agent === "string") return agent;
+  if (typeof agent === "object" && agent.firstname) {
+    return `${agent.firstname} ${agent.lastname}`.trim();
+  }
+  return null;
 }
 
 /**

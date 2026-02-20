@@ -4266,6 +4266,32 @@ Create content that:
         const tenantId = ctx.user?.tenantId;
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
+        // Check if this is a user instruction/preference being set
+        try {
+          const { detectInstruction, saveInstruction } = await import("./userInstructions");
+          const detected = await detectInstruction(input.message);
+          if (detected && detected.isInstruction) {
+            // Save the instruction permanently for this user
+            await saveInstruction(ctx.user!.id, detected.instruction, detected.category);
+            console.log(`[parseIntent] Saved user instruction: "${detected.instruction}" (category: ${detected.category}) for user ${ctx.user!.id}`);
+            // Return empty actions with a special flag so the frontend shows the confirmation
+            return {
+              actions: [],
+              instructionSaved: true,
+              instructionConfirmation: detected.confirmation,
+            };
+          }
+        } catch (e) {
+          console.error("[parseIntent] Instruction detection error:", e);
+        }
+
+        // Get user's explicit instructions (persistent preferences)
+        let instructionContext = "";
+        try {
+          const { buildInstructionContext } = await import("./userInstructions");
+          instructionContext = await buildInstructionContext(ctx.user!.id);
+        } catch { /* instructions are optional */ }
+
         // Get user's learned preferences to improve content drafting
         let preferenceContext = "";
         try {
@@ -4509,7 +4535,8 @@ Return JSON with an "actions" array. Each action object has:
 - For change_pipeline_stage: ALWAYS include stageName (the human-readable stage name the user mentioned, e.g. "pending appointment", "offer scheduled", "qualified"). Also include pipelineName if the user mentions a specific pipeline (e.g. "sales pipeline", "acquisition pipeline"). Leave pipelineId and stageId empty strings — the system will resolve the actual IDs automatically.
 - summary: a SHORT one-line summary of the action (e.g. "Send SMS to John" or "Add note to Kimberly"). The full content will be shown separately.
 - needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID
-${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descriptions), match this user's established style:\n${preferenceContext}` : ""}`
+${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descriptions), match this user's established style:\n${preferenceContext}` : ""}
+${instructionContext}`
             },
             { role: "user", content: input.message }
           ],
@@ -4775,10 +4802,39 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
       .query(async ({ ctx, input }) => {
         const tenantId = ctx.user?.tenantId;
         if (!tenantId) return { resolved: false as const };
-        const { getPipelinesForTenant, resolveStageByName } = await import("./ghlActions");
+        const { getPipelinesForTenant, resolveStageByName, findOpportunityByContact } = await import("./ghlActions");
         const pipelines = await getPipelinesForTenant(tenantId);
         if (!pipelines.length) return { resolved: false as const, error: "No pipelines found" };
-        const result = resolveStageByName(pipelines, input.stageName, input.pipelineName);
+
+        // If a contactId is provided and no explicit pipeline was specified,
+        // look up the contact's current pipeline to prefer it during resolution.
+        // This prevents moving contacts to the wrong pipeline when multiple pipelines
+        // have stages with the same name (e.g. "Made Offer" in both Sales Process and Buyer Pipeline).
+        let preferredPipelineName = input.pipelineName;
+        if (input.contactId && !input.pipelineName) {
+          try {
+            const opp = await findOpportunityByContact(tenantId, input.contactId);
+            if (opp) {
+              const currentPipeline = pipelines.find(p => p.id === opp.pipelineId);
+              if (currentPipeline) {
+                preferredPipelineName = currentPipeline.name;
+                console.log(`[resolveStage] Preferring contact's current pipeline: "${preferredPipelineName}"`);
+              }
+            }
+          } catch (e) {
+            console.warn("[resolveStage] Failed to look up contact's pipeline:", e);
+          }
+        }
+
+        // First try with the preferred pipeline
+        let result = resolveStageByName(pipelines, input.stageName, preferredPipelineName);
+
+        // If not found in preferred pipeline and we inferred the pipeline (not user-specified),
+        // fall back to searching all pipelines
+        if (!result && preferredPipelineName && !input.pipelineName) {
+          result = resolveStageByName(pipelines, input.stageName);
+        }
+
         if (!result) return { resolved: false as const, error: `Could not find a stage matching "${input.stageName}"` };
         return {
           resolved: true as const,
