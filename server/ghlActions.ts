@@ -1000,6 +1000,183 @@ export async function createAppointment(
   return { success: true, appointmentId: data?.id || data?.event?.id || data?.appointment?.id };
 }
 
+/**
+ * Get upcoming appointments for a contact by searching calendar events.
+ * Searches across all calendars for the next 90 days.
+ */
+export async function getAppointmentsForContact(
+  tenantId: number,
+  contactId: string
+): Promise<Array<{ id: string; title: string; startTime: string; endTime: string; calendarId: string; appointmentStatus: string }>> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return [];
+
+  try {
+    // Get all calendars first
+    const calendars = await getCalendarsForTenant(tenantId);
+    if (calendars.length === 0) return [];
+
+    const now = new Date();
+    // Search from 30 days ago to 90 days ahead to catch recent and upcoming
+    const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const endDate = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+    const allAppointments: Array<{ id: string; title: string; startTime: string; endTime: string; calendarId: string; appointmentStatus: string }> = [];
+
+    // Search each calendar for events
+    for (const cal of calendars) {
+      try {
+        const data = await ghlFetch(
+          creds,
+          `/calendars/events?locationId=${creds.locationId}&calendarId=${cal.id}&startTime=${startDate.getTime()}&endTime=${endDate.getTime()}`,
+          "GET"
+        );
+
+        const events = data?.events || data?.data || [];
+        for (const evt of events) {
+          // Filter by contactId
+          if (evt.contactId === contactId && evt.appointmentStatus !== "cancelled") {
+            allAppointments.push({
+              id: evt.id,
+              title: evt.title || "Untitled Appointment",
+              startTime: evt.startTime,
+              endTime: evt.endTime,
+              calendarId: evt.calendarId || cal.id,
+              appointmentStatus: evt.appointmentStatus || "confirmed",
+            });
+          }
+        }
+      } catch (err) {
+        console.error(`[GHLActions] Error fetching events for calendar ${cal.id}:`, err);
+      }
+    }
+
+    // Sort by startTime ascending (soonest first)
+    allAppointments.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    console.log(`[getAppointmentsForContact] Found ${allAppointments.length} appointments for contact ${contactId}`);
+    return allAppointments;
+  } catch (error) {
+    console.error("[GHLActions] Appointment fetch error:", error);
+    return [];
+  }
+}
+
+/**
+ * Fuzzy-match an appointment by title or find the next upcoming one.
+ */
+export function resolveAppointmentByTitle(
+  appointments: Array<{ id: string; title: string; startTime: string }>,
+  searchTitle?: string
+): { appointmentId: string; appointmentTitle: string; startTime: string } | null {
+  if (appointments.length === 0) return null;
+
+  // If no search title, return the next upcoming appointment
+  if (!searchTitle) {
+    const now = new Date();
+    const upcoming = appointments.find(a => new Date(a.startTime) >= now);
+    if (upcoming) return { appointmentId: upcoming.id, appointmentTitle: upcoming.title, startTime: upcoming.startTime };
+    // If no upcoming, return the most recent
+    return { appointmentId: appointments[appointments.length - 1].id, appointmentTitle: appointments[appointments.length - 1].title, startTime: appointments[appointments.length - 1].startTime };
+  }
+
+  const normalized = searchTitle.toLowerCase().trim();
+
+  // Pass 1: Exact title match
+  const exact = appointments.find(a => a.title.toLowerCase() === normalized);
+  if (exact) return { appointmentId: exact.id, appointmentTitle: exact.title, startTime: exact.startTime };
+
+  // Pass 2: Substring match
+  const sub = appointments.find(a => {
+    const aTitle = a.title.toLowerCase();
+    return aTitle.includes(normalized) || normalized.includes(aTitle);
+  });
+  if (sub) return { appointmentId: sub.id, appointmentTitle: sub.title, startTime: sub.startTime };
+
+  // Pass 3: Word overlap
+  const inputWords = normalized.split(/\s+/).filter(w => w.length > 2 && !['the', 'a', 'an', 'to', 'for', 'and', 'with'].includes(w));
+  let bestMatch: typeof appointments[0] | null = null;
+  let bestScore = 0;
+  for (const appt of appointments) {
+    const apptWords = appt.title.toLowerCase().split(/\s+/);
+    const overlap = inputWords.filter(iw => apptWords.some(aw => aw.includes(iw) || iw.includes(aw))).length;
+    if (overlap > bestScore) {
+      bestScore = overlap;
+      bestMatch = appt;
+    }
+  }
+  if (bestMatch && bestScore > 0) {
+    return { appointmentId: bestMatch.id, appointmentTitle: bestMatch.title, startTime: bestMatch.startTime };
+  }
+
+  // If nothing matched by title, return the next upcoming
+  const now = new Date();
+  const upcoming = appointments.find(a => new Date(a.startTime) >= now);
+  if (upcoming) return { appointmentId: upcoming.id, appointmentTitle: upcoming.title, startTime: upcoming.startTime };
+
+  return null;
+}
+
+/**
+ * Update an existing appointment (reschedule, change title, etc.).
+ */
+export async function updateAppointment(
+  tenantId: number,
+  eventId: string,
+  updates: {
+    startTime?: string;
+    endTime?: string;
+    title?: string;
+    notes?: string;
+    appointmentStatus?: string;
+    selectedTimezone?: string;
+  }
+): Promise<{ success: boolean }> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) throw new Error("No GHL credentials configured");
+
+  const body: any = {};
+  if (updates.startTime) body.startTime = updates.startTime;
+  if (updates.endTime) body.endTime = updates.endTime;
+  if (updates.title) body.title = updates.title;
+  if (updates.notes) body.notes = updates.notes;
+  if (updates.appointmentStatus) body.appointmentStatus = updates.appointmentStatus;
+  if (updates.selectedTimezone) body.selectedTimezone = updates.selectedTimezone;
+  body.ignoreFreeSlotValidation = true;
+
+  console.log(`[updateAppointment] Updating appointment ${eventId}:`, JSON.stringify(body));
+
+  await ghlFetch(
+    creds,
+    `/calendars/events/appointments/${eventId}`,
+    "PUT",
+    body
+  );
+
+  return { success: true };
+}
+
+/**
+ * Cancel an appointment by setting its status to "cancelled".
+ */
+export async function cancelAppointment(
+  tenantId: number,
+  eventId: string
+): Promise<{ success: boolean }> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) throw new Error("No GHL credentials configured");
+
+  console.log(`[cancelAppointment] Cancelling appointment ${eventId}`);
+
+  await ghlFetch(
+    creds,
+    `/calendars/events/appointments/${eventId}`,
+    "PUT",
+    { appointmentStatus: "cancelled" }
+  );
+
+  return { success: true };
+}
+
 // ============ ACTION LOG HELPERS ============
 
 export async function createActionLog(params: {
@@ -1302,6 +1479,71 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
           requestingUserGhlId,
           payload.selectedTimezone || "America/New_York"
         );
+        break;
+      }
+      case "update_appointment": {
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        
+        // Find the appointment to update
+        const contactAppointments = await getAppointmentsForContact(action.tenantId, contactId);
+        if (contactAppointments.length === 0) {
+          throw new Error(`No appointments found for this contact. Please create an appointment first.`);
+        }
+        
+        // Resolve which appointment to update
+        const resolvedAppt = resolveAppointmentByTitle(contactAppointments, payload.title || payload.appointmentTitle);
+        if (!resolvedAppt) {
+          throw new Error(`Could not find a matching appointment. Available appointments: ${contactAppointments.map(a => `"${a.title}" on ${new Date(a.startTime).toLocaleDateString()}`).join(", ")}`);
+        }
+        
+        console.log(`[GHLActions] Resolved appointment: "${resolvedAppt.appointmentTitle}" (${resolvedAppt.appointmentId})`);
+        
+        // Build update object
+        const apptUpdates: any = {};
+        if (payload.startTime) {
+          apptUpdates.startTime = payload.startTime;
+          // If startTime changed but no endTime, calculate new endTime (same duration as original)
+          if (!payload.endTime) {
+            const originalAppt = contactAppointments.find(a => a.id === resolvedAppt.appointmentId);
+            if (originalAppt) {
+              const originalDuration = new Date(originalAppt.endTime).getTime() - new Date(originalAppt.startTime).getTime();
+              apptUpdates.endTime = new Date(new Date(payload.startTime).getTime() + originalDuration).toISOString();
+            } else {
+              // Default 1 hour
+              const start = new Date(payload.startTime);
+              start.setHours(start.getHours() + 1);
+              apptUpdates.endTime = start.toISOString();
+            }
+          }
+        }
+        if (payload.endTime) apptUpdates.endTime = payload.endTime;
+        if (payload.notes) apptUpdates.notes = payload.notes;
+        if (payload.appointmentTitle || (payload.title && payload.title !== resolvedAppt.appointmentTitle)) {
+          apptUpdates.title = payload.appointmentTitle || payload.title;
+        }
+        if (payload.selectedTimezone) apptUpdates.selectedTimezone = payload.selectedTimezone;
+        
+        result = await updateAppointment(action.tenantId, resolvedAppt.appointmentId, apptUpdates);
+        break;
+      }
+      case "cancel_appointment": {
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        
+        // Find the appointment to cancel
+        const apptsToCancelFrom = await getAppointmentsForContact(action.tenantId, contactId);
+        if (apptsToCancelFrom.length === 0) {
+          throw new Error(`No appointments found for this contact.`);
+        }
+        
+        // Resolve which appointment to cancel
+        const apptToCancel = resolveAppointmentByTitle(apptsToCancelFrom, payload.title || payload.appointmentTitle);
+        if (!apptToCancel) {
+          throw new Error(`Could not find a matching appointment. Available appointments: ${apptsToCancelFrom.map(a => `"${a.title}" on ${new Date(a.startTime).toLocaleDateString()}`).join(", ")}`);
+        }
+        
+        console.log(`[GHLActions] Cancelling appointment: "${apptToCancel.appointmentTitle}" (${apptToCancel.appointmentId})`);
+        
+        result = await cancelAppointment(action.tenantId, apptToCancel.appointmentId);
         break;
       }
       default:

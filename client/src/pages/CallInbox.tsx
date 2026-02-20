@@ -367,6 +367,8 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   add_to_workflow: "Add to Workflow",
   remove_from_workflow: "Remove from Workflow",
   create_appointment: "Create Appointment",
+  update_appointment: "Update Appointment",
+  cancel_appointment: "Cancel Appointment",
 };
 
 const ACTION_ICONS: Record<string, string> = {
@@ -383,6 +385,8 @@ const ACTION_ICONS: Record<string, string> = {
   add_to_workflow: "⚡",
   remove_from_workflow: "🚫",
   create_appointment: "📅",
+  update_appointment: "🔄",
+  cancel_appointment: "❌",
 };
 
 function AICoachQA() {
@@ -1102,6 +1106,32 @@ function AICoachQA() {
                               {msg.payload.notes && (
                                 <p><span className="text-teal-600 dark:text-teal-400">Notes:</span> <span className="font-medium text-teal-700 dark:text-teal-300">{msg.payload.notes}</span></p>
                               )}
+                            </div>
+                          )}
+                          {/* Show update_appointment details */}
+                          {msg.actionType === "update_appointment" && msg.payload && (
+                            <div className="mt-1 text-xs bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-md px-2 py-1 space-y-0.5">
+                              {msg.payload.title && (
+                                <p><span className="text-sky-600 dark:text-sky-400">Appointment:</span> <span className="font-medium text-sky-700 dark:text-sky-300">{msg.payload.title}</span></p>
+                              )}
+                              {msg.payload.startTime && (
+                                <p><span className="text-sky-600 dark:text-sky-400">New Date/Time:</span> <span className="font-medium text-sky-700 dark:text-sky-300">{new Date(msg.payload.startTime).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></p>
+                              )}
+                              {msg.payload.appointmentTitle && (
+                                <p><span className="text-sky-600 dark:text-sky-400">New Title:</span> <span className="font-medium text-sky-700 dark:text-sky-300">{msg.payload.appointmentTitle}</span></p>
+                              )}
+                              {msg.payload.notes && (
+                                <p><span className="text-sky-600 dark:text-sky-400">Notes:</span> <span className="font-medium text-sky-700 dark:text-sky-300">{msg.payload.notes}</span></p>
+                              )}
+                            </div>
+                          )}
+                          {/* Show cancel_appointment details */}
+                          {msg.actionType === "cancel_appointment" && msg.payload && (
+                            <div className="mt-1 text-xs bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md px-2 py-1 space-y-0.5">
+                              {msg.payload.title && (
+                                <p><span className="text-red-600 dark:text-red-400">Appointment:</span> <span className="font-medium text-red-700 dark:text-red-300">{msg.payload.title}</span></p>
+                              )}
+                              <p className="text-red-600 dark:text-red-400 font-medium">This appointment will be cancelled</p>
                             </div>
                           )}
                           {/* Show resolved pipeline stage for confirmation */}

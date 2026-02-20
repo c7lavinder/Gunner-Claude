@@ -4484,6 +4484,8 @@ Available action types:
 9. add_to_workflow - Add a contact to a GHL workflow/automation
 10. remove_from_workflow - Remove a contact from a GHL workflow/automation
 11. create_appointment - Create a calendar appointment/event for a contact
+12. update_appointment - Reschedule or update an existing appointment (change date/time, title, notes)
+13. cancel_appointment - Cancel an existing appointment for a contact
 
 MULTI-ACTION SUPPORT: A user may request MULTIPLE actions in a single message (e.g., "Add a note to Jose Ruiz, then create a task for 3 months from now, then move it to the 4 month stage"). You MUST detect ALL actions and return each one as a separate item in the "actions" array. Parse each action independently with its own contactName, params, and summary.
 
@@ -4522,6 +4524,13 @@ IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions co
 - "Book a meeting with the seller for tomorrow morning" → create_appointment
 - "Set up an appointment to see the property next week" → create_appointment
 - "Put John on the calendar for Thursday at 3" → create_appointment
+- "Reschedule the appointment with John to next Wednesday at 3pm" → update_appointment
+- "Move John's appointment to Friday" → update_appointment
+- "Push back the meeting with Jane to next week" → update_appointment
+- "Change the walkthrough time to 2pm" → update_appointment
+- "Cancel the appointment with John" → cancel_appointment
+- "Remove the meeting with Jane from the calendar" → cancel_appointment
+- "Cancel John's walkthrough" → cancel_appointment
 - "Can you create summary for the last call with Jackson James and add that summary as a note?" → add_note (use the RECENT CALL DATA to write the full summary as the noteBody)
 - "Summarize the call with [Name] and save it as a note" → add_note (write the complete summary in noteBody)
 - "Write up what happened on the last call and add it to their notes" → add_note
@@ -4564,6 +4573,8 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
 - For add_to_workflow: Set params.workflowName to the workflow name the user mentioned (e.g. "follow-up", "drip campaign", "nurture sequence"). The system will fuzzy-match to the actual GHL workflow.
 - For remove_from_workflow: Set params.workflowName to the workflow name to remove from. The system will fuzzy-match to the actual GHL workflow.
 - For create_appointment: Set params.title to a descriptive appointment title (e.g. "Property Walkthrough - 123 Main St" or "Follow-up Meeting with John"). Set params.startTime to the appointment date/time in ISO 8601 format (YYYY-MM-DDTHH:mm:ssZ). Today is ${new Date().toISOString().split('T')[0]}. If the user says "next Tuesday at 2pm", calculate the actual date. If no time is specified, default to 10:00 AM. Set params.endTime to the end time (default 1 hour after start). Set params.calendarName to the calendar name if the user specifies one (e.g. "appointments calendar", "walkthrough calendar"). If no calendar is specified, leave it empty and the system will use the default calendar. Set params.notes to any additional details about the appointment. Set params.selectedTimezone to the user's timezone if mentioned (default: America/New_York).
+- For update_appointment: Set params.title to the appointment title or keyword to find the right appointment (e.g. "walkthrough", "meeting"). If the user doesn't specify which appointment, leave title empty and the system will find the next upcoming one. Set params.startTime to the NEW date/time in ISO 8601 format if rescheduling. Today is ${new Date().toISOString().split('T')[0]}. If the user says "move to Friday at 2pm", calculate the actual date. Set params.endTime if the duration changes. Set params.notes if updating notes. Set params.appointmentTitle if renaming the appointment (different from params.title which is used for matching).
+- For cancel_appointment: Set params.title to the appointment title or keyword to find the right appointment (e.g. "walkthrough", "meeting", "follow-up"). If the user doesn't specify which appointment, leave title empty and the system will find the next upcoming one. The system will set the appointment status to "cancelled" in GHL.
 
 CRITICAL: You have REAL call data below. You MUST use it to write specific, accurate content. Reference actual property addresses, discussion topics, outcomes, and details from the transcripts. NEVER generate vague or placeholder text like "regarding his property" or "Please provide the summary" or "Insert details here".
 ${callContext}
@@ -4621,9 +4632,10 @@ ${instructionContext}`
                             startTime: { type: "string" },
                             endTime: { type: "string" },
                             notes: { type: "string" },
-                            selectedTimezone: { type: "string" },
-                          },
-                          required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone"],
+selectedTimezone: { type: "string" },
+                             appointmentTitle: { type: "string" },
+                           },
+                           required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone", "appointmentTitle"],
                           additionalProperties: false
                         },
                         assigneeName: { type: "string" },
@@ -4648,7 +4660,7 @@ ${instructionContext}`
         console.log(`[parseIntent] Call context available: ${callContext.length > 0 ? 'yes (' + callContext.length + ' chars)' : 'no'}`);
         if (content && typeof content === "string") {
           const parsed = JSON.parse(content);
-          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow", "create_appointment"];
+          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment"];
           // Return the actions array, or wrap legacy single-action format for backwards compatibility
           if (parsed.actions && Array.isArray(parsed.actions)) {
             // Filter out any actions with missing, empty, or invalid actionType
@@ -4685,7 +4697,7 @@ ${instructionContext}`
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
         // Validate actionType server-side with a friendly error
-        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow", "create_appointment"];
+        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment"];
         if (!input.actionType || !VALID_ACTION_TYPES.includes(input.actionType)) {
           throw new TRPCError({
             code: "BAD_REQUEST",

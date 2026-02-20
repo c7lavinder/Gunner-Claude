@@ -2453,3 +2453,12 @@
 - [x] Update AI Coach LLM prompt to recognize calendar/appointment commands
 - [x] Wire up frontend confirmation card for appointment details (date, time, calendar, title)
 - [x] Write vitest tests for create_appointment
+
+## AI Coach: Update/Cancel Appointment
+- [x] Research GHL Update Appointment and Delete Appointment API endpoints
+- [x] Add update_appointment and cancel_appointment action types to schema enum
+- [x] Implement GHL API: get appointments for contact, update appointment, delete/cancel appointment
+- [x] Add update_appointment and cancel_appointment cases to executeAction switch
+- [x] Update AI Coach LLM prompt to recognize reschedule/cancel appointment commands
+- [x] Wire up frontend confirmation cards for appointment update/cancel
+- [x] Write vitest tests for update_appointment and cancel_appointment

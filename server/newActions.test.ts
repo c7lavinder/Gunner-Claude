@@ -404,3 +404,190 @@ describe("resolveCalendarByName function", () => {
     expect(ghlActionsSource).toContain("calWords.some(cw => cw.includes(iw) || iw.includes(cw))");
   });
 });
+
+
+// ============ UPDATE APPOINTMENT TESTS ============
+
+describe("update_appointment backend implementation", () => {
+  it("should export getAppointmentsForContact function", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("export async function getAppointmentsForContact");
+  });
+
+  it("should export updateAppointment function", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("export async function updateAppointment");
+  });
+
+  it("should export resolveAppointmentByTitle function", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("export function resolveAppointmentByTitle");
+  });
+
+  it("should handle update_appointment case in executeAction switch", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain('case "update_appointment"');
+  });
+
+  it("updateAppointment should use PUT to GHL appointments endpoint", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("/calendars/events/appointments/${eventId}");
+    expect(ghlActionsSource).toContain('"PUT"');
+  });
+
+  it("should search for appointments by contactId", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("evt.contactId === contactId");
+  });
+
+  it("should filter out cancelled appointments", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain('evt.appointmentStatus !== "cancelled"');
+  });
+
+  it("should preserve original appointment duration when rescheduling", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("originalDuration");
+  });
+
+  it("should set ignoreFreeSlotValidation on update", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // The updateAppointment function should set this
+    expect(ghlActionsSource).toContain("body.ignoreFreeSlotValidation = true");
+  });
+});
+
+describe("cancel_appointment backend implementation", () => {
+  it("should export cancelAppointment function", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("export async function cancelAppointment");
+  });
+
+  it("should handle cancel_appointment case in executeAction switch", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain('case "cancel_appointment"');
+  });
+
+  it("cancelAppointment should set status to cancelled", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain('appointmentStatus: "cancelled"');
+  });
+
+  it("should resolve appointment by title before cancelling", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // The cancel case should use resolveAppointmentByTitle
+    expect(ghlActionsSource).toContain("resolveAppointmentByTitle(apptsToCancelFrom");
+  });
+
+  it("should throw error when no appointments found for cancel", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("No appointments found for this contact");
+  });
+});
+
+describe("update/cancel appointment in schema", () => {
+  it("should include update_appointment in actionType enum", async () => {
+    const schemaSource = readFileSync(join(SERVER_DIR, "..", "drizzle", "schema.ts"), "utf-8");
+    expect(schemaSource).toContain('"update_appointment"');
+  });
+
+  it("should include cancel_appointment in actionType enum", async () => {
+    const schemaSource = readFileSync(join(SERVER_DIR, "..", "drizzle", "schema.ts"), "utf-8");
+    expect(schemaSource).toContain('"cancel_appointment"');
+  });
+});
+
+describe("update/cancel appointment in parseIntent prompt", () => {
+  it("should include update_appointment in VALID_ACTION_TYPES", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    const matches = routersSource.match(/"update_appointment"/g);
+    expect(matches && matches.length >= 2).toBe(true); // At least in both VALID_ACTION_TYPES arrays
+  });
+
+  it("should include cancel_appointment in VALID_ACTION_TYPES", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    const matches = routersSource.match(/"cancel_appointment"/g);
+    expect(matches && matches.length >= 2).toBe(true);
+  });
+
+  it("should include reschedule examples in the LLM prompt", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("Reschedule the appointment");
+  });
+
+  it("should include cancel examples in the LLM prompt", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("Cancel the appointment");
+  });
+
+  it("should include appointmentTitle in JSON schema params", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("appointmentTitle: { type:");
+  });
+
+  it("should include update_appointment params instructions", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("For update_appointment:");
+  });
+
+  it("should include cancel_appointment params instructions", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("For cancel_appointment:");
+  });
+});
+
+describe("update/cancel appointment frontend confirmation cards", () => {
+  it("should include update_appointment in ACTION_TYPE_LABELS", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('update_appointment: "Update Appointment"');
+  });
+
+  it("should include cancel_appointment in ACTION_TYPE_LABELS", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('cancel_appointment: "Cancel Appointment"');
+  });
+
+  it("should include update_appointment icon", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('update_appointment: "🔄"');
+  });
+
+  it("should include cancel_appointment icon", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('cancel_appointment: "❌"');
+  });
+
+  it("should display update_appointment card with new date/time", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('msg.actionType === "update_appointment"');
+    expect(callInboxSource).toContain("New Date/Time:");
+  });
+
+  it("should display cancel_appointment card with cancellation warning", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('msg.actionType === "cancel_appointment"');
+    expect(callInboxSource).toContain("This appointment will be cancelled");
+  });
+});
+
+describe("resolveAppointmentByTitle function", () => {
+  it("should return next upcoming appointment when no search title", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("If no search title, return the next upcoming appointment");
+  });
+
+  it("should match exact appointment titles", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("a.title.toLowerCase() === normalized");
+  });
+
+  it("should match substring appointment titles", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("aTitle.includes(normalized) || normalized.includes(aTitle)");
+  });
+
+  it("should sort appointments by startTime ascending", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("Sort by startTime ascending");
+  });
+});
