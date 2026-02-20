@@ -2468,3 +2468,14 @@
 - [x] Identify why the action reports success but tasks aren't updated — ROOT CAUSE: field name mismatch (payload.newDueDate vs payload.dueDate, payload.completed vs payload.taskStatus)
 - [x] Fix the root cause — mapped payload.dueDate, payload.description, payload.taskStatus to correct updateTask fields
 - [x] Add better error handling — empty body validation, detailed logging of updates being sent
+
+## BUG: Mark task as completed not actually completing in GHL
+- [x] Research GHL task update API — GHL has a SEPARATE endpoint: PUT /contacts/:contactId/tasks/:taskId/completed
+- [x] Fix the updateTask function to use the dedicated /completed endpoint instead of the general update endpoint
+- [x] Test with "check off the task for sue ashburn"
+
+## BUG: SMS still sends from assigned number, not requesting user's number
+- [x] Research GHL conversations/messages API deeper — found `fromNumber` parameter in API docs
+- [x] Check if GHL needs the actual phone number instead of userId — YES, `fromNumber` explicitly controls sender
+- [x] Look into GHL user phone number lookup — added getUserPhoneNumber() that queries /phone-system/numbers/location/:locationId and matches by userId
+- [x] Updated sendSms to auto-resolve fromNumber from user's GHL phone assignment

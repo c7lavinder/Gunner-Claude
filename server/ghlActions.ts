@@ -431,26 +431,77 @@ export async function changePipelineStage(
 
 // ============ ACTION 4: SEND SMS ============
 
+/**
+ * Get the phone number assigned to a specific GHL user.
+ * Looks up active phone numbers for the location and finds the one assigned to the userId.
+ */
+export async function getUserPhoneNumber(
+  tenantId: number,
+  ghlUserId: string
+): Promise<string | null> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return null;
+
+  try {
+    const data = await ghlFetch(
+      creds,
+      `/phone-system/numbers/location/${creds.locationId}`,
+      "GET"
+    );
+    
+    const numbers = data.data || data.numbers || data || [];
+    console.log(`[getUserPhoneNumber] Found ${Array.isArray(numbers) ? numbers.length : 0} phone numbers for location`);
+    
+    // Find the number assigned to this user
+    for (const num of (Array.isArray(numbers) ? numbers : [])) {
+      const assignedUser = num.userId || num.assignedTo || num.user_id;
+      if (assignedUser === ghlUserId) {
+        const phoneNumber = num.phoneNumber || num.phone || num.number;
+        console.log(`[getUserPhoneNumber] Found phone ${phoneNumber} assigned to user ${ghlUserId}`);
+        return phoneNumber;
+      }
+    }
+    
+    console.log(`[getUserPhoneNumber] No phone number found assigned to user ${ghlUserId}`);
+    return null;
+  } catch (err: any) {
+    console.error(`[getUserPhoneNumber] Error looking up phone number: ${err.message}`);
+    return null;
+  }
+}
+
 export async function sendSms(
   tenantId: number,
   contactId: string,
   message: string,
-  userId?: string // GHL user ID — routes SMS from that user's assigned phone number
-): Promise<{ success: boolean; messageId?: string }> {
+  userId?: string, // GHL user ID — routes SMS from that user's assigned phone number
+  fromNumber?: string // Explicit phone number to send from
+): Promise<{ success: boolean; messageId?: string; fromNumber?: string }> {
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured");
+
+  // If we have a userId but no fromNumber, try to look up the user's phone number
+  let resolvedFromNumber = fromNumber;
+  if (userId && !resolvedFromNumber) {
+    resolvedFromNumber = await getUserPhoneNumber(tenantId, userId) || undefined;
+  }
 
   const body: any = {
     type: "SMS",
     contactId,
     message,
   };
-  // If a GHL userId is provided, include it so GHL routes from that user's number
+  // Pass fromNumber to explicitly control which phone number sends the SMS
+  if (resolvedFromNumber) {
+    body.fromNumber = resolvedFromNumber;
+    console.log(`[sendSms] Using explicit fromNumber: ${resolvedFromNumber}`);
+  }
+  // Also pass userId as fallback routing
   if (userId) {
     body.userId = userId;
   }
 
-  console.log(`[sendSms] Sending SMS to contact ${contactId} with userId=${userId || 'none (will use contact assigned user)'}`);
+  console.log(`[sendSms] Sending SMS to contact ${contactId} with userId=${userId || 'none'}, fromNumber=${resolvedFromNumber || 'none (will use GHL default routing)'}`);
 
   const data = await ghlFetch(
     creds,
@@ -459,7 +510,7 @@ export async function sendSms(
     body
   );
 
-  return { success: true, messageId: data.messageId || data.id };
+  return { success: true, messageId: data.messageId || data.id, fromNumber: resolvedFromNumber };
 }
 
 // ============ HELPER: Parse relative date strings ============
@@ -715,22 +766,39 @@ export async function updateTask(
       body.dueDate = parseRelativeDate(updates.dueDate);
     }
   }
-  if (updates.completed !== undefined) body.completed = updates.completed;
-
-  console.log(`[GHL] updateTask: PUT /contacts/${contactId}/tasks/${taskId} body=${JSON.stringify(body)}`);
+  // Handle completion separately — GHL has a dedicated endpoint for this
+  const needsCompletion = updates.completed === true;
   
-  if (Object.keys(body).length === 0) {
+  // Only include non-completion fields in the general update body
+  console.log(`[GHL] updateTask: contactId=${contactId}, taskId=${taskId}, body=${JSON.stringify(body)}, needsCompletion=${needsCompletion}`);
+  
+  if (Object.keys(body).length === 0 && !needsCompletion) {
     throw new Error("No update fields to send to GHL. The update body is empty.");
   }
 
-  const resp = await ghlFetch(
-    creds,
-    `/contacts/${contactId}/tasks/${taskId}`,
-    "PUT",
-    body
-  );
+  // Step 1: Update task fields (title, body, dueDate) if any
+  if (Object.keys(body).length > 0) {
+    const resp = await ghlFetch(
+      creds,
+      `/contacts/${contactId}/tasks/${taskId}`,
+      "PUT",
+      body
+    );
+    console.log(`[GHL] updateTask field update response: ${JSON.stringify(resp)}`);
+  }
 
-  console.log(`[GHL] updateTask response: ${JSON.stringify(resp)}`);
+  // Step 2: Mark as completed using the dedicated endpoint
+  if (needsCompletion) {
+    console.log(`[GHL] updateTask: Marking task ${taskId} as completed via /completed endpoint`);
+    const compResp = await ghlFetch(
+      creds,
+      `/contacts/${contactId}/tasks/${taskId}/completed`,
+      "PUT",
+      { completed: true }
+    );
+    console.log(`[GHL] updateTask completion response: ${JSON.stringify(compResp)}`);
+  }
+
   return { success: true };
 }
 
