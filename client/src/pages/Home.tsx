@@ -4,7 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useSearch } from "wouter";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, TrendingUp, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap, AlertTriangle, Lightbulb, ArrowRight } from "lucide-react";
+import { Phone, TrendingUp, TrendingDown, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap, AlertTriangle, Lightbulb, ArrowRight, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -17,15 +17,54 @@ function StatCard({
   title, 
   value, 
   icon: Icon, 
-  loading 
+  loading,
+  priorValue,
+  isPercentage,
 }: { 
   title: string; 
   value: string | number; 
   icon: React.ElementType;
   loading?: boolean;
+  priorValue?: number;
+  isPercentage?: boolean;
 }) {
+  // Calculate percentage change vs prior period
+  const getChange = () => {
+    if (priorValue === undefined || loading) return null;
+    const currentNum = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(currentNum)) return null;
+    
+    if (isPercentage) {
+      // For percentage metrics (avg score), show point difference
+      const diff = currentNum - priorValue;
+      if (Math.abs(diff) < 0.5) return { pct: 0, direction: 'flat' as const };
+      return { pct: Math.round(Math.abs(diff)), direction: diff > 0 ? 'up' as const : 'down' as const };
+    }
+    
+    if (priorValue === 0 && currentNum === 0) return { pct: 0, direction: 'flat' as const };
+    if (priorValue === 0) return { pct: 100, direction: 'up' as const };
+    const pctChange = Math.round(((currentNum - priorValue) / priorValue) * 100);
+    if (pctChange === 0) return { pct: 0, direction: 'flat' as const };
+    return { pct: Math.abs(pctChange), direction: pctChange > 0 ? 'up' as const : 'down' as const };
+  };
+  
+  const change = getChange();
+  
   return (
-    <Card className="p-3 sm:p-4">
+    <Card className="p-3 sm:p-4 relative">
+      {/* Comparison badge in top-right corner */}
+      {change && change.direction !== 'flat' && (
+        <div className={`absolute top-1.5 right-1.5 sm:top-2 sm:right-2 flex items-center gap-0.5 text-[10px] sm:text-xs font-semibold ${
+          change.direction === 'up' ? 'text-emerald-600' : 'text-red-500'
+        }`}>
+          {change.direction === 'up' ? (
+            <ArrowUpRight className="h-3 w-3" />
+          ) : (
+            <ArrowDownRight className="h-3 w-3" />
+          )}
+          {change.pct}%{isPercentage ? 'pt' : ''}
+        </div>
+      )}
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="p-1.5 sm:p-2 rounded-lg bg-muted shrink-0">
           <Icon className="h-4 w-4 text-muted-foreground" />
@@ -167,30 +206,36 @@ export default function Home() {
           value={stats?.totalCalls ?? 0}
           icon={Phone}
           loading={statsLoading}
+          priorValue={stats?.priorPeriod?.totalCalls}
         />
         <StatCard
           title="Conversations"
           value={stats?.gradedCalls ?? 0}
           icon={MessageSquare}
           loading={statsLoading}
+          priorValue={stats?.priorPeriod?.gradedCalls}
         />
         <StatCard
           title="Appointments"
           value={stats?.appointmentsSet ?? 0}
           icon={Calendar}
           loading={statsLoading}
+          priorValue={stats?.priorPeriod?.appointmentsSet}
         />
         <StatCard
           title="Offer Calls"
           value={stats?.offerCallsCompleted ?? 0}
           icon={CheckCircle2}
           loading={statsLoading}
+          priorValue={stats?.priorPeriod?.offerCallsCompleted}
         />
         <StatCard
           title="Avg Score"
           value={stats?.averageScore ? `${Math.round(stats.averageScore)}%` : "N/A"}
           icon={TrendingUp}
           loading={statsLoading}
+          priorValue={stats?.priorPeriod?.averageScore}
+          isPercentage
         />
       </div>
 

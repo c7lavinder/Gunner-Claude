@@ -674,6 +674,14 @@ export async function getCallStats(options?: {
       callCount: number;
     }>;
   }>;
+  // Prior period comparison
+  priorPeriod?: {
+    totalCalls: number;
+    gradedCalls: number;
+    appointmentsSet: number;
+    offerCallsCompleted: number;
+    averageScore: number;
+  };
 }> {
   const db = await getDb();
   if (!db) return {
@@ -986,6 +994,61 @@ export async function getCallStats(options?: {
     };
   });
 
+  // ---- Prior period comparison ----
+  // Calculate the equivalent prior period for comparison badges
+  let priorPeriod: { totalCalls: number; gradedCalls: number; appointmentsSet: number; offerCallsCompleted: number; averageScore: number } | undefined;
+  
+  if (startDate && options?.dateRange !== 'all' && options?.dateRange !== 'ytd') {
+    // Calculate prior period: same duration, shifted back
+    const currentDurationMs = now.getTime() - startDate.getTime();
+    const priorEnd = new Date(startDate.getTime()); // prior period ends where current starts
+    const priorStart = new Date(priorEnd.getTime() - currentDurationMs);
+    
+    // Query prior period calls
+    let priorCalls = await db.select().from(calls).where(
+      and(
+        gte(calls.createdAt, priorStart),
+        lte(calls.createdAt, priorEnd),
+        ...baseConditions
+      )
+    );
+    
+    // Apply same permission-based filtering
+    if (options?.viewableTeamMemberIds && options.viewableTeamMemberIds !== 'all') {
+      const viewableIds = options.viewableTeamMemberIds;
+      priorCalls = priorCalls.filter(c => c.teamMemberId && viewableIds.includes(c.teamMemberId));
+    }
+    
+    const priorGradedCalls = priorCalls.filter(c => c.status === "completed" && (c.classification === "conversation" || c.classification === "admin_call"));
+    const priorAppointments = priorCalls.filter(c => c.callOutcome === "appointment_set").length;
+    const priorOfferCalls = priorGradedCalls.filter(c => c.callType === "offer").length;
+    
+    // Get prior period grades for average score
+    const priorGradedCallIds = priorGradedCalls.map(c => c.id);
+    const priorGradesArr = priorGradedCallIds.length > 0
+      ? await db.select().from(callGrades).where(inArray(callGrades.callId, priorGradedCallIds))
+      : [];
+    // Deduplicate: keep latest grade per call
+    const priorGradeMap = new Map<number, (typeof priorGradesArr)[number]>();
+    for (const g of priorGradesArr) {
+      const existing = priorGradeMap.get(g.callId);
+      if (!existing || g.id > existing.id) {
+        priorGradeMap.set(g.callId, g);
+      }
+    }
+    const priorGrades = Array.from(priorGradeMap.values());
+    const priorTotalScore = priorGrades.reduce((sum, g) => sum + (parseFloat(g.overallScore || "0")), 0);
+    const priorAvgScore = priorGrades.length > 0 ? priorTotalScore / priorGrades.length : 0;
+    
+    priorPeriod = {
+      totalCalls: priorCalls.length,
+      gradedCalls: priorGradedCalls.length,
+      appointmentsSet: priorAppointments,
+      offerCallsCompleted: priorOfferCalls,
+      averageScore: priorAvgScore,
+    };
+  }
+
   return {
     totalCalls: allCalls.length,
     gradedCalls: gradedCalls.length,
@@ -1004,6 +1067,7 @@ export async function getCallStats(options?: {
     teamMemberScores,
     weeklyTrends,
     teamMemberTrends,
+    priorPeriod,
   };
 }
 

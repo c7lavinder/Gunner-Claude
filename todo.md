@@ -2483,3 +2483,9 @@
 ## BUG: "check of the task for sue ashburn for today" not recognized as update_task
 - [x] Fix parseIntent prompt to handle typos like "check of" (for "check off") and variations like "check off task for [contact] for today"
 - [x] Add more example phrasings for task completion in the LLM prompt (check off, check of, complete, finish, done with, close out, mark as done)
+
+## Dashboard: Stat Card Comparison Badges
+- [x] Update backend to fetch prior period stats alongside current period
+- [x] Calculate percentage change for each metric (calls, conversations, appointments, offer calls, avg score)
+- [x] Add green/red percentage badge to top corner of each stat card
+- [x] Handle edge cases (prior period zero, no data, same value)
