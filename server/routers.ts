@@ -2950,8 +2950,8 @@ Create content that:
     upsertCampaignKpi: protectedProcedure
       .input(z.object({
         periodId: z.number(),
-        market: z.enum(["tennessee", "global"]),
-        channel: z.enum(["cold_calls", "sms", "forms", "ppl", "jv", "ppc", "postcards", "referrals"]),
+        market: z.string(),
+        channel: z.string(),
         spent: z.number(),
         volume: z.number(),
         contacts: z.number(),
@@ -2997,12 +2997,12 @@ Create content that:
       .input(z.object({
         periodId: z.number().optional(),
         propertyAddress: z.string(),
-        inventoryStatus: z.enum(["for_sale", "assigned", "funded"]).optional(),
-        location: z.enum(["nashville", "nash_sw", "knoxville", "chattanooga", "global", "nah"]).optional(),
-        leadSource: z.enum(["cold_calls", "sms", "postcards", "forms", "ppl", "ppc", "jv", "referrals"]).optional(),
-        lmName: z.enum(["chris", "daniel"]).optional(),
-        amName: z.enum(["kyle"]).optional(),
-        dmName: z.enum(["esteban", "steve"]).optional(),
+        inventoryStatus: z.string().optional(),
+        location: z.string().optional(),
+        leadSource: z.string().optional(),
+        lmName: z.string().optional(),
+        amName: z.string().optional(),
+        dmName: z.string().optional(),
         revenue: z.number().optional(),
         assignmentFee: z.number().optional(),
         profit: z.number().optional(),
@@ -3024,12 +3024,12 @@ Create content that:
         id: z.number(),
         periodId: z.number().optional(),
         propertyAddress: z.string().optional(),
-        inventoryStatus: z.enum(["for_sale", "assigned", "funded"]).optional(),
-        location: z.enum(["nashville", "nash_sw", "knoxville", "chattanooga", "global", "nah"]).optional(),
-        leadSource: z.enum(["cold_calls", "sms", "postcards", "forms", "ppl", "ppc", "jv", "referrals"]).optional(),
-        lmName: z.enum(["chris", "daniel"]).optional(),
-        amName: z.enum(["kyle"]).optional(),
-        dmName: z.enum(["esteban", "steve"]).optional(),
+        inventoryStatus: z.string().optional(),
+        location: z.string().optional(),
+        leadSource: z.string().optional(),
+        lmName: z.string().optional(),
+        amName: z.string().optional(),
+        dmName: z.string().optional(),
         revenue: z.number().optional(),
         assignmentFee: z.number().optional(),
         profit: z.number().optional(),
@@ -3793,6 +3793,10 @@ Create content that:
           newDealStageName: config.newDealStageName || undefined,
           lastSynced: tenant.lastGhlSync ? tenant.lastGhlSync.toISOString() : null,
         },
+        // Advanced config
+        stageClassification: config.stageClassification || null,
+        industry: config.industry || null,
+        engineWebhookUrl: config.engineWebhookUrl || null,
         batchDialer: {
           enabled: !!config.batchDialerEnabled,
           connected: !!config.batchDialerApiKey,
@@ -3807,6 +3811,45 @@ Create content that:
         },
       };
     }),
+
+    // Update advanced CRM config (stage classification, industry, webhook URL)
+    updateAdvancedConfig: protectedProcedure
+      .input(z.object({
+        stageClassification: z.object({
+          activeStages: z.array(z.string()),
+          followUpStages: z.array(z.string()),
+          deadStages: z.array(z.string()),
+          highValueStages: z.array(z.string()).optional(),
+          offerStages: z.array(z.string()).optional(),
+        }).optional(),
+        industry: z.string().optional(),
+        engineWebhookUrl: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { parseCrmConfig, getTenantById, updateTenantSettings } = await import("./tenant");
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant' });
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const tenant = await getTenantById(ctx.user.tenantId);
+        if (!tenant) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+        const existingConfig = parseCrmConfig({ crmConfig: tenant.crmConfig as string | null });
+        
+        if (input.stageClassification) {
+          existingConfig.stageClassification = input.stageClassification;
+        }
+        if (input.industry !== undefined) {
+          existingConfig.industry = input.industry || undefined;
+        }
+        if (input.engineWebhookUrl !== undefined) {
+          existingConfig.engineWebhookUrl = input.engineWebhookUrl || undefined;
+        }
+        
+        await updateTenantSettings(ctx.user.tenantId, {
+          crmConfig: JSON.stringify(existingConfig),
+        });
+        return { success: true };
+      }),
 
     // Manual BatchLeads sync (property enrichment for recent calls)
     syncBatchLeads: protectedProcedure.mutation(async ({ ctx }) => {

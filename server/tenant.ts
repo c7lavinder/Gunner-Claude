@@ -120,6 +120,8 @@ export interface TenantCrmConfig {
   };
   // External webhook URL for graded call data (e.g., Gunner Engine)
   engineWebhookUrl?: string;
+  // Industry/business type for LLM prompt customization (default: "real estate wholesaling/investing")
+  industry?: string;
 }
 
 export function parseCrmConfig(tenant: { crmConfig: string | null }): TenantCrmConfig {

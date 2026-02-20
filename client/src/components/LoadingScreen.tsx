@@ -30,7 +30,7 @@ export function LoadingScreen() {
         <div className="relative">
           {/* Cannon logo */}
           <img
-            src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/ORoxztkyoTJEjMxT.png"
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo.png"
             alt="Gunner"
             className={`h-32 w-32 object-contain transition-transform duration-300 ${
               isFiring ? "animate-cannon-recoil" : ""

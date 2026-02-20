@@ -224,7 +224,7 @@ export default function Signup() {
             <CardHeader className="text-center">
               <CardTitle className="text-2xl">Create your account</CardTitle>
               <CardDescription>
-                Get started with your 3-day free trial
+                Get started with your 14-day free trial
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">

@@ -1,0 +1,1 @@
+ALTER TABLE `kpi_deals` MODIFY COLUMN `inventoryStatus` varchar(50) DEFAULT 'for_sale';

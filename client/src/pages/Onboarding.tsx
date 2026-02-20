@@ -118,6 +118,10 @@ export default function Onboarding() {
     batchDialerApiKey: "",
     dispoPipelineName: "",
     newDealStageName: "",
+    industry: "",
+    activeStages: "",
+    followUpStages: "",
+    deadStages: "",
     selectedRoles: ["lead_manager", "acquisition_manager"] as string[],
     trainingMaterials: "",
     teamInvites: [
@@ -178,6 +182,17 @@ export default function Onboarding() {
           }
           if (formData.newDealStageName) {
             crmConfig.newDealStageName = formData.newDealStageName;
+          }
+          if (formData.industry) {
+            crmConfig.industry = formData.industry;
+          }
+          // Parse comma-separated stage classification
+          const parseStages = (val: string) => val.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+          const activeStages = parseStages(formData.activeStages);
+          const followUpStages = parseStages(formData.followUpStages);
+          const deadStages = parseStages(formData.deadStages);
+          if (activeStages.length > 0 || followUpStages.length > 0 || deadStages.length > 0) {
+            crmConfig.stageClassification = { activeStages, followUpStages, deadStages };
           }
           
           await updateTenantMutation.mutateAsync({
@@ -569,6 +584,61 @@ export default function Onboarding() {
                   )}
                 </div>
 
+                {/* Stage Classification */}
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-medium mb-3 flex items-center gap-2">Pipeline Stage Classification</h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Classify your pipeline stages so Gunner can detect opportunities. Enter stage names separated by commas.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-sm flex items-center gap-2">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+                        Active Deal Stages
+                      </Label>
+                      <Input
+                        placeholder="e.g. warm leads, pending apt, made offer, counter offer"
+                        value={formData.activeStages}
+                        onChange={(e) => setFormData({ ...formData, activeStages: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm flex items-center gap-2">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                        Follow-Up Stages
+                      </Label>
+                      <Input
+                        placeholder="e.g. follow up, callback, nurture"
+                        value={formData.followUpStages}
+                        onChange={(e) => setFormData({ ...formData, followUpStages: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm flex items-center gap-2">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />
+                        Dead / Closed Stages
+                      </Label>
+                      <Input
+                        placeholder="e.g. dead, not interested, do not contact, wrong number"
+                        value={formData.deadStages}
+                        onChange={(e) => setFormData({ ...formData, deadStages: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">You can update these later in Settings → Integrations</p>
+                </div>
+
+                {/* Industry */}
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-medium mb-3">Industry / Business Type</h4>
+                  <Input
+                    placeholder="e.g. real estate wholesaling/investing"
+                    value={formData.industry}
+                    onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Used to customize AI grading. Default: real estate wholesaling/investing</p>
+                </div>
+
                 <div className="border-t pt-4 mt-4">
                   <h4 className="font-medium mb-3">BatchDialer Integration (Optional)</h4>
                   <p className="text-xs text-muted-foreground mb-3">
@@ -753,7 +823,7 @@ export default function Onboarding() {
         {/* Logo */}
         <div className="text-center mb-8">
           <img
-            src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/ORoxztkyoTJEjMxT.png"
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo.png"
             alt="Gunner"
             className="h-16 mx-auto"
           />

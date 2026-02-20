@@ -101,7 +101,7 @@ export default function Paywall() {
         {/* Logo */}
         <div className="text-center mb-6">
           <img
-            src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/ORoxztkyoTJEjMxT.png"
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo.png"
             alt="Gunner"
             className="h-12 mx-auto"
           />
@@ -109,7 +109,7 @@ export default function Paywall() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Start Your 3-Day Free Trial</h1>
+          <h1 className="text-3xl font-bold mb-2">Start Your 14-Day Free Trial</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
             Enter your card to unlock your dashboard. You won't be charged until your trial ends.
             Cancel anytime.
@@ -244,13 +244,13 @@ export default function Paywall() {
             ) : (
               <>
                 <CreditCard className="h-5 w-5 mr-2" />
-                Start 3-Day Free Trial
+                Start Free Trial
               </>
             )}
           </Button>
           <p className="text-xs text-muted-foreground mt-3">
             Your card will be charged ${getPlanPrice(selectedPlan)[billingPeriod === "monthly" ? "monthly" : "yearly"]} 
-            {billingPeriod === "yearly" ? "/year" : "/month"} after your 3-day trial ends.
+            {billingPeriod === "yearly" ? "/year" : "/month"} after your 14-day trial ends.
           </p>
         </div>
 

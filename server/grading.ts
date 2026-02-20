@@ -432,6 +432,7 @@ export async function gradeCall(
     gradingRules?: { title: string; ruleText: string | null; priority: number | null }[];
     recentFeedback?: { feedbackType: string | null; explanation: string | null; correctBehavior: string | null }[];
     companyName?: string;
+    industry?: string;
     tenantRubrics?: { name: string; description: string | null; criteria: string; callType?: string | null; redFlags?: string | null }[];
   }
 ): Promise<GradingResult> {
@@ -509,7 +510,8 @@ export async function gradeCall(
   }
 
   const companyName = context?.companyName || "the company";
-  const systemPrompt = `You are an expert sales coach for a real estate wholesaling company called ${companyName}. 
+  const industry = context?.industry || "real estate wholesaling/investing";
+  const systemPrompt = `You are an expert sales coach for a ${industry} company called ${companyName}. 
 Your job is to analyze phone call transcripts and grade them based on a specific rubric.
 
 You are grading a ${callType === "cold_call" ? "Cold Call (Lead Generation)" : callType === "qualification" ? "Qualification/Diagnosis" : callType === "follow_up" ? "Follow-Up" : callType === "seller_callback" ? "Seller Callback (Inbound)" : callType === "admin_callback" ? "Admin Callback (Operational)" : "Offer"} call made by ${teamMemberName}.
@@ -764,7 +766,8 @@ export interface ClassificationResult {
  */
 export async function classifyCall(
   transcript: string,
-  durationSeconds: number | null | undefined
+  durationSeconds: number | null | undefined,
+  industry?: string
 ): Promise<ClassificationResult> {
   // First check: Duration filter
   if (durationSeconds && durationSeconds < MINIMUM_CALL_DURATION_SECONDS) {
@@ -781,7 +784,7 @@ export async function classifyCall(
       messages: [
         {
           role: "system",
-          content: `You are a call classification system for a real estate investment company.
+          content: `You are a call classification system for a ${industry || "real estate wholesaling/investing"} company.
 Analyze the transcript and classify the call into one of these categories:
 
 1. "conversation" - A SALES conversation where the rep is actively selling. This includes:
@@ -891,14 +894,15 @@ Respond with JSON only:
  */
 export async function detectCallType(
   transcript: string,
-  teamMemberRole?: string
+  teamMemberRole?: string,
+  industry?: string
 ): Promise<{ callType: GradableCallType; confidence: number; reason: string }> {
   try {
     const response = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: `You are a call type classifier for a real estate wholesaling company. Analyze the transcript and determine what type of call this is.
+          content: `You are a call type classifier for a ${industry || "real estate wholesaling/investing"} company. Analyze the transcript and determine what type of call this is.
 
 CALL TYPES:
 1. "cold_call" - First contact with a homeowner. The caller is reaching out to someone who hasn't spoken with the company before. The goal is to gauge interest in selling, NOT to set appointments. Signs: introducing the company, asking if they've thought about selling, no prior relationship mentioned.
@@ -1024,6 +1028,17 @@ export async function processCall(callId: number): Promise<void> {
     // Under 30s: instant skip, no transcription needed
     // 30-60s: transcribe and generate a short summary, but still skip grading
     // 60s+: proceed to full classification and grading
+    // Get tenant industry from crmConfig for LLM prompts (needed for summaries and classification)
+    let tenantIndustry: string | undefined;
+    if (call.tenantId) {
+      const { parseCrmConfig } = await import("./tenant");
+      const tenantForIndustry = await getTenantById(call.tenantId);
+      if (tenantForIndustry) {
+        const crmConfig = parseCrmConfig(tenantForIndustry);
+        tenantIndustry = crmConfig.industry;
+      }
+    }
+
     if (call.duration && call.duration < 30) {
       console.log(`[ProcessCall] Call ${callId} is very short (${call.duration}s), skipping without transcription`);
       await updateCall(callId, {
@@ -1047,7 +1062,7 @@ export async function processCall(callId: number): Promise<void> {
             messages: [
               {
                 role: "system",
-                content: `You summarize phone calls for a real estate investment company. Write a 1-2 sentence summary of what happened on this short call. Be specific and concise. Examples:
+                content: `You summarize phone calls for a ${tenantIndustry || "real estate wholesaling/investing"} company. Write a 1-2 sentence summary of what happened on this short call. Be specific and concise. Examples:
 - "Left voicemail for homeowner about selling their property on Oak St."
 - "Callback request — seller asked to be called back next Tuesday."
 - "Brief conversation, homeowner said they're not interested in selling right now."
@@ -1091,7 +1106,7 @@ export async function processCall(callId: number): Promise<void> {
 
     // Step 3: Classify the call
     await updateCall(callId, { status: "classifying" });
-    const classificationResult = await classifyCall(transcript, call.duration);
+    const classificationResult = await classifyCall(transcript, call.duration, tenantIndustry);
     
     await updateCall(callId, {
       classification: classificationResult.classification,
@@ -1130,6 +1145,7 @@ export async function processCall(callId: number): Promise<void> {
         
         const gradeResult = await gradeCall(transcript, "admin_callback", teamMemberName, {
           companyName,
+          industry: tenantIndustry,
           trainingMaterials: adminGradingContext.trainingMaterials.map(m => ({
             title: m.title,
             content: m.content,
@@ -1211,7 +1227,7 @@ export async function processCall(callId: number): Promise<void> {
             messages: [
               {
                 role: "system",
-                content: `You summarize phone calls for a real estate investment company. Write a 1-2 sentence summary of what happened on this call. Be specific and concise. Examples:
+                content: `You summarize phone calls for a ${tenantIndustry || "real estate wholesaling/investing"} company. Write a 1-2 sentence summary of what happened on this call. Be specific and concise. Examples:
 - "Left voicemail for homeowner about selling their property on Oak St."
 - "Callback request — seller asked to be called back next Tuesday."
 - "Brief conversation, homeowner said they're not interested in selling right now."
@@ -1261,7 +1277,7 @@ export async function processCall(callId: number): Promise<void> {
     // Only auto-detect if not manually set
     if (callTypeSource !== "manual") {
       // Try AI detection from transcript
-      const aiDetection = await detectCallType(transcript, teamMemberRole);
+      const aiDetection = await detectCallType(transcript, teamMemberRole, tenantIndustry);
       console.log(`[ProcessCall] AI detected call type: ${aiDetection.callType} (confidence: ${aiDetection.confidence}, reason: ${aiDetection.reason})`);
       
       if (aiDetection.confidence >= 0.6) {
@@ -1322,6 +1338,7 @@ export async function processCall(callId: number): Promise<void> {
         correctBehavior: f.correctBehavior,
       })),
       companyName,
+      industry: tenantIndustry,
       tenantRubrics: gradingContext.tenantRubrics,
     });
 

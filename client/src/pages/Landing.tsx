@@ -134,7 +134,7 @@ export default function Landing() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <img 
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/wbPTXtdBmAzNpJxB.png" 
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-small.png" 
               alt="Gunner" 
               className="h-12 w-auto"
             />
@@ -176,7 +176,7 @@ export default function Landing() {
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mt-4">
-              3-day free trial • No credit card required to start
+              14-day free trial • No credit card required to start
             </p>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function Landing() {
               Simple, Transparent Pricing
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-              Choose the plan that fits your team. All plans include a 3-day free trial.
+              Choose the plan that fits your team. All plans include a free trial.
             </p>
             <div className="inline-flex items-center gap-4 p-1 bg-muted rounded-lg">
               <button
@@ -334,7 +334,7 @@ export default function Landing() {
               Ready to Transform Your Sales Team?
             </h2>
             <p className="text-xl text-muted-foreground mb-8">
-              Start your 3-day free trial today. Enter card to unlock dashboard.
+              Start your free trial today. Enter card to unlock dashboard.
             </p>
             <Link href="/signup">
               <Button size="lg" className="gap-2">
@@ -351,7 +351,7 @@ export default function Landing() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/wbPTXtdBmAzNpJxB.png" 
+                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-small.png" 
                 alt="Gunner" 
                 className="h-10 w-auto"
               />

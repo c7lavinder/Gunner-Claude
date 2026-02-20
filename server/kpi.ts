@@ -220,9 +220,9 @@ export async function createKpiDeal(data: {
   tenantId: number;
   periodId?: number;
   propertyAddress: string;
-  inventoryStatus?: "for_sale" | "assigned" | "funded";
+  inventoryStatus?: string;
   location?: string;
-  leadSource?: "cold_calls" | "sms" | "postcards" | "forms" | "ppl" | "ppc" | "jv" | "referrals";
+  leadSource?: string;
   lmName?: string;
   amName?: string;
   dmName?: string;
@@ -243,9 +243,9 @@ export async function createKpiDeal(data: {
 export async function updateKpiDeal(id: number, data: Partial<{
   periodId: number;
   propertyAddress: string;
-  inventoryStatus: "for_sale" | "assigned" | "funded";
+  inventoryStatus: string;
   location: string;
-  leadSource: "cold_calls" | "sms" | "postcards" | "forms" | "ppl" | "ppc" | "jv" | "referrals";
+  leadSource: string;
   lmName: string;
   amName: string;
   dmName: string;

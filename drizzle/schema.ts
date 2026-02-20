@@ -896,12 +896,8 @@ export const kpiDeals = mysqlTable("kpi_deals", {
   periodId: int("periodId").references(() => kpiPeriods.id),
   // Deal info
   propertyAddress: text("propertyAddress").notNull(),
-  // Status: For Sale, Assigned, Funded
-  inventoryStatus: mysqlEnum("inventoryStatus", [
-    "for_sale",
-    "assigned",
-    "funded"
-  ]).default("for_sale"),
+  // Status: For Sale, Assigned, Funded (dynamic per-tenant)
+  inventoryStatus: varchar("inventoryStatus", { length: 50 }).default("for_sale"),
   // Location: dynamic per-tenant market areas
   location: varchar("location", { length: 100 }),
   // Lead source

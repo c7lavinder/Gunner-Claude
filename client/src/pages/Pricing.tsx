@@ -237,7 +237,7 @@ export default function Pricing() {
       <div className="container py-8">
         <div className="flex items-center justify-between mb-12">
           <img
-            src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/ORoxztkyoTJEjMxT.png"
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo.png"
             alt="Gunner"
             className="h-12"
           />
@@ -382,7 +382,7 @@ export default function Pricing() {
         <div className="text-center mt-16 text-muted-foreground">
           <p className="mb-4">Trusted by 100+ sales teams</p>
           <p className="text-sm">
-            3-day free trial • Card required to start • Cancel anytime
+            14-day free trial • Card required to start • Cancel anytime
           </p>
         </div>
       </div>

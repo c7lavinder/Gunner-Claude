@@ -24,13 +24,13 @@ interface CallGradedPayload {
   timestamp: string;
 }
 
-// Default webhook URL — used when tenant has no custom engineWebhookUrl in crmConfig
-const DEFAULT_ENGINE_WEBHOOK_URL = "https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded";
+// Default webhook URL from env var — only used for platform owner's tenant
+const DEFAULT_ENGINE_WEBHOOK_URL = process.env.GUNNER_ENGINE_WEBHOOK_URL || null;
 
 /**
  * Get the webhook URL for a given tenant.
- * Returns tenant-specific URL from crmConfig.engineWebhookUrl, or the default.
- * Returns null if the tenant explicitly has no webhook configured and is not the platform owner.
+ * Returns tenant-specific URL from crmConfig.engineWebhookUrl, or the env default for platform owner.
+ * Returns null if the tenant has no webhook configured.
  */
 async function getWebhookUrl(tenantId: number): Promise<string | null> {
   try {
@@ -39,11 +39,25 @@ async function getWebhookUrl(tenantId: number): Promise<string | null> {
     if (!tenant) return DEFAULT_ENGINE_WEBHOOK_URL;
     
     const config = parseCrmConfig(tenant);
+    // Per-tenant webhook URL takes priority
     if (config.engineWebhookUrl) return config.engineWebhookUrl;
     
-    // Only send to default URL for the platform owner's tenant (tenant 1)
-    // Other tenants don't have the Gunner Engine backend, so skip
-    if (tenantId === 1) return DEFAULT_ENGINE_WEBHOOK_URL;
+    // Fall back to env var default for platform owner's tenant (tenant ID 1 or check via users table)
+    const { isPlatformOwner } = await import("./tenant");
+    // Check if any user in this tenant is the platform owner
+    const db = (await import("./db")).getDb;
+    const dbInstance = await db();
+    if (dbInstance) {
+      const { users } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const ownerOpenId = process.env.OWNER_OPEN_ID;
+      if (ownerOpenId) {
+        const [ownerUser] = await dbInstance.select().from(users).where(
+          and(eq(users.tenantId, tenantId), eq(users.openId, ownerOpenId))
+        ).limit(1);
+        if (ownerUser) return DEFAULT_ENGINE_WEBHOOK_URL;
+      }
+    }
     
     return null; // No webhook configured for this tenant
   } catch {

@@ -15,7 +15,6 @@ import Training from "./pages/Training";
 import SocialMedia from "./pages/SocialMedia";
 import TeamManagement from "./pages/TeamManagement";
 import Profile from "./pages/Profile";
-import KpiDashboard from "./pages/KpiDashboard";
 import Onboarding from "./pages/Onboarding";
 import Pricing from "./pages/Pricing";
 import SuperAdmin from "./pages/SuperAdmin";
@@ -77,7 +76,6 @@ function ProtectedRouter() {
       <Route path="/social" component={SocialMedia} />
       <Route path="/team-management" component={TeamManagement} />
       <Route path="/profile" component={Profile} />
-      <Route path="/kpi" component={KpiDashboard} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/paywall" component={Paywall} />

@@ -2511,3 +2511,20 @@
 - [x] Make campaign KPI market/channel and KPI goals channel dynamic (varchar instead of enum)
 - [x] Make KPI deals leadSource dynamic (varchar instead of enum)
 - [x] Write tests for all audit fixes (26 tests passing)
+
+## V2 Prep: Remove KPI Page & Onboarding Hardening
+- [x] Remove KPI reporting page and all related routes/nav items
+- [x] Add pipeline stage classification to onboarding (active/follow-up/dead stages + industry)
+- [x] Set APP_URL and EMAIL_LOGO_URL env vars
+- [x] Full audit: find and fix ALL remaining hardcoded tenant-specific values
+- [x] Ensure all tenant config is accessible via onboarding or settings UI (Advanced Configuration card)
+- [x] Make LLM grading prompts use dynamic industry from tenant config
+- [x] Replace hardcoded Railway webhook URL with GUNNER_ENGINE_WEBHOOK_URL env var
+- [x] Replace hardcoded KPI enums (market, channel, leadSource, inventoryStatus) with varchar
+- [x] Fix all 3-day trial references to 14-day across Signup, Paywall, Landing, Pricing pages
+- [x] Write tests for all changes (15 branding audit tests passing)
+
+## Remove Manus branding from user-facing website
+- [x] Remove all manuscdn logo URLs from 8 frontend files — replaced with CloudFront S3 URLs
+- [x] Remove 'Login with Manus' text from ManusDialog
+- [x] Upload logos to S3 for neutral domain (d2xsxph8kpxj0f.cloudfront.net)

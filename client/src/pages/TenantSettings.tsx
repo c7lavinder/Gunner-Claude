@@ -63,6 +63,12 @@ export default function TenantSettings() {
   const [selectedPlan, setSelectedPlan] = useState<'starter' | 'growth' | 'scale'>('growth');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [editingMember, setEditingMember] = useState<{ id: number; name: string; teamRole: string | null; role: string } | null>(null);
+  // Advanced config state
+  const [industry, setIndustry] = useState("");
+  const [engineWebhookUrl, setEngineWebhookUrl] = useState("");
+  const [activeStages, setActiveStages] = useState("");
+  const [followUpStages, setFollowUpStages] = useState("");
+  const [deadStages, setDeadStages] = useState("");
 
   // Fetch tenant settings
   const { data: settings, isLoading: settingsLoading, refetch: refetchSettings } = trpc.tenant.getSettings.useQuery(
@@ -333,6 +339,20 @@ export default function TenantSettings() {
     }
   }, [settings]);
 
+  // Initialize advanced config from CRM integrations
+  useEffect(() => {
+    if (crmIntegrations) {
+      setIndustry(crmIntegrations.industry || "");
+      setEngineWebhookUrl(crmIntegrations.engineWebhookUrl || "");
+      const sc = crmIntegrations.stageClassification;
+      if (sc) {
+        setActiveStages((sc.activeStages || []).join(", "));
+        setFollowUpStages((sc.followUpStages || []).join(", "));
+        setDeadStages((sc.deadStages || []).join(", "));
+      }
+    }
+  }, [crmIntegrations]);
+
   const handleSaveGeneral = () => {
     updateSettingsMutation.mutate({
       name: companyName,
@@ -399,6 +419,28 @@ export default function TenantSettings() {
     },
     onError: (error) => toast.error(`Sync failed: ${error.message}`),
   });
+
+  // Advanced config mutation
+  const updateAdvancedConfigMutation = trpc.tenant.updateAdvancedConfig.useMutation({
+    onSuccess: () => {
+      toast.success("Advanced configuration saved");
+      refetchCrmIntegrations();
+    },
+    onError: (error) => toast.error(error.message || "Failed to save configuration"),
+  });
+
+  const handleSaveAdvancedConfig = () => {
+    const parseCommaSeparated = (val: string) => val.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    updateAdvancedConfigMutation.mutate({
+      industry: industry || undefined,
+      engineWebhookUrl: engineWebhookUrl || undefined,
+      stageClassification: {
+        activeStages: parseCommaSeparated(activeStages),
+        followUpStages: parseCommaSeparated(followUpStages),
+        deadStages: parseCommaSeparated(deadStages),
+      },
+    });
+  };
 
   const syncBlMutation = trpc.tenant.syncBatchLeads.useMutation({
     onSuccess: (stats) => {
@@ -1862,6 +1904,99 @@ export default function TenantSettings() {
                   </p>
                 </>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Advanced Configuration Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <Zap className="h-5 w-5 text-purple-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Advanced Configuration</CardTitle>
+                  <CardDescription>Pipeline stages, industry, and webhook settings</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Industry */}
+              <div className="space-y-2">
+                <Label htmlFor="industry">Industry / Business Type</Label>
+                <Input
+                  id="industry"
+                  placeholder="e.g. real estate wholesaling/investing"
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Used to customize AI grading prompts and call classification. Default: real estate wholesaling/investing</p>
+              </div>
+
+              {/* Pipeline Stage Classification */}
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-semibold">Pipeline Stage Classification</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Classify your CRM pipeline stages for opportunity detection. Enter stage names separated by commas (case-insensitive).</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="activeStages" className="text-sm flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+                      Active Deal Stages
+                    </Label>
+                    <Input
+                      id="activeStages"
+                      placeholder="e.g. warm leads, pending apt, made offer, counter offer"
+                      value={activeStages}
+                      onChange={(e) => setActiveStages(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="followUpStages" className="text-sm flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                      Follow-Up Stages
+                    </Label>
+                    <Input
+                      id="followUpStages"
+                      placeholder="e.g. follow up, callback, nurture"
+                      value={followUpStages}
+                      onChange={(e) => setFollowUpStages(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="deadStages" className="text-sm flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />
+                      Dead / Closed Stages
+                    </Label>
+                    <Input
+                      id="deadStages"
+                      placeholder="e.g. dead, not interested, do not contact, wrong number"
+                      value={deadStages}
+                      onChange={(e) => setDeadStages(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Webhook URL */}
+              <div className="space-y-2">
+                <Label htmlFor="engineWebhookUrl">External Webhook URL (Optional)</Label>
+                <Input
+                  id="engineWebhookUrl"
+                  placeholder="https://your-automation-server.com/webhook"
+                  value={engineWebhookUrl}
+                  onChange={(e) => setEngineWebhookUrl(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Graded call data will be sent to this URL via POST. Leave blank to disable.</p>
+              </div>
+
+              <Button
+                onClick={handleSaveAdvancedConfig}
+                disabled={updateAdvancedConfigMutation.isPending}
+              >
+                {updateAdvancedConfigMutation.isPending ? "Saving..." : "Save Advanced Config"}
+              </Button>
             </CardContent>
           </Card>
 

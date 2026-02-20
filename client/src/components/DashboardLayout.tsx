@@ -71,7 +71,7 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
   }
   
   // Admin Dashboard is for super_admin users (platform owner) — hidden in demo
-  const isPlatformOwner = openId === 'U3JEthPNs4UbYRrgRBbShj';
+  const isPlatformOwner = false; // Determined server-side via env var
   if ((isSuperAdmin || isPlatformOwner) && !isDemo) {
     items.push({ icon: Shield, label: "Platform Admin", path: "/admin" });
   }
@@ -319,7 +319,7 @@ function DashboardLayoutContent({
               >
                 {isCollapsed ? (
                   <img 
-                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/ORoxztkyoTJEjMxT.png" 
+                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo.png" 
                     alt="Gunner" 
                     className="h-8 w-8 object-contain"
                   />
@@ -330,7 +330,7 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <img 
-                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/pEvSFVlapabhnbkw.png" 
+                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-dark.png" 
                     alt="Gunner" 
                     className="h-12 object-contain"
                   />
@@ -420,7 +420,7 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-lg" />
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/pEvSFVlapabhnbkw.png" 
+                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-dark.png" 
                 alt="Gunner" 
                 className="h-8 object-contain"
               />
