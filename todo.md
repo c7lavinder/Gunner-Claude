@@ -2492,3 +2492,6 @@
 
 ## BUG: Avg Score stat card comparison badge overflows card
 - [x] Fix badge text overflow — "25%pt" is too wide and clips outside the card boundary
+
+## BUG: Avg Score badge shows "25pt" instead of "25%"
+- [x] Change badge label to always use % suffix for all stat cards including Avg Score

@@ -52,7 +52,7 @@ function StatCard({
   
   // Format the badge label
   const badgeLabel = change && change.direction !== 'flat'
-    ? `${change.pct}${isPercentage ? 'pt' : '%'}`
+    ? `${change.pct}%`
     : null;
   
   return (
