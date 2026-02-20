@@ -108,8 +108,18 @@ export interface TenantCrmConfig {
   newDealStageName?: string;
   newDealStageId?: string;
   stageMapping?: Record<string, string>;
-  // Per-pipeline stage mappings: { pipelineId: { stageId: callType } }
+  // Per-pipeline stage mappings: { pipelineId: { name: string; stageMapping: Record<string, string> } }
   pipelineMappings?: Record<string, { name: string; stageMapping: Record<string, string> }>;
+  // Opportunity detection: per-tenant stage classification overrides
+  stageClassification?: {
+    activeStages?: string[];
+    followUpStages?: string[];
+    deadStages?: string[];
+    highValueStages?: string[];
+    offerStages?: string[];
+  };
+  // External webhook URL for graded call data (e.g., Gunner Engine)
+  engineWebhookUrl?: string;
 }
 
 export function parseCrmConfig(tenant: { crmConfig: string | null }): TenantCrmConfig {
@@ -689,10 +699,10 @@ export function getTenantIdFromUser(user: { tenantId?: number | null }): number 
  * Check if user is platform owner (super admin)
  */
 export function isPlatformOwner(openId: string): boolean {
-  // Check against the OWNER_OPEN_ID env var (Manus OAuth)
-  // Also check against Corey's Google OAuth openId
-  const ownerOpenId = process.env.OWNER_OPEN_ID || "U3JEthPNs4UbYRrgRBbShj";
-  return openId === ownerOpenId || openId === "google_112815946311339322655";
+  // Check against the OWNER_OPEN_ID env var
+  const ownerOpenId = process.env.OWNER_OPEN_ID;
+  if (!ownerOpenId) return false;
+  return openId === ownerOpenId;
 }
 
 // ============ USER MANAGEMENT ============
@@ -772,8 +782,8 @@ export async function inviteUserToTenant(
 
   // Send team invite email notification
   try {
-    // Use the deployed domain for invite links so users sign in at getgunner.ai
-    const baseUrl = 'https://getgunner.ai';
+    // Use the deployed domain for invite links
+    const baseUrl = process.env.APP_URL || process.env.VITE_APP_URL || 'https://getgunner.ai';
     await sendTeamInviteEmail(
       email,
       inviterName,

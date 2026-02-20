@@ -13,12 +13,10 @@ import { getAllTenantsUsage, getTenantUsage } from "./rateLimit";
 import { runEmailSequenceJobs } from "./emailSequenceJobs";
 
 // Super admin check middleware
-// Platform owner's openId for fallback access
-const PLATFORM_OWNER_OPEN_ID = "U3JEthPNs4UbYRrgRBbShj";
-
 const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
   const isSuperAdmin = ctx.user?.role === "super_admin";
-  const isPlatformOwner = ctx.user?.openId === PLATFORM_OWNER_OPEN_ID;
+  const ownerOpenId = process.env.OWNER_OPEN_ID;
+  const isPlatformOwner = ownerOpenId ? ctx.user?.openId === ownerOpenId : false;
   
   if (!isSuperAdmin && !isPlatformOwner) {
     throw new TRPCError({

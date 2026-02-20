@@ -867,17 +867,8 @@ export const campaignKpis = mysqlTable("campaign_kpis", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   periodId: int("periodId").references(() => kpiPeriods.id).notNull(),
-  market: mysqlEnum("market", ["tennessee", "global"]).default("global").notNull(),
-  channel: mysqlEnum("channel", [
-    "cold_calls", 
-    "sms", 
-    "forms", 
-    "ppl", 
-    "jv", 
-    "ppc", 
-    "postcards", 
-    "referrals"
-  ]).notNull(),
+  market: varchar("market", { length: 100 }).default("global").notNull(),
+  channel: varchar("channel", { length: 100 }).notNull(),
   // Metrics
   spent: int("spent").default(0).notNull(), // in cents
   volume: int("volume").default(0).notNull(), // # sent (calls, sms, postcards, etc.)
@@ -914,16 +905,7 @@ export const kpiDeals = mysqlTable("kpi_deals", {
   // Location: dynamic per-tenant market areas
   location: varchar("location", { length: 100 }),
   // Lead source
-  leadSource: mysqlEnum("leadSource", [
-    "cold_calls", 
-    "sms", 
-    "postcards",
-    "forms", 
-    "ppl", 
-    "ppc", 
-    "jv", 
-    "referrals"
-  ]),
+  leadSource: varchar("leadSource", { length: 100 }),
   // Team members: dynamic per-tenant (stored as lowercase name)
   lmName: varchar("lmName", { length: 100 }),
   amName: varchar("amName", { length: 100 }),
@@ -954,17 +936,7 @@ export const kpiGoals = mysqlTable("kpi_goals", {
   // Goal type
   goalType: mysqlEnum("goalType", ["campaign", "team_member"]).notNull(),
   // For campaign goals
-  channel: mysqlEnum("channel", [
-    "cold_calls", 
-    "sms", 
-    "forms", 
-    "ppl", 
-    "jv", 
-    "ppc", 
-    "postcards", 
-    "referrals",
-    "total"
-  ]),
+  channel: varchar("channel", { length: 100 }),
   // For team member goals
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   // Goal metrics

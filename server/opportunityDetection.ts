@@ -185,48 +185,89 @@ function resolveGhlAssignee(
 
 // ============ SALES PROCESS PIPELINE STAGE CLASSIFICATION ============
 
-// TODO (S19): Move these stage classifications to a tenant-configurable table
-// so each client can define their own pipeline stages and signal rules.
-// For now, these defaults work for real estate flipping businesses.
-// These stage names are matched case-insensitively
-const ACTIVE_DEAL_STAGES = [
-  "new lead", "warm leads", "sms warm leads", "hot leads",
-  "pending apt", "walkthrough apt scheduled", "offer apt scheduled",
-  "made offer", "under contract", "purchased"
+// Default stage classifications — used when tenant has no custom stageClassification in crmConfig.
+// These are broad keyword patterns that match common real estate CRM setups.
+const DEFAULT_ACTIVE_PATTERNS = [
+  "new lead", "warm", "hot", "pending", "walkthrough", "apt scheduled",
+  "appointment", "offer", "under contract", "purchased", "qualified",
+  "interested", "active", "engaged", "scheduled"
 ];
 
-const FOLLOW_UP_STAGES = [
-  "1 month follow up", "4 month follow up", "1 year follow up",
-  "follow up", "new offer", "new walkthrough"
+const DEFAULT_FOLLOW_UP_PATTERNS = [
+  "follow up", "follow-up", "followup", "nurture", "drip",
+  "month", "year", "later", "callback", "re-engage",
+  "new offer", "new walkthrough"
 ];
 
-const DEAD_STAGES = [
-  "ghosted lead", "ghosted", "agreement not closed", "do not want",
-  "sold", "trash"
+const DEFAULT_DEAD_PATTERNS = [
+  "ghost", "dead", "lost", "closed lost", "do not", "dnc",
+  "not interested", "sold", "trash", "junk", "disqualified",
+  "agreement not closed", "removed", "unqualified"
 ];
+
+const DEFAULT_HIGH_VALUE_PATTERNS = [
+  "warm", "hot", "pending", "walkthrough", "apt scheduled",
+  "appointment", "offer", "qualified"
+];
+
+const DEFAULT_OFFER_PATTERNS = [
+  "offer", "under contract", "closing"
+];
+
+/**
+ * Per-tenant stage classification config stored in crmConfig.stageClassification.
+ * If present, these arrays of stage names (case-insensitive) override the defaults.
+ */
+export interface StageClassificationConfig {
+  activeStages?: string[];
+  followUpStages?: string[];
+  deadStages?: string[];
+  highValueStages?: string[];
+  offerStages?: string[];
+}
+
+// Module-level tenant stage config cache — set per-scan via setTenantStageConfig()
+let _tenantStageConfig: StageClassificationConfig | null = null;
+
+export function setTenantStageConfig(config: StageClassificationConfig | null) {
+  _tenantStageConfig = config;
+}
+
+function matchesAny(stageName: string, patterns: string[]): boolean {
+  const lower = stageName.toLowerCase();
+  return patterns.some(p => lower.includes(p.toLowerCase()));
+}
 
 function classifyStage(stageName: string): "active" | "follow_up" | "dead" | "unknown" {
-  const lower = stageName.toLowerCase();
-  if (ACTIVE_DEAL_STAGES.some(s => lower.includes(s.toLowerCase()))) return "active";
-  if (FOLLOW_UP_STAGES.some(s => lower.includes(s.toLowerCase()))) return "follow_up";
-  if (DEAD_STAGES.some(s => lower.includes(s.toLowerCase()))) return "dead";
+  // Use tenant-specific config if available, otherwise use smart defaults
+  if (_tenantStageConfig) {
+    if (_tenantStageConfig.activeStages?.length && matchesAny(stageName, _tenantStageConfig.activeStages)) return "active";
+    if (_tenantStageConfig.followUpStages?.length && matchesAny(stageName, _tenantStageConfig.followUpStages)) return "follow_up";
+    if (_tenantStageConfig.deadStages?.length && matchesAny(stageName, _tenantStageConfig.deadStages)) return "dead";
+    // If tenant config exists but stage doesn't match any category, fall through to defaults
+  }
+  if (matchesAny(stageName, DEFAULT_DEAD_PATTERNS)) return "dead";
+  if (matchesAny(stageName, DEFAULT_FOLLOW_UP_PATTERNS)) return "follow_up";
+  if (matchesAny(stageName, DEFAULT_ACTIVE_PATTERNS)) return "active";
   return "unknown";
 }
 
 function isHighValueStage(stageName: string): boolean {
-  const lower = stageName.toLowerCase();
-  return ["warm leads", "hot leads", "pending apt", "walkthrough apt scheduled", "offer apt scheduled", "made offer"].some(
-    s => lower.includes(s.toLowerCase())
-  );
+  if (_tenantStageConfig?.highValueStages?.length) {
+    return matchesAny(stageName, _tenantStageConfig.highValueStages);
+  }
+  return matchesAny(stageName, DEFAULT_HIGH_VALUE_PATTERNS);
 }
 
 function isOfferOrBeyond(stageName: string): boolean {
-  const lower = stageName.toLowerCase();
-  return ["made offer", "offer apt scheduled"].some(s => lower.includes(s.toLowerCase()));
+  if (_tenantStageConfig?.offerStages?.length) {
+    return matchesAny(stageName, _tenantStageConfig.offerStages);
+  }
+  return matchesAny(stageName, DEFAULT_OFFER_PATTERNS);
 }
 
 function isWalkthroughStage(stageName: string): boolean {
-  return stageName.toLowerCase().includes("walkthrough");
+  return stageName.toLowerCase().includes("walkthrough") || stageName.toLowerCase().includes("walk-through");
 }
 
 // ============ GHL API HELPERS ============
@@ -431,7 +472,7 @@ async function getContactPipelineProgression(
     const info = contactOppMap.get(contactId)!;
     const stageName = info.stageName;
     const lower = stageName.toLowerCase();
-    const isWalkthrough = lower.includes("walkthrough") || lower.includes("pending apt");
+    const isWalkthrough = lower.includes("walkthrough") || lower.includes("walk-through") || lower.includes("pending") || lower.includes("scheduled");
     const isOffer = lower.includes("offer") || lower.includes("made offer") || lower.includes("under contract") || lower.includes("purchased");
     return {
       hasProgressed: isWalkthrough || isOffer || lower.includes("hot lead"),
@@ -1099,7 +1140,7 @@ async function detectStaleActiveStage(
   creds: GHLCredentials | null
 ): Promise<DetectedOpportunity | null> {
   const lower = stageName.toLowerCase();
-  const isStaleCandidate = lower.includes("pending apt") || lower.includes("walkthrough");
+  const isStaleCandidate = lower.includes("pending") || lower.includes("walkthrough") || lower.includes("scheduled");
   if (!isStaleCandidate) return null;
 
   const stageChangeAt = opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : new Date(opp.updatedAt);
@@ -2858,6 +2899,9 @@ async function scanTenant(
     locationId: config.ghlLocationId,
   };
 
+  // Set tenant-specific stage classification if configured
+  setTenantStageConfig(config.stageClassification || null);
+
   const detections: DetectedOpportunity[] = [];
 
   // Build GHL user ID → team member mapping once per tenant scan
@@ -2870,8 +2914,13 @@ async function scanTenant(
   try {
     const pipelines = await fetchPipelines(creds);
     
-    // Find the Sales Process pipeline (main acquisition pipeline)
-    const salesPipeline = pipelines.find(p => p.name.toLowerCase().includes("sales process"));
+    // Find the main acquisition pipeline using tenant's configured name, or smart-match
+    const pipelineSearchName = config.dispoPipelineName || "sales process";
+    const salesPipeline = pipelines.find(p => p.name.toLowerCase().includes(pipelineSearchName.toLowerCase()))
+      || pipelines.find(p => {
+        const lower = p.name.toLowerCase();
+        return lower.includes("sales") || lower.includes("acquisition") || lower.includes("deal") || lower.includes("main");
+      });
     
     if (salesPipeline) {
       // Build stage name lookup
@@ -2947,7 +2996,12 @@ async function scanTenant(
   try {
     // Fetch pipelines once for cross-referencing (lightweight — just Sales Process + Follow Up)
     const pipelinesForConv = await fetchPipelines(creds);
-    const salesPipelineConv = pipelinesForConv.find(p => p.name.toLowerCase().includes("sales process"));
+    const pipelineSearchNameConv = config.dispoPipelineName || "sales process";
+    const salesPipelineConv = pipelinesForConv.find(p => p.name.toLowerCase().includes(pipelineSearchNameConv.toLowerCase()))
+      || pipelinesForConv.find(p => {
+        const lower = p.name.toLowerCase();
+        return lower.includes("sales") || lower.includes("acquisition") || lower.includes("deal") || lower.includes("main");
+      });
     const followUpPipelineConv = pipelinesForConv.find(p => p.name.toLowerCase().includes("follow up"));
     
     for (const pipeline of [salesPipelineConv, followUpPipelineConv].filter(Boolean) as any[]) {

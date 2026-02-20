@@ -24,7 +24,32 @@ interface CallGradedPayload {
   timestamp: string;
 }
 
-const GUNNER_ENGINE_WEBHOOK_URL = "https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded";
+// Default webhook URL — used when tenant has no custom engineWebhookUrl in crmConfig
+const DEFAULT_ENGINE_WEBHOOK_URL = "https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded";
+
+/**
+ * Get the webhook URL for a given tenant.
+ * Returns tenant-specific URL from crmConfig.engineWebhookUrl, or the default.
+ * Returns null if the tenant explicitly has no webhook configured and is not the platform owner.
+ */
+async function getWebhookUrl(tenantId: number): Promise<string | null> {
+  try {
+    const { getTenantById, parseCrmConfig } = await import("./tenant");
+    const tenant = await getTenantById(tenantId);
+    if (!tenant) return DEFAULT_ENGINE_WEBHOOK_URL;
+    
+    const config = parseCrmConfig(tenant);
+    if (config.engineWebhookUrl) return config.engineWebhookUrl;
+    
+    // Only send to default URL for the platform owner's tenant (tenant 1)
+    // Other tenants don't have the Gunner Engine backend, so skip
+    if (tenantId === 1) return DEFAULT_ENGINE_WEBHOOK_URL;
+    
+    return null; // No webhook configured for this tenant
+  } catch {
+    return DEFAULT_ENGINE_WEBHOOK_URL;
+  }
+}
 
 /**
  * Attempt to resolve a GHL contact ID by searching for the phone number.
@@ -54,6 +79,13 @@ export async function sendCallGradedWebhook(
   callId: number
 ): Promise<boolean> {
   try {
+    // Resolve the webhook URL for this tenant
+    const webhookUrl = await getWebhookUrl(tenantId);
+    if (!webhookUrl) {
+      console.log(`[Gunner Engine Webhook] No webhook URL configured for tenant ${tenantId}, skipping`);
+      return true; // Not an error — just no webhook configured
+    }
+
     // If contactId is empty, attempt GHL contact lookup by phone
     if (!payload.contactId && payload.phone) {
       const resolvedId = await resolveGhlContactId(tenantId, payload.phone);
@@ -72,7 +104,7 @@ export async function sendCallGradedWebhook(
       }
     }
 
-    const response = await fetch(GUNNER_ENGINE_WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

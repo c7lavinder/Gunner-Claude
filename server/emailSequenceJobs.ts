@@ -184,7 +184,7 @@ export async function runEmailSequenceJobs(): Promise<{
       sql`${tenants.subscriptionStatus} IN ('active') OR ${tenants.subscriptionTier} = 'trial'`
     );
 
-  const baseUrl = process.env.VITE_OAUTH_PORTAL_URL?.replace('/oauth', '') || 'https://www.getgunner.ai';
+  const baseUrl = process.env.APP_URL || process.env.VITE_APP_URL || process.env.VITE_OAUTH_PORTAL_URL?.replace('/oauth', '') || 'https://www.getgunner.ai';
   const dashboardLink = `${baseUrl}/dashboard`;
 
   for (const tenant of activeTenants) {
@@ -338,7 +338,7 @@ export async function sendWelcomeSequenceEmail(tenantId: number): Promise<boolea
   const admin = await getTenantAdmin(tenantId);
   if (!admin?.email) return false;
 
-  const baseUrl = process.env.VITE_OAUTH_PORTAL_URL?.replace('/oauth', '') || 'https://www.getgunner.ai';
+  const baseUrl = process.env.APP_URL || process.env.VITE_APP_URL || process.env.VITE_OAUTH_PORTAL_URL?.replace('/oauth', '') || 'https://www.getgunner.ai';
   const dashboardLink = `${baseUrl}/dashboard`;
 
   const success = await sendSequenceDay0Welcome(admin.email, dashboardLink);

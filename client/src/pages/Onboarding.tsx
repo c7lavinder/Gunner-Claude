@@ -723,7 +723,7 @@ export default function Onboarding() {
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
-                  Start your 3-day free trial (cancel anytime)
+                  Start your 14-day free trial (cancel anytime)
                 </li>
                 <li className="flex items-center gap-2">
                   <Link2 className="h-4 w-4" />

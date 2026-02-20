@@ -29,8 +29,8 @@ export interface UserEmailContext {
   planType: string | null;
 }
 
-// Base URL for links in emails
-const APP_URL = "https://getgunner.ai";
+// Base URL for links in emails — configurable via env var
+const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://getgunner.ai";
 
 /**
  * Trial Period Emails (Days 0-3)

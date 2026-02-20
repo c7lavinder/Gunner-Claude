@@ -1,0 +1,1 @@
+ALTER TABLE `kpi_goals` MODIFY COLUMN `channel` varchar(100);

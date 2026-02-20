@@ -253,7 +253,7 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
     });
 
     // Send password reset email
-    const baseUrl = process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai';
+    const baseUrl = process.env.APP_URL || process.env.VITE_APP_URL || process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai';
     await sendPasswordResetEmail(email, token, baseUrl);
 
     console.log(`[PasswordReset] Token created for user ${user.id}, email: ${email}`);
@@ -319,7 +319,7 @@ export async function createEmailVerification(userId: number, email: string, nam
     });
 
     // Send verification email
-    const baseUrl = process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai';
+    const baseUrl = process.env.APP_URL || process.env.VITE_APP_URL || process.env.VITE_OAUTH_PORTAL_URL?.replace('/auth', '') || 'https://getgunner.ai';
     await sendEmailVerificationEmail(email, name, companyName, token, baseUrl);
 
     console.log(`[EmailVerification] Token created for user ${userId}, email: ${email}`);

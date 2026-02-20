@@ -351,6 +351,20 @@
       "when": 1771611926621,
       "tag": "0049_oval_hiroim",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "5",
+      "when": 1771626606836,
+      "tag": "0050_bitter_hardball",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "5",
+      "when": 1771626660629,
+      "tag": "0051_robust_weapon_omega",
+      "breakpoints": true
     }
   ]
 }

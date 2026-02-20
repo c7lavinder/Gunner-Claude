@@ -9,7 +9,23 @@ import { getDb } from "./db";
 import { webhookRetryQueue, calls, tenants } from "../drizzle/schema";
 import { eq, and, lte, sql } from "drizzle-orm";
 
-const GUNNER_ENGINE_WEBHOOK_URL = "https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded";
+// Default webhook URL — used when tenant has no custom engineWebhookUrl
+const DEFAULT_ENGINE_WEBHOOK_URL = "https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded";
+
+/**
+ * Get the webhook URL for a given tenant.
+ */
+async function getWebhookUrlForTenant(tenantId: number): Promise<string> {
+  try {
+    const { getTenantById, parseCrmConfig } = await import("./tenant");
+    const tenant = await getTenantById(tenantId);
+    if (!tenant) return DEFAULT_ENGINE_WEBHOOK_URL;
+    const config = parseCrmConfig(tenant);
+    return config.engineWebhookUrl || DEFAULT_ENGINE_WEBHOOK_URL;
+  } catch {
+    return DEFAULT_ENGINE_WEBHOOK_URL;
+  }
+}
 
 // Retry schedule in milliseconds
 const RETRY_DELAYS = [
@@ -69,7 +85,8 @@ async function retryWebhook(
   try {
     const payload = JSON.parse(queueItem.payload);
     
-    const response = await fetch(GUNNER_ENGINE_WEBHOOK_URL, {
+    const webhookUrl = await getWebhookUrlForTenant(queueItem.tenantId);
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

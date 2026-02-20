@@ -2495,3 +2495,19 @@
 
 ## BUG: Avg Score badge shows "25pt" instead of "25%"
 - [x] Change badge label to always use % suffix for all stat cards including Avg Score
+
+## Onboarding Audit Fixes
+- [x] Make pipeline stage classification configurable per tenant (replace hardcoded ACTIVE_DEAL_STAGES, FOLLOW_UP_STAGES, DEAD_STAGES)
+- [x] Fix hardcoded "Sales Process" pipeline lookup — use tenant's dispoPipelineName
+- [x] Make Gunner Engine webhook URL per-tenant or conditional
+- [x] Fix KPI module — remove hardcoded team member names (chris, daniel, kyle, esteban, steve)
+- [x] Remove hardcoded Google OAuth ID from isPlatformOwner
+- [x] Remove hardcoded PLATFORM_OWNER_OPEN_ID in adminRouter.ts
+- [x] Fix hardcoded URLs in email templates — use env vars
+- [x] Fix hardcoded logo URL in emailService.ts — use constant from env
+- [x] Fix hardcoded baseUrl in tenant.ts invite emails
+- [x] Fix hardcoded APP_URL in emailTemplates.ts
+- [x] Fix trial length display in onboarding UI — show 14-day (matches backend)
+- [x] Make campaign KPI market/channel and KPI goals channel dynamic (varchar instead of enum)
+- [x] Make KPI deals leadSource dynamic (varchar instead of enum)
+- [x] Write tests for all audit fixes (26 tests passing)

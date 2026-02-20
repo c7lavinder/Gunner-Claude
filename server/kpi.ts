@@ -143,8 +143,8 @@ export async function getCampaignKpis(periodId: number) {
 export async function upsertCampaignKpi(data: {
   tenantId: number;
   periodId: number;
-  market: "tennessee" | "global";
-  channel: "cold_calls" | "sms" | "forms" | "ppl" | "jv" | "ppc" | "postcards" | "referrals";
+  market: string;
+  channel: string;
   spent: number;
   volume: number;
   contacts: number;
@@ -244,11 +244,11 @@ export async function updateKpiDeal(id: number, data: Partial<{
   periodId: number;
   propertyAddress: string;
   inventoryStatus: "for_sale" | "assigned" | "funded";
-  location: "nashville" | "nash_sw" | "knoxville" | "chattanooga" | "global" | "nah";
+  location: string;
   leadSource: "cold_calls" | "sms" | "postcards" | "forms" | "ppl" | "ppc" | "jv" | "referrals";
-  lmName: "chris" | "daniel";
-  amName: "kyle";
-  dmName: "esteban" | "steve";
+  lmName: string;
+  amName: string;
+  dmName: string;
   revenue: number;
   assignmentFee: number;
   profit: number;
@@ -349,7 +349,7 @@ export async function upsertKpiGoal(data: {
   tenantId: number;
   periodId?: number;
   goalType: "campaign" | "team_member";
-  channel?: "cold_calls" | "sms" | "forms" | "ppl" | "jv" | "ppc" | "postcards" | "referrals" | "total";
+  channel?: string;
   teamMemberId?: number;
   metricName: string;
   targetValue: number;

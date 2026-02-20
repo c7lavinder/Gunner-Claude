@@ -6,8 +6,9 @@ import { outreachHistory } from "../drizzle/schema";
 // Initialize Resend client
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-// Email sender configuration
+// Email sender configuration — configurable via env var
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Gunner <noreply@getgunner.ai>';
+const EMAIL_LOGO_URL = process.env.EMAIL_LOGO_URL || 'https://www.getgunner.ai/gunner-logo.png';
 
 // Email templates for different notification types
 export type EmailType = 
@@ -208,7 +209,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <h1 style="color: #8B1A1A; font-size: 28px; margin: 0 0 16px;">Welcome to Gunner 🎯</h1>
@@ -239,7 +240,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
@@ -266,7 +267,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
@@ -297,7 +298,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
@@ -328,7 +329,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <h1 style="color: #8B1A1A; font-size: 28px; margin: 0 0 16px;">Welcome to Gunner — for real this time.</h1>
@@ -359,7 +360,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
@@ -395,7 +396,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
@@ -430,7 +431,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
@@ -465,7 +466,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey ${data.firstName},</p>
@@ -495,7 +496,7 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
             <div style="text-align: center; padding: 24px 0; border-bottom: 3px solid #8B1A1A;">
-              <img src="https://www.getgunner.ai/gunner-logo.png" alt="Gunner" style="height: 40px;">
+              <img src="${EMAIL_LOGO_URL}" alt="Gunner" style="height: 40px;">
             </div>
             <div style="padding: 32px 24px;">
               <div style="background: linear-gradient(135deg, #8B1A1A 0%, #6B1515 100%); border-radius: 8px; padding: 24px; margin: 0 0 24px; color: white; text-align: center;">
