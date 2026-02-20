@@ -717,13 +717,20 @@ export async function updateTask(
   }
   if (updates.completed !== undefined) body.completed = updates.completed;
 
-  await ghlFetch(
+  console.log(`[GHL] updateTask: PUT /contacts/${contactId}/tasks/${taskId} body=${JSON.stringify(body)}`);
+  
+  if (Object.keys(body).length === 0) {
+    throw new Error("No update fields to send to GHL. The update body is empty.");
+  }
+
+  const resp = await ghlFetch(
     creds,
     `/contacts/${contactId}/tasks/${taskId}`,
     "PUT",
     body
   );
 
+  console.log(`[GHL] updateTask response: ${JSON.stringify(resp)}`);
   return { success: true };
 }
 
@@ -1386,10 +1393,22 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         }
 
         const updates: { title?: string; body?: string; dueDate?: string; completed?: boolean } = {};
-        if (payload.newDueDate) updates.dueDate = payload.newDueDate;
+        // Map from LLM payload field names to updateTask parameter names
+        if (payload.dueDate) updates.dueDate = payload.dueDate;
+        if (payload.newDueDate) updates.dueDate = payload.newDueDate; // fallback alias
+        if (payload.description) updates.body = payload.description;
+        if (payload.newBody !== undefined) updates.body = payload.newBody; // fallback alias
         if (payload.newTitle) updates.title = payload.newTitle;
-        if (payload.newBody !== undefined) updates.body = payload.newBody;
-        if (payload.completed !== undefined) updates.completed = payload.completed;
+        // Handle taskStatus from LLM ("completed" string) → completed boolean
+        if (payload.taskStatus === "completed") updates.completed = true;
+        if (payload.completed !== undefined) updates.completed = payload.completed; // fallback alias
+        
+        // Validate that at least one update field is set
+        if (Object.keys(updates).length === 0) {
+          throw new Error("No update fields provided. Please specify what to change (due date, title, description, or status).");
+        }
+        
+        console.log(`[GHLActions] update_task: contactId=${contactId}, taskId=${taskId}, updates=${JSON.stringify(updates)}`);
 
         result = await updateTask(action.tenantId, contactId, taskId, updates);
         break;

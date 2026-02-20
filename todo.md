@@ -2462,3 +2462,9 @@
 - [x] Update AI Coach LLM prompt to recognize reschedule/cancel appointment commands
 - [x] Wire up frontend confirmation cards for appointment update/cancel
 - [x] Write vitest tests for update_appointment and cancel_appointment
+
+## BUG: update_task shows success but doesn't actually update in GHL
+- [x] Check server logs for update_task execution details
+- [x] Identify why the action reports success but tasks aren't updated — ROOT CAUSE: field name mismatch (payload.newDueDate vs payload.dueDate, payload.completed vs payload.taskStatus)
+- [x] Fix the root cause — mapped payload.dueDate, payload.description, payload.taskStatus to correct updateTask fields
+- [x] Add better error handling — empty body validation, detailed logging of updates being sent
