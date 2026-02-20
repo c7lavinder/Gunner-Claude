@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch } from "lucide-react";
+import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch, Copy, Webhook, AlertTriangle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -108,6 +108,8 @@ export default function Onboarding() {
   const [pipelines, setPipelines] = useState<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState("");
   const [stageMapping, setStageMapping] = useState<Record<string, string>>({});
+  // Stage classification: maps stage name (lowercase) to bucket
+  const [stageClassifications, setStageClassifications] = useState<Record<string, 'active' | 'follow_up' | 'dead' | 'unclassified'>>({});
   const [formData, setFormData] = useState({
     companyName: "",
     companySlug: "",
@@ -186,11 +188,24 @@ export default function Onboarding() {
           if (formData.industry) {
             crmConfig.industry = formData.industry;
           }
-          // Parse comma-separated stage classification
-          const parseStages = (val: string) => val.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-          const activeStages = parseStages(formData.activeStages);
-          const followUpStages = parseStages(formData.followUpStages);
-          const deadStages = parseStages(formData.deadStages);
+          // Derive stage classification from interactive map or free-text fallback
+          const hasInteractiveClassifications = Object.keys(stageClassifications).length > 0;
+          let activeStages: string[] = [];
+          let followUpStages: string[] = [];
+          let deadStages: string[] = [];
+          if (hasInteractiveClassifications) {
+            for (const [stageName, bucket] of Object.entries(stageClassifications)) {
+              if (bucket === 'active') activeStages.push(stageName);
+              else if (bucket === 'follow_up') followUpStages.push(stageName);
+              else if (bucket === 'dead') deadStages.push(stageName);
+            }
+          } else {
+            // Fallback: parse comma-separated text inputs
+            const parseStages = (val: string) => val.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+            activeStages = parseStages(formData.activeStages);
+            followUpStages = parseStages(formData.followUpStages);
+            deadStages = parseStages(formData.deadStages);
+          }
           if (activeStages.length > 0 || followUpStages.length > 0 || deadStages.length > 0) {
             crmConfig.stageClassification = { activeStages, followUpStages, deadStages };
           }
@@ -487,6 +502,56 @@ export default function Onboarding() {
                     </div>
                   )}
                 </div>
+
+                {/* Webhook Setup Instruction Card */}
+                {connectionStatus.success && (
+                  <div className="border-t pt-4 mt-4">
+                    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4">
+                      <h4 className="font-medium mb-2 flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                        <Webhook className="h-4 w-4" />
+                        Required: Set Up GHL Webhook
+                      </h4>
+                      <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
+                        For Gunner to receive call data automatically, you need to create a webhook in your GHL workflow that fires when a call is completed.
+                      </p>
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs font-medium text-amber-800 dark:text-amber-300">Webhook URL (copy this):</Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <code className="flex-1 text-xs bg-white dark:bg-black/30 border border-amber-200 dark:border-amber-700 rounded px-3 py-2 font-mono break-all">
+                              {`${window.location.origin}/api/webhook/ghl`}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/api/webhook/ghl`);
+                                toast.success("Webhook URL copied!");
+                              }}
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-amber-700 dark:text-amber-400 space-y-1.5">
+                          <p className="font-medium">Setup steps in GoHighLevel:</p>
+                          <ol className="list-decimal list-inside space-y-1 ml-1">
+                            <li>Go to <strong>Automation</strong> → <strong>Workflows</strong></li>
+                            <li>Create a new workflow (or edit an existing one)</li>
+                            <li>Add a trigger: <strong>"Call Status Changed"</strong> → filter for <strong>"Completed"</strong></li>
+                            <li>Add an action: <strong>"Webhook"</strong> → paste the URL above</li>
+                            <li>Set method to <strong>POST</strong> and save the workflow</li>
+                          </ol>
+                        </div>
+                        <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-500 bg-amber-100 dark:bg-amber-900/30 rounded p-2">
+                          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          <span>Without this webhook, Gunner won't receive call data from GHL. You can also set this up later from Settings → Integrations.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="border-t pt-4 mt-4">
                   <h4 className="font-medium mb-3 flex items-center gap-2"><GitBranch className="h-4 w-4" /> Pipeline Mapping</h4>
@@ -588,43 +653,105 @@ export default function Onboarding() {
                 <div className="border-t pt-4 mt-4">
                   <h4 className="font-medium mb-3 flex items-center gap-2">Pipeline Stage Classification</h4>
                   <p className="text-xs text-muted-foreground mb-3">
-                    Classify your pipeline stages so Gunner can detect opportunities. Enter stage names separated by commas.
+                    Classify your pipeline stages so Gunner can detect opportunities. Click each stage to cycle through categories.
                   </p>
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-sm flex items-center gap-2">
-                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
-                        Active Deal Stages
-                      </Label>
-                      <Input
-                        placeholder="e.g. warm leads, pending apt, made offer, counter offer"
-                        value={formData.activeStages}
-                        onChange={(e) => setFormData({ ...formData, activeStages: e.target.value })}
-                      />
+                  
+                  {connectionStatus.success && pipelines.length > 0 ? (() => {
+                    // Get all stages from ALL pipelines (not just selected)
+                    const allStages = pipelines.flatMap(p => p.stages);
+                    if (allStages.length === 0) return null;
+                    
+                    const bucketColors = {
+                      active: { bg: 'bg-green-100 dark:bg-green-900/40', border: 'border-green-400', text: 'text-green-700 dark:text-green-300', label: 'Active Deal' },
+                      follow_up: { bg: 'bg-yellow-100 dark:bg-yellow-900/40', border: 'border-yellow-400', text: 'text-yellow-700 dark:text-yellow-300', label: 'Follow-Up' },
+                      dead: { bg: 'bg-red-100 dark:bg-red-900/40', border: 'border-red-400', text: 'text-red-700 dark:text-red-300', label: 'Dead / Closed' },
+                      unclassified: { bg: 'bg-muted', border: 'border-border', text: 'text-muted-foreground', label: 'Unclassified' },
+                    };
+                    const cycleOrder: Array<'active' | 'follow_up' | 'dead' | 'unclassified'> = ['unclassified', 'active', 'follow_up', 'dead'];
+                    
+                    const handleStageClick = (stageName: string) => {
+                      const key = stageName.toLowerCase();
+                      const current = stageClassifications[key] || 'unclassified';
+                      const currentIdx = cycleOrder.indexOf(current);
+                      const next = cycleOrder[(currentIdx + 1) % cycleOrder.length];
+                      setStageClassifications(prev => ({ ...prev, [key]: next }));
+                    };
+                    
+                    // Count per bucket
+                    const counts = { active: 0, follow_up: 0, dead: 0, unclassified: 0 };
+                    allStages.forEach(s => {
+                      const bucket = stageClassifications[s.name.toLowerCase()] || 'unclassified';
+                      counts[bucket]++;
+                    });
+                    
+                    return (
+                      <div className="space-y-3">
+                        {/* Legend */}
+                        <div className="flex flex-wrap gap-3 text-xs">
+                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Active Deal ({counts.active})</span>
+                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> Follow-Up ({counts.follow_up})</span>
+                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Dead ({counts.dead})</span>
+                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/40" /> Unclassified ({counts.unclassified})</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Click a stage to cycle: Unclassified → Active → Follow-Up → Dead</p>
+                        
+                        {/* Stage chips */}
+                        <div className="flex flex-wrap gap-2">
+                          {allStages.map((stage) => {
+                            const bucket = stageClassifications[stage.name.toLowerCase()] || 'unclassified';
+                            const colors = bucketColors[bucket];
+                            return (
+                              <button
+                                key={stage.id}
+                                type="button"
+                                onClick={() => handleStageClick(stage.name)}
+                                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all cursor-pointer hover:scale-105 ${colors.bg} ${colors.border} ${colors.text}`}
+                              >
+                                {stage.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    /* Fallback: free-text inputs when no pipelines loaded */
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm flex items-center gap-2">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+                          Active Deal Stages
+                        </Label>
+                        <Input
+                          placeholder="e.g. warm leads, pending apt, made offer, counter offer"
+                          value={formData.activeStages}
+                          onChange={(e) => setFormData({ ...formData, activeStages: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm flex items-center gap-2">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500" />
+                          Follow-Up Stages
+                        </Label>
+                        <Input
+                          placeholder="e.g. follow up, callback, nurture"
+                          value={formData.followUpStages}
+                          onChange={(e) => setFormData({ ...formData, followUpStages: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm flex items-center gap-2">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />
+                          Dead / Closed Stages
+                        </Label>
+                        <Input
+                          placeholder="e.g. dead, not interested, do not contact, wrong number"
+                          value={formData.deadStages}
+                          onChange={(e) => setFormData({ ...formData, deadStages: e.target.value })}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-sm flex items-center gap-2">
-                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500" />
-                        Follow-Up Stages
-                      </Label>
-                      <Input
-                        placeholder="e.g. follow up, callback, nurture"
-                        value={formData.followUpStages}
-                        onChange={(e) => setFormData({ ...formData, followUpStages: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-sm flex items-center gap-2">
-                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />
-                        Dead / Closed Stages
-                      </Label>
-                      <Input
-                        placeholder="e.g. dead, not interested, do not contact, wrong number"
-                        value={formData.deadStages}
-                        onChange={(e) => setFormData({ ...formData, deadStages: e.target.value })}
-                      />
-                    </div>
-                  </div>
+                  )}
                   <p className="text-xs text-muted-foreground mt-2">You can update these later in Settings → Integrations</p>
                 </div>
 

@@ -2528,3 +2528,10 @@
 - [x] Remove all manuscdn logo URLs from 8 frontend files — replaced with CloudFront S3 URLs
 - [x] Remove 'Login with Manus' text from ManusDialog
 - [x] Upload logos to S3 for neutral domain (d2xsxph8kpxj0f.cloudfront.net)
+
+## Onboarding UX: Auto-fetch GHL Stages + Webhook Setup Card
+- [x] Auto-fetch GHL pipeline stages after connection test succeeds (already wired up)
+- [x] Replace free-text stage classification with click-to-classify stage chips (Active / Follow-Up / Dead / Unclassified)
+- [x] Add GHL webhook setup instruction card to onboarding step 2 with copyable webhook URL and step-by-step GHL instructions
+- [x] Add GHL webhook URL display + copy button to Settings → Integrations → Advanced Configuration
+- [x] Write tests for new features (19 tests passing)

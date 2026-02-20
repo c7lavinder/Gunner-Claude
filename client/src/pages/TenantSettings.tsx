@@ -37,7 +37,9 @@ import {
   Loader2,
   Phone,
   Home,
-  TestTube
+  TestTube,
+  Webhook,
+  Copy
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -1979,7 +1981,35 @@ export default function TenantSettings() {
                 </div>
               </div>
 
-              {/* Webhook URL */}
+              {/* GHL Inbound Webhook URL */}
+              <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-2">
+                <Label className="text-sm font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                  <Webhook className="h-4 w-4" />
+                  GHL Webhook URL
+                </Label>
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Add this URL to your GHL workflow to send call data to Gunner automatically.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-white dark:bg-black/30 border border-amber-200 dark:border-amber-700 rounded px-3 py-2 font-mono break-all">
+                    {`${window.location.origin}/api/webhook/ghl`}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/api/webhook/ghl`);
+                      toast.success("Webhook URL copied!");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-500">GHL Workflow: Trigger on "Call Status Changed" → "Completed" → Webhook POST to this URL</p>
+              </div>
+
+              {/* External Webhook URL */}
               <div className="space-y-2">
                 <Label htmlFor="engineWebhookUrl">External Webhook URL (Optional)</Label>
                 <Input
