@@ -366,6 +366,7 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   update_task: "Update Task",
   add_to_workflow: "Add to Workflow",
   remove_from_workflow: "Remove from Workflow",
+  create_appointment: "Create Appointment",
 };
 
 const ACTION_ICONS: Record<string, string> = {
@@ -381,6 +382,7 @@ const ACTION_ICONS: Record<string, string> = {
   update_task: "🔄",
   add_to_workflow: "⚡",
   remove_from_workflow: "🚫",
+  create_appointment: "📅",
 };
 
 function AICoachQA() {
@@ -1079,6 +1081,26 @@ function AICoachQA() {
                               )}
                               {msg.payload.taskStatus && (
                                 <p><span className="text-amber-600 dark:text-amber-400">Status:</span> <span className="font-medium text-amber-700 dark:text-amber-300">{msg.payload.taskStatus}</span></p>
+                              )}
+                            </div>
+                          )}
+                          {/* Show appointment details */}
+                          {msg.actionType === "create_appointment" && msg.payload && (
+                            <div className="mt-1 text-xs bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 rounded-md px-2 py-1 space-y-0.5">
+                              {msg.payload.title && (
+                                <p><span className="text-teal-600 dark:text-teal-400">Title:</span> <span className="font-medium text-teal-700 dark:text-teal-300">{msg.payload.title}</span></p>
+                              )}
+                              {msg.payload.startTime && (
+                                <p><span className="text-teal-600 dark:text-teal-400">Date/Time:</span> <span className="font-medium text-teal-700 dark:text-teal-300">{new Date(msg.payload.startTime).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></p>
+                              )}
+                              {msg.payload.endTime && msg.payload.startTime && (
+                                <p><span className="text-teal-600 dark:text-teal-400">Duration:</span> <span className="font-medium text-teal-700 dark:text-teal-300">{Math.round((new Date(msg.payload.endTime).getTime() - new Date(msg.payload.startTime).getTime()) / 60000)} min</span></p>
+                              )}
+                              {msg.payload.calendarName && (
+                                <p><span className="text-teal-600 dark:text-teal-400">Calendar:</span> <span className="font-medium text-teal-700 dark:text-teal-300">{msg.payload.calendarName}</span></p>
+                              )}
+                              {msg.payload.notes && (
+                                <p><span className="text-teal-600 dark:text-teal-400">Notes:</span> <span className="font-medium text-teal-700 dark:text-teal-300">{msg.payload.notes}</span></p>
                               )}
                             </div>
                           )}

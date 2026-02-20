@@ -337,6 +337,13 @@
       "when": 1771609233033,
       "tag": "0047_wealthy_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "5",
+      "when": 1771611357329,
+      "tag": "0048_demonic_ogun",
+      "breakpoints": true
     }
   ]
 }

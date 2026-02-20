@@ -1249,7 +1249,7 @@ export const coachActionLog = mysqlTable("coach_action_log", {
   actionType: mysqlEnum("actionType", [
     "add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage",
     "send_sms", "create_task", "add_tag", "remove_tag", "update_field",
-    "add_to_workflow", "remove_from_workflow", "update_task"
+    "add_to_workflow", "remove_from_workflow", "update_task", "create_appointment"
   ]).notNull(),
   requestText: text("requestText").notNull(),
   targetContactId: varchar("targetContactId", { length: 255 }),

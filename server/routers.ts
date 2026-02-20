@@ -4483,6 +4483,7 @@ Available action types:
 8. update_task - Update an existing task (change due date, title, description, or status)
 9. add_to_workflow - Add a contact to a GHL workflow/automation
 10. remove_from_workflow - Remove a contact from a GHL workflow/automation
+11. create_appointment - Create a calendar appointment/event for a contact
 
 MULTI-ACTION SUPPORT: A user may request MULTIPLE actions in a single message (e.g., "Add a note to Jose Ruiz, then create a task for 3 months from now, then move it to the 4 month stage"). You MUST detect ALL actions and return each one as a separate item in the "actions" array. Parse each action independently with its own contactName, params, and summary.
 
@@ -4516,6 +4517,11 @@ IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions co
 - "Remove Jane from the drip campaign" → remove_from_workflow
 - "Put this contact in the nurture sequence" → add_to_workflow
 - "Take him out of the cold calling workflow" → remove_from_workflow
+- "Schedule an appointment with John for next Tuesday at 2pm" → create_appointment
+- "Add a walkthrough for 123 Main St on Friday at 10am" → create_appointment
+- "Book a meeting with the seller for tomorrow morning" → create_appointment
+- "Set up an appointment to see the property next week" → create_appointment
+- "Put John on the calendar for Thursday at 3" → create_appointment
 - "Can you create summary for the last call with Jackson James and add that summary as a note?" → add_note (use the RECENT CALL DATA to write the full summary as the noteBody)
 - "Summarize the call with [Name] and save it as a note" → add_note (write the complete summary in noteBody)
 - "Write up what happened on the last call and add it to their notes" → add_note
@@ -4557,6 +4563,7 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
 - For update_task: Set params.title to a keyword describing which task to update (e.g. "pending", "follow up", "call back"). Set params.dueDate to the new due date in ISO 8601 format if the user wants to change the due date. Set params.description to the new description if the user wants to change it. The system will search the contact's existing tasks and find the best match. If the user says "mark as completed", set params.taskStatus to "completed".
 - For add_to_workflow: Set params.workflowName to the workflow name the user mentioned (e.g. "follow-up", "drip campaign", "nurture sequence"). The system will fuzzy-match to the actual GHL workflow.
 - For remove_from_workflow: Set params.workflowName to the workflow name to remove from. The system will fuzzy-match to the actual GHL workflow.
+- For create_appointment: Set params.title to a descriptive appointment title (e.g. "Property Walkthrough - 123 Main St" or "Follow-up Meeting with John"). Set params.startTime to the appointment date/time in ISO 8601 format (YYYY-MM-DDTHH:mm:ssZ). Today is ${new Date().toISOString().split('T')[0]}. If the user says "next Tuesday at 2pm", calculate the actual date. If no time is specified, default to 10:00 AM. Set params.endTime to the end time (default 1 hour after start). Set params.calendarName to the calendar name if the user specifies one (e.g. "appointments calendar", "walkthrough calendar"). If no calendar is specified, leave it empty and the system will use the default calendar. Set params.notes to any additional details about the appointment. Set params.selectedTimezone to the user's timezone if mentioned (default: America/New_York).
 
 CRITICAL: You have REAL call data below. You MUST use it to write specific, accurate content. Reference actual property addresses, discussion topics, outcomes, and details from the transcripts. NEVER generate vague or placeholder text like "regarding his property" or "Please provide the summary" or "Insert details here".
 ${callContext}
@@ -4609,8 +4616,14 @@ ${instructionContext}`
                             stageId: { type: "string" },
                             workflowName: { type: "string" },
                             taskStatus: { type: "string" },
+                            calendarName: { type: "string" },
+                            calendarId: { type: "string" },
+                            startTime: { type: "string" },
+                            endTime: { type: "string" },
+                            notes: { type: "string" },
+                            selectedTimezone: { type: "string" },
                           },
-                          required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus"],
+                          required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone"],
                           additionalProperties: false
                         },
                         assigneeName: { type: "string" },
@@ -4635,7 +4648,7 @@ ${instructionContext}`
         console.log(`[parseIntent] Call context available: ${callContext.length > 0 ? 'yes (' + callContext.length + ' chars)' : 'no'}`);
         if (content && typeof content === "string") {
           const parsed = JSON.parse(content);
-          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow"];
+          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow", "create_appointment"];
           // Return the actions array, or wrap legacy single-action format for backwards compatibility
           if (parsed.actions && Array.isArray(parsed.actions)) {
             // Filter out any actions with missing, empty, or invalid actionType
@@ -4672,7 +4685,7 @@ ${instructionContext}`
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
         // Validate actionType server-side with a friendly error
-        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow"];
+        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow", "create_appointment"];
         if (!input.actionType || !VALID_ACTION_TYPES.includes(input.actionType)) {
           throw new TRPCError({
             code: "BAD_REQUEST",

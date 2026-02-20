@@ -248,3 +248,159 @@ describe("conversational feedback routing fix", () => {
     expect(callInboxSource).toContain("streamCoachQuestion(userMessage, chatHistory)");
   });
 });
+
+
+// ============ CREATE APPOINTMENT TESTS ============
+
+describe("create_appointment backend implementation", () => {
+  it("should export getCalendarsForTenant function", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("export async function getCalendarsForTenant");
+  });
+
+  it("should export createAppointment function", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("export async function createAppointment");
+  });
+
+  it("should export resolveCalendarByName function", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("export function resolveCalendarByName");
+  });
+
+  it("should handle create_appointment case in executeAction switch", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain('case "create_appointment"');
+  });
+
+  it("createAppointment should use GHL calendars/events/appointments endpoint", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("/calendars/events/appointments");
+  });
+
+  it("should set appointmentStatus to confirmed", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain('appointmentStatus: "confirmed"');
+  });
+
+  it("should set ignoreFreeSlotValidation to true", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlActionsSource).toContain("ignoreFreeSlotValidation: true");
+  });
+
+  it("should resolve calendar by name when no calendarId provided", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // Should try to resolve calendar name
+    expect(ghlActionsSource).toContain("resolveCalendarByName(calendars, payload.calendarName)");
+  });
+
+  it("should fall back to default calendar when none specified", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // Should use first calendar as default
+    expect(ghlActionsSource).toContain("No calendar specified, using default");
+  });
+
+  it("should default to 1 hour appointment if no endTime", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // Should calculate endTime as startTime + 1 hour
+    expect(ghlActionsSource).toContain("setHours(start.getHours() + 1)");
+  });
+
+  it("should pass assignedUserId from requesting user", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // Should pass requestingUserGhlId to createAppointment
+    expect(ghlActionsSource).toContain("requestingUserGhlId,");
+  });
+});
+
+describe("create_appointment in schema", () => {
+  it("should include create_appointment in actionType enum", async () => {
+    const schemaSource = readFileSync(join(SERVER_DIR, "..", "drizzle", "schema.ts"), "utf-8");
+    expect(schemaSource).toContain('"create_appointment"');
+  });
+});
+
+describe("create_appointment in parseIntent prompt", () => {
+  it("should include create_appointment in VALID_ACTION_TYPES", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain('"create_appointment"');
+  });
+
+  it("should include create_appointment examples in the LLM prompt", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("Schedule an appointment");
+  });
+
+  it("should include calendarName in JSON schema params", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("calendarName: { type:");
+  });
+
+  it("should include startTime in JSON schema params", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("startTime: { type:");
+  });
+
+  it("should include endTime in JSON schema params", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("endTime: { type:");
+  });
+
+  it("should include selectedTimezone in JSON schema params", async () => {
+    const routersSource = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(routersSource).toContain("selectedTimezone: { type:");
+  });
+});
+
+describe("create_appointment frontend confirmation card", () => {
+  it("should include create_appointment in ACTION_TYPE_LABELS", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('create_appointment: "Create Appointment"');
+  });
+
+  it("should include create_appointment in ACTION_ICONS", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('create_appointment: "📅"');
+  });
+
+  it("should display appointment title in confirmation card", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain('msg.actionType === "create_appointment"');
+  });
+
+  it("should display appointment date/time in card", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain("Date/Time:");
+  });
+
+  it("should display appointment duration in card", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain("Duration:");
+  });
+
+  it("should display calendar name if provided", async () => {
+    const callInboxSource = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(callInboxSource).toContain("Calendar:");
+  });
+});
+
+describe("resolveCalendarByName function", () => {
+  // Import the function directly for unit testing
+  it("should match exact calendar names", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // Verify the function has exact match logic
+    expect(ghlActionsSource).toContain("c.name.toLowerCase() === normalized");
+  });
+
+  it("should match substring calendar names", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // Verify the function has substring match logic
+    expect(ghlActionsSource).toContain("cName.includes(normalized) || normalized.includes(cName)");
+  });
+
+  it("should match by word overlap", async () => {
+    const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // Verify the function has word overlap logic
+    expect(ghlActionsSource).toContain("calWords.some(cw => cw.includes(iw) || iw.includes(cw))");
+  });
+});

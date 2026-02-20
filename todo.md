@@ -2444,3 +2444,12 @@
 ## AI Coach: SMS Phone Number Fix
 - [x] Investigate GHL API fromNumber parameter for explicit phone number routing — GHL uses userId parameter to route from user's assigned number; no separate fromNumber param found
 - [x] Ensure SMS sends from the requesting user's actual phone line, not the contact's assigned user — code verified correct; GHL may override based on conversation thread
+
+## AI Coach: Create Appointment / Add to Calendar
+- [x] Research GHL Calendar/Appointments API endpoints
+- [x] Add create_appointment action type to schema enum
+- [x] Implement GHL API: list calendars, create appointment/event
+- [x] Add create_appointment case to executeAction switch
+- [x] Update AI Coach LLM prompt to recognize calendar/appointment commands
+- [x] Wire up frontend confirmation card for appointment details (date, time, calendar, title)
+- [x] Write vitest tests for create_appointment

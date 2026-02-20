@@ -888,6 +888,118 @@ export function resolveWorkflowByName(
   return null;
 }
 
+// ============ CALENDAR / APPOINTMENT FUNCTIONS ============
+
+/**
+ * Get all calendars for a tenant's GHL location.
+ */
+export async function getCalendarsForTenant(
+  tenantId: number
+): Promise<Array<{ id: string; name: string; description?: string }>> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return [];
+
+  try {
+    const data = await ghlFetch(
+      creds,
+      `/calendars/?locationId=${creds.locationId}`,
+      "GET"
+    );
+    return (data.calendars || []).map((c: any) => ({
+      id: c.id,
+      name: c.name || "Unnamed Calendar",
+      description: c.description || "",
+    }));
+  } catch (error) {
+    console.error("[GHLActions] Calendar fetch error:", error);
+    return [];
+  }
+}
+
+/**
+ * Fuzzy-match a calendar name to a calendar ID.
+ * Similar to workflow resolution.
+ */
+export function resolveCalendarByName(
+  calendars: Array<{ id: string; name: string }>,
+  calendarName: string
+): { calendarId: string; calendarName: string } | null {
+  const normalized = calendarName.toLowerCase().trim();
+
+  // Pass 1: Exact match
+  const exact = calendars.find(c => c.name.toLowerCase() === normalized);
+  if (exact) return { calendarId: exact.id, calendarName: exact.name };
+
+  // Pass 2: Substring match (either direction)
+  const sub = calendars.find(c => {
+    const cName = c.name.toLowerCase();
+    return cName.includes(normalized) || normalized.includes(cName);
+  });
+  if (sub) return { calendarId: sub.id, calendarName: sub.name };
+
+  // Pass 3: Word overlap
+  const inputWords = normalized.split(/\s+/).filter(w => w.length > 2 && !['the', 'a', 'an', 'to', 'for', 'and'].includes(w));
+  let bestMatch: typeof calendars[0] | null = null;
+  let bestScore = 0;
+  for (const cal of calendars) {
+    const calWords = cal.name.toLowerCase().split(/\s+/);
+    const overlap = inputWords.filter(iw => calWords.some(cw => cw.includes(iw) || iw.includes(cw))).length;
+    if (overlap > bestScore) {
+      bestScore = overlap;
+      bestMatch = cal;
+    }
+  }
+  if (bestMatch && bestScore > 0 && bestScore >= inputWords.length * 0.5) {
+    return { calendarId: bestMatch.id, calendarName: bestMatch.name };
+  }
+
+  return null;
+}
+
+/**
+ * Create an appointment on a GHL calendar for a contact.
+ */
+export async function createAppointment(
+  tenantId: number,
+  calendarId: string,
+  contactId: string,
+  startTime: string,
+  endTime: string,
+  title: string,
+  notes?: string,
+  assignedUserId?: string,
+  selectedTimezone?: string
+): Promise<{ success: boolean; appointmentId?: string }> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) throw new Error("No GHL credentials configured");
+
+  const body: any = {
+    calendarId,
+    locationId: creds.locationId,
+    contactId,
+    startTime,
+    endTime,
+    title,
+    appointmentStatus: "confirmed",
+    ignoreFreeSlotValidation: true,
+  };
+
+  if (notes) body.notes = notes;
+  if (assignedUserId) body.assignedUserId = assignedUserId;
+  if (selectedTimezone) body.selectedTimezone = selectedTimezone;
+
+  console.log(`[createAppointment] Creating appointment on calendar ${calendarId} for contact ${contactId}: "${title}" at ${startTime}`);
+
+  const data = await ghlFetch(
+    creds,
+    `/calendars/events/appointments`,
+    "POST",
+    body
+  );
+
+  return { success: true, appointmentId: data?.id || data?.event?.id || data?.appointment?.id };
+}
+
 // ============ ACTION LOG HELPERS ============
 
 export async function createActionLog(params: {
@@ -1135,6 +1247,61 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         if (!workflowId) throw new Error("No workflow specified. Please provide a workflow name.");
         
         result = await removeContactFromWorkflow(action.tenantId, contactId, workflowId);
+        break;
+      }
+      case "create_appointment": {
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        
+        // Resolve calendar by name if no calendarId provided
+        let calendarId = payload.calendarId;
+        if (!calendarId && payload.calendarName) {
+          const calendars = await getCalendarsForTenant(action.tenantId);
+          const resolved = resolveCalendarByName(calendars, payload.calendarName);
+          if (!resolved) {
+            // If only one calendar exists, use it as default
+            if (calendars.length === 1) {
+              calendarId = calendars[0].id;
+              console.log(`[GHLActions] Only one calendar found, using: "${calendars[0].name}" (${calendarId})`);
+            } else {
+              throw new Error(`Could not find a calendar matching "${payload.calendarName}". Available calendars: ${calendars.map(c => c.name).join(", ")}`);
+            }
+          } else {
+            calendarId = resolved.calendarId;
+            console.log(`[GHLActions] Resolved calendar: "${resolved.calendarName}" (${calendarId})`);
+          }
+        }
+        
+        // If still no calendarId, try to use the first/default calendar
+        if (!calendarId) {
+          const calendars = await getCalendarsForTenant(action.tenantId);
+          if (calendars.length === 0) throw new Error("No calendars found in your GHL account. Please create a calendar first.");
+          calendarId = calendars[0].id;
+          console.log(`[GHLActions] No calendar specified, using default: "${calendars[0].name}" (${calendarId})`);
+        }
+        
+        if (!payload.startTime) throw new Error("No appointment time specified. Please provide a date and time.");
+        
+        // Calculate endTime if not provided (default 1 hour)
+        let endTime = payload.endTime;
+        if (!endTime) {
+          const start = new Date(payload.startTime);
+          start.setHours(start.getHours() + 1);
+          endTime = start.toISOString();
+        }
+        
+        const appointmentTitle = payload.title || `Appointment with ${action.targetContactName || 'Contact'}`;
+        
+        result = await createAppointment(
+          action.tenantId,
+          calendarId,
+          contactId,
+          payload.startTime,
+          endTime,
+          appointmentTitle,
+          payload.notes || payload.description,
+          requestingUserGhlId,
+          payload.selectedTimezone || "America/New_York"
+        );
         break;
       }
       default:
