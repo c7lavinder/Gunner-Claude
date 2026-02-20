@@ -2479,3 +2479,7 @@
 - [x] Check if GHL needs the actual phone number instead of userId — YES, `fromNumber` explicitly controls sender
 - [x] Look into GHL user phone number lookup — added getUserPhoneNumber() that queries /phone-system/numbers/location/:locationId and matches by userId
 - [x] Updated sendSms to auto-resolve fromNumber from user's GHL phone assignment
+
+## BUG: "check of the task for sue ashburn for today" not recognized as update_task
+- [x] Fix parseIntent prompt to handle typos like "check of" (for "check off") and variations like "check off task for [contact] for today"
+- [x] Add more example phrasings for task completion in the LLM prompt (check off, check of, complete, finish, done with, close out, mark as done)
