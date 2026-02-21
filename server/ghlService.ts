@@ -678,17 +678,30 @@ async function retryStuckCalls(): Promise<void> {
     for (const tenant of allTenants) {
       // Get all non-completed calls for this tenant (high limit to catch all stuck ones)
       const allCalls = await getCalls({ tenantId: tenant.id, limit: 500 });
-      const stuckCalls = allCalls.filter((call: any) =>
+      // Catch calls stuck in processing states (transcribing/classifying/grading) for >1 hour
+      const stuckProcessing = allCalls.filter((call: any) =>
         (call.status === 'transcribing' || call.status === 'classifying' || call.status === 'grading') &&
         call.updatedAt && new Date(call.updatedAt) < oneHourAgo
       );
 
+      // Also catch calls stuck at 'pending' for >1 hour — these were never picked up
+      const stuckPending = allCalls.filter((call: any) =>
+        call.status === 'pending' &&
+        call.recordingUrl && // Must have a recording to process
+        call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+      );
+
+      const stuckCalls = [...stuckProcessing, ...stuckPending];
+
       for (const call of stuckCalls) {
-        console.log(`[StuckCallRetry] Resetting stuck call ${call.id} (${call.contactName}, status: ${call.status}, updated: ${call.updatedAt})`);
-        await updateCall(call.id, {
-          status: 'pending',
-          classificationReason: `Auto-reset from stuck '${call.status}' state — retrying processing`,
-        });
+        const isPending = call.status === 'pending';
+        console.log(`[StuckCallRetry] ${isPending ? 'Processing missed' : 'Resetting stuck'} call ${call.id} (${call.contactName}, status: ${call.status}, updated: ${call.updatedAt})`);
+        if (!isPending) {
+          await updateCall(call.id, {
+            status: 'pending',
+            classificationReason: `Auto-reset from stuck '${call.status}' state — retrying processing`,
+          });
+        }
         callProcessingQueue.add(() => processCall(call.id)).catch((err: any) => {
           console.error(`[StuckCallRetry] Error reprocessing call ${call.id}:`, err);
         });

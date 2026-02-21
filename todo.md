@@ -2574,3 +2574,14 @@
 - [x] Build correction pattern monitoring — detect recurring correction themes across team members
 - [x] Surface correction patterns to admin (daily notification + API endpoint at feedback.patterns)
 - [x] Write vitest tests for monitoring feature (41 tests passing)
+
+## Stuck Queued Calls + Admin UI for Stuck Call Management
+- [x] Investigate and retry the 2 stuck queued calls (Call #2370005 Daniel→Morgan, Call #2400012 Chris→Lorrie — both stuck at pending, never picked up)
+- [x] Fix retryStuckCalls and resetStuck to also catch pending calls stuck >1 hour
+- [x] Add listStuck query and retryCall mutation endpoints
+- [x] Remove date filter from review query so stuck calls always show regardless of date range
+- [x] Add admin UI section to view stuck/queued calls with amber "Stuck" badges and "never picked up" labels
+- [x] Add individual "Retry" button for each stuck call in Needs Review tab
+- [x] Add "Retry All Stuck" button in stuck calls warning banner
+- [x] Make Queued card on dashboard clickable to navigate to Call History review tab
+- [x] Write vitest tests for stuck call management (16 tests passing)

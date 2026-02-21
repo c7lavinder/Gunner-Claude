@@ -1,0 +1,38 @@
+{
+  "query": "SELECT id, status, duration, contactName, contactPhone, teamMemberName, callType, classification, callSource, createdAt, updatedAt, tenantId FROM calls WHERE status NOT IN ('completed', 'skipped', 'failed') ORDER BY createdAt ASC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, status, duration, contactName, contactPhone, teamMemberName, callType, classification, callSource, createdAt, updatedAt, tenantId FROM calls WHERE status NOT IN ('completed', 'skipped', 'failed') ORDER BY createdAt ASC LIMIT 10;",
+  "rows": [
+    {
+      "id": "2370005",
+      "status": "pending",
+      "duration": "226",
+      "contactName": "Morgan Shoffner",
+      "contactPhone": "+16625448783",
+      "teamMemberName": "Daniel Lozano",
+      "callType": "qualification",
+      "classification": "pending",
+      "callSource": "ghl",
+      "createdAt": "2026-02-19 18:18:18",
+      "updatedAt": "2026-02-19 18:18:18",
+      "tenantId": "1"
+    },
+    {
+      "id": "2400012",
+      "status": "pending",
+      "duration": "117",
+      "contactName": "Lorrie Chaney",
+      "contactPhone": "+14232233725",
+      "teamMemberName": "Chris Segura",
+      "callType": "qualification",
+      "classification": "pending",
+      "callSource": "ghl",
+      "createdAt": "2026-02-19 21:09:27",
+      "updatedAt": "2026-02-19 21:09:27",
+      "tenantId": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tstatus\tduration\tcontactName\tcontactPhone\tteamMemberName\tcallType\tclassification\tcallSource\tcreatedAt\tupdatedAt\ttenantId\n2370005\tpending\t226\tMorgan Shoffner\t+16625448783\tDaniel Lozano\tqualification\tpending\tghl\t2026-02-19 18:18:18\t2026-02-19 18:18:18\t1\n2400012\tpending\t117\tLorrie Chaney\t+14232233725\tChris Segura\tqualification\tpending\tghl\t2026-02-19 21:09:27\t2026-02-19 21:09:27\t1\n",
+  "stderr": "",
+  "execution_time_ms": 371
+}

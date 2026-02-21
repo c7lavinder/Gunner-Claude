@@ -1772,11 +1772,10 @@ export default function CallInbox() {
   const { data: callsData, isLoading, refetch, isRefetching } = trpc.calls.withGrades.useQuery(queryParams);
   
   // Separate query for needs review (pending + flagged) and skipped
-  // Both use the shared dateFilter for consistent filtering across tabs
+  // Review query does NOT use dateFilter — stuck/pending calls should always show regardless of date range
   const { data: reviewData, refetch: refetchReview } = trpc.calls.withGrades.useQuery({
     limit: 100,
     statuses: ["pending", "transcribing", "grading", "failed"],
-    startDate: dateFilter.startDate,
   });
   const { data: skippedData, refetch: refetchSkipped } = trpc.calls.withGrades.useQuery({
     limit: 100,
@@ -1806,6 +1805,16 @@ export default function CallInbox() {
     },
     onError: (error) => {
       toast.error(`Failed to reset stuck calls: ${error.message}`);
+    },
+  });
+
+  const retryCallMutation = trpc.calls.retryCall.useMutation({
+    onSuccess: () => {
+      toast.success("Call queued for reprocessing");
+      handleRefresh();
+    },
+    onError: (error) => {
+      toast.error(`Failed to retry call: ${error.message}`);
     },
   });
 
@@ -2156,16 +2165,19 @@ export default function CallInbox() {
 
             {/* === TAB: Needs Review (pending + failed + flagged feedback) === */}
             <TabsContent value="review" className="space-y-6">
-              {/* Stuck calls warning */}
+              {/* Stuck calls warning — includes pending calls stuck for >1 hour */}
               {pendingCalls.some((c: any) => 
-                (c.status === 'transcribing' || c.status === 'grading') && 
+                (c.status === 'transcribing' || c.status === 'grading' || c.status === 'classifying' || c.status === 'pending') && 
                 c.updatedAt && 
                 new Date(c.updatedAt) < new Date(Date.now() - 60 * 60 * 1000)
               ) && (
                 <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                   <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                   <span className="text-sm text-amber-800 dark:text-amber-200 flex-1">
-                    Some calls have been processing for over an hour and may be stuck.
+                    {pendingCalls.filter((c: any) => c.status === 'pending' && c.updatedAt && new Date(c.updatedAt) < new Date(Date.now() - 60 * 60 * 1000)).length > 0
+                      ? `${pendingCalls.filter((c: any) => c.updatedAt && new Date(c.updatedAt) < new Date(Date.now() - 60 * 60 * 1000)).length} call(s) have been queued for over an hour and may need to be retried.`
+                      : 'Some calls have been processing for over an hour and may be stuck.'
+                    }
                   </span>
                   <Button
                     variant="outline"
@@ -2175,9 +2187,9 @@ export default function CallInbox() {
                     className="border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900"
                   >
                     {resetStuckMutation.isPending ? (
-                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Resetting...</>
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Retrying...</>
                     ) : (
-                      <><RefreshCw className="h-4 w-4 mr-2" />Reset Stuck Calls</>
+                      <><RefreshCw className="h-4 w-4 mr-2" />Retry All Stuck</>
                     )}
                   </Button>
                 </div>
@@ -2188,42 +2200,68 @@ export default function CallInbox() {
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Processing ({pendingCalls.length})</h3>
                   <div className="space-y-3">
-                    {pendingCalls.map((item: any) => (
-                      <Card key={item.id} className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-semibold truncate">
-                                  {item.contactName || item.contactPhone || "Unknown Contact"}
-                                </h3>
-                                <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                  {item.status === "pending" ? "Queued" : item.status === "transcribing" ? "Transcribing" : "Grading"}
-                                </Badge>
+                    {pendingCalls.map((item: any) => {
+                      const isStuck = item.updatedAt && new Date(item.updatedAt) < new Date(Date.now() - 60 * 60 * 1000);
+                      return (
+                        <Card key={item.id} className={isStuck ? "border-amber-300 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20" : "border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20"}>
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold truncate">
+                                    {item.contactName || item.contactPhone || "Unknown Contact"}
+                                  </h3>
+                                  <Badge variant="secondary" className={isStuck ? "text-xs bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300" : "text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"}>
+                                    {isStuck ? "Stuck" : item.status === "pending" ? "Queued" : item.status === "transcribing" ? "Transcribing" : item.status === "classifying" ? "Classifying" : "Grading"}
+                                  </Badge>
+                                  {isStuck && (
+                                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                                      ({item.status === 'pending' ? 'never picked up' : `stuck at ${item.status}`})
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                  {item.teamMemberName && (
+                                    <span className="flex items-center gap-1">
+                                      <User className="h-3 w-3" />
+                                      {item.teamMemberName}
+                                    </span>
+                                  )}
+                                  {item.duration && (
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
+                                    </span>
+                                  )}
+                                  {item.createdAt && (
+                                    <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                                {item.teamMemberName && (
-                                  <span className="flex items-center gap-1">
-                                    <User className="h-3 w-3" />
-                                    {item.teamMemberName}
-                                  </span>
-                                )}
-                                {item.duration && (
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
-                                  </span>
-                                )}
-                                {item.createdAt && (
-                                  <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
+                              <div className="flex items-center gap-2">
+                                {isStuck ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => retryCallMutation.mutate({ callId: item.id })}
+                                    disabled={retryCallMutation.isPending}
+                                    className="border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900"
+                                  >
+                                    {retryCallMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <><RefreshCw className="h-4 w-4 mr-1" />Retry</>
+                                    )}
+                                  </Button>
+                                ) : (
+                                  <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
                                 )}
                               </div>
                             </div>
-                            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -562,6 +562,75 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // List stuck/queued calls for admin UI
+    listStuck: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const allCalls = await getCalls({ tenantId: ctx.user?.tenantId ?? undefined, limit: 500 });
+        
+        // Calls stuck in processing states
+        const stuckProcessing = allCalls.filter(call => 
+          (call.status === 'transcribing' || call.status === 'grading' || call.status === 'classifying') &&
+          call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+        );
+        // Calls stuck at pending with a recording (never picked up)
+        const stuckPending = allCalls.filter(call => 
+          call.status === 'pending' &&
+          call.recordingUrl &&
+          call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+        );
+        
+        return [...stuckProcessing, ...stuckPending].map(call => ({
+          id: call.id,
+          contactName: call.contactName,
+          contactPhone: call.contactPhone,
+          teamMemberName: call.teamMemberName,
+          status: call.status,
+          duration: call.duration,
+          callSource: call.callSource,
+          callType: call.callType,
+          createdAt: call.createdAt,
+          updatedAt: call.updatedAt,
+          recordingUrl: call.recordingUrl,
+        }));
+      }),
+
+    // Retry a specific stuck call by ID
+    retryCall: protectedProcedure
+      .input(z.object({ callId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        
+        const call = await getCallById(input.callId);
+        if (!call) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Call not found' });
+        }
+        if (call.tenantId !== ctx.user?.tenantId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Not your tenant' });
+        }
+        
+        // Reset to pending if not already
+        if (call.status !== 'pending') {
+          await updateCall(input.callId, {
+            status: 'pending',
+            classificationReason: 'Manual retry from admin UI',
+          });
+        }
+        
+        // Trigger reprocessing
+        processCall(input.callId).catch(err => {
+          console.error(`[RetryCall] Error reprocessing call ${input.callId}:`, err);
+        });
+        
+        return { success: true };
+      }),
+
     // Reset stuck calls (transcribing/grading for more than 1 hour)
     resetStuck: protectedProcedure
       .mutation(async ({ ctx }) => {
@@ -574,17 +643,28 @@ export const appRouter = router({
         
         // Get all calls for this tenant and filter for stuck ones
         const allCalls = await getCalls({ tenantId: ctx.user?.tenantId ?? undefined });
-        const stuckCalls = allCalls.filter(call => 
+        // Calls stuck in processing states
+        const stuckProcessing = allCalls.filter(call => 
           (call.status === 'transcribing' || call.status === 'grading' || call.status === 'classifying') &&
           call.updatedAt && new Date(call.updatedAt) < oneHourAgo
         );
+        // Calls stuck at pending with a recording (never picked up)
+        const stuckPending = allCalls.filter(call => 
+          call.status === 'pending' &&
+          call.recordingUrl &&
+          call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+        );
+        const stuckCalls = [...stuckProcessing, ...stuckPending];
 
         let resetCount = 0;
         for (const call of stuckCalls) {
-          await updateCall(call.id, { 
-            status: 'pending',
-            classificationReason: 'Reset from stuck state - will retry processing'
-          });
+          const isPending = call.status === 'pending';
+          if (!isPending) {
+            await updateCall(call.id, { 
+              status: 'pending',
+              classificationReason: 'Reset from stuck state - will retry processing'
+            });
+          }
           // Trigger reprocessing
           processCall(call.id).catch(err => {
             console.error(`[ResetStuck] Error reprocessing call ${call.id}:`, err);
