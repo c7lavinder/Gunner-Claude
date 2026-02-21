@@ -2558,3 +2558,13 @@
 - [x] Update red flag from rigid "Not setting clear expectations" to nuanced version
 - [x] Label key phrases as "examples, not requirements" in grading prompt
 - [x] Write 55 vitest tests for all new behavior (all passing)
+
+## DQ-Aware Grading + Prior Context Awareness
+- [x] Add DQ detection logic in grading prompt — recognize when a call is a quick disqualification (not in buybox, no motivation, not in area, going to list)
+- [x] Adjust grading rubric for DQ calls: grade on DQ quality (probing questions to confirm, correct identification, professional exit, door left open) not full qualification depth
+- [x] Add prior context awareness — recognize when rep references prior conversations, text leads, existing notes, and don't penalize for not re-gathering already-known info
+- [x] Write vitest tests for DQ detection and prior context awareness (29 tests passing)
+- [x] Add EARLY DISQUALIFICATION AWARENESS section to grading prompt with DQ reasons, neutral scoring, and balance guidance
+- [x] Add PRIOR CONTEXT AWARENESS section to grading prompt with prior context phrases and full credit for confirmed info
+- [x] Add EARLY DISQUALIFICATION CONTEXT rules (22-23) to AI Coach system prompt
+- [x] Add PRIOR CONTEXT AWARENESS rule (24) to AI Coach system prompt

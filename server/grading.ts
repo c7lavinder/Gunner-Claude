@@ -526,6 +526,21 @@ ${rubric.description}
 GRADING PHILOSOPHY:
 Reps have different communication styles. Some follow scripts closely; others achieve the same goals conversationally. Both approaches are valid. When evaluating criteria, focus on WHETHER the rep accomplished the goal of each criterion, not just whether they used specific scripted phrases. A rep who naturally sets expectations through conversational framing (e.g., "Do you have a couple minutes? Just want to see if we're a good fit to work together") should receive credit for Setting Expectations, even if they didn't use the exact scripted approach. Award full points when the goal is clearly achieved regardless of style. Award partial points when the goal is partially achieved. Only give zero when the behavior is completely absent.
 
+EARLY DISQUALIFICATION AWARENESS:
+Some calls are quick disqualifications where the rep correctly identifies that the lead is not viable. Common DQ reasons include: property not in buybox (manufactured home, commercial, land-only, fully remodeled), seller has no motivation (just curious, not interested, going to list with agent), property not in service area, wrong number, or seller is hostile/uncooperative. When a call is a legitimate early DQ:
+- DO NOT penalize for skipping deep qualification (Property Condition, Motivation Extraction, Price Discussion) on a clearly dead lead. A 2-4 minute DQ call should NOT be graded the same as a 15-minute qualification call.
+- DO grade on: (1) Did the rep ask at least 1-2 probing questions to CONFIRM the DQ is real before giving up? (e.g., "Are you set on listing?" / "Is there any flexibility?" / "What if we could close quickly?") (2) Did they correctly identify the DQ reason? (3) Did they exit professionally? (4) Did they leave the door open? ("If anything changes, feel free to reach out")
+- A rep who quickly identifies a dead lead and moves on efficiently is doing their job WELL — don't punish speed on bad leads.
+- HOWEVER, if the transcript shows the rep gave up too easily without any probing (e.g., seller says "I'm thinking about listing" and rep immediately says "OK, good luck" without asking why or exploring alternatives), that IS a legitimate area for improvement.
+- For DQ calls, score the criteria that were actually relevant. For criteria that were skipped because the call was a DQ, give a neutral score (50-70% of max points) with feedback like "Not applicable — call was correctly identified as a disqualification" rather than 0.
+
+PRIOR CONTEXT AWARENESS:
+Reps often have information from previous conversations, text messages, CRM notes, or prior calls with the same lead. When the transcript shows evidence of prior context:
+- Look for phrases like: "based on what you told me before", "from our text conversation", "I see in my notes", "last time we spoke", "you mentioned", "I already have your info", "we texted about this", "from the information you sent", "I already know about the property"
+- DO NOT penalize for "not gathering" information that was clearly already known. If the rep references prior knowledge (e.g., already knows beds/baths, already knows the situation), give full credit for those information-gathering criteria.
+- Text leads and inbound leads often come with pre-filled information. A rep who says "I see you're at 123 Main St, 3 bed 2 bath — is that still accurate?" is confirming prior info, not skipping the question.
+- The key question is: Does the rep HAVE the information (from any source), not whether they asked for it on THIS specific call.
+
 CRITERIA TO EVALUATE:
 ${rubric.criteria.map((c, i) => `
 ${i + 1}. ${c.name} (${c.maxPoints} points max)
