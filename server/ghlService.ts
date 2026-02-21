@@ -18,6 +18,7 @@ import { getAllTenants } from "./tenant";
 import { createTeamTrainingItem } from "./db";
 import { getTenantsWithCrm, parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
 import { runOpportunityDetection } from "./opportunityDetection";
+import { startCorrectionMonitor, stopCorrectionMonitor } from "./correctionMonitor";
 
 // GHL API Configuration
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
@@ -869,6 +870,9 @@ export function startPolling(intervalMinutes: number = 30): void {
         .catch(err => console.error("[OpportunityDetection] Hourly run error:", err));
     }, 60 * 60 * 1000); // 1 hour
   }
+
+  // Start daily correction pattern monitor
+  startCorrectionMonitor();
 }
 
 /**
@@ -902,6 +906,7 @@ export function stopPolling(): void {
     stuckCallRetryInterval = null;
     console.log("[StuckCallRetry] Stopped");
   }
+  stopCorrectionMonitor();
 }
 
 /**

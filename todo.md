@@ -2568,3 +2568,9 @@
 - [x] Add PRIOR CONTEXT AWARENESS section to grading prompt with prior context phrases and full credit for confirmed info
 - [x] Add EARLY DISQUALIFICATION CONTEXT rules (22-23) to AI Coach system prompt
 - [x] Add PRIOR CONTEXT AWARENESS rule (24) to AI Coach system prompt
+
+## Mark Corrections as Incorporated + Correction Pattern Monitoring
+- [x] Mark Daniel's 6 pending corrections as "Incorporated" (all 6 updated in DB, 0 pending remaining) 
+- [x] Build correction pattern monitoring — detect recurring correction themes across team members
+- [x] Surface correction patterns to admin (daily notification + API endpoint at feedback.patterns)
+- [x] Write vitest tests for monitoring feature (41 tests passing)

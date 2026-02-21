@@ -1130,6 +1130,21 @@ export const appRouter = router({
         await updateAIFeedback(input.id, { status: input.status });
         return { success: true };
       }),
+
+    // Detect correction patterns across team feedback
+    patterns: protectedProcedure
+      .input(z.object({
+        dayWindow: z.number().optional().default(7),
+        minCount: z.number().optional().default(2),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const { detectCorrectionPatterns } = await import("./correctionMonitor");
+        return await detectCorrectionPatterns({
+          dayWindow: input?.dayWindow || 7,
+          minCount: input?.minCount || 2,
+          tenantId: ctx.user?.tenantId || undefined,
+        });
+      }),
   }),
 
   // ============ GRADING RULES ============
