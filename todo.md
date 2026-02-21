@@ -2585,3 +2585,6 @@
 - [x] Add "Retry All Stuck" button in stuck calls warning banner
 - [x] Make Queued card on dashboard clickable to navigate to Call History review tab
 - [x] Write vitest tests for stuck call management (16 tests passing)
+
+## Correction Monitor Notifications
+- [x] Disable automatic daily correction pattern notifications (emails were too frequent)

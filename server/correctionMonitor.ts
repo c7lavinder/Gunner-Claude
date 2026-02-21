@@ -299,36 +299,10 @@ export async function runCorrectionMonitor(): Promise<{
  * Checks once per day for correction patterns.
  */
 export function startCorrectionMonitor() {
-  if (correctionMonitorInterval) {
-    console.log("[CorrectionMonitor] Already running, skipping start.");
-    return;
-  }
-
-  console.log("[CorrectionMonitor] Starting daily correction pattern monitor");
-  
-  // Run initial check after a 10-minute delay (let other services settle)
-  setTimeout(() => {
-    runCorrectionMonitor()
-      .then(result => {
-        lastCorrectionCheckTime = new Date();
-        if (result.patternsDetected > 0) {
-          console.log(`[CorrectionMonitor] Initial check: ${result.patternsDetected} patterns found`);
-        }
-      })
-      .catch(err => console.error("[CorrectionMonitor] Initial check error:", err));
-  }, 10 * 60 * 1000);
-
-  // Then run every 24 hours
-  correctionMonitorInterval = setInterval(() => {
-    runCorrectionMonitor()
-      .then(result => {
-        lastCorrectionCheckTime = new Date();
-        if (result.patternsDetected > 0) {
-          console.log(`[CorrectionMonitor] Daily check: ${result.patternsDetected} patterns found`);
-        }
-      })
-      .catch(err => console.error("[CorrectionMonitor] Daily check error:", err));
-  }, 24 * 60 * 60 * 1000);
+  // Disabled — automatic notifications turned off per owner request.
+  // The feedback.patterns API endpoint is still available for on-demand queries.
+  console.log("[CorrectionMonitor] Automatic notifications disabled. Use feedback.patterns endpoint for on-demand analysis.");
+  return;
 }
 
 /**
