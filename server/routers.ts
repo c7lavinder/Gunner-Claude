@@ -1219,6 +1219,13 @@ export const appRouter = router({
         const questionLower = input.question.toLowerCase();
         let mentionedMember: typeof teamMembersList[0] | null = null;
         let mentionedMemberCalls: Array<any> = [];
+        let isSelfReference = false;
+
+        // Detect self-referencing: "my calls", "I already do it", "my score", etc.
+        const selfReferencePatterns = /\b(my calls|my score|my grade|my performance|i already|i do that|i do it|i say that|i always|my approach|my style|my technique|my opening|my intro|how i|what i say|what i do|when i call|i set expectations|i handle|i ask|my last call|my recent|my average|grade me|my transcript)\b/i;
+        if (selfReferencePatterns.test(input.question)) {
+          isSelfReference = true;
+        }
 
         // Try to match a team member name in the question
         for (const member of teamMembersList) {
@@ -1288,6 +1295,13 @@ export const appRouter = router({
         // Get ALL recent calls for coaching insights (examples, patterns, objection handling)
         // This is available to everyone for learning purposes
         // Smart data window: pull more data when asking about specific topics or members
+        
+        // Self-reference: if user says "my calls" / "I already do it" and no specific member mentioned,
+        // resolve to the current user's team member profile
+        if (isSelfReference && !mentionedMember && currentUserTeamMember) {
+          mentionedMember = currentUserTeamMember;
+        }
+
         const isAskingAboutMember = !!mentionedMember;
         const isAskingAboutPerformance = /\b(performance|score|grade|average|trend|improv|progress|week|month|compare|rank|best|worst)\b/i.test(input.question);
         const isAskingAboutOutcome = /\b(walkthrough|appointment|callback|follow.?up|offer|close|no.?show|skip|disqualif)\b/i.test(input.question);
@@ -1379,7 +1393,7 @@ export const appRouter = router({
         if (accessDeniedForMember && mentionedMember) {
           memberCallContext = `\n\nACCESS RESTRICTED: The current user does not have permission to view ${mentionedMember.name}'s individual performance data. They can only view their own data and data for people assigned to them.`;
         } else if (mentionedMember && mentionedMemberCalls.length > 0) {
-          memberCallContext = `\n\nDETAILED DATA FOR ${mentionedMember.name.toUpperCase()}:\n`;
+          memberCallContext = `\n\nDETAILED DATA FOR ${mentionedMember.name.toUpperCase()}${isSelfReference ? ' (THIS IS THE CURRENT USER — they are asking about their own calls)' : ''}:\n`;
           memberCallContext += `Role: ${(mentionedMember.teamRole || 'unknown').replace('_', ' ')}\n`;
           memberCallContext += `Recent graded calls: ${mentionedMemberCalls.length}\n`;
           const scores = mentionedMemberCalls.filter(c => c.grade).map(c => parseFloat(c.grade!.overallScore || "0"));
@@ -1387,6 +1401,9 @@ export const appRouter = router({
             memberCallContext += `Average score: ${Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)}%\n`;
             memberCallContext += `Score range: ${Math.round(Math.min(...scores))}% - ${Math.round(Math.max(...scores))}%\n`;
           }
+          // Detect if user is disputing a grade or claiming they already do something
+          const isDisputingGrade = /\b(i already|i do that|i do it|but i|i always|i say|that's not fair|disagree|wrong|incorrect|i did|i said|my approach|my style|should.*score|should.*pass|should.*count)\b/i.test(input.question);
+          
           for (const call of mentionedMemberCalls.slice(0, 5)) {
             const grade = call.grade;
             memberCallContext += `\n--- Call with ${call.contactName || "Unknown"} (${call.callTimestamp ? new Date(call.callTimestamp).toLocaleDateString() : 'Unknown date'}) ---\n`;
@@ -1397,6 +1414,26 @@ export const appRouter = router({
               memberCallContext += `Summary: ${grade.summary || 'N/A'}\n`;
               if (grade.strengths) memberCallContext += `Strengths: ${JSON.stringify(grade.strengths)}\n`;
               if (grade.improvements) memberCallContext += `Areas to improve: ${JSON.stringify(grade.improvements)}\n`;
+              // Include per-criterion scores so AI can discuss specific criteria
+              if (grade.criteriaScores) {
+                try {
+                  const criteria = typeof grade.criteriaScores === 'string' ? JSON.parse(grade.criteriaScores) : grade.criteriaScores;
+                  if (Array.isArray(criteria)) {
+                    memberCallContext += `Criteria breakdown:\n`;
+                    for (const c of criteria) {
+                      memberCallContext += `  - ${c.name}: ${c.score}/${c.maxPoints} — ${c.feedback}\n`;
+                    }
+                  }
+                } catch { /* criteria parse is best-effort */ }
+              }
+            }
+            // Include transcript excerpt when user is disputing grades or asking about their approach
+            // This lets the AI verify claims like "I already do it" against actual call content
+            if (call.transcript && (isDisputingGrade || isSelfReference)) {
+              const transcriptExcerpt = call.transcript.length > 2000
+                ? call.transcript.substring(0, 2000) + "... [truncated]"
+                : call.transcript;
+              memberCallContext += `Transcript excerpt:\n${transcriptExcerpt}\n`;
             }
           }
         } else if (mentionedMember && mentionedMemberCalls.length === 0) {
@@ -1584,7 +1621,14 @@ CRITICAL RULES:
 13. When you see a "COMPUTED STATS" block above, those numbers are EXACT — calculated directly from the database. You MUST use those exact numbers in your response. Do NOT estimate, round differently, or contradict the computed stats. Present them naturally in your answer (e.g., "You've made 12 calls this week with an average score of 78.3%").
 14. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access.
 15. If the user's message looks like a CRM action request, start your response with [ACTION_REDIRECT] on its own line. NEVER tell the user to retype or rephrase their request as a command.
-16. If the user is giving feedback about a PREVIOUS action (like "that was wrong" or "not from my number"), respond conversationally — do NOT use [ACTION_REDIRECT]. Acknowledge the issue and offer to help.`;
+16. If the user is giving feedback about a PREVIOUS action (like "that was wrong" or "not from my number"), respond conversationally — do NOT use [ACTION_REDIRECT]. Acknowledge the issue and offer to help.
+
+GRADE DISPUTE & PUSHBACK HANDLING:
+17. When a user says "I already do it", "I do that", "that's not fair", or disputes a grade: FIRST check the TRANSCRIPT EXCERPTS above to see what they actually said on their calls. Quote their exact words from the transcript. If the transcript shows they DO perform the behavior (even in a conversational/natural way), acknowledge it specifically: "Looking at your call with [contact], you said '[exact quote]' — that IS a form of [criterion]. The rubric scored it [X/Y] because [specific reason]."
+18. NEVER dismiss a user's self-reported behavior without checking the evidence. If transcripts are available, use them. If they're not, say "I'd need to review the specific transcript to verify — can you tell me which call you're referring to?"
+19. When evaluating a user's example phrase or approach, be fair about what it accomplishes vs. what the rubric ideally wants. Distinguish between: (a) "You don't do this at all" — a real gap, (b) "You do this naturally/conversationally but the rubric wants it more explicitly" — partial credit, acknowledge what works, (c) "You do this well" — give credit. For (b), frame it as "Your approach works and shows [skill]. The rubric is looking for [additional element] which could push your score even higher" rather than "it would not fully satisfy the criteria."
+20. When a user provides a specific example of what they say on calls (e.g., "Do you have a couple of minutes to chat, just want to make sure we are a good fit to work together"), evaluate it honestly: What does it accomplish? (sets a conversational frame, implies mutual evaluation, asks permission) What could make it even stronger? (adding call structure, mentioning what info you'll gather, giving a time estimate). Be specific about what's good AND what could level it up — don't just say it "doesn't meet the criteria."
+21. When the user is asking about their OWN calls (self-reference detected), use a collaborative tone: "your", "you", "let's look at your calls" rather than a third-person analytical tone. They're asking for personal coaching, not a report about someone else.`;
 
         // Build messages with conversation history for context
         const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [

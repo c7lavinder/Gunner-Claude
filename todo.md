@@ -2543,3 +2543,18 @@
 - [x] Add FOLLOW-UP MESSAGES instruction to system prompt so LLM handles "do it again" etc.
 - [x] Update all 3 frontend parseIntent calls to pass conversation history
 - [x] Write tests (22 tests passing)
+
+## AI Coach: Better handling of user pushback/disagreement
+- [x] Improve askQuestion prompt to check transcript evidence when user says "I already do it"
+- [x] Make AI Coach acknowledge user's self-reported behavior before citing rubric
+- [x] Improve grading rubric to be more flexible about natural conversation styles
+- [x] When user provides an example of what they say, AI should evaluate it fairly against transcript
+- [x] Add self-reference detection (regex) so "my calls", "I already do it" auto-resolves to user's team member
+- [x] Include transcript excerpts (up to 2000 chars) in member call context when user disputes grades or self-references
+- [x] Include per-criterion scores in member call context so AI can discuss specific criteria
+- [x] Add GRADE DISPUTE & PUSHBACK HANDLING rules (17-21) to askQuestion system prompt
+- [x] Add GRADING PHILOSOPHY section to grading prompt (natural vs scripted styles both valid)
+- [x] Update Setting Expectations rubric to accept conversational approaches (mutual fit check, etc.)
+- [x] Update red flag from rigid "Not setting clear expectations" to nuanced version
+- [x] Label key phrases as "examples, not requirements" in grading prompt
+- [x] Write 55 vitest tests for all new behavior (all passing)

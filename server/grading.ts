@@ -15,8 +15,8 @@ export const LEAD_MANAGER_RUBRIC = {
     {
       name: "Setting Expectations",
       maxPoints: 10,
-      description: "Explained call structure, working together process, comfort with saying 'not a good fit'",
-      keyPhrases: ["Let me explain what this call will look like", "comfortable saying not a good fit"],
+      description: "Set expectations for the call — either explicitly (explaining call structure, what info will be gathered, comfort with saying 'not a good fit') OR conversationally (framing the call as a mutual fit check, asking for a few minutes, establishing a collaborative tone). Both scripted and natural approaches count. Award full credit if the seller clearly understands the purpose and feels comfortable. Award partial credit if the rep sets a conversational frame but doesn't detail the call structure.",
+      keyPhrases: ["Let me explain what this call will look like", "comfortable saying not a good fit", "good fit to work together", "couple of minutes to chat", "see if we can help", "want to learn about your situation", "just want to ask a few questions"],
     },
     {
       name: "Property Condition",
@@ -68,7 +68,7 @@ export const LEAD_MANAGER_RUBRIC = {
     "Not asking follow-up questions",
     "Getting defensive with angry sellers",
     "Not confirming all decision makers",
-    "Not setting clear expectations",
+    "Not setting any expectations or frame for the call (neither explicit structure nor conversational framing)",
     "Talking too fast or too slow",
     "Not matching seller's tone",
     "Weak objection handling",
@@ -523,11 +523,14 @@ ${callType === "admin_callback" ? "\nIMPORTANT: This is an Admin Callback — an
 RUBRIC: ${rubric.name}
 ${rubric.description}
 
+GRADING PHILOSOPHY:
+Reps have different communication styles. Some follow scripts closely; others achieve the same goals conversationally. Both approaches are valid. When evaluating criteria, focus on WHETHER the rep accomplished the goal of each criterion, not just whether they used specific scripted phrases. A rep who naturally sets expectations through conversational framing (e.g., "Do you have a couple minutes? Just want to see if we're a good fit to work together") should receive credit for Setting Expectations, even if they didn't use the exact scripted approach. Award full points when the goal is clearly achieved regardless of style. Award partial points when the goal is partially achieved. Only give zero when the behavior is completely absent.
+
 CRITERIA TO EVALUATE:
 ${rubric.criteria.map((c, i) => `
 ${i + 1}. ${c.name} (${c.maxPoints} points max)
    - ${c.description}
-   - Key phrases to look for: ${c.keyPhrases.length > 0 ? c.keyPhrases.join(", ") : "N/A - evaluate based on tone and approach"}
+   - Key phrases to look for (examples, not requirements): ${c.keyPhrases.length > 0 ? c.keyPhrases.join(", ") : "N/A - evaluate based on tone and approach"}
 `).join("\n")}
 
 RED FLAGS TO IDENTIFY:
