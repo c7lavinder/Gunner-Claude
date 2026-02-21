@@ -2535,3 +2535,11 @@
 - [x] Add GHL webhook setup instruction card to onboarding step 2 with copyable webhook URL and step-by-step GHL instructions
 - [x] Add GHL webhook URL display + copy button to Settings → Integrations → Advanced Configuration
 - [x] Write tests for new features (19 tests passing)
+
+## BUG FIX: AI Coach parseIntent has no conversation memory
+- [x] Add `history` parameter to parseIntent input schema
+- [x] Extract contact name from conversation history when current message has no name
+- [x] Include conversation history in LLM messages array for follow-up context
+- [x] Add FOLLOW-UP MESSAGES instruction to system prompt so LLM handles "do it again" etc.
+- [x] Update all 3 frontend parseIntent calls to pass conversation history
+- [x] Write tests (22 tests passing)

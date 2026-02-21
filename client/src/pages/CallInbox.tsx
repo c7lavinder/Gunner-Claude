@@ -413,7 +413,14 @@ function AICoachQA() {
       if (response.answer.includes("[ACTION_REDIRECT]")) {
         setConversation(prev => [...prev, { role: "assistant", content: "On it \u2014 creating that for you now..." }]);
         try {
-          const result = await parseIntentMutation.mutateAsync({ message: lastUserMessageRef.current });
+          // Build conversation history for follow-up context
+          const historyForRedirect = conversation
+            .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+              msg.role === "user" || msg.role === "assistant"
+            )
+            .slice(-10)
+            .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+          const result = await parseIntentMutation.mutateAsync({ message: lastUserMessageRef.current, history: historyForRedirect });
           // Handle instruction/preference saved
           if ((result as any).instructionSaved) {
             setConversation(prev => [...prev, { role: "assistant", content: (result as any).instructionConfirmation || "Got it — I'll remember that preference!" }]);
@@ -540,7 +547,14 @@ function AICoachQA() {
           return updated;
         });
         try {
-          const result = await parseIntentMutation.mutateAsync({ message: userMessage });
+          // Build conversation history for follow-up context
+          const historyForStreamRedirect = conversation
+            .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+              msg.role === "user" || msg.role === "assistant"
+            )
+            .slice(-10)
+            .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+          const result = await parseIntentMutation.mutateAsync({ message: userMessage, history: historyForStreamRedirect });
           // Handle instruction/preference saved
           if ((result as any).instructionSaved) {
             setConversation(prev => {
@@ -652,7 +666,14 @@ function AICoachQA() {
 
     try {
       // Parse the intent — now returns { actions: [...] }
-      const result = await parseIntentMutation.mutateAsync({ message: userMessage });
+      // Build conversation history for context (filter to user/assistant messages only)
+      const historyForIntent = conversation
+        .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+          msg.role === "user" || msg.role === "assistant"
+        )
+        .slice(-10)
+        .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+      const result = await parseIntentMutation.mutateAsync({ message: userMessage, history: historyForIntent });
       // Handle instruction/preference saved
       if ((result as any).instructionSaved) {
         setConversation(prev => [...prev, { role: "assistant", content: (result as any).instructionConfirmation || "Got it \u2014 I'll remember that preference!" }]);

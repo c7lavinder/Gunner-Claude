@@ -4315,6 +4315,10 @@ Create content that:
         message: z.string(),
         contextContactId: z.string().optional(),
         contextContactName: z.string().optional(),
+        history: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+        })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const tenantId = ctx.user?.tenantId;
@@ -4400,6 +4404,56 @@ Create content that:
         // This provides real context for tasks, notes, SMS, and any other action
         let callContext = "";
         let contactNameForLookup = input.contextContactName || "";
+        
+        // If no contact name in current message context, try to extract from conversation history
+        // This handles follow-up messages like "do it again", "try again", "its there"
+        let historyContactName = "";
+        if (!contactNameForLookup && input.history && input.history.length > 0) {
+          // Scan history in reverse to find the most recent contact name mentioned
+          for (let i = input.history.length - 1; i >= 0; i--) {
+            const msg = input.history[i];
+            if (msg.role === "user") {
+              // Try to extract contact name from previous user messages
+              const historyNamePatterns = [
+                /(?:note|notes|summary|text|sms|task|call|tag|stage|workflow|appointment)\s+(?:to|for|about|on|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+                /(?:call|conversation|chat|summary|talk)\s+(?:with|for|about)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+                /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)(?:'s|\u2019s)\s+(?:call|conversation|last\s+call)/i,
+                /(?:^|\s)([A-Z][a-z]{1,15}\s+[A-Z][a-z]{1,15})(?:\s|$|[.,!?])/,
+              ];
+              for (const pattern of historyNamePatterns) {
+                const match = msg.content.match(pattern);
+                if (match && match[1]) {
+                  const potentialName = match[1].trim();
+                  // Filter out common words that aren't names
+                  const commonWords = new Set(['The', 'This', 'That', 'What', 'How', 'Why', 'When', 'Where', 'Who', 'Can', 'Could', 'Would', 'Should', 'Tell', 'Show', 'Give', 'Help', 'About', 'Team', 'Call', 'Last', 'Recent', 'CRM', 'Sales', 'Pipeline']);
+                  if (!commonWords.has(potentialName.split(' ')[0])) {
+                    historyContactName = potentialName;
+                    break;
+                  }
+                }
+              }
+              if (historyContactName) break;
+            }
+            // Also check assistant messages for contact names (e.g., "Creating note for Rita Adams...")
+            if (msg.role === "assistant") {
+              const assistantNamePatterns = [
+                /(?:note|notes|task|sms|text|tag|stage)\s+(?:to|for|about)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+                /(?:Creating|Adding|Sending|Moving|Updating)\s+\w+\s+(?:to|for|about)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+              ];
+              for (const pattern of assistantNamePatterns) {
+                const match = msg.content.match(pattern);
+                if (match && match[1]) {
+                  historyContactName = match[1].trim();
+                  break;
+                }
+              }
+              if (historyContactName) break;
+            }
+          }
+          if (historyContactName) {
+            console.log(`[parseIntent] Extracted contact name from history: "${historyContactName}"`);
+          }
+        }
         try {
           const { getDb } = await import("./db");
           const db = await getDb();
@@ -4410,6 +4464,12 @@ Create content that:
             // Try to extract a contact name from the message for lookup
             // First use explicit context, then try to parse from the message
             if (!contactNameForLookup) contactNameForLookup = "";
+            
+            // Use history-derived contact name as fallback
+            if (!contactNameForLookup && historyContactName) {
+              contactNameForLookup = historyContactName;
+              console.log(`[parseIntent] Using contact name from conversation history: "${historyContactName}"`);
+            }
             
             if (!contactNameForLookup) {
               // Try to extract potential contact name from the message
@@ -4588,6 +4648,8 @@ IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions co
 Do NOT return empty actions for these — they are action requests even if phrased as questions.
 COMPOUND REQUESTS: When a user asks to "create a summary AND add it as a note", this is ONE action (add_note) where you write the full summary as the noteBody. Do NOT treat this as two separate actions. Use the RECENT CALL DATA below to write the actual summary content.
 
+FOLLOW-UP MESSAGES: If the user sends a short follow-up like "do it again", "try again", "redo it", "its there", "i confirmed it", "type it", "write it", or similar — look at the CONVERSATION HISTORY to understand what they originally asked for. Re-execute the same action type for the same contact using the RECENT CALL DATA below. Do NOT say you don't have the data — the transcript and call details ARE provided in this prompt. Use them.
+
 Context: ${input.contextContactId ? `Currently viewing contact: ${input.contextContactName} (ID: ${input.contextContactId})` : "No contact context"}
 
 The current user is: ${ctx.user!.name || "Unknown"}
@@ -4643,6 +4705,11 @@ Return JSON with an "actions" array. Each action object has:
 ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descriptions), match this user's established style:\n${preferenceContext}` : ""}
 ${instructionContext}`
             },
+            // Include conversation history for context (so follow-ups like "do it again" work)
+            ...(input.history && input.history.length > 0 ? input.history.slice(-6).map(msg => ({
+              role: msg.role as "user" | "assistant",
+              content: msg.role === "assistant" ? `[Previous response: ${msg.content.substring(0, 500)}]` : msg.content
+            })) : []),
             { role: "user", content: input.message }
           ],
           response_format: {
