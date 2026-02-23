@@ -564,7 +564,7 @@ export default function Home() {
                 </div>
                 {/* Desktop: Vertical list */}
                 <div className="hidden sm:block space-y-2">
-                  {leaderboard.slice(0, 3).map((entry, index) => (
+                  {leaderboard.slice(0, 5).map((entry, index) => (
                     <div 
                       key={entry.teamMember.id} 
                       className="flex items-center gap-3 p-3 rounded-lg border"
@@ -572,7 +572,8 @@ export default function Home() {
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
                         index === 0 ? "bg-yellow-500 text-white" :
                         index === 1 ? "bg-gray-400 text-white" :
-                        "bg-amber-700 text-white"
+                        index === 2 ? "bg-amber-700 text-white" :
+                        "bg-zinc-300 text-zinc-700"
                       }`}>
                         {index + 1}
                       </div>
