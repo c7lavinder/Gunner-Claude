@@ -99,16 +99,78 @@ interface DetectedOpportunity {
 const NO_PRICE_DATA = { ourOffer: null, sellerAsk: null, priceGap: null };
 
 /**
- * Extract dollar amounts from a transcript.
+ * Extract dollar amounts from a transcript using LLM for accurate context understanding.
+ * Falls back to regex-based extraction if LLM fails.
  * Returns { ourOffer, sellerAsk, priceGap } with values in whole dollars.
- * CONSERVATIVE approach: only classify when context CLEARLY indicates an offer or asking price.
- * Never guess — it's better to show no price than a wrong price.
  */
-function extractPricesFromTranscript(transcript: string): { ourOffer: number | null; sellerAsk: number | null; priceGap: number | null } {
+async function extractPricesFromTranscriptLLM(transcript: string): Promise<{ ourOffer: number | null; sellerAsk: number | null; priceGap: number | null }> {
+  if (!transcript) return NO_PRICE_DATA;
+  
+  // Use a larger excerpt to catch prices mentioned later in the call
+  const excerpt = transcript.substring(0, 4000);
+  
+  try {
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `You extract price information from real estate call transcripts. Identify:
+1. "our_offer" — the price OUR TEAM (the buyer/wholesaler/investor) offered or would pay for the property
+2. "seller_ask" — the price the SELLER wants, is asking for, or would accept
+
+RULES:
+- Only extract prices that are clearly about the property purchase/sale price
+- Do NOT extract: taxes, repairs, rent, mortgage payments, ARV, renovation costs, closing costs, commissions
+- Numbers may be stated as "105 thousand", "one-oh-five", "105k", "$105,000", etc.
+- If a number is ambiguous or you're not sure which side it belongs to, return null for that field
+- It's better to return null than a wrong number
+- Return whole dollar amounts (no cents)`
+        },
+        {
+          role: "user",
+          content: `Extract the offer and asking prices from this transcript excerpt:\n\n${excerpt}`
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "price_extraction",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              our_offer: { type: ["number", "null"], description: "Our team's offer price in whole dollars, or null if not mentioned" },
+              seller_ask: { type: ["number", "null"], description: "Seller's asking price in whole dollars, or null if not mentioned" }
+            },
+            required: ["our_offer", "seller_ask"],
+            additionalProperties: false
+          }
+        }
+      }
+    });
+    
+    const content = response.choices[0].message.content;
+    const parsed = JSON.parse(typeof content === "string" ? content : "{}");
+    const ourOffer = typeof parsed.our_offer === "number" ? parsed.our_offer : null;
+    const sellerAsk = typeof parsed.seller_ask === "number" ? parsed.seller_ask : null;
+    const priceGap = (ourOffer !== null && sellerAsk !== null) ? Math.abs(sellerAsk - ourOffer) : null;
+    
+    return { ourOffer, sellerAsk, priceGap };
+  } catch (error) {
+    console.warn("[OpportunityDetection] LLM price extraction failed, falling back to regex:", error);
+    return extractPricesFromTranscriptRegex(transcript);
+  }
+}
+
+/**
+ * Regex-based fallback for price extraction.
+ * Used when LLM is unavailable or fails.
+ */
+function extractPricesFromTranscriptRegex(transcript: string): { ourOffer: number | null; sellerAsk: number | null; priceGap: number | null } {
   if (!transcript) return NO_PRICE_DATA;
 
   // Find all dollar amounts in the transcript
-  const amountPattern = /\$(\d[\d,]*(?:\.\d{2})?)|(\d[\d,]*(?:\.\d{2})?)\s*(?:thousand|k\b)/gi;
+  const amountPattern = /\$(\d[\d,]*(?:\.\d{2})?)|(\ d[\d,]*(?:\.\d{2})?)\s*(?:thousand|k\b)/gi;
   const amounts: { value: number; context: string; index: number }[] = [];
 
   let match;
@@ -116,20 +178,17 @@ function extractPricesFromTranscript(transcript: string): { ourOffer: number | n
     let raw = match[1] || match[2];
     if (!raw) continue;
     let value = parseFloat(raw.replace(/,/g, ""));
-    // Handle "thousand" / "k" suffix
     if (match[0].toLowerCase().includes("thousand") || match[0].toLowerCase().endsWith("k")) {
       value *= 1000;
     }
-    // Filter unrealistic property prices (too low or too high)
     if (value < 10_000 || value > 10_000_000) continue;
     const start = Math.max(0, match.index - 100);
     const end = Math.min(transcript.length, match.index + match[0].length + 100);
     const context = transcript.substring(start, end).toLowerCase();
     
-    // EXCLUDE amounts that appear in non-price contexts (taxes, repairs, rent, income, etc.)
     const nonPriceContext = /\b(tax|taxes|rent|rental|income|mortgage|payment|repair|renovation|assessment|insurance|hoa|fee|dues|deposit|earnest|closing cost|commission|arv|after repair|monthly|per month|year|annual|square foot|per sq)\b/;
     if (nonPriceContext.test(context) && !/(asking|offer|want|need|take|pay|price|worth|value|sell for|buy for|looking for)/.test(context)) {
-      continue; // Skip amounts in non-price contexts
+      continue;
     }
     
     amounts.push({ value, context, index: match.index });
@@ -140,10 +199,7 @@ function extractPricesFromTranscript(transcript: string): { ourOffer: number | n
   let ourOffer: number | null = null;
   let sellerAsk: number | null = null;
 
-  // STRICT classification: only assign when context CLEARLY indicates offer or ask
-  // Our offer patterns — must be clearly from the buyer's side
   const ourPatterns = /\b((?:we|our|i)(?:'d| would| can| could)? (?:offer|pay|do|go|come in at)|our offer|we offered|offered (?:him|her|them)|came in at|we(?:'re| are) at)/;
-  // Seller ask patterns — must be clearly from the seller's side
   const sellerPatterns = /\b((?:want|need|asking|looking for|hoping for|at least|minimum|bottom line|won't go below|won't take less|i(?:'d| would) take|my price|i want|i need|they want|(?:he|she) wants?|(?:he|she) (?:is |was )?asking|seller(?:'s)? ask|asking price))/;
 
   for (const amt of amounts) {
@@ -154,14 +210,76 @@ function extractPricesFromTranscript(transcript: string): { ourOffer: number | n
     }
   }
 
-  // DO NOT guess when context is unclear.
-  // Previous logic defaulted single amounts to "seller ask" and guessed lower/higher for two amounts.
-  // This caused wrong prices (e.g., property values, tax amounts being labeled as offers).
-  // Only return prices that were explicitly classified by context patterns above.
-
   const priceGap = (ourOffer !== null && sellerAsk !== null) ? Math.abs(sellerAsk - ourOffer) : null;
 
   return { ourOffer, sellerAsk, priceGap };
+}
+
+/**
+ * Synchronous wrapper that uses regex extraction.
+ * Used ONLY as a fallback when async is not available.
+ * Prefer extractPricesFromTranscriptLLM() for accurate results.
+ */
+function extractPricesFromTranscriptSync(transcript: string): { ourOffer: number | null; sellerAsk: number | null; priceGap: number | null } {
+  return extractPricesFromTranscriptRegex(transcript);
+}
+
+/**
+ * Check if there's been recent outbound activity (calls, SMS, emails) in GHL conversations
+ * for a given contact since a specific date. This prevents false "team went silent" signals
+ * when the team has been actively working the lead through GHL but activity isn't in Gunner's DB.
+ */
+async function hasRecentGHLOutboundActivity(
+  creds: GHLCredentials | null,
+  contactId: string | null,
+  sinceDate: Date
+): Promise<{ hasActivity: boolean; outboundCount: number; inboundCount: number; lastOutboundAt: Date | null; summary: string | null }> {
+  const noActivity = { hasActivity: false, outboundCount: 0, inboundCount: 0, lastOutboundAt: null, summary: null };
+  if (!creds || !contactId) return noActivity;
+  
+  try {
+    const conversations = await ghlFetch(
+      creds,
+      `/conversations/search?locationId=${creds.locationId}&contactId=${contactId}`
+    );
+    const convList = conversations.conversations || [];
+    if (convList.length === 0) return noActivity;
+    
+    const conv = convList[0];
+    const lastMsgDate = new Date(conv.lastMessageDate);
+    
+    // If no messages since the cutoff date, no recent activity
+    if (lastMsgDate < sinceDate) return noActivity;
+    
+    // Fetch recent messages and filter to those after sinceDate
+    const messages = await fetchConversationMessages(creds, conv.id, 30);
+    const recentMessages = messages.filter((m: GHLMessageDetail) => {
+      const msgDate = new Date(m.dateAdded);
+      return msgDate > sinceDate;
+    });
+    
+    if (recentMessages.length === 0) return noActivity;
+    
+    const outbound = recentMessages.filter((m: GHLMessageDetail) => m.direction === "outbound");
+    const inbound = recentMessages.filter((m: GHLMessageDetail) => m.direction === "inbound");
+    const lastOutbound = outbound.length > 0 ? new Date(outbound[0].dateAdded) : null;
+    
+    const parts: string[] = [];
+    if (outbound.length > 0) parts.push(`${outbound.length} outbound message${outbound.length > 1 ? "s" : ""}`);
+    if (inbound.length > 0) parts.push(`${inbound.length} inbound message${inbound.length > 1 ? "s" : ""}`);
+    const summary = parts.length > 0 ? `GHL shows ${parts.join(" and ")} since ${sinceDate.toLocaleDateString()}.` : null;
+    
+    return {
+      hasActivity: outbound.length > 0,
+      outboundCount: outbound.length,
+      inboundCount: inbound.length,
+      lastOutboundAt: lastOutbound,
+      summary
+    };
+  } catch (err) {
+    console.error(`[OpportunityDetection] Error checking GHL activity for contact ${contactId}:`, err);
+    return noActivity;
+  }
 }
 
 // ============ GHL USER ID → TEAM MEMBER RESOLVER ============
@@ -631,7 +749,8 @@ async function detectFollowUpInboundIgnored(
   stageName: string | null,
   db: any,
   tenantId: number,
-  ghlMap: GhlUserIdMap
+  ghlMap: GhlUserIdMap,
+  creds: GHLCredentials | null
 ): Promise<DetectedOpportunity | null> {
   if (conversation.lastMessageDirection !== "inbound") return null;
   if (!stageName || classifyStage(stageName) !== "follow_up") return null;
@@ -664,6 +783,34 @@ async function detectFollowUpInboundIgnored(
     (c: any) => c.status === "completed" && c.classification === "conversation" && c.duration && c.duration > 60
   );
   if (answeredCall) return null; // Team engaged with this contact recently
+
+  // CHECK GHL CONVERSATIONS — team may be texting/calling through GHL without it showing in Gunner
+  const ghlActivity = await hasRecentGHLOutboundActivity(creds, conversation.contactId, fourHoursAgoDate);
+  if (ghlActivity.hasActivity) {
+    return null; // Team has been actively working this lead through GHL — not ignored
+  }
+
+  // DQ SUPPRESSION: If the last call was a proper DQ conversation (not interested, not selling, etc.),
+  // don't flag the inbound as "ignored" — the lead was properly disqualified
+  const lastCallForContact = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, conversation.contactId)
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(1);
+  
+  if (lastCallForContact.length > 0) {
+    const lastCall = lastCallForContact[0];
+    const dqClassifications = ["not interested", "not selling", "wrong number", "do not call", "dnc"];
+    if (lastCall.classification && dqClassifications.includes(lastCall.classification.toLowerCase())) {
+      return null; // Last call was a proper DQ — inbound from a DQ'd lead doesn't need urgent response
+    }
+  }
 
   return {
     tier: "missed",
@@ -837,7 +984,13 @@ async function detectOfferNoFollowUp(
     )
     .limit(1);
 
-  if (recentOutbound.length > 0) return null; // There was follow-up
+  if (recentOutbound.length > 0) return null; // There was follow-up in Gunner DB
+
+  // CHECK GHL CONVERSATIONS — team may be calling/texting through GHL without it showing in Gunner
+  const ghlActivity = await hasRecentGHLOutboundActivity(creds, opp.contactId, stageChangeAt);
+  if (ghlActivity.hasActivity) {
+    return null; // Team has been actively working this lead through GHL — not silent
+  }
 
   return {
     tier: "missed",
@@ -854,9 +1007,9 @@ async function detectOfferNoFollowUp(
     ...resolveGhlAssignee(opp.assignedTo, ghlMap),
     assignedTo: opp.assignedTo || null,
     detectionSource: "pipeline",
-    lastActivityAt: stageChangeAt,
+    lastActivityAt: ghlActivity.lastOutboundAt || stageChangeAt,
     lastStageChangeAt: stageChangeAt,
-    transcriptExcerpt: "",
+    transcriptExcerpt: ghlActivity.summary || "",
     ...NO_PRICE_DATA,
   };
 }
@@ -896,9 +1049,9 @@ async function detectNewLeadSLABreach(
   if (opp.pipelineStageId !== opp.pipelineStageId) return null; // redundant but safe
 
   return {
-    tier: "missed",
+    tier: "warning",
     triggerRules: ["new_lead_sla_breach"],
-    priorityScore: 70,
+    priorityScore: 60,
     contactName: opp.name || opp.contact?.name || null,
     contactPhone: opp.contact?.phone || null,
     propertyAddress: null,
@@ -982,13 +1135,13 @@ async function detectPriceStatedNoFollowUp(
     const progression = await getContactPipelineProgression(creds, call.ghlContactId, contactOppMap);
     if (progression.isOfferOrBeyond) continue; // Already in offer stage — price discussion led to action
 
-    // Extract actual dollar amounts from the transcript
-    const priceData = extractPricesFromTranscript(call.transcript);
+    // Extract actual dollar amounts from the transcript using LLM
+    const priceData = await extractPricesFromTranscriptLLM(call.transcript);
 
     results.push({
-      tier: "missed",
+      tier: "possible",
       triggerRules: ["price_stated_no_followup"],
-      priorityScore: 85,
+      priorityScore: 70,
       contactName: call.contactName,
       contactPhone: call.contactPhone,
       propertyAddress: call.propertyAddress,
@@ -1090,6 +1243,31 @@ async function detectMotivatedOneDone(
     const progression = await getContactPipelineProgression(creds, call.ghlContactId, contactOppMap);
     if (progression.hasProgressed) continue; // Deal has progressed in pipeline
 
+    // FOLLOW-UP STAGE SUPPRESSION: If the lead is in a follow-up or dead stage AND
+    // the last call was a proper conversation (not just voicemail/no answer), the team
+    // made an informed decision to move them there. Examples: Sara Prinzi (not motivated,
+    // wants crazy high price), Matthew Golden (no equity, listing is best option).
+    if (progression.currentStage) {
+      const stageLower = progression.currentStage.toLowerCase();
+      const isFollowUpOrDead = stageLower.includes("follow up") || stageLower.includes("followup") ||
+        stageLower.includes("dead") || stageLower.includes("ghost") || stageLower.includes("dq") ||
+        stageLower.includes("1 year");
+      if (isFollowUpOrDead) {
+        // The call was already filtered to classification === "conversation" above,
+        // so if they're in follow-up after a real conversation, the team intentionally DQ'd them.
+        // Check call outcome — if it's not_interested, dead, or no_answer, suppress.
+        const dqOutcomes = ["not_interested", "dead", "no_answer", "left_vm", "none"];
+        if (call.callOutcome && dqOutcomes.includes(call.callOutcome)) {
+          continue; // Properly DQ'd after real conversation — not a missed opportunity
+        }
+        // Even without a specific DQ outcome, if the conversation was 60+ seconds
+        // and they moved to follow-up, the team made an informed decision
+        if (call.duration && call.duration >= 60) {
+          continue; // Real conversation + moved to follow-up = intentional DQ
+        }
+      }
+    }
+
     // APPOINTMENT CHECK: If there's a future appointment, the team has a next step planned
     const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
     if (hasFutureApt) continue; // Appointment scheduled — team is working it
@@ -1123,7 +1301,7 @@ async function detectMotivatedOneDone(
       lastStageChangeAt: null,
       // Include motivation keywords in transcript excerpt so AI reason can be specific
       transcriptExcerpt: `[Motivation signals detected: ${matchedMotivations.join(", ")}] ` + call.transcript.substring(0, 500),
-      ...extractPricesFromTranscript(call.transcript),
+      ...(await extractPricesFromTranscriptLLM(call.transcript)),
     });
   }
 
@@ -1603,7 +1781,7 @@ async function detectMissedCallback(
       lastActivityAt: call.callTimestamp,
       lastStageChangeAt: null,
       transcriptExcerpt: call.transcript.substring(0, 500),
-    ...extractPricesFromTranscript(call.transcript),
+    ...(await extractPricesFromTranscriptLLM(call.transcript)),
     });
   }
 
@@ -2010,7 +2188,7 @@ async function detectPostWalkthroughGhosting(
         lastActivityAt: stageChangeAt,
         lastStageChangeAt: stageChangeAt,
         transcriptExcerpt: excerpt,
-        ...extractPricesFromTranscript(latestTranscript.length > 0 ? latestTranscript[0].transcript : ""),
+        ...(await extractPricesFromTranscriptLLM(latestTranscript.length > 0 ? latestTranscript[0].transcript : "")),
       });
     }
   }
@@ -2147,7 +2325,7 @@ async function detectPostWalkthroughGhosting(
       lastStageChangeAt: null,
       transcriptExcerpt: `[Post-walkthrough: ${outboundAttempts.length} follow-up attempt(s) with no conversation since ${new Date(call.callTimestamp).toLocaleDateString()}] ` +
         call.transcript.substring(0, 400),
-      ...extractPricesFromTranscript(call.transcript),
+      ...(await extractPricesFromTranscriptLLM(call.transcript)),
     });
   }
 
@@ -2180,12 +2358,12 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
   new_lead_sla_breach: {
     label: "New Lead — No Call Within 15 Min",
     context: "A new lead entered the pipeline. No outbound call was logged within the 15-minute SLA window.",
-    tier: "missed"
+    tier: "warning"
   },
   price_stated_no_followup: {
-    label: "Seller Stated Price — No Follow Up Logged",
-    context: "During a call, the seller mentioned a specific price they would accept. No follow-up has been logged in the 48 hours since.",
-    tier: "at_risk"
+    label: "Seller Stated Price — Worth a Look",
+    context: "During a call, the seller mentioned a specific price they would accept. This lead has deal potential worth reviewing. No follow-up has been logged in the 48 hours since.",
+    tier: "possible"
   },
   motivated_one_and_done: {
     label: "Motivated Seller — Only 1 Call Attempt",
@@ -2246,7 +2424,7 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
 
 async function generateAIReason(detection: DetectedOpportunity, db: any, tenantId: number): Promise<{ reason: string; suggestion: string; missedItems?: string[] }> {
   const ruleDesc = RULE_DESCRIPTIONS[detection.triggerRules[0]];
-  const tierLabel = ruleDesc?.tier === "missed" ? "Missed (urgent)" : ruleDesc?.tier === "at_risk" ? "At Risk" : "Worth a Look";
+  const tierLabel = ruleDesc?.tier === "missed" ? "Missed (urgent)" : (ruleDesc?.tier === "at_risk" || ruleDesc?.tier === "warning") ? "At Risk" : "Worth a Look";
   
   // Build a rich factual timeline from available data
   const facts: string[] = [];
@@ -2409,7 +2587,7 @@ CRITICAL RULES:
 - Use phrases like "no follow-up has been logged" instead of "we completely missed it" or "the team dropped the ball."
 - If you don't know whether the team took action, say "no activity was logged" — do NOT say they failed or missed it.
 - The tone should be neutral and informative, like a CRM status update — not accusatory or dramatic.
-- Tier context: "${tierLabel}" — ${ruleDesc?.tier === "missed" ? "This appears to be a gap that needs attention." : ruleDesc?.tier === "at_risk" ? "This lead may need re-engagement." : "This is flagged for the owner to review and potentially help the team."}
+- Tier context: "${tierLabel}" — ${ruleDesc?.tier === "missed" ? "This appears to be a gap that needs attention." : (ruleDesc?.tier === "at_risk" || ruleDesc?.tier === "warning") ? "This lead may need re-engagement." : "This is flagged for the owner to review — focus on deal potential and what makes this lead worth pursuing, not on rep failures."}
 
 SPECIFICITY REQUIREMENTS:
 - If the transcript mentions a MOTIVATION (divorce, foreclosure, tax lien, death in family, job relocation, inheritance, vacant property, code violations, financial hardship, medical bills, behind on payments, tired landlord, etc.), you MUST name the specific motivation in the reason. Say "seller mentioned going through a divorce" NOT "seller showed motivation signals."
@@ -2422,9 +2600,22 @@ SPECIFICITY REQUIREMENTS:
 - Keep it concise and professional.
 
 MISSED ITEMS (CRITICAL — the owner needs these so they don't have to read the full transcript):
-- Analyze the transcript excerpt for specific things the rep missed, failed to ask, or should have said differently.
+- For "Worth a Look" tier signals: Focus on WHY this deal has potential (seller's situation, price point, motivation, timeline) rather than what the rep did wrong. Frame items as deal insights: "Seller asking $150k and doesn't have time for updates — potential negotiation leverage" rather than "Rep didn't ask about timeline."
+- For "Missed" and "At Risk" tier signals: Analyze the transcript excerpt for specific things the rep missed, failed to ask, or should have said differently.
+- SPECIAL CASE — Ghosted/Dead/DQ'd leads (dead_with_selling_signals, post_walkthrough_ghosting, or pipeline stage containing 'ghost', 'dead', 'dq', '1 year'):
+  • Do NOT list basic qualification questions as missed items (e.g., "didn't ask about timeline").
+  • Instead, focus on OUTREACH CONTEXT and RE-ENGAGEMENT POTENTIAL:
+    - How many call/text attempts were made before the lead went cold?
+    - What was the seller's last known position or interest level?
+    - What re-engagement angle could work (price change, new approach, different team member)?
+  • Examples for ghosted leads:
+    - "12 outbound attempts over 2 weeks with no response — seller may have found another buyer"
+    - "Seller was interested at $130k but went silent after our $103k offer — price gap may be the issue"
+    - "Last conversation showed interest but seller stopped responding — try a different channel (text vs call)"
+    - "Property still shows as active listing — seller may still be motivated"
+  • If the lead was properly DQ'd (not interested, wrong number, etc.), return an empty array.
 - Each item should be a short, specific, actionable phrase the owner can immediately understand.
-- Examples of good missed items:
+- Examples of good missed items (for active leads):
   • "Didn't ask about seller's timeline or urgency"
   • "Seller said 'small developer' — rep didn't probe what that means or ask about other properties"
   • "Seller showed hesitation ('I'm not sure') — rep moved to DQ instead of exploring the objection"
@@ -2678,8 +2869,8 @@ async function isAlreadyFlagged(
 ): Promise<boolean> {
   if (!ghlContactId) return false;
 
-  // Check if this contact already has an active or recently handled/dismissed opportunity with the same rule
-  const existing = await db
+  // Check 1: Same contact + same rule — active or recently handled/dismissed
+  const existingSameRule = await db
     .select({ id: opportunities.id })
     .from(opportunities)
     .where(
@@ -2693,7 +2884,26 @@ async function isAlreadyFlagged(
     )
     .limit(1);
 
-  return existing.length > 0;
+  if (existingSameRule.length > 0) return true;
+
+  // Check 2: Same contact dismissed as "not_a_deal" or "false_positive" with ANY rule
+  // in the last 60 days — if the owner said this contact is not a deal, don't re-flag
+  // with a different rule either (e.g., don't flag "price_stated" after dismissing "motivated_one_and_done")
+  const dismissedContact = await db
+    .select({ id: opportunities.id })
+    .from(opportunities)
+    .where(
+      and(
+        eq(opportunities.tenantId, tenantId),
+        eq(opportunities.ghlContactId, ghlContactId),
+        eq(opportunities.status, "dismissed"),
+        sql`${opportunities.dismissReason} IN ('not_a_deal', 'false_positive')`,
+        sql`${opportunities.resolvedAt} > DATE_SUB(NOW(), INTERVAL 60 DAY)`
+      )
+    )
+    .limit(1);
+
+  return dismissedContact.length > 0;
 }
 
 // ============ MAIN DETECTION LOOP ============
@@ -2814,7 +3024,7 @@ async function reEvaluateActiveOpportunities(db: any, tenantId: number, creds: G
               detection.lastActivityAt = latestCall[0].callTimestamp;
             }
             // Extract prices from latest transcript
-            const prices = extractPricesFromTranscript(latestCall[0].transcript);
+            const prices = await extractPricesFromTranscriptLLM(latestCall[0].transcript);
             detection.ourOffer = prices.ourOffer;
             detection.sellerAsk = prices.sellerAsk;
             detection.priceGap = prices.priceGap;
@@ -2839,7 +3049,7 @@ async function reEvaluateActiveOpportunities(db: any, tenantId: number, creds: G
                 })
                 .join("\n");
               if (smsText) {
-                const smsPrices = extractPricesFromTranscript(smsText);
+                const smsPrices = await extractPricesFromTranscriptLLM(smsText);
                 if (smsPrices.ourOffer) detection.ourOffer = smsPrices.ourOffer;
                 if (smsPrices.sellerAsk) detection.sellerAsk = smsPrices.sellerAsk;
                 if (detection.ourOffer && detection.sellerAsk) {
@@ -2935,6 +3145,45 @@ async function scanTenant(
       for (const opp of allOpps) {
         const stageName = stageMap.get(opp.pipelineStageId) || "Unknown";
 
+        // GLOBAL SUPPRESSION: Skip leads in terminal/closed stages
+        // Under Contract, Purchased, Closed Won = deal is done, no signals needed
+        // 1 Year Follow Up with proper DQ = properly disqualified, not a missed opportunity
+        const lowerStage = stageName.toLowerCase();
+        if (
+          lowerStage.includes("under contract") ||
+          lowerStage.includes("purchased") ||
+          lowerStage.includes("closed won") ||
+          lowerStage.includes("closed lost") ||
+          lowerStage.includes("agreement not closed")
+        ) {
+          continue; // Terminal stage — no opportunity signals needed
+        }
+
+        // DQ SUPPRESSION: If the lead is in a follow-up stage AND the last call was a proper DQ,
+        // this is a properly disqualified lead, not a missed opportunity.
+        // Examples: Arthur Stuck in "1 Year Follow Up" after being DQ'd for not being in buy box.
+        if (classifyStage(stageName) === "follow_up" || classifyStage(stageName) === "dead") {
+          const lastCallForOpp = await db
+            .select({ classification: calls.classification, callOutcome: calls.callOutcome, duration: calls.duration })
+            .from(calls)
+            .where(
+              and(
+                eq(calls.tenantId, tenantId),
+                eq(calls.ghlContactId, opp.contactId)
+              )
+            )
+            .orderBy(desc(calls.callTimestamp))
+            .limit(1);
+
+          if (lastCallForOpp.length > 0) {
+            const lastCall = lastCallForOpp[0];
+            const dqOutcomes = ["not_interested", "not_selling", "wrong_number", "do_not_call", "dnc", "dead", "disqualified", "not_in_area", "not_in_buybox"];
+            if (lastCall.callOutcome && dqOutcomes.includes(lastCall.callOutcome.toLowerCase())) {
+              continue; // Properly DQ'd lead in follow-up/dead stage — not a missed opportunity
+            }
+          }
+        }
+
         // Rule 1: Backward movement — DISABLED (too noisy without GHL stage history)
         // Will revisit once we can reliably determine prior stage
         // const backward = await detectBackwardMovement(opp, stageName, db, tenantId, ghlMap);
@@ -3020,6 +3269,20 @@ async function scanTenant(
     for (const conv of conversations) {
       const oppInfo = contactOppMap.get(conv.contactId);
 
+      // GLOBAL SUPPRESSION: Skip contacts in terminal/closed pipeline stages
+      if (oppInfo) {
+        const convStageLower = oppInfo.stageName.toLowerCase();
+        if (
+          convStageLower.includes("under contract") ||
+          convStageLower.includes("purchased") ||
+          convStageLower.includes("closed won") ||
+          convStageLower.includes("closed lost") ||
+          convStageLower.includes("agreement not closed")
+        ) {
+          continue; // Terminal stage — no opportunity signals needed
+        }
+      }
+
       // Rule 2: Repeat inbound
       const repeat = await detectRepeatInbound(conv, creds, db, tenantId, ghlMap, oppInfo?.opp || null);
       if (repeat) detections.push(repeat);
@@ -3031,7 +3294,8 @@ async function scanTenant(
         oppInfo?.stageName || null,
         db,
         tenantId,
-        ghlMap
+        ghlMap,
+        creds
       );
       if (followUpIgnored) detections.push(followUpIgnored);
 
@@ -3055,14 +3319,26 @@ async function scanTenant(
   // ========== PHASE 3: TRANSCRIPT-ENRICHED DETECTION ==========
   console.log(`[OpportunityDetection] Phase 3: Transcript-enriched detection for tenant ${tenantId}`);
 
+  // Build a set of terminal-stage contactIds for suppression in transcript rules
+  const terminalStageContactIds = new Set<string>();
+  for (const [contactId, { stageName: sn }] of Array.from(contactOppMap.entries())) {
+    const sl = sn.toLowerCase();
+    if (sl.includes("under contract") || sl.includes("purchased") || sl.includes("closed won") || sl.includes("closed lost") || sl.includes("agreement not closed")) {
+      terminalStageContactIds.add(contactId);
+    }
+  }
+
   try {
     // Rule 6: Price stated no follow-up (now checks appointments + pipeline)
     const priceDetections = await detectPriceStatedNoFollowUp(db, tenantId, creds, contactOppMap);
-    detections.push(...priceDetections);
+    // Filter out detections for contacts in terminal stages
+    const filteredPriceDetections = priceDetections.filter(d => !d.ghlContactId || !terminalStageContactIds.has(d.ghlContactId));
+    detections.push(...filteredPriceDetections);
 
     // Rule 7: Motivated one-and-done (now checks GHL pipeline progression + appointments)
     const motivatedDetections = await detectMotivatedOneDone(db, tenantId, creds, contactOppMap);
-    detections.push(...motivatedDetections);
+    const filteredMotivatedDetections = motivatedDetections.filter(d => !d.ghlContactId || !terminalStageContactIds.has(d.ghlContactId));
+    detections.push(...filteredMotivatedDetections);
 
     // Rule 11: Duplicate property
     const dupDetections = await detectDuplicateProperty(db, tenantId, ghlMap);
@@ -3093,6 +3369,33 @@ async function scanTenant(
   } catch (transcriptError) {
     console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
     result.errors++;
+  }
+
+  // ========== PHASE 3.5: AUTO-RESOLVE TERMINAL STAGE OPPORTUNITIES ==========
+  // If a contact has moved to Under Contract, Purchased, etc., auto-resolve any active opportunities
+  if (terminalStageContactIds.size > 0) {
+    try {
+      const terminalContactArray = Array.from(terminalStageContactIds);
+      // Process in batches to avoid SQL limits
+      for (let i = 0; i < terminalContactArray.length; i += 50) {
+        const batch = terminalContactArray.slice(i, i + 50);
+        const autoResolved = await db.update(opportunities)
+          .set({
+            status: "handled",
+            resolvedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(opportunities.tenantId, tenantId),
+              eq(opportunities.status, "active"),
+              inArray(opportunities.ghlContactId, batch)
+            )
+          );
+      }
+      console.log(`[OpportunityDetection] Auto-resolved opportunities for ${terminalContactArray.length} contacts in terminal stages`);
+    } catch (autoResolveErr) {
+      console.error(`[OpportunityDetection] Error auto-resolving terminal stage opportunities:`, autoResolveErr);
+    }
   }
 
   // ========== PHASE 4: DEDUPLICATE & SAVE ==========
@@ -3132,7 +3435,7 @@ async function scanTenant(
 
           // Merge price data from all transcripts (latest takes priority)
           for (const row of allTranscripts) {
-            const prices = extractPricesFromTranscript(row.transcript);
+            const prices = await extractPricesFromTranscriptLLM(row.transcript);
             if (!detection.ourOffer && prices.ourOffer) detection.ourOffer = prices.ourOffer;
             if (!detection.sellerAsk && prices.sellerAsk) detection.sellerAsk = prices.sellerAsk;
           }
@@ -3157,16 +3460,16 @@ async function scanTenant(
                   })
                   .join("\n");
                 if (smsText) {
-                  const smsPrices = extractPricesFromTranscript(smsText);
-                  // SMS prices override transcript prices since SMS negotiations are more recent/explicit
-                  if (smsPrices.ourOffer) detection.ourOffer = smsPrices.ourOffer;
-                  if (smsPrices.sellerAsk) detection.sellerAsk = smsPrices.sellerAsk;
-                }
+                const smsPrices = await extractPricesFromTranscriptLLM(smsText);
+                // SMS prices override transcript prices since SMS negotiations are more recent/explicit
+                if (smsPrices.ourOffer) detection.ourOffer = smsPrices.ourOffer;
+                if (smsPrices.sellerAsk) detection.sellerAsk = smsPrices.sellerAsk;
               }
-            } catch (smsErr) {
-              // Non-critical — continue without SMS price enrichment
             }
+          } catch (smsErr) {
+            // Non-critical — continue without SMS price enrichment
           }
+        }
 
           // Recalculate gap
           if (detection.ourOffer && detection.sellerAsk) {

@@ -2592,3 +2592,35 @@
 ## BatchDialer Recording Endpoint Fix
 - [x] Update recording download URL to use correct endpoint: /api/call/{id}/recording (was /api/callrecording/{id})
 - [x] Ensure X-ApiKey auth header is used for recording downloads (already was, confirmed)
+
+## "Worth a Look" Signal Category
+- [ ] Add "Worth a Look" classification for signals where seller stated a price and there's negotiation potential
+- [ ] Update opportunity detection prompt to distinguish "Missed" (rep failed) vs "Worth a Look" (lead is viable, worth pursuing)
+- [ ] Update UI to show "Worth a Look" badge instead of "Missed" for these signals
+- [ ] Write vitest tests for the new classification
+- [ ] Suppress followup_inbound_ignored when last call was a proper DQ conversation (not interested + real conversation duration)
+- [ ] Reframe "What They Missed" as "Why This Is Worth a Look" for possible-tier signals in the UI
+- [ ] Fix price extraction logic — extracting wrong numbers from transcript (showed $150k/$160k when real numbers were $105k/$130k)
+- [ ] Auto-suppress/resolve opportunity signals when pipeline stage shows under contract or purchased
+- [ ] Fix Suzanne Burgess price extraction (showed $30k/$122k, real was $100k→$103k offer)
+- [ ] Fix follow-up detection to check GHL conversations/SMS/call activity before claiming "team went silent" or "no follow-up"
+- [ ] Barbara Thompson false positive — system says "no follow-up 135 hours" but team has been calling/texting daily
+- [ ] Dequisha McKnight false positive — system says "team went silent" but Kyle made in-person offer and is actively communicating
+- [x] Cathie Cooper — "What They Missed" for ghosted leads should focus on outreach history and re-engagement potential, not basic qualification questions
+- [x] Reframe missedItems for ghosted/DQ'd leads to show outreach context instead of rep coaching
+
+## Opportunity Detection V2 — Critical Fixes
+- [x] Wire up LLM price extraction (extractPricesFromTranscriptLLM) to replace all regex calls in detection rules
+- [x] Increase LLM price extraction transcript window from 1500 to 4000 chars for better coverage
+- [x] Add under-contract/purchased stage suppression to all pipeline-based detection rules
+- [x] Add DQ stage suppression (1 Year Follow Up, Dead, etc.) for properly disqualified leads
+- [x] Fix ghosted lead missedItems to focus on re-engagement strategy instead of basic qualification coaching
+- [x] Update AI reason prompt to distinguish ghosted leads from missed opportunities
+- [x] Replace regex extractPricesFromTranscript in reEvaluateActiveOpportunities with LLM version
+- [x] Replace regex extractPricesFromTranscript in price gap enrichment (Phase 4) with LLM version
+- [x] Write comprehensive vitest tests for all opportunity detection fixes
+- [x] Change "New Lead — No Call Within 15 Min" (SLA breach) from "Missed" tier to "At Risk" tier
+- [x] Sara Prinzi false positive — motivated_one_and_done should be suppressed when lead is in 1 Year Follow Up and last call shows not motivated / high price
+- [x] Improve motivated_one_and_done rule to check if lead was intentionally moved to follow-up (call classification shows proper DQ conversation)
+- [x] Ensure "Not a Deal" dismissal prevents re-flagging of the same contact+rule for 30+ days
+- [x] Matthew Golden false positive — motivated_one_and_done for lead in 1 Year Follow Up after proper DQ conversation (no equity, listing is best option)

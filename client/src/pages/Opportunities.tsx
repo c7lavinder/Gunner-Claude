@@ -500,17 +500,25 @@ export default function Opportunities() {
                               {opp.reason || "Signal detected from pipeline activity."}
                             </p>
 
-                            {/* Missed Items — what the rep should have done */}
+                            {/* Missed Items — context depends on tier */}
                             {(opp as any).missedItems && Array.isArray((opp as any).missedItems) && (opp as any).missedItems.length > 0 && (
-                              <div className="mt-2 bg-amber-500/5 border border-amber-500/20 rounded-lg p-2.5">
-                                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mb-1.5 flex items-center gap-1">
+                              <div className={`mt-2 rounded-lg p-2.5 ${
+                                (opp as any).tier === "possible"
+                                  ? "bg-blue-500/5 border border-blue-500/20"
+                                  : "bg-amber-500/5 border border-amber-500/20"
+                              }`}>
+                                <p className={`text-[11px] font-semibold mb-1.5 flex items-center gap-1 ${
+                                  (opp as any).tier === "possible"
+                                    ? "text-blue-600 dark:text-blue-400"
+                                    : "text-amber-600 dark:text-amber-400"
+                                }`}>
                                   <Eye className="h-3 w-3" />
-                                  What They Missed
+                                  {(opp as any).tier === "possible" ? "Why This Is Worth a Look" : "What They Missed"}
                                 </p>
                                 <ul className="space-y-1">
                                   {((opp as any).missedItems as string[]).map((item: string, idx: number) => (
                                     <li key={idx} className="text-xs text-foreground/70 flex items-start gap-1.5">
-                                      <span className="text-amber-500 mt-0.5 shrink-0">•</span>
+                                      <span className={`mt-0.5 shrink-0 ${(opp as any).tier === "possible" ? "text-blue-500" : "text-amber-500"}`}>•</span>
                                       <span>{item}</span>
                                     </li>
                                   ))}
