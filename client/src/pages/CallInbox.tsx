@@ -1621,12 +1621,14 @@ function GHLSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
 function MultiSelectFilter({ 
   label, 
   options, 
+  groups,
   selected, 
   onChange,
   icon: Icon
 }: { 
   label: string; 
-  options: { value: string; label: string }[]; 
+  options?: { value: string; label: string }[]; 
+  groups?: { label: string; options: { value: string; label: string }[] }[];
   selected: string[]; 
   onChange: (values: string[]) => void;
   icon?: React.ElementType;
@@ -1646,6 +1648,21 @@ function MultiSelectFilter({
     setOpen(false);
   };
 
+  // Render a single option row
+  const renderOption = (option: { value: string; label: string }) => (
+    <div
+      key={option.value}
+      className="flex items-center space-x-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
+      onClick={() => toggleOption(option.value)}
+    >
+      <Checkbox
+        checked={selected.includes(option.value)}
+        onCheckedChange={() => toggleOption(option.value)}
+      />
+      <span className="text-sm">{option.label}</span>
+    </div>
+  );
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -1660,21 +1677,23 @@ function MultiSelectFilter({
           <ChevronDown className="h-3.5 w-3.5 ml-2 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-2" align="start">
-        <div className="space-y-2">
-          {options.map((option) => (
-            <div
-              key={option.value}
-              className="flex items-center space-x-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
-              onClick={() => toggleOption(option.value)}
-            >
-              <Checkbox
-                checked={selected.includes(option.value)}
-                onCheckedChange={() => toggleOption(option.value)}
-              />
-              <span className="text-sm">{option.label}</span>
-            </div>
-          ))}
+      <PopoverContent className="w-64 p-2" align="start">
+        <div className="space-y-1 max-h-80 overflow-y-auto">
+          {groups ? (
+            groups.map((group, idx) => (
+              group.options.length > 0 && (
+                <div key={group.label}>
+                  {idx > 0 && <div className="border-t my-1.5" />}
+                  <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    {group.label}
+                  </div>
+                  {group.options.map(renderOption)}
+                </div>
+              )
+            ))
+          ) : (
+            options?.map(renderOption)
+          )}
           {selected.length > 0 && (
             <div className="border-t pt-2 mt-2">
               <Button variant="ghost" size="sm" className="w-full justify-center" onClick={clearAll}>
@@ -1783,6 +1802,9 @@ export default function CallInbox() {
     startDate: dateFilter.startDate,
   });
 
+  // Fetch all team members for the tenant (for grouped Team Member filter)
+  const { data: allTeamMembers } = trpc.team.list.useQuery();
+
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
   const updateStatusMutation = trpc.feedback.updateStatus.useMutation();
   const reclassifyMutation = trpc.calls.reclassify.useMutation({
@@ -1863,14 +1885,32 @@ export default function CallInbox() {
     c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call")
   );
 
-  // Get unique team members from current results for filter options
-  const teamMemberOptions = useMemo(() => {
-    const members = new Set<string>();
-    gradedCalls.forEach((c: any) => {
-      if (c.teamMemberName) members.add(c.teamMemberName);
+  // Build team member filter options grouped by team role (from tenant's team list)
+  const teamMemberGroups = useMemo(() => {
+    if (!allTeamMembers || allTeamMembers.length === 0) return undefined;
+    const roleOrder: Record<string, number> = { acquisition_manager: 0, lead_manager: 1, lead_generator: 2 };
+    const roleLabels: Record<string, string> = {
+      acquisition_manager: 'Acquisition Managers',
+      lead_manager: 'Lead Managers',
+      lead_generator: 'Lead Generators',
+      admin: 'Admin',
+    };
+    const grouped: Record<string, { value: string; label: string }[]> = {};
+    allTeamMembers.forEach((m: any) => {
+      const role = m.teamRole || 'other';
+      if (!grouped[role]) grouped[role] = [];
+      grouped[role].push({ value: m.name, label: m.name });
     });
-    return Array.from(members).sort().map(name => ({ value: name, label: name }));
-  }, [gradedCalls]);
+    // Sort members within each group alphabetically
+    Object.values(grouped).forEach(arr => arr.sort((a, b) => a.label.localeCompare(b.label)));
+    // Return groups in role order
+    return Object.entries(grouped)
+      .sort(([a], [b]) => (roleOrder[a] ?? 99) - (roleOrder[b] ?? 99))
+      .map(([role, options]) => ({
+        label: roleLabels[role] || role,
+        options,
+      }));
+  }, [allTeamMembers]);
 
   // Call type options - all 6 types
   const callTypeOptions = [
@@ -2046,7 +2086,7 @@ export default function CallInbox() {
                     <div className={`${showFilters ? 'flex' : 'hidden'} sm:flex flex-wrap items-center gap-2`}>
                       <MultiSelectFilter
                         label="Team Member"
-                        options={teamMemberOptions}
+                        groups={teamMemberGroups}
                         selected={selectedTeamMembers}
                         onChange={handleFilterChange(setSelectedTeamMembers)}
                         icon={User}

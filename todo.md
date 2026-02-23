@@ -2624,3 +2624,6 @@
 - [x] Improve motivated_one_and_done rule to check if lead was intentionally moved to follow-up (call classification shows proper DQ conversation)
 - [x] Ensure "Not a Deal" dismissal prevents re-flagging of the same contact+rule for 30+ days
 - [x] Matthew Golden false positive — motivated_one_and_done for lead in 1 Year Follow Up after proper DQ conversation (no equity, listing is best option)
+
+## Call History Fix- [x] Lead Generator calls not showing in All Calls tab (only in Skipped) — fix query filtering- [x] Group Team Member dropdown by team type (Acquisition Manager, Lead Manager, Lead Generator) instead of flat list
+- [x] Team Member dropdown must only show team members from the associated tenant (use team.list query, not current page results)
