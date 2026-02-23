@@ -2723,3 +2723,14 @@
 ## Bug: Admin Users Missing Team Type Toggles on Training Page
 - [x] Admin users (like Kyle) should see team type toggles on Training page to filter insights
 - [x] Fix toggle visibility logic to check user.role === 'admin' in addition to teamRole === 'admin'
+## Rename GHL/GoHighLevel to CRM in User-Facing UI
+- [x] Change "Team Members (from GHL)" to "Team Members (from CRM)" in TenantSettings and TeamManagement
+- [x] Change "Team members synced from GoHighLevel" to "Team members synced from CRM"
+- [x] Update all GHL/GoHighLevel references to CRM across CallInbox, Landing, Onboarding, Pricing, PrivacyPolicy, SuperAdmin, TenantSettings, TenantSetup
+- [x] Rename GHLSyncStatus component to CRMSyncStatus
+- [x] Update webhook URL labels from "GHL Webhook URL" to "CRM Webhook URL"
+- [x] Update test assertions in onboardingUX.test.ts to match new CRM naming
+## Bug: BatchDialer/BatchLeads Connection Status
+- [x] Fix BatchDialer showing "Not Connected" when API key is saved as env var and syncing works
+- [x] Fix getCrmIntegrations to check both tenant crmConfig AND global env fallback for API keys
+- [x] Add connectionStatusEnvFallback.test.ts with 8 tests covering env fallback logic

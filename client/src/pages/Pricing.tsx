@@ -81,7 +81,7 @@ const FEATURE_CONFIG: Record<string, { label: string; icon: React.ElementType; d
   crm_integration: { 
     label: "CRM Integration", 
     icon: Link2, 
-    description: "Connect with GoHighLevel to automatically sync contacts, calls, and deal data. Streamline your workflow." 
+    description: "Connect your CRM to automatically sync contacts, calls, and deal data. Streamline your workflow." 
   },
   multi_crm: { 
     label: "Multiple CRM Integrations", 

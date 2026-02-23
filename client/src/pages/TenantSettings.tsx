@@ -380,7 +380,7 @@ export default function TenantSettings() {
   const testGhlMutation = trpc.tenant.testGhlConnection.useMutation({
     onSuccess: (result) => {
       if (result.success) {
-        toast.success(result.message || "GHL connected!");
+        toast.success(result.message || "CRM connected!");
       } else {
         toast.error(result.error || "Connection failed");
       }
@@ -1213,7 +1213,7 @@ export default function TenantSettings() {
             </CardContent>
           </Card>
 
-          {/* Team Members from GHL */}
+          {/* Team Members from CRM */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -1221,8 +1221,8 @@ export default function TenantSettings() {
                   <Users className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">Team Members (from GHL)</CardTitle>
-                  <CardDescription>Team members synced from GoHighLevel</CardDescription>
+                  <CardTitle className="text-lg">Team Members (from CRM)</CardTitle>
+                  <CardDescription>Team members synced from CRM</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -1262,7 +1262,7 @@ export default function TenantSettings() {
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                  <p>No team members synced from GHL</p>
+                  <p>No team members synced from CRM</p>
                 </div>
               )}
             </CardContent>
@@ -1609,7 +1609,7 @@ export default function TenantSettings() {
 
         {/* CRM Integrations */}
         <TabsContent value="integrations" className="space-y-6">
-          {/* GoHighLevel Integration Card */}
+          {/* CRM Integration Card */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -1618,7 +1618,7 @@ export default function TenantSettings() {
                     <Link2 className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-base">GoHighLevel</CardTitle>
+                    <CardTitle className="text-base">CRM (GoHighLevel)</CardTitle>
                     <CardDescription>Sync contacts, call recordings, and pipeline data</CardDescription>
                     {crmIntegrations?.ghl?.lastSynced && (
                       <p className="text-xs text-muted-foreground mt-1">
@@ -1651,7 +1651,7 @@ export default function TenantSettings() {
                       <Input
                         id="ghlApiKey"
                         type="password"
-                        placeholder={crmIntegrations?.ghl?.hasApiKey ? "••••••••••••" : "Enter GHL Private Integration token"}
+                        placeholder={crmIntegrations?.ghl?.hasApiKey ? "••••••••••••" : "Enter CRM Private Integration token"}
                         value={ghlApiKey}
                         onChange={(e) => setGhlApiKey(e.target.value)}
                       />
@@ -1660,7 +1660,7 @@ export default function TenantSettings() {
                       <Label htmlFor="ghlLocationId">Location ID</Label>
                       <Input
                         id="ghlLocationId"
-                        placeholder={crmIntegrations?.ghl?.hasLocationId ? (crmIntegrations.ghl.locationId || "••••••••") : "Enter GHL Location ID"}
+                        placeholder={crmIntegrations?.ghl?.hasLocationId ? (crmIntegrations.ghl.locationId || "••••••••") : "Enter CRM Location ID"}
                         value={ghlLocationId}
                         onChange={(e) => setGhlLocationId(e.target.value)}
                       />
@@ -1722,7 +1722,7 @@ export default function TenantSettings() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Calls sync automatically every 30 minutes. Find your API key in GHL → Settings → Integrations → Private Integrations.
+                    Calls sync automatically every 30 minutes. Find your API key in your CRM → Settings → Integrations → Private Integrations.
                   </p>
                 </>
               )}
@@ -2017,14 +2017,14 @@ export default function TenantSettings() {
                 </div>
               </div>
 
-              {/* GHL Inbound Webhook URL */}
+              {/* CRM Inbound Webhook URL */}
               <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-2">
                 <Label className="text-sm font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-2">
                   <Webhook className="h-4 w-4" />
-                  GHL Webhook URL
+                  CRM Webhook URL
                 </Label>
                 <p className="text-xs text-amber-700 dark:text-amber-400">
-                  Add this URL to your GHL workflow to send call data to Gunner automatically.
+                  Add this URL to your CRM workflow to send call data to Gunner automatically.
                 </p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 text-xs bg-white dark:bg-black/30 border border-amber-200 dark:border-amber-700 rounded px-3 py-2 font-mono break-all">
@@ -2042,7 +2042,7 @@ export default function TenantSettings() {
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                <p className="text-xs text-amber-600 dark:text-amber-500">GHL Workflow: Trigger on "Call Status Changed" → "Completed" → Webhook POST to this URL</p>
+                <p className="text-xs text-amber-600 dark:text-amber-500">CRM Workflow: Trigger on "Call Status Changed" → "Completed" → Webhook POST to this URL</p>
               </div>
 
               {/* External Webhook URL */}

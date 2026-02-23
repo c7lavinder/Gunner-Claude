@@ -50,9 +50,9 @@ describe("Onboarding UX: Stage Classification & Webhook Instructions", () => {
     });
   });
 
-  describe("GHL Webhook Setup Instruction Card in Onboarding", () => {
+  describe("CRM Webhook Setup Instruction Card in Onboarding", () => {
     it("should show webhook instruction card after successful connection", () => {
-      expect(onboardingContent).toContain("Required: Set Up GHL Webhook");
+      expect(onboardingContent).toContain("Required: Set Up CRM Webhook");
     });
 
     it("should display the webhook URL with copy button", () => {
@@ -60,7 +60,7 @@ describe("Onboarding UX: Stage Classification & Webhook Instructions", () => {
       expect(onboardingContent).toContain("Webhook URL copied!");
     });
 
-    it("should include step-by-step GHL setup instructions", () => {
+    it("should include step-by-step CRM setup instructions", () => {
       expect(onboardingContent).toContain("Automation");
       expect(onboardingContent).toContain("Workflows");
       expect(onboardingContent).toContain("Call Status Changed");
@@ -76,9 +76,9 @@ describe("Onboarding UX: Stage Classification & Webhook Instructions", () => {
     });
   });
 
-  describe("GHL Webhook URL in Settings", () => {
-    it("should show GHL webhook URL in settings Advanced Configuration", () => {
-      expect(settingsContent).toContain("GHL Webhook URL");
+  describe("CRM Webhook URL in Settings", () => {
+    it("should show CRM webhook URL in settings Advanced Configuration", () => {
+      expect(settingsContent).toContain("CRM Webhook URL");
       expect(settingsContent).toContain("/api/webhook/ghl");
     });
 

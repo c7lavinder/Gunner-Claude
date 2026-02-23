@@ -30,7 +30,7 @@ const features = [
   {
     icon: Phone,
     title: "CRM Integration",
-    description: "Connect to GoHighLevel and automatically sync calls. No manual uploads needed - calls flow in and get graded automatically."
+    description: "Connect your CRM and automatically sync calls. No manual uploads needed - calls flow in and get graded automatically."
   },
   {
     icon: Zap,

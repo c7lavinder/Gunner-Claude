@@ -4066,6 +4066,10 @@ Create content that:
         };
       }
       const config = parseCrmConfig({ crmConfig: tenant.crmConfig as string | null });
+      // Check both tenant-specific config AND global env fallback for API keys
+      // (sync code uses env fallback, so connection status should reflect that)
+      const hasBdKey = !!(config.batchDialerApiKey || process.env.BATCHDIALER_API_KEY);
+      const hasBlKey = !!(config.batchLeadsApiKey || process.env.BATCHLEADS_API_KEY);
       return {
         ghl: {
           enabled: !!(config.ghlApiKey && config.ghlLocationId),
@@ -4083,15 +4087,15 @@ Create content that:
         industry: config.industry || null,
         engineWebhookUrl: config.engineWebhookUrl || null,
         batchDialer: {
-          enabled: !!config.batchDialerEnabled,
-          connected: !!config.batchDialerApiKey,
-          hasApiKey: !!config.batchDialerApiKey,
+          enabled: hasBdKey || !!config.batchDialerEnabled,
+          connected: hasBdKey,
+          hasApiKey: hasBdKey,
           lastSynced: tenant.lastBatchDialerSync ? tenant.lastBatchDialerSync.toISOString() : null,
         },
         batchLeads: {
-          enabled: !!config.batchLeadsApiKey,
-          connected: !!config.batchLeadsApiKey,
-          hasApiKey: !!config.batchLeadsApiKey,
+          enabled: hasBlKey,
+          connected: hasBlKey,
+          hasApiKey: hasBlKey,
           lastSynced: tenant.lastBatchLeadsSync ? tenant.lastBatchLeadsSync.toISOString() : null,
         },
       };

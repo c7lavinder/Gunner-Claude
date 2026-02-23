@@ -1210,7 +1210,7 @@ export default function SuperAdmin() {
                         { id: 'api_access', label: 'API Access', description: 'Programmatic access to call data and analytics. Build custom integrations or export data to your own systems.' },
                         { id: 'priority_support', label: 'Priority Support', description: 'Skip the queue with dedicated support channels. Get faster response times and access to senior support specialists.' },
                         { id: 'custom_branding', label: 'Custom Branding', description: 'White-label the platform with your company logo, colors, and domain. Perfect for agencies and enterprises.' },
-                        { id: 'crm_integration', label: 'CRM Integration', description: 'Connect with GoHighLevel to automatically sync contacts, calls, and deal data. Streamline your workflow.' },
+                        { id: 'crm_integration', label: 'CRM Integration', description: 'Connect your CRM to automatically sync contacts, calls, and deal data. Streamline your workflow.' },
                         { id: 'multi_crm', label: 'Multiple CRM Integrations', description: 'Connect multiple CRM instances or different CRM platforms. Ideal for agencies managing multiple client accounts.' },
                         { id: 'unlimited_users', label: 'Unlimited Users', description: 'No cap on team size. Add as many sales reps, managers, and admins as you need without per-seat charges.' },
                         { id: 'call_recording', label: 'Call Recording Storage', description: 'Store and access call recordings for review and training. Includes searchable transcripts and highlight clips.' },
@@ -1623,12 +1623,12 @@ function TenantDetailPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">CRM Configuration</CardTitle>
-          <CardDescription>Update GoHighLevel and BatchDialer credentials for this tenant</CardDescription>
+          <CardDescription>Update CRM and BatchDialer credentials for this tenant</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>GHL API Key</Label>
+              <Label>CRM API Key</Label>
               <Input
                 type="password"
                 value={crmForm.ghlApiKey}
@@ -1637,7 +1637,7 @@ function TenantDetailPanel({
               />
             </div>
             <div className="space-y-2">
-              <Label>GHL Location ID</Label>
+              <Label>CRM Location ID</Label>
               <Input
                 value={crmForm.ghlLocationId}
                 onChange={(e) => setCrmForm({ ...crmForm, ghlLocationId: e.target.value })}

@@ -372,7 +372,7 @@ export default function TeamManagement() {
         </CardContent>
       </Card>
 
-      {/* Team Members from GHL */}
+      {/* Team Members from CRM */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -380,8 +380,8 @@ export default function TeamManagement() {
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">Team Members (from GHL)</CardTitle>
-              <CardDescription>Team members synced from GoHighLevel</CardDescription>
+              <CardTitle className="text-lg">Team Members (from CRM)</CardTitle>
+              <CardDescription>Team members synced from CRM</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -412,7 +412,7 @@ export default function TeamManagement() {
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
-              <p>No team members synced from GHL</p>
+              <p>No team members synced from CRM</p>
             </div>
           )}
         </CardContent>

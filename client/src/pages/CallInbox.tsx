@@ -403,7 +403,7 @@ function AICoachQA() {
   const [editedContent, setEditedContent] = useState("");
   // Sender override for SMS actions: maps actionId -> { ghlUserId, name }
   const [senderOverrides, setSenderOverrides] = useState<Record<number, { ghlUserId: string; name: string } | null>>({});
-  // Fetch team members who can send SMS (have GHL user IDs)
+  // Fetch team members who can send SMS (have CRM user IDs)
   const { data: smsTeamSenders } = trpc.coachActions.smsTeamSenders.useQuery();
   
   // Fire-and-forget mutation to persist exchanges for conversation memory
@@ -592,7 +592,7 @@ function AICoachQA() {
                 } else {
                   const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
                   if (contacts.length === 0) {
-                    setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in GHL. Skipping action: ${action.summary}` }]);
+                    setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in CRM. Skipping action: ${action.summary}` }]);
                     continue;
                   } else if (contacts.length === 1) {
                     action.contactId = contacts[0].id;
@@ -715,7 +715,7 @@ function AICoachQA() {
               // Need to search for the contact
               const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
               if (contacts.length === 0) {
-                setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in GHL. Skipping action: ${action.summary}` }]);
+                setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in CRM. Skipping action: ${action.summary}` }]);
                 continue;
               } else if (contacts.length === 1) {
                 action.contactId = contacts[0].id;
@@ -840,7 +840,7 @@ function AICoachQA() {
           } else {
             const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
             if (contacts.length === 0) {
-              setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in GHL. Skipping action: ${action.summary}` }]);
+              setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in CRM. Skipping action: ${action.summary}` }]);
               continue;
             } else if (contacts.length === 1) {
               action.contactId = contacts[0].id;
@@ -1696,13 +1696,13 @@ function BatchDialerSyncButton({ onSyncComplete }: { onSyncComplete: () => void 
   );
 }
 
-// GHL Sync Status Component
-function GHLSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
+// CRM Sync Status Component
+function CRMSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
   const { data: status, refetch: refetchStatus } = trpc.ghlSync.status.useQuery();
   const syncNowMutation = trpc.ghlSync.syncNow.useMutation({
     onSuccess: (result) => {
       if (result.success) {
-        toast.success(`Synced ${result.synced} calls from GoHighLevel`);
+        toast.success(`Synced ${result.synced} calls from CRM`);
         onSyncComplete();
       } else {
         toast.error("Sync failed: " + result.errors.join(", "));
@@ -1729,7 +1729,7 @@ function GHLSyncStatus({ onSyncComplete }: { onSyncComplete: () => void }) {
       {syncNowMutation.isPending || status?.isPolling ? (
         <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Syncing...</>
       ) : (
-        <><Cloud className="h-4 w-4 mr-2" />Sync from GHL{lastSyncText && <span className="ml-1 text-muted-foreground font-normal">({lastSyncText})</span>}</>
+        <><Cloud className="h-4 w-4 mr-2" />Sync from CRM{lastSyncText && <span className="ml-1 text-muted-foreground font-normal">({lastSyncText})</span>}</>
       )}
     </Button>
   );
@@ -2094,7 +2094,7 @@ export default function CallInbox() {
           </p>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <GHLSyncStatus onSyncComplete={handleRefresh} />
+          <CRMSyncStatus onSyncComplete={handleRefresh} />
           <Button 
             variant="ghost" 
             size="sm"

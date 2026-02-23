@@ -413,25 +413,25 @@ export default function Onboarding() {
             
             {formData.selectedCrm === "ghl" && (
               <div className="mt-6 space-y-4 p-4 bg-muted/50 rounded-lg">
-                <h4 className="font-medium">GoHighLevel Connection</h4>
+                <h4 className="font-medium">CRM Connection</h4>
                 <div className="space-y-2">
                   <Label htmlFor="ghlApiKey">API Key</Label>
                   <Input
                     id="ghlApiKey"
                     type="password"
-                    placeholder="Enter your GHL API key"
+                    placeholder="Enter your CRM API key"
                     value={formData.ghlApiKey}
                     onChange={(e) => setFormData({ ...formData, ghlApiKey: e.target.value })}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Find this in GHL → Settings → Business Profile → API Keys
+                    Find this in your CRM → Settings → Business Profile → API Keys
                   </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ghlLocationId">Location ID</Label>
                   <Input
                     id="ghlLocationId"
-                    placeholder="Enter your GHL Location ID"
+                    placeholder="Enter your CRM Location ID"
                     value={formData.ghlLocationId}
                     onChange={(e) => {
                       setFormData({ ...formData, ghlLocationId: e.target.value });
@@ -509,10 +509,10 @@ export default function Onboarding() {
                     <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4">
                       <h4 className="font-medium mb-2 flex items-center gap-2 text-amber-800 dark:text-amber-300">
                         <Webhook className="h-4 w-4" />
-                        Required: Set Up GHL Webhook
+                        Required: Set Up CRM Webhook
                       </h4>
                       <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-                        For Gunner to receive call data automatically, you need to create a webhook in your GHL workflow that fires when a call is completed.
+                        For Gunner to receive call data automatically, you need to create a webhook in your CRM workflow that fires when a call is completed.
                       </p>
                       <div className="space-y-3">
                         <div>
@@ -535,7 +535,7 @@ export default function Onboarding() {
                           </div>
                         </div>
                         <div className="text-xs text-amber-700 dark:text-amber-400 space-y-1.5">
-                          <p className="font-medium">Setup steps in GoHighLevel:</p>
+                          <p className="font-medium">Setup steps in your CRM:</p>
                           <ol className="list-decimal list-inside space-y-1 ml-1">
                             <li>Go to <strong>Automation</strong> → <strong>Workflows</strong></li>
                             <li>Create a new workflow (or edit an existing one)</li>
@@ -546,7 +546,7 @@ export default function Onboarding() {
                         </div>
                         <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-500 bg-amber-100 dark:bg-amber-900/30 rounded p-2">
                           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          <span>Without this webhook, Gunner won't receive call data from GHL. You can also set this up later from Settings → Integrations.</span>
+                          <span>Without this webhook, Gunner won't receive call data from your CRM. You can also set this up later from Settings → Integrations.</span>
                         </div>
                       </div>
                     </div>
@@ -623,7 +623,7 @@ export default function Onboarding() {
                   ) : (
                     <>
                       <p className="text-xs text-muted-foreground mb-3">
-                        {connectionStatus.success ? "No pipelines found. Enter names manually:" : "Connect GHL above to auto-load pipelines, or enter names manually:"}
+                        {connectionStatus.success ? "No pipelines found. Enter names manually:" : "Connect CRM above to auto-load pipelines, or enter names manually:"}
                       </p>
                       <div className="space-y-2">
                         <Label htmlFor="dispoPipelineName">Dispo Pipeline Name</Label>
@@ -633,7 +633,7 @@ export default function Onboarding() {
                           value={formData.dispoPipelineName}
                           onChange={(e) => setFormData({ ...formData, dispoPipelineName: e.target.value })}
                         />
-                        <p className="text-xs text-muted-foreground">The pipeline in GHL where qualified leads are moved</p>
+                        <p className="text-xs text-muted-foreground">The pipeline in your CRM where qualified leads are moved</p>
                       </div>
                       <div className="space-y-2 mt-3">
                         <Label htmlFor="newDealStageName">New Deal Stage Name</Label>

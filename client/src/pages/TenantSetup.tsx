@@ -19,7 +19,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 
 const STEPS = [
   { id: 1, title: "Company Info", icon: Building2, description: "Customer company details" },
-  { id: 2, title: "CRM Setup", icon: Link2, description: "Connect GHL & BatchDialer" },
+  { id: 2, title: "CRM Setup", icon: Link2, description: "Connect CRM & BatchDialer" },
   { id: 3, title: "Team Members", icon: Users, description: "Add the team" },
   { id: 4, title: "Launch", icon: Rocket, description: "Review & create" },
 ];
@@ -178,7 +178,7 @@ export default function TenantSetup() {
 
   const handleTestConnection = async () => {
     if (!formData.ghlApiKey || !formData.ghlLocationId) {
-      toast.error("Enter both GHL API Key and Location ID first");
+      toast.error("Enter both CRM API Key and Location ID first");
       return;
     }
     setTestingConnection(true);
@@ -232,7 +232,7 @@ export default function TenantSetup() {
           setSelectedPipelineId(result.pipelines[0].id);
         }
       } else if (result.pipelines.length === 0) {
-        toast.info("No pipelines found in this GHL location");
+        toast.info("No pipelines found in this CRM location");
       }
     } catch (error: any) {
       console.error("Failed to fetch pipelines:", error);
@@ -394,14 +394,14 @@ export default function TenantSetup() {
       case 2:
         return (
           <div className="space-y-6">
-            {/* GHL Connection Section */}
+            {/* CRM Connection Section */}
             <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
               <h4 className="font-medium flex items-center gap-2">
                 <Link2 className="h-4 w-4" />
-                GoHighLevel Connection
+                CRM Connection
               </h4>
               <div className="space-y-2">
-                <Label htmlFor="ghlApiKey">GHL API Key</Label>
+                <Label htmlFor="ghlApiKey">CRM API Key</Label>
                 <Input
                   id="ghlApiKey"
                   type="password"
@@ -414,7 +414,7 @@ export default function TenantSetup() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ghlLocationId">GHL Location ID</Label>
+                <Label htmlFor="ghlLocationId">CRM Location ID</Label>
                 <Input
                   id="ghlLocationId"
                   placeholder="e.g., hmD7eWGQJE7EVFpJxj4q"
@@ -482,7 +482,7 @@ export default function TenantSetup() {
                 {loadingPipelines && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading pipelines from GHL...
+                    Loading pipelines from CRM...
                   </div>
                 )}
 
@@ -606,7 +606,7 @@ export default function TenantSetup() {
               <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
                 <h4 className="font-medium">Pipeline Mapping</h4>
                 <p className="text-xs text-muted-foreground">
-                  Connect GHL above to auto-load pipelines, or enter names manually:
+                  Connect CRM above to auto-load pipelines, or enter names manually:
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -655,7 +655,7 @@ export default function TenantSetup() {
         return (
           <div className="space-y-6">
             <p className="text-muted-foreground text-center text-sm">
-              Add team members who make calls. Their names must match what appears in GHL/BatchDialer for auto-matching.
+              Add team members who make calls. Their names must match what appears in your CRM/BatchDialer for auto-matching.
               Include their email to send an invite so they can sign in.
             </p>
 
@@ -823,7 +823,7 @@ export default function TenantSetup() {
                         ) : (
                           <WifiOff className="h-4 w-4 text-yellow-500" />
                         )}
-                        GoHighLevel {connectionStatus.success ? "verified" : "configured (not tested)"}
+                        CRM {connectionStatus.success ? "verified" : "configured (not tested)"}
                       </div>
                       {connectionStatus.locationName && (
                         <div><span className="text-muted-foreground">Location:</span> {connectionStatus.locationName}</div>

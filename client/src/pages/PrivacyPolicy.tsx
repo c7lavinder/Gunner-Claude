@@ -53,7 +53,7 @@ export default function PrivacyPolicy() {
 
             <h3 className="text-xl font-medium mt-6 mb-3">2.3 Information from Third Parties</h3>
             <ul className="list-disc list-inside text-muted-foreground space-y-2">
-              <li><strong>CRM Data:</strong> Contact information and call data from integrated CRM systems (e.g., GoHighLevel)</li>
+              <li><strong>CRM Data:</strong> Contact information and call data from integrated CRM systems</li>
               <li><strong>Authentication Providers:</strong> Profile information from Google OAuth if you choose to sign in with Google</li>
             </ul>
           </section>
