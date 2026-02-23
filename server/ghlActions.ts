@@ -464,6 +464,26 @@ export async function getUserPhoneNumber(
   tenantId: number,
   ghlUserId: string
 ): Promise<string | null> {
+  // Fast path: check cached lcPhone in team_members table first
+  try {
+    const { getDb } = await import("./db");
+    const { teamMembers } = await import("../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (db) {
+      const [member] = await db.select({ lcPhone: teamMembers.lcPhone })
+        .from(teamMembers)
+        .where(eq(teamMembers.ghlUserId, ghlUserId))
+        .limit(1);
+      if (member?.lcPhone) {
+        console.log(`[getUserPhoneNumber] Using cached lcPhone ${member.lcPhone} for user ${ghlUserId}`);
+        return member.lcPhone;
+      }
+    }
+  } catch (cacheErr) {
+    // Non-critical: fall through to GHL API
+  }
+
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) return null;
 
@@ -481,6 +501,16 @@ export async function getUserPhoneNumber(
       const phoneNumber = userData.lcPhone[creds.locationId];
       if (phoneNumber) {
         console.log(`[getUserPhoneNumber] Found LC phone ${phoneNumber} for user ${ghlUserId} (${userData.name || 'unknown'}) at location ${creds.locationId}`);
+        // Cache the phone number in team_members for future fast lookups
+        try {
+          const { getDb } = await import("./db");
+          const { teamMembers } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          const db = await getDb();
+          if (db) {
+            await db.update(teamMembers).set({ lcPhone: phoneNumber }).where(eq(teamMembers.ghlUserId, ghlUserId));
+          }
+        } catch (cacheErr) { /* non-critical */ }
         return phoneNumber;
       }
     }
@@ -1363,7 +1393,7 @@ export async function confirmAction(actionId: number): Promise<void> {
     .where(eq(coachActionLog.id, actionId));
 }
 
-export async function executeAction(actionId: number): Promise<{ success: boolean; error?: string; smsMessageId?: string; smsSenderName?: string }> {
+export async function executeAction(actionId: number): Promise<{ success: boolean; error?: string; smsMessageId?: string; smsSenderName?: string; smsFromNumber?: string }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -1730,7 +1760,7 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
 
     // For SMS, return extra metadata for the frontend
     if (action.actionType === "send_sms" && result?.messageId) {
-      return { success: true, smsMessageId: result.messageId, smsSenderName: (payload.senderOverrideName || action.requestedByName || "Unknown") };
+      return { success: true, smsMessageId: result.messageId, smsSenderName: (payload.senderOverrideName || action.requestedByName || "Unknown"), smsFromNumber: result.fromNumber || undefined };
     }
     return { success: true };
   } catch (error: any) {

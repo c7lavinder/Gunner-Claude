@@ -352,7 +352,7 @@ function FeedbackCard({
 type ConversationMessage = 
   | { role: "user"; content: string }
   | { role: "assistant"; content: string }
-  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number; resolvedStage?: { pipelineName: string; stageName: string }; smsDeliveryStatus?: string };
+  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number; resolvedStage?: { pipelineName: string; stageName: string }; smsDeliveryStatus?: string; smsFromNumber?: string };
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
   add_note: "Add Note",
@@ -952,7 +952,7 @@ function AICoachQA() {
       const result = await confirmExecuteMutation.mutateAsync({ actionId, editedPayload });
       setConversation(prev => prev.map(msg => 
         msg.role === "action_card" && msg.actionId === actionId 
-          ? { ...msg, status: result.success ? "executed" as const : "failed" as const, result: result.success ? "Action completed successfully!" : (result.error || "Action failed") }
+          ? { ...msg, status: result.success ? "executed" as const : "failed" as const, result: result.success ? "Action completed successfully!" : (result.error || "Action failed"), ...(result.smsFromNumber ? { smsFromNumber: result.smsFromNumber } : {}) }
           : msg
       ));
       if (result.success) {
@@ -1157,32 +1157,36 @@ function AICoachQA() {
                                     }
                                   }}
                                 >
-                                  <SelectTrigger className="h-5 text-[10px] w-auto min-w-[120px] max-w-[180px] px-1.5 py-0 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30">
+                                  <SelectTrigger className="h-5 text-[10px] w-auto min-w-[140px] max-w-[220px] px-1.5 py-0 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30">
                                     <SelectValue placeholder={`${currentUser.name}'s line`} />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="default">{currentUser.name}'s line (default)</SelectItem>
+                                    <SelectItem value="default">
+                                      {currentUser.name}'s line{(() => { const me = smsTeamSenders.find(s => s.name === currentUser.name); return me?.lcPhone ? ` (${me.lcPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')})` : ''; })()} (default)
+                                    </SelectItem>
                                     {smsTeamSenders.filter(s => s.name !== currentUser.name).map(sender => (
                                       <SelectItem key={sender.ghlUserId} value={sender.ghlUserId}>
-                                        {sender.name}'s line
+                                        {sender.name}'s line{sender.lcPhone ? ` (${sender.lcPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')})` : ''}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <span className="text-[10px] font-medium text-blue-700 dark:text-blue-300">{currentUser.name}'s line</span>
+                                <span className="text-[10px] font-medium text-blue-700 dark:text-blue-300">
+                                  {currentUser.name}'s line{(() => { const me = smsTeamSenders?.find(s => s.name === currentUser.name); return me?.lcPhone ? ` (${me.lcPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')})` : ''; })()}
+                                </span>
                               )}
                             </div>
                           )}
                           {/* Show sender override info for executed SMS */}
                           {msg.actionType === "send_sms" && msg.status === "executed" && msg.payload?.senderOverrideName && (
                             <p className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">
-                              ✅ Sent from: {msg.payload.senderOverrideName}'s line
+                              ✅ Sent from: {msg.payload.senderOverrideName}'s line{msg.smsFromNumber ? ` (${msg.smsFromNumber.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')})` : ''}
                             </p>
                           )}
                           {msg.actionType === "send_sms" && msg.status === "executed" && !msg.payload?.senderOverrideName && currentUser?.name && (
                             <p className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">
-                              ✅ Sent from: {currentUser.name}'s line
+                              ✅ Sent from: {currentUser.name}'s line{msg.smsFromNumber ? ` (${msg.smsFromNumber.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')})` : ''}
                             </p>
                           )}
                           {/* SMS Delivery Status Indicator */}

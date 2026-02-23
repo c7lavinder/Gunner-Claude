@@ -116,6 +116,7 @@ export const teamMembers = mysqlTable("team_members", {
   teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator"]).notNull(),
   userId: int("userId").references(() => users.id),
   ghlUserId: varchar("ghlUserId", { length: 255 }), // GoHighLevel user ID for matching
+  lcPhone: varchar("lcPhone", { length: 20 }), // LC phone number from GHL (e.g. +16157688784)
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

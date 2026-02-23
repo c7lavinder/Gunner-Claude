@@ -379,6 +379,13 @@
       "when": 1771882027867,
       "tag": "0053_daily_surge",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "5",
+      "when": 1771884109741,
+      "tag": "0054_lovely_magdalene",
+      "breakpoints": true
     }
   ]
 }

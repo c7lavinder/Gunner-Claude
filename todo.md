@@ -2692,3 +2692,12 @@
 - [x] Fix: Switched to GET /users/{ghlUserId} API and extract phone from lcPhone[locationId]
 - [x] Verified: Kyle=+16157688784, Chris=+19312885429, Daniel=+16152405127 all resolve correctly
 - [x] fromNumber is now explicitly passed to GHL send message API
+## Show Actual From Phone Number in SMS Action Card
+- [x] Display the actual phone number (e.g. "+1 (615) 768-8784") alongside team member name in SMS card
+- [x] Show phone number in both pending (dropdown) and executed (status) SMS action cards
+- [x] Return phone number from smsTeamSenders endpoint
+## Phone Number Sync During Team Sync
+- [x] Add lcPhone column to team_members table
+- [x] During GHL team sync, call GET /users/{ghlUserId} and store lcPhone for each member
+- [x] Use cached lcPhone from team_members table in getUserPhoneNumber as a fast path
+- [x] Add bulk syncPhoneNumbers endpoint for manual refresh of all team member phone numbers

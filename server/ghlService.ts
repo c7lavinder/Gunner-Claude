@@ -191,8 +191,37 @@ async function linkTeamMemberGhlUserId(teamMemberId: number, ghlUserId: string):
     const { eq: eqOp } = await import("drizzle-orm");
     const db = await getDatabase();
     if (!db) return;
-    await db.update(teamMembersTable).set({ ghlUserId }).where(eqOp(teamMembersTable.id, teamMemberId));
-    console.log(`[GHL] Auto-linked team member ${teamMemberId} to GHL userId ${ghlUserId}`);
+    
+    // Also try to fetch the user's LC phone number from GHL
+    let lcPhone: string | undefined;
+    try {
+      const creds = getActiveCredentials();
+      const url = `${GHL_API_BASE}/users/${ghlUserId}`;
+      const resp = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${creds.apiKey}`,
+          "Version": "2021-07-28",
+        },
+      });
+      if (resp.ok) {
+        const userData = await resp.json();
+        if (userData.lcPhone && typeof userData.lcPhone === 'object') {
+          lcPhone = userData.lcPhone[creds.locationId] || undefined;
+          if (lcPhone) {
+            console.log(`[GHL] Found LC phone ${lcPhone} for user ${ghlUserId} (team member ${teamMemberId})`);
+          }
+        }
+      }
+    } catch (phoneErr) {
+      // Non-critical: phone lookup failed, still link the ghlUserId
+      console.warn(`[GHL] Failed to fetch phone for user ${ghlUserId}:`, phoneErr);
+    }
+    
+    const updateData: any = { ghlUserId };
+    if (lcPhone) updateData.lcPhone = lcPhone;
+    
+    await db.update(teamMembersTable).set(updateData).where(eqOp(teamMembersTable.id, teamMemberId));
+    console.log(`[GHL] Auto-linked team member ${teamMemberId} to GHL userId ${ghlUserId}${lcPhone ? ` with phone ${lcPhone}` : ''}`);
   } catch (e) {
     console.warn(`[GHL] Failed to persist ghlUserId for team member ${teamMemberId}:`, e);
   }

@@ -419,6 +419,55 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // Admin: Sync LC phone numbers for all team members with GHL user IDs
+    syncPhoneNumbers: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No tenant' });
+        
+        const members = await getTeamMembers(tenantId);
+        const { parseCrmConfig, getTenantById } = await import("./tenant");
+        const tenant = await getTenantById(tenantId);
+        if (!tenant) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+        const config = parseCrmConfig(tenant);
+        if (!config?.ghlApiKey || !config?.ghlLocationId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'GHL not configured' });
+        }
+        
+        let synced = 0;
+        for (const member of members) {
+          if (!member.ghlUserId) continue;
+          try {
+            const resp = await fetch(`https://services.leadconnectorhq.com/users/${member.ghlUserId}`, {
+              headers: {
+                'Authorization': `Bearer ${config.ghlApiKey}`,
+                'Version': '2021-07-28',
+              },
+            });
+            if (resp.ok) {
+              const userData = await resp.json();
+              const lcPhone = userData.lcPhone?.[config.ghlLocationId];
+              if (lcPhone && lcPhone !== member.lcPhone) {
+                const { getDb } = await import("./db");
+                const { teamMembers: tmTable } = await import("../drizzle/schema");
+                const { eq: eqOp } = await import("drizzle-orm");
+                const db = await getDb();
+                if (!db) continue;
+                await db.update(tmTable).set({ lcPhone }).where(eqOp(tmTable.id, member.id));
+                synced++;
+                console.log(`[Team] Synced phone ${lcPhone} for ${member.name}`);
+              }
+            }
+          } catch (e) {
+            console.warn(`[Team] Failed to sync phone for ${member.name}:`, e);
+          }
+        }
+        return { success: true, synced };
+      }),
+
     // Admin: Update user's team role
     updateUserRole: protectedProcedure
       .input(z.object({
@@ -5449,6 +5498,7 @@ selectedTimezone: { type: "string" },
             id: m.id,
             name: m.name,
             ghlUserId: m.ghlUserId!,
+            lcPhone: m.lcPhone || null,
           }));
       }),
   }),

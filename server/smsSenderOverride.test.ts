@@ -255,9 +255,82 @@ describe("Frontend: SMS delivery status indicator", () => {
 });
 
 describe("executeAction return type", () => {
-  it("should include optional smsMessageId and smsSenderName in return type", async () => {
+  it("should include optional smsMessageId, smsSenderName, and smsFromNumber in return type", async () => {
     const source = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
     expect(source).toContain("smsMessageId?: string");
     expect(source).toContain("smsSenderName?: string");
+    expect(source).toContain("smsFromNumber?: string");
+  });
+});
+
+describe("lcPhone column in team_members schema", () => {
+  it("should have lcPhone column in team_members table", async () => {
+    const schema = readFileSync(join(__dirname, "..", "drizzle", "schema.ts"), "utf-8");
+    expect(schema).toContain('lcPhone:');
+    expect(schema).toContain('"lcPhone"');
+  });
+});
+
+describe("Phone number sync during team linking", () => {
+  it("should sync lcPhone when linking GHL user ID in ghlService", async () => {
+    const source = readFileSync(join(SERVER_DIR, "ghlService.ts"), "utf-8");
+    expect(source).toContain("lcPhone");
+    expect(source).toContain("/users/");
+  });
+
+  it("should have syncPhoneNumbers endpoint in team router", async () => {
+    const source = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    expect(source).toContain("syncPhoneNumbers:");
+  });
+});
+
+describe("getUserPhoneNumber caches lcPhone", () => {
+  it("should check cached lcPhone in team_members first", async () => {
+    const source = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(source).toContain("Using cached lcPhone");
+    expect(source).toContain("teamMembers.lcPhone");
+  });
+
+  it("should cache phone number after GHL API lookup", async () => {
+    const source = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // After finding phone via API, should update team_members
+    expect(source).toContain(".set({ lcPhone: phoneNumber })");
+  });
+});
+
+describe("smsTeamSenders returns lcPhone", () => {
+  it("should include lcPhone in smsTeamSenders response", async () => {
+    const source = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    const idx = source.indexOf("smsTeamSenders:");
+    const section = source.substring(idx, idx + 700);
+    expect(section).toContain("lcPhone: m.lcPhone");
+  });
+});
+
+describe("Frontend: Phone number display in SMS cards", () => {
+  it("should have smsFromNumber in ConversationMessage type", async () => {
+    const source = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(source).toContain("smsFromNumber?: string");
+  });
+
+  it("should display phone numbers in sender dropdown", async () => {
+    const source = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(source).toContain("sender.lcPhone");
+  });
+
+  it("should display from phone number on executed SMS cards", async () => {
+    const source = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(source).toContain("msg.smsFromNumber");
+  });
+
+  it("should format phone numbers for display", async () => {
+    const source = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    // Should format +1XXXXXXXXXX to (XXX) XXX-XXXX
+    expect(source).toContain("replace(/^\\+1(\\d{3})(\\d{3})(\\d{4})$/");
+  });
+
+  it("should pass smsFromNumber from result to conversation state", async () => {
+    const source = readFileSync(join(CLIENT_DIR, "pages", "CallInbox.tsx"), "utf-8");
+    expect(source).toContain("result.smsFromNumber");
   });
 });
