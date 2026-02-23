@@ -52,8 +52,13 @@ export default function TeamManagement() {
   });
 
   const linkUserMutation = trpc.team.linkUser.useMutation({
-    onSuccess: () => {
-      toast.success("User linked to team member");
+    onSuccess: (data) => {
+      if (data.syncedPhone) {
+        const formatted = data.syncedPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3');
+        toast.success(`User linked to team member. Phone synced: ${formatted}`);
+      } else {
+        toast.success("User linked to team member");
+      }
       utils.team.allUsers.invalidate();
       utils.team.list.invalidate();
     },
@@ -180,8 +185,14 @@ export default function TeamManagement() {
                         <div className="font-medium">{u.name || u.email}</div>
                         <div className="text-sm text-muted-foreground">{u.email}</div>
                         {linkedMember && (
-                          <div className="text-xs text-blue-600 mt-1">
-                            Linked to: {linkedMember.name}
+                          <div className="text-xs text-blue-600 mt-1 flex items-center gap-2">
+                            <span>Linked to: {linkedMember.name}</span>
+                            {linkedMember.lcPhone && (
+                              <span className="inline-flex items-center gap-1 text-emerald-600">
+                                <Phone className="h-3 w-3" />
+                                {linkedMember.lcPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>

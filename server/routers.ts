@@ -391,7 +391,50 @@ export const appRouter = router({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
         await linkUserToTeamMember(input.userId, input.teamMemberId);
-        return { success: true };
+        
+        // Auto-sync phone number for the linked team member
+        let syncedPhone: string | null = null;
+        try {
+          const tenantId = ctx.user?.tenantId;
+          if (tenantId) {
+            const members = await getTeamMembers(tenantId);
+            const member = members.find(m => m.id === input.teamMemberId);
+            if (member?.ghlUserId) {
+              const { parseCrmConfig, getTenantById } = await import("./tenant");
+              const tenant = await getTenantById(tenantId);
+              if (tenant) {
+                const config = parseCrmConfig(tenant);
+                if (config?.ghlApiKey && config?.ghlLocationId) {
+                  const resp = await fetch(`https://services.leadconnectorhq.com/users/${member.ghlUserId}`, {
+                    headers: {
+                      'Authorization': `Bearer ${config.ghlApiKey}`,
+                      'Version': '2021-07-28',
+                    },
+                  });
+                  if (resp.ok) {
+                    const userData = await resp.json();
+                    const lcPhone = userData.lcPhone?.[config.ghlLocationId];
+                    if (lcPhone) {
+                      const { getDb } = await import("./db");
+                      const { teamMembers: tmTable } = await import("../drizzle/schema");
+                      const { eq: eqOp } = await import("drizzle-orm");
+                      const db = await getDb();
+                      if (db) {
+                        await db.update(tmTable).set({ lcPhone }).where(eqOp(tmTable.id, member.id));
+                        syncedPhone = lcPhone;
+                        console.log(`[Team] Auto-synced phone ${lcPhone} for ${member.name} on link`);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[Team] Failed to auto-sync phone on link:`, e);
+        }
+        
+        return { success: true, syncedPhone };
       }),
 
     // Admin: Assign Lead Manager to Acquisition Manager

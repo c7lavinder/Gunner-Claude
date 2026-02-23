@@ -2705,3 +2705,11 @@
 - [x] Add "Sync Phone Numbers" button to Team Management page (admin only)
 - [x] Wire button to call team.syncPhoneNumbers mutation
 - [x] Show loading state and success/error toast
+## Auto-Sync Phone on Team Member Link
+- [x] When linking a user to a team member, automatically pull their LC phone number from GHL
+- [x] Update linkUser endpoint to trigger phone sync after linking
+- [x] Show synced phone number in success toast after linking
+## Display Phone Numbers in Team Member List
+- [x] Show each team member's synced phone number on the Team Management page
+- [x] Format phone numbers nicely for display (e.g. (615) 768-8784)
+- [x] Phone icon with emerald color next to linked member name
