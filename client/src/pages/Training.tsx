@@ -276,7 +276,7 @@ function GenerateInsightsBtn({ onSuccess }: { onSuccess: () => void }) {
 function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
@@ -325,7 +325,7 @@ function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
 function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
@@ -374,7 +374,7 @@ function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
 function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
@@ -588,7 +588,7 @@ function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   const utils = trpc.useUtils();
   const [showFacilitator, setShowFacilitator] = useState(false);
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   
   let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
@@ -643,7 +643,7 @@ function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
 function TeamTrainingContent() {
   const utils = trpc.useUtils();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator">("all");
   const handleInsightsGenerated = () => utils.teamTraining.list.invalidate();
 
@@ -706,7 +706,7 @@ function TeamTrainingContent() {
 export default function Training() {
   const { isDemo, guardAction: guardDemoAction } = useDemo();
   const { user } = useAuth();
-  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [mainTab, setMainTab] = useState("team");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<any>(null);
@@ -1402,7 +1402,7 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
 }) {
   const { user } = useAuth();
   const { isDemo } = useDemo();
-  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const utils = trpc.useUtils();
 
   // Fetch tenant-specific rubrics

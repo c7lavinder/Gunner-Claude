@@ -2720,3 +2720,6 @@
 ## Sync Phone Numbers Button on Settings Page
 - [x] Add "Sync Phone Numbers" button to TenantSettings Team Members card header
 - [x] Wire to team.syncPhoneNumbers mutation with loading state and toast
+## Bug: Admin Users Missing Team Type Toggles on Training Page
+- [x] Admin users (like Kyle) should see team type toggles on Training page to filter insights
+- [x] Fix toggle visibility logic to check user.role === 'admin' in addition to teamRole === 'admin'
