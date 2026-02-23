@@ -5407,13 +5407,49 @@ selectedTimezone: { type: "string" },
       }),
 
     // Get edit stats for the current user
-    editStats: protectedProcedure
+     editStats: protectedProcedure
       .query(async ({ ctx }) => {
         const tenantId = ctx.user?.tenantId;
         if (!tenantId) return { totalEdits: 0, totalAccepts: 0, categories: [] as string[] };
-
         const { getEditStats } = await import("./coachPreferences");
         return getEditStats(tenantId, ctx.user!.id);
+      }),
+
+    // Check SMS delivery status for an executed action
+    smsDeliveryStatus: protectedProcedure
+      .input(z.object({ actionId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return { status: "unknown", found: false };
+        const { coachActionLog } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const [action] = await db.select().from(coachActionLog).where(eq(coachActionLog.id, input.actionId));
+        if (!action || action.actionType !== "send_sms") return { status: "unknown", found: false };
+        const meta = action.resultMeta as any;
+        if (!meta?.messageId || !action.targetContactId) {
+          // No messageId stored - SMS was sent but we can't track it
+          return { status: action.status === "executed" ? "sent" : action.status || "unknown", found: false };
+        }
+        const { getMessageStatus } = await import("./ghlActions");
+        return getMessageStatus(action.tenantId, action.targetContactId, meta.messageId);
+      }),
+
+    // Get team members for sender override dropdown (only those with GHL user IDs)
+    smsTeamSenders: protectedProcedure
+      .query(async ({ ctx }) => {
+        const tenantId = ctx.user?.tenantId;
+        if (!tenantId) return [];
+        const { getTeamMembers } = await import("./db");
+        const members = await getTeamMembers(tenantId);
+        // Only return members that have a GHL user ID (meaning they can send SMS)
+        return members
+          .filter(m => m.ghlUserId)
+          .map(m => ({
+            id: m.id,
+            name: m.name,
+            ghlUserId: m.ghlUserId!,
+          }));
       }),
   }),
 });

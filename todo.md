@@ -2677,3 +2677,12 @@
 - [x] SMS sends from the logged-in user's phone number (whoever is using the AI Coach)
 - [x] Reverted previous change that routed SMS through contact's assignedTo user
 - [x] Frontend "Sending from" label correctly shows the logged-in user's name
+## SMS Override Sender Option
+- [x] Add endpoint to list team members with phone numbers for sender selection
+- [x] Add senderOverride field to SMS action execution (optional GHL user ID)
+- [x] Add sender dropdown to SMS action card (pending state) to pick a different team member's line
+- [x] Default dropdown to logged-in user, allow switching to any team member
+## SMS Delivery Confirmation
+- [x] Track SMS message ID from GHL send response
+- [x] Add endpoint or logic to check GHL message delivery status
+- [x] Show delivery status indicator on executed SMS action cards (sent, delivered, failed)

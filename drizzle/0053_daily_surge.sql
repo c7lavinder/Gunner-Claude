@@ -1,0 +1,1 @@
+ALTER TABLE `coach_action_log` ADD `resultMeta` json;

@@ -1227,6 +1227,7 @@ export const coachActionLog = mysqlTable("coach_action_log", {
   payload: json("payload"),
   status: mysqlEnum("status", ["pending", "confirmed", "executed", "failed", "cancelled"]).notNull().default("pending"),
   error: text("error"),
+  resultMeta: json("resultMeta"), // Stores execution metadata (e.g., SMS messageId, sender info)
   confirmedAt: timestamp("confirmedAt"),
   executedAt: timestamp("executedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

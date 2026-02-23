@@ -38,7 +38,8 @@ import {
   Tag,
   Pencil,
   ClipboardList,
-  MoreVertical
+  MoreVertical,
+  Users
 } from "lucide-react";
 import { Link, useSearch, useLocation, useRoute } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -351,7 +352,7 @@ function FeedbackCard({
 type ConversationMessage = 
   | { role: "user"; content: string }
   | { role: "assistant"; content: string }
-  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number; resolvedStage?: { pipelineName: string; stageName: string } };
+  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number; resolvedStage?: { pipelineName: string; stageName: string }; smsDeliveryStatus?: string };
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
   add_note: "Add Note",
@@ -400,6 +401,10 @@ function AICoachQA() {
   // Track which action card is being edited and its edited content
   const [editingActionId, setEditingActionId] = useState<number | null>(null);
   const [editedContent, setEditedContent] = useState("");
+  // Sender override for SMS actions: maps actionId -> { ghlUserId, name }
+  const [senderOverrides, setSenderOverrides] = useState<Record<number, { ghlUserId: string; name: string } | null>>({});
+  // Fetch team members who can send SMS (have GHL user IDs)
+  const { data: smsTeamSenders } = trpc.coachActions.smsTeamSenders.useQuery();
   
   // Fire-and-forget mutation to persist exchanges for conversation memory
   const saveExchangeMutation = trpc.coach.saveExchange.useMutation();
@@ -918,6 +923,16 @@ function AICoachQA() {
       }
     }
 
+    // If there's a sender override for this SMS action, inject it into the payload
+    if (actionCard?.actionType === "send_sms" && senderOverrides[actionId]) {
+      const override = senderOverrides[actionId];
+      editedPayload = {
+        ...(editedPayload || actionCard.payload || {}),
+        senderOverrideGhlId: override.ghlUserId,
+        senderOverrideName: override.name,
+      };
+    }
+
     // Clear editing state
     setEditingActionId(null);
     setEditedContent("");
@@ -942,6 +957,41 @@ function AICoachQA() {
       ));
       if (result.success) {
         toast.success("Action executed successfully!");
+        // For SMS actions, poll delivery status after a short delay
+        if (actionCard?.actionType === "send_sms") {
+          // Set initial status as "sent"
+          setConversation(prev => prev.map(msg =>
+            msg.role === "action_card" && msg.actionId === actionId
+              ? { ...msg, smsDeliveryStatus: "sent" }
+              : msg
+          ));
+          // Poll for delivery status after 3 seconds
+          setTimeout(async () => {
+            try {
+              const statusResult = await coachUtils.coachActions.smsDeliveryStatus.fetch({ actionId });
+              if (statusResult.found && statusResult.status) {
+                setConversation(prev => prev.map(msg =>
+                  msg.role === "action_card" && msg.actionId === actionId
+                    ? { ...msg, smsDeliveryStatus: statusResult.status }
+                    : msg
+                ));
+              }
+            } catch { /* non-critical */ }
+          }, 3000);
+          // Poll again after 8 seconds for final status
+          setTimeout(async () => {
+            try {
+              const statusResult = await coachUtils.coachActions.smsDeliveryStatus.fetch({ actionId });
+              if (statusResult.found && statusResult.status) {
+                setConversation(prev => prev.map(msg =>
+                  msg.role === "action_card" && msg.actionId === actionId
+                    ? { ...msg, smsDeliveryStatus: statusResult.status }
+                    : msg
+                ));
+              }
+            } catch { /* non-critical */ }
+          }, 8000);
+        }
       } else {
         toast.error(result.error || "Action failed");
       }
@@ -1089,11 +1139,68 @@ function AICoachQA() {
                           {msg.contactName && (
                             <p className="text-xs text-muted-foreground mt-0.5">Contact: {msg.contactName}</p>
                           )}
-                          {/* Show sender info for SMS */}
+                          {/* Show sender info for SMS with override dropdown */}
                           {msg.actionType === "send_sms" && msg.status === "pending" && currentUser?.name && (
-                            <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
-                              📤 Sending from: {currentUser.name}'s line
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] text-blue-600 dark:text-blue-400">📤 Sending from:</span>
+                              {smsTeamSenders && smsTeamSenders.length > 1 ? (
+                                <Select
+                                  value={senderOverrides[msg.actionId]?.ghlUserId || "default"}
+                                  onValueChange={(val) => {
+                                    if (val === "default") {
+                                      setSenderOverrides(prev => ({ ...prev, [msg.actionId]: null }));
+                                    } else {
+                                      const sender = smsTeamSenders.find(s => s.ghlUserId === val);
+                                      if (sender) {
+                                        setSenderOverrides(prev => ({ ...prev, [msg.actionId]: { ghlUserId: sender.ghlUserId, name: sender.name } }));
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="h-5 text-[10px] w-auto min-w-[120px] max-w-[180px] px-1.5 py-0 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30">
+                                    <SelectValue placeholder={`${currentUser.name}'s line`} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="default">{currentUser.name}'s line (default)</SelectItem>
+                                    {smsTeamSenders.filter(s => s.name !== currentUser.name).map(sender => (
+                                      <SelectItem key={sender.ghlUserId} value={sender.ghlUserId}>
+                                        {sender.name}'s line
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <span className="text-[10px] font-medium text-blue-700 dark:text-blue-300">{currentUser.name}'s line</span>
+                              )}
+                            </div>
+                          )}
+                          {/* Show sender override info for executed SMS */}
+                          {msg.actionType === "send_sms" && msg.status === "executed" && msg.payload?.senderOverrideName && (
+                            <p className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">
+                              ✅ Sent from: {msg.payload.senderOverrideName}'s line
                             </p>
+                          )}
+                          {msg.actionType === "send_sms" && msg.status === "executed" && !msg.payload?.senderOverrideName && currentUser?.name && (
+                            <p className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">
+                              ✅ Sent from: {currentUser.name}'s line
+                            </p>
+                          )}
+                          {/* SMS Delivery Status Indicator */}
+                          {msg.actionType === "send_sms" && msg.status === "executed" && msg.smsDeliveryStatus && (
+                            <div className={`flex items-center gap-1 mt-1 text-[10px] px-2 py-0.5 rounded-full w-fit ${
+                              msg.smsDeliveryStatus === "delivered" ? "bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400" :
+                              msg.smsDeliveryStatus === "sent" ? "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400" :
+                              msg.smsDeliveryStatus === "pending" ? "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400" :
+                              msg.smsDeliveryStatus === "failed" || msg.smsDeliveryStatus === "undelivered" ? "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400" :
+                              "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                            }`}>
+                              {msg.smsDeliveryStatus === "delivered" && <CheckCircle className="h-2.5 w-2.5" />}
+                              {msg.smsDeliveryStatus === "sent" && <Send className="h-2.5 w-2.5" />}
+                              {msg.smsDeliveryStatus === "pending" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                              {(msg.smsDeliveryStatus === "failed" || msg.smsDeliveryStatus === "undelivered") && <XCircle className="h-2.5 w-2.5" />}
+                              {!(["delivered", "sent", "pending", "failed", "undelivered"].includes(msg.smsDeliveryStatus)) && <MessageSquare className="h-2.5 w-2.5" />}
+                              <span className="font-medium capitalize">{msg.smsDeliveryStatus}</span>
+                            </div>
                           )}
                           {/* Show workflow name for workflow actions */}
                           {(msg.actionType === "add_to_workflow" || msg.actionType === "remove_from_workflow") && msg.payload?.workflowName && (

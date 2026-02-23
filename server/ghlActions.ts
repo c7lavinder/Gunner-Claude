@@ -538,7 +538,48 @@ export async function sendSms(
   return { success: true, messageId: data.messageId || data.id, fromNumber: resolvedFromNumber };
 }
 
-// ============ HELPER: Parse relative date strings ============
+/**
+ * Check the delivery status of an SMS message by searching the contact's conversation.
+ * GHL messages have a `status` field: pending, sent, delivered, failed, undelivered, etc.
+ */
+export async function getMessageStatus(
+  tenantId: number,
+  contactId: string,
+  messageId: string
+): Promise<{ status: string; found: boolean }> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return { status: "unknown", found: false };
+
+  try {
+    // Search for the contact's conversation
+    const searchData = await ghlFetch(
+      creds,
+      `/conversations/search?locationId=${creds.locationId}&contactId=${contactId}`
+    );
+    const conversations = searchData.conversations || [];
+    if (conversations.length === 0) return { status: "unknown", found: false };
+
+    // Get messages from the first conversation
+    const convId = conversations[0].id;
+    const msgData = await ghlFetch(
+      creds,
+      `/conversations/${convId}/messages`
+    );
+    const messages = msgData.messages?.messages || msgData.messages || [];
+
+    // Find our specific message by ID
+    const msg = messages.find((m: any) => m.id === messageId);
+    if (msg) {
+      return { status: msg.status || "sent", found: true };
+    }
+
+    return { status: "pending", found: false };
+  } catch (err: any) {
+    console.error(`[getMessageStatus] Error checking message ${messageId}:`, err.message);
+    return { status: "unknown", found: false };
+  }
+}
+// ============ HELPER: Parse relative date strings =============
 
 function parseRelativeDate(dateStr: string): string {
   const now = new Date();
@@ -1318,7 +1359,7 @@ export async function confirmAction(actionId: number): Promise<void> {
     .where(eq(coachActionLog.id, actionId));
 }
 
-export async function executeAction(actionId: number): Promise<{ success: boolean; error?: string }> {
+export async function executeAction(actionId: number): Promise<{ success: boolean; error?: string; smsMessageId?: string; smsSenderName?: string }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -1453,10 +1494,24 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
       }
       case "send_sms": {
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
-        // SMS is sent from the logged-in user's phone number (whoever is using the AI Coach)
-        const smsUserId = requestingUserGhlId;
-        console.log(`[GHLActions] SMS action: requestedBy=${action.requestedBy} (${action.requestedByName}), sending as GHL userId=${smsUserId || 'NONE'}`);
+        // Check for sender override in payload, otherwise use the logged-in user
+        let smsUserId = requestingUserGhlId;
+        let senderName = action.requestedByName || "Unknown";
+        if (payload.senderOverrideGhlId) {
+          smsUserId = payload.senderOverrideGhlId;
+          senderName = payload.senderOverrideName || senderName;
+          console.log(`[GHLActions] SMS sender override: using ${senderName} (GHL: ${smsUserId}) instead of ${action.requestedByName}`);
+        }
+        console.log(`[GHLActions] SMS action: requestedBy=${action.requestedBy} (${action.requestedByName}), sending as ${senderName} (GHL userId=${smsUserId || 'NONE'})`);
         result = await sendSms(action.tenantId, contactId, payload.message, smsUserId);
+        // Store SMS metadata for delivery tracking
+        if (result.messageId) {
+          try {
+            await db.update(coachActionLog)
+              .set({ resultMeta: { messageId: result.messageId, fromNumber: result.fromNumber, senderName, senderGhlId: smsUserId } })
+              .where(eq(coachActionLog.id, actionId));
+          } catch { /* non-critical metadata storage */ }
+        }
         break;
       }
       case "create_task":
@@ -1669,6 +1724,10 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
       .set({ status: "executed", executedAt: new Date() })
       .where(eq(coachActionLog.id, actionId));
 
+    // For SMS, return extra metadata for the frontend
+    if (action.actionType === "send_sms" && result?.messageId) {
+      return { success: true, smsMessageId: result.messageId, smsSenderName: (payload.senderOverrideName || action.requestedByName || "Unknown") };
+    }
     return { success: true };
   } catch (error: any) {
     const errorMsg = error.message || "Unknown error";
