@@ -1162,7 +1162,7 @@ function AICoachQA() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="default">
-                                      {currentUser.name}'s line{(() => { const me = smsTeamSenders.find(s => s.name === currentUser.name); return me?.lcPhone ? ` (${me.lcPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')})` : ''; })()} (default)
+                                      {currentUser.name}'s line{(() => { const me = smsTeamSenders.find(s => s.name === currentUser.name); return me?.lcPhone ? ` (${me.lcPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')})` : ''; })()}
                                     </SelectItem>
                                     {smsTeamSenders.filter(s => s.name !== currentUser.name).map(sender => (
                                       <SelectItem key={sender.ghlUserId} value={sender.ghlUserId}>
