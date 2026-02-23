@@ -2717,3 +2717,6 @@
 - [x] Add Phone column to the Team Members list page (TenantSettings team table)
 - [x] Display formatted phone numbers for each team member
 - [x] Join teamMembers table in getTenantUsers to include lcPhone field
+## Sync Phone Numbers Button on Settings Page
+- [x] Add "Sync Phone Numbers" button to TenantSettings Team Members card header
+- [x] Wire to team.syncPhoneNumbers mutation with loading state and toast

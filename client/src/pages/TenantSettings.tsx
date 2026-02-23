@@ -293,6 +293,14 @@ export default function TenantSettings() {
     onError: (error) => toast.error("Failed to remove assignment: " + error.message),
   });
 
+  const syncPhoneNumbersMutation = trpc.team.syncPhoneNumbers.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Phone numbers synced! ${data.synced} updated.`);
+      refetchTeam();
+    },
+    onError: (error) => toast.error("Failed to sync phone numbers: " + error.message),
+  });
+
   const batchAwardXpMutation = trpc.gamification.batchAwardXp.useMutation({
     onSuccess: (data) => {
       if (data.processed === 0) {
@@ -683,8 +691,25 @@ export default function TenantSettings() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Team Members</CardTitle>
-              <CardDescription>Manage your team's access and roles</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Team Members</CardTitle>
+                  <CardDescription>Manage your team's access and roles</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => syncPhoneNumbersMutation.mutate()}
+                  disabled={syncPhoneNumbersMutation.isPending}
+                >
+                  {syncPhoneNumbersMutation.isPending ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Phone className="h-4 w-4 mr-2" />
+                  )}
+                  Sync Phone Numbers
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
