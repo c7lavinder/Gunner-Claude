@@ -1039,11 +1039,12 @@ export const appRouter = router({
         // Get viewable team member IDs based on permissions
         const viewableIds = await getViewableTeamMemberIds(permissionContext);
         
-        // Pass viewable IDs and tenant ID to getCallStats for filtering
+        // Pass viewable IDs, tenant ID, and current user's team member ID for personal stats
         return await getCallStats({
           ...input,
           viewableTeamMemberIds: viewableIds,
           tenantId: ctx.user?.tenantId || undefined,
+          currentTeamMemberId: teamMember?.id,
         });
       }),
   }),

@@ -2653,3 +2653,7 @@
 - [x] Acquisition Managers and Admins see all team members (current behavior)
 - [x] Use team assignments data to determine which LGs are assigned to which LMs
 - [x] Write tests for the role-based filtering logic
+## Dashboard Header Stats Personalization
+- [x] Dashboard header ("X calls today — Y graded, avg Z%") should show individual team member stats, not team-wide
+- [x] Admins continue to see team-wide stats
+- [x] Non-admin users see only their own calls/grades/avg in the header

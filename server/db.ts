@@ -639,6 +639,7 @@ export async function getCallStats(options?: {
   dateRange?: "today" | "week" | "month" | "ytd" | "all";
   viewableTeamMemberIds?: number[] | 'all'; // Permission-based filtering
   tenantId?: number; // Multi-tenant filtering
+  currentTeamMemberId?: number; // For personal stats in header
 }): Promise<{
   totalCalls: number;
   gradedCalls: number;
@@ -701,6 +702,14 @@ export async function getCallStats(options?: {
     offerCallsCompleted: number;
     leadsGenerated: number;
     averageScore: number;
+  };
+  // Personal stats for the current user (their own calls only)
+  personalStats?: {
+    totalCalls: number;
+    gradedCalls: number;
+    averageScore: number;
+    callsToday: number;
+    gradedToday: number;
   };
 }> {
   const db = await getDb();
@@ -1104,6 +1113,27 @@ export async function getCallStats(options?: {
     };
   }
 
+  // Compute personal stats for the current user (their own calls only)
+  let personalStats: { totalCalls: number; gradedCalls: number; averageScore: number; callsToday: number; gradedToday: number } | undefined;
+  if (options?.currentTeamMemberId) {
+    const myId = options.currentTeamMemberId;
+    const myCalls = allCalls.filter(c => c.teamMemberId === myId);
+    const myGradedCalls = myCalls.filter(c => c.status === 'completed' && (c.classification === 'conversation' || c.classification === 'admin_call'));
+    const myGradedCallIds = myGradedCalls.map(c => c.id);
+    const myGrades = grades.filter(g => myGradedCallIds.includes(g.callId));
+    const myTotalScore = myGrades.reduce((sum, g) => sum + parseFloat(g.overallScore || '0'), 0);
+    const myAvgScore = myGrades.length > 0 ? myTotalScore / myGrades.length : 0;
+    const myCallsToday = myCalls.filter(c => c.createdAt >= todayStartCST).length;
+    const myGradedToday = myGradedCalls.filter(c => c.createdAt >= todayStartCST).length;
+    personalStats = {
+      totalCalls: myCalls.length,
+      gradedCalls: myGradedCalls.length,
+      averageScore: myAvgScore,
+      callsToday: myCallsToday,
+      gradedToday: myGradedToday,
+    };
+  }
+
   return {
     totalCalls: allCalls.length,
     gradedCalls: gradedCalls.length,
@@ -1124,6 +1154,7 @@ export async function getCallStats(options?: {
     weeklyTrends,
     teamMemberTrends,
     priorPeriod,
+    personalStats,
   };
 }
 

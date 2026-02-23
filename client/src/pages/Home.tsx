@@ -172,8 +172,8 @@ export default function Home() {
                 ? ((signalCounts?.missed ?? 0) + (signalCounts?.warning ?? 0) > 0
                   ? `${(signalCounts?.missed ?? 0) + (signalCounts?.warning ?? 0)} signals need attention`
                   : `All clear, ${firstName}`)
-                : (stats?.gradedToday && stats.gradedToday > 0
-                  ? `${stats.callsToday ?? 0} calls today — ${stats.gradedToday} graded${stats.averageScore ? `, avg ${Math.round(stats.averageScore)}%` : ''}`
+                : ((stats?.personalStats?.gradedToday ?? 0) > 0
+                  ? `${stats?.personalStats?.callsToday ?? 0} calls today — ${stats?.personalStats?.gradedToday ?? 0} graded${stats?.personalStats?.averageScore ? `, avg ${Math.round(stats.personalStats.averageScore)}%` : ''}`
                   : `Welcome back, ${firstName}`)}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
