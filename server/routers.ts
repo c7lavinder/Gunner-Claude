@@ -83,6 +83,7 @@ import {
   getViewableTeamMemberIds,
   getTeamMemberByUserId,
   getTeamAssignments,
+  getLeadGeneratorsForLeadManager,
   assignLeadManagerToAcquisitionManager,
   removeLeadManagerAssignment,
   updateTeamMemberRole,
@@ -312,6 +313,39 @@ export const appRouter = router({
     myProfile: protectedProcedure.query(async ({ ctx }) => {
       if (!ctx.user?.id) return null;
       return await getTeamMemberByUserId(ctx.user.id);
+    }),
+
+    // Get team members visible to the current user (for dropdown filters)
+    // LG: only themselves, LM: themselves + assigned LGs, AM/Admin: everyone
+    visibleMembers: protectedProcedure.query(async ({ ctx }) => {
+      const tenantId = ctx.user?.tenantId;
+      const allMembers = await getTeamMembers(tenantId || undefined);
+      const isAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'super_admin' || ctx.user?.isTenantAdmin === 'true';
+      
+      // Admins see everyone
+      if (isAdmin || ctx.user?.teamRole === 'admin') return allMembers;
+      
+      // Get current user's team member record
+      const currentMember = ctx.user?.id ? await getTeamMemberByUserId(ctx.user.id) : null;
+      if (!currentMember) return allMembers; // fallback to all if no team member record
+      
+      // Lead Generators only see themselves
+      if (currentMember.teamRole === 'lead_generator') {
+        return allMembers.filter(m => m.id === currentMember.id);
+      }
+      
+      // Lead Managers see themselves + assigned Lead Generators
+      if (currentMember.teamRole === 'lead_manager') {
+        const assignedLgIds = await getLeadGeneratorsForLeadManager(currentMember.id);
+        const visibleIds = new Set([currentMember.id, ...assignedLgIds]);
+        return allMembers.filter(m => visibleIds.has(m.id));
+      }
+      
+      // Acquisition Managers see everyone
+      if (currentMember.teamRole === 'acquisition_manager') return allMembers;
+      
+      // Fallback: show all
+      return allMembers;
     }),
 
     // Admin: Get all users for management

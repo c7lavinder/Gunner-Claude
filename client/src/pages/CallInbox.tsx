@@ -1809,8 +1809,8 @@ export default function CallInbox() {
     startDate: dateFilter.startDate,
   });
 
-  // Fetch all team members for the tenant (for grouped Team Member filter)
-  const { data: allTeamMembers } = trpc.team.list.useQuery();
+  // Fetch visible team members for the current user (role-restricted for dropdown filter)
+  const { data: allTeamMembers } = trpc.team.visibleMembers.useQuery();
 
   const { data: allFeedback, isLoading: feedbackLoading } = trpc.feedback.list.useQuery({ limit: 100 });
   const updateStatusMutation = trpc.feedback.updateStatus.useMutation();
