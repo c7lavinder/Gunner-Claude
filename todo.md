@@ -2713,3 +2713,7 @@
 - [x] Show each team member's synced phone number on the Team Management page
 - [x] Format phone numbers nicely for display (e.g. (615) 768-8784)
 - [x] Phone icon with emerald color next to linked member name
+## Phone Numbers on Team Members Table
+- [x] Add Phone column to the Team Members list page (TenantSettings team table)
+- [x] Display formatted phone numbers for each team member
+- [x] Join teamMembers table in getTenantUsers to include lcPhone field

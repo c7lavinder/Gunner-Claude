@@ -692,6 +692,7 @@ export default function TenantSettings() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead></TableHead>
@@ -703,6 +704,7 @@ export default function TenantSettings() {
                       <TableRow key={i}>
                         <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                         <TableCell><Skeleton className="h-6 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-28" /></TableCell>
                         <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                         <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                         <TableCell><Skeleton className="h-8 w-8" /></TableCell>
@@ -710,7 +712,7 @@ export default function TenantSettings() {
                     ))
                   ) : (teamMembers || []).length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         No team members found
                       </TableCell>
                     </TableRow>
@@ -719,6 +721,15 @@ export default function TenantSettings() {
                       <TableRow key={member.id}>
                         <TableCell className="font-medium">{member.name}</TableCell>
                         <TableCell>{member.email}</TableCell>
+                        <TableCell>
+                          {member.lcPhone ? (
+                            <span className="text-sm text-emerald-600 font-medium">
+                              {member.lcPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">
                             <Badge variant="outline" className="capitalize w-fit">

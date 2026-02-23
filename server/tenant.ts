@@ -663,7 +663,7 @@ export async function getTenantUsers(tenantId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  return db
+  const results = await db
     .select({
       id: users.id,
       name: users.name,
@@ -672,10 +672,14 @@ export async function getTenantUsers(tenantId: number) {
       teamRole: users.teamRole,
       createdAt: users.createdAt,
       lastSignedIn: users.lastSignedIn,
+      lcPhone: teamMembers.lcPhone,
     })
     .from(users)
+    .leftJoin(teamMembers, eq(teamMembers.userId, users.id))
     .where(eq(users.tenantId, tenantId))
     .orderBy(desc(users.createdAt));
+
+  return results;
 }
 
 /**
