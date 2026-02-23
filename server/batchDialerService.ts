@@ -382,7 +382,7 @@ export function getAgentName(agent: BatchDialerCall["agent"]): string | null {
  */
 export async function fetchCallRecording(callId: number, apiKey?: string): Promise<Buffer> {
   return withRetry(async () => {
-    const url = `${BATCHDIALER_API_BASE}/callrecording/${callId}`;
+    const url = `${BATCHDIALER_API_BASE}/call/${callId}/recording`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60_000); // 60s timeout for recordings (larger files)

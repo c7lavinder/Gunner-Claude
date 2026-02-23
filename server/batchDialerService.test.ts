@@ -189,5 +189,23 @@ describe("BatchDialer Service", () => {
       const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
       expect(source).toContain("Recording download for call");
     });
+
+    it("should use the correct recording endpoint: /api/call/{id}/recording", async () => {
+      const fs = await import("fs");
+      const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
+      expect(source).toContain("/call/${callId}/recording");
+      // Ensure old incorrect endpoint is not used
+      expect(source).not.toContain("/callrecording/${callId}");
+    });
+
+    it("should use X-ApiKey header for recording downloads", async () => {
+      const fs = await import("fs");
+      const source = fs.readFileSync("/home/ubuntu/gunner/server/batchDialerService.ts", "utf-8");
+      // Extract the fetchCallRecording function and verify it uses X-ApiKey
+      const fnStart = source.indexOf("export async function fetchCallRecording");
+      const fnEnd = source.indexOf("\n}", fnStart) + 2;
+      const fnBody = source.substring(fnStart, fnEnd);
+      expect(fnBody).toContain("X-ApiKey");
+    });
   });
 });

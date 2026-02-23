@@ -2588,3 +2588,7 @@
 
 ## Correction Monitor Notifications
 - [x] Disable automatic daily correction pattern notifications (emails were too frequent)
+
+## BatchDialer Recording Endpoint Fix
+- [x] Update recording download URL to use correct endpoint: /api/call/{id}/recording (was /api/callrecording/{id})
+- [x] Ensure X-ApiKey auth header is used for recording downloads (already was, confirmed)
