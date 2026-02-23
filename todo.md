@@ -2641,3 +2641,9 @@
 - [x] Update suggested coaching prompts for Lead Generators (replace price objections/rapport with lead gen topics)
 - [x] Update suggested actions for Lead Generators (add note, schedule qualification call for LM, flag as interested lead)
 - [x] Detect user role and switch AI Coach persona accordingly
+## Lead Generator Workflow Language Fix
+- [x] Remove "handoff/transfer" language from LG AI Coach system prompt — LGs tell sellers they'll pass info to manager, not formal handoffs
+- [x] Update coachStream.ts LG prompt to reflect actual workflow
+- [x] Update routers.ts LG prompt to reflect actual workflow
+- [x] Update frontend starter action prompts if needed
+- [x] Update tests to match new language

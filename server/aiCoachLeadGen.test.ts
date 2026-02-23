@@ -52,13 +52,13 @@ describe("AI Coach Lead Generator System Prompt", () => {
   it("should generate lead generation-focused prompt for Lead Generators", () => {
     const isLeadGenerator = true;
     const promptIntro = isLeadGenerator
-      ? `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller identify motivated sellers, qualify interest quickly, and pass warm leads to Lead Managers for full qualification.`
+      ? `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.`
       : 'You are a data-driven sales coach for a real estate wholesaling team.';
 
     expect(promptIntro).toContain("cold calling coach");
     expect(promptIntro).toContain("LEAD GENERATION");
-    expect(promptIntro).toContain("motivated sellers");
-    expect(promptIntro).toContain("Lead Managers");
+    expect(promptIntro).toContain("gauge seller interest");
+    expect(promptIntro).toContain("manager will follow up");
     expect(promptIntro).not.toContain("data-driven sales coach for a real estate wholesaling team.");
   });
 
@@ -80,17 +80,16 @@ describe("AI Coach Lead Generator System Prompt", () => {
           "Opening lines and hooks for cold calls",
           "Quickly identifying seller motivation",
           "Handling initial objections",
-          "Knowing when a lead is warm enough to pass to a Lead Manager",
-          "Adding notes about seller interest level",
-          "Scheduling qualification calls for Lead Managers",
+          "Recognizing when a seller is interested and wrapping up professionally",
+          "Adding notes about seller interest level and key details for the manager",
           "Efficient call pacing and volume strategies",
         ]
       : [];
 
-    expect(coachingTopics).toHaveLength(7);
+    expect(coachingTopics).toHaveLength(6);
     expect(coachingTopics[0]).toContain("Opening lines");
-    expect(coachingTopics[3]).toContain("warm enough to pass");
-    expect(coachingTopics[5]).toContain("Scheduling qualification calls");
+    expect(coachingTopics[3]).toContain("wrapping up professionally");
+    expect(coachingTopics[4]).toContain("for the manager");
   });
 
   it("should explicitly exclude qualification/offer topics for Lead Generators", () => {
@@ -105,15 +104,16 @@ describe("AI Coach Lead Generator System Prompt", () => {
     expect(fullPrompt).toContain("Lead Manager and Acquisition Manager's job");
   });
 
-  it("should instruct Lead Generator coach to help with task/note creation for handoffs", () => {
+  it("should instruct Lead Generator coach about the actual workflow (no formal handoffs)", () => {
     const isLeadGenerator = true;
-    const handoffInstruction = isLeadGenerator
-      ? "When the user asks about scheduling or transferring leads, help them create tasks or notes for the Lead Manager team. Their job is to FIND interested sellers, not to close deals."
+    const workflowInstruction = isLeadGenerator
+      ? "The Lead Generator's workflow is simple: call, gauge interest, tell the seller their manager will follow up, then add notes so the manager has context. They do NOT do formal handoffs or transfers — they just let the seller know someone will be in touch."
       : '';
 
-    expect(handoffInstruction).toContain("create tasks or notes for the Lead Manager team");
-    expect(handoffInstruction).toContain("FIND interested sellers");
-    expect(handoffInstruction).toContain("not to close deals");
+    expect(workflowInstruction).toContain("manager will follow up");
+    expect(workflowInstruction).toContain("add notes so the manager has context");
+    expect(workflowInstruction).toContain("do NOT do formal handoffs or transfers");
+    expect(workflowInstruction).toContain("someone will be in touch");
   });
 });
 
@@ -157,7 +157,7 @@ describe("AI Coach Lead Generator Frontend Prompts", () => {
     const actionPrompts = teamRole === 'lead_generator'
       ? [
           'Add note to John Smith: "Interested in selling, motivated"',
-          'Create task: Schedule qualification call for Lead Manager',
+          'Create task: Follow up with interested seller tomorrow',
           'Add note to Jane Doe: "Not interested, remove from list"',
         ]
       : [
@@ -167,7 +167,7 @@ describe("AI Coach Lead Generator Frontend Prompts", () => {
         ];
 
     expect(actionPrompts[0]).toContain("Interested in selling, motivated");
-    expect(actionPrompts[1]).toContain("Schedule qualification call for Lead Manager");
+    expect(actionPrompts[1]).toContain("Follow up with interested seller");
     expect(actionPrompts[2]).toContain("Not interested, remove from list");
   });
 
@@ -236,7 +236,7 @@ describe("AI Coach Lead Generator Streaming Prompt Consistency", () => {
     // Both endpoints should use the same conditional pattern
     const buildPromptIntro = (isLeadGenerator: boolean) => {
       return isLeadGenerator
-        ? `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller identify motivated sellers, qualify interest quickly, and pass warm leads to Lead Managers for full qualification.`
+        ? `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.`
         : 'You are a data-driven sales coach for a real estate wholesaling team.';
     };
 
@@ -247,6 +247,9 @@ describe("AI Coach Lead Generator Streaming Prompt Consistency", () => {
     expect(streamingPrompt).toBe(nonStreamingPrompt);
     expect(streamingPrompt).toContain("cold calling coach");
     expect(streamingPrompt).toContain("LEAD GENERATION");
+    expect(streamingPrompt).toContain("manager will follow up");
+    expect(streamingPrompt).not.toContain("handoff");
+    expect(streamingPrompt).not.toContain("transfer");
   });
 
   it("should maintain CRM action capabilities for Lead Generators", () => {

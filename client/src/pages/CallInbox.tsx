@@ -1031,7 +1031,7 @@ function AICoachQA() {
                 <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mt-2">Actions</p>
                 {(currentUser?.teamRole === 'lead_generator' ? [
                   'Add note to John Smith: "Interested in selling, motivated"',
-                  'Create task: Schedule qualification call for Lead Manager',
+                  'Create task: Follow up with interested seller tomorrow',
                   'Add note to Jane Doe: "Not interested, remove from list"',
                 ] : [
                   'Add note to John Smith: "Called back, interested"',
