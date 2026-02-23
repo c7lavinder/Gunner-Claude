@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Shield, UserCog, Link2, Unlink, Zap } from "lucide-react";
+import { Users, Shield, UserCog, Link2, Unlink, Zap, Phone } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -98,6 +98,18 @@ export default function TeamManagement() {
     onError: (error) => toast.error("Failed to award XP: " + error.message),
   });
 
+  const syncPhonesMutation = trpc.team.syncPhoneNumbers.useMutation({
+    onSuccess: (data) => {
+      if (data.synced === 0) {
+        toast.info("All phone numbers are already up to date.");
+      } else {
+        toast.success(`Synced phone numbers for ${data.synced} team member${data.synced > 1 ? 's' : ''}.`);
+      }
+      utils.team.list.invalidate();
+    },
+    onError: (error) => toast.error("Failed to sync phone numbers: " + error.message),
+  });
+
   const isLoading = membersLoading || usersLoading || assignmentsLoading;
 
   // Get acquisition managers for assignment dropdown
@@ -116,14 +128,24 @@ export default function TeamManagement() {
           <h1 className="text-2xl font-bold">Team Management</h1>
           <p className="text-muted-foreground">Manage user roles and team assignments</p>
         </div>
-        <Button 
-          onClick={() => batchAwardXpMutation.mutate()}
-          disabled={batchAwardXpMutation.isPending}
-          className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
-        >
-          <Zap className="h-4 w-4 mr-2" />
-          {batchAwardXpMutation.isPending ? "Awarding XP..." : "Award XP for All Calls"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline"
+            onClick={() => syncPhonesMutation.mutate()}
+            disabled={syncPhonesMutation.isPending}
+          >
+            <Phone className="h-4 w-4 mr-2" />
+            {syncPhonesMutation.isPending ? "Syncing..." : "Sync Phone Numbers"}
+          </Button>
+          <Button 
+            onClick={() => batchAwardXpMutation.mutate()}
+            disabled={batchAwardXpMutation.isPending}
+            className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            {batchAwardXpMutation.isPending ? "Awarding XP..." : "Award XP for All Calls"}
+          </Button>
+        </div>
       </div>
 
       {/* Users & Roles Section */}

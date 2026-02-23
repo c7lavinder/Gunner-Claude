@@ -2701,3 +2701,7 @@
 - [x] During GHL team sync, call GET /users/{ghlUserId} and store lcPhone for each member
 - [x] Use cached lcPhone from team_members table in getUserPhoneNumber as a fast path
 - [x] Add bulk syncPhoneNumbers endpoint for manual refresh of all team member phone numbers
+## Sync Phone Numbers Button on Team Page
+- [x] Add "Sync Phone Numbers" button to Team Management page (admin only)
+- [x] Wire button to call team.syncPhoneNumbers mutation
+- [x] Show loading state and success/error toast
