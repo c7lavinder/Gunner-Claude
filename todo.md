@@ -2666,3 +2666,6 @@
 - [x] Investigate why Daniel Lozano's dashboard shows 0 for all stats when viewed as alvarez.lozano
 - [x] Check if alvarez.lozano user account is properly linked to Daniel Lozano team member record
 - [x] Fix user-to-team-member linking if broken
+## LG Dashboard Layout Fix
+- [x] Give Lead Generators the same dashboard layout as Lead Managers (full company view with leaderboard, gamification cards)
+- [x] Fix floating point percentage display bug (e.g., "28.999999999996%" should show "29%")

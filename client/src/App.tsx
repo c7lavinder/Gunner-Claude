@@ -65,7 +65,9 @@ function ProtectedRouter() {
   return (
     <Switch>
       <Route path="/dashboard" component={Home} />
-      <Route path="/lead-gen-dashboard" component={LeadGenDashboard} />
+      <Route path="/lead-gen-dashboard">
+        <Redirect to="/dashboard" />
+      </Route>
       <Route path="/calls" component={CallInbox} />
       <Route path="/coach-log" component={CoachActivityLog} />
       <Route path="/calls/:id" component={CallDetail} />

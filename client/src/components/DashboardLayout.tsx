@@ -35,11 +35,11 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
   const isSuperAdmin = userRole === 'super_admin';
   const isLeadGenerator = teamRole === 'lead_generator';
   
-  // Lead Generators get a simplified menu
+  // Lead Generators get a simplified menu but same dashboard as LMs
   if (isLeadGenerator) {
     return [
-      { icon: LayoutDashboard, label: "My Dashboard", path: "/lead-gen-dashboard" },
-      { icon: Phone, label: "My Calls", path: "/calls" },
+      { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+      { icon: Phone, label: "Call History", path: "/calls" },
       { icon: Users, label: "My Profile", path: "/team" },
     ];
   }
