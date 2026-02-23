@@ -2669,3 +2669,6 @@
 ## LG Dashboard Layout Fix
 - [x] Give Lead Generators the same dashboard layout as Lead Managers (full company view with leaderboard, gamification cards)
 - [x] Fix floating point percentage display bug (e.g., "28.999999999996%" should show "29%")
+## Training Page Access Control
+- [x] Hide "Add Material" button on Training page for non-admin users
+- [x] Add Training page to Lead Generator sidebar navigation

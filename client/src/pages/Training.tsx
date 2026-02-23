@@ -705,6 +705,8 @@ function TeamTrainingContent() {
 
 export default function Training() {
   const { isDemo, guardAction: guardDemoAction } = useDemo();
+  const { user } = useAuth();
+  const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true';
   const [mainTab, setMainTab] = useState("team");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<any>(null);
@@ -884,7 +886,7 @@ export default function Training() {
             Manage training materials and view grading criteria
           </p>
         </div>
-        {mainTab === "materials" && (
+        {mainTab === "materials" && isAdmin && (
           <Dialog open={isAddDialogOpen || !!editingMaterial} onOpenChange={(open) => {
             if (!open) {
               setIsAddDialogOpen(false);
@@ -1136,6 +1138,7 @@ export default function Training() {
                       material={material}
                       onEdit={() => openEditDialog(material)}
                       onDelete={() => deleteMutation.mutate({ id: material.id })}
+                      isAdmin={isAdmin}
                     />
                   ))}
                 </div>
@@ -1150,6 +1153,7 @@ export default function Training() {
                         material={material}
                         onEdit={() => openEditDialog(material)}
                         onDelete={() => deleteMutation.mutate({ id: material.id })}
+                        isAdmin={isAdmin}
                       />
                     ))}
                   </div>
@@ -1180,11 +1184,13 @@ export default function Training() {
 function MaterialCard({ 
   material, 
   onEdit, 
-  onDelete 
+  onDelete,
+  isAdmin = false 
 }: { 
   material: any; 
   onEdit: () => void; 
   onDelete: () => void;
+  isAdmin?: boolean;
 }) {
   const Icon = getCategoryIcon(material.category);
   
@@ -1225,6 +1231,7 @@ function MaterialCard({
           <span className="text-xs text-muted-foreground">
             {new Date(material.createdAt).toLocaleDateString()}
           </span>
+          {isAdmin && (
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onEdit}>
               <Edit className="h-4 w-4" />
@@ -1251,6 +1258,7 @@ function MaterialCard({
               </AlertDialogContent>
             </AlertDialog>
           </div>
+          )}
         </div>
       </CardContent>
     </Card>

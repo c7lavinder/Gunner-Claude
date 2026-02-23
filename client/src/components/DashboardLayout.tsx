@@ -40,6 +40,7 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
     return [
       { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
       { icon: Phone, label: "Call History", path: "/calls" },
+      { icon: BookOpen, label: "Training", path: "/training" },
       { icon: Users, label: "My Profile", path: "/team" },
     ];
   }

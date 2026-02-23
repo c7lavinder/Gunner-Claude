@@ -335,12 +335,18 @@ async function syncBatchDialerCallsForTenant(
         console.log(
           `[BatchDialer] Tenant ${tenantId}: Imported call ${bdCall.id} (${agentName}, ${bdCall.disposition}, ${bdCall.duration}s)`
         );
-      } catch (error) {
-        console.error(
-          `[BatchDialer] Tenant ${tenantId}: Error importing call ${bdCall.id}:`,
-          error
-        );
-        stats.errors++;
+      } catch (error: any) {
+        // Handle duplicate entry errors gracefully (unique index on batchDialerCallId)
+        if (error?.message?.includes('Duplicate entry') || error?.cause?.message?.includes('Duplicate entry')) {
+          console.log(`[BatchDialer] Tenant ${tenantId}: Skipping duplicate call ${bdCall.id}`);
+          stats.skipped++;
+        } else {
+          console.error(
+            `[BatchDialer] Tenant ${tenantId}: Error importing call ${bdCall.id}:`,
+            error
+          );
+          stats.errors++;
+        }
       }
     }
 
