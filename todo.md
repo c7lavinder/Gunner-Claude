@@ -2647,3 +2647,9 @@
 - [x] Update routers.ts LG prompt to reflect actual workflow
 - [x] Update frontend starter action prompts if needed
 - [x] Update tests to match new language
+## Team Member Dropdown Role Restriction
+- [ ] Lead Generators should only see themselves in the Team Member filter dropdown
+- [ ] Lead Managers should see themselves + Lead Generators assigned to them
+- [ ] Acquisition Managers and Admins see all team members (current behavior)
+- [ ] Use team assignments data to determine which LGs are assigned to which LMs
+- [ ] Write tests for the role-based filtering logic
