@@ -163,7 +163,7 @@ export default function Analytics() {
             Team Leaderboard
           </CardTitle>
           <CardDescription className="text-xs sm:text-sm">
-            Ranked by appointments (LMs) and offers (AMs) — {dateRange === 'today' ? 'today' : dateRange === 'week' ? 'last 7 days' : dateRange === 'month' ? 'last 30 days' : dateRange === 'ytd' ? 'year to date' : 'all time'}
+            Ranked by appointments (LMs), offers (AMs), and leads generated (LGs) — {dateRange === 'today' ? 'today' : dateRange === 'week' ? 'last 7 days' : dateRange === 'month' ? 'last 30 days' : dateRange === 'ytd' ? 'year to date' : 'all time'}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-3 sm:px-6">

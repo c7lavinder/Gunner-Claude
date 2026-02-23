@@ -2633,3 +2633,4 @@
 - [x] Add Leads count box to Dashboard page
 - [x] Add Leads count box to Analytics page
 - [x] Ensure Lead Generator gamification is working (leaderboard, streaks, badges)
+- [x] Update leaderboard subtitle to include Lead Generators: "Ranked by appointments (LMs), offers (AMs), and leads generated (LGs)"
