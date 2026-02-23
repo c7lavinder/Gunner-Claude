@@ -2,7 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, TrendingUp, CheckCircle, Calendar, Trophy, Users, MessageSquare, CheckCircle2, Clock, BarChart3, LineChart } from "lucide-react";
+import { Phone, TrendingUp, CheckCircle, Calendar, Trophy, Users, MessageSquare, CheckCircle2, Clock, BarChart3, LineChart, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -55,9 +55,10 @@ export default function Analytics() {
 
   const isLoading = statsLoading || leaderboardLoading;
 
-  // Separate lead managers and acquisition managers
+  // Separate lead managers, acquisition managers, and lead generators
   const leadManagers = leaderboard?.filter(e => e.teamMember.teamRole === "lead_manager") || [];
   const acquisitionManagers = leaderboard?.filter(e => e.teamMember.teamRole === "acquisition_manager") || [];
+  const leadGenerators = leaderboard?.filter(e => e.teamMember.teamRole === "lead_generator") || [];
 
   // Calculate team-wide metrics
   const teamMetrics = leaderboard?.reduce((acc, entry) => {
@@ -115,7 +116,7 @@ export default function Analytics() {
       </div>
 
       {/* Stats Grid - Same as Dashboard */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard
           title="Calls Made"
           value={stats?.totalCalls ?? 0}
@@ -126,6 +127,12 @@ export default function Analytics() {
           title="Conversations"
           value={stats?.gradedCalls ?? 0}
           icon={MessageSquare}
+          loading={statsLoading}
+        />
+        <StatCard
+          title="Leads Generated"
+          value={stats?.leadsGenerated ?? 0}
+          icon={Target}
           loading={statsLoading}
         />
         <StatCard
@@ -161,9 +168,10 @@ export default function Analytics() {
         </CardHeader>
         <CardContent className="px-3 sm:px-6">
           <Tabs defaultValue="lead_managers" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6">
+            <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6">
               <TabsTrigger value="lead_managers">Lead Managers</TabsTrigger>
               <TabsTrigger value="acquisition_managers">Acquisition Managers</TabsTrigger>
+              <TabsTrigger value="lead_generators">Lead Generators</TabsTrigger>
             </TabsList>
 
             {/* Lead Managers Leaderboard */}
@@ -290,6 +298,70 @@ export default function Analytics() {
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>No acquisition managers data yet</p>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Lead Generators Leaderboard */}
+            <TabsContent value="lead_generators">
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <Skeleton key={i} className="h-20 w-full" />
+                  ))}
+                </div>
+              ) : leadGenerators.length > 0 ? (
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
+                  <table className="w-full min-w-[500px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Rank</th>
+                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Name</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Calls</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Conv</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Leads</th>
+                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">A-B</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leadGenerators
+                        .sort((a, b) => b.leadsGenerated - a.leadsGenerated)
+                        .map((entry, index) => (
+                        <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="py-2 sm:py-4 px-2 sm:px-4">
+                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
+                              index === 0 ? "bg-yellow-500 text-white" :
+                              index === 1 ? "bg-gray-400 text-white" :
+                              "bg-amber-700 text-white"
+                            }`}>
+                              {index + 1}
+                            </div>
+                          </td>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4">
+                            <p className="font-medium text-sm sm:text-base">{entry.teamMember.name}</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Lead Generator</p>
+                          </td>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold">{entry.totalCalls}</p>
+                          </td>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold">{entry.gradedCalls}</p>
+                          </td>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold text-purple-600">{entry.leadsGenerated}</p>
+                          </td>
+                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
+                            <p className="text-sm sm:text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No lead generators data yet</p>
                 </div>
               )}
             </TabsContent>

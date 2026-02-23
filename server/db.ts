@@ -500,6 +500,7 @@ export async function getLeaderboardData(tenantId?: number, dateRange?: "today" 
   averageScore: number;
   appointmentsSet: number;
   offerCallsCompleted: number;
+  leadsGenerated: number;
   abScoredCalls: number;
   gradeDistribution: { A: number; B: number; C: number; D: number; F: number };
 }>> {
@@ -575,6 +576,22 @@ export async function getLeaderboardData(tenantId?: number, dateRange?: "today" 
       const appointmentsSet = memberCalls.filter(c => c.callOutcome === "appointment_set").length;
       const offerCallsCompleted = gradedCalls.filter(c => c.callType === "offer").length;
       
+      // Count leads generated (unique interested contacts) for lead generators
+      const positiveOutcomesSet = new Set(['appointment_set', 'interested', 'callback_scheduled', 'callback_requested', 'offer_made']);
+      const leadPhones = new Set<string>();
+      if (member.teamRole === 'lead_generator') {
+        for (const c of memberCalls) {
+          if (
+            (c.classification === 'conversation' || c.classification === 'admin_call') &&
+            positiveOutcomesSet.has(c.callOutcome || '') &&
+            c.contactPhone
+          ) {
+            leadPhones.add(c.contactPhone);
+          }
+        }
+      }
+      const leadsGenerated = leadPhones.size;
+      
       const grades = await Promise.all(
         gradedCalls.map(async (call) => {
           return await getCallGradeByCallId(call.id);
@@ -606,6 +623,7 @@ export async function getLeaderboardData(tenantId?: number, dateRange?: "today" 
         averageScore: validGrades.length > 0 ? totalScore / validGrades.length : 0,
         appointmentsSet,
         offerCallsCompleted,
+        leadsGenerated,
         abScoredCalls,
         gradeDistribution,
       };
@@ -633,6 +651,7 @@ export async function getCallStats(options?: {
   skippedToday: number;
   appointmentsSet: number;
   offerCallsCompleted: number;
+  leadsGenerated: number; // calls made by lead_generator team members
   classificationBreakdown: {
     conversation: number;
     admin_call: number;
@@ -680,6 +699,7 @@ export async function getCallStats(options?: {
     gradedCalls: number;
     appointmentsSet: number;
     offerCallsCompleted: number;
+    leadsGenerated: number;
     averageScore: number;
   };
 }> {
@@ -696,6 +716,7 @@ export async function getCallStats(options?: {
     skippedToday: 0,
     appointmentsSet: 0,
     offerCallsCompleted: 0,
+    leadsGenerated: 0,
     classificationBreakdown: {
       conversation: 0,
       admin_call: 0,
@@ -844,6 +865,8 @@ export async function getCallStats(options?: {
   // Count completed offer calls (calls by acquisition managers)
   const offerCallsCompleted = gradedCalls.filter(c => c.callType === "offer").length;
 
+
+
   // Calculate average call duration for graded calls
   const gradedCallDurations = gradedCalls.filter(c => c.duration).map(c => c.duration || 0);
   const averageCallDuration = gradedCallDurations.length > 0 
@@ -863,6 +886,23 @@ export async function getCallStats(options?: {
 
   // Calculate team member scores (tenant-scoped)
   const members = await getTeamMembers(options?.tenantId);
+
+  // Count leads generated: unique contacts where a Lead Generator had a conversation
+  // with someone interested in selling (positive outcome)
+  const lgMemberIds = new Set(members.filter(m => m.teamRole === 'lead_generator').map(m => m.id));
+  const positiveOutcomes = new Set(['appointment_set', 'interested', 'callback_scheduled', 'offer_made']);
+  const lgLeadPhones = new Set<string>();
+  for (const c of allCalls) {
+    if (
+      c.teamMemberId && lgMemberIds.has(c.teamMemberId) &&
+      (c.classification === 'conversation' || c.classification === 'admin_call') &&
+      positiveOutcomes.has(c.callOutcome || '') &&
+      c.contactPhone
+    ) {
+      lgLeadPhones.add(c.contactPhone);
+    }
+  }
+  const leadsGenerated = lgLeadPhones.size;
   const teamMemberScores = members.map(member => {
     const memberCalls = gradedCalls.filter(c => c.teamMemberId === member.id);
     const memberGrades = grades.filter(g => memberCalls.some(c => c.id === g.callId));
@@ -996,7 +1036,7 @@ export async function getCallStats(options?: {
 
   // ---- Prior period comparison ----
   // Calculate the equivalent prior period for comparison badges
-  let priorPeriod: { totalCalls: number; gradedCalls: number; appointmentsSet: number; offerCallsCompleted: number; averageScore: number } | undefined;
+  let priorPeriod: { totalCalls: number; gradedCalls: number; appointmentsSet: number; offerCallsCompleted: number; leadsGenerated: number; averageScore: number } | undefined;
   
   if (startDate && options?.dateRange !== 'all' && options?.dateRange !== 'ytd') {
     // Calculate prior period: same duration, shifted back
@@ -1023,6 +1063,20 @@ export async function getCallStats(options?: {
     const priorAppointments = priorCalls.filter(c => c.callOutcome === "appointment_set").length;
     const priorOfferCalls = priorGradedCalls.filter(c => c.callType === "offer").length;
     
+    // Prior period leads generated
+    const priorLgLeadPhones = new Set<string>();
+    for (const c of priorCalls) {
+      if (
+        c.teamMemberId && lgMemberIds.has(c.teamMemberId) &&
+        (c.classification === 'conversation' || c.classification === 'admin_call') &&
+        positiveOutcomes.has(c.callOutcome || '') &&
+        c.contactPhone
+      ) {
+        priorLgLeadPhones.add(c.contactPhone);
+      }
+    }
+    const priorLeadsGenerated = priorLgLeadPhones.size;
+    
     // Get prior period grades for average score
     const priorGradedCallIds = priorGradedCalls.map(c => c.id);
     const priorGradesArr = priorGradedCallIds.length > 0
@@ -1045,6 +1099,7 @@ export async function getCallStats(options?: {
       gradedCalls: priorGradedCalls.length,
       appointmentsSet: priorAppointments,
       offerCallsCompleted: priorOfferCalls,
+      leadsGenerated: priorLeadsGenerated,
       averageScore: priorAvgScore,
     };
   }
@@ -1061,6 +1116,7 @@ export async function getCallStats(options?: {
     skippedToday,
     appointmentsSet,
     offerCallsCompleted,
+    leadsGenerated,
     classificationBreakdown,
     averageCallDuration,
     gradeDistribution,

@@ -206,8 +206,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Stats Grid - 2 columns on mobile, 5 on desktop */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
+      {/* Stats Grid - 2 columns on mobile, 6 on desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
         <StatCard
           title="Calls Made"
           value={stats?.totalCalls ?? 0}
@@ -221,6 +221,13 @@ export default function Home() {
           icon={MessageSquare}
           loading={statsLoading}
           priorValue={stats?.priorPeriod?.gradedCalls}
+        />
+        <StatCard
+          title="Leads Generated"
+          value={stats?.leadsGenerated ?? 0}
+          icon={Target}
+          loading={statsLoading}
+          priorValue={stats?.priorPeriod?.leadsGenerated}
         />
         <StatCard
           title="Appointments"

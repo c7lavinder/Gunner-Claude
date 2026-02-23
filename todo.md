@@ -2627,3 +2627,9 @@
 
 ## Call History Fix- [x] Lead Generator calls not showing in All Calls tab (only in Skipped) — fix query filtering- [x] Group Team Member dropdown by team type (Acquisition Manager, Lead Manager, Lead Generator) instead of flat list
 - [x] Team Member dropdown must only show team members from the associated tenant (use team.list query, not current page results)
+
+## Lead Generator Improvements
+- [x] Include Lead Generator call data in Analytics page charts/metrics
+- [x] Add Leads count box to Dashboard page
+- [x] Add Leads count box to Analytics page
+- [x] Ensure Lead Generator gamification is working (leaderboard, streaks, badges)
