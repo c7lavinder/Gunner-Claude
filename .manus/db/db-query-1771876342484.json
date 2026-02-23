@@ -1,0 +1,70 @@
+{
+  "query": "SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE REFERENCED_TABLE_NAME = 'users' AND REFERENCED_COLUMN_NAME = 'id' AND TABLE_SCHEMA = DATABASE();",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE REFERENCED_TABLE_NAME = 'users' AND REFERENCED_COLUMN_NAME = 'id' AND TABLE_SCHEMA = DATABASE();",
+  "rows": [
+    {
+      "TABLE_NAME": "team_members",
+      "COLUMN_NAME": "userId"
+    },
+    {
+      "TABLE_NAME": "ai_feedback",
+      "COLUMN_NAME": "userId"
+    },
+    {
+      "TABLE_NAME": "social_posts",
+      "COLUMN_NAME": "createdBy"
+    },
+    {
+      "TABLE_NAME": "pending_invitations",
+      "COLUMN_NAME": "invitedBy"
+    },
+    {
+      "TABLE_NAME": "pending_invitations",
+      "COLUMN_NAME": "acceptedByUserId"
+    },
+    {
+      "TABLE_NAME": "password_reset_tokens",
+      "COLUMN_NAME": "userId"
+    },
+    {
+      "TABLE_NAME": "outreach_history",
+      "COLUMN_NAME": "sentByUserId"
+    },
+    {
+      "TABLE_NAME": "email_verification_tokens",
+      "COLUMN_NAME": "userId"
+    },
+    {
+      "TABLE_NAME": "emails_sent",
+      "COLUMN_NAME": "userId"
+    },
+    {
+      "TABLE_NAME": "coach_action_log",
+      "COLUMN_NAME": "requestedBy"
+    },
+    {
+      "TABLE_NAME": "opportunities",
+      "COLUMN_NAME": "resolvedBy"
+    },
+    {
+      "TABLE_NAME": "ai_coach_preferences",
+      "COLUMN_NAME": "userId"
+    },
+    {
+      "TABLE_NAME": "coach_action_edits",
+      "COLUMN_NAME": "userId"
+    },
+    {
+      "TABLE_NAME": "coach_messages",
+      "COLUMN_NAME": "userId"
+    },
+    {
+      "TABLE_NAME": "user_instructions",
+      "COLUMN_NAME": "userId"
+    }
+  ],
+  "messages": [],
+  "stdout": "TABLE_NAME\tCOLUMN_NAME\nteam_members\tuserId\nai_feedback\tuserId\nsocial_posts\tcreatedBy\npending_invitations\tinvitedBy\npending_invitations\tacceptedByUserId\npassword_reset_tokens\tuserId\noutreach_history\tsentByUserId\nemail_verification_tokens\tuserId\nemails_sent\tuserId\ncoach_action_log\trequestedBy\nopportunities\tresolvedBy\nai_coach_preferences\tuserId\ncoach_action_edits\tuserId\ncoach_messages\tuserId\nuser_instructions\tuserId\n",
+  "stderr": "",
+  "execution_time_ms": 354
+}

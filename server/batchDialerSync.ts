@@ -1,7 +1,7 @@
 import { fetchCallRecording, getAgentName, type BatchDialerCall } from "./batchDialerService";
 import { getDb, createCall, getCallByBatchDialerId, getTeamMembers } from "./db";
 import { calls } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { storagePut } from "./storage";
 import { processCall } from "./grading";
 import { getTenantsWithCrm, parseCrmConfig } from "./tenant";
@@ -25,6 +25,9 @@ let lastSeenCallId: number | null = null;
 
 let syncInterval: NodeJS.Timeout | null = null;
 
+/** Prevent concurrent sync runs */
+let isSyncing = false;
+
 // ============ HELPERS ============
 
 /**
@@ -40,7 +43,7 @@ async function initLastSeenCallId(): Promise<void> {
     .select({ batchDialerCallId: calls.batchDialerCallId })
     .from(calls)
     .where(eq(calls.callSource, "batchdialer"))
-    .orderBy(calls.callTimestamp)
+    .orderBy(desc(calls.batchDialerCallId))
     .limit(1);
 
   if (recentCall.length > 0 && recentCall[0].batchDialerCallId) {
@@ -360,6 +363,13 @@ export async function syncBatchDialerCalls(): Promise<{
   skipped: number;
   errors: number;
 }> {
+  // Prevent concurrent sync runs
+  if (isSyncing) {
+    console.log("[BatchDialer] Sync already in progress, skipping");
+    return { imported: 0, skipped: 0, errors: 0 };
+  }
+  isSyncing = true;
+
   console.log("[BatchDialer] Starting sync...");
 
   const totalStats = { imported: 0, skipped: 0, errors: 0 };
@@ -414,6 +424,8 @@ export async function syncBatchDialerCalls(): Promise<{
     );
   } catch (error) {
     console.error("[BatchDialer] Sync failed:", error);
+  } finally {
+    isSyncing = false;
   }
 
   return totalStats;

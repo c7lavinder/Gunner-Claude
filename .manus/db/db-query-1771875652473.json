@@ -1,0 +1,73 @@
+{
+  "query": "SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE REFERENCED_TABLE_NAME = 'calls' AND TABLE_SCHEMA = DATABASE();",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE REFERENCED_TABLE_NAME = 'calls' AND TABLE_SCHEMA = DATABASE();",
+  "rows": [
+    {
+      "TABLE_NAME": "call_grades",
+      "COLUMN_NAME": "callId",
+      "CONSTRAINT_NAME": "call_grades_callId_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    },
+    {
+      "TABLE_NAME": "ai_feedback",
+      "COLUMN_NAME": "callId",
+      "CONSTRAINT_NAME": "ai_feedback_callId_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    },
+    {
+      "TABLE_NAME": "team_training_items",
+      "COLUMN_NAME": "callReference",
+      "CONSTRAINT_NAME": "team_training_items_callReference_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    },
+    {
+      "TABLE_NAME": "deals",
+      "COLUMN_NAME": "offerCallId",
+      "CONSTRAINT_NAME": "deals_offerCallId_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    },
+    {
+      "TABLE_NAME": "reward_views",
+      "COLUMN_NAME": "callId",
+      "CONSTRAINT_NAME": "reward_views_callId_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    },
+    {
+      "TABLE_NAME": "user_badges",
+      "COLUMN_NAME": "triggerCallId",
+      "CONSTRAINT_NAME": "user_badges_triggerCallId_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    },
+    {
+      "TABLE_NAME": "xp_transactions",
+      "COLUMN_NAME": "callId",
+      "CONSTRAINT_NAME": "xp_transactions_callId_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    },
+    {
+      "TABLE_NAME": "opportunities",
+      "COLUMN_NAME": "relatedCallId",
+      "CONSTRAINT_NAME": "opportunities_relatedCallId_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    },
+    {
+      "TABLE_NAME": "webhook_retry_queue",
+      "COLUMN_NAME": "callId",
+      "CONSTRAINT_NAME": "webhook_retry_queue_callId_calls_id_fk",
+      "REFERENCED_TABLE_NAME": "calls",
+      "REFERENCED_COLUMN_NAME": "id"
+    }
+  ],
+  "messages": [],
+  "stdout": "TABLE_NAME\tCOLUMN_NAME\tCONSTRAINT_NAME\tREFERENCED_TABLE_NAME\tREFERENCED_COLUMN_NAME\ncall_grades\tcallId\tcall_grades_callId_calls_id_fk\tcalls\tid\nai_feedback\tcallId\tai_feedback_callId_calls_id_fk\tcalls\tid\nteam_training_items\tcallReference\tteam_training_items_callReference_calls_id_fk\tcalls\tid\ndeals\tofferCallId\tdeals_offerCallId_calls_id_fk\tcalls\tid\nreward_views\tcallId\treward_views_callId_calls_id_fk\tcalls\tid\nuser_badges\ttriggerCallId\tuser_badges_triggerCallId_calls_id_fk\tcalls\tid\nxp_transactions\tcallId\txp_transactions_callId_calls_id_fk\tcalls\tid\nopportunities\trelatedCallId\topportunities_relatedCallId_calls_id_fk\tcalls\tid\nwebhook_retry_queue\tcallId\twebhook_retry_queue_callId_calls_id_fk\tcalls\tid\n",
+  "stderr": "",
+  "execution_time_ms": 347
+}

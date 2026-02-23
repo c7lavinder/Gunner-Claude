@@ -2657,3 +2657,12 @@
 - [x] Dashboard header ("X calls today — Y graded, avg Z%") should show individual team member stats, not team-wide
 - [x] Admins continue to see team-wide stats
 - [x] Non-admin users see only their own calls/grades/avg in the header
+## Bug: Duplicate LG Calls with Different Scores
+- [x] Investigate why LG calls (e.g., Charles Lester, Russell Stansberry by Efren) appear twice with different scores
+- [x] Determine if duplicates come from BatchDialer sync, GHL sync, or processing pipeline
+- [x] Fix deduplication logic to prevent duplicate call imports
+- [x] Clean up existing duplicate calls in database
+## Bug: Daniel's Dashboard Shows All Zeros (alvarez.lozano)
+- [x] Investigate why Daniel Lozano's dashboard shows 0 for all stats when viewed as alvarez.lozano
+- [x] Check if alvarez.lozano user account is properly linked to Daniel Lozano team member record
+- [x] Fix user-to-team-member linking if broken

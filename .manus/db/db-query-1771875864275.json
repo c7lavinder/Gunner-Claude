@@ -1,0 +1,13 @@
+{
+  "query": "SHOW TABLES LIKE 'deals';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SHOW TABLES LIKE 'deals';",
+  "rows": [
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (deals)": "deals"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_nusXfQu5XBTMz3NUCR6brb (deals)\ndeals\n",
+  "stderr": "",
+  "execution_time_ms": 346
+}
