@@ -2686,3 +2686,9 @@
 - [x] Track SMS message ID from GHL send response
 - [x] Add endpoint or logic to check GHL message delivery status
 - [x] Show delivery status indicator on executed SMS action cards (sent, delivered, failed)
+## Bug: SMS Still Sending from Wrong User's Phone Number
+- [x] GHL shows SMS sent from Esteban Leiva (+16158525930) but AI Coach says "Kyle Barks's line"
+- [x] Root cause: getUserPhoneNumber used /phone-system/numbers/location/ endpoint which returned 401
+- [x] Fix: Switched to GET /users/{ghlUserId} API and extract phone from lcPhone[locationId]
+- [x] Verified: Kyle=+16157688784, Chris=+19312885429, Daniel=+16152405127 all resolve correctly
+- [x] fromNumber is now explicitly passed to GHL send message API

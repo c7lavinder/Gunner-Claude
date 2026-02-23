@@ -44,6 +44,27 @@ describe("SMS sender override in executeAction", () => {
   });
 });
 
+describe("getUserPhoneNumber uses GHL Users API", () => {
+  it("should call /users/{ghlUserId} endpoint instead of phone-system", async () => {
+    const source = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    // Should use the users API, not the phone-system API
+    expect(source).toContain("`/users/${ghlUserId}`");
+    // Should NOT use the old phone-system endpoint
+    expect(source).not.toContain("phone-system/numbers/location");
+  });
+
+  it("should extract phone from lcPhone[locationId]", async () => {
+    const source = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(source).toContain("userData.lcPhone");
+    expect(source).toContain("creds.locationId");
+  });
+
+  it("should have a fallback to userData.phone", async () => {
+    const source = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(source).toContain("userData.phone");
+  });
+});
+
 describe("SMS delivery status tracking (resultMeta)", () => {
   it("should store messageId in resultMeta after sending SMS", async () => {
     const source = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");

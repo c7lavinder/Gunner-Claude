@@ -468,29 +468,33 @@ export async function getUserPhoneNumber(
   if (!creds) return null;
 
   try {
-    const data = await ghlFetch(
+    // Use the GHL Users API to get the user's LC phone number.
+    // The response includes an `lcPhone` object mapping locationId → phone number.
+    const userData = await ghlFetch(
       creds,
-      `/phone-system/numbers/location/${creds.locationId}`,
+      `/users/${ghlUserId}`,
       "GET"
     );
     
-    const numbers = data.data || data.numbers || data || [];
-    console.log(`[getUserPhoneNumber] Found ${Array.isArray(numbers) ? numbers.length : 0} phone numbers for location`);
-    
-    // Find the number assigned to this user
-    for (const num of (Array.isArray(numbers) ? numbers : [])) {
-      const assignedUser = num.userId || num.assignedTo || num.user_id;
-      if (assignedUser === ghlUserId) {
-        const phoneNumber = num.phoneNumber || num.phone || num.number;
-        console.log(`[getUserPhoneNumber] Found phone ${phoneNumber} assigned to user ${ghlUserId}`);
+    // Extract phone from lcPhone map: { locationId: "+1XXXXXXXXXX" }
+    if (userData.lcPhone && typeof userData.lcPhone === 'object') {
+      const phoneNumber = userData.lcPhone[creds.locationId];
+      if (phoneNumber) {
+        console.log(`[getUserPhoneNumber] Found LC phone ${phoneNumber} for user ${ghlUserId} (${userData.name || 'unknown'}) at location ${creds.locationId}`);
         return phoneNumber;
       }
     }
     
-    console.log(`[getUserPhoneNumber] No phone number found assigned to user ${ghlUserId}`);
+    // Fallback: check phone field on the user object
+    if (userData.phone) {
+      console.log(`[getUserPhoneNumber] Using user phone field ${userData.phone} for user ${ghlUserId}`);
+      return userData.phone;
+    }
+    
+    console.log(`[getUserPhoneNumber] No phone number found for user ${ghlUserId} (${userData.name || 'unknown'}) at location ${creds.locationId}. lcPhone:`, JSON.stringify(userData.lcPhone));
     return null;
   } catch (err: any) {
-    console.error(`[getUserPhoneNumber] Error looking up phone number: ${err.message}`);
+    console.error(`[getUserPhoneNumber] Error looking up phone number for user ${ghlUserId}: ${err.message}`);
     return null;
   }
 }

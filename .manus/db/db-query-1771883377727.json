@@ -1,0 +1,18 @@
+{
+  "query": "SELECT u.id as userId, u.name, u.email, tm.id as teamMemberId, tm.ghlUserId, tm.name as tmName FROM users u LEFT JOIN team_members tm ON tm.userId = u.id WHERE u.name LIKE '%Kyle%'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT u.id as userId, u.name, u.email, tm.id as teamMemberId, tm.ghlUserId, tm.name as tmName FROM users u LEFT JOIN team_members tm ON tm.userId = u.id WHERE u.name LIKE '%Kyle%'",
+  "rows": [
+    {
+      "userId": "90493",
+      "name": "Kyle Barks",
+      "email": "kbarks@newagainhouses.com",
+      "teamMemberId": "3",
+      "ghlUserId": "InPGvGL7iu5TCnYJLMEx",
+      "tmName": "Kyle Barks"
+    }
+  ],
+  "messages": [],
+  "stdout": "userId\tname\temail\tteamMemberId\tghlUserId\ttmName\n90493\tKyle Barks\tkbarks@newagainhouses.com\t3\tInPGvGL7iu5TCnYJLMEx\tKyle Barks\n",
+  "stderr": "",
+  "execution_time_ms": 351
+}
