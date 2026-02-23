@@ -83,6 +83,31 @@ export async function searchContacts(
   }
 }
 
+// ============ GET CONTACT BY ID ============
+
+export async function getContact(
+  tenantId: number,
+  contactId: string
+): Promise<{ id: string; name: string; phone: string; email: string; assignedTo?: string } | null> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return null;
+
+  try {
+    const data = await ghlFetch(creds, `/contacts/${contactId}`, "GET");
+    const c = data.contact || data;
+    return {
+      id: c.id,
+      name: `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name || "Unknown",
+      phone: c.phone || "",
+      email: c.email || "",
+      assignedTo: c.assignedTo || undefined,
+    };
+  } catch (error) {
+    console.error(`[GHLActions] getContact error for ${contactId}:`, error);
+    return null;
+  }
+}
+
 // ============ ACTION 1: ADD NOTE TO CONTACT ============
 
 export async function addNoteToContact(
@@ -1426,11 +1451,14 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         result = await changePipelineStage(action.tenantId, resolvedOppId, resolvedPipelineId, resolvedStageId);
         break;
       }
-      case "send_sms":
+      case "send_sms": {
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
-        console.log(`[GHLActions] SMS action: requestedBy=${action.requestedBy} (${action.requestedByName}), resolved GHL userId=${requestingUserGhlId || 'NONE'}`);
-        result = await sendSms(action.tenantId, contactId, payload.message, requestingUserGhlId);
+        // SMS is sent from the logged-in user's phone number (whoever is using the AI Coach)
+        const smsUserId = requestingUserGhlId;
+        console.log(`[GHLActions] SMS action: requestedBy=${action.requestedBy} (${action.requestedByName}), sending as GHL userId=${smsUserId || 'NONE'}`);
+        result = await sendSms(action.tenantId, contactId, payload.message, smsUserId);
         break;
+      }
       case "create_task":
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
         result = await createTask(action.tenantId, contactId, payload.title, payload.description, payload.dueDate, finalTaskAssignee);

@@ -2672,3 +2672,8 @@
 ## Training Page Access Control
 - [x] Hide "Add Material" button on Training page for non-admin users
 - [x] Add Training page to Lead Generator sidebar navigation
+- [x] Restrict "Generate AI Insights" button on Training page to admin only (already was admin-only)
+## SMS Sender Routing Clarification
+- [x] SMS sends from the logged-in user's phone number (whoever is using the AI Coach)
+- [x] Reverted previous change that routed SMS through contact's assignedTo user
+- [x] Frontend "Sending from" label correctly shows the logged-in user's name
