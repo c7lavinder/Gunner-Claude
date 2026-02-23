@@ -2635,3 +2635,9 @@
 - [x] Ensure Lead Generator gamification is working (leaderboard, streaks, badges)
 - [x] Update leaderboard subtitle to include Lead Generators: "Ranked by appointments (LMs), offers (AMs), and leads generated (LGs)"
 - [x] Change Dashboard leaderboard from top 3 to top 5 team members
+
+## Lead Generator AI Coach Customization
+- [x] Create lead-gen-focused system prompt for AI Coach (cold calling tips, identifying motivated sellers, opening lines)
+- [x] Update suggested coaching prompts for Lead Generators (replace price objections/rapport with lead gen topics)
+- [x] Update suggested actions for Lead Generators (add note, schedule qualification call for LM, flag as interested lead)
+- [x] Detect user role and switch AI Coach persona accordingly

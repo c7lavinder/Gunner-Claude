@@ -1352,6 +1352,7 @@ export const appRouter = router({
           ? await getTeamMemberByUserId(ctx.user.id)
           : null;
         const isAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'super_admin';
+        const isLeadGenerator = currentUserTeamMember?.teamRole === 'lead_generator' || ctx.user?.teamRole === 'lead_generator';
 
         // Build set of team member IDs this user can see individual performance for
         const visibleMemberIds = new Set<number>();
@@ -1616,7 +1617,19 @@ export const appRouter = router({
           }
         } catch { /* memory is best-effort */ }
 
-        const systemPrompt = `You are a data-driven sales coach for a real estate wholesaling team. You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
+        const systemPrompt = `${isLeadGenerator ? `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller identify motivated sellers, qualify interest quickly, and pass warm leads to Lead Managers for full qualification.
+
+Your coaching should focus on:
+- Opening lines and hooks for cold calls
+- Quickly identifying seller motivation (distress, life events, timeline)
+- Handling initial objections ("not interested", "how did you get my number", "stop calling")
+- Knowing when a lead is warm enough to pass to a Lead Manager
+- Adding notes about seller interest level and key details
+- Scheduling qualification calls for Lead Managers when a seller shows interest
+- Efficient call pacing and volume strategies
+- NOT on full qualification, offers, walkthroughs, or closing — that's the Lead Manager and Acquisition Manager's job
+
+When the user asks about scheduling or transferring leads, help them create tasks or notes for the Lead Manager team. Their job is to FIND interested sellers, not to close deals.` : 'You are a data-driven sales coach for a real estate wholesaling team.'} You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
 
 ${SECURITY_RULES}
 ${questionIsPlatform ? PLATFORM_KNOWLEDGE : ''}

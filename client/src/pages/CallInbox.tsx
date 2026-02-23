@@ -996,7 +996,7 @@ function AICoachQA() {
             </Button>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground mt-0.5">Ask questions or give CRM commands</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">{currentUser?.teamRole === 'lead_generator' ? 'Cold calling tips, lead notes & CRM commands' : 'Ask questions or give CRM commands'}</p>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col overflow-hidden px-3 pb-3 pt-0">
         <div className="flex-1 overflow-y-auto">
@@ -1008,10 +1008,13 @@ function AICoachQA() {
               </p>
               <div className="flex flex-col gap-1.5 w-full">
                 <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mt-1">Coaching</p>
-                {[
+                {(currentUser?.teamRole === 'lead_generator' ? [
+                  "Best opening lines for cold calls?",
+                  "How to identify a motivated seller?",
+                ] : [
                   "How do I handle price objections?",
                   "Tips for building rapport quickly",
-                ].map((prompt, i) => (
+                ]).map((prompt, i) => (
                   <button
                     key={i}
                     onClick={() => {
@@ -1026,11 +1029,15 @@ function AICoachQA() {
                   </button>
                 ))}
                 <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mt-2">Actions</p>
-                {[
+                {(currentUser?.teamRole === 'lead_generator' ? [
+                  'Add note to John Smith: "Interested in selling, motivated"',
+                  'Create task: Schedule qualification call for Lead Manager',
+                  'Add note to Jane Doe: "Not interested, remove from list"',
+                ] : [
                   'Add note to John Smith: "Called back, interested"',
                   "Create task: Follow up with seller tomorrow",
                   'Send SMS to Jane Doe: "Are you still interested in selling?"',
-                ].map((prompt, i) => (
+                ]).map((prompt, i) => (
                   <button
                     key={`action-${i}`}
                     onClick={() => {
@@ -1315,7 +1322,7 @@ function AICoachQA() {
         
         <div className="flex gap-2 mt-2 pt-2 border-t flex-shrink-0">
           <Textarea
-            placeholder="Ask a question or give a command..."
+            placeholder={currentUser?.teamRole === 'lead_generator' ? "Ask about cold calling or give a command..." : "Ask a question or give a command..."}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={handleKeyDown}
