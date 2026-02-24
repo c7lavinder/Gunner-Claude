@@ -261,8 +261,8 @@ export default function Opportunities() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tighter">Pipeline Signals</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">Pipeline Signals</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--obs-text-tertiary)' }}>
             Deals your team might be missing — detected from pipeline activity, conversations, and call data
           </p>
         </div>

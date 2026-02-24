@@ -98,7 +98,7 @@ import { LEAD_MANAGER_RUBRIC, ACQUISITION_MANAGER_RUBRIC, LEAD_GENERATOR_RUBRIC,
 import { processCall } from "./grading";
 import { invokeLLM } from "./_core/llm";
 import { generateTeamInsights, saveGeneratedInsights, clearAiGeneratedInsights } from "./insights";
-import { pollForNewCalls, getPollingStatus, startPolling, stopPolling, resyncCallRecording } from "./ghlService";
+import { pollForNewCalls, getPollingStatus, startPolling, stopPolling, resyncCallRecording, backfillGHLPropertyAddresses } from "./ghlService";
 import { storagePut } from "./storage";
 import { runArchivalJob, getArchivalStats, archiveCall } from "./archival";
 import { verifyTenantOwnership } from "./tenantOwnership";
@@ -1082,6 +1082,11 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return await resyncCallRecording(input.callId);
       }),
+
+    // Backfill property addresses for existing GHL calls
+    backfillAddresses: protectedProcedure.mutation(async () => {
+      return await backfillGHLPropertyAddresses();
+    }),
   }),
 
   // ============ SYNC STATUS ============

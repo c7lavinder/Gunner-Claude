@@ -807,8 +807,8 @@ export default function TeamMembers() {
       {/* Page header - lookbook style */}
       <div className="obs-section-header">
         <div>
-          <h2 className="obs-section-title">Team Roster</h2>
-          <p style={{fontSize: 14, color: 'var(--obs-text-secondary)', marginTop: 4}}>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">Team Roster</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--obs-text-tertiary)' }}>
             {isLeadGenerator ? "Your profile and performance" : "Your squad ranked by performance"}
           </p>
         </div>

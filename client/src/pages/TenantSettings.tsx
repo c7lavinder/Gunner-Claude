@@ -551,8 +551,8 @@ export default function TenantSettings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Company Settings</h1>
-          <p className="text-sm text-muted-foreground hidden sm:block">Manage your organization's settings and team</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">Company Settings</h1>
+          <p className="text-sm mt-0.5 hidden sm:block" style={{ color: 'var(--obs-text-tertiary)' }}>Manage your organization's settings and team</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => { refetchSettings(); refetchTeam(); }}>
           <RefreshCw className="h-4 w-4" />

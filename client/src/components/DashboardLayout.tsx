@@ -203,8 +203,11 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
             onClick={() => setLocation('/dashboard')}
             style={{ cursor: 'pointer' }}
           >
-            <div className="obs-logo-mark">G</div>
-            <span className="hidden sm:inline">GUNNER</span>
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-small.png"
+              alt="Gunner"
+              style={{ height: 32, objectFit: 'contain' }}
+            />
           </div>
 
           {/* Desktop Tabs */}

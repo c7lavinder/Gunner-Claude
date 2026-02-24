@@ -237,12 +237,7 @@ function LeaderboardPanel({ leaderboard, loading }: { leaderboard: any[] | undef
                 }`}>
                   {index + 1}
                 </div>
-                {/* Avatar */}
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0" style={{
-                  background: 'linear-gradient(135deg, var(--obs-accent), #5a1018)',
-                }}>
-                  {initials}
-                </div>
+
                 {/* Name + role */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{entry.teamMember.name}</p>
@@ -374,9 +369,32 @@ function CallHistoryTable({ dateRange }: { dateRange: DateRange }) {
     return undefined;
   }, [filter]);
 
+  // Convert dateRange to startDate/endDate
+  const dateFilter = useMemo(() => {
+    const now = new Date();
+    let startDate: string | undefined;
+    if (dateRange === 'today') {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      startDate = d.toISOString();
+    } else if (dateRange === 'week') {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      startDate = d.toISOString();
+    } else if (dateRange === 'month') {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 30);
+      startDate = d.toISOString();
+    } else if (dateRange === 'ytd') {
+      startDate = new Date(now.getFullYear(), 0, 1).toISOString();
+    }
+    return startDate;
+  }, [dateRange]);
+
   const { data: callsData, isLoading } = trpc.calls.withGrades.useQuery({
     limit: 20,
     statuses: statuses,
+    startDate: dateFilter,
   });
 
   const calls = callsData?.items || [];
@@ -395,19 +413,8 @@ function CallHistoryTable({ dateRange }: { dateRange: DateRange }) {
 
   return (
     <div>
-      {/* Section header */}
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">Call History</h2>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--obs-text-tertiary)' }}>
-            All calls from the past 7 days
-          </p>
-        </div>
-        <span className="obs-badge-accent">Last 7 Days</span>
-      </div>
-
       {/* Toolbar */}
-      <div className="obs-panel mt-4">
+      <div className="obs-panel">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'var(--obs-text-tertiary)' }} />

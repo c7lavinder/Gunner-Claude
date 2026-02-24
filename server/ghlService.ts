@@ -493,6 +493,42 @@ async function matchTeamMember(ghlUserId?: string, userName?: string, tenantId?:
 }
 
 /**
+ * Fetch a GHL contact's address by contactId.
+ * Returns a formatted property address string, or null if not available.
+ */
+async function fetchGHLContactAddress(contactId: string): Promise<string | null> {
+  try {
+    const creds = getActiveCredentials();
+    const url = `${GHL_API_BASE}/contacts/${contactId}`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${creds.apiKey}`,
+        "Version": "2021-07-28",
+      },
+    });
+    if (!response.ok) {
+      console.warn(`[GHL] Failed to fetch contact ${contactId}: ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    const contact = data.contact || data;
+    // Build address from available fields
+    const parts: string[] = [];
+    if (contact.address1) parts.push(contact.address1);
+    if (contact.city) parts.push(contact.city);
+    if (contact.state) {
+      const stateZip = contact.postalCode ? `${contact.state} ${contact.postalCode}` : contact.state;
+      parts.push(stateZip);
+    }
+    const address = parts.join(", ").trim();
+    return address || null;
+  } catch (error) {
+    console.warn(`[GHL] Error fetching contact address for ${contactId}:`, error);
+    return null;
+  }
+}
+
+/**
  * Sync a single GHL call to the local database
  */
 async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolean; callId?: number; skipped?: boolean; reason?: string }> {
@@ -540,12 +576,23 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
       return { success: false, reason: "Failed to upload recording to S3" };
     }
 
+    // Fetch property address from GHL contact (like BatchDialer does)
+    let propertyAddress: string | undefined;
+    if (ghlCall.contactId) {
+      const address = await fetchGHLContactAddress(ghlCall.contactId);
+      if (address) {
+        propertyAddress = address;
+        console.log(`[GHL] Got property address for contact ${ghlCall.contactId}: ${address}`);
+      }
+    }
+
     // Create the call record with tenantId from team member
     const call = await createCall({
       ghlCallId: ghlCall.id,
       ghlContactId: ghlCall.contactId,
       contactName: ghlCall.contactName,
       contactPhone: ghlCall.contactPhone,
+      propertyAddress: propertyAddress,
       recordingUrl: recordingUrl,
       duration: ghlCall.duration,
       callDirection: ghlCall.direction || "outbound",
@@ -1327,4 +1374,103 @@ export async function resyncCallRecording(callId: number): Promise<{
       message: error instanceof Error ? error.message : "Unknown error during re-sync" 
     };
   }
+}
+
+/**
+ * Backfill property addresses for existing GHL calls that don't have one.
+ * Looks up the GHL contact for each call and fetches the address.
+ */
+export async function backfillGHLPropertyAddresses(): Promise<{
+  updated: number;
+  skipped: number;
+  errors: number;
+}> {
+  const { isNull, isNotNull, and } = await import("drizzle-orm");
+  const { calls: callsTable } = await import("../drizzle/schema");
+  const { getDb } = await import("./db");
+  const db = await getDb();
+  if (!db) return { updated: 0, skipped: 0, errors: 0 };
+
+  const results = { updated: 0, skipped: 0, errors: 0 };
+
+  try {
+    // Find GHL calls without property addresses
+    const callsWithoutAddress = await db
+      .select({
+        id: callsTable.id,
+        ghlContactId: callsTable.ghlContactId,
+        tenantId: callsTable.tenantId,
+      })
+      .from(callsTable)
+      .where(
+        and(
+          isNotNull(callsTable.ghlContactId),
+          isNull(callsTable.propertyAddress)
+        )
+      )
+      .limit(200); // Process in batches
+
+    console.log(`[GHL Backfill] Found ${callsWithoutAddress.length} calls without property addresses`);
+
+    // Group by tenantId to load credentials once per tenant
+    const byTenant = new Map<number, typeof callsWithoutAddress>();
+    for (const call of callsWithoutAddress) {
+      if (!call.tenantId) continue;
+      const group = byTenant.get(call.tenantId) || [];
+      group.push(call);
+      byTenant.set(call.tenantId, group);
+    }
+
+    for (const [tenantId, tenantCalls] of Array.from(byTenant.entries())) {
+      // Load tenant credentials
+      const tenant = await getTenantById(tenantId);
+      if (!tenant) continue;
+      const config = parseCrmConfig(tenant);
+      if (!config.ghlApiKey || !config.ghlLocationId) continue;
+
+      setActiveCredentials({
+        apiKey: config.ghlApiKey,
+        locationId: config.ghlLocationId,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        dispoPipelineName: config.dispoPipelineName,
+        newDealStageName: config.newDealStageName,
+      });
+
+      // Cache contact addresses to avoid duplicate lookups
+      const addressCache = new Map<string, string | null>();
+
+      for (const call of tenantCalls) {
+        try {
+          if (!call.ghlContactId) { results.skipped++; continue; }
+
+          let address = addressCache.get(call.ghlContactId);
+          if (address === undefined) {
+            address = await fetchGHLContactAddress(call.ghlContactId);
+            addressCache.set(call.ghlContactId, address);
+          }
+
+          if (address) {
+            await updateCall(call.id, { propertyAddress: address });
+            results.updated++;
+            console.log(`[GHL Backfill] Updated call ${call.id} with address: ${address}`);
+          } else {
+            results.skipped++;
+          }
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (err) {
+          results.errors++;
+          console.warn(`[GHL Backfill] Error for call ${call.id}:`, err);
+        }
+      }
+    }
+
+    console.log(`[GHL Backfill] Complete: ${results.updated} updated, ${results.skipped} skipped, ${results.errors} errors`);
+  } catch (error) {
+    console.error("[GHL Backfill] Fatal error:", error);
+  }
+
+  return results;
 }

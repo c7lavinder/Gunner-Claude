@@ -16,7 +16,10 @@ import {
   Clock,
   Award,
   Zap,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 /* ─── helpers ─── */
 const pct = (a: number, b: number) => (b === 0 ? 0 : Math.round((a / b) * 100));
@@ -57,7 +60,6 @@ const dateRangeLabels: Record<DateRange, string> = {
    ═══════════════════════════════════════════════════════ */
 export default function Analytics() {
   const [dateRange, setDateRange] = useState<DateRange>("week");
-  const [showRangeMenu, setShowRangeMenu] = useState(false);
   const [expandedMember, setExpandedMember] = useState<number | null>(null);
 
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
@@ -109,190 +111,67 @@ export default function Analytics() {
 
   /* ─── render ─── */
   return (
-    <div className="analytics-page" style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px 80px" }}>
+    <div className="space-y-6">
       {/* ═══ HEADER ═══ */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 32 }}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">
             Analytics
           </h1>
-          <p style={{ fontSize: 14, color: "var(--muted-foreground)", marginTop: 4 }}>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--obs-text-tertiary)' }}>
             Performance intelligence across your entire team
           </p>
         </div>
-        {/* Date range selector */}
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setShowRangeMenu(!showRangeMenu)}
-            className="obs-panel"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              background: "var(--card)",
-            }}
-          >
-            {dateRangeLabels[dateRange]}
-            <ChevronDown size={14} />
-          </button>
-          {showRangeMenu && (
-            <div
-              className="obs-panel"
-              style={{
-                position: "absolute",
-                right: 0,
-                top: "calc(100% + 4px)",
-                zIndex: 50,
-                minWidth: 160,
-                padding: 4,
-                borderRadius: 10,
-                border: "1px solid var(--border)",
-                background: "var(--card)",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-              }}
-            >
-              {(Object.keys(dateRangeLabels) as DateRange[]).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => {
-                    setDateRange(r);
-                    setShowRangeMenu(false);
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "8px 12px",
-                    fontSize: 13,
-                    fontWeight: r === dateRange ? 600 : 400,
-                    color: r === dateRange ? "var(--primary)" : "var(--foreground)",
-                    background: r === dateRange ? "rgba(139,26,26,0.06)" : "transparent",
-                    border: "none",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                  }}
-                >
-                  {dateRangeLabels[r]}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder="Select period" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="today">Today</SelectItem>
+            <SelectItem value="week">Last 7 Days</SelectItem>
+            <SelectItem value="month">Last 30 Days</SelectItem>
+            <SelectItem value="ytd">Year to Date</SelectItem>
+            <SelectItem value="all">All Time</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* ═══ EXECUTIVE KPI ROW ═══ */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginBottom: 32 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {statsLoading
           ? Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="obs-panel" style={{ padding: 20, borderRadius: 12 }}>
+              <div key={i} className="obs-stat-card">
                 <Skeleton className="h-4 w-16 mb-3" />
                 <Skeleton className="h-8 w-20 mb-2" />
                 <Skeleton className="h-3 w-24" />
               </div>
             ))
           : [
-              {
-                label: "Total Calls",
-                value: stats?.totalCalls ?? 0,
-                prev: prior?.totalCalls,
-                icon: Phone,
-                iconColor: "#8B1A1A",
-              },
-              {
-                label: "Graded Calls",
-                value: stats?.gradedCalls ?? 0,
-                prev: prior?.gradedCalls,
-                icon: MessageSquare,
-                iconColor: "#a52525",
-              },
-              {
-                label: "Leads Generated",
-                value: stats?.leadsGenerated ?? 0,
-                prev: prior?.leadsGenerated,
-                icon: Target,
-                iconColor: "#c41e3a",
-              },
-              {
-                label: "Appointments",
-                value: stats?.appointmentsSet ?? 0,
-                prev: prior?.appointmentsSet,
-                icon: Calendar,
-                iconColor: "#d97706",
-              },
-              {
-                label: "Offer Calls",
-                value: stats?.offerCallsCompleted ?? 0,
-                prev: prior?.offerCallsCompleted,
-                icon: CheckCircle,
-                iconColor: "#16a34a",
-              },
-              {
-                label: "Avg Score",
-                value: stats?.averageScore ?? 0,
-                prev: prior?.averageScore,
-                icon: TrendingUp,
-                iconColor: "#6366f1",
-                suffix: "%",
-              },
+              { label: "Total Calls", value: stats?.totalCalls ?? 0, prev: prior?.totalCalls, icon: Phone },
+              { label: "Graded Calls", value: stats?.gradedCalls ?? 0, prev: prior?.gradedCalls, icon: MessageSquare },
+              { label: "Leads Generated", value: stats?.leadsGenerated ?? 0, prev: prior?.leadsGenerated, icon: Target },
+              { label: "Appointments", value: stats?.appointmentsSet ?? 0, prev: prior?.appointmentsSet, icon: Calendar },
+              { label: "Offer Calls", value: stats?.offerCallsCompleted ?? 0, prev: prior?.offerCallsCompleted, icon: CheckCircle },
+              { label: "Avg Score", value: Math.round(stats?.averageScore ?? 0), prev: prior?.averageScore ? Math.round(prior.averageScore) : undefined, icon: TrendingUp, suffix: "%", isPercentage: true },
             ].map((kpi, i) => {
-              const d = kpi.prev != null ? delta(kpi.value, kpi.prev) : null;
+              const d = kpi.prev != null ? (kpi as any).isPercentage ? Math.round(kpi.value - kpi.prev) : delta(kpi.value, kpi.prev) : null;
               const Icon = kpi.icon;
+              const showChange = d !== null && Math.abs(d) >= 1;
               return (
-                <div
-                  key={i}
-                  className="obs-panel"
-                  style={{
-                    padding: "20px 18px",
-                    borderRadius: 12,
-                    border: "1px solid var(--border)",
-                    background: "var(--card)",
-                    transition: "box-shadow 0.2s, transform 0.2s",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        background: `${kpi.iconColor}12`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Icon size={18} style={{ color: kpi.iconColor }} />
-                    </div>
-                    {d !== null && (
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: d >= 0 ? "#16a34a" : "#dc2626",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 2,
-                        }}
-                      >
-                        {d >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {d >= 0 ? "+" : ""}
-                        {d}%
+                <div key={i} className="obs-stat-card">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="stat-icon-wrap"><Icon className="h-4 w-4" /></div>
+                    {showChange && (
+                      <span className={`change-badge ${d >= 0 ? 'change-up' : 'change-down'}`}>
+                        {d >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                        {Math.abs(d)}%
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1 }}>
-                    {kpi.value.toLocaleString()}
-                    {kpi.suffix || ""}
+                  <div className="stat-value">
+                    {Math.round(kpi.value).toLocaleString()}{(kpi as any).suffix || ""}
                   </div>
-                  <div style={{ fontSize: 13, color: "var(--muted-foreground)", marginTop: 4 }}>
-                    {kpi.label}
-                  </div>
+                  <p className="stat-label">{kpi.label}</p>
                 </div>
               );
             })}
@@ -300,20 +179,12 @@ export default function Analytics() {
 
 
       {/* ═══ MIDDLE ROW: Score Trends + Grade Distribution ═══ */}
-      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 24, marginBottom: 32 }}>
+      <div className="grid gap-4 lg:grid-cols-5">
         {/* Score Trends */}
-        <div
-          className="obs-panel"
-          style={{
-            padding: "24px 28px",
-            borderRadius: 12,
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-          }}
-        >
-          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+        <div className="obs-panel lg:col-span-3">
+          <h3 className="obs-section-title mb-5">
             Score Trends — {stats?.weeklyTrends?.length ?? 12} Weeks
-          </h2>
+          </h3>
           {statsLoading ? (
             <Skeleton className="h-56 w-full" />
           ) : stats?.weeklyTrends && stats.weeklyTrends.length > 0 ? (
@@ -424,21 +295,12 @@ export default function Analytics() {
         </div>
 
         {/* Grade Distribution + Call Metrics */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div className="lg:col-span-2 flex flex-col gap-4">
           {/* Grade Distribution */}
-          <div
-            className="obs-panel"
-            style={{
-              padding: "24px 28px",
-              borderRadius: 12,
-              border: "1px solid var(--border)",
-              background: "var(--card)",
-              flex: 1,
-            }}
-          >
-            <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16 }}>
+          <div className="obs-panel flex-1">
+            <h3 className="obs-section-title mb-4">
               Grade Distribution
-            </h2>
+            </h3>
             {statsLoading ? (
               <Skeleton className="h-32 w-full" />
             ) : (
@@ -509,18 +371,10 @@ export default function Analytics() {
           </div>
 
           {/* Quick Metrics */}
-          <div
-            className="obs-panel"
-            style={{
-              padding: "24px 28px",
-              borderRadius: 12,
-              border: "1px solid var(--border)",
-              background: "var(--card)",
-            }}
-          >
-            <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16 }}>
+          <div className="obs-panel">
+            <h3 className="obs-section-title mb-4">
               Quick Metrics
-            </h2>
+            </h3>
             {statsLoading ? (
               <Skeleton className="h-20 w-full" />
             ) : (
@@ -550,19 +404,10 @@ export default function Analytics() {
       </div>
 
       {/* ═══ CALL CLASSIFICATION BREAKDOWN ═══ */}
-      <div
-        className="obs-panel"
-        style={{
-          padding: "24px 28px",
-          borderRadius: 12,
-          border: "1px solid var(--border)",
-          background: "var(--card)",
-          marginBottom: 32,
-        }}
-      >
-        <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+      <div className="obs-panel">
+        <h3 className="obs-section-title mb-5">
           Call Classification
-        </h2>
+        </h3>
         {statsLoading ? (
           <Skeleton className="h-16 w-full" />
         ) : classifications.length > 0 ? (
@@ -605,20 +450,11 @@ export default function Analytics() {
       </div>
 
       {/* ═══ TEAM PERFORMANCE TABLE ═══ */}
-      <div
-        className="obs-panel"
-        style={{
-          padding: "24px 28px",
-          borderRadius: 12,
-          border: "1px solid var(--border)",
-          background: "var(--card)",
-          marginBottom: 32,
-        }}
-      >
+      <div className="obs-panel">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>
+          <h3 className="obs-section-title">
             Team Performance
-          </h2>
+          </h3>
           <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
             {stats?.teamMemberScores?.filter((m) => m.totalGraded > 0).length ?? 0} active members
           </span>
@@ -765,21 +601,13 @@ export default function Analytics() {
       </div>
 
       {/* ═══ ROLE LEADERBOARDS ═══ */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 32 }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Acquisition Managers */}
-        <div
-          className="obs-panel"
-          style={{
-            padding: "24px 28px",
-            borderRadius: 12,
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-          }}
-        >
+        <div className="obs-panel">
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            <h3 className="obs-section-title">
               Acquisition Managers
-            </h2>
+            </h3>
             <span
               style={{
                 fontSize: 11,
@@ -872,19 +700,11 @@ export default function Analytics() {
         </div>
 
         {/* Lead Generators */}
-        <div
-          className="obs-panel"
-          style={{
-            padding: "24px 28px",
-            borderRadius: 12,
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-          }}
-        >
+        <div className="obs-panel">
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            <h3 className="obs-section-title">
               Lead Generators
-            </h2>
+            </h3>
             <span
               style={{
                 fontSize: 11,
@@ -979,19 +799,10 @@ export default function Analytics() {
 
       {/* ═══ INDIVIDUAL PERFORMANCE SPARKLINES ═══ */}
       {stats?.teamMemberTrends && stats.teamMemberTrends.filter((m) => m.weeklyScores.some((w) => w.callCount > 0)).length > 0 && (
-        <div
-          className="obs-panel"
-          style={{
-            padding: "24px 28px",
-            borderRadius: 12,
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-            marginBottom: 32,
-          }}
-        >
-          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+        <div className="obs-panel">
+          <h3 className="obs-section-title mb-5">
             Individual Trends
-          </h2>
+          </h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
             {stats.teamMemberTrends
               .filter((m) => m.weeklyScores.some((w) => w.callCount > 0))
@@ -1075,40 +886,19 @@ export default function Analytics() {
 
       {/* ═══ WEEKLY BREAKDOWN TABLE ═══ */}
       {stats?.weeklyTrends && stats.weeklyTrends.length > 0 && (
-        <div
-          className="obs-panel"
-          style={{
-            padding: "24px 28px",
-            borderRadius: 12,
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-          }}
-        >
-          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+        <div className="obs-panel">
+          <h3 className="obs-section-title mb-5">
             Weekly Breakdown
-          </h2>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="obs-table w-full">
               <thead>
                 <tr>
-                  {["Week", "Avg Score", "Total Calls", "Graded", "Change"].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "10px 14px",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        letterSpacing: "0.06em",
-                        textTransform: "uppercase" as const,
-                        color: "var(--muted-foreground)",
-                        textAlign: h === "Week" ? "left" : "center",
-                        background: "var(--muted)",
-                        borderBottom: "1px solid var(--border)",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  <th>WEEK</th>
+                  <th>AVG SCORE</th>
+                  <th>TOTAL CALLS</th>
+                  <th>GRADED</th>
+                  <th>CHANGE</th>
                 </tr>
               </thead>
               <tbody>

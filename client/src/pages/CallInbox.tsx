@@ -2119,7 +2119,7 @@ export default function CallInbox() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">Call History</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
+          <p className="text-sm mt-0.5 hidden sm:block" style={{ color: 'var(--obs-text-tertiary)' }}>
             Review calls, provide feedback, and get coaching advice
           </p>
         </div>
@@ -2171,9 +2171,9 @@ export default function CallInbox() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
+      <div className="space-y-4">
         {/* Main Content - Calls and Feedback */}
-        <div className="lg:col-span-2">
+        <div>
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setPage(0); }}>
             {/* 3 Clean Tabs */}
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -2278,7 +2278,15 @@ export default function CallInbox() {
             </div>
 
             {/* === TAB: All Calls (paginated, filtered) === */}
-            <TabsContent value="calls" className="space-y-4">
+            <TabsContent value="calls">
+              <div className="grid gap-4 lg:grid-cols-3">
+              {/* AI Coach - inline in first tab */}
+              <div className="lg:col-span-1 order-first lg:order-last">
+                <div className="sticky top-20">
+                  <AICoachQA />
+                </div>
+              </div>
+              <div className="lg:col-span-2 space-y-4">
               {isLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5].map((i) => (
@@ -2349,6 +2357,8 @@ export default function CallInbox() {
                   </CardContent>
                 </Card>
               )}
+              </div>
+              </div>
             </TabsContent>
 
             {/* === TAB: Needs Review (pending + failed + flagged feedback) === */}
@@ -2637,12 +2647,7 @@ export default function CallInbox() {
           </Tabs>
         </div>
 
-        {/* AI Coach Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-4">
-            <AICoachQA />
-          </div>
-        </div>
+
       </div>
     </div>
   );

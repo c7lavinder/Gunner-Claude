@@ -104,7 +104,7 @@
   --obs-accent-soft: rgba(139,26,26,0.06);
   --obs-accent-medium: rgba(139,26,26,0.12);
   --obs-accent-text: #8B1A1A;
-  --obs-nav-bg: rgba(255,255,255,0.85);
+  --obs-nav-bg: rgba(255,255,255,1);
   --obs-stat-bar-bg: rgba(0,0,0,0.06);
   --obs-xp-bar-bg: rgba(0,0,0,0.06);
   --obs-badge-bg: rgba(0,0,0,0.04);
@@ -209,7 +209,7 @@
   --obs-accent-soft: rgba(196,30,58,0.08);
   --obs-accent-medium: rgba(196,30,58,0.15);
   --obs-accent-text: #e8364f;
-  --obs-nav-bg: rgba(9,9,11,0.85);
+  --obs-nav-bg: rgba(9,9,11,1);
   --obs-stat-bar-bg: rgba(255,255,255,0.06);
   --obs-xp-bar-bg: rgba(255,255,255,0.06);
   --obs-badge-bg: rgba(255,255,255,0.04);

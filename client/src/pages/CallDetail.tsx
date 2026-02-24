@@ -44,7 +44,7 @@ const FEEDBACK_TYPES = [
 
 function GradeBadge({ grade, size = "default" }: { grade: string; size?: "default" | "large" }) {
   const gradeClass = `grade-${grade.toLowerCase()}`;
-  const sizeClass = size === "large" ? "text-2xl px-4 py-2" : "";
+  const sizeClass = size === "large" ? "grade-badge-lg" : "";
   return <span className={`grade-badge ${gradeClass} ${sizeClass}`}>{grade}</span>;
 }
 
@@ -223,10 +223,10 @@ export default function CallDetail() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-extrabold tracking-tighter">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">
             {call.contactName || call.contactPhone || "Unknown Contact"}
           </h1>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mt-0.5" style={{ color: 'var(--obs-text-tertiary)' }}>
             {call.teamMemberName && (
               <span className="flex items-center gap-1">
                 <User className="h-3 w-3" />
@@ -507,13 +507,11 @@ export default function CallDetail() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left Column - Grade Overview */}
           <div className="space-y-6">
-            <Card>
-              <CardHeader className="text-center pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Overall Grade</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center">
+            <div className="obs-panel">
+              <h3 className="obs-section-title text-center mb-4">Overall Grade</h3>
+              <div className="flex flex-col items-center">
                 <GradeBadge grade={grade?.overallGrade || "?"} size="large" />
-                <p className="text-3xl font-bold mt-4">
+                <p className="text-3xl font-extrabold mt-3 tracking-tight">
                   {grade?.overallScore ? `${Math.round(parseFloat(grade.overallScore))}%` : "N/A"}
                 </p>
                 <div className="flex flex-wrap gap-2 mt-2 justify-center">
@@ -560,8 +558,8 @@ export default function CallDetail() {
                     </Badge>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {/* Strengths */}
             {strengths.length > 0 && (

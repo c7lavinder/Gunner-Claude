@@ -2867,3 +2867,21 @@
 - [x] Verify compilation and run tests
 
 - [x] Remove Conversion Funnel section from Analytics page
+
+- [x] Remove Role Leaderboards (Acquisition Managers / Lead Generators) from Analytics
+- [x] Remove Team Performance table from Analytics
+- [x] Remove Call Classification section from Analytics
+- [x] Fix empty space below Score Trends chart - fill the chart area properly
+- [x] Round all percentages to nearest whole number (no decimals like 68.392%)
+
+- [x] Make AI Coach box fit inline on Call Inbox first tab
+- [x] Remove red avatar boxes from Dashboard Leaderboard
+- [x] Fix Call History table not populating on Dashboard (shows "No calls found")
+- [x] Call History table on Dashboard should filter by the date range selector at top
+- [x] Remove "Call History" heading and subtitle from Dashboard
+- [x] Ensure all boxes, tabs, and fonts match Obsidian design system across all pages
+- [x] Use original Gunner logo (VITE_APP_LOGO) in top nav instead of "G" square + text
+- [x] Ensure all page headers flow smoothly and match Dashboard aesthetic (font, spacing, subtitle)
+- [x] Improve grade letter badge on Call Detail page to match Obsidian aesthetic
+- [x] Make top navigation bar opaque (not transparent) so content doesn't scroll behind it
+- [x] Pull property address from GHL contacts like BatchDialer does
