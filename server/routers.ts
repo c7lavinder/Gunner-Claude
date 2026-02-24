@@ -4886,6 +4886,8 @@ Available action types:
 
 MULTI-ACTION SUPPORT: A user may request MULTIPLE actions in a single message (e.g., "Add a note to Jose Ruiz, then create a task for 3 months from now, then move it to the 4 month stage"). You MUST detect ALL actions and return each one as a separate item in the "actions" array. Parse each action independently with its own contactName, params, and summary.
 
+CRITICAL — ONLY PARSE THE CURRENT MESSAGE: You will see conversation history messages for context. ONLY parse the LAST user message (the current request) for new actions. Previous user messages in the history have ALREADY been processed and executed — do NOT re-detect or re-create actions from them. The history is provided ONLY so you can understand context for follow-ups like "do it again" or to extract contact names. If the current message says "move the task for Rose Hill to 5 weeks", return ONLY the Rose Hill action — do NOT also return actions from earlier messages in the history.
+
 If the message contains NO CRM action requests (it's a coaching question, greeting, etc.), return an empty actions array.
 
 CRITICAL — CONVERSATIONAL MESSAGES ARE NOT ACTIONS:
@@ -5000,9 +5002,12 @@ ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descri
 ${instructionContext}`
             },
             // Include conversation history for context (so follow-ups like "do it again" work)
+            // Tag previous user messages as already-processed to prevent re-detection
             ...(input.history && input.history.length > 0 ? input.history.slice(-6).map(msg => ({
               role: msg.role as "user" | "assistant",
-              content: msg.role === "assistant" ? `[Previous response: ${msg.content.substring(0, 500)}]` : msg.content
+              content: msg.role === "assistant" 
+                ? `[Previous response: ${msg.content.substring(0, 500)}]` 
+                : `[ALREADY PROCESSED - context only, do NOT parse as new action] ${msg.content}`
             })) : []),
             { role: "user", content: input.message }
           ],

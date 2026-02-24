@@ -2913,3 +2913,4 @@
 - [x] BUG: AI Coach pipeline stage move fails with "Can not create duplicate opportunity" — need to find and update existing opportunity instead of creating a new one
 - [x] Fix AI Coach responses to display call outcomes in clean English (e.g., "Callback Scheduled") instead of raw snake_case (e.g., "callback_scheduled")
 - [x] Fix AI Coach going off the rails with generic filler about training materials — tighten system prompt to stay concise and specific
+- [x] BUG: AI Coach re-detects already-executed actions when user sends a new command — should only parse the new message, not re-parse conversation history
