@@ -858,11 +858,11 @@ export default function TeamMembers() {
 
       <Tabs defaultValue="team" className="w-full">
         <TabsList className="bg-slate-900 border border-red-900/40">
-          <TabsTrigger value="team" className="flex items-center gap-2 data-[state=active]:bg-red-900/40 data-[state=active]:text-white">
+          <TabsTrigger value="team" className="flex items-center gap-2 text-slate-300 data-[state=active]:bg-red-900/40 data-[state=active]:text-white">
             <Users className="h-4 w-4" />
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11px" }}>ROSTER</span>
           </TabsTrigger>
-          <TabsTrigger value="profile" className="flex items-center gap-2 data-[state=active]:bg-red-900/40 data-[state=active]:text-white">
+          <TabsTrigger value="profile" className="flex items-center gap-2 text-slate-300 data-[state=active]:bg-red-900/40 data-[state=active]:text-white">
             <User className="h-4 w-4" />
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11px" }}>MY PROFILE</span>
           </TabsTrigger>

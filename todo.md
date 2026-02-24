@@ -2762,3 +2762,6 @@
 
 ## Teammate Classes Color Update
 - [x] Lead Manager = red, Acquisition Manager = orange, Lead Generator = yellow
+
+## Bug: MY PROFILE tab text not visible
+- [x] Fix inactive tab text color to be readable against dark background
