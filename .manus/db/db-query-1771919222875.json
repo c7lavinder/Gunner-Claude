@@ -1,0 +1,157 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "ai_coach_preferences"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "ai_feedback"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "badge_progress"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "badges"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "brand_assets"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "brand_profile"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "call_grades"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "calls"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "campaign_kpis"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "coach_action_edits"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "coach_action_log"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "coach_messages"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "content_ideas"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "deals"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "email_verification_tokens"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "emails_sent"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "grading_rules"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "kpi_channels"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "kpi_deals"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "kpi_goals"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "kpi_markets"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "kpi_periods"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "lead_gen_staff"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "opportunities"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "outreach_history"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "password_reset_tokens"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "pending_invitations"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "performance_metrics"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "platform_settings"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "reward_views"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "social_posts"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "subscription_plans"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "team_assignments"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "team_member_kpis"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "team_members"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "team_training_items"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "tenant_call_types"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "tenant_roles"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "tenant_rubrics"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "tenants"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "training_materials"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "user_badges"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "user_instructions"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "user_streaks"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "user_xp"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "users"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "webhook_retry_queue"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb": "xp_transactions"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_nusXfQu5XBTMz3NUCR6brb\n__drizzle_migrations\nai_coach_preferences\nai_feedback\nbadge_progress\nbadges\nbrand_assets\nbrand_profile\ncall_grades\ncalls\ncampaign_kpis\ncoach_action_edits\ncoach_action_log\ncoach_messages\ncontent_ideas\ndeals\nemail_verification_tokens\nemails_sent\ngrading_rules\nkpi_channels\nkpi_deals\nkpi_goals\nkpi_markets\nkpi_periods\nlead_gen_staff\nopportunities\noutreach_history\npassword_reset_tokens\npending_invitations\nperformance_metrics\nplatform_settings\nreward_views\nsocial_posts\nsubscription_plans\nteam_assignments\nteam_member_kpis\nteam_members\nteam_training_items\ntenant_call_types\ntenant_roles\ntenant_rubrics\ntenants\ntraining_materials\nuser_badges\nuser_instructions\nuser_streaks\nuser_xp\nusers\nwebhook_retry_queue\nxp_transactions\n",
+  "stderr": "",
+  "execution_time_ms": 342
+}

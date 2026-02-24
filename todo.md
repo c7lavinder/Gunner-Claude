@@ -2897,3 +2897,4 @@
 - [x] Limit Dashboard Call History table to show only the last 10 calls
 - [x] Make unselected tabs appear fainted/muted across all tab bars to match Team page style
 - [x] Fix all custom tab CSS classes (obs-role-tab, training tabs, call-filter-pill, etc.) so unselected tabs are fainted/muted like Team page
+- [x] Fix Daniel Lozano login issue - being forced to create new account instead of logging into existing one (root cause: case-sensitive email lookup in Google auth + openId mismatch)

@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { users, tenants, pendingInvitations, subscriptionPlans } from "../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import * as crypto from "crypto";
 import { createSessionToken, getUserWithTenant } from "./selfServeAuth";
 import { ENV } from "./_core/env";
@@ -175,9 +175,10 @@ export async function signInWithGoogle(params: {
     }
 
     // Check if there's an existing user with this email (from email/password signup)
-    console.log('[GoogleAuth] Checking for existing user by email:', email);
+    // Use case-insensitive comparison to handle email casing differences (e.g. Google returns 'Alvarez.lozano@hotmail.com' but DB has 'alvarez.lozano@hotmail.com')
+    console.log('[GoogleAuth] Checking for existing user by email (case-insensitive):', email);
     const [emailUser] = await db.select().from(users).where(
-      eq(users.email, email)
+      sql`LOWER(${users.email}) = LOWER(${email})`
     ).limit(1);
 
     if (emailUser) {

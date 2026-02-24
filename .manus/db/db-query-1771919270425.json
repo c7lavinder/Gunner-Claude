@@ -1,0 +1,23 @@
+{
+  "query": "SELECT id, name, email, openId, role, tenantId, teamRole, loginMethod, createdAt, updatedAt, lastSignedIn FROM users WHERE name LIKE '%Daniel%' OR name LIKE '%Lozano%' OR email LIKE '%daniel%' OR email LIKE '%lozano%' ORDER BY createdAt DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, email, openId, role, tenantId, teamRole, loginMethod, createdAt, updatedAt, lastSignedIn FROM users WHERE name LIKE '%Daniel%' OR name LIKE '%Lozano%' OR email LIKE '%daniel%' OR email LIKE '%lozano%' ORDER BY createdAt DESC;",
+  "rows": [
+    {
+      "id": "180249",
+      "name": "Daniel Lozano",
+      "email": "alvarez.lozano@hotmail.com",
+      "openId": "CGbwE9M3Zq3FKxXynJsw9V",
+      "role": "user",
+      "tenantId": "1",
+      "teamRole": "lead_manager",
+      "loginMethod": "email",
+      "createdAt": "2026-02-03 00:09:01",
+      "updatedAt": "2026-02-23 22:20:19",
+      "lastSignedIn": "2026-02-23 22:20:19"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\topenId\trole\ttenantId\tteamRole\tloginMethod\tcreatedAt\tupdatedAt\tlastSignedIn\n180249\tDaniel Lozano\talvarez.lozano@hotmail.com\tCGbwE9M3Zq3FKxXynJsw9V\tuser\t1\tlead_manager\temail\t2026-02-03 00:09:01\t2026-02-23 22:20:19\t2026-02-23 22:20:19\n",
+  "stderr": "",
+  "execution_time_ms": 348
+}

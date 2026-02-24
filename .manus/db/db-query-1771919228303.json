@@ -1,0 +1,25 @@
+{
+  "query": "SHOW TABLES LIKE '%user%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SHOW TABLES LIKE '%user%';",
+  "rows": [
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%user%)": "user_badges"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%user%)": "user_instructions"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%user%)": "user_streaks"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%user%)": "user_xp"
+    },
+    {
+      "Tables_in_nusXfQu5XBTMz3NUCR6brb (%user%)": "users"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_nusXfQu5XBTMz3NUCR6brb (%user%)\nuser_badges\nuser_instructions\nuser_streaks\nuser_xp\nusers\n",
+  "stderr": "",
+  "execution_time_ms": 345
+}

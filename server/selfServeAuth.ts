@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { users, tenants, subscriptionPlans } from "../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -54,8 +54,8 @@ export async function signUpWithEmail(params: {
   const db = await getDb();
   if (!db) return { success: false, error: "Database not available" };
 
-  // Check if email already exists
-  const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  // Check if email already exists (case-insensitive)
+  const existingUser = await db.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${email})`).limit(1);
   if (existingUser.length > 0) {
     return { success: false, error: "Email already registered" };
   }
@@ -137,10 +137,10 @@ export async function signInWithEmail(params: {
   const db = await getDb();
   if (!db) return { success: false, error: "Database not available" };
 
-  // Find user by email
+  // Find user by email (case-insensitive)
   const [user] = await db.select().from(users).where(
     and(
-      eq(users.email, email),
+      sql`LOWER(${users.email}) = LOWER(${email})`,
       eq(users.loginMethod, 'email_password')
     )
   ).limit(1);
@@ -223,10 +223,10 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
   const db = await getDb();
   if (!db) return { success: false, error: "Database not available" };
 
-  // Find user by email
+  // Find user by email (case-insensitive)
   const [user] = await db.select().from(users).where(
     and(
-      eq(users.email, email),
+      sql`LOWER(${users.email}) = LOWER(${email})`,
       eq(users.loginMethod, 'email_password')
     )
   ).limit(1);
