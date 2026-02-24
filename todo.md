@@ -2911,3 +2911,5 @@
 - [x] BUG: Kyle Barks (Acquisition Manager) calls showing as "Qualification" instead of "Offer" — updated AI prompt to use role as strong default + fixed low-confidence fallback for AMs
 - [x] Improve AI Coach execution logs to show clear action summaries instead of repeating raw user prompt for every action
 - [x] BUG: AI Coach pipeline stage move fails with "Can not create duplicate opportunity" — need to find and update existing opportunity instead of creating a new one
+- [x] Fix AI Coach responses to display call outcomes in clean English (e.g., "Callback Scheduled") instead of raw snake_case (e.g., "callback_scheduled")
+- [x] Fix AI Coach going off the rails with generic filler about training materials — tighten system prompt to stay concise and specific

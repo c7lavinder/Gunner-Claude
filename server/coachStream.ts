@@ -127,13 +127,31 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       `- ${m.name} (${m.teamRole || 'member'}) | ID: ${m.id}`
     ).join('\n');
 
+    // Format call outcomes from snake_case to clean English
+    const formatOutcome = (outcome: string): string => {
+      const outcomeLabels: Record<string, string> = {
+        appointment_set: 'Appointment Set',
+        offer_made: 'Offer Made',
+        callback_scheduled: 'Callback Scheduled',
+        callback_requested: 'Callback Requested',
+        interested: 'Interested',
+        left_vm: 'Left Voicemail',
+        no_answer: 'No Answer',
+        not_interested: 'Not Interested',
+        dead: 'Dead Lead',
+        none: 'No Outcome',
+        follow_up: 'Follow Up',
+      };
+      return outcomeLabels[outcome] || outcome.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    };
+
     // Build recent calls summary
     const callsToShow = Math.min(recentCalls.items.length, mentionedMember ? 20 : isPerformanceQuestion ? 30 : 15);
     let recentCallsSummary = `\nRECENT CALLS (${callsToShow} most recent):\n`;
     for (const call of recentCalls.items.slice(0, callsToShow)) {
       recentCallsSummary += `- ${call.contactName || 'Unknown'} | ${call.teamMemberName || 'Unassigned'}`;
       if (call.propertyAddress) recentCallsSummary += ` | ${call.propertyAddress}`;
-      if (call.callOutcome) recentCallsSummary += ` | Outcome: ${call.callOutcome}`;
+      if (call.callOutcome) recentCallsSummary += ` | Outcome: ${formatOutcome(call.callOutcome)}`;
       if (call.grade?.overallGrade) recentCallsSummary += ` | Grade: ${call.grade.overallGrade}`;
       if (call.grade?.overallScore) recentCallsSummary += ` (${call.grade.overallScore}/100)`;
       if (call.grade?.strengths) recentCallsSummary += ` | Strengths: ${JSON.stringify(call.grade.strengths).substring(0, 100)}`;
@@ -154,7 +172,7 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
           memberCalls.forEach(c => { if (c.callOutcome) outcomes[c.callOutcome] = (outcomes[c.callOutcome] || 0) + 1; });
           memberCallContext = `\n\nDETAILED DATA FOR ${mentionedMember.name.toUpperCase()}:\n`;
           memberCallContext += `Calls analyzed: ${memberCalls.length} | Avg Score: ${avgScore.toFixed(1)}/100\n`;
-          memberCallContext += `Outcomes: ${Object.entries(outcomes).map(([o, c]) => `${o}: ${c}`).join(', ')}\n`;
+          memberCallContext += `Outcomes: ${Object.entries(outcomes).map(([o, c]) => `${formatOutcome(o)}: ${c}`).join(', ')}\n`;
           for (const call of memberCalls.slice(0, 5)) {
             memberCallContext += `  Call: ${call.contactName || 'Unknown'}`;
             if (call.grade?.overallGrade) memberCallContext += ` | ${call.grade.overallGrade} (${call.grade.overallScore}/100)`;
@@ -305,8 +323,8 @@ CRITICAL RULES:
 3. If asked about a person NOT in the team members list, say "I don't see [name] on your team. Your current team members are: ${teamMemberNames.join(', ')}." Then ask if they meant one of those people.
 4. NEVER make up or hallucinate information. No fake names, scores, or details.
 5. When asked strategic questions, look at the actual call outcomes and pipeline data to give a data-backed recommendation.
-6. Keep responses to 3-5 sentences. Be specific and actionable.
-7. Reference training materials by name when they're relevant to the question.
+6. Keep responses to 2-4 sentences. Be direct and specific. Do NOT pad responses with generic coaching advice or motivational filler.
+7. Only mention training materials if the user SPECIFICALLY asks about training, scripts, or talk tracks. Do NOT volunteer training material references just to fill space.
 8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data.
 9. ACCESS CONTROL: If you see "ACCESS RESTRICTED" for a team member, politely tell the user they don't have permission to view that person's individual performance.
 10. When answering general coaching questions, freely reference examples from ALL team calls.
@@ -314,7 +332,9 @@ CRITICAL RULES:
 12. When the user references something from CONVERSATION MEMORY, acknowledge the continuity naturally.
 13. NEVER say "I can't directly add notes", "I don't have access to your CRM", "I can't interact with your CRM controls", or anything similar. You DO have full CRM access.
 14. If the user's message looks like a CRM action request, start your response with [ACTION_REDIRECT] on its own line. NEVER tell the user to retype or rephrase their request as a command.
-15. If the user is giving feedback about a PREVIOUS action (like "that was wrong" or "not from my number"), respond conversationally — do NOT use [ACTION_REDIRECT]. Acknowledge the issue and offer to help.`;
+15. If the user is giving feedback about a PREVIOUS action (like "that was wrong" or "not from my number"), respond conversationally — do NOT use [ACTION_REDIRECT]. Acknowledge the issue and offer to help.
+16. Use clean English for all data values. Never output raw snake_case identifiers like "callback_scheduled" — always say "Callback Scheduled" etc.
+17. Do NOT end responses with generic paragraphs about persistence, strategy alignment, or training philosophy. If you've answered the question, stop.`;
 
     // Build messages
     const messages: Array<{ role: string; content: string }> = [

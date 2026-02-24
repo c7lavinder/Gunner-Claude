@@ -544,7 +544,23 @@ export default function CallDetail() {
                   </Badge>
                   {(call as any).callOutcome && (call as any).callOutcome !== 'pending' && (
                     <Badge variant="outline" className="capitalize">
-                      {(call as any).callOutcome?.replace(/_/g, ' ')}
+                      {{
+                        appointment_set: 'Appointment Set',
+                        offer_made: 'Offer Made',
+                        callback_scheduled: 'Callback Scheduled',
+                        callback_requested: 'Callback Requested',
+                        interested: 'Interested',
+                        left_vm: 'Left Voicemail',
+                        left_voicemail: 'Left Voicemail',
+                        no_answer: 'No Answer',
+                        not_interested: 'Not Interested',
+                        dead: 'Dead Lead',
+                        wrong_number: 'Wrong Number',
+                        do_not_call: 'Do Not Call',
+                        follow_up: 'Follow Up',
+                        offer_accepted: 'Offer Accepted',
+                        offer_rejected: 'Offer Rejected',
+                      }[(call as any).callOutcome as string] || (call as any).callOutcome?.replace(/_/g, ' ')}
                     </Badge>
                   )}
                   {call.propertyAddress && (
