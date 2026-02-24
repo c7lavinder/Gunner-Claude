@@ -303,7 +303,7 @@ export default function CoachActivityLog() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter flex items-center gap-2">
               <Bot className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
               AI Coach Activity Log
             </h1>

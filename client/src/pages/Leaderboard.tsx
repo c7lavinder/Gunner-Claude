@@ -202,7 +202,7 @@ export default function Leaderboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Team Leaderboard</h1>
+        <h1 className="text-3xl font-extrabold tracking-tighter">Team Leaderboard</h1>
         <p className="text-muted-foreground mt-1">
           Track team performance, rankings, and achievements
         </p>

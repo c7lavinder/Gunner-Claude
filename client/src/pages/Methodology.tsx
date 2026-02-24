@@ -31,7 +31,7 @@ export default function Methodology() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Grading Methodology</h1>
+        <h1 className="text-3xl font-extrabold tracking-tighter">Grading Methodology</h1>
         <p className="text-muted-foreground">
           View the criteria and training materials used to evaluate calls
         </p>

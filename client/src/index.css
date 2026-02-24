@@ -184,12 +184,7 @@
     }
   }
 
-  /* ═══════════════════════════════════════════════════════
-     GRADE BADGES — Obsidian style
-     ═══════════════════════════════════════════════════════ */
-  .grade-badge {
-    @apply inline-flex items-center justify-center font-bold rounded-lg px-3 py-1 text-sm;
-  }
+  /* Grade badge base — see Obsidian override below */
 
   .grade-a {
     @apply bg-emerald-500 text-white;
@@ -220,20 +215,7 @@
     @apply h-full rounded-full transition-all duration-500;
   }
 
-  /* ═══════════════════════════════════════════════════════
-     OBSIDIAN CARD SYSTEM — Premium depth and hover
-     ═══════════════════════════════════════════════════════ */
-  .card-hover {
-    @apply transition-all duration-200;
-  }
-  .card-hover:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-    border-color: oklch(0.42 0.16 25 / 0.15);
-  }
-  .dark .card-hover:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
-    border-color: oklch(0.58 0.18 22 / 0.2);
-  }
+  /* Card hover — see Obsidian call cards override below */
 
   /* ═══════════════════════════════════════════════════════
      OBSIDIAN SHADOWS — Subtle in light, deep in dark
@@ -255,5 +237,136 @@
   }
   .dark .obsidian-shadow-card {
     box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN GRADE BADGES — Round circles like lookbook
+     ═══════════════════════════════════════════════════════ */
+  .grade-badge {
+    @apply inline-flex items-center justify-center font-bold rounded-full w-10 h-10 text-sm;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN TYPOGRAPHY — Tighter tracking, premium weights
+     ═══════════════════════════════════════════════════════ */
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN PAGE BACKGROUND — Subtle warm tint
+     ═══════════════════════════════════════════════════════ */
+  body {
+    background-color: oklch(0.975 0.002 286);
+  }
+  .dark body {
+    background-color: oklch(0.115 0.005 286);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN SIDEBAR — Premium left border accent
+     ═══════════════════════════════════════════════════════ */
+  [data-slot="sidebar"] {
+    border-right: 1px solid oklch(0.92 0.004 286) !important;
+  }
+  .dark [data-slot="sidebar"] {
+    border-right: 1px solid oklch(1 0 0 / 6%) !important;
+  }
+
+  /* Active sidebar item gets primary accent */
+  [data-slot="sidebar-menu-button"][data-active="true"] {
+    background: oklch(0.42 0.16 25 / 0.08) !important;
+    color: oklch(0.42 0.16 25) !important;
+    font-weight: 500;
+  }
+  .dark [data-slot="sidebar-menu-button"][data-active="true"] {
+    background: oklch(0.58 0.18 22 / 0.12) !important;
+    color: oklch(0.58 0.18 22) !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN CALL CARDS — Left accent border like lookbook
+     ═══════════════════════════════════════════════════════ */
+  .card-hover {
+    @apply transition-all duration-200;
+    border-left: 3px solid transparent;
+  }
+  .card-hover:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    border-left-color: oklch(0.42 0.16 25 / 0.4);
+    transform: translateY(-1px);
+  }
+  .dark .card-hover:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
+    border-left-color: oklch(0.58 0.18 22 / 0.5);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN BADGE REFINEMENTS — Softer, more premium
+     ═══════════════════════════════════════════════════════ */
+  [data-slot="badge"] {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN SCROLLBAR — Thin, subtle
+     ═══════════════════════════════════════════════════════ */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.8 0 0);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.7 0 0);
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: oklch(0.3 0 0);
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.4 0 0);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN TABLE HEADERS — Uppercase, spaced, premium
+     ═══════════════════════════════════════════════════════ */
+  th {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: oklch(0.50 0.016 286);
+  }
+  .dark th {
+    color: oklch(0.65 0.015 286);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN SELECT/INPUT — Refined borders
+     ═══════════════════════════════════════════════════════ */
+  [data-slot="select-trigger"],
+  [data-slot="input"] {
+    transition: all 0.2s;
+  }
+  [data-slot="select-trigger"]:hover,
+  [data-slot="input"]:hover {
+    border-color: oklch(0.42 0.16 25 / 0.3);
+  }
+  .dark [data-slot="select-trigger"]:hover,
+  .dark [data-slot="input"]:hover {
+    border-color: oklch(0.58 0.18 22 / 0.3);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN TABS — Refined active state
+     ═══════════════════════════════════════════════════════ */
+  [data-slot="tabs-trigger"][data-state="active"] {
+    font-weight: 600;
   }
 }

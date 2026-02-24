@@ -261,7 +261,7 @@ export default function Opportunities() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Pipeline Signals</h1>
+          <h1 className="text-2xl font-extrabold tracking-tighter">Pipeline Signals</h1>
           <p className="text-muted-foreground mt-1">
             Deals your team might be missing — detected from pipeline activity, conversations, and call data
           </p>

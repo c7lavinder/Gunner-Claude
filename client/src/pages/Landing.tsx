@@ -157,7 +157,7 @@ export default function Landing() {
             <Badge variant="secondary" className="mb-4">
               AI-Powered Call Coaching
             </Badge>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
+            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter mb-6">
               Turn Every Sales Call Into a{" "}
               <span className="text-primary">Coaching Opportunity</span>
             </h1>

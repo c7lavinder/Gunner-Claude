@@ -2088,7 +2088,7 @@ export default function CallInbox() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Call History</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">Call History</h1>
           <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
             Review calls, provide feedback, and get coaching advice
           </p>

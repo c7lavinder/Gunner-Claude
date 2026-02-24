@@ -223,7 +223,7 @@ export default function CallDetail() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-2xl font-extrabold tracking-tighter">
             {call.contactName || call.contactPhone || "Unknown Contact"}
           </h1>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-1">

@@ -437,7 +437,7 @@ export default function Profile() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
+          <h1 className="text-3xl font-extrabold tracking-tighter">My Profile</h1>
           <p className="text-muted-foreground mt-1">
             {activeTab === 'achievements' ? 'Track your progress, achievements, and badges' : 'Manage your account settings and security'}
           </p>

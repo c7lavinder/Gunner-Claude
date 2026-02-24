@@ -2775,3 +2775,12 @@
 - [x] Update CallInbox page styling to match Obsidian lookbook
 - [x] Ensure all existing functionality is preserved after redesign
 - [x] Test both light and dark modes across all pages
+
+## Obsidian Visual Polish (Premium Look)
+- [x] Add premium shadows, refined borders, and card treatments to global CSS
+- [x] Update sidebar with premium styling (subtle borders, refined hover states)
+- [x] Polish call cards with better shadows, spacing, and typography hierarchy
+- [x] Polish dashboard stat cards with premium treatments
+- [x] Polish filter tabs and badges with refined styling
+- [x] Add subtle hover animations and transitions for premium feel
+- [x] Ensure visual distinction between current basic look and premium Obsidian aesthetic

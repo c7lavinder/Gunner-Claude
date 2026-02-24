@@ -31,14 +31,14 @@ function StatCard({
   return (
     <Card className="p-3 sm:p-4">
       <div className="flex items-center gap-2 sm:gap-3">
-        <div className="p-1.5 sm:p-2 rounded-lg bg-muted shrink-0">
-          <Icon className="h-4 w-4 text-muted-foreground" />
+        <div className="p-1.5 sm:p-2 rounded-lg bg-primary/8 dark:bg-primary/12 shrink-0">
+          <Icon className="h-4 w-4 text-primary" />
         </div>
         <div className="min-w-0">
           {loading ? (
             <Skeleton className="h-6 w-12" />
           ) : (
-            <div className="text-xl sm:text-2xl font-bold truncate">{value}</div>
+            <div className="text-xl sm:text-2xl font-extrabold tracking-tight truncate">{value}</div>
           )}
           <p className="text-xs text-muted-foreground truncate">{title}</p>
         </div>
@@ -96,7 +96,7 @@ export default function Analytics() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Analytics</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">Analytics</h1>
           <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
             Team performance metrics and insights
           </p>
