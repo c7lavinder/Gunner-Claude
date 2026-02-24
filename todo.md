@@ -2786,13 +2786,13 @@
 - [x] Ensure visual distinction between current basic look and premium Obsidian aesthetic
 
 ## Match Obsidian Lookbook Exactly (All Pages)
-- [ ] Sidebar: match lookbook nav styling (spacing, hover states, icon sizing, active indicator)
-- [ ] Dashboard: match lookbook stat cards, signal cards, leaderboard, activity feed
-- [ ] Call History: match lookbook call cards, filter tabs, processing status cards
-- [ ] Team Roster: match lookbook character cards, role tabs, detail panel
-- [ ] Analytics: match lookbook styling consistency
-- [ ] Global: match lookbook page backgrounds, card borders, spacing system
-- [ ] Verify all pages visually match the lookbook
+- [x] Sidebar: replaced with top nav bar matching lookbook exactly
+- [x] Dashboard: match lookbook stat cards, signal cards, leaderboard, activity feed
+- [x] Call History: match lookbook call cards, filter tabs, processing status cards
+- [x] Team Roster: match lookbook character cards, role tabs, detail panel
+- [x] Analytics: match lookbook styling consistency
+- [x] Global: match lookbook page backgrounds, card borders, spacing system
+- [x] Verify all pages visually match the lookbook
 
 ## Visual Overhaul - Match Obsidian Lookbook
 - [x] Rewrite index.css with complete Obsidian design system
@@ -2805,3 +2805,14 @@
 - [x] Remove Call Processing Status section (redundant with stat cards)
 - [x] Simplify mobile leaderboard to use same vertical list as desktop
 - [x] Keep gamification stats but match Team gamification page styling
+
+## Full Creative Overhaul v3 - Top Nav + Obsidian
+- [x] Replace sidebar with top navigation bar (lookbook style pill tabs)
+- [x] Build TopNavLayout component with logo, nav pills, user menu, dark mode toggle
+- [x] Update App.tsx routing to use TopNavLayout
+- [x] Rewrite index.css with complete Obsidian design system
+- [x] Rewrite Dashboard (Home.tsx) with premium Obsidian components
+- [x] Rewrite Call History (CallInbox.tsx) with premium Obsidian components
+- [x] Rewrite Team Roster (TeamMembers.tsx) with premium Obsidian components
+- [x] Update remaining pages for new layout
+- [x] Verify compilation and deliver

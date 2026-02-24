@@ -7,76 +7,32 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-  useSidebar,
-} from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Building2, Shield, AlertTriangle, Settings, Sun, Moon } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import {
+  LayoutDashboard, LogOut, Users, Phone, BarChart3, BookOpen,
+  Building2, Shield, AlertTriangle, Settings, Sun, Moon, Menu, X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { useLocation, Redirect, useSearch } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { useImpersonation } from "./ImpersonationBanner";
 import { useTheme } from "@/contexts/ThemeContext";
 
-// ─── THEME TOGGLE COMPONENTS ───────────────────────────
-function ThemeToggleButton() {
-  const { theme, toggleTheme, switchable } = useTheme();
-  if (!switchable || !toggleTheme) return null;
-  return (
-    <button
-      onClick={toggleTheme}
-      className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-    >
-      {theme === 'light' ? (
-        <Moon className="h-4 w-4 text-muted-foreground shrink-0" />
-      ) : (
-        <Sun className="h-4 w-4 text-muted-foreground shrink-0" />
-      )}
-      <span className="text-sm text-muted-foreground group-data-[collapsible=icon]:hidden">
-        {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
-      </span>
-    </button>
-  );
-}
-
-function MobileThemeToggle() {
-  const { theme, toggleTheme, switchable } = useTheme();
-  if (!switchable || !toggleTheme) return null;
-  return (
-    <button
-      onClick={toggleTheme}
-      className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent/50 transition-colors"
-      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-    >
-      {theme === 'light' ? (
-        <Moon className="h-4 w-4 text-muted-foreground" />
-      ) : (
-        <Sun className="h-4 w-4 text-muted-foreground" />
-      )}
-    </button>
-  );
-}
-
-const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string, isTenantAdmin?: string | null, isDemo?: boolean) => {
+// ─── NAV ITEMS ────────────────────────────────────────
+const getMenuItems = (
+  teamRole: string | null | undefined,
+  openId?: string,
+  userRole?: string,
+  isTenantAdmin?: string | null,
+  isDemo?: boolean
+) => {
   const isAdmin = teamRole === 'admin' || isTenantAdmin === 'true';
   const isSuperAdmin = userRole === 'super_admin';
   const isLeadGenerator = teamRole === 'lead_generator';
-  
-  // Lead Generators get a simplified menu but same dashboard as LMs
+
   if (isLeadGenerator) {
     return [
       { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -85,114 +41,80 @@ const getMenuItems = (teamRole: string | null | undefined, openId?: string, user
       { icon: Users, label: "My Profile", path: "/team" },
     ];
   }
-  
+
   const items = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Phone, label: "Call History", path: "/calls" },
     { icon: BarChart3, label: "Analytics", path: "/analytics" },
   ];
-  
-  // Signals is admin-only
+
   if (isAdmin) {
     items.push({ icon: AlertTriangle, label: "Signals", path: "/opportunities" });
   }
-  
+
   items.push({ icon: BookOpen, label: "Training", path: "/training" });
-  
-  // Social Media is temporarily hidden (coming soon)
-  // if (!isLeadManager) {
-  //   items.push({ icon: Share2, label: "Social Media", path: "/social" });
-  // }
-  
-  // Team page now includes My Profile tab
   items.push({ icon: Users, label: "Team", path: "/team" });
-  
-  // Company Settings (includes Team Management) is admin-only — hidden in demo
+
   if (isAdmin && !isDemo) {
     items.push({ icon: Building2, label: "Settings", path: "/settings" });
   }
-  
-  // Admin Dashboard is for super_admin users (platform owner) — hidden in demo
-  const isPlatformOwner = false; // Determined server-side via env var
+
+  const isPlatformOwner = false;
   if ((isSuperAdmin || isPlatformOwner) && !isDemo) {
     items.push({ icon: Shield, label: "Platform Admin", path: "/admin" });
   }
-  
+
   return items;
 };
 
-const SIDEBAR_WIDTH_KEY = "sidebar-width";
-const DEFAULT_WIDTH = 280;
-const MIN_WIDTH = 200;
-const MAX_WIDTH = 480;
-
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
-  });
+// ─── MAIN LAYOUT ──────────────────────────────────────
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { loading, user } = useAuth();
   const [location] = useLocation();
   const searchString = useSearch();
   const { isImpersonating } = useImpersonation();
-  
-  // Check if user just completed checkout (Stripe redirects with ?checkout=success)
-  // Use sessionStorage to persist this across re-renders after URL cleanup
+
   const searchParams = new URLSearchParams(searchString);
   const checkoutFromUrl = searchParams.get('checkout') === 'success';
-  
-  // Store checkout success in sessionStorage so it persists after URL cleanup
+
   const [justCompletedCheckout, setJustCompletedCheckout] = useState(() => {
     if (checkoutFromUrl) return true;
     return sessionStorage.getItem('checkout_success') === 'true';
   });
-  
-  // When checkout=success is in URL, save to sessionStorage
+
   useEffect(() => {
     if (checkoutFromUrl) {
       sessionStorage.setItem('checkout_success', 'true');
       setJustCompletedCheckout(true);
-      // Clear after 60 seconds (enough time for webhook to process)
       setTimeout(() => {
         sessionStorage.removeItem('checkout_success');
       }, 60000);
     }
   }, [checkoutFromUrl]);
-  
-  // Fetch tenant settings to check onboarding status
+
   const { data: tenantSettings, isLoading: tenantLoading } = trpc.tenant.getSettings.useQuery(
     undefined,
     { enabled: !!user }
   );
 
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
-  }, [sidebarWidth]);
-
   if (loading || (user && tenantLoading)) {
-    return <DashboardLayoutSkeleton />
+    return <DashboardLayoutSkeleton />;
   }
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-[var(--obs-bg-base)]">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
             <h1 className="text-2xl font-semibold tracking-tight text-center">
               Sign in to continue
             </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
+            <p className="text-sm text-[var(--obs-text-secondary)] text-center max-w-sm">
               Access to this dashboard requires authentication. Continue to launch the login flow.
             </p>
           </div>
           <Button
-            onClick={() => {
-              window.location.href = getLoginUrl();
-            }}
+            onClick={() => { window.location.href = getLoginUrl(); }}
             size="lg"
             className="w-full shadow-lg hover:shadow-xl transition-all"
           >
@@ -203,70 +125,38 @@ export default function DashboardLayout({
     );
   }
 
-  // Check if email is verified - redirect to verification pending page
-  // Skip for users who signed up with Google OAuth (they're already verified)
   const isEmailPasswordUser = user?.loginMethod === 'email_password';
   const isEmailVerified = user?.emailVerified === 'true';
-  
   if (isEmailPasswordUser && !isEmailVerified) {
     return <Redirect to="/verification-pending" />;
   }
 
-  // Route detection
   const isOnboardingRoute = location === '/onboarding';
   const isPaywallRoute = location === '/paywall';
   const isPricingRoute = location === '/pricing';
-  
-  // State checks
   const onboardingCompleted = tenantSettings?.onboardingCompleted === 'true';
-  const hasActiveSubscription = tenantSettings?.stripeSubscriptionId && 
+  const hasActiveSubscription = tenantSettings?.stripeSubscriptionId &&
     (tenantSettings?.subscriptionStatus === 'active' || tenantSettings?.subscriptionStatus === 'past_due');
   const isSuperAdmin = user?.role === 'super_admin';
-  
-  // FLOW LOGIC:
-  // 1. If on onboarding page, always render it (let the page handle its own logic)
-  if (isOnboardingRoute) {
-    return (
-      <div className="min-h-screen bg-background">
-        {children}
-      </div>
-    );
+
+  if (isOnboardingRoute || isPaywallRoute || isPricingRoute) {
+    return <div className="min-h-screen bg-background">{children}</div>;
   }
-  
-  // 2. If on paywall page, always render it (let the page handle its own logic)
-  if (isPaywallRoute || isPricingRoute) {
-    return (
-      <div className="min-h-screen bg-background">
-        {children}
-      </div>
-    );
-  }
-  
-  // Demo users bypass onboarding and paywall
+
   const isDemo = Boolean((user as any)?._isDemo);
-  
-  // 3. If onboarding NOT completed, redirect to onboarding
-  // Super admins and demo users bypass this check
+
   if (!onboardingCompleted && tenantSettings && !isSuperAdmin && !isDemo) {
     return <Redirect to="/onboarding" />;
   }
-  
-  // 4. If onboarding completed but no subscription, redirect to paywall
-  // Super admins and demo users bypass this check
+
   if (onboardingCompleted && !hasActiveSubscription && tenantSettings && !isSuperAdmin && !justCompletedCheckout && !isDemo) {
     return <Redirect to="/paywall" />;
   }
 
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": `${sidebarWidth}px`,
-        } as CSSProperties
-      }
-    >
+    <div className="min-h-screen bg-[var(--obs-bg-base)]">
       {isDemo && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-center py-2.5 px-4 text-sm font-medium shadow-md">
+        <div className="fixed top-0 left-0 right-0 z-[110] bg-gradient-to-r from-orange-500 to-amber-500 text-white text-center py-2.5 px-4 text-sm font-medium shadow-md">
           <span>You're viewing a demo of Gunner AI</span>
           <span className="mx-2">—</span>
           <a href="https://getgunner.ai" target="_blank" rel="noopener noreferrer" className="underline font-semibold hover:text-white/90 transition-colors">
@@ -274,163 +164,104 @@ export default function DashboardLayout({
           </a>
         </div>
       )}
-      <div className={`flex min-h-svh w-full ${isImpersonating ? "pt-12" : isDemo ? "pt-10" : ""}`}>
-        <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+      <div className={isImpersonating ? "pt-12" : isDemo ? "pt-10" : ""}>
+        <TopNavBar user={user} isDemo={isDemo} />
+        <main className="obs-page">
           {children}
-        </DashboardLayoutContent>
+        </main>
       </div>
-    </SidebarProvider>
+    </div>
   );
 }
 
-type DashboardLayoutContentProps = {
-  children: React.ReactNode;
-  setSidebarWidth: (width: number) => void;
-};
-
-function DashboardLayoutContent({
-  children,
-  setSidebarWidth,
-}: DashboardLayoutContentProps) {
-  const { user, logout } = useAuth();
+// ─── TOP NAV BAR ──────────────────────────────────────
+function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
   const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
-  const isCollapsed = state === "collapsed";
-  const [isResizing, setIsResizing] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
+  const { theme, toggleTheme, switchable } = useTheme();
+  const { logout } = useAuth();
+  const isMobile = useIsMobile();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isImpersonating: isTenantImpersonating, impersonationType: impType } = useImpersonation();
-  // When impersonating a tenant as super_admin, show admin-level sidebar items (not super_admin items)
+
   const effectiveRole = (isTenantImpersonating && impType === 'super_admin') ? 'admin' : user?.role;
   const effectiveTeamRole = (isTenantImpersonating && impType === 'super_admin') ? 'admin' : user?.teamRole;
   const effectiveIsTenantAdmin = (isTenantImpersonating && impType === 'super_admin') ? 'true' : user?.isTenantAdmin;
-  const isDemo = Boolean((user as any)?._isDemo);
   const menuItems = getMenuItems(effectiveTeamRole, user?.openId, effectiveRole, effectiveIsTenantAdmin, isDemo);
-  const activeMenuItem = menuItems.find(item => item.path === location);
-  const isMobile = useIsMobile();
 
+  // Close mobile menu on route change
   useEffect(() => {
-    if (isCollapsed) {
-      setIsResizing(false);
-    }
-  }, [isCollapsed]);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-
-      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
-      const newWidth = e.clientX - sidebarLeft;
-      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
-        setSidebarWidth(newWidth);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    if (isResizing) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    }
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [isResizing, setSidebarWidth]);
+    setMobileMenuOpen(false);
+  }, [location]);
 
   return (
     <>
-      <div className="relative" ref={sidebarRef}>
-        <Sidebar
-          collapsible="icon"
-          className="border-r-0"
-          disableTransition={isResizing}
-        >
-          <SidebarHeader className="h-20 justify-center">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
-              <button
-                onClick={toggleSidebar}
-                className="h-10 w-10 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
-                aria-label="Toggle navigation"
-              >
-                {isCollapsed ? (
-                  <img 
-                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo.png" 
-                    alt="Gunner" 
-                    className="h-8 w-8 object-contain"
-                  />
-                ) : (
-                  <PanelLeft className="h-5 w-5 text-muted-foreground" />
-                )}
-              </button>
-              {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <img 
-                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-dark.png" 
-                    alt="Gunner" 
-                    className="h-12 object-contain"
-                  />
-                </div>
-              ) : null}
-            </div>
-          </SidebarHeader>
+      <nav className="obs-topnav">
+        <div className="obs-topnav-inner">
+          {/* Brand */}
+          <div
+            className="obs-topnav-brand"
+            onClick={() => setLocation('/dashboard')}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="obs-logo-mark">G</div>
+            <span className="hidden sm:inline">GUNNER</span>
+          </div>
 
-          <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
-                const isActive = location === item.path;
+          {/* Desktop Tabs */}
+          {!isMobile && (
+            <div className="obs-topnav-tabs">
+              {menuItems.map((item) => {
+                const isActive = location === item.path ||
+                  (item.path !== '/dashboard' && location.startsWith(item.path));
                 return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <button
+                    key={item.path}
+                    className={`obs-topnav-tab ${isActive ? 'active' : ''}`}
+                    onClick={() => setLocation(item.path)}
+                  >
+                    {item.label}
+                  </button>
                 );
               })}
-            </SidebarMenu>
-          </SidebarContent>
-
-          <SidebarFooter className="p-3">
-            {/* Theme Toggle */}
-            <div className="px-1 mb-2 group-data-[collapsible=icon]:px-0">
-              <ThemeToggleButton />
             </div>
+          )}
+
+          {/* Right side */}
+          <div className="obs-topnav-right">
+            {/* Theme toggle */}
+            {switchable && toggleTheme && (
+              <button
+                className="obs-theme-toggle"
+                onClick={toggleTheme}
+                aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              >
+                {theme === 'light' ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
+              </button>
+            )}
+
+            {/* User avatar dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
+                <button className="obs-avatar-btn" aria-label="User menu">
+                  <Avatar className="h-8 w-8">
                     {user?.profilePicture && (
                       <AvatarImage src={user.profilePicture} alt={user?.name || 'Profile'} />
                     )}
-                    <AvatarFallback className="text-xs font-medium">
-                      {user?.name?.charAt(0).toUpperCase()}
+                    <AvatarFallback className="obs-avatar-fallback">
+                      {user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
-                    </p>
-                  </div>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <div className="px-3 py-2 border-b border-[var(--obs-border-subtle)]">
+                  <p className="text-sm font-medium truncate">{user?.name || '-'}</p>
+                  <p className="text-xs text-[var(--obs-text-tertiary)] truncate mt-0.5">{user?.email || '-'}</p>
+                </div>
                 <DropdownMenuItem
                   onClick={() => setLocation('/profile')}
                   className="cursor-pointer"
@@ -448,34 +279,43 @@ function DashboardLayoutContent({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </SidebarFooter>
-        </Sidebar>
-        <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
-          onMouseDown={() => {
-            if (isCollapsed) return;
-            setIsResizing(true);
-          }}
-          style={{ zIndex: 50 }}
-        />
-      </div>
 
-      <SidebarInset>
-        {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="h-9 w-9 rounded-lg" />
-              <img 
-                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-dark.png" 
-                alt="Gunner" 
-                className="h-8 object-contain"
-              />
-            </div>
-            <MobileThemeToggle />
+            {/* Mobile hamburger */}
+            {isMobile && (
+              <button
+                className="obs-theme-toggle"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </button>
+            )}
           </div>
-        )}
-        <main className="flex-1 p-4">{children}</main>
-      </SidebarInset>
+        </div>
+      </nav>
+
+      {/* Mobile dropdown menu */}
+      {isMobile && mobileMenuOpen && (
+        <div className="obs-mobile-menu">
+          {menuItems.map((item) => {
+            const isActive = location === item.path ||
+              (item.path !== '/dashboard' && location.startsWith(item.path));
+            return (
+              <button
+                key={item.path}
+                className={`obs-mobile-menu-item ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  setLocation(item.path);
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }

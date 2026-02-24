@@ -1,17 +1,13 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
 import { 
-  Users, UserPlus, Trophy, Medal, Flame, Zap, Target, 
-  TrendingUp, Camera, Upload, Award, Star, Lock, CheckCircle, User,
-  Swords, Shield, Crown
+  Users, UserPlus, Trophy, Flame, Zap, Target, 
+  Camera, Upload, Award, Lock, CheckCircle, User,
+  Swords
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -25,88 +21,25 @@ const roleLabels: Record<string, string> = {
   lead_generator: "Lead Generator",
 };
 
-const roleGlowColors: Record<string, string> = {
-  admin: "from-red-700 to-red-600",
-  lead_manager: "from-orange-600 to-orange-400",
-  acquisition_manager: "from-red-700 to-red-500",
-  lead_generator: "from-yellow-500 to-yellow-400",
+// Map team roles to lookbook CSS class suffixes
+const roleClassMap: Record<string, string> = {
+  admin: "acq",
+  acquisition_manager: "acq",
+  lead_manager: "lead",
+  lead_generator: "gen",
 };
 
-const roleGlowColorsLight: Record<string, string> = {
-  admin: "from-red-600/20 to-red-500/10",
-  lead_manager: "from-orange-500/20 to-orange-400/10",
-  acquisition_manager: "from-red-600/20 to-red-500/10",
-  lead_generator: "from-yellow-400/20 to-yellow-300/10",
-};
-
-const roleBadgeColors: Record<string, string> = {
-  admin: "bg-red-700/80 text-white border-red-500/50 dark:bg-red-700/80 dark:text-white",
-  lead_manager: "bg-orange-600/80 text-white border-orange-400/50 dark:bg-orange-600/80 dark:text-white",
-  acquisition_manager: "bg-red-700/80 text-white border-red-500/50 dark:bg-red-700/80 dark:text-white",
-  lead_generator: "bg-yellow-500/80 text-slate-900 border-yellow-400/50 dark:bg-yellow-500/80 dark:text-slate-900",
-};
-
-// ─── RANK GLOW COLORS ───────────────────────────────────
-function getRankGlow(rank: number) {
-  if (rank === 1) return { border: "border-yellow-400", shadow: "shadow-[0_0_20px_rgba(250,204,21,0.5)]", bg: "from-yellow-400/20 to-yellow-600/10" };
-  if (rank === 2) return { border: "border-slate-300 dark:border-slate-300", shadow: "shadow-[0_0_15px_rgba(203,213,225,0.4)]", bg: "from-slate-300/15 to-slate-400/5" };
-  if (rank === 3) return { border: "border-amber-600", shadow: "shadow-[0_0_15px_rgba(217,119,6,0.4)]", bg: "from-amber-600/15 to-amber-700/5" };
-  return { border: "border-border", shadow: "", bg: "from-muted to-muted/50" };
+function getRoleClass(teamRole: string): string {
+  return roleClassMap[teamRole] || "gen";
 }
 
-// ─── LEVEL TIER STYLING ─────────────────────────────────
-function getLevelStyle(level: number) {
-  if (level >= 5) return { color: "text-yellow-500 dark:text-yellow-400", glow: "drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]", label: "LEGENDARY" };
-  if (level >= 4) return { color: "text-red-500 dark:text-red-400", glow: "drop-shadow-[0_0_6px_rgba(220,38,38,0.5)]", label: "EPIC" };
-  if (level >= 3) return { color: "text-red-600 dark:text-red-500", glow: "drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]", label: "RARE" };
-  if (level >= 2) return { color: "text-amber-500 dark:text-amber-400", glow: "drop-shadow-[0_0_4px_rgba(251,191,36,0.4)]", label: "UNCOMMON" };
-  return { color: "text-muted-foreground", glow: "", label: "COMMON" };
-}
-
-// ─── STAT BAR COMPONENT ─────────────────────────────────
-function StatBar({ label, value, max, color, icon }: { label: string; value: number; max: number; color: string; icon?: React.ReactNode }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  return (
-    <div className="flex items-center gap-2">
-      {icon && <span className="text-xs opacity-60 w-4">{icon}</span>}
-      <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground w-12 shrink-0">{label}</span>
-      <div className="flex-1 h-2.5 bg-muted rounded-sm overflow-hidden border border-border relative">
-        <div 
-          className={`h-full ${color} transition-all duration-700 ease-out relative`}
-          style={{ width: `${pct}%` }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20" />
-        </div>
-      </div>
-      <span className="text-xs font-mono text-foreground/70 w-10 text-right tabular-nums">{value}</span>
-    </div>
-  );
-}
-
-// ─── RANK BADGE ─────────────────────────────────────────
-function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1) return (
-    <div className="absolute -top-3 -left-3 z-20">
-      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-yellow-300 via-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg shadow-yellow-500/40 border border-yellow-300/50 rotate-[-5deg]">
-        <Crown className="h-5 w-5 text-yellow-900" />
-      </div>
-    </div>
-  );
-  if (rank === 2) return (
-    <div className="absolute -top-3 -left-3 z-20">
-      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-200 via-slate-300 to-slate-500 flex items-center justify-center shadow-lg shadow-slate-400/30 border border-slate-200/50 rotate-[-5deg]">
-        <Medal className="h-5 w-5 text-slate-700" />
-      </div>
-    </div>
-  );
-  if (rank === 3) return (
-    <div className="absolute -top-3 -left-3 z-20">
-      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 via-amber-600 to-amber-800 flex items-center justify-center shadow-lg shadow-amber-600/30 border border-amber-400/50 rotate-[-5deg]">
-        <Medal className="h-5 w-5 text-amber-200" />
-      </div>
-    </div>
-  );
-  return null;
+// ─── LEVEL TIER LABELS ─────────────────────────────────
+function getLevelTitle(level: number): string {
+  if (level >= 5) return "LEGENDARY";
+  if (level >= 4) return "EPIC";
+  if (level >= 3) return "RARE";
+  if (level >= 2) return "UNCOMMON";
+  return "COMMON";
 }
 
 // ─── PROFILE PICTURE UPLOAD ─────────────────────────────
@@ -134,19 +67,19 @@ function ProfilePictureUpload({ currentPicture, onUpload }: { currentPicture?: s
       <div className="relative">
         <Avatar className="h-32 w-32">
           <AvatarImage src={preview || currentPicture || undefined} />
-          <AvatarFallback className="text-4xl"><Camera className="h-12 w-12 text-muted-foreground" /></AvatarFallback>
+          <AvatarFallback className="text-4xl"><Camera className="h-12 w-12" style={{color: 'var(--obs-text-tertiary)'}} /></AvatarFallback>
         </Avatar>
         <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full" onClick={() => fileInputRef.current?.click()}>
           <Upload className="h-4 w-4" />
         </Button>
       </div>
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-      <p className="text-sm text-muted-foreground">Click to upload a profile picture</p>
+      <p className="text-sm" style={{color: 'var(--obs-text-tertiary)'}}>Click to upload a profile picture</p>
     </div>
   );
 }
 
-// ─── TEAMMATE CARD (THE MAIN EVENT) ────────────────────
+// ─── LOOKBOOK ROSTER CARD ─────────────────────────────
 function CharacterCard({ 
   member, gamificationData, scoreData, rank, isCurrentUser, onUploadPicture, isSelected, onSelect
 }: { 
@@ -167,179 +100,165 @@ function CharacterCard({
   const gradeDistribution = scoreData?.gradeDistribution || { A: 0, B: 0, C: 0, D: 0, F: 0 };
   const abCount = gradeDistribution.A + gradeDistribution.B;
   
-  const rankGlow = getRankGlow(rank);
-  const levelStyle = getLevelStyle(level);
-  const roleGlow = roleGlowColors[member.teamRole] || "from-slate-500 to-slate-700";
-  const roleBadge = roleBadgeColors[member.teamRole] || "bg-slate-500/80 text-white";
-
-  // Max values for stat bars (use reasonable maximums)
+  const roleClass = getRoleClass(member.teamRole);
+  const levelTitle = getLevelTitle(level);
+  
+  // Max values for stat bars
   const maxCalls = 200;
   const maxScore = 100;
   const maxAB = Math.max(totalCalls, 50);
   const maxBadges = 20;
+  
+  const callsPct = maxCalls > 0 ? Math.min((totalCalls / maxCalls) * 100, 100) : 0;
+  const scorePct = avgScore ? Math.min(avgScore, 100) : 0;
+  const abPct = maxAB > 0 ? Math.min((abCount / maxAB) * 100, 100) : 0;
+  const badgesPct = maxBadges > 0 ? Math.min((badges.length / maxBadges) * 100, 100) : 0;
+  const xpProgress = Math.min((xp % 500) / 5, 100);
+  
+  // Grade distribution percentages
+  const totalGraded = gradeDistribution.A + gradeDistribution.B + gradeDistribution.C + gradeDistribution.D + gradeDistribution.F;
+  const gradeA = totalGraded > 0 ? (gradeDistribution.A / totalGraded) * 100 : 0;
+  const gradeB = totalGraded > 0 ? (gradeDistribution.B / totalGraded) * 100 : 0;
+  const gradeC = totalGraded > 0 ? (gradeDistribution.C / totalGraded) * 100 : 0;
+  const gradeD = totalGraded > 0 ? (gradeDistribution.D / totalGraded) * 100 : 0;
+  const gradeF = totalGraded > 0 ? (gradeDistribution.F / totalGraded) * 100 : 0;
+
+  const rankBadgeType = rank === 1 ? "gold" : rank === 2 ? "silver" : rank === 3 ? "bronze" : null;
+  const rankEmoji = rank === 1 ? "👑" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+
+  const initials = member.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?';
 
   return (
     <div 
-      className={`relative group cursor-pointer transition-all duration-300 ${
-        isSelected ? "scale-[1.02] z-10" : "hover:scale-[1.01]"
-      }`}
+      className={`obs-roster-card ${isSelected ? 'ring-2 ring-[var(--obs-accent)]' : ''}`}
+      data-rank={rank <= 3 ? rank : undefined}
       onClick={onSelect}
+      style={{ cursor: 'pointer' }}
     >
-      {/* Rank badge */}
-      <RankBadge rank={rank} />
-      
-      {/* Card container */}
-      <div className={`relative rounded-xl overflow-hidden border-2 transition-all duration-300 ${
-        isSelected 
-          ? `${rankGlow.border} ${rankGlow.shadow}` 
-          : `border-border hover:border-primary/30`
-      }`}>
-        
-        {/* Top gradient header - teammate portrait area */}
-        <div className={`relative bg-gradient-to-br ${roleGlow} p-0.5`}>
-          <div className="bg-card/95 dark:bg-slate-900/90 backdrop-blur-sm">
-            <div className="p-3 sm:p-4">
-              <div className="flex items-start gap-3">
-                {/* Avatar */}
-                <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-                  <DialogTrigger asChild>
-                    <div className={`relative shrink-0 ${isCurrentUser ? 'cursor-pointer hover:opacity-90' : 'cursor-default'}`}>
-                      <div className={`rounded-lg overflow-hidden border-2 ${
-                        rank === 1 ? "border-yellow-400/70" : rank === 2 ? "border-slate-300/70" : rank === 3 ? "border-amber-500/70" : "border-slate-600"
-                      }`}>
-                        <Avatar className="h-16 w-16 sm:h-20 sm:w-20 rounded-none">
-                          <AvatarImage src={member.user?.profilePicture || undefined} className="object-cover" />
-                          <AvatarFallback className="text-xl sm:text-2xl font-black bg-gradient-to-br from-primary/80 to-primary text-primary-foreground rounded-none" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                            {member.name?.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                      </div>
-                      {isCurrentUser && (
-                        <div className="absolute -bottom-1 -right-1 bg-card rounded-full p-1 border border-border">
-                          <Camera className="h-2.5 w-2.5 text-muted-foreground" />
-                        </div>
-                      )}
-                      {/* Rank number */}
-                      <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-card border border-border flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-foreground/70" style={{ fontFamily: "'Orbitron', sans-serif" }}>#{rank}</span>
-                      </div>
+      {/* Role-colored top gradient strip */}
+      <div className={`obs-roster-card-header ${roleClass}`}>
+        <div className="obs-roster-card-header-inner">
+          <div className="obs-roster-top-row">
+            {/* Avatar with rank */}
+            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+              <DialogTrigger asChild>
+                <div className={`obs-roster-avatar-wrap ${isCurrentUser ? 'cursor-pointer' : 'cursor-default'}`} onClick={e => { if (!isCurrentUser) e.preventDefault(); }}>
+                  {/* Rank crown/medal badge */}
+                  {rankBadgeType && (
+                    <div className={`obs-rank-badge ${rankBadgeType}`}>
+                      {rankEmoji}
                     </div>
-                  </DialogTrigger>
-                  {isCurrentUser && onUploadPicture && (
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Update Profile Picture</DialogTitle>
-                        <DialogDescription>Upload a new profile picture. Images should be less than 5MB.</DialogDescription>
-                      </DialogHeader>
-                      <ProfilePictureUpload 
-                        currentPicture={member.user?.profilePicture}
-                        onUpload={(base64, mimeType) => { onUploadPicture(base64, mimeType); setUploadDialogOpen(false); }}
-                      />
-                    </DialogContent>
                   )}
-                </Dialog>
-                
-                {/* Name & Role */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base sm:text-lg font-black text-foreground leading-tight truncate tracking-wide" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                    {member.name}
-                  </h3>
-                  <div className={`inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded mt-1 border ${roleBadge}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                    {roleLabels[member.teamRole] || member.teamRole}
+                  {/* Avatar */}
+                  <div className="obs-roster-avatar">
+                    {member.user?.profilePicture ? (
+                      <img src={member.user.profilePicture} alt={member.name} />
+                    ) : (
+                      initials
+                    )}
                   </div>
-                  
-                  {/* Badges row */}
-                  {badges.length > 0 && (
-                    <div className="flex gap-1 mt-1.5">
-                      {badges.slice(0, 5).map((badge: any, i: number) => (
-                        <span key={i} className="text-sm" title={`${badge.name} (${badge.tier})`}>
-                          {badge.icon}
-                        </span>
-                      ))}
-                      {badges.length > 5 && (
-                        <span className="text-[10px] text-muted-foreground self-center">+{badges.length - 5}</span>
-                      )}
-                    </div>
-                  )}
+                  {/* Rank number */}
+                  <div className="obs-rank-number">#{rank}</div>
                 </div>
-                
-                {/* Level display */}
-                <div className="shrink-0 text-right">
-                  <div className={`text-2xl sm:text-3xl font-black ${levelStyle.color} ${levelStyle.glow} leading-none`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                    {level}
-                  </div>
-                  <div className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                    LVL
-                  </div>
-                  <div className={`text-[8px] sm:text-[9px] ${levelStyle.color} uppercase tracking-wider mt-0.5 opacity-70`} style={{ fontFamily: "'Press Start 2P', cursive", fontSize: "7px" }}>
-                    {title}
-                  </div>
-                  {hotStreak > 0 && (
-                    <div className="flex items-center justify-end gap-0.5 mt-1">
-                      <Flame className="h-3 w-3 text-orange-400" />
-                      <span className="text-xs font-bold text-orange-400">{hotStreak}</span>
-                    </div>
-                  )}
-                </div>
+              </DialogTrigger>
+              {isCurrentUser && onUploadPicture && (
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Update Profile Picture</DialogTitle>
+                    <DialogDescription>Upload a new profile picture. Images should be less than 5MB.</DialogDescription>
+                  </DialogHeader>
+                  <ProfilePictureUpload 
+                    currentPicture={member.user?.profilePicture}
+                    onUpload={(base64, mimeType) => { onUploadPicture(base64, mimeType); setUploadDialogOpen(false); }}
+                  />
+                </DialogContent>
+              )}
+            </Dialog>
+            
+            {/* Name, role, badges */}
+            <div className="obs-roster-info">
+              <div className="obs-roster-name">{member.name}</div>
+              <div className={`obs-roster-role-badge ${roleClass}`}>
+                {roleLabels[member.teamRole] || member.teamRole}
               </div>
-              
-              {/* XP Progress bar */}
-              <div className="mt-2.5">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">{xp.toLocaleString()} XP</span>
+              {badges.length > 0 && (
+                <div className="obs-badges-row">
+                  {badges.slice(0, 5).map((badge: any, i: number) => (
+                    <span key={i} className="obs-badge-icon" title={`${badge.name} (${badge.tier})`}>
+                      {badge.icon}
+                    </span>
+                  ))}
+                  {badges.length > 5 && (
+                    <span style={{fontSize: '10px', color: 'var(--obs-text-tertiary)'}}>+{badges.length - 5}</span>
+                  )}
                 </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden border border-border">
-                  <div 
-                    className="h-full bg-gradient-to-r from-red-700 via-red-600 to-amber-500 transition-all duration-1000 relative"
-                    style={{ width: `${Math.min((xp % 500) / 5, 100)}%` }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/30" />
-                  </div>
-                </div>
-              </div>
+              )}
+            </div>
+            
+            {/* Level display */}
+            <div className="obs-level-display">
+              <div className="obs-level-number">{level}</div>
+              <div className="obs-level-label">LVL</div>
+              <div className="obs-level-title">{levelTitle}</div>
+              {hotStreak > 0 && (
+                <div className="obs-streak-badge">🔥 {hotStreak}</div>
+              )}
             </div>
           </div>
         </div>
-        
-        {/* Stats section */}
-        <div className="bg-card p-3 sm:p-4 space-y-1.5">
-          <StatBar label="CALLS" value={totalCalls} max={maxCalls} color="bg-gradient-to-r from-red-700 to-red-500" />
-          <StatBar label="SCORE" value={avgScore ? Math.round(avgScore) : 0} max={maxScore} color="bg-gradient-to-r from-amber-600 to-amber-400" />
-          <StatBar label="A & B" value={abCount} max={maxAB} color="bg-gradient-to-r from-red-600 to-amber-500" />
-          <StatBar label="BADGE" value={badges.length} max={maxBadges} color="bg-gradient-to-r from-red-800 to-red-600" />
-          
-          {/* Grade distribution mini bar */}
-          {totalCalls > 0 && (
-            <div className="pt-1.5 mt-1 border-t border-border">
-              <div className="flex h-1.5 rounded-full overflow-hidden">
-                {gradeDistribution.A > 0 && <div className="bg-emerald-500" style={{ width: `${(gradeDistribution.A / totalCalls) * 100}%` }} />}
-                {gradeDistribution.B > 0 && <div className="bg-teal-500" style={{ width: `${(gradeDistribution.B / totalCalls) * 100}%` }} />}
-                {gradeDistribution.C > 0 && <div className="bg-yellow-500" style={{ width: `${(gradeDistribution.C / totalCalls) * 100}%` }} />}
-                {gradeDistribution.D > 0 && <div className="bg-orange-500" style={{ width: `${(gradeDistribution.D / totalCalls) * 100}%` }} />}
-                {gradeDistribution.F > 0 && <div className="bg-red-500" style={{ width: `${(gradeDistribution.F / totalCalls) * 100}%` }} />}
-              </div>
-              <div className="flex gap-2 mt-1 justify-center">
-                {[
-                  { label: "A", count: gradeDistribution.A, color: "bg-emerald-500" },
-                  { label: "B", count: gradeDistribution.B, color: "bg-teal-500" },
-                  { label: "C", count: gradeDistribution.C, color: "bg-yellow-500" },
-                  { label: "D", count: gradeDistribution.D, color: "bg-orange-500" },
-                  { label: "F", count: gradeDistribution.F, color: "bg-red-500" },
-                ].map(g => (
-                  <span key={g.label} className="flex items-center gap-0.5 text-[9px] text-muted-foreground">
-                    <span className={`w-1.5 h-1.5 rounded-full ${g.color}`} />{g.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Selection indicator glow line at bottom */}
-        {isSelected && (
-          <div className={`h-0.5 bg-gradient-to-r ${roleGlow}`} />
-        )}
       </div>
+      
+      {/* XP bar */}
+      <div className="obs-xp-section">
+        <div className="obs-xp-label">{xp.toLocaleString()} XP</div>
+        <div className="obs-xp-bar">
+          <div className="obs-xp-fill" style={{width: `${xpProgress}%`}} />
+        </div>
+      </div>
+      
+      {/* Stat bars */}
+      <div className="obs-roster-stats">
+        <div className="obs-stat-bar-row">
+          <span className="obs-stat-bar-label">Calls</span>
+          <div className="obs-stat-bar-track"><div className="obs-stat-bar-fill calls" style={{width: `${callsPct}%`}} /></div>
+          <span className="obs-stat-bar-value">{totalCalls}</span>
+        </div>
+        <div className="obs-stat-bar-row">
+          <span className="obs-stat-bar-label">Score</span>
+          <div className="obs-stat-bar-track"><div className="obs-stat-bar-fill score" style={{width: `${scorePct}%`}} /></div>
+          <span className="obs-stat-bar-value">{avgScore ? `${Math.round(avgScore)}%` : 'N/A'}</span>
+        </div>
+        <div className="obs-stat-bar-row">
+          <span className="obs-stat-bar-label">A & B</span>
+          <div className="obs-stat-bar-track"><div className="obs-stat-bar-fill ab" style={{width: `${abPct}%`}} /></div>
+          <span className="obs-stat-bar-value">{abCount}</span>
+        </div>
+        <div className="obs-stat-bar-row">
+          <span className="obs-stat-bar-label">Badge</span>
+          <div className="obs-stat-bar-track"><div className="obs-stat-bar-fill badges" style={{width: `${badgesPct}%`}} /></div>
+          <span className="obs-stat-bar-value">{badges.length}</span>
+        </div>
+      </div>
+      
+      {/* Grade distribution */}
+      {totalGraded > 0 && (
+        <div className="obs-grade-dist">
+          <div className="obs-grade-bar">
+            {gradeA > 0 && <div className="obs-grade-seg a" style={{width: `${gradeA}%`}} />}
+            {gradeB > 0 && <div className="obs-grade-seg b" style={{width: `${gradeB}%`}} />}
+            {gradeC > 0 && <div className="obs-grade-seg c" style={{width: `${gradeC}%`}} />}
+            {gradeD > 0 && <div className="obs-grade-seg d" style={{width: `${gradeD}%`}} />}
+            {gradeF > 0 && <div className="obs-grade-seg f" style={{width: `${gradeF}%`}} />}
+          </div>
+          <div className="obs-grade-legend">
+            <span><span className="dot a" />A</span>
+            <span><span className="dot b" />B</span>
+            <span><span className="dot c" />C</span>
+            <span><span className="dot d" />D</span>
+            <span><span className="dot f" />F</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -356,62 +275,46 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
   const avgScore = scoreData?.averageScore;
   const totalCalls = scoreData?.totalCalls || 0;
   const gradeDistribution = scoreData?.gradeDistribution || { A: 0, B: 0, C: 0, D: 0, F: 0 };
-  const levelStyle = getLevelStyle(level);
-  const roleGlow = roleGlowColors[member.teamRole] || "from-slate-500 to-slate-700";
+  const roleClass = getRoleClass(member.teamRole);
+  const initials = member.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?';
 
   return (
-    <div className="relative rounded-xl overflow-hidden border-2 border-border bg-card">
-      {/* Header with gradient */}
-      <div className={`bg-gradient-to-r ${roleGlow} p-0.5`}>
-        <div className="bg-card/95 dark:bg-slate-900/95 backdrop-blur-sm p-4 sm:p-6">
+    <div className="obs-roster-card" data-rank={rank <= 3 ? rank : undefined} style={{maxWidth: '100%'}}>
+      <div className={`obs-roster-card-header ${roleClass}`}>
+        <div className="obs-roster-card-header-inner">
           <div className="flex items-center gap-4 sm:gap-6">
             {/* Large avatar */}
-            <div className="relative shrink-0">
-              <div className={`rounded-xl overflow-hidden border-3 ${
-                rank === 1 ? "border-yellow-400" : rank === 2 ? "border-slate-300" : rank === 3 ? "border-amber-500" : "border-slate-600"
-              }`}>
-                <Avatar className="h-24 w-24 sm:h-32 sm:w-32 rounded-none">
-                  <AvatarImage src={member.user?.profilePicture || undefined} className="object-cover" />
-                  <AvatarFallback className="text-4xl sm:text-5xl font-black bg-gradient-to-br from-primary/80 to-primary text-primary-foreground rounded-none" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                    {member.name?.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+            <div className="obs-roster-avatar-wrap">
+              <div className="obs-roster-avatar" style={{width: 80, height: 80, fontSize: 24}}>
+                {member.user?.profilePicture ? (
+                  <img src={member.user.profilePicture} alt={member.name} />
+                ) : (
+                  initials
+                )}
               </div>
-              {rank <= 3 && (
-                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2">
-                  <div className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
-                    rank === 1 ? "bg-yellow-400 text-yellow-900" : rank === 2 ? "bg-slate-300 text-slate-800" : "bg-amber-600 text-amber-100"
-                  }`} style={{ fontFamily: "'Press Start 2P', cursive", fontSize: "7px" }}>
-                    {rank === 1 ? "1ST" : rank === 2 ? "2ND" : "3RD"}
-                  </div>
-                </div>
-              )}
+              {rank <= 3 && <div className="obs-rank-number">#{rank}</div>}
             </div>
             
-            {/* Teammate info */}
+            {/* Info */}
             <div className="flex-1 min-w-0">
-              <h2 className="text-xl sm:text-3xl font-black text-foreground tracking-wide" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                {member.name}
-              </h2>
-              <div className={`inline-block text-xs px-3 py-1 rounded mt-1 border ${roleBadgeColors[member.teamRole] || "bg-slate-500/80 text-white"}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
+              <div className="obs-roster-name" style={{fontSize: 18}}>{member.name}</div>
+              <div className={`obs-roster-role-badge ${roleClass}`}>
                 {roleLabels[member.teamRole] || member.teamRole}
               </div>
               
               <div className="flex items-center gap-4 mt-3">
                 <div>
-                  <span className={`text-3xl sm:text-4xl font-black ${levelStyle.color} ${levelStyle.glow}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                  <span className="obs-level-number" style={{fontSize: 32}}>
                     LVL {level}
                   </span>
                 </div>
-                <div className="text-muted-foreground">
-                  <div className="text-sm font-bold" style={{ fontFamily: "'Orbitron', sans-serif" }}>{title}</div>
-                  <div className="text-xs font-mono">{xp.toLocaleString()} XP</div>
+                <div>
+                  <div className="obs-level-title" style={{fontSize: 11, opacity: 1}}>{title}</div>
+                  <div style={{fontFamily: "'Orbitron', sans-serif", fontSize: 10, color: 'var(--obs-text-tertiary)'}}>{xp.toLocaleString()} XP</div>
                 </div>
                 {hotStreak > 0 && (
-                  <div className="flex items-center gap-1 bg-orange-500/20 px-3 py-1.5 rounded-lg border border-orange-500/30">
-                    <Flame className="h-4 w-4 text-orange-400" />
-                    <span className="text-sm font-bold text-orange-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>{hotStreak}</span>
-                    <span className="text-[10px] text-orange-400/70 uppercase">streak</span>
+                  <div className="obs-streak-badge" style={{fontSize: 13}}>
+                    🔥 {hotStreak}
                   </div>
                 )}
               </div>
@@ -421,18 +324,24 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
       </div>
       
       {/* Stats grid */}
-      <div className="p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div style={{padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12, background: 'var(--obs-bg-inset)'}}>
         {[
-          { label: "CALLS", value: totalCalls, color: "from-red-700 to-red-600", textColor: "text-red-600 dark:text-red-400" },
-          { label: "AVG SCORE", value: avgScore ? `${Math.round(avgScore)}%` : "N/A", color: "from-amber-600 to-amber-500", textColor: "text-amber-600 dark:text-amber-400" },
-          { label: "A & B GRADES", value: gradeDistribution.A + gradeDistribution.B, color: "from-red-600 to-amber-500", textColor: "text-red-500 dark:text-red-300" },
-          { label: "BADGES", value: badges.length, color: "from-red-800 to-red-600", textColor: "text-red-600 dark:text-red-400" },
+          { label: "CALLS", value: totalCalls, color: 'var(--obs-accent-text)' },
+          { label: "AVG SCORE", value: avgScore ? `${Math.round(avgScore)}%` : "N/A", color: '#d97706' },
+          { label: "A & B GRADES", value: gradeDistribution.A + gradeDistribution.B, color: 'var(--obs-accent-text)' },
+          { label: "BADGES", value: badges.length, color: '#7f1d1d' },
         ].map(stat => (
-          <div key={stat.label} className="bg-muted/60 rounded-lg p-3 border border-border text-center">
-            <div className={`text-2xl sm:text-3xl font-black ${stat.textColor}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
+          <div key={stat.label} style={{
+            background: 'var(--obs-bg-card)',
+            border: '1px solid var(--obs-border-subtle)',
+            borderRadius: 8,
+            padding: 12,
+            textAlign: 'center',
+          }}>
+            <div style={{fontFamily: "'Orbitron', sans-serif", fontSize: 24, fontWeight: 900, color: stat.color}}>
               {stat.value}
             </div>
-            <div className="text-[9px] text-muted-foreground uppercase tracking-widest mt-1" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+            <div style={{fontFamily: "'Orbitron', sans-serif", fontSize: 8, color: 'var(--obs-text-tertiary)', letterSpacing: '0.15em', textTransform: 'uppercase' as const, marginTop: 4}}>
               {stat.label}
             </div>
           </div>
@@ -441,16 +350,24 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
       
       {/* Badges showcase */}
       {badges.length > 0 && (
-        <div className="px-4 sm:px-6 pb-4 sm:pb-6">
+        <div style={{padding: '12px 16px 16px', background: 'var(--obs-bg-card)'}}>
           <div className="flex items-center gap-2 mb-2">
-            <Award className="h-4 w-4 text-primary" />
-            <span className="text-xs text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Achievements</span>
+            <Award className="h-4 w-4" style={{color: 'var(--obs-accent-text)'}} />
+            <span style={{fontFamily: "'Orbitron', sans-serif", fontSize: 9, color: 'var(--obs-text-tertiary)', letterSpacing: '0.1em', textTransform: 'uppercase' as const}}>Achievements</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {badges.map((badge: any, i: number) => (
-              <div key={i} className="bg-muted/80 px-2.5 py-1.5 rounded-lg border border-border flex items-center gap-1.5" title={`${badge.name} (${badge.tier})`}>
-                <span className="text-base">{badge.icon}</span>
-                <span className="text-[10px] text-muted-foreground font-medium">{badge.name}</span>
+              <div key={i} style={{
+                background: 'var(--obs-bg-inset)',
+                padding: '4px 10px',
+                borderRadius: 6,
+                border: '1px solid var(--obs-border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }} title={`${badge.name} (${badge.tier})`}>
+                <span style={{fontSize: 14}}>{badge.icon}</span>
+                <span style={{fontSize: 10, color: 'var(--obs-text-secondary)'}}>{badge.name}</span>
               </div>
             ))}
           </div>
@@ -462,9 +379,9 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
 
 // ─── PROFILE BADGE CARD ─────────────────────────────────
 const profileTierColors: Record<string, { bg: string; border: string; text: string }> = {
-  bronze: { bg: "bg-amber-100 dark:bg-amber-900/30", border: "border-amber-300 dark:border-amber-700/50", text: "text-amber-700 dark:text-amber-400" },
-  silver: { bg: "bg-slate-100 dark:bg-slate-800/50", border: "border-slate-300 dark:border-slate-500/50", text: "text-slate-600 dark:text-slate-300" },
-  gold: { bg: "bg-yellow-100 dark:bg-yellow-900/30", border: "border-yellow-300 dark:border-yellow-500/50", text: "text-yellow-700 dark:text-yellow-400" },
+  bronze: { bg: "rgba(217,119,6,0.08)", border: "rgba(217,119,6,0.2)", text: "var(--obs-role-gen)" },
+  silver: { bg: "rgba(148,163,184,0.08)", border: "rgba(148,163,184,0.2)", text: "var(--obs-text-secondary)" },
+  gold: { bg: "rgba(250,204,21,0.08)", border: "rgba(250,204,21,0.2)", text: "#d97706" },
 };
 
 interface BadgeTier { target: number; earned: boolean; earnedAt?: Date | string; }
@@ -490,35 +407,49 @@ function ProfileBadgeCard({ badge }: { badge: BadgeData }) {
   const progressPercent = nextTarget > 0 ? Math.min((badge.currentProgress / nextTarget) * 100, 100) : 100;
 
   return (
-    <div className={`relative rounded-lg overflow-hidden transition-all border ${
-      isEarned ? `${tierStyle.bg} ${tierStyle.border}` : "bg-muted/30 border-border border-dashed opacity-60"
-    }`}>
-      <div className="p-4">
+    <div style={{
+      borderRadius: 10,
+      overflow: 'hidden',
+      border: `1px solid ${isEarned ? tierStyle.border : 'var(--obs-border-subtle)'}`,
+      background: isEarned ? tierStyle.bg : 'var(--obs-bg-inset)',
+      opacity: isEarned ? 1 : 0.6,
+      borderStyle: isEarned ? 'solid' : 'dashed',
+      transition: 'all 0.2s',
+    }}>
+      <div style={{padding: 16}}>
         <div className="flex items-start gap-3">
-          <div className={`text-3xl ${!isEarned && "grayscale opacity-50"}`}>{badge.icon}</div>
+          <div style={{fontSize: 28, filter: isEarned ? 'none' : 'grayscale(1) opacity(0.5)'}}>{badge.icon}</div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className={`font-bold text-sm ${isEarned ? tierStyle.text : "text-muted-foreground"}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
+              <h4 style={{fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 12, color: isEarned ? tierStyle.text : 'var(--obs-text-tertiary)'}}>
                 {badge.name}
               </h4>
-              {isEarned ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
+              {isEarned ? <CheckCircle className="h-4 w-4" style={{color: '#22c55e'}} /> : <Lock className="h-4 w-4" style={{color: 'var(--obs-text-tertiary)'}} />}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{badge.description}</p>
+            <p style={{fontSize: 11, color: 'var(--obs-text-tertiary)', marginTop: 2}}>{badge.description}</p>
             {nextTargetTier && (
-              <div className="mt-2">
-                <div className="flex justify-between text-[10px] text-muted-foreground mb-1 font-mono">
+              <div style={{marginTop: 8}}>
+                <div className="flex justify-between" style={{fontSize: 9, color: 'var(--obs-text-tertiary)', fontFamily: "'Orbitron', sans-serif", marginBottom: 4}}>
                   <span>{nextTargetTier.toUpperCase()}</span>
                   <span>{badge.currentProgress} / {nextTarget}</span>
                 </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden border border-border">
-                  <div className="h-full bg-gradient-to-r from-red-700 to-amber-500 transition-all" style={{ width: `${progressPercent}%` }} />
+                <div className="obs-xp-bar">
+                  <div className="obs-xp-fill" style={{width: `${progressPercent}%`}} />
                 </div>
               </div>
             )}
             {isEarned && (
               <div className="flex gap-1 mt-2">
                 {tiers.map(tier => badge.tiers[tier].earned && (
-                  <span key={tier} className={`text-[10px] px-2 py-0.5 rounded ${profileTierColors[tier].bg} ${profileTierColors[tier].text} border ${profileTierColors[tier].border}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                  <span key={tier} style={{
+                    fontFamily: "'Orbitron', sans-serif",
+                    fontSize: 9,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background: profileTierColors[tier].bg,
+                    color: profileTierColors[tier].text,
+                    border: `1px solid ${profileTierColors[tier].border}`,
+                  }}>
                     {tier.toUpperCase()}
                   </span>
                 ))}
@@ -531,7 +462,7 @@ function ProfileBadgeCard({ badge }: { badge: BadgeData }) {
   );
 }
 
-// ─── MY PROFILE (DARK THEME) ────────────────────────────
+// ─── MY PROFILE ────────────────────────────────────────
 function MyProfileContent() {
   const { data: gamification, isLoading: gamificationLoading } = trpc.gamification.getSummary.useQuery();
   const { data: allBadges, isLoading: badgesLoading } = trpc.gamification.getAllBadges.useQuery();
@@ -542,12 +473,12 @@ function MyProfileContent() {
   return (
     <div className="space-y-6">
       {/* XP & Level */}
-      <div className="rounded-xl overflow-hidden border-2 border-border bg-card">
-        <div className="bg-gradient-to-r from-red-800 to-red-600 p-0.5">
-          <div className="bg-card/95 dark:bg-slate-900/95 p-4 sm:p-6">
+      <div className="obs-roster-card" style={{maxWidth: '100%'}}>
+        <div className="obs-roster-card-header acq">
+          <div className="obs-roster-card-header-inner">
             <div className="flex items-center gap-2 mb-4">
-              <Trophy className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
-              <h3 className="text-sm text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Level & Experience</h3>
+              <Trophy className="h-5 w-5" style={{color: '#d97706'}} />
+              <h3 style={{fontFamily: "'Orbitron', sans-serif", fontSize: 11, color: 'var(--obs-text-tertiary)', letterSpacing: '0.1em', textTransform: 'uppercase' as const}}>Level & Experience</h3>
             </div>
             {gamificationLoading ? (
               <Skeleton className="h-24 w-full" />
@@ -555,27 +486,25 @@ function MyProfileContent() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-4xl font-black text-foreground" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                    <p className="obs-level-number" style={{fontSize: 36}}>
                       Level {gamification?.xp.level ?? 1}
                     </p>
-                    <p className="text-lg text-amber-600 dark:text-amber-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>{gamification?.xp.title ?? "Rookie"}</p>
+                    <p className="obs-level-title" style={{fontSize: 14, opacity: 1, marginTop: 4}}>{gamification?.xp.title ?? "Rookie"}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-black text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                    <p style={{fontFamily: "'Orbitron', sans-serif", fontSize: 20, fontWeight: 900, color: 'var(--obs-accent-text)'}}>
                       {gamification?.xp.totalXp?.toLocaleString() ?? 0} XP
                     </p>
-                    <p className="text-sm text-muted-foreground font-mono">
+                    <p style={{fontSize: 12, color: 'var(--obs-text-tertiary)'}}>
                       {((gamification?.xp.nextLevelXp ?? 500) - (gamification?.xp.totalXp ?? 0)).toLocaleString()} XP to next level
                     </p>
                   </div>
                 </div>
                 <div>
-                    <div className="h-4 bg-muted rounded-full overflow-hidden border border-border">
-                    <div className="h-full bg-gradient-to-r from-red-700 via-red-600 to-amber-500 transition-all duration-500 relative" style={{ width: `${gamification?.xp.progress ?? 0}%` }}>
-                      <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20" />
-                    </div>
+                  <div className="obs-xp-bar" style={{height: 10}}>
+                    <div className="obs-xp-fill" style={{width: `${gamification?.xp.progress ?? 0}%`}} />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 text-right font-mono">{gamification?.xp.progress ?? 0}% to Level {(gamification?.xp.level ?? 1) + 1}</p>
+                  <p style={{fontSize: 11, color: 'var(--obs-text-tertiary)', marginTop: 4, textAlign: 'right'}}>{gamification?.xp.progress ?? 0}% to Level {(gamification?.xp.level ?? 1) + 1}</p>
                 </div>
               </div>
             )}
@@ -585,111 +514,119 @@ function MyProfileContent() {
 
       {/* Streaks */}
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl overflow-hidden border-2 border-border bg-card">
-          <div className="bg-gradient-to-r from-orange-500 to-red-500 p-0.5">
-            <div className="bg-card/95 dark:bg-slate-900/95 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Flame className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-                <h3 className="text-xs text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Hot Streak</h3>
-              </div>
-              <p className="text-[10px] text-muted-foreground mb-3">Consecutive C+ or better grades</p>
-              {gamificationLoading ? <Skeleton className="h-16 w-full" /> : (
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-4xl font-black text-orange-500 dark:text-orange-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                      {gamification?.streaks.hotStreakCurrent ?? 0}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">Current</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-black text-orange-600" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                      {gamification?.streaks.hotStreakBest ?? 0}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">Best</p>
-                  </div>
-                </div>
-              )}
-            </div>
+        <div className="obs-panel">
+          <div className="flex items-center gap-2 mb-3">
+            <Flame className="h-5 w-5" style={{color: '#ea580c'}} />
+            <h3 style={{fontFamily: "'Orbitron', sans-serif", fontSize: 10, color: 'var(--obs-text-tertiary)', letterSpacing: '0.1em', textTransform: 'uppercase' as const}}>Hot Streak</h3>
           </div>
+          <p style={{fontSize: 10, color: 'var(--obs-text-tertiary)', marginBottom: 12}}>Consecutive C+ or better grades</p>
+          {gamificationLoading ? <Skeleton className="h-16 w-full" /> : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p style={{fontFamily: "'Orbitron', sans-serif", fontSize: 36, fontWeight: 900, color: '#ea580c'}}>
+                  {gamification?.streaks.hotStreakCurrent ?? 0}
+                </p>
+                <p style={{fontSize: 11, color: 'var(--obs-text-tertiary)'}}>Current</p>
+              </div>
+              <div className="text-right">
+                <p style={{fontFamily: "'Orbitron', sans-serif", fontSize: 24, fontWeight: 900, color: 'var(--obs-text-secondary)'}}>
+                  {gamification?.streaks.hotStreakBest ?? 0}
+                </p>
+                <p style={{fontSize: 11, color: 'var(--obs-text-tertiary)'}}>Best</p>
+              </div>
+            </div>
+          )}
         </div>
-
-        <div className="rounded-xl overflow-hidden border-2 border-border bg-card">
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-500 p-0.5">
-            <div className="bg-card/95 dark:bg-slate-900/95 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Target className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-                <h3 className="text-xs text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Consistency</h3>
-              </div>
-              <p className="text-[10px] text-muted-foreground mb-3">Days with at least one graded call</p>
-              {gamificationLoading ? <Skeleton className="h-16 w-full" /> : (
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-4xl font-black text-blue-500 dark:text-blue-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                      {gamification?.streaks.consistencyStreakCurrent ?? 0}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">Current</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-black text-blue-600" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                      {gamification?.streaks.consistencyStreakBest ?? 0}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">Best</p>
-                  </div>
-                </div>
-              )}
-            </div>
+        
+        <div className="obs-panel">
+          <div className="flex items-center gap-2 mb-3">
+            <Target className="h-5 w-5" style={{color: '#2563eb'}} />
+            <h3 style={{fontFamily: "'Orbitron', sans-serif", fontSize: 10, color: 'var(--obs-text-tertiary)', letterSpacing: '0.1em', textTransform: 'uppercase' as const}}>Consistency Streak</h3>
           </div>
+          <p style={{fontSize: 10, color: 'var(--obs-text-tertiary)', marginBottom: 12}}>Days with at least one graded call</p>
+          {gamificationLoading ? <Skeleton className="h-16 w-full" /> : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p style={{fontFamily: "'Orbitron', sans-serif", fontSize: 36, fontWeight: 900, color: '#2563eb'}}>
+                  {gamification?.streaks.consistencyStreakCurrent ?? 0}
+                </p>
+                <p style={{fontSize: 11, color: 'var(--obs-text-tertiary)'}}>Current</p>
+              </div>
+              <div className="text-right">
+                <p style={{fontFamily: "'Orbitron', sans-serif", fontSize: 24, fontWeight: 900, color: 'var(--obs-text-secondary)'}}>
+                  {gamification?.streaks.consistencyStreakBest ?? 0}
+                </p>
+                <p style={{fontSize: 11, color: 'var(--obs-text-tertiary)'}}>Best</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Badges */}
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-sm font-bold mb-4 flex items-center gap-2 text-foreground/80 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-            <Award className="h-5 w-5 text-primary" />
-            Earned ({earnedBadges.length})
-          </h2>
-          {badgesLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
-            </div>
-          ) : earnedBadges.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {earnedBadges.map((badge: BadgeData) => <ProfileBadgeCard key={badge.code} badge={badge} />)}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center py-8">
-              <Award className="h-12 w-12 text-muted-foreground mb-2" />
-              <p className="text-muted-foreground text-sm">No badges earned yet. Keep grinding!</p>
-            </div>
-          )}
-        </div>
+      {/* Earned Badges */}
+      <div>
+        <h2 className="obs-section-title flex items-center gap-2" style={{marginBottom: 16}}>
+          <Award className="h-5 w-5" style={{color: 'var(--obs-accent-text)'}} />
+          Earned ({earnedBadges.length})
+        </h2>
+        {badgesLoading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
+          </div>
+        ) : earnedBadges.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {earnedBadges.map((badge: BadgeData) => <ProfileBadgeCard key={badge.code} badge={badge} />)}
+          </div>
+        ) : (
+          <div style={{
+            borderRadius: 10,
+            border: '1px solid var(--obs-border-subtle)',
+            background: 'var(--obs-bg-inset)',
+            padding: '32px 16px',
+            textAlign: 'center',
+          }}>
+            <Award className="h-12 w-12 mx-auto mb-2" style={{color: 'var(--obs-text-tertiary)', opacity: 0.5}} />
+            <p style={{fontSize: 13, color: 'var(--obs-text-tertiary)'}}>No badges earned yet. Keep grinding!</p>
+          </div>
+        )}
+      </div>
 
-        <div>
-          <h2 className="text-sm font-bold mb-4 flex items-center gap-2 text-foreground/80 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-            <Zap className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-            In Progress ({inProgressBadges.length})
-          </h2>
-          {badgesLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
-            </div>
-          ) : inProgressBadges.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {inProgressBadges.map((badge: BadgeData) => <ProfileBadgeCard key={badge.code} badge={badge} />)}
-            </div>
-          ) : earnedBadges.length === allBadges?.length ? (
-            <div className="rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center py-8">
-              <CheckCircle className="h-12 w-12 text-green-500/50 mb-2" />
-              <p className="text-muted-foreground text-sm">All badges earned! You're a legend!</p>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center py-8">
-              <Zap className="h-12 w-12 text-orange-500/50 mb-2" />
-              <p className="text-muted-foreground text-sm">Start making calls to unlock badges!</p>
-            </div>
-          )}
-        </div>
+      <div>
+        <h2 className="obs-section-title flex items-center gap-2" style={{marginBottom: 16}}>
+          <Zap className="h-5 w-5" style={{color: '#ea580c'}} />
+          In Progress ({inProgressBadges.length})
+        </h2>
+        {badgesLoading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
+          </div>
+        ) : inProgressBadges.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {inProgressBadges.map((badge: BadgeData) => <ProfileBadgeCard key={badge.code} badge={badge} />)}
+          </div>
+        ) : earnedBadges.length === allBadges?.length ? (
+          <div style={{
+            borderRadius: 10,
+            border: '1px solid var(--obs-border-subtle)',
+            background: 'var(--obs-bg-inset)',
+            padding: '32px 16px',
+            textAlign: 'center',
+          }}>
+            <CheckCircle className="h-12 w-12 mx-auto mb-2" style={{color: '#22c55e', opacity: 0.5}} />
+            <p style={{fontSize: 13, color: 'var(--obs-text-tertiary)'}}>All badges earned! You're a legend!</p>
+          </div>
+        ) : (
+          <div style={{
+            borderRadius: 10,
+            border: '1px solid var(--obs-border-subtle)',
+            background: 'var(--obs-bg-inset)',
+            padding: '32px 16px',
+            textAlign: 'center',
+          }}>
+            <Zap className="h-12 w-12 mx-auto mb-2" style={{color: '#ea580c', opacity: 0.5}} />
+            <p style={{fontSize: 13, color: 'var(--obs-text-tertiary)'}}>Start making calls to unlock badges!</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -701,6 +638,7 @@ function TeamMembersContent() {
   const { isDemo, guardAction: guardDemoAction } = useDemo();
   const utils = trpc.useUtils();
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   
   const { data: teamMembers, isLoading: membersLoading, refetch } = trpc.team.list.useQuery();
   const { data: scoreLeaderboard, isLoading: scoreLoading } = trpc.leaderboard.get.useQuery();
@@ -739,12 +677,18 @@ function TeamMembersContent() {
   }, [gamificationLeaderboard]);
   
   const sortedMembers = useMemo(() => {
-    return teamMembers?.slice().sort((a, b) => {
+    let members = teamMembers?.slice().sort((a, b) => {
       const aXp = gamificationMap.get(a.id)?.xp || 0;
       const bXp = gamificationMap.get(b.id)?.xp || 0;
       return bXp - aXp;
     }) || [];
-  }, [teamMembers, gamificationMap]);
+    
+    if (roleFilter !== "all") {
+      members = members.filter(m => m.teamRole === roleFilter);
+    }
+    
+    return members;
+  }, [teamMembers, gamificationMap, roleFilter]);
 
   const selectedMember = sortedMembers.find(m => m.id === selectedMemberId);
   const selectedRank = selectedMember ? sortedMembers.indexOf(selectedMember) + 1 : 0;
@@ -754,7 +698,7 @@ function TeamMembersContent() {
       {(!teamMembers || teamMembers.length === 0) && !isLoading && (
         <div className="flex justify-end">
           <Button onClick={() => { if (!guardDemoAction("Team management")) seedMutation.mutate(); }} disabled={seedMutation.isPending || isDemo}
-            className="bg-gradient-to-r from-red-800 to-red-600 text-white border-0 hover:from-red-900 hover:to-red-700">
+            style={{background: 'linear-gradient(135deg, var(--obs-accent), var(--obs-accent-light))', color: '#fff', border: 'none'}}>
             <UserPlus className="h-4 w-4 mr-2" /> Initialize Team
           </Button>
         </div>
@@ -772,20 +716,20 @@ function TeamMembersContent() {
 
       {/* Teammate grid */}
       {isLoading ? (
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="obs-roster-grid">
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="rounded-xl border-2 border-border bg-card overflow-hidden">
-              <div className="p-4"><Skeleton className="h-24 w-full" /></div>
-              <div className="p-4 space-y-2">
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-full" />
+            <div key={i} className="obs-roster-card" style={{overflow: 'hidden'}}>
+              <div style={{padding: 16}}><Skeleton className="h-24 w-full" /></div>
+              <div style={{padding: '0 16px 16px'}}>
+                <Skeleton className="h-3 w-full mb-2" />
+                <Skeleton className="h-3 w-full mb-2" />
                 <Skeleton className="h-3 w-3/4" />
               </div>
             </div>
           ))}
         </div>
       ) : sortedMembers.length > 0 ? (
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="obs-roster-grid">
           {sortedMembers.map((member, index) => {
             const isCurrentUser = member.userId === user?.id;
             return (
@@ -804,38 +748,44 @@ function TeamMembersContent() {
           })}
         </div>
       ) : (
-        <div className="rounded-xl border-2 border-border bg-card flex flex-col items-center justify-center py-16">
-          <Users className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: "'Orbitron', sans-serif" }}>No Teammates Found</h3>
-          <p className="text-muted-foreground text-center max-w-md mb-4 text-sm">
+        <div style={{
+          borderRadius: 12,
+          border: '1px solid var(--obs-border-subtle)',
+          background: 'var(--obs-bg-card)',
+          padding: '64px 16px',
+          textAlign: 'center',
+        }}>
+          <Users className="h-16 w-16 mx-auto mb-4" style={{color: 'var(--obs-text-tertiary)'}} />
+          <h3 style={{fontFamily: "'Orbitron', sans-serif", fontSize: 16, fontWeight: 700, color: 'var(--obs-text-primary)'}}>No Teammates Found</h3>
+          <p style={{fontSize: 13, color: 'var(--obs-text-tertiary)', maxWidth: 400, margin: '8px auto 16px'}}>
             Add your first team members to start tracking call performance and coaching.
           </p>
-          <Button onClick={() => window.location.href = "/settings"} className="bg-gradient-to-r from-red-800 to-red-600 text-white border-0">
+          <Button onClick={() => window.location.href = "/settings"} style={{background: 'linear-gradient(135deg, var(--obs-accent), var(--obs-accent-light))', color: '#fff', border: 'none'}}>
             <UserPlus className="h-4 w-4 mr-2" /> Go to Settings
           </Button>
         </div>
       )}
 
-      {/* Team Roles Legend - arcade style */}
-      <div className="rounded-xl border-2 border-border bg-card overflow-hidden">
-        <div className="p-4 border-b border-border">
-          <h3 className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+      {/* Team Roles Legend */}
+      <div className="obs-panel" style={{padding: 0, overflow: 'hidden'}}>
+        <div style={{padding: '12px 16px', borderBottom: '1px solid var(--obs-border-subtle)'}}>
+          <h3 style={{fontFamily: "'Orbitron', sans-serif", fontSize: 10, color: 'var(--obs-text-tertiary)', letterSpacing: '0.1em', textTransform: 'uppercase' as const}} className="flex items-center gap-2">
             <Swords className="h-4 w-4" /> Teammate Classes
           </h3>
         </div>
-        <div className="p-4 grid gap-3 sm:grid-cols-3">
+        <div style={{padding: 16}} className="grid gap-3 sm:grid-cols-3">
           {[
-            { role: "lead_manager", label: "Lead Manager", desc: "Qualifies leads, extracts motivation, discusses price, and sets appointments for walkthroughs.", glow: "from-orange-600 to-orange-400" },
-            { role: "acquisition_manager", label: "Acquisition Manager", desc: "Handles offer calls and closings. Graded on motivation restatement, offer setup, and price delivery.", glow: "from-red-700 to-red-500" },
-            { role: "lead_generator", label: "Lead Generator", desc: "Makes cold calls to generate interest. Sets up warm handoffs to Lead Managers.", glow: "from-yellow-500 to-yellow-400" },
+            { role: "lead_manager", label: "Lead Manager", desc: "Qualifies leads, extracts motivation, discusses price, and sets appointments for walkthroughs.", roleClass: "lead" },
+            { role: "acquisition_manager", label: "Acquisition Manager", desc: "Handles offer calls and closings. Graded on motivation restatement, offer setup, and price delivery.", roleClass: "acq" },
+            { role: "lead_generator", label: "Lead Generator", desc: "Makes cold calls to generate interest. Sets up warm handoffs to Lead Managers.", roleClass: "gen" },
           ].map(r => (
-            <div key={r.role} className="relative rounded-lg overflow-hidden">
-              <div className={`bg-gradient-to-r ${r.glow} p-px`}>
-                <div className="bg-card/95 dark:bg-slate-900/95 p-3 rounded-lg">
-                  <div className={`inline-block text-[10px] px-2 py-0.5 rounded border ${roleBadgeColors[r.role]}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
+            <div key={r.role} style={{borderRadius: 10, overflow: 'hidden'}}>
+              <div className={`obs-roster-card-header ${r.roleClass}`} style={{padding: 1}}>
+                <div style={{background: 'var(--obs-bg-card)', padding: 12, borderRadius: 9}}>
+                  <div className={`obs-roster-role-badge ${r.roleClass}`}>
                     {r.label}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{r.desc}</p>
+                  <p style={{fontSize: 12, color: 'var(--obs-text-tertiary)', marginTop: 8, lineHeight: 1.5}}>{r.desc}</p>
                 </div>
               </div>
             </div>
@@ -848,41 +798,42 @@ function TeamMembersContent() {
 
 // ─── MAIN EXPORT ────────────────────────────────────────
 export default function TeamMembers() {
+  const [activeTab, setActiveTab] = useState<"team" | "profile">("team");
+  const { user } = useAuth();
+  const isLeadGenerator = user?.teamRole === 'lead_generator';
+  
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Page header - arcade style */}
-      <div className="relative">
-        <h1 className="text-2xl sm:text-3xl font-black tracking-wider text-foreground flex items-center gap-3" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-red-800 to-red-600 flex items-center justify-center">
-            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-          </div>
-          TEAM ROSTER
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1 ml-11 sm:ml-13 hidden sm:block font-mono uppercase tracking-wider">
-          Select a teammate to view stats
-        </p>
+      {/* Page header - lookbook style */}
+      <div className="obs-section-header">
+        <div>
+          <h2 className="obs-section-title">Team Roster</h2>
+          <p style={{fontSize: 14, color: 'var(--obs-text-secondary)', marginTop: 4}}>
+            {isLeadGenerator ? "Your profile and performance" : "Your squad ranked by performance"}
+          </p>
+        </div>
+        <span className="obs-section-badge">{activeTab === "team" ? "Roster" : "Profile"}</span>
       </div>
 
-      <Tabs defaultValue="team" className="w-full">
-        <TabsList className="bg-muted border border-primary/20">
-          <TabsTrigger value="team" className="flex items-center gap-2 data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
-            <Users className="h-4 w-4" />
-            <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11px" }}>ROSTER</span>
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="flex items-center gap-2 data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
-            <User className="h-4 w-4" />
-            <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11px" }}>MY PROFILE</span>
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="team" className="mt-6">
-          <TeamMembersContent />
-        </TabsContent>
-        
-        <TabsContent value="profile" className="mt-6">
-          <MyProfileContent />
-        </TabsContent>
-      </Tabs>
+      {/* Role filter tabs - lookbook style */}
+      <div className="obs-role-tabs">
+        <button 
+          className={`obs-role-tab ${activeTab === 'team' ? 'active' : ''}`}
+          onClick={() => setActiveTab('team')}
+        >
+          <Users className="h-4 w-4" />
+          {isLeadGenerator ? 'My Profile' : 'Roster'}
+        </button>
+        <button 
+          className={`obs-role-tab ${activeTab === 'profile' ? 'active' : ''}`}
+          onClick={() => setActiveTab('profile')}
+        >
+          <User className="h-4 w-4" />
+          My Profile
+        </button>
+      </div>
+      
+      {activeTab === "team" ? <TeamMembersContent /> : <MyProfileContent />}
     </div>
   );
 }
