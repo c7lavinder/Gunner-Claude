@@ -1651,7 +1651,9 @@ Return JSON with "actions" array. Each action:
 - actionType: "check_off_task" | "update_task" | "create_task" | "add_note" | "create_appointment" | "change_pipeline_stage" | "send_sms" | "schedule_sms" | "add_to_workflow" | "remove_from_workflow"
 - reason: 1-2 sentence explanation
 - suggested: boolean
-- payload: relevant fields for the action type`;
+- payload: object with ALL of these fields (set unused ones to empty string ""):
+  noteBody, title, description, dueDate, taskKeyword, message, scheduledDate, scheduledTime, pipelineName, stageName, workflowName, startTime, endTime, calendarName
+  For add_note: fill noteBody with the actual note content. For create_task: fill title, description, dueDate. For change_pipeline_stage: fill pipelineName and stageName. For send_sms: fill message. Etc.`;
 
   const userPrompt = `CALL DETAILS:
 - Contact: ${call.contactName || 'Unknown'}
@@ -1692,7 +1694,27 @@ Suggest the most relevant next steps for this lead.`;
                   actionType: { type: "string" },
                   reason: { type: "string" },
                   suggested: { type: "boolean" },
-                  payload: { type: "object", additionalProperties: true },
+                  payload: {
+                    type: "object",
+                    properties: {
+                      noteBody: { type: "string", description: "Full note content for add_note actions" },
+                      title: { type: "string", description: "Task or appointment title" },
+                      description: { type: "string", description: "Task description or details" },
+                      dueDate: { type: "string", description: "Due date in YYYY-MM-DD format" },
+                      taskKeyword: { type: "string", description: "Keyword to find existing task" },
+                      message: { type: "string", description: "SMS message text" },
+                      scheduledDate: { type: "string", description: "Scheduled send date YYYY-MM-DD" },
+                      scheduledTime: { type: "string", description: "Scheduled send time HH:mm" },
+                      pipelineName: { type: "string", description: "Exact pipeline name" },
+                      stageName: { type: "string", description: "Exact stage name" },
+                      workflowName: { type: "string", description: "Exact workflow name" },
+                      startTime: { type: "string", description: "Appointment start time ISO" },
+                      endTime: { type: "string", description: "Appointment end time ISO" },
+                      calendarName: { type: "string", description: "Calendar name" },
+                    },
+                    required: ["noteBody", "title", "description", "dueDate", "taskKeyword", "message", "scheduledDate", "scheduledTime", "pipelineName", "stageName", "workflowName", "startTime", "endTime", "calendarName"],
+                    additionalProperties: false,
+                  },
                 },
                 required: ["actionType", "reason", "suggested", "payload"],
                 additionalProperties: false,

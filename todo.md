@@ -2939,3 +2939,7 @@
 
 ## Call Type Classification Fix
 - [x] Fix AI call type detection: cold calls with engaged sellers being misclassified as qualification — strengthen first-contact vs follow-up distinction and give more weight to lead_generator role
+
+## Next Steps Payload Fix
+- [x] Fix empty payload bug: OpenAI strict JSON schema was stripping all payload properties because additionalProperties:true is incompatible with strict:true — now all 14 payload fields are explicitly defined in schema
+- [x] Fix Edit mode empty fields: root cause was empty payload from DB — now AI returns all fields with empty strings for unused ones

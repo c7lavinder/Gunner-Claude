@@ -1261,6 +1261,8 @@ Return a JSON object with an "actions" array. Each action object has:
 
 For schedule_sms, this will be implemented as a task reminder since GHL doesn't support scheduled SMS directly.
 
+IMPORTANT: The payload object must include ALL fields (noteBody, title, description, dueDate, taskKeyword, message, scheduledDate, scheduledTime, pipelineName, stageName, workflowName, startTime, endTime, calendarName). Set unused fields to empty string "". For example, an add_note action should have noteBody filled with the actual note content, and all other fields set to "".
+
 Return ONLY the JSON object, no other text.`;
 
         const userPrompt = `CALL DETAILS:
@@ -1305,7 +1307,27 @@ Based on ALL of the above context, suggest the most relevant next steps for this
                         actionType: { type: "string" },
                         reason: { type: "string" },
                         suggested: { type: "boolean" },
-                        payload: { type: "object", additionalProperties: true },
+                        payload: {
+                          type: "object",
+                          properties: {
+                            noteBody: { type: "string", description: "Full note content for add_note actions" },
+                            title: { type: "string", description: "Task or appointment title" },
+                            description: { type: "string", description: "Task description or details" },
+                            dueDate: { type: "string", description: "Due date in YYYY-MM-DD format" },
+                            taskKeyword: { type: "string", description: "Keyword to find existing task" },
+                            message: { type: "string", description: "SMS message text" },
+                            scheduledDate: { type: "string", description: "Scheduled send date YYYY-MM-DD" },
+                            scheduledTime: { type: "string", description: "Scheduled send time HH:mm" },
+                            pipelineName: { type: "string", description: "Exact pipeline name" },
+                            stageName: { type: "string", description: "Exact stage name" },
+                            workflowName: { type: "string", description: "Exact workflow name" },
+                            startTime: { type: "string", description: "Appointment start time ISO" },
+                            endTime: { type: "string", description: "Appointment end time ISO" },
+                            calendarName: { type: "string", description: "Calendar name" },
+                          },
+                          required: ["noteBody", "title", "description", "dueDate", "taskKeyword", "message", "scheduledDate", "scheduledTime", "pipelineName", "stageName", "workflowName", "startTime", "endTime", "calendarName"],
+                          additionalProperties: false,
+                        },
                       },
                       required: ["actionType", "reason", "suggested", "payload"],
                       additionalProperties: false,
