@@ -2841,3 +2841,11 @@
 - [ ] Make bars 3D with darker right edge and shadow depth effect
 - [ ] Add gradient fade at bottom of bars blending into container
 - [ ] Ensure bars are proportionally sized with ascending trend look
+
+## Score Trends Chart - Match Lookbook 3D Style
+- [x] Add inset container with light beige/gray background behind bars
+- [x] Make bars 3D with darker right face and shadow depth effect
+- [x] Add gradient fade/mist at bottom of bars blending into container
+- [x] Ensure bars are progressively taller (ascending trend)
+- [x] Revert default theme back to light (lookbook is light mode)
+- [x] Add explicit margin spacing around activity highlight text

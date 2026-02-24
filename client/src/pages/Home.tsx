@@ -111,33 +111,79 @@ function ScoreTrendsChart({ stats, loading }: { stats: any; loading: boolean }) 
           <p className="text-sm">No score data yet</p>
         </div>
       ) : (
-        <div style={{ padding: '0 8px' }}>
-          {/* Chart area - use fixed pixel heights to avoid flex min-height:0 issues */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 220 }}>
-            {weeklyData.map((week, i) => {
-              // Calculate pixel height directly: min 20px, max 200px
-              const rawRatio = maxScore > 0 ? week.averageScore / maxScore : 0;
-              const barHeight = week.averageScore > 0 ? Math.max(Math.round(rawRatio * 200), 30) : 8;
-              return (
-                <div key={week.weekStart} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: 220 }}>
-                  <div
-                    style={{
-                      width: '100%',
-                      height: barHeight,
-                      background: 'linear-gradient(to top, #7a1020, var(--obs-accent), var(--obs-accent-light))',
-                      opacity: 0.6 + (i / weeklyData.length) * 0.4,
-                      boxShadow: '0 -4px 20px rgba(196,30,58,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
-                      borderRadius: '6px 6px 2px 2px',
-                      transition: 'height 0.7s ease-out',
-                    }}
-                    title={`Week of ${week.weekStart}: ${week.averageScore}% avg (${week.callCount} calls)`}
-                  />
-                </div>
-              );
-            })}
+        <div style={{ padding: '0 12px' }}>
+          {/* Inset container with beige/gray background like lookbook */}
+          <div style={{
+            background: 'linear-gradient(180deg, rgba(200,190,175,0.15) 0%, rgba(200,190,175,0.08) 100%)',
+            borderRadius: 12,
+            padding: '24px 20px 16px',
+            position: 'relative',
+            overflow: 'hidden',
+          }}>
+            {/* Bottom gradient mist/fade */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '40%',
+              background: 'linear-gradient(to top, rgba(255,245,240,0.6), transparent)',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }} />
+            {/* Chart bars */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 200, position: 'relative', zIndex: 2 }}>
+              {weeklyData.map((week, i) => {
+                const rawRatio = maxScore > 0 ? week.averageScore / maxScore : 0;
+                const barHeight = week.averageScore > 0 ? Math.max(Math.round(rawRatio * 180), 35) : 10;
+                return (
+                  <div key={week.weekStart} style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', height: 200 }}>
+                    {/* 3D bar group */}
+                    <div style={{ position: 'relative', width: '80%', height: barHeight }}>
+                      {/* Main bar face */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          background: 'linear-gradient(180deg, #c41e3a 0%, #8b1528 40%, #5a0d1a 100%)',
+                          borderRadius: '4px 4px 1px 1px',
+                          boxShadow: '0 2px 8px rgba(140,20,40,0.3)',
+                          transition: 'height 0.7s ease-out',
+                        }}
+                      />
+                      {/* Right face for 3D depth */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 2,
+                          right: -4,
+                          width: 4,
+                          height: barHeight - 2,
+                          background: 'linear-gradient(180deg, #7a1020 0%, #3d0810 100%)',
+                          borderRadius: '0 3px 3px 0',
+                        }}
+                      />
+                      {/* Top face for 3D depth */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: -3,
+                          left: 2,
+                          right: -2,
+                          height: 5,
+                          background: 'linear-gradient(90deg, #d4354f, #c41e3a)',
+                          borderRadius: '3px 3px 0 0',
+                          transform: 'skewX(-8deg)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          {/* Labels below bars */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+          {/* Labels below container */}
+          <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
             {weeklyData.map((week) => (
               <div key={week.weekStart + '-label'} style={{ flex: 1, textAlign: 'center' }}>
                 <span className="text-[11px] font-semibold" style={{ color: 'var(--obs-text-secondary)' }}>
@@ -300,7 +346,11 @@ function RecentActivityFeed({ calls, loading }: { calls: any[] | undefined; load
               <div className="flex-1 min-w-0 text-sm" style={{ color: 'var(--obs-text-secondary)' }}>
                 <span>{item.prefix}</span>
                 {item.highlight && (
-                  <span className="font-bold" style={{ color: 'var(--foreground)' }}>{item.highlight}</span>
+                  <span className="font-bold" style={{
+                    color: 'var(--foreground)',
+                    margin: '0 6px',
+                    letterSpacing: '-0.01em',
+                  }}>{item.highlight}</span>
                 )}
                 {item.suffix && <span>{item.suffix}</span>}
               </div>
