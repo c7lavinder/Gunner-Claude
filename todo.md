@@ -2914,3 +2914,4 @@
 - [x] Fix AI Coach responses to display call outcomes in clean English (e.g., "Callback Scheduled") instead of raw snake_case (e.g., "callback_scheduled")
 - [x] Fix AI Coach going off the rails with generic filler about training materials — tighten system prompt to stay concise and specific
 - [x] BUG: AI Coach re-detects already-executed actions when user sends a new command — should only parse the new message, not re-parse conversation history
+- [x] BUG: Too many calls being classified as "Callback" outcome — tighten AI grading criteria for call outcomes to be more specific

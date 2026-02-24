@@ -616,19 +616,26 @@ Respond with a JSON object in this exact format:
     {"objection": "Price too high", "context": "Seller said: 'I was hoping for at least $200k'", "suggestedResponses": ["Response 1", "Response 2"]}
   ],
   "summary": "brief overall summary",
-  "callOutcome": "appointment_set" or "offer_made" or "callback_scheduled" or "interested" or "left_vm" or "no_answer" or "not_interested" or "dead" or "none"
+  "callOutcome": "appointment_set" or "offer_made" or "callback_scheduled" or "interested" or "left_vm" or "no_answer" or "not_interested" or "dead" or "none" (see CALL OUTCOME DEFINITIONS below for strict criteria — default to 'interested' over 'callback_scheduled' when in doubt)
 }
 
-CALL OUTCOME DEFINITIONS:
-- appointment_set: A walkthrough, meeting, or follow-up appointment was scheduled with a specific date/time
-- offer_made: An offer was presented to the seller (regardless of whether accepted or rejected)
-- callback_scheduled: The seller agreed to a callback or follow-up call at a specific time
-- interested: The seller expressed interest in selling but no firm commitment was made
-- left_vm: The rep left a voicemail message
+CALL OUTCOME DEFINITIONS (choose the MOST SPECIFIC outcome that fits):
+- appointment_set: A walkthrough, meeting, or in-person appointment was scheduled with a SPECIFIC date/time. The seller and agent agreed on an exact day and time to meet. Vague statements like "call me next week" do NOT count.
+- offer_made: A specific dollar amount was presented to the seller as an offer, OR the agent discussed specific pricing/numbers with the seller. This takes priority over callback_scheduled if an offer was discussed.
+- callback_scheduled: The seller explicitly agreed to receive a call back at a SPECIFIC date/time (e.g., "Call me Tuesday at 3pm"). STRICT REQUIREMENTS: There must be a mutually agreed-upon specific time. These do NOT qualify as callback_scheduled:
+  * "I'll call you back" or "We'll follow up" (agent-initiated, no seller agreement to specific time)
+  * "Call me sometime next week" (no specific time)
+  * "I'll think about it and get back to you" (seller will initiate, not a scheduled callback)
+  * "Feel free to reach out" (open-ended, no commitment)
+  * The agent saying they will follow up (unless the seller agreed to a specific time)
+- interested: The seller expressed interest in selling or hearing more, but no specific appointment, offer, or callback time was set. USE THIS when the conversation was positive but ended without a firm next step. This includes: seller asking questions about the process, seller saying "maybe" or "I might be interested", seller giving property details willingly, seller saying "call me back" without a specific time.
+- left_vm: The rep left a voicemail message (no live conversation occurred)
 - no_answer: The call went unanswered or was very brief with no real conversation
 - not_interested: The seller clearly stated they are not interested in selling
 - dead: Wrong number, disconnected, or the lead is completely dead
-- none: The call ended without a clear outcome or next step`;
+- none: The call ended without any clear outcome — the conversation was neutral with no interest expressed either way
+
+IMPORTANT: Default to "interested" over "callback_scheduled" when in doubt. Most follow-up calls where the seller is engaged but no specific callback time was set should be "interested", NOT "callback_scheduled". Reserve "callback_scheduled" for cases where both parties agreed on a specific date/time for the next call.`;
 
   try {
     const response = await invokeLLM({
