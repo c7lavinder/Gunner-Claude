@@ -104,8 +104,8 @@ export default function Analytics() {
               </div>
             ))
           : [
-              { label: "Total Calls", value: stats?.totalCalls ?? 0, prev: prior?.totalCalls, icon: Phone },
-              { label: "Graded Calls", value: stats?.gradedCalls ?? 0, prev: prior?.gradedCalls, icon: MessageSquare },
+              { label: "Calls Made", value: stats?.totalCalls ?? 0, prev: prior?.totalCalls, icon: Phone },
+              { label: "Conversations", value: stats?.gradedCalls ?? 0, prev: prior?.gradedCalls, icon: MessageSquare },
               { label: "Leads Generated", value: stats?.leadsGenerated ?? 0, prev: prior?.leadsGenerated, icon: Target },
               { label: "Appointments", value: stats?.appointmentsSet ?? 0, prev: prior?.appointmentsSet, icon: Calendar },
               { label: "Offer Calls", value: stats?.offerCallsCompleted ?? 0, prev: prior?.offerCallsCompleted, icon: CheckCircle },

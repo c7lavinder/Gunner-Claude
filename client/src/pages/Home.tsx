@@ -392,7 +392,7 @@ function CallHistoryTable({ dateRange }: { dateRange: DateRange }) {
   }, [dateRange]);
 
   const { data: callsData, isLoading } = trpc.calls.withGrades.useQuery({
-    limit: 20,
+    limit: 10,
     statuses: statuses,
     startDate: dateFilter,
   });
