@@ -2908,3 +2908,4 @@
 - [x] Signal detection: "Worth a Look" - detect when team skips walkthrough too easily and jumps to offer call
 - [x] Signal detection: "Worth a Look" - detect when seller mentions previous buyer/deal fell through
 - [x] BUG: AI Coach pipeline stage move shows wrong stage in blue badge — text says "Offer call scheduled" but badge shows "Walkthrough Apt Scheduled" (root cause: Pass 4 single-word overlap + missing call↔apt abbreviation mapping)
+- [x] BUG: Kyle Barks (Acquisition Manager) calls showing as "Qualification" instead of "Offer" — updated AI prompt to use role as strong default + fixed low-confidence fallback for AMs

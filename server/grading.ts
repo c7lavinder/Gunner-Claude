@@ -936,13 +936,18 @@ CALL TYPES:
 6. "admin_callback" - OUTBOUND operational call about documents, scheduling, closing details, title info, walkthrough times, or scheduling a callback. NOT a sales call. Signs: discussing DocuSign, purchase agreements, scheduling inspections, coordinating closing dates, helping with paperwork, vendor coordination, or simply scheduling a time to call back because the person is busy/unavailable. No active selling happening.
 
 CRITICAL RULES FOR CALL TYPE:
-- "offer" requires a SPECIFIC DOLLAR AMOUNT to be presented as a formal offer. If no price is stated, it is NOT an offer call.
+- "offer" includes ANY call where the acquisition manager is discussing price, value, terms, or negotiating with the seller — even if a specific dollar amount is not explicitly stated. If the conversation involves offer strategy, pricing discussion, property valuation, or deal negotiation, it IS an offer call.
+- A SPECIFIC DOLLAR AMOUNT is NOT required to classify as "offer". Discussion of price ranges, comparable sales, repair costs, ARV, or any financial negotiation qualifies.
 - If the person is busy/unavailable and the rep just schedules a callback, this is "admin_callback" — NOT "offer", "qualification", or "follow_up".
 - If the call is very short (under 2 minutes) and consists only of scheduling a callback time, it is "admin_callback".
 - If the rep mentions wanting to "discuss an offer" but the other person is unavailable and no offer is actually presented, it is "admin_callback".
-- The team member's role should NOT determine the call type. A call by an acquisition manager where no offer is presented is NOT an offer call.
 
-The team member's role is: ${teamMemberRole || "unknown"}. Use this as a WEAK hint only — the transcript content MUST be the primary signal. Do NOT default to "offer" just because the team member is an acquisition manager.
+ROLE-BASED GUIDANCE:
+The team member's role is: ${teamMemberRole || "unknown"}.
+- If the role is "acquisition_manager", DEFAULT to "offer" unless the transcript clearly shows it is an admin_callback, wrong_number, or the AM is doing someone else's job (e.g., cold calling a new lead). Acquisition managers are in the offer stage of the pipeline — their calls are offer calls unless proven otherwise.
+- If the role is "lead_manager", DEFAULT to "qualification" unless the transcript clearly shows a different type.
+- If the role is "lead_generator", DEFAULT to "cold_call" unless the transcript clearly shows a different type.
+- The transcript can override the role-based default, but only with clear evidence (e.g., AM making a cold call to a brand new lead, or LM presenting a specific offer price).
 
 Respond with JSON only.`,
         },
@@ -1309,18 +1314,17 @@ export async function processCall(callId: number): Promise<void> {
         console.log(`[ProcessCall] Using medium-confidence AI detection for call ${callId}: ${aiDetection.callType} (${aiDetection.confidence})`);
       } else {
         // Low confidence: fall back to role-based inference
-        // IMPORTANT: Never default to "offer" based on role alone.
-        // "offer" requires a specific dollar amount to be presented.
-        // If AI couldn't detect an offer, the role shouldn't override that.
         if (teamMemberRole === "lead_generator") {
           callType = "cold_call";
+        } else if (teamMemberRole === "acquisition_manager") {
+          // Acquisition managers are in the offer stage — default to offer
+          callType = "offer";
         } else {
-          // Default to qualification for both lead_managers AND acquisition_managers
-          // when AI can't determine the type. This is safer than assuming "offer"
-          // because an offer call requires a specific price to be stated.
+          // Default to qualification for lead_managers
           callType = "qualification";
         }
         callTypeSource = "auto";
+        console.log(`[ProcessCall] Low confidence AI detection for call ${callId}, using role-based fallback: ${callType} (role: ${teamMemberRole})`);
       }
     }
 
