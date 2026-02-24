@@ -2895,3 +2895,4 @@
 - [x] Remove "All" filter button from Dashboard Call History, keep only Completed and Needs Review, default to Completed
 - [x] Rename Analytics KPI labels to match Dashboard: "Total Calls" → "Calls Made", "Graded Calls" → "Conversations"
 - [x] Limit Dashboard Call History table to show only the last 10 calls
+- [x] Make unselected tabs appear fainted/muted across all tab bars to match Team page style
