@@ -142,38 +142,47 @@ export async function addNoteToOpportunity(
 
 // ============ OPPORTUNITY LOOKUP BY CONTACT ============
 
-export async function findOpportunityByContact(
+/**
+ * Find ALL opportunities for a contact (across all pipelines).
+ * Returns them sorted by most recently updated first.
+ */
+export async function findAllOpportunitiesByContact(
   tenantId: number,
   contactId: string
-): Promise<{ opportunityId: string; pipelineId: string; stageId: string; name: string } | null> {
+): Promise<Array<{ opportunityId: string; pipelineId: string; stageId: string; name: string }>> {
   const creds = await getCredentialsForTenant(tenantId);
-  if (!creds) return null;
+  if (!creds) return [];
 
   try {
-    // GHL API: search opportunities filtered by contact_id
     const data = await ghlFetch(
       creds,
-      `/opportunities/search?location_id=${creds.locationId}&contact_id=${contactId}&limit=10`,
+      `/opportunities/search?location_id=${creds.locationId}&contact_id=${contactId}&limit=20`,
       "GET"
     );
     const opps = data.opportunities || [];
-    if (opps.length === 0) return null;
+    if (opps.length === 0) return [];
 
-    // Return the most recently updated opportunity
     const sorted = opps.sort((a: any, b: any) => 
       new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime()
     );
-    const opp = sorted[0];
-    return {
+    return sorted.map((opp: any) => ({
       opportunityId: opp.id,
       pipelineId: opp.pipelineId,
       stageId: opp.pipelineStageId,
       name: opp.name || opp.contactName || "Unknown",
-    };
+    }));
   } catch (error) {
-    console.error("[GHLActions] Opportunity lookup by contact error:", error);
-    return null;
+    console.error("[GHLActions] All opportunities lookup by contact error:", error);
+    return [];
   }
+}
+
+export async function findOpportunityByContact(
+  tenantId: number,
+  contactId: string
+): Promise<{ opportunityId: string; pipelineId: string; stageId: string; name: string } | null> {
+  const opps = await findAllOpportunitiesByContact(tenantId, contactId);
+  return opps.length > 0 ? opps[0] : null;
 }
 
 // ============ PIPELINE & STAGE RESOLUTION ============
@@ -1464,19 +1473,25 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         let resolvedStageId = payload.stageId;
         let currentPipelineName: string | undefined;
 
+        // Fetch ALL opportunities for this contact upfront (needed for cross-pipeline moves)
+        let allOpps: Array<{ opportunityId: string; pipelineId: string; stageId: string; name: string }> = [];
+        if (contactId) {
+          allOpps = await findAllOpportunitiesByContact(action.tenantId, contactId);
+          console.log(`[GHLActions] Found ${allOpps.length} opportunities for contact ${contactId}`);
+        }
+
         // Auto-resolve opportunity ID from contact if not provided
         if (!resolvedOppId && contactId) {
           console.log(`[GHLActions] No opportunity ID — looking up opportunities for contact ${contactId}`);
-          const opp = await findOpportunityByContact(action.tenantId, contactId);
-          if (opp) {
+          if (allOpps.length > 0) {
+            const opp = allOpps[0]; // most recently updated
             resolvedOppId = opp.opportunityId;
-            // Use the opportunity's current pipeline if no pipeline specified
             if (!resolvedPipelineId) resolvedPipelineId = opp.pipelineId;
             console.log(`[GHLActions] Found opportunity ${resolvedOppId} in pipeline ${resolvedPipelineId}`);
           }
         }
 
-        if (!resolvedOppId) {
+        if (!resolvedOppId && allOpps.length === 0) {
           throw new Error("No opportunity found for this contact. The contact may not have a deal in any pipeline yet.");
         }
 
@@ -1535,6 +1550,23 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
 
         if (!resolvedPipelineId || !resolvedStageId) {
           throw new Error("Could not determine the target pipeline stage. Please specify the stage name more clearly.");
+        }
+
+        // CROSS-PIPELINE DUPLICATE PREVENTION:
+        // If the target pipeline is different from the current opportunity's pipeline,
+        // check if the contact already has an opportunity in the target pipeline.
+        // If so, update THAT opportunity instead of trying to move the current one
+        // (which would cause GHL's "Can not create duplicate opportunity" error).
+        const currentOpp = allOpps.find(o => o.opportunityId === resolvedOppId);
+        if (currentOpp && currentOpp.pipelineId !== resolvedPipelineId) {
+          console.log(`[GHLActions] Cross-pipeline move detected: current pipeline ${currentOpp.pipelineId} → target pipeline ${resolvedPipelineId}`);
+          const existingInTarget = allOpps.find(o => o.pipelineId === resolvedPipelineId);
+          if (existingInTarget) {
+            console.log(`[GHLActions] Contact already has opportunity ${existingInTarget.opportunityId} in target pipeline — updating that one instead to avoid duplicate`);
+            resolvedOppId = existingInTarget.opportunityId;
+          } else {
+            console.log(`[GHLActions] No existing opportunity in target pipeline — will move current opportunity across pipelines`);
+          }
         }
 
         result = await changePipelineStage(action.tenantId, resolvedOppId, resolvedPipelineId, resolvedStageId);

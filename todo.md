@@ -2910,3 +2910,4 @@
 - [x] BUG: AI Coach pipeline stage move shows wrong stage in blue badge — text says "Offer call scheduled" but badge shows "Walkthrough Apt Scheduled" (root cause: Pass 4 single-word overlap + missing call↔apt abbreviation mapping)
 - [x] BUG: Kyle Barks (Acquisition Manager) calls showing as "Qualification" instead of "Offer" — updated AI prompt to use role as strong default + fixed low-confidence fallback for AMs
 - [x] Improve AI Coach execution logs to show clear action summaries instead of repeating raw user prompt for every action
+- [x] BUG: AI Coach pipeline stage move fails with "Can not create duplicate opportunity" — need to find and update existing opportunity instead of creating a new one
