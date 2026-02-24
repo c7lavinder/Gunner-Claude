@@ -2936,3 +2936,6 @@
 ## Next Steps Bug Fixes
 - [x] Fix generateAndStoreNextSteps crashing when GHL workflow API returns 401 — Promise.all propagates error past try/catch
 - [x] Ensure Generate Next Steps button works for existing calls that were graded before auto-generation was deployed
+
+## Call Type Classification Fix
+- [x] Fix AI call type detection: cold calls with engaged sellers being misclassified as qualification — strengthen first-contact vs follow-up distinction and give more weight to lead_generator role

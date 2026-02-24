@@ -1,0 +1,20 @@
+{
+  "query": "SELECT id, contactName, teamMemberName, callType, callTypeSource, classification, classificationReason, duration FROM calls WHERE contactName LIKE '%BLUE SKY%' OR propertyAddress LIKE '%2408 Amber%' ORDER BY id DESC LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, teamMemberName, callType, callTypeSource, classification, classificationReason, duration FROM calls WHERE contactName LIKE '%BLUE SKY%' OR propertyAddress LIKE '%2408 Amber%' ORDER BY id DESC LIMIT 3;",
+  "rows": [
+    {
+      "id": "2550087",
+      "contactName": "BLUE SKY MINING COMPANY LLC",
+      "teamMemberName": "Alex Diaz",
+      "callType": "qualification",
+      "callTypeSource": "ai_suggested",
+      "classification": "conversation",
+      "classificationReason": "The representative is actively qualifying the seller, asking about their property, motivation for selling, desired price, and property details (bedrooms, bathrooms, updates, rental status). They are also discussing the possibility of making a cash offer and attempting to schedule a follow-up call, which are all sales activities.",
+      "duration": "288"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tteamMemberName\tcallType\tcallTypeSource\tclassification\tclassificationReason\tduration\n2550087\tBLUE SKY MINING COMPANY LLC\tAlex Diaz\tqualification\tai_suggested\tconversation\tThe representative is actively qualifying the seller, asking about their property, motivation for selling, desired price, and property details (bedrooms, bathrooms, updates, rental status). They are also discussing the possibility of making a cash offer and attempting to schedule a follow-up call, which are all sales activities.\t288\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}
