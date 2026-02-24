@@ -38,7 +38,7 @@ export default function Methodology() {
       </div>
 
       <Tabs defaultValue="acquisition_manager" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList>
           <TabsTrigger value="acquisition_manager" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
             Acquisition Manager

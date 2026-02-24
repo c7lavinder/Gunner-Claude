@@ -670,7 +670,7 @@ function TeamTrainingContent() {
         <Card>
           <CardContent className="pt-6">
             <Tabs value={selectedRole} onValueChange={(value) => setSelectedRole(value as any)} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList>
                 <TabsTrigger value="all"><Users className="h-4 w-4 mr-2" />All Roles</TabsTrigger>
                 <TabsTrigger value="acquisition_manager">Acquisition Manager</TabsTrigger>
                 <TabsTrigger value="lead_manager">Lead Manager</TabsTrigger>
@@ -1064,7 +1064,7 @@ export default function Training() {
 
       {/* Main Tabs - Team Training, Materials, Methodology */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-lg grid-cols-3">
+        <TabsList>
           <TabsTrigger value="team" className="flex items-center gap-2">
             <Sparkles className="h-4 w-4" />
             Team Training

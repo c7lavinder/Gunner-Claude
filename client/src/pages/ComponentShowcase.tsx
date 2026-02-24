@@ -891,7 +891,7 @@ export default function ComponentsShowcase() {
           <section className="space-y-4">
             <h3 className="text-2xl font-semibold">Tabs</h3>
             <Tabs defaultValue="account" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList>
                 <TabsTrigger value="account">Account</TabsTrigger>
                 <TabsTrigger value="password">Password</TabsTrigger>
                 <TabsTrigger value="settings">Settings</TabsTrigger>

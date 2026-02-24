@@ -1169,7 +1169,7 @@ export default function TeamTraining() {
           </CardHeader>
           <CardContent>
             <Tabs value={selectedRole} onValueChange={(value) => setSelectedRole(value as any)} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList>
                 <TabsTrigger value="all">All Roles</TabsTrigger>
                 <TabsTrigger value="acquisition_manager">Acquisition Manager</TabsTrigger>
                 <TabsTrigger value="lead_manager">Lead Manager</TabsTrigger>

@@ -209,7 +209,7 @@ export default function Leaderboard() {
       </div>
 
       <Tabs defaultValue="xp" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList>
           <TabsTrigger value="xp" className="flex items-center gap-2">
             <Zap className="h-4 w-4" /> XP & Level
           </TabsTrigger>

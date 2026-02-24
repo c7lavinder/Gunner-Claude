@@ -1526,10 +1526,36 @@
   }
 
   /* ═══════════════════════════════════════════════════════
-     TABS — Active state
+     TABS — Obsidian pill style (matches Dashboard filter pills)
      ═══════════════════════════════════════════════════════ */
+  [data-slot="tabs-list"] {
+    background: var(--obs-bg-elevated);
+    border: 1px solid var(--obs-border-subtle);
+    border-radius: 100px;
+    padding: 4px;
+    gap: 2px;
+    height: auto;
+  }
+  [data-slot="tabs-trigger"] {
+    border-radius: 100px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--obs-text-secondary);
+    border: none;
+    background: transparent;
+    transition: all 0.15s;
+    box-shadow: none;
+  }
+  [data-slot="tabs-trigger"]:hover {
+    background: var(--obs-bg-inset);
+    color: var(--obs-text-primary);
+  }
   [data-slot="tabs-trigger"][data-state="active"] {
+    background: var(--obs-accent-soft);
+    color: var(--obs-accent-text);
     font-weight: 600;
+    box-shadow: none;
   }
 
   /* ═══════════════════════════════════════════════════════

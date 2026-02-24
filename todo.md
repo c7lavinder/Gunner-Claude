@@ -2885,3 +2885,7 @@
 - [x] Improve grade letter badge on Call Detail page to match Obsidian aesthetic
 - [x] Make top navigation bar opaque (not transparent) so content doesn't scroll behind it
 - [x] Pull property address from GHL contacts like BatchDialer does
+- [x] Fix Dashboard "All" tab call history still not populating
+- [x] Standardize all tab bars across site to match the sharp pill style from Dashboard
+- [x] Update Training page tab bars to match sharp pill style
+- [x] Update Signals page tab bars to match sharp pill style

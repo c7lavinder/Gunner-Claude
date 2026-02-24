@@ -609,7 +609,7 @@ export default function CallDetail() {
           {/* Right Column - Details */}
           <div className="lg:col-span-2 space-y-6">
             <Tabs defaultValue="coaching" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList>
                 <TabsTrigger value="coaching">Coaching</TabsTrigger>
                 <TabsTrigger value="criteria">Criteria</TabsTrigger>
                 <TabsTrigger value="transcript">Transcript</TabsTrigger>

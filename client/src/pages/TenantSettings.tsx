@@ -563,7 +563,7 @@ export default function TenantSettings() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* Mobile: Horizontal scroll tabs with text labels */}
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="w-max sm:w-full sm:max-w-4xl sm:grid sm:grid-cols-7">
+          <TabsList className="flex-wrap">
             <TabsTrigger value="general" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
               <Building2 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>General</span>
