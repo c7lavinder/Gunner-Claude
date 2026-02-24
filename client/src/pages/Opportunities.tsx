@@ -39,6 +39,11 @@ import {
   DollarSign,
   TrendingDown,
   Ghost,
+  Voicemail,
+  CalendarX,
+  Search,
+  Ban,
+  MessageSquareX,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDemo } from "@/hooks/useDemo";
@@ -163,6 +168,31 @@ const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string 
     label: "Post-Walkthrough Ghosting — Seller Went Silent",
     icon: Ghost,
     shortLabel: "Post-Walkthrough Ghost",
+  },
+  short_call_actionable_intel: {
+    label: "Short Call — Actionable Intel Found",
+    icon: Voicemail,
+    shortLabel: "Short Call Intel",
+  },
+  sms_deal_lost: {
+    label: "Deal Lost via Text — No Save Attempt",
+    icon: MessageSquareX,
+    shortLabel: "SMS Deal Lost",
+  },
+  delayed_scheduled_callback: {
+    label: "Scheduled Callback — Not Made on Time",
+    icon: CalendarX,
+    shortLabel: "Missed Callback",
+  },
+  skipped_walkthrough: {
+    label: "Walkthrough Skipped — Offer Sent Blind",
+    icon: Search,
+    shortLabel: "Skipped Walkthrough",
+  },
+  deal_fell_through: {
+    label: "Deal Fell Through — Worth Revisiting",
+    icon: Ban,
+    shortLabel: "Deal Fell Through",
   },
 };
 

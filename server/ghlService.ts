@@ -833,10 +833,12 @@ async function checkAndRunWeeklyInsights(): Promise<void> {
           ];
           
           for (const item of allItems) {
+            // Enforce max 50 char title to prevent UI truncation
+            const truncatedTitle = item.title.length > 50 ? item.title.substring(0, 47) + '...' : item.title;
             await createTeamTrainingItem({
               tenantId: tenant.id,
               itemType: item.itemType,
-              title: item.title,
+              title: truncatedTitle,
               description: item.description,
               targetBehavior: (item as any).targetBehavior,
               priority: item.priority,

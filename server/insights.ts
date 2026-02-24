@@ -267,11 +267,18 @@ CRITICAL LIMITS:
 Every item MUST include a "teamRole" field set to one of: "lead_manager", "acquisition_manager", or "lead_generator".
 Every item MUST include a "teamMemberName" field (set to a specific team member name, or null for role-wide items).
 
+TITLE FORMAT RULE: All titles MUST be 6 words or fewer. Be direct and punchy. Examples:
+- GOOD: "Weak Price Anchoring" (3 words)
+- GOOD: "No Follow-Up After Offer" (5 words)
+- GOOD: "Kyle Crushed Callback Conversion" (4 words)
+- BAD: "Inconsistent Expectation Setting and Price Anchoring by Lead Managers" (too long, wordy)
+- BAD: "Team Members Are Not Consistently Following Up With Motivated Sellers" (way too long)
+
 Respond with a JSON object in this exact format:
 {
   "issues": [
     {
-      "title": "Brief title",
+      "title": "Max 6 words",
       "description": "Detailed description of the issue",
       "priority": "urgent" | "high" | "medium" | "low",
       "teamRole": "lead_manager" | "acquisition_manager" | "lead_generator",
@@ -496,10 +503,12 @@ export async function saveGeneratedInsights(insights: InsightsResult, tenantId?:
   for (const insight of allInsights) {
     const teamMemberId = insight.teamMemberName ? memberMap.get(insight.teamMemberName) : null;
 
+    // Enforce max 50 char title to prevent UI truncation
+    const truncatedTitle = insight.title.length > 50 ? insight.title.substring(0, 47) + '...' : insight.title;
     await db.insert(teamTrainingItems).values({
       tenantId: tenantId!, // CRITICAL: Set tenantId for multi-tenant isolation (NOT NULL enforced)
       itemType: insight.itemType,
-      title: insight.title,
+      title: truncatedTitle,
       description: insight.description,
       targetBehavior: insight.targetBehavior || null,
       priority: insight.priority,
