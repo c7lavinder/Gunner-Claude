@@ -2755,3 +2755,7 @@
 - [x] Click to expand showing full stats in CharacterDetailPanel (Mario Kart character detail feel)
 - [x] Streak flames and XP progress bars with arcade styling (cyan-to-purple gradient)
 - [x] Retro/gaming typography using Orbitron + Press Start 2P Google Fonts
+
+## Team Page Color & Text Tweaks
+- [x] Update color scheme to match Gunner brand (dark maroon/crimson reds)
+- [x] Replace all "CHARACTER" text with "TEAMMATE"

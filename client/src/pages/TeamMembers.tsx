@@ -26,17 +26,17 @@ const roleLabels: Record<string, string> = {
 };
 
 const roleGlowColors: Record<string, string> = {
-  admin: "from-purple-500 to-purple-700",
-  lead_manager: "from-blue-500 to-cyan-500",
-  acquisition_manager: "from-emerald-500 to-green-500",
-  lead_generator: "from-amber-500 to-orange-500",
+  admin: "from-red-900 to-red-800",
+  lead_manager: "from-red-800 to-red-700",
+  acquisition_manager: "from-red-700 to-amber-800",
+  lead_generator: "from-amber-700 to-amber-600",
 };
 
 const roleBadgeColors: Record<string, string> = {
-  admin: "bg-purple-500/80 text-white border-purple-400/50",
-  lead_manager: "bg-blue-500/80 text-white border-blue-400/50",
-  acquisition_manager: "bg-emerald-500/80 text-white border-emerald-400/50",
-  lead_generator: "bg-amber-500/80 text-white border-amber-400/50",
+  admin: "bg-red-900/80 text-white border-red-700/50",
+  lead_manager: "bg-red-800/80 text-white border-red-600/50",
+  acquisition_manager: "bg-red-700/80 text-white border-red-500/50",
+  lead_generator: "bg-amber-700/80 text-white border-amber-500/50",
 };
 
 // ─── RANK GLOW COLORS ───────────────────────────────────
@@ -50,9 +50,9 @@ function getRankGlow(rank: number) {
 // ─── LEVEL TIER STYLING ─────────────────────────────────
 function getLevelStyle(level: number) {
   if (level >= 5) return { color: "text-yellow-400", glow: "drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]", label: "LEGENDARY" };
-  if (level >= 4) return { color: "text-purple-400", glow: "drop-shadow-[0_0_6px_rgba(168,85,247,0.5)]", label: "EPIC" };
-  if (level >= 3) return { color: "text-blue-400", glow: "drop-shadow-[0_0_5px_rgba(96,165,250,0.5)]", label: "RARE" };
-  if (level >= 2) return { color: "text-emerald-400", glow: "drop-shadow-[0_0_4px_rgba(52,211,153,0.4)]", label: "UNCOMMON" };
+  if (level >= 4) return { color: "text-red-400", glow: "drop-shadow-[0_0_6px_rgba(220,38,38,0.5)]", label: "EPIC" };
+  if (level >= 3) return { color: "text-red-500", glow: "drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]", label: "RARE" };
+  if (level >= 2) return { color: "text-amber-400", glow: "drop-shadow-[0_0_4px_rgba(251,191,36,0.4)]", label: "UNCOMMON" };
   return { color: "text-slate-400", glow: "", label: "COMMON" };
 }
 
@@ -139,7 +139,7 @@ function ProfilePictureUpload({ currentPicture, onUpload }: { currentPicture?: s
   );
 }
 
-// ─── CHARACTER CARD (THE MAIN EVENT) ────────────────────
+// ─── TEAMMATE CARD (THE MAIN EVENT) ────────────────────
 function CharacterCard({ 
   member, gamificationData, scoreData, rank, isCurrentUser, onUploadPicture, isSelected, onSelect
 }: { 
@@ -188,7 +188,7 @@ function CharacterCard({
           : `border-slate-700/60 hover:border-slate-600`
       }`}>
         
-        {/* Top gradient header - character portrait area */}
+        {/* Top gradient header - teammate portrait area */}
         <div className={`relative bg-gradient-to-br ${roleGlow} p-0.5`}>
           <div className="bg-slate-900/90 backdrop-blur-sm">
             <div className="p-3 sm:p-4">
@@ -283,7 +283,7 @@ function CharacterCard({
                 </div>
                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
                   <div 
-                    className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 transition-all duration-1000 relative"
+                    className="h-full bg-gradient-to-r from-red-700 via-red-600 to-amber-500 transition-all duration-1000 relative"
                     style={{ width: `${Math.min((xp % 500) / 5, 100)}%` }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/30" />
@@ -296,10 +296,10 @@ function CharacterCard({
         
         {/* Stats section - dark panel */}
         <div className="bg-slate-900 p-3 sm:p-4 space-y-1.5">
-          <StatBar label="CALLS" value={totalCalls} max={maxCalls} color="bg-gradient-to-r from-cyan-500 to-cyan-400" />
-          <StatBar label="SCORE" value={avgScore ? Math.round(avgScore) : 0} max={maxScore} color="bg-gradient-to-r from-emerald-500 to-emerald-400" />
-          <StatBar label="A & B" value={abCount} max={maxAB} color="bg-gradient-to-r from-green-500 to-lime-400" />
-          <StatBar label="BADGE" value={badges.length} max={maxBadges} color="bg-gradient-to-r from-purple-500 to-pink-400" />
+          <StatBar label="CALLS" value={totalCalls} max={maxCalls} color="bg-gradient-to-r from-red-700 to-red-500" />
+          <StatBar label="SCORE" value={avgScore ? Math.round(avgScore) : 0} max={maxScore} color="bg-gradient-to-r from-amber-600 to-amber-400" />
+          <StatBar label="A & B" value={abCount} max={maxAB} color="bg-gradient-to-r from-red-600 to-amber-500" />
+          <StatBar label="BADGE" value={badges.length} max={maxBadges} color="bg-gradient-to-r from-red-800 to-red-600" />
           
           {/* Grade distribution mini bar */}
           {totalCalls > 0 && (
@@ -337,7 +337,7 @@ function CharacterCard({
   );
 }
 
-// ─── SELECTED CHARACTER DETAIL PANEL ────────────────────
+// ─── SELECTED TEAMMATE DETAIL PANEL ────────────────────
 function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
   member: any; gamificationData?: any; scoreData?: any; rank: number;
 }) {
@@ -381,7 +381,7 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
               )}
             </div>
             
-            {/* Character info */}
+            {/* Teammate info */}
             <div className="flex-1 min-w-0">
               <h2 className="text-xl sm:text-3xl font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                 {member.name}
@@ -416,10 +416,10 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
       {/* Stats grid */}
       <div className="p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "CALLS", value: totalCalls, color: "from-cyan-500 to-cyan-600", textColor: "text-cyan-400" },
-          { label: "AVG SCORE", value: avgScore ? `${Math.round(avgScore)}%` : "N/A", color: "from-emerald-500 to-emerald-600", textColor: "text-emerald-400" },
-          { label: "A & B GRADES", value: gradeDistribution.A + gradeDistribution.B, color: "from-green-500 to-lime-500", textColor: "text-green-400" },
-          { label: "BADGES", value: badges.length, color: "from-purple-500 to-pink-500", textColor: "text-purple-400" },
+          { label: "CALLS", value: totalCalls, color: "from-red-700 to-red-600", textColor: "text-red-400" },
+          { label: "AVG SCORE", value: avgScore ? `${Math.round(avgScore)}%` : "N/A", color: "from-amber-600 to-amber-500", textColor: "text-amber-400" },
+          { label: "A & B GRADES", value: gradeDistribution.A + gradeDistribution.B, color: "from-red-600 to-amber-500", textColor: "text-red-300" },
+          { label: "BADGES", value: badges.length, color: "from-red-800 to-red-600", textColor: "text-red-400" },
         ].map(stat => (
           <div key={stat.label} className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/50 text-center">
             <div className={`text-2xl sm:text-3xl font-black ${stat.textColor}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
@@ -436,7 +436,7 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
       {badges.length > 0 && (
         <div className="px-4 sm:px-6 pb-4 sm:pb-6">
           <div className="flex items-center gap-2 mb-2">
-            <Award className="h-4 w-4 text-purple-400" />
+            <Award className="h-4 w-4 text-red-400" />
             <span className="text-xs text-slate-400 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Achievements</span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -504,7 +504,7 @@ function ProfileBadgeCard({ badge }: { badge: BadgeData }) {
                   <span>{badge.currentProgress} / {nextTarget}</span>
                 </div>
                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
-                  <div className="h-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-all" style={{ width: `${progressPercent}%` }} />
+                  <div className="h-full bg-gradient-to-r from-red-700 to-amber-500 transition-all" style={{ width: `${progressPercent}%` }} />
                 </div>
               </div>
             )}
@@ -536,7 +536,7 @@ function MyProfileContent() {
     <div className="space-y-6">
       {/* XP & Level */}
       <div className="rounded-xl overflow-hidden border-2 border-slate-700/60 bg-slate-900">
-        <div className="bg-gradient-to-r from-cyan-500 to-purple-500 p-0.5">
+        <div className="bg-gradient-to-r from-red-800 to-red-600 p-0.5">
           <div className="bg-slate-900/95 p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="h-5 w-5 text-yellow-400" />
@@ -551,10 +551,10 @@ function MyProfileContent() {
                     <p className="text-4xl font-black text-white" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                       Level {gamification?.xp.level ?? 1}
                     </p>
-                    <p className="text-lg text-cyan-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>{gamification?.xp.title ?? "Rookie"}</p>
+                    <p className="text-lg text-amber-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>{gamification?.xp.title ?? "Rookie"}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-black text-purple-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                    <p className="text-2xl font-black text-red-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                       {gamification?.xp.totalXp?.toLocaleString() ?? 0} XP
                     </p>
                     <p className="text-sm text-slate-500 font-mono">
@@ -563,8 +563,8 @@ function MyProfileContent() {
                   </div>
                 </div>
                 <div>
-                  <div className="h-4 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
-                    <div className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 transition-all duration-500 relative" style={{ width: `${gamification?.xp.progress ?? 0}%` }}>
+                    <div className="h-4 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                    <div className="h-full bg-gradient-to-r from-red-700 via-red-600 to-amber-500 transition-all duration-500 relative" style={{ width: `${gamification?.xp.progress ?? 0}%` }}>
                       <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20" />
                     </div>
                   </div>
@@ -639,7 +639,7 @@ function MyProfileContent() {
       <div className="space-y-6">
         <div>
           <h2 className="text-sm font-bold mb-4 flex items-center gap-2 text-slate-300 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-            <Award className="h-5 w-5 text-purple-400" />
+            <Award className="h-5 w-5 text-red-400" />
             Earned ({earnedBadges.length})
           </h2>
           {badgesLoading ? (
@@ -747,13 +747,13 @@ function TeamMembersContent() {
       {(!teamMembers || teamMembers.length === 0) && !isLoading && (
         <div className="flex justify-end">
           <Button onClick={() => { if (!guardDemoAction("Team management")) seedMutation.mutate(); }} disabled={seedMutation.isPending || isDemo}
-            className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white border-0 hover:from-cyan-600 hover:to-purple-600">
+            className="bg-gradient-to-r from-red-800 to-red-600 text-white border-0 hover:from-red-900 hover:to-red-700">
             <UserPlus className="h-4 w-4 mr-2" /> Initialize Team
           </Button>
         </div>
       )}
 
-      {/* Selected character detail panel */}
+      {/* Selected teammate detail panel */}
       {selectedMember && (
         <CharacterDetailPanel
           member={selectedMember}
@@ -763,7 +763,7 @@ function TeamMembersContent() {
         />
       )}
 
-      {/* Character grid */}
+      {/* Teammate grid */}
       {isLoading ? (
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map(i => (
@@ -799,11 +799,11 @@ function TeamMembersContent() {
       ) : (
         <div className="rounded-xl border-2 border-slate-700/60 bg-slate-900 flex flex-col items-center justify-center py-16">
           <Users className="h-16 w-16 text-slate-600 mb-4" />
-          <h3 className="text-lg font-bold text-slate-300" style={{ fontFamily: "'Orbitron', sans-serif" }}>No Players Found</h3>
+          <h3 className="text-lg font-bold text-slate-300" style={{ fontFamily: "'Orbitron', sans-serif" }}>No Teammates Found</h3>
           <p className="text-slate-500 text-center max-w-md mb-4 text-sm">
             Add your first team members to start tracking call performance and coaching.
           </p>
-          <Button onClick={() => window.location.href = "/settings"} className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white border-0">
+          <Button onClick={() => window.location.href = "/settings"} className="bg-gradient-to-r from-red-800 to-red-600 text-white border-0">
             <UserPlus className="h-4 w-4 mr-2" /> Go to Settings
           </Button>
         </div>
@@ -813,14 +813,14 @@ function TeamMembersContent() {
       <div className="rounded-xl border-2 border-slate-700/60 bg-slate-900 overflow-hidden">
         <div className="p-4 border-b border-slate-800">
           <h3 className="text-xs text-slate-400 uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-            <Swords className="h-4 w-4" /> Character Classes
+            <Swords className="h-4 w-4" /> Teammate Classes
           </h3>
         </div>
         <div className="p-4 grid gap-3 sm:grid-cols-3">
           {[
-            { role: "lead_manager", label: "Lead Manager", desc: "Qualifies leads, extracts motivation, discusses price, and sets appointments for walkthroughs.", glow: "from-blue-500 to-cyan-500" },
-            { role: "acquisition_manager", label: "Acquisition Manager", desc: "Handles offer calls and closings. Graded on motivation restatement, offer setup, and price delivery.", glow: "from-emerald-500 to-green-500" },
-            { role: "lead_generator", label: "Lead Generator", desc: "Makes cold calls to generate interest. Sets up warm handoffs to Lead Managers.", glow: "from-amber-500 to-orange-500" },
+            { role: "lead_manager", label: "Lead Manager", desc: "Qualifies leads, extracts motivation, discusses price, and sets appointments for walkthroughs.", glow: "from-red-800 to-red-700" },
+            { role: "acquisition_manager", label: "Acquisition Manager", desc: "Handles offer calls and closings. Graded on motivation restatement, offer setup, and price delivery.", glow: "from-red-700 to-amber-800" },
+            { role: "lead_generator", label: "Lead Generator", desc: "Makes cold calls to generate interest. Sets up warm handoffs to Lead Managers.", glow: "from-amber-700 to-amber-600" },
           ].map(r => (
             <div key={r.role} className="relative rounded-lg overflow-hidden">
               <div className={`bg-gradient-to-r ${r.glow} p-px`}>
@@ -846,23 +846,23 @@ export default function TeamMembers() {
       {/* Page header - arcade style */}
       <div className="relative">
         <h1 className="text-2xl sm:text-3xl font-black tracking-wider text-foreground flex items-center gap-3" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-red-800 to-red-600 flex items-center justify-center">
             <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
           </div>
           TEAM ROSTER
         </h1>
         <p className="text-xs text-muted-foreground mt-1 ml-11 sm:ml-13 hidden sm:block font-mono uppercase tracking-wider">
-          Select a character to view stats
+          Select a teammate to view stats
         </p>
       </div>
 
       <Tabs defaultValue="team" className="w-full">
-        <TabsList className="bg-slate-900 border border-slate-700/60">
-          <TabsTrigger value="team" className="flex items-center gap-2 data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+        <TabsList className="bg-slate-900 border border-red-900/40">
+          <TabsTrigger value="team" className="flex items-center gap-2 data-[state=active]:bg-red-900/40 data-[state=active]:text-white">
             <Users className="h-4 w-4" />
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11px" }}>ROSTER</span>
           </TabsTrigger>
-          <TabsTrigger value="profile" className="flex items-center gap-2 data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+          <TabsTrigger value="profile" className="flex items-center gap-2 data-[state=active]:bg-red-900/40 data-[state=active]:text-white">
             <User className="h-4 w-4" />
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11px" }}>MY PROFILE</span>
           </TabsTrigger>
