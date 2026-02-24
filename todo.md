@@ -2898,3 +2898,12 @@
 - [x] Make unselected tabs appear fainted/muted across all tab bars to match Team page style
 - [x] Fix all custom tab CSS classes (obs-role-tab, training tabs, call-filter-pill, etc.) so unselected tabs are fainted/muted like Team page
 - [x] Fix Daniel Lozano login issue - being forced to create new account instead of logging into existing one (root cause: case-sensitive email lookup in Google auth + openId mismatch)
+- [x] Signal detection: "Missed" - detect when seller mentions they sold house elsewhere or deal fell through with us (e.g., Carl Horton SMS saying he sold)
+- [x] Signal detection: "At Risk" - detect when caller missed scheduled callback/offer call time (e.g., Kyle didn't call Robert Marlow at scheduled time)
+- [x] Signal detection: "Worth a Look" - detect when team skips walkthrough too easily and jumps to offer call (e.g., 8348 Oak Dr - in-person conversion is better)
+- [x] Signal detection: "Worth a Look" - detect when seller mentions previous buyer/deal fell through (e.g., Cindy Page said last buyer sale didn't go through)
+- [x] BUG: No signals being generated at all - investigated: pipeline IS running but dedup blocks re-flagging same contacts within 30 days. Added 4 new detection rules to catch the missing scenarios.
+- [x] Signal detection: "Missed" - detect when seller mentions they sold house elsewhere or deal fell through with us
+- [x] Signal detection: "At Risk" - detect when caller missed scheduled callback/offer call time
+- [x] Signal detection: "Worth a Look" - detect when team skips walkthrough too easily and jumps to offer call
+- [x] Signal detection: "Worth a Look" - detect when seller mentions previous buyer/deal fell through

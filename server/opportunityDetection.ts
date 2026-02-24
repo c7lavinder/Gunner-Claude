@@ -2420,6 +2420,26 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
     context: "A short call, voicemail, or callback request was auto-skipped from grading, but the transcript contains actionable intelligence: contact info for an alternate person (email, phone), a referral to a decision-maker (spouse, partner, attorney), a callback/scheduling request, or clear interest signals. This call needs manual review to capture the lead.",
     tier: "possible"
   },
+  sms_deal_lost: {
+    label: "Seller Communicated Deal Lost via SMS",
+    context: "The seller sent an SMS/text message indicating they sold the property, went with another buyer, or are no longer interested. This deal was lost and needs review to understand what went wrong and prevent similar losses.",
+    tier: "missed"
+  },
+  delayed_scheduled_callback: {
+    label: "Scheduled Callback Was Delayed",
+    context: "A callback was scheduled during a previous call, but the follow-up call was made late. The agent acknowledged the delay in the transcript (apologized for being late, mentioned running behind, etc.). This may have damaged rapport with the seller.",
+    tier: "warning"
+  },
+  skipped_walkthrough: {
+    label: "Skipped Walkthrough \u2014 Went Straight to Offer",
+    context: "This contact progressed from qualification/appointment directly to the offer stage without evidence of an in-person walkthrough. In-person walkthroughs significantly improve conversion rates. The seller may have declined the walkthrough or the team skipped it.",
+    tier: "possible"
+  },
+  deal_fell_through: {
+    label: "Previous Deal Fell Through \u2014 Re-engagement Opportunity",
+    context: "The seller mentioned that a previous buyer's deal, contract, or financing fell through. The property is back on the market and the seller may be more motivated to close quickly. This is a re-engagement opportunity.",
+    tier: "possible"
+  },
 };
 
 async function generateAIReason(detection: DetectedOpportunity, db: any, tenantId: number): Promise<{ reason: string; suggestion: string; missedItems?: string[] }> {
@@ -2859,6 +2879,481 @@ async function detectShortCallActionableIntel(
   return results;
 }
 
+// Rule 18: SMS Deal Lost — Seller communicated via SMS that they sold, went with another buyer, etc.
+// Scans GHL conversations for inbound messages indicating the deal is lost.
+async function detectSMSDealLost(
+  conversation: GHLConversation,
+  opp: GHLPipelineOpportunity | null,
+  stageName: string | null,
+  creds: GHLCredentials,
+  db: any,
+  tenantId: number,
+  ghlMap: GhlUserIdMap
+): Promise<DetectedOpportunity | null> {
+  // Only check conversations with recent inbound messages (last 7 days)
+  const lastMsgTime = new Date(conversation.lastMessageDate);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  if (lastMsgTime < sevenDaysAgo) return null;
+  if (conversation.lastMessageDirection !== "inbound") return null;
+
+  // Skip contacts already in terminal stages
+  if (stageName) {
+    const lower = stageName.toLowerCase();
+    if (lower.includes("purchased") || lower.includes("closed won")) return null;
+  }
+
+  // Fetch recent messages to scan for deal-lost keywords
+  let messages: GHLMessageDetail[] = [];
+  try {
+    messages = await fetchConversationMessages(creds, conversation.id, 20);
+  } catch {
+    return null;
+  }
+
+  const DEAL_LOST_PATTERNS = [
+    /(?:already|just|recently)\s+(?:sold|accepted|signed|closed|went\s+with)/i,
+    /(?:sold|selling)\s+(?:the|my|our|this)\s+(?:house|property|home|place)/i,
+    /(?:went|going)\s+with\s+(?:another|a\s+different|someone\s+else|other)/i,
+    /(?:found|have|got)\s+(?:a|another)\s+(?:buyer|offer|deal)/i,
+    /(?:no\s+longer|not\s+(?:interested|selling|looking)|changed\s+(?:my|our)\s+mind)/i,
+    /(?:took|accepted|signed)\s+(?:an|another|their|the)\s+(?:offer|deal|contract)/i,
+    /(?:under\s+contract|in\s+escrow)\s+(?:with|already|now)/i,
+    /(?:listed|listing)\s+(?:with|through)\s+(?:a|an|my|another)\s+(?:agent|realtor|broker)/i,
+    /(?:deal|sale)\s+(?:is|already)\s+(?:done|closed|finalized|complete)/i,
+    /(?:house|property|home)\s+(?:is|already)\s+(?:sold|under\s+contract|pending)/i,
+  ];
+
+  // Check recent inbound messages for deal-lost signals
+  const recentInbound = messages.filter(m => {
+    if (m.direction !== "inbound" || !m.body) return false;
+    const msgDate = new Date(m.dateAdded);
+    return msgDate >= sevenDaysAgo;
+  });
+
+  let matchedBody = "";
+  for (const msg of recentInbound) {
+    if (!msg.body) continue;
+    const matched = DEAL_LOST_PATTERNS.some(p => p.test(msg.body!));
+    if (matched) {
+      matchedBody = msg.body;
+      break;
+    }
+  }
+
+  if (!matchedBody) return null;
+
+  // Get the latest call for team member info
+  const latestCall = await db
+    .select({ teamMemberId: calls.teamMemberId, teamMemberName: calls.teamMemberName, propertyAddress: calls.propertyAddress, id: calls.id })
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, conversation.contactId)
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(1);
+
+  return {
+    tier: "missed",
+    triggerRules: ["sms_deal_lost"],
+    priorityScore: 90,
+    contactName: conversation.fullName || conversation.contactName || null,
+    contactPhone: conversation.phone || null,
+    propertyAddress: latestCall.length > 0 ? latestCall[0].propertyAddress : null,
+    ghlContactId: conversation.contactId,
+    ghlOpportunityId: opp?.id || null,
+    ghlPipelineStageId: opp?.pipelineStageId || null,
+    ghlPipelineStageName: stageName,
+    relatedCallId: latestCall.length > 0 ? latestCall[0].id : null,
+    teamMemberId: latestCall.length > 0 ? latestCall[0].teamMemberId : null,
+    teamMemberName: latestCall.length > 0 ? latestCall[0].teamMemberName : null,
+    assignedTo: opp?.assignedTo || null,
+    detectionSource: "conversation",
+    lastActivityAt: lastMsgTime,
+    lastStageChangeAt: null,
+    transcriptExcerpt: `[SMS from seller]: ${matchedBody.substring(0, 500)}`,
+    ...NO_PRICE_DATA,
+  };
+}
+
+// Rule 19: Delayed Scheduled Callback — Agent acknowledged being late to a scheduled call
+// Detects when a callback was scheduled but the follow-up call happened late (agent apologizes for delay)
+async function detectDelayedScheduledCallback(
+  db: any,
+  tenantId: number,
+  creds: GHLCredentials | null
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Find calls where outcome was callback_scheduled
+  const callbackCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, "completed"),
+        eq(calls.callOutcome, "callback_scheduled"),
+        gte(calls.callTimestamp, sevenDaysAgo)
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(30);
+
+  for (const call of callbackCalls) {
+    if (!call.ghlContactId) continue;
+
+    // Find the next call to this contact after the callback was scheduled
+    const followUpCalls = await db
+      .select()
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.ghlContactId, call.ghlContactId),
+          gte(calls.callTimestamp, call.callTimestamp),
+          eq(calls.classification, "conversation")
+        )
+      )
+      .orderBy(calls.callTimestamp)
+      .limit(3);
+
+    // Skip the original call itself
+    const nextCalls = followUpCalls.filter((c: any) => c.id !== call.id);
+    if (nextCalls.length === 0) continue; // No follow-up call yet — Rule 12 handles this
+
+    const nextCall = nextCalls[0];
+
+    // Check if the follow-up call transcript contains apology/delay language
+    if (!nextCall.transcript) continue;
+
+    const DELAY_PATTERNS = [
+      /(?:sorry|apologize|apologies)\s+(?:for|about)\s+(?:the|being|my|this)?\s*(?:delay|late|wait|hold|getting\s+(?:back|to\s+you))/i,
+      /(?:sorry|apologize)\s+(?:it|i)\s+(?:took|been)\s+(?:so\s+long|a\s+while|this\s+long)/i,
+      /(?:just\s+now|finally)\s+(?:getting\s+(?:to|around\s+to)|able\s+to\s+(?:call|reach))/i,
+      /(?:meant|supposed|should\s+have)\s+(?:to\s+)?(?:call|reach|get\s+(?:back|to))\s+(?:you\s+)?(?:earlier|sooner|yesterday|before)/i,
+      /(?:running|ran)\s+(?:behind|late)/i,
+      /(?:back[\s-]to[\s-]back|slammed|swamped|crazy\s+(?:day|week|busy))/i,
+    ];
+
+    const hasDelayLanguage = DELAY_PATTERNS.some(p => p.test(nextCall.transcript));
+    if (!hasDelayLanguage) continue;
+
+    // Calculate the delay between scheduled callback and actual follow-up
+    const scheduledTime = new Date(call.callTimestamp).getTime();
+    const actualTime = new Date(nextCall.callTimestamp).getTime();
+    const delayHours = Math.round((actualTime - scheduledTime) / (1000 * 60 * 60));
+
+    // Check if the follow-up resulted in a negative outcome (makes it more concerning)
+    const negativeOutcomes = ["not_interested", "dead", "no_answer"];
+    const isNegativeOutcome = nextCall.callOutcome && negativeOutcomes.includes(nextCall.callOutcome);
+
+    const excerpt = `[Callback scheduled on ${new Date(call.callTimestamp).toLocaleDateString()} by ${call.teamMemberName || "team"}. Follow-up call ${delayHours}h later by ${nextCall.teamMemberName || "team"} — agent acknowledged delay. Outcome: ${nextCall.callOutcome || "unknown"}] ${nextCall.transcript.substring(0, 400)}`;
+
+    results.push({
+      tier: "warning",
+      triggerRules: ["delayed_scheduled_callback"],
+      priorityScore: isNegativeOutcome ? 80 : 65,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress || nextCall.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: nextCall.id,
+      teamMemberId: nextCall.teamMemberId,
+      teamMemberName: nextCall.teamMemberName,
+      assignedTo: null,
+      detectionSource: "transcript",
+      lastActivityAt: nextCall.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: excerpt,
+      ...(await extractPricesFromTranscriptLLM(nextCall.transcript)),
+    });
+  }
+
+  return results;
+}
+
+// Rule 20: Skipped Walkthrough — Pipeline jumped from qualification/appointment to offer without walkthrough
+// Detects when a contact's pipeline stage progression skips the walkthrough stage
+async function detectSkippedWalkthrough(
+  opp: GHLPipelineOpportunity,
+  stageName: string,
+  salesPipelineStages: PipelineStage[],
+  db: any,
+  tenantId: number,
+  ghlMap: GhlUserIdMap,
+  creds: GHLCredentials | null
+): Promise<DetectedOpportunity | null> {
+  // Only flag if currently in an offer stage
+  if (!isOfferOrBeyond(stageName)) return null;
+
+  // Check if there's a walkthrough stage in this pipeline
+  const walkthroughStage = salesPipelineStages.find(s => isWalkthroughStage(s.name));
+  if (!walkthroughStage) return null; // No walkthrough stage in pipeline — can't skip what doesn't exist
+
+  // Check if the contact has any calls where walkthrough was discussed or completed
+  const walkthroughCalls = await db
+    .select({ id: calls.id, transcript: calls.transcript, callTimestamp: calls.callTimestamp })
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.ghlContactId, opp.contactId),
+        eq(calls.classification, "conversation"),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(10);
+
+  // Check transcripts for evidence of an in-person walkthrough
+  const WALKTHROUGH_EVIDENCE = [
+    /(?:walked|walk)\s+(?:through|thru)\s+(?:the|your|this|that)\s+(?:house|property|home|place)/i,
+    /(?:walkthrough|walk-through)\s+(?:was|went|looked|is)\s+(?:good|great|fine|done|complete)/i,
+    /(?:saw|seen|looked at|checked out|inspected)\s+(?:the|your|this|that)\s+(?:house|property|home|place)/i,
+    /(?:came|went|drove|stopped)\s+(?:out|by|over)\s+(?:to|and)\s+(?:see|look|check|inspect|walk)/i,
+    /(?:met|meeting)\s+(?:at|with)\s+(?:the|your)\s+(?:house|property|home|place)/i,
+  ];
+
+  // Check for walkthrough REFUSAL patterns — seller said no to walkthrough
+  const WALKTHROUGH_SKIP_PATTERNS = [
+    /(?:don't|do\s+not|doesn't|can't|cannot)\s+(?:need|want|have\s+to|require)\s+(?:a\s+)?(?:walkthrough|walk-through|walk\s+through|to\s+(?:come|see|look|walk))/i,
+    /(?:no\s+(?:need|reason)\s+(?:for|to)\s+(?:a\s+)?(?:walkthrough|walk-through|come\s+(?:out|by|look)))/i,
+    /(?:just|can\s+you\s+just|why\s+don't\s+you\s+just)\s+(?:send|give|make)\s+(?:me|us)\s+(?:an\s+)?(?:offer|number|price)/i,
+    /(?:skip|bypass|don't\s+(?:need|bother\s+with))\s+(?:the\s+)?(?:walkthrough|walk-through|inspection|visit)/i,
+    /(?:sight\s+unseen|without\s+(?:seeing|looking|visiting|walking))/i,
+  ];
+
+  let hasWalkthroughEvidence = false;
+  let hasSkipPattern = false;
+  let skipExcerpt = "";
+
+  for (const call of walkthroughCalls) {
+    if (!call.transcript) continue;
+    if (WALKTHROUGH_EVIDENCE.some(p => p.test(call.transcript))) {
+      hasWalkthroughEvidence = true;
+      break;
+    }
+    if (WALKTHROUGH_SKIP_PATTERNS.some(p => p.test(call.transcript))) {
+      hasSkipPattern = true;
+      skipExcerpt = call.transcript.substring(0, 500);
+    }
+  }
+
+  // If walkthrough happened, no issue
+  if (hasWalkthroughEvidence) return null;
+
+  // If no skip pattern found either, check if there are any calls at all
+  // If there are calls but no walkthrough evidence and we're at offer stage, flag it
+  if (!hasSkipPattern && walkthroughCalls.length === 0) return null;
+
+  // Also check GHL appointments for walkthrough-type appointments
+  if (creds) {
+    try {
+      const appointments = await fetchContactAppointments(creds, opp.contactId);
+      const walkthroughApt = appointments.find((a: any) => {
+        const title = (a.title || a.name || "").toLowerCase();
+        return title.includes("walkthrough") || title.includes("walk-through") || title.includes("showing") || title.includes("inspection");
+      });
+      if (walkthroughApt) return null; // Walkthrough appointment exists
+    } catch {
+      // Non-critical
+    }
+  }
+
+  const latestCall = walkthroughCalls.length > 0 ? walkthroughCalls[0] : null;
+
+  return {
+    tier: "possible",
+    triggerRules: ["skipped_walkthrough"],
+    priorityScore: 60,
+    contactName: opp.name || opp.contact?.name || null,
+    contactPhone: opp.contact?.phone || null,
+    propertyAddress: null,
+    ghlContactId: opp.contactId,
+    ghlOpportunityId: opp.id,
+    ghlPipelineStageId: opp.pipelineStageId,
+    ghlPipelineStageName: stageName,
+    relatedCallId: latestCall?.id || null,
+    ...resolveGhlAssignee(opp.assignedTo, ghlMap),
+    assignedTo: opp.assignedTo || null,
+    detectionSource: "hybrid",
+    lastActivityAt: latestCall ? new Date(latestCall.callTimestamp) : null,
+    lastStageChangeAt: opp.lastStageChangeAt ? new Date(opp.lastStageChangeAt) : null,
+    transcriptExcerpt: hasSkipPattern
+      ? `[Seller appears to have declined walkthrough — went straight to offer] ${skipExcerpt}`
+      : `[No walkthrough evidence found in ${walkthroughCalls.length} calls — contact is now at offer stage]`,
+    ...NO_PRICE_DATA,
+  };
+}
+
+// Rule 21: Deal Fell Through — Seller mentions previous buyer/deal fell through, sale didn't close
+// This is a re-engagement opportunity: the seller was under contract but it fell apart
+async function detectDealFellThrough(
+  db: any,
+  tenantId: number,
+  creds: GHLCredentials | null,
+  contactOppMap: Map<string, { opp: GHLPipelineOpportunity; stageName: string }>
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  // Scan recent completed conversations for deal-fell-through language
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        eq(calls.status, "completed"),
+        eq(calls.classification, "conversation"),
+        gte(calls.callTimestamp, fourteenDaysAgo),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(50);
+
+  const DEAL_FELL_THROUGH_PATTERNS = [
+    /(?:deal|sale|contract|closing|buyer|offer)\s+(?:fell|fall|falling)\s+(?:through|apart)/i,
+    /(?:buyer|deal|contract|sale)\s+(?:backed|back)\s+(?:out|off|away)/i,
+    /(?:buyer|deal|contract)\s+(?:didn't|did\s+not|didn't)\s+(?:go\s+through|close|work\s+out|happen|pan\s+out)/i,
+    /(?:previous|last|other|first)\s+(?:buyer|deal|offer|contract)\s+(?:fell|didn't|did\s+not|backed|failed)/i,
+    /(?:back\s+(?:on|to)\s+(?:the\s+)?market|relisted|re-listed)/i,
+    /(?:contract|deal|sale)\s+(?:was|got)\s+(?:cancelled|canceled|terminated|voided)/i,
+    /(?:financing|loan|mortgage)\s+(?:fell\s+through|didn't\s+(?:go|work)|was\s+denied|got\s+denied)/i,
+    /(?:inspection|appraisal)\s+(?:killed|failed|didn't\s+(?:pass|go)|fell\s+through)/i,
+    /(?:they|buyer)\s+(?:couldn't|could\s+not|can't)\s+(?:get\s+(?:financing|approved|the\s+loan)|close|perform)/i,
+    /(?:still|again|back\s+to)\s+(?:looking|trying|wanting)\s+to\s+sell/i,
+  ];
+
+  // Also scan GHL conversations for SMS mentions
+  const smsContactsToCheck: string[] = [];
+
+  for (const call of recentCalls) {
+    if (!call.transcript || !call.ghlContactId) continue;
+
+    const hasDealFellThrough = DEAL_FELL_THROUGH_PATTERNS.some(p => p.test(call.transcript));
+    if (!hasDealFellThrough) continue;
+
+    // Check if contact is in a terminal stage (already closed) — skip if so
+    const oppInfo = contactOppMap.get(call.ghlContactId);
+    if (oppInfo) {
+      const lower = oppInfo.stageName.toLowerCase();
+      if (lower.includes("purchased") || lower.includes("closed won") || lower.includes("under contract")) continue;
+    }
+
+    results.push({
+      tier: "possible",
+      triggerRules: ["deal_fell_through"],
+      priorityScore: 70,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: oppInfo?.opp?.id || null,
+      ghlPipelineStageId: oppInfo?.opp?.pipelineStageId || null,
+      ghlPipelineStageName: oppInfo?.stageName || null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: oppInfo?.opp?.assignedTo || null,
+      detectionSource: "transcript",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: `[Seller mentioned previous deal fell through] ${call.transcript.substring(0, 500)}`,
+      ...(await extractPricesFromTranscriptLLM(call.transcript)),
+    });
+  }
+
+  // Also scan GHL SMS conversations for deal-fell-through signals
+  if (creds) {
+    try {
+      const conversations = await fetchRecentConversations(creds, 50);
+      for (const conv of conversations) {
+        if (conv.lastMessageDirection !== "inbound") continue;
+        const lastMsgTime = new Date(conv.lastMessageDate);
+        if (lastMsgTime < fourteenDaysAgo) continue;
+
+        // Check if already detected via call transcript
+        if (results.some(r => r.ghlContactId === conv.contactId)) continue;
+
+        // Fetch messages
+        let messages: GHLMessageDetail[] = [];
+        try {
+          messages = await fetchConversationMessages(creds, conv.id, 15);
+        } catch { continue; }
+
+        const recentInbound = messages.filter(m => {
+          if (m.direction !== "inbound" || !m.body) return false;
+          return new Date(m.dateAdded) >= fourteenDaysAgo;
+        });
+
+        let matchedBody = "";
+        for (const msg of recentInbound) {
+          if (!msg.body) continue;
+          if (DEAL_FELL_THROUGH_PATTERNS.some(p => p.test(msg.body!))) {
+            matchedBody = msg.body;
+            break;
+          }
+        }
+
+        if (!matchedBody) continue;
+
+        const oppInfo = contactOppMap.get(conv.contactId);
+        if (oppInfo) {
+          const lower = oppInfo.stageName.toLowerCase();
+          if (lower.includes("purchased") || lower.includes("closed won")) continue;
+        }
+
+        const latestCall = await db
+          .select({ teamMemberId: calls.teamMemberId, teamMemberName: calls.teamMemberName, propertyAddress: calls.propertyAddress, id: calls.id })
+          .from(calls)
+          .where(
+            and(
+              eq(calls.tenantId, tenantId),
+              eq(calls.ghlContactId, conv.contactId)
+            )
+          )
+          .orderBy(desc(calls.callTimestamp))
+          .limit(1);
+
+        results.push({
+          tier: "possible",
+          triggerRules: ["deal_fell_through"],
+          priorityScore: 70,
+          contactName: conv.fullName || conv.contactName || null,
+          contactPhone: conv.phone || null,
+          propertyAddress: latestCall.length > 0 ? latestCall[0].propertyAddress : null,
+          ghlContactId: conv.contactId,
+          ghlOpportunityId: oppInfo?.opp?.id || null,
+          ghlPipelineStageId: oppInfo?.opp?.pipelineStageId || null,
+          ghlPipelineStageName: oppInfo?.stageName || null,
+          relatedCallId: latestCall.length > 0 ? latestCall[0].id : null,
+          teamMemberId: latestCall.length > 0 ? latestCall[0].teamMemberId : null,
+          teamMemberName: latestCall.length > 0 ? latestCall[0].teamMemberName : null,
+          assignedTo: oppInfo?.opp?.assignedTo || null,
+          detectionSource: "conversation",
+          lastActivityAt: lastMsgTime,
+          lastStageChangeAt: null,
+          transcriptExcerpt: `[SMS from seller]: ${matchedBody.substring(0, 500)}`,
+          ...NO_PRICE_DATA,
+        });
+      }
+    } catch (err) {
+      // Non-critical
+    }
+  }
+
+  return results;
+}
+
 // ============ DEDUPLICATION ============
 
 async function isAlreadyFlagged(
@@ -3208,6 +3703,10 @@ async function scanTenant(
         // Rule 10: Walkthrough no offer
         const walkthrough = await detectWalkthroughNoOffer(opp, stageName, db, tenantId, ghlMap, creds);
         if (walkthrough) detections.push(walkthrough);
+
+        // Rule 20: Skipped walkthrough — went straight to offer
+        const skippedWalk = await detectSkippedWalkthrough(opp, stageName, salesPipeline.stages, db, tenantId, ghlMap, creds);
+        if (skippedWalk) detections.push(skippedWalk);
       }
     }
 
@@ -3310,6 +3809,18 @@ async function scanTenant(
         ghlMap
       );
       if (activeNegotiation) detections.push(activeNegotiation);
+
+      // Rule 18: SMS deal lost — seller communicated they sold/went with another buyer
+      const smsLost = await detectSMSDealLost(
+        conv,
+        oppInfo?.opp || null,
+        oppInfo?.stageName || null,
+        creds,
+        db,
+        tenantId,
+        ghlMap
+      );
+      if (smsLost) detections.push(smsLost);
     }
   } catch (convError) {
     console.error(`[OpportunityDetection] Conversation scan error:`, convError);
@@ -3365,6 +3876,21 @@ async function scanTenant(
     detections.push(...shortCallDetections);
     if (shortCallDetections.length > 0) {
       console.log(`[OpportunityDetection] Rule 17: Found ${shortCallDetections.length} short calls with actionable intel`);
+    }
+
+    // Rule 19: Delayed scheduled callback — agent acknowledged being late
+    const delayedCallbackDetections = await detectDelayedScheduledCallback(db, tenantId, creds);
+    detections.push(...delayedCallbackDetections);
+    if (delayedCallbackDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 19: Found ${delayedCallbackDetections.length} delayed scheduled callbacks`);
+    }
+
+    // Rule 21: Deal fell through — seller mentions previous deal/buyer fell through
+    const dealFellDetections = await detectDealFellThrough(db, tenantId, creds, contactOppMap);
+    const filteredDealFellDetections = dealFellDetections.filter(d => !d.ghlContactId || !terminalStageContactIds.has(d.ghlContactId));
+    detections.push(...filteredDealFellDetections);
+    if (filteredDealFellDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 21: Found ${filteredDealFellDetections.length} deals that fell through`);
     }
   } catch (transcriptError) {
     console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
