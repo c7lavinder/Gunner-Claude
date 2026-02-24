@@ -1,10 +1,46 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, TrendingUp, CheckCircle, Calendar, Trophy, Users, MessageSquare, CheckCircle2, Clock, BarChart3, LineChart, Target } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Phone,
+  MessageSquare,
+  Target,
+  Calendar,
+  CheckCircle,
+  TrendingUp,
+  TrendingDown,
+  ArrowRight,
+  ChevronDown,
+  Users,
+  BarChart3,
+  Clock,
+  Award,
+  Zap,
+} from "lucide-react";
+
+/* ─── helpers ─── */
+const pct = (a: number, b: number) => (b === 0 ? 0 : Math.round((a / b) * 100));
+const delta = (cur: number, prev: number) =>
+  prev === 0 ? (cur > 0 ? 100 : 0) : Math.round(((cur - prev) / prev) * 100);
+const fmtDur = (s: number) => {
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+};
+const gradeColor: Record<string, string> = {
+  A: "#16a34a",
+  B: "#65a30d",
+  C: "#ca8a04",
+  D: "#ea580c",
+  F: "#dc2626",
+};
+const gradeBg: Record<string, string> = {
+  A: "rgba(22,163,74,0.12)",
+  B: "rgba(101,163,13,0.12)",
+  C: "rgba(202,138,4,0.12)",
+  D: "rgba(234,88,12,0.12)",
+  F: "rgba(220,38,38,0.12)",
+};
 
 type DateRange = "today" | "week" | "month" | "ytd" | "all";
 
@@ -16,751 +52,1201 @@ const dateRangeLabels: Record<DateRange, string> = {
   all: "All Time",
 };
 
-// Compact stat card matching Dashboard style
-function StatCard({ 
-  title, 
-  value, 
-  icon: Icon, 
-  loading 
-}: { 
-  title: string; 
-  value: string | number; 
-  icon: React.ElementType;
-  loading?: boolean;
-}) {
-  return (
-    <Card className="p-3 sm:p-4">
-      <div className="flex items-center gap-2 sm:gap-3">
-        <div className="p-1.5 sm:p-2 rounded-lg bg-primary/8 dark:bg-primary/12 shrink-0">
-          <Icon className="h-4 w-4 text-primary" />
-        </div>
-        <div className="min-w-0">
-          {loading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div className="text-xl sm:text-2xl font-extrabold tracking-tight truncate">{value}</div>
-          )}
-          <p className="text-xs text-muted-foreground truncate">{title}</p>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
+/* ═══════════════════════════════════════════════════════
+   ANALYTICS PAGE — $100M SaaS Grade
+   ═══════════════════════════════════════════════════════ */
 export default function Analytics() {
   const [dateRange, setDateRange] = useState<DateRange>("week");
-  
+  const [showRangeMenu, setShowRangeMenu] = useState(false);
+  const [expandedMember, setExpandedMember] = useState<number | null>(null);
+
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
-  const { data: leaderboard, isLoading: leaderboardLoading } = trpc.leaderboard.get.useQuery({ dateRange });
+  const { data: leaderboard, isLoading: lbLoading } = trpc.leaderboard.get.useQuery({ dateRange });
 
-  const isLoading = statsLoading || leaderboardLoading;
-
-  // Separate lead managers, acquisition managers, and lead generators
-  const leadManagers = leaderboard?.filter(e => e.teamMember.teamRole === "lead_manager") || [];
-  const acquisitionManagers = leaderboard?.filter(e => e.teamMember.teamRole === "acquisition_manager") || [];
-  const leadGenerators = leaderboard?.filter(e => e.teamMember.teamRole === "lead_generator") || [];
-
-  // Calculate team-wide metrics
-  const teamMetrics = leaderboard?.reduce((acc, entry) => {
-    acc.totalCalls += entry.totalCalls;
-    acc.totalAGrades += entry.gradeDistribution.A;
-    acc.totalBGrades += entry.gradeDistribution.B;
-    acc.totalCGrades += entry.gradeDistribution.C;
-    acc.totalDGrades += entry.gradeDistribution.D;
-    acc.totalFGrades += entry.gradeDistribution.F;
-    return acc;
-  }, {
-    totalCalls: 0,
-    totalAGrades: 0,
-    totalBGrades: 0,
-    totalCGrades: 0,
-    totalDGrades: 0,
-    totalFGrades: 0,
-  }) || {
-    totalCalls: 0,
-    totalAGrades: 0,
-    totalBGrades: 0,
-    totalCGrades: 0,
-    totalDGrades: 0,
-    totalFGrades: 0,
-  };
-
-  const totalGradedCalls = teamMetrics.totalAGrades + teamMetrics.totalBGrades + 
-    teamMetrics.totalCGrades + teamMetrics.totalDGrades + teamMetrics.totalFGrades;
-  
-  const passingRate = totalGradedCalls > 0 
-    ? Math.round(((teamMetrics.totalAGrades + teamMetrics.totalBGrades) / totalGradedCalls) * 100)
+  /* ─── derived data ─── */
+  const prior = stats?.priorPeriod;
+  const totalGraded = stats?.gradedCalls ?? 0;
+  const totalGrades = stats?.gradeDistribution
+    ? Object.values(stats.gradeDistribution).reduce((a, b) => a + b, 0)
     : 0;
+  const passingRate =
+    stats?.gradeDistribution
+      ? pct(stats.gradeDistribution.A + stats.gradeDistribution.B, totalGrades)
+      : 0;
 
+  /* Funnel data */
+  const funnel = useMemo(() => {
+    if (!stats) return [];
+    return [
+      { label: "Calls Made", value: stats.totalCalls, icon: Phone, color: "#8B1A1A" },
+      { label: "Conversations", value: stats.gradedCalls, icon: MessageSquare, color: "#a52525" },
+      { label: "Leads Generated", value: stats.leadsGenerated, icon: Target, color: "#c41e3a" },
+      { label: "Appointments", value: stats.appointmentsSet, icon: Calendar, color: "#d97706" },
+      { label: "Offer Calls", value: stats.offerCallsCompleted, icon: CheckCircle, color: "#16a34a" },
+    ];
+  }, [stats]);
+
+  /* Classification breakdown */
+  const classifications = useMemo(() => {
+    if (!stats?.classificationBreakdown) return [];
+    const cb = stats.classificationBreakdown;
+    const total = Object.values(cb).reduce((a, b) => a + b, 0);
+    return [
+      { label: "Conversation", count: cb.conversation, pct: pct(cb.conversation, total), color: "#16a34a" },
+      { label: "Admin Call", count: cb.admin_call, pct: pct(cb.admin_call, total), color: "#6366f1" },
+      { label: "Voicemail", count: cb.voicemail, pct: pct(cb.voicemail, total), color: "#8b5cf6" },
+      { label: "No Answer", count: cb.no_answer, pct: pct(cb.no_answer, total), color: "#ef4444" },
+      { label: "Callback", count: cb.callback_request, pct: pct(cb.callback_request, total), color: "#f59e0b" },
+      { label: "Wrong Number", count: cb.wrong_number, pct: pct(cb.wrong_number, total), color: "#78716c" },
+      { label: "Too Short", count: cb.too_short, pct: pct(cb.too_short, total), color: "#94a3b8" },
+    ].filter((c) => c.count > 0);
+  }, [stats]);
+
+  /* Sorted leaderboard by role */
+  const acquisitionManagers = useMemo(
+    () =>
+      (leaderboard ?? [])
+        .filter((e) => e.teamMember.teamRole === "acquisition_manager")
+        .sort((a, b) => b.averageScore - a.averageScore),
+    [leaderboard]
+  );
+  const leadGenerators = useMemo(
+    () =>
+      (leaderboard ?? [])
+        .filter((e) => e.teamMember.teamRole === "lead_generator")
+        .sort((a, b) => b.averageScore - a.averageScore),
+    [leaderboard]
+  );
+
+  /* ─── render ─── */
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="analytics-page" style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px 80px" }}>
+      {/* ═══ HEADER ═══ */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 32 }}>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">
-            Team performance metrics and insights
+          <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>
+            Analytics
+          </h1>
+          <p style={{ fontSize: 14, color: "var(--muted-foreground)", marginTop: 4 }}>
+            Performance intelligence across your entire team
           </p>
         </div>
-        <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select period" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="week">Last 7 Days</SelectItem>
-            <SelectItem value="month">Last 30 Days</SelectItem>
-            <SelectItem value="ytd">Year to Date</SelectItem>
-            <SelectItem value="all">All Time</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Date range selector */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowRangeMenu(!showRangeMenu)}
+            className="obs-panel"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              background: "var(--card)",
+            }}
+          >
+            {dateRangeLabels[dateRange]}
+            <ChevronDown size={14} />
+          </button>
+          {showRangeMenu && (
+            <div
+              className="obs-panel"
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 4px)",
+                zIndex: 50,
+                minWidth: 160,
+                padding: 4,
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "var(--card)",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+              }}
+            >
+              {(Object.keys(dateRangeLabels) as DateRange[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => {
+                    setDateRange(r);
+                    setShowRangeMenu(false);
+                  }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "8px 12px",
+                    fontSize: 13,
+                    fontWeight: r === dateRange ? 600 : 400,
+                    color: r === dateRange ? "var(--primary)" : "var(--foreground)",
+                    background: r === dateRange ? "rgba(139,26,26,0.06)" : "transparent",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  {dateRangeLabels[r]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Stats Grid - Same as Dashboard */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard
-          title="Calls Made"
-          value={stats?.totalCalls ?? 0}
-          icon={Phone}
-          loading={statsLoading}
-        />
-        <StatCard
-          title="Conversations"
-          value={stats?.gradedCalls ?? 0}
-          icon={MessageSquare}
-          loading={statsLoading}
-        />
-        <StatCard
-          title="Leads Generated"
-          value={stats?.leadsGenerated ?? 0}
-          icon={Target}
-          loading={statsLoading}
-        />
-        <StatCard
-          title="Appointments Set"
-          value={stats?.appointmentsSet ?? 0}
-          icon={Calendar}
-          loading={statsLoading}
-        />
-        <StatCard
-          title="Offer Calls"
-          value={stats?.offerCallsCompleted ?? 0}
-          icon={CheckCircle2}
-          loading={statsLoading}
-        />
-        <StatCard
-          title="Average Score"
-          value={stats?.averageScore ? `${Math.round(stats.averageScore)}%` : "N/A"}
-          icon={TrendingUp}
-          loading={statsLoading}
-        />
+      {/* ═══ EXECUTIVE KPI ROW ═══ */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginBottom: 32 }}>
+        {statsLoading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="obs-panel" style={{ padding: 20, borderRadius: 12 }}>
+                <Skeleton className="h-4 w-16 mb-3" />
+                <Skeleton className="h-8 w-20 mb-2" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            ))
+          : [
+              {
+                label: "Total Calls",
+                value: stats?.totalCalls ?? 0,
+                prev: prior?.totalCalls,
+                icon: Phone,
+                iconColor: "#8B1A1A",
+              },
+              {
+                label: "Graded Calls",
+                value: stats?.gradedCalls ?? 0,
+                prev: prior?.gradedCalls,
+                icon: MessageSquare,
+                iconColor: "#a52525",
+              },
+              {
+                label: "Leads Generated",
+                value: stats?.leadsGenerated ?? 0,
+                prev: prior?.leadsGenerated,
+                icon: Target,
+                iconColor: "#c41e3a",
+              },
+              {
+                label: "Appointments",
+                value: stats?.appointmentsSet ?? 0,
+                prev: prior?.appointmentsSet,
+                icon: Calendar,
+                iconColor: "#d97706",
+              },
+              {
+                label: "Offer Calls",
+                value: stats?.offerCallsCompleted ?? 0,
+                prev: prior?.offerCallsCompleted,
+                icon: CheckCircle,
+                iconColor: "#16a34a",
+              },
+              {
+                label: "Avg Score",
+                value: stats?.averageScore ?? 0,
+                prev: prior?.averageScore,
+                icon: TrendingUp,
+                iconColor: "#6366f1",
+                suffix: "%",
+              },
+            ].map((kpi, i) => {
+              const d = kpi.prev != null ? delta(kpi.value, kpi.prev) : null;
+              const Icon = kpi.icon;
+              return (
+                <div
+                  key={i}
+                  className="obs-panel"
+                  style={{
+                    padding: "20px 18px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    background: "var(--card)",
+                    transition: "box-shadow 0.2s, transform 0.2s",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        background: `${kpi.iconColor}12`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Icon size={18} style={{ color: kpi.iconColor }} />
+                    </div>
+                    {d !== null && (
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: d >= 0 ? "#16a34a" : "#dc2626",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 2,
+                        }}
+                      >
+                        {d >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {d >= 0 ? "+" : ""}
+                        {d}%
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1 }}>
+                    {kpi.value.toLocaleString()}
+                    {kpi.suffix || ""}
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--muted-foreground)", marginTop: 4 }}>
+                    {kpi.label}
+                  </div>
+                </div>
+              );
+            })}
       </div>
 
-      {/* Team Leaderboard */}
-      <Card className="mb-4 sm:mb-6">
-        <CardHeader className="pb-3 sm:pb-6">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500" />
-            Team Leaderboard
-          </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Ranked by appointments (LMs), offers (AMs), and leads generated (LGs) — {dateRange === 'today' ? 'today' : dateRange === 'week' ? 'last 7 days' : dateRange === 'month' ? 'last 30 days' : dateRange === 'ytd' ? 'year to date' : 'all time'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="px-3 sm:px-6">
-          <Tabs defaultValue="acquisition_managers" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6">
-              <TabsTrigger value="acquisition_managers">Acquisition Managers</TabsTrigger>
-              <TabsTrigger value="lead_managers">Lead Managers</TabsTrigger>
-              <TabsTrigger value="lead_generators">Lead Generators</TabsTrigger>
-            </TabsList>
+      {/* ═══ CONVERSION FUNNEL ═══ */}
+      <div
+        className="obs-panel"
+        style={{
+          padding: "24px 28px",
+          borderRadius: 12,
+          border: "1px solid var(--border)",
+          background: "var(--card)",
+          marginBottom: 32,
+        }}
+      >
+        <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+          Conversion Funnel
+        </h2>
+        {statsLoading ? (
+          <Skeleton className="h-20 w-full" />
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+            {funnel.map((step, i) => {
+              const Icon = step.icon;
+              const convRate = i > 0 && funnel[i - 1].value > 0 ? pct(step.value, funnel[i - 1].value) : null;
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", flex: 1 }}>
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 12,
+                        background: `${step.color}12`,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Icon size={22} style={{ color: step.color }} />
+                    </div>
+                    <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>
+                      {step.value.toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 2 }}>
+                      {step.label}
+                    </div>
+                  </div>
+                  {i < funnel.length - 1 && (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0 4px", minWidth: 48 }}>
+                      <ArrowRight size={16} style={{ color: "var(--muted-foreground)", opacity: 0.4 }} />
+                      {convRate !== null && (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", marginTop: 2 }}>
+                          {convRate}%
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-            {/* Lead Managers Leaderboard */}
-            <TabsContent value="lead_managers">
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[1, 2].map((i) => (
-                    <Skeleton key={i} className="h-20 w-full" />
+      {/* ═══ MIDDLE ROW: Score Trends + Grade Distribution ═══ */}
+      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 24, marginBottom: 32 }}>
+        {/* Score Trends */}
+        <div
+          className="obs-panel"
+          style={{
+            padding: "24px 28px",
+            borderRadius: 12,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+          }}
+        >
+          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+            Score Trends — {stats?.weeklyTrends?.length ?? 12} Weeks
+          </h2>
+          {statsLoading ? (
+            <Skeleton className="h-56 w-full" />
+          ) : stats?.weeklyTrends && stats.weeklyTrends.length > 0 ? (
+            <div>
+              {/* SVG area chart */}
+              <div style={{ position: "relative", height: 220 }}>
+                {/* Y-axis */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 36,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    fontSize: 11,
+                    color: "var(--muted-foreground)",
+                  }}
+                >
+                  <span>100</span>
+                  <span>75</span>
+                  <span>50</span>
+                  <span>25</span>
+                  <span>0</span>
+                </div>
+                <div style={{ marginLeft: 44, height: "100%", position: "relative" }}>
+                  {/* Grid lines */}
+                  {[0, 25, 50, 75, 100].map((v) => (
+                    <div
+                      key={v}
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        top: `${100 - v}%`,
+                        borderTop: "1px solid var(--border)",
+                        opacity: 0.5,
+                      }}
+                    />
                   ))}
+                  <svg
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#8B1A1A" stopOpacity="0.25" />
+                        <stop offset="100%" stopColor="#8B1A1A" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    {(() => {
+                      const weeks = stats.weeklyTrends;
+                      const pts = weeks.map((w, i) => ({
+                        x: weeks.length > 1 ? (i / (weeks.length - 1)) * 100 : 50,
+                        y: 100 - Math.min(w.averageScore, 100),
+                      }));
+                      const lineD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+                      const areaD = lineD + ` L ${pts[pts.length - 1].x} 100 L ${pts[0].x} 100 Z`;
+                      return (
+                        <>
+                          <path d={areaD} fill="url(#trendGrad)" />
+                          <path d={lineD} fill="none" stroke="#8B1A1A" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                        </>
+                      );
+                    })()}
+                    {stats.weeklyTrends.map((w, i) => {
+                      const x = stats.weeklyTrends.length > 1 ? (i / (stats.weeklyTrends.length - 1)) * 100 : 50;
+                      const y = 100 - Math.min(w.averageScore, 100);
+                      return (
+                        <circle key={i} cx={x} cy={y} r="2.5" fill="#8B1A1A" vectorEffect="non-scaling-stroke">
+                          <title>
+                            {new Date(w.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })}:{" "}
+                            {w.averageScore}% ({w.gradedCalls} graded)
+                          </title>
+                        </circle>
+                      );
+                    })}
+                  </svg>
                 </div>
-              ) : leadManagers.length > 0 ? (
-                <div className="overflow-x-auto -mx-3 sm:mx-0">
-                  <table className="w-full min-w-[500px]">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Rank</th>
-                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Name</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Calls</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Conv</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Appts</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">A-B</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leadManagers
-                        .sort((a, b) => b.appointmentsSet - a.appointmentsSet)
-                        .map((entry, index) => (
-                        <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-2 sm:py-4 px-2 sm:px-4">
-                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
-                              index === 0 ? "bg-yellow-500 text-white" :
-                              index === 1 ? "bg-gray-400 text-white" :
-                              "bg-amber-700 text-white"
-                            }`}>
-                              {index + 1}
-                            </div>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4">
-                            <p className="font-medium text-sm sm:text-base">{entry.teamMember.name}</p>
-                            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Lead Manager</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold">{entry.totalCalls}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold">{entry.gradedCalls}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold text-blue-600">{entry.appointmentsSet}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No lead managers data yet</p>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Acquisition Managers Leaderboard */}
-            <TabsContent value="acquisition_managers">
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[1].map((i) => (
-                    <Skeleton key={i} className="h-20 w-full" />
+              </div>
+              {/* X-axis */}
+              <div
+                style={{
+                  marginLeft: 44,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 11,
+                  color: "var(--muted-foreground)",
+                  marginTop: 8,
+                }}
+              >
+                {stats.weeklyTrends
+                  .filter((_, i) => i % Math.max(1, Math.floor(stats.weeklyTrends.length / 6)) === 0 || i === stats.weeklyTrends.length - 1)
+                  .map((w, i) => (
+                    <span key={i}>{new Date(w.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                   ))}
-                </div>
-              ) : acquisitionManagers.length > 0 ? (
-                <div className="overflow-x-auto -mx-3 sm:mx-0">
-                  <table className="w-full min-w-[500px]">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Rank</th>
-                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Name</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Calls</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Conv</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Offers</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">A-B</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {acquisitionManagers
-                        .sort((a, b) => b.offerCallsCompleted - a.offerCallsCompleted)
-                        .map((entry, index) => (
-                        <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-2 sm:py-4 px-2 sm:px-4">
-                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
-                              index === 0 ? "bg-yellow-500 text-white" :
-                              index === 1 ? "bg-gray-400 text-white" :
-                              "bg-amber-700 text-white"
-                            }`}>
-                              {index + 1}
-                            </div>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4">
-                            <p className="font-medium text-sm sm:text-base">{entry.teamMember.name}</p>
-                            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Acquisition Manager</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold">{entry.totalCalls}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold">{entry.gradedCalls}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold text-green-600">{entry.offerCallsCompleted}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No acquisition managers data yet</p>
-                </div>
-              )}
-            </TabsContent>
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: 40, color: "var(--muted-foreground)" }}>
+              <BarChart3 size={40} style={{ margin: "0 auto 12px", opacity: 0.3 }} />
+              <p>No trend data available yet</p>
+            </div>
+          )}
+        </div>
 
-            {/* Lead Generators Leaderboard */}
-            <TabsContent value="lead_generators">
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[1, 2].map((i) => (
-                    <Skeleton key={i} className="h-20 w-full" />
-                  ))}
-                </div>
-              ) : leadGenerators.length > 0 ? (
-                <div className="overflow-x-auto -mx-3 sm:mx-0">
-                  <table className="w-full min-w-[500px]">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Rank</th>
-                        <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Name</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Calls</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Conv</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">Leads</th>
-                        <th className="text-center py-2 sm:py-3 px-2 sm:px-4 font-medium text-muted-foreground text-xs sm:text-sm">A-B</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leadGenerators
-                        .sort((a, b) => b.leadsGenerated - a.leadsGenerated)
-                        .map((entry, index) => (
-                        <tr key={entry.teamMember.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-2 sm:py-4 px-2 sm:px-4">
-                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
-                              index === 0 ? "bg-yellow-500 text-white" :
-                              index === 1 ? "bg-gray-400 text-white" :
-                              "bg-amber-700 text-white"
-                            }`}>
-                              {index + 1}
-                            </div>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4">
-                            <p className="font-medium text-sm sm:text-base">{entry.teamMember.name}</p>
-                            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Lead Generator</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold">{entry.totalCalls}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold">{entry.gradedCalls}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold text-purple-600">{entry.leadsGenerated}</p>
-                          </td>
-                          <td className="py-2 sm:py-4 px-2 sm:px-4 text-center">
-                            <p className="text-sm sm:text-lg font-bold text-emerald-600">{entry.abScoredCalls}</p>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No lead generators data yet</p>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Analytics Insights Section */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Score Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-blue-500" />
-              Score Distribution
-            </CardTitle>
-            <CardDescription>
-              Grade breakdown across all graded calls
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        {/* Grade Distribution + Call Metrics */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Grade Distribution */}
+          <div
+            className="obs-panel"
+            style={{
+              padding: "24px 28px",
+              borderRadius: 12,
+              border: "1px solid var(--border)",
+              background: "var(--card)",
+              flex: 1,
+            }}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16 }}>
+              Grade Distribution
+            </h2>
             {statsLoading ? (
-              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-32 w-full" />
             ) : (
-              <div className="space-y-3">
-                {["A", "B", "C", "D", "F"].map((grade) => {
-                  const count = stats?.gradeDistribution?.[grade as keyof typeof stats.gradeDistribution] ?? 0;
-                  const total = Object.values(stats?.gradeDistribution ?? {}).reduce((a, b) => a + b, 0);
-                  const percentage = total > 0 ? (count / total) * 100 : 0;
-                  const colors: Record<string, string> = {
-                    A: "bg-emerald-500",
-                    B: "bg-green-500",
-                    C: "bg-yellow-500",
-                    D: "bg-orange-500",
-                    F: "bg-red-500",
-                  };
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {(["A", "B", "C", "D", "F"] as const).map((g) => {
+                  const count = stats?.gradeDistribution?.[g] ?? 0;
+                  const percentage = totalGrades > 0 ? (count / totalGrades) * 100 : 0;
                   return (
-                    <div key={grade} className="flex items-center gap-3">
-                      <span className="w-8 font-bold text-lg">{grade}</span>
-                      <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full ${colors[grade]} transition-all duration-500`}
-                          style={{ width: `${percentage}%` }}
+                    <div key={g} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div
+                        style={{
+                          width: 28,
+                          height: 24,
+                          borderRadius: 6,
+                          background: gradeBg[g],
+                          color: gradeColor[g],
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {g}
+                      </div>
+                      <div
+                        style={{
+                          flex: 1,
+                          height: 8,
+                          borderRadius: 4,
+                          background: "var(--muted)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${percentage}%`,
+                            background: gradeColor[g],
+                            borderRadius: 4,
+                            transition: "width 0.5s ease",
+                          }}
                         />
                       </div>
-                      <span className="w-16 text-right text-sm text-muted-foreground">
+                      <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, textAlign: "right", color: "var(--muted-foreground)" }}>
                         {count} ({Math.round(percentage)}%)
                       </span>
                     </div>
                   );
                 })}
+                {/* Passing rate */}
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    background: "rgba(22,163,74,0.06)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>A+B Passing Rate</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: "#16a34a" }}>{passingRate}%</span>
+                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Call Metrics */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-purple-500" />
-              Call Metrics
-            </CardTitle>
-            <CardDescription>
-              Performance metrics for graded calls
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+          {/* Quick Metrics */}
+          <div
+            className="obs-panel"
+            style={{
+              padding: "24px 28px",
+              borderRadius: 12,
+              border: "1px solid var(--border)",
+              background: "var(--card)",
+            }}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16 }}>
+              Quick Metrics
+            </h2>
             {statsLoading ? (
-              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-20 w-full" />
             ) : (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                  <span className="text-muted-foreground">Average Call Duration</span>
-                  <span className="text-xl font-bold">
-                    {stats?.averageCallDuration 
-                      ? `${Math.floor(stats.averageCallDuration / 60)}m ${Math.round(stats.averageCallDuration % 60)}s`
-                      : "N/A"
-                    }
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 13, color: "var(--muted-foreground)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Clock size={14} /> Avg Duration
                   </span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{fmtDur(stats?.averageCallDuration ?? 0)}</span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                  <span className="text-muted-foreground">Total Graded Calls</span>
-                  <span className="text-xl font-bold">{stats?.gradedCalls ?? 0}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                  <span className="text-muted-foreground">Passing Rate (A & B)</span>
-                  <span className="text-xl font-bold text-emerald-600">
-                    {stats?.gradeDistribution 
-                      ? `${Math.round(((stats.gradeDistribution.A + stats.gradeDistribution.B) / Math.max(1, Object.values(stats.gradeDistribution).reduce((a, b) => a + b, 0))) * 100)}%`
-                      : "N/A"
-                    }
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 13, color: "var(--muted-foreground)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Zap size={14} /> Calls Today
                   </span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{stats?.callsToday ?? 0}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+                  <span style={{ fontSize: 13, color: "var(--muted-foreground)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Award size={14} /> Graded Today
+                  </span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{stats?.gradedToday ?? 0}</span>
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Team Member Scores Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-indigo-500" />
-            Team Member Scores
-          </CardTitle>
-          <CardDescription>
-            Individual performance breakdown by team member
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {statsLoading ? (
-            <Skeleton className="h-40 w-full" />
-          ) : stats?.teamMemberScores && stats.teamMemberScores.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Team Member</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">Avg Score</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">Total Graded</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">A</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">B</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">C</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">D</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">F</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.teamMemberScores
-                    .filter(m => m.totalGraded > 0)
-                    .sort((a, b) => b.averageScore - a.averageScore)
-                    .map((member) => (
-                    <tr key={member.memberId} className="border-b last:border-0 hover:bg-muted/50">
-                      <td className="py-4 px-4 font-medium">{member.memberName}</td>
-                      <td className="py-4 px-4 text-center">
-                        <span className={`font-bold ${
-                          member.averageScore >= 80 ? "text-emerald-600" :
-                          member.averageScore >= 60 ? "text-yellow-600" : "text-red-600"
-                        }`}>
-                          {Math.round(member.averageScore)}%
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-center">{member.totalGraded}</td>
-                      <td className="py-4 px-4 text-center text-emerald-600 font-medium">{member.gradeDistribution.A}</td>
-                      <td className="py-4 px-4 text-center text-green-600 font-medium">{member.gradeDistribution.B}</td>
-                      <td className="py-4 px-4 text-center text-yellow-600 font-medium">{member.gradeDistribution.C}</td>
-                      <td className="py-4 px-4 text-center text-orange-600 font-medium">{member.gradeDistribution.D}</td>
-                      <td className="py-4 px-4 text-center text-red-600 font-medium">{member.gradeDistribution.F}</td>
-                    </tr>
+      {/* ═══ CALL CLASSIFICATION BREAKDOWN ═══ */}
+      <div
+        className="obs-panel"
+        style={{
+          padding: "24px 28px",
+          borderRadius: 12,
+          border: "1px solid var(--border)",
+          background: "var(--card)",
+          marginBottom: 32,
+        }}
+      >
+        <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+          Call Classification
+        </h2>
+        {statsLoading ? (
+          <Skeleton className="h-16 w-full" />
+        ) : classifications.length > 0 ? (
+          <div>
+            {/* Stacked bar */}
+            <div style={{ display: "flex", height: 32, borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+              {classifications.map((c, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: `${c.pct}%`,
+                    background: c.color,
+                    minWidth: c.pct > 0 ? 4 : 0,
+                    transition: "width 0.5s ease",
+                  }}
+                  title={`${c.label}: ${c.count} (${c.pct}%)`}
+                />
+              ))}
+            </div>
+            {/* Legend */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
+              {classifications.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: c.color }} />
+                  <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                    {c.label}{" "}
+                    <span style={{ fontWeight: 600, color: "var(--foreground)" }}>
+                      {c.count}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: 20, color: "var(--muted-foreground)" }}>
+            No classification data available
+          </div>
+        )}
+      </div>
+
+      {/* ═══ TEAM PERFORMANCE TABLE ═══ */}
+      <div
+        className="obs-panel"
+        style={{
+          padding: "24px 28px",
+          borderRadius: 12,
+          border: "1px solid var(--border)",
+          background: "var(--card)",
+          marginBottom: 32,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            Team Performance
+          </h2>
+          <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+            {stats?.teamMemberScores?.filter((m) => m.totalGraded > 0).length ?? 0} active members
+          </span>
+        </div>
+        {statsLoading ? (
+          <Skeleton className="h-48 w-full" />
+        ) : stats?.teamMemberScores && stats.teamMemberScores.filter((m) => m.totalGraded > 0).length > 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  {["Member", "Avg Score", "Graded", "A", "B", "C", "D", "F", "Trend"].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: "10px 14px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase" as const,
+                        color: "var(--muted-foreground)",
+                        textAlign: h === "Member" ? "left" : "center",
+                        background: "var(--muted)",
+                      }}
+                    >
+                      {h}
+                    </th>
                   ))}
-                </tbody>
-              </table>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.teamMemberScores
+                  .filter((m) => m.totalGraded > 0)
+                  .sort((a, b) => b.averageScore - a.averageScore)
+                  .map((member) => {
+                    const trend = stats.teamMemberTrends?.find((t) => t.memberId === member.memberId);
+                    const isExpanded = expandedMember === member.memberId;
+                    return (
+                      <tr
+                        key={member.memberId}
+                        onClick={() => setExpandedMember(isExpanded ? null : member.memberId)}
+                        style={{
+                          borderBottom: "1px solid var(--border)",
+                          cursor: "pointer",
+                          transition: "background 0.15s",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--muted)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <td style={{ padding: "14px", fontSize: 14, fontWeight: 600 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                background: "linear-gradient(135deg, #8B1A1A, #5a1018)",
+                                color: "#fff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 12,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {member.memberName
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .slice(0, 2)}
+                            </div>
+                            {member.memberName}
+                          </div>
+                        </td>
+                        <td style={{ padding: "14px", textAlign: "center" }}>
+                          <span
+                            style={{
+                              fontSize: 16,
+                              fontWeight: 800,
+                              color:
+                                member.averageScore >= 80
+                                  ? "#16a34a"
+                                  : member.averageScore >= 60
+                                  ? "#ca8a04"
+                                  : "#dc2626",
+                            }}
+                          >
+                            {Math.round(member.averageScore)}%
+                          </span>
+                        </td>
+                        <td style={{ padding: "14px", textAlign: "center", fontSize: 14, fontWeight: 600 }}>
+                          {member.totalGraded}
+                        </td>
+                        {(["A", "B", "C", "D", "F"] as const).map((g) => (
+                          <td key={g} style={{ padding: "14px", textAlign: "center" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                minWidth: 28,
+                                height: 24,
+                                borderRadius: 6,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                background: member.gradeDistribution[g] > 0 ? gradeBg[g] : "transparent",
+                                color: member.gradeDistribution[g] > 0 ? gradeColor[g] : "var(--muted-foreground)",
+                              }}
+                            >
+                              {member.gradeDistribution[g]}
+                            </span>
+                          </td>
+                        ))}
+                        <td style={{ padding: "14px", textAlign: "center" }}>
+                          {/* Mini sparkline */}
+                          {trend && trend.weeklyScores.some((w) => w.callCount > 0) ? (
+                            <svg viewBox="0 0 60 20" style={{ width: 60, height: 20, display: "inline-block" }}>
+                              {(() => {
+                                const scores = trend.weeklyScores.slice(-8);
+                                const pts = scores.map((w, i) => ({
+                                  x: scores.length > 1 ? (i / (scores.length - 1)) * 60 : 30,
+                                  y: 20 - (w.averageScore / 100) * 20,
+                                }));
+                                const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+                                return <path d={d} fill="none" stroke="#8B1A1A" strokeWidth="1.5" />;
+                              })()}
+                            </svg>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: 40, color: "var(--muted-foreground)" }}>
+            <Users size={40} style={{ margin: "0 auto 12px", opacity: 0.3 }} />
+            <p>No graded calls yet</p>
+          </div>
+        )}
+      </div>
+
+      {/* ═══ ROLE LEADERBOARDS ═══ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 32 }}>
+        {/* Acquisition Managers */}
+        <div
+          className="obs-panel"
+          style={{
+            padding: "24px 28px",
+            borderRadius: 12,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>
+              Acquisition Managers
+            </h2>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "3px 10px",
+                borderRadius: 100,
+                background: "rgba(139,26,26,0.06)",
+                color: "#8B1A1A",
+              }}
+            >
+              {acquisitionManagers.length}
+            </span>
+          </div>
+          {lbLoading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : acquisitionManagers.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {acquisitionManagers.map((entry, i) => (
+                <div
+                  key={entry.teamMember.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "12px 0",
+                    borderBottom: i < acquisitionManagers.length - 1 ? "1px solid var(--border)" : "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      background:
+                        i === 0
+                          ? "linear-gradient(135deg, #f59e0b, #d97706)"
+                          : i === 1
+                          ? "linear-gradient(135deg, #9ca3af, #6b7280)"
+                          : i === 2
+                          ? "linear-gradient(135deg, #d97706, #92400e)"
+                          : "var(--muted)",
+                      color: i < 3 ? "#fff" : "var(--muted-foreground)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      fontFamily: "'Orbitron', sans-serif",
+                    }}
+                  >
+                    {i + 1}
+                  </div>
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: "linear-gradient(135deg, #8B1A1A, #5a1018)",
+                      color: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {entry.teamMember.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .slice(0, 2)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{entry.teamMember.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                      {entry.totalCalls} calls · {entry.offerCallsCompleted} offers
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "'Orbitron', sans-serif" }}>
+                    {Math.round(entry.averageScore)}%
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No graded calls yet</p>
+            <div style={{ textAlign: "center", padding: 30, color: "var(--muted-foreground)" }}>
+              No acquisition managers data
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Score Trends Over Time */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <LineChart className="h-5 w-5 text-cyan-500" />
-            Score Trends Over Time
-          </CardTitle>
-          <CardDescription>
-            Weekly average scores for the past 12 weeks
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {statsLoading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : stats?.weeklyTrends && stats.weeklyTrends.length > 0 ? (
-            <div className="space-y-6">
-              {/* Team Average Trend Chart */}
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-4">Team Average Score</h4>
-                <div className="relative h-48">
-                  {/* Y-axis labels */}
-                  <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-xs text-muted-foreground">
-                    <span>100%</span>
-                    <span>75%</span>
-                    <span>50%</span>
-                    <span>25%</span>
-                    <span>0%</span>
+        {/* Lead Generators */}
+        <div
+          className="obs-panel"
+          style={{
+            padding: "24px 28px",
+            borderRadius: 12,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>
+              Lead Generators
+            </h2>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "3px 10px",
+                borderRadius: 100,
+                background: "rgba(139,26,26,0.06)",
+                color: "#8B1A1A",
+              }}
+            >
+              {leadGenerators.length}
+            </span>
+          </div>
+          {lbLoading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : leadGenerators.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {leadGenerators.map((entry, i) => (
+                <div
+                  key={entry.teamMember.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "12px 0",
+                    borderBottom: i < leadGenerators.length - 1 ? "1px solid var(--border)" : "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      background:
+                        i === 0
+                          ? "linear-gradient(135deg, #f59e0b, #d97706)"
+                          : i === 1
+                          ? "linear-gradient(135deg, #9ca3af, #6b7280)"
+                          : i === 2
+                          ? "linear-gradient(135deg, #d97706, #92400e)"
+                          : "var(--muted)",
+                      color: i < 3 ? "#fff" : "var(--muted-foreground)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      fontFamily: "'Orbitron', sans-serif",
+                    }}
+                  >
+                    {i + 1}
                   </div>
-                  {/* Chart area */}
-                  <div className="ml-12 h-full relative">
-                    {/* Grid lines */}
-                    <div className="absolute inset-0 flex flex-col justify-between">
-                      {[0, 1, 2, 3, 4].map((i) => (
-                        <div key={i} className="border-t border-muted h-0" />
-                      ))}
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: "linear-gradient(135deg, #8B1A1A, #5a1018)",
+                      color: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {entry.teamMember.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .slice(0, 2)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{entry.teamMember.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                      {entry.totalCalls} calls · {entry.leadsGenerated} leads
                     </div>
-                    {/* Line chart */}
-                    <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
-                      {/* Gradient fill under line */}
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "'Orbitron', sans-serif" }}>
+                    {Math.round(entry.averageScore)}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: 30, color: "var(--muted-foreground)" }}>
+              No lead generators data
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ INDIVIDUAL PERFORMANCE SPARKLINES ═══ */}
+      {stats?.teamMemberTrends && stats.teamMemberTrends.filter((m) => m.weeklyScores.some((w) => w.callCount > 0)).length > 0 && (
+        <div
+          className="obs-panel"
+          style={{
+            padding: "24px 28px",
+            borderRadius: 12,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+            marginBottom: 32,
+          }}
+        >
+          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+            Individual Trends
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+            {stats.teamMemberTrends
+              .filter((m) => m.weeklyScores.some((w) => w.callCount > 0))
+              .map((member, mi) => {
+                const colors = ["#8B1A1A", "#16a34a", "#d97706", "#6366f1", "#ec4899", "#06b6d4"];
+                const color = colors[mi % colors.length];
+                const recentScores = member.weeklyScores.slice(-4).filter((w) => w.callCount > 0);
+                const recentAvg = recentScores.length > 0 ? Math.round(recentScores.reduce((s, w) => s + w.averageScore, 0) / recentScores.length) : 0;
+                const totalCalls = member.weeklyScores.reduce((s, w) => s + w.callCount, 0);
+
+                return (
+                  <div
+                    key={member.memberId}
+                    style={{
+                      padding: 16,
+                      borderRadius: 10,
+                      border: "1px solid var(--border)",
+                      background: "var(--card)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 7,
+                            background: `linear-gradient(135deg, ${color}, ${color}88)`,
+                            color: "#fff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 10,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {member.memberName
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .slice(0, 2)}
+                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{member.memberName}</span>
+                      </div>
+                      <span style={{ fontSize: 16, fontWeight: 800, color }}>{recentAvg}%</span>
+                    </div>
+                    {/* Sparkline */}
+                    <svg viewBox="0 0 100 30" style={{ width: "100%", height: 40 }} preserveAspectRatio="none">
                       <defs>
-                        <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="rgb(6, 182, 212)" stopOpacity="0.3" />
-                          <stop offset="100%" stopColor="rgb(6, 182, 212)" stopOpacity="0" />
+                        <linearGradient id={`ig-${member.memberId}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+                          <stop offset="100%" stopColor={color} stopOpacity="0" />
                         </linearGradient>
                       </defs>
-                      {/* Build line segments that skip empty weeks (gradedCalls === 0) */}
                       {(() => {
-                        const dataWeeks = stats.weeklyTrends
-                          .map((week, i) => ({ ...week, i }))
-                          .filter(w => w.gradedCalls > 0);
-                        if (dataWeeks.length === 0) return null;
-                        const total = stats.weeklyTrends.length;
-                        // Build segments (consecutive data points)
-                        const segments: typeof dataWeeks[] = [];
-                        let current: typeof dataWeeks = [];
-                        for (let j = 0; j < dataWeeks.length; j++) {
-                          if (current.length === 0 || dataWeeks[j].i === dataWeeks[j-1].i + 1) {
-                            current.push(dataWeeks[j]);
-                          } else {
-                            segments.push(current);
-                            current = [dataWeeks[j]];
-                          }
-                        }
-                        if (current.length > 0) segments.push(current);
-                        return segments.map((seg, si) => {
-                          const pts = seg.map(w => ({
-                            x: total > 1 ? (w.i / (total - 1)) * 100 : 50,
-                            y: 100 - w.averageScore,
-                          }));
-                          const lineD = pts.map((p, pi) => `${pi === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-                          const areaD = lineD + ` L ${pts[pts.length-1].x} 100 L ${pts[0].x} 100 Z`;
-                          return (
-                            <g key={si}>
-                              <path d={areaD} fill="url(#scoreGradient)" vectorEffect="non-scaling-stroke" />
-                              <path d={lineD} fill="none" stroke="rgb(6, 182, 212)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-                            </g>
-                          );
-                        });
-                      })()}
-                      {/* Data points — only for weeks with graded calls */}
-                      {stats.weeklyTrends.map((week, i) => {
-                        if (week.gradedCalls === 0) return null;
-                        const x = stats.weeklyTrends.length > 1 ? (i / (stats.weeklyTrends.length - 1)) * 100 : 50;
-                        const y = 100 - week.averageScore;
+                        const scores = member.weeklyScores;
+                        const pts = scores.map((w, i) => ({
+                          x: scores.length > 1 ? (i / (scores.length - 1)) * 100 : 50,
+                          y: 30 - (Math.min(w.averageScore, 100) / 100) * 30,
+                        }));
+                        const lineD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+                        const areaD = lineD + ` L ${pts[pts.length - 1].x} 30 L ${pts[0].x} 30 Z`;
                         return (
-                          <circle
-                            key={i}
-                            cx={`${x}%`}
-                            cy={`${y}%`}
-                            r="4"
-                            fill="rgb(6, 182, 212)"
-                            className="hover:r-6 transition-all"
-                          >
-                            <title>{`Week of ${week.weekStart}: ${week.averageScore}% (${week.gradedCalls} calls)`}</title>
-                          </circle>
+                          <>
+                            <path d={areaD} fill={`url(#ig-${member.memberId})`} />
+                            <path d={lineD} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                          </>
                         );
-                      })}
+                      })()}
                     </svg>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>
+                      <span>{totalCalls} total calls</span>
+                      <span>Last 4 wk avg</span>
+                    </div>
                   </div>
-                </div>
-                {/* X-axis labels */}
-                <div className="ml-12 flex justify-between text-xs text-muted-foreground mt-2">
-                  {stats.weeklyTrends.filter((_, i) => i % 3 === 0 || i === stats.weeklyTrends.length - 1).map((week, i) => (
-                    <span key={i}>{new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                  ))}
-                </div>
-              </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
-              {/* Weekly Stats Table */}
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left py-2 px-3 font-medium">Week</th>
-                      <th className="text-center py-2 px-3 font-medium">Avg Score</th>
-                      <th className="text-center py-2 px-3 font-medium">Total Calls</th>
-                      <th className="text-center py-2 px-3 font-medium">Graded</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.weeklyTrends.slice().reverse().slice(0, 6).map((week, i) => (
-                      <tr key={i} className="border-t hover:bg-muted/30">
-                        <td className="py-2 px-3">
-                          {new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+      {/* ═══ WEEKLY BREAKDOWN TABLE ═══ */}
+      {stats?.weeklyTrends && stats.weeklyTrends.length > 0 && (
+        <div
+          className="obs-panel"
+          style={{
+            padding: "24px 28px",
+            borderRadius: 12,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+          }}
+        >
+          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
+            Weekly Breakdown
+          </h2>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Week", "Avg Score", "Total Calls", "Graded", "Change"].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: "10px 14px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase" as const,
+                        color: "var(--muted-foreground)",
+                        textAlign: h === "Week" ? "left" : "center",
+                        background: "var(--muted)",
+                        borderBottom: "1px solid var(--border)",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {stats.weeklyTrends
+                  .slice()
+                  .reverse()
+                  .slice(0, 8)
+                  .map((week, i, arr) => {
+                    const prevWeek = arr[i + 1];
+                    const change = prevWeek && prevWeek.averageScore > 0 ? week.averageScore - prevWeek.averageScore : null;
+                    return (
+                      <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 500 }}>
+                          {new Date(week.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </td>
-                        <td className="py-2 px-3 text-center">
-                          <span className={`font-medium ${
-                            week.averageScore >= 80 ? "text-emerald-600" :
-                            week.averageScore >= 60 ? "text-yellow-600" :
-                            week.averageScore > 0 ? "text-red-600" : "text-muted-foreground"
-                          }`}>
+                        <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color:
+                                week.averageScore >= 80
+                                  ? "#16a34a"
+                                  : week.averageScore >= 60
+                                  ? "#ca8a04"
+                                  : week.averageScore > 0
+                                  ? "#dc2626"
+                                  : "var(--muted-foreground)",
+                            }}
+                          >
                             {week.averageScore > 0 ? `${week.averageScore}%` : "—"}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-center">{week.totalCalls}</td>
-                        <td className="py-2 px-3 text-center">{week.gradedCalls}</td>
+                        <td style={{ padding: "12px 14px", textAlign: "center", fontSize: 13 }}>
+                          {week.totalCalls}
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "center", fontSize: 13 }}>
+                          {week.gradedCalls}
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                          {change !== null ? (
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: change >= 0 ? "#16a34a" : "#dc2626",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 2,
+                              }}
+                            >
+                              {change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                              {change >= 0 ? "+" : ""}
+                              {Math.round(change)}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>—</span>
+                          )}
+                        </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <LineChart className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No trend data available yet</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Individual Team Member Trends */}
-      {stats?.teamMemberTrends && stats.teamMemberTrends.filter(m => m.weeklyScores.some(w => w.callCount > 0)).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-violet-500" />
-              Individual Performance Trends
-            </CardTitle>
-            <CardDescription>
-              Weekly score trends by team member
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-6 md:grid-cols-2">
-              {stats.teamMemberTrends
-                .filter(member => member.weeklyScores.some(w => w.callCount > 0))
-                .map((member, memberIndex) => {
-                  const colors = [
-                    "rgb(59, 130, 246)", // blue
-                    "rgb(16, 185, 129)", // emerald
-                    "rgb(245, 158, 11)", // amber
-                    "rgb(139, 92, 246)", // violet
-                  ];
-                  const color = colors[memberIndex % colors.length];
-                  
-                  return (
-                    <div key={member.memberId} className="border rounded-lg p-4">
-                      <h4 className="font-medium mb-3">{member.memberName}</h4>
-                      <div className="relative h-32">
-                        {/* Mini chart */}
-                        <svg className="w-full h-full" preserveAspectRatio="none">
-                          <defs>
-                            <linearGradient id={`gradient-${member.memberId}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor={color} stopOpacity="0.2" />
-                              <stop offset="100%" stopColor={color} stopOpacity="0" />
-                            </linearGradient>
-                          </defs>
-                          {/* Area */}
-                          <path
-                            d={`M 0 ${100 - (member.weeklyScores[0]?.averageScore || 0)} ` +
-                              member.weeklyScores.map((week, i) => {
-                                const x = (i / (member.weeklyScores.length - 1)) * 100;
-                                const y = 100 - week.averageScore;
-                                return `L ${x} ${y}`;
-                              }).join(' ') +
-                              ` L 100 100 L 0 100 Z`}
-                            fill={`url(#gradient-${member.memberId})`}
-                            vectorEffect="non-scaling-stroke"
-                          />
-                          {/* Line */}
-                          <path
-                            d={`M 0 ${100 - (member.weeklyScores[0]?.averageScore || 0)} ` +
-                              member.weeklyScores.map((week, i) => {
-                                const x = (i / (member.weeklyScores.length - 1)) * 100;
-                                const y = 100 - week.averageScore;
-                                return `L ${x} ${y}`;
-                              }).join(' ')}
-                            fill="none"
-                            stroke={color}
-                            strokeWidth="2"
-                            vectorEffect="non-scaling-stroke"
-                          />
-                        </svg>
-                      </div>
-                      {/* Stats summary */}
-                      <div className="flex justify-between text-sm mt-2">
-                        <span className="text-muted-foreground">
-                          {member.weeklyScores.reduce((sum, w) => sum + w.callCount, 0)} total calls
-                        </span>
-                        <span className="font-medium" style={{ color }}>
-                          {(() => {
-                            const recentScores = member.weeklyScores.slice(-4).filter(w => w.callCount > 0);
-                            if (recentScores.length === 0) return "No recent data";
-                            const avg = recentScores.reduce((sum, w) => sum + w.averageScore, 0) / recentScores.length;
-                            return `${Math.round(avg)}% avg (last 4 weeks)`;
-                          })()}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </CardContent>
-        </Card>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
