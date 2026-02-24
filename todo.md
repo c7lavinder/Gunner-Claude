@@ -2759,3 +2759,6 @@
 ## Team Page Color & Text Tweaks
 - [x] Update color scheme to match Gunner brand (dark maroon/crimson reds)
 - [x] Replace all "CHARACTER" text with "TEAMMATE"
+
+## Teammate Classes Color Update
+- [x] Lead Manager = red, Acquisition Manager = orange, Lead Generator = yellow

@@ -26,17 +26,17 @@ const roleLabels: Record<string, string> = {
 };
 
 const roleGlowColors: Record<string, string> = {
-  admin: "from-red-900 to-red-800",
-  lead_manager: "from-red-800 to-red-700",
-  acquisition_manager: "from-red-700 to-amber-800",
-  lead_generator: "from-amber-700 to-amber-600",
+  admin: "from-red-700 to-red-600",
+  lead_manager: "from-orange-600 to-orange-400",
+  acquisition_manager: "from-red-700 to-red-500",
+  lead_generator: "from-yellow-500 to-yellow-400",
 };
 
 const roleBadgeColors: Record<string, string> = {
-  admin: "bg-red-900/80 text-white border-red-700/50",
-  lead_manager: "bg-red-800/80 text-white border-red-600/50",
+  admin: "bg-red-700/80 text-white border-red-500/50",
+  lead_manager: "bg-orange-600/80 text-white border-orange-400/50",
   acquisition_manager: "bg-red-700/80 text-white border-red-500/50",
-  lead_generator: "bg-amber-700/80 text-white border-amber-500/50",
+  lead_generator: "bg-yellow-500/80 text-slate-900 border-yellow-400/50",
 };
 
 // ─── RANK GLOW COLORS ───────────────────────────────────
@@ -818,9 +818,9 @@ function TeamMembersContent() {
         </div>
         <div className="p-4 grid gap-3 sm:grid-cols-3">
           {[
-            { role: "lead_manager", label: "Lead Manager", desc: "Qualifies leads, extracts motivation, discusses price, and sets appointments for walkthroughs.", glow: "from-red-800 to-red-700" },
-            { role: "acquisition_manager", label: "Acquisition Manager", desc: "Handles offer calls and closings. Graded on motivation restatement, offer setup, and price delivery.", glow: "from-red-700 to-amber-800" },
-            { role: "lead_generator", label: "Lead Generator", desc: "Makes cold calls to generate interest. Sets up warm handoffs to Lead Managers.", glow: "from-amber-700 to-amber-600" },
+            { role: "lead_manager", label: "Lead Manager", desc: "Qualifies leads, extracts motivation, discusses price, and sets appointments for walkthroughs.", glow: "from-orange-600 to-orange-400" },
+            { role: "acquisition_manager", label: "Acquisition Manager", desc: "Handles offer calls and closings. Graded on motivation restatement, offer setup, and price delivery.", glow: "from-red-700 to-red-500" },
+            { role: "lead_generator", label: "Lead Generator", desc: "Makes cold calls to generate interest. Sets up warm handoffs to Lead Managers.", glow: "from-yellow-500 to-yellow-400" },
           ].map(r => (
             <div key={r.role} className="relative rounded-lg overflow-hidden">
               <div className={`bg-gradient-to-r ${r.glow} p-px`}>
