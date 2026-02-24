@@ -2824,3 +2824,9 @@
 - [x] Add Call History table with search bar, filter pills (All/Completed/Needs Review), and data table
 - [x] Remove excessive numbers and stat overload from current dashboard
 - [x] Match dark card backgrounds, icon styling, and change percentage badges from lookbook
+
+## Dashboard Visual Fixes - Match Lookbook Exactly
+- [x] Fix Recent Activity text formatting (score jammed against text, needs spacing like lookbook)
+- [x] Fix Score Trends chart bars (too flat/thin, should be tall vertical bars like lookbook)
+- [x] Add variety to activity feed (badges earned, milestones, streaks, not just scores)
+- [x] Ensure activity text reads naturally: "Name scored **92%** on call with Contact"

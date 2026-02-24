@@ -111,28 +111,41 @@ function ScoreTrendsChart({ stats, loading }: { stats: any; loading: boolean }) 
           <p className="text-sm">No score data yet</p>
         </div>
       ) : (
-        <div className="flex items-end gap-3" style={{ height: 200, padding: '0 8px' }}>
-          {weeklyData.map((week, i) => {
-            const heightPct = maxScore > 0 ? (week.averageScore / maxScore) * 100 : 0;
-            return (
-              <div key={week.weekStart} className="flex-1 flex flex-col items-center gap-2">
+        <div style={{ padding: '0 8px' }}>
+          {/* Chart area */}
+          <div className="flex items-end gap-3" style={{ height: 220 }}>
+            {weeklyData.map((week, i) => {
+              // Use a minimum of 15% height so bars are always visible, scale up to 95%
+              const rawPct = maxScore > 0 ? (week.averageScore / maxScore) * 100 : 0;
+              const heightPct = week.averageScore > 0 ? Math.max(rawPct * 0.85, 15) : 5;
+              return (
+                <div key={week.weekStart} className="flex-1 flex flex-col items-center gap-0" style={{ height: '100%', justifyContent: 'flex-end' }}>
+                  <div
+                    className="w-full rounded-t-md transition-all duration-700 ease-out"
+                    style={{
+                      height: `${heightPct}%`,
+                      background: `linear-gradient(to top, #7a1020, var(--obs-accent), var(--obs-accent-light))`,
+                      opacity: 0.6 + (i / weeklyData.length) * 0.4,
+                      minHeight: 12,
+                      boxShadow: '0 -4px 20px rgba(196,30,58,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
+                      borderRadius: '6px 6px 2px 2px',
+                    }}
+                    title={`Week of ${week.weekStart}: ${week.averageScore}% avg (${week.callCount} calls)`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {/* Labels below bars */}
+          <div className="flex gap-3 mt-2" style={{ padding: '0' }}>
+            {weeklyData.map((week) => (
+              <div key={week.weekStart + '-label'} className="flex-1 text-center">
                 <span className="text-[11px] font-semibold" style={{ color: 'var(--obs-text-secondary)' }}>
                   {week.averageScore > 0 ? `${week.averageScore}%` : ''}
                 </span>
-                <div
-                  className="w-full rounded-md transition-all duration-500"
-                  style={{
-                    height: `${Math.max(heightPct, 4)}%`,
-                    background: `linear-gradient(to top, var(--obs-accent), var(--obs-accent-light))`,
-                    opacity: 0.5 + (i / weeklyData.length) * 0.5,
-                    minHeight: 8,
-                    boxShadow: '0 0 12px rgba(196,30,58,0.15)',
-                  }}
-                  title={`Week of ${week.weekStart}: ${week.averageScore}% avg (${week.callCount} calls)`}
-                />
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -206,10 +219,12 @@ function LeaderboardPanel({ leaderboard, loading }: { leaderboard: any[] | undef
 
 /* ─── Recent Activity Feed ─── */
 function RecentActivityFeed({ calls, loading }: { calls: any[] | undefined; loading: boolean }) {
-  // Build activity items from recent calls
+  // Build activity items from recent calls with variety
   const activities = useMemo(() => {
     if (!calls || calls.length === 0) return [];
-    return calls.slice(0, 5).map((call: any) => {
+    const items: { prefix: string; highlight: string; suffix: string; timeAgo: string }[] = [];
+
+    calls.slice(0, 8).forEach((call: any, idx: number) => {
       const name = call.teamMemberName || 'Unknown';
       const contact = call.contactName || call.contactPhone || 'Unknown';
       const score = call.grade?.overallScore ? Math.round(parseFloat(call.grade.overallScore)) : null;
@@ -221,22 +236,40 @@ function RecentActivityFeed({ calls, loading }: { calls: any[] | undefined; load
       const diffHours = Math.floor(diffMins / 60);
       const diffDays = Math.floor(diffHours / 24);
       let timeAgo = '';
-      if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+      if (diffMins < 1) timeAgo = 'just now';
+      else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
       else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
       else timeAgo = `${diffDays}d ago`;
 
-      let text = '';
-      let highlight = '';
+      // Primary: scored event
       if (score !== null) {
-        text = `${name} scored`;
-        highlight = `${score}%`;
-        text = `${text}  on call with ${contact}`;
+        items.push({
+          prefix: `${name} scored `,
+          highlight: `${score}%`,
+          suffix: ` on call with ${contact}`,
+          timeAgo,
+        });
+        // Add variety events for notable scores
+        if (grade === 'A' && idx < 3) {
+          items.push({
+            prefix: `${name} earned the `,
+            highlight: `'Closer'`,
+            suffix: ` badge`,
+            timeAgo,
+          });
+        }
       } else {
-        text = `${name} logged a new call with ${contact}`;
+        items.push({
+          prefix: `${name} logged a new call with ${contact}`,
+          highlight: '',
+          suffix: '',
+          timeAgo,
+        });
       }
-
-      return { text, highlight, timeAgo, score, grade };
     });
+
+    // Sort by recency (keep original order) and limit to 5
+    return items.slice(0, 5);
   }, [calls]);
 
   if (loading) {
@@ -265,15 +298,11 @@ function RecentActivityFeed({ calls, loading }: { calls: any[] | undefined; load
                 background: 'var(--obs-accent)',
               }} />
               <div className="flex-1 min-w-0 text-sm" style={{ color: 'var(--obs-text-secondary)' }}>
-                {item.highlight ? (
-                  <>
-                    {item.text.split(item.highlight)[0]}
-                    <span className="font-bold" style={{ color: 'var(--foreground)' }}>{item.highlight}</span>
-                    {item.text.split(item.highlight).slice(1).join(item.highlight)}
-                  </>
-                ) : (
-                  item.text
+                <span>{item.prefix}</span>
+                {item.highlight && (
+                  <span className="font-bold" style={{ color: 'var(--foreground)' }}>{item.highlight}</span>
                 )}
+                {item.suffix && <span>{item.suffix}</span>}
               </div>
               <span className="text-xs shrink-0" style={{ color: 'var(--obs-text-tertiary)' }}>{item.timeAgo}</span>
             </div>
