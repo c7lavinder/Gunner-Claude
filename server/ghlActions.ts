@@ -203,9 +203,10 @@ export async function getPipelinesForTenant(
 
 // Common abbreviation mappings for real estate pipeline stages
 const ABBREVIATION_MAP: Record<string, string[]> = {
-  "apt": ["appointment", "appt"],
-  "appt": ["appointment", "apt"],
-  "appointment": ["apt", "appt"],
+  "apt": ["appointment", "appt", "call"],
+  "appt": ["appointment", "apt", "call"],
+  "appointment": ["apt", "appt", "call"],
+  "call": ["apt", "appt", "appointment"],
   "qual": ["qualified", "qualification"],
   "qualified": ["qual"],
   "dq": ["disqualified", "disqualify", "dq'd"],
@@ -390,21 +391,34 @@ export function resolveStageByName(
     }
   }
 
-  // Pass 4: Abbreviation-expanded exact word match — check if input abbreviation matches a stage
+  // Pass 4: Abbreviation-expanded word match — require majority of input words to match stage words
   // e.g., "disqualified" → abbreviation "dq" matches stage "DQ'd" → abbreviation "dq"
+  // Requires at least 50% of input words to match to prevent false positives from single shared words
   for (const pipeline of searchPipelines) {
-    const inputVariants = new Set(normalizedStage.split(/\s+/).flatMap(w => expandWord(w)));
-    const stage = pipeline.stages.find(s => {
+    const fillerWords = new Set(["stage", "the", "to", "in", "a", "an"]);
+    const inputWords = normalizedStage.split(/\s+/).filter(w => !fillerWords.has(w));
+    let bestMatch: typeof pipeline.stages[0] | null = null;
+    let bestScore = 0;
+    for (const s of pipeline.stages) {
       const strippedActual = stripParenthetical(s.name).toLowerCase();
-      const actualVariants = new Set(strippedActual.split(/\s+/).flatMap(w => expandWord(w)));
-      // Check if any input variant exactly matches any actual variant
-      for (const iv of Array.from(inputVariants)) {
-        if (actualVariants.has(iv)) return true;
+      const actualWords = strippedActual.split(/\s+/).filter(w => !fillerWords.has(w));
+      const actualVariants = new Set(actualWords.flatMap(w => expandWord(w)));
+      // Count how many input words match
+      let matchCount = 0;
+      for (const iw of inputWords) {
+        const iVariants = expandWord(iw);
+        if (iVariants.some(iv => actualVariants.has(iv))) matchCount++;
       }
-      return false;
-    });
-    if (stage) {
-      return { pipelineId: pipeline.id, stageId: stage.id, pipelineName: pipeline.name, stageName: stage.name };
+      // Require at least 50% of input words to match
+      const matchRatio = matchCount / inputWords.length;
+      if (matchRatio >= 0.5 && matchCount > bestScore) {
+        bestScore = matchCount;
+        bestMatch = s;
+      }
+    }
+    if (bestMatch) {
+      const pipeline2 = searchPipelines.find(p => p.stages.some(s => s.id === bestMatch!.id))!;
+      return { pipelineId: pipeline2.id, stageId: bestMatch.id, pipelineName: pipeline2.name, stageName: bestMatch.name };
     }
   }
 
