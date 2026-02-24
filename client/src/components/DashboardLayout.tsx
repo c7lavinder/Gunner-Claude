@@ -23,12 +23,53 @@ import {
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Building2, Shield, AlertTriangle, Settings } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Phone, BarChart3, BookOpen, Building2, Shield, AlertTriangle, Settings, Sun, Moon } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect, useSearch } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { useImpersonation } from "./ImpersonationBanner";
+import { useTheme } from "@/contexts/ThemeContext";
+
+// ─── THEME TOGGLE COMPONENTS ───────────────────────────
+function ThemeToggleButton() {
+  const { theme, toggleTheme, switchable } = useTheme();
+  if (!switchable || !toggleTheme) return null;
+  return (
+    <button
+      onClick={toggleTheme}
+      className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+    >
+      {theme === 'light' ? (
+        <Moon className="h-4 w-4 text-muted-foreground shrink-0" />
+      ) : (
+        <Sun className="h-4 w-4 text-muted-foreground shrink-0" />
+      )}
+      <span className="text-sm text-muted-foreground group-data-[collapsible=icon]:hidden">
+        {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+      </span>
+    </button>
+  );
+}
+
+function MobileThemeToggle() {
+  const { theme, toggleTheme, switchable } = useTheme();
+  if (!switchable || !toggleTheme) return null;
+  return (
+    <button
+      onClick={toggleTheme}
+      className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent/50 transition-colors"
+      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+    >
+      {theme === 'light' ? (
+        <Moon className="h-4 w-4 text-muted-foreground" />
+      ) : (
+        <Sun className="h-4 w-4 text-muted-foreground" />
+      )}
+    </button>
+  );
+}
 
 const getMenuItems = (teamRole: string | null | undefined, openId?: string, userRole?: string, isTenantAdmin?: string | null, isDemo?: boolean) => {
   const isAdmin = teamRole === 'admin' || isTenantAdmin === 'true';
@@ -364,6 +405,10 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
+            {/* Theme Toggle */}
+            <div className="px-1 mb-2 group-data-[collapsible=icon]:px-0">
+              <ThemeToggleButton />
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -426,6 +471,7 @@ function DashboardLayoutContent({
                 className="h-8 object-contain"
               />
             </div>
+            <MobileThemeToggle />
           </div>
         )}
         <main className="flex-1 p-4">{children}</main>

@@ -32,28 +32,35 @@ const roleGlowColors: Record<string, string> = {
   lead_generator: "from-yellow-500 to-yellow-400",
 };
 
+const roleGlowColorsLight: Record<string, string> = {
+  admin: "from-red-600/20 to-red-500/10",
+  lead_manager: "from-orange-500/20 to-orange-400/10",
+  acquisition_manager: "from-red-600/20 to-red-500/10",
+  lead_generator: "from-yellow-400/20 to-yellow-300/10",
+};
+
 const roleBadgeColors: Record<string, string> = {
-  admin: "bg-red-700/80 text-white border-red-500/50",
-  lead_manager: "bg-orange-600/80 text-white border-orange-400/50",
-  acquisition_manager: "bg-red-700/80 text-white border-red-500/50",
-  lead_generator: "bg-yellow-500/80 text-slate-900 border-yellow-400/50",
+  admin: "bg-red-700/80 text-white border-red-500/50 dark:bg-red-700/80 dark:text-white",
+  lead_manager: "bg-orange-600/80 text-white border-orange-400/50 dark:bg-orange-600/80 dark:text-white",
+  acquisition_manager: "bg-red-700/80 text-white border-red-500/50 dark:bg-red-700/80 dark:text-white",
+  lead_generator: "bg-yellow-500/80 text-slate-900 border-yellow-400/50 dark:bg-yellow-500/80 dark:text-slate-900",
 };
 
 // ─── RANK GLOW COLORS ───────────────────────────────────
 function getRankGlow(rank: number) {
   if (rank === 1) return { border: "border-yellow-400", shadow: "shadow-[0_0_20px_rgba(250,204,21,0.5)]", bg: "from-yellow-400/20 to-yellow-600/10" };
-  if (rank === 2) return { border: "border-slate-300", shadow: "shadow-[0_0_15px_rgba(203,213,225,0.4)]", bg: "from-slate-300/15 to-slate-400/5" };
+  if (rank === 2) return { border: "border-slate-300 dark:border-slate-300", shadow: "shadow-[0_0_15px_rgba(203,213,225,0.4)]", bg: "from-slate-300/15 to-slate-400/5" };
   if (rank === 3) return { border: "border-amber-600", shadow: "shadow-[0_0_15px_rgba(217,119,6,0.4)]", bg: "from-amber-600/15 to-amber-700/5" };
-  return { border: "border-slate-700", shadow: "", bg: "from-slate-800/50 to-slate-900/50" };
+  return { border: "border-border", shadow: "", bg: "from-muted to-muted/50" };
 }
 
 // ─── LEVEL TIER STYLING ─────────────────────────────────
 function getLevelStyle(level: number) {
-  if (level >= 5) return { color: "text-yellow-400", glow: "drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]", label: "LEGENDARY" };
-  if (level >= 4) return { color: "text-red-400", glow: "drop-shadow-[0_0_6px_rgba(220,38,38,0.5)]", label: "EPIC" };
-  if (level >= 3) return { color: "text-red-500", glow: "drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]", label: "RARE" };
-  if (level >= 2) return { color: "text-amber-400", glow: "drop-shadow-[0_0_4px_rgba(251,191,36,0.4)]", label: "UNCOMMON" };
-  return { color: "text-slate-400", glow: "", label: "COMMON" };
+  if (level >= 5) return { color: "text-yellow-500 dark:text-yellow-400", glow: "drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]", label: "LEGENDARY" };
+  if (level >= 4) return { color: "text-red-500 dark:text-red-400", glow: "drop-shadow-[0_0_6px_rgba(220,38,38,0.5)]", label: "EPIC" };
+  if (level >= 3) return { color: "text-red-600 dark:text-red-500", glow: "drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]", label: "RARE" };
+  if (level >= 2) return { color: "text-amber-500 dark:text-amber-400", glow: "drop-shadow-[0_0_4px_rgba(251,191,36,0.4)]", label: "UNCOMMON" };
+  return { color: "text-muted-foreground", glow: "", label: "COMMON" };
 }
 
 // ─── STAT BAR COMPONENT ─────────────────────────────────
@@ -62,8 +69,8 @@ function StatBar({ label, value, max, color, icon }: { label: string; value: num
   return (
     <div className="flex items-center gap-2">
       {icon && <span className="text-xs opacity-60 w-4">{icon}</span>}
-      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 w-12 shrink-0">{label}</span>
-      <div className="flex-1 h-2.5 bg-slate-800 rounded-sm overflow-hidden border border-slate-700/50 relative">
+      <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground w-12 shrink-0">{label}</span>
+      <div className="flex-1 h-2.5 bg-muted rounded-sm overflow-hidden border border-border relative">
         <div 
           className={`h-full ${color} transition-all duration-700 ease-out relative`}
           style={{ width: `${pct}%` }}
@@ -71,7 +78,7 @@ function StatBar({ label, value, max, color, icon }: { label: string; value: num
           <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20" />
         </div>
       </div>
-      <span className="text-xs font-mono text-slate-300 w-10 text-right tabular-nums">{value}</span>
+      <span className="text-xs font-mono text-foreground/70 w-10 text-right tabular-nums">{value}</span>
     </div>
   );
 }
@@ -185,12 +192,12 @@ function CharacterCard({
       <div className={`relative rounded-xl overflow-hidden border-2 transition-all duration-300 ${
         isSelected 
           ? `${rankGlow.border} ${rankGlow.shadow}` 
-          : `border-slate-700/60 hover:border-slate-600`
+          : `border-border hover:border-primary/30`
       }`}>
         
         {/* Top gradient header - teammate portrait area */}
         <div className={`relative bg-gradient-to-br ${roleGlow} p-0.5`}>
-          <div className="bg-slate-900/90 backdrop-blur-sm">
+          <div className="bg-card/95 dark:bg-slate-900/90 backdrop-blur-sm">
             <div className="p-3 sm:p-4">
               <div className="flex items-start gap-3">
                 {/* Avatar */}
@@ -202,19 +209,19 @@ function CharacterCard({
                       }`}>
                         <Avatar className="h-16 w-16 sm:h-20 sm:w-20 rounded-none">
                           <AvatarImage src={member.user?.profilePicture || undefined} className="object-cover" />
-                          <AvatarFallback className="text-xl sm:text-2xl font-black bg-gradient-to-br from-slate-700 to-slate-800 text-white rounded-none" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                          <AvatarFallback className="text-xl sm:text-2xl font-black bg-gradient-to-br from-primary/80 to-primary text-primary-foreground rounded-none" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                             {member.name?.charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                       </div>
                       {isCurrentUser && (
-                        <div className="absolute -bottom-1 -right-1 bg-slate-800 rounded-full p-1 border border-slate-600">
-                          <Camera className="h-2.5 w-2.5 text-slate-300" />
+                        <div className="absolute -bottom-1 -right-1 bg-card rounded-full p-1 border border-border">
+                          <Camera className="h-2.5 w-2.5 text-muted-foreground" />
                         </div>
                       )}
                       {/* Rank number */}
-                      <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-slate-900 border border-slate-600 flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-slate-300" style={{ fontFamily: "'Orbitron', sans-serif" }}>#{rank}</span>
+                      <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-card border border-border flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-foreground/70" style={{ fontFamily: "'Orbitron', sans-serif" }}>#{rank}</span>
                       </div>
                     </div>
                   </DialogTrigger>
@@ -234,7 +241,7 @@ function CharacterCard({
                 
                 {/* Name & Role */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-base sm:text-lg font-black text-white leading-tight truncate tracking-wide" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                  <h3 className="text-base sm:text-lg font-black text-foreground leading-tight truncate tracking-wide" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                     {member.name}
                   </h3>
                   <div className={`inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded mt-1 border ${roleBadge}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
@@ -250,7 +257,7 @@ function CharacterCard({
                         </span>
                       ))}
                       {badges.length > 5 && (
-                        <span className="text-[10px] text-slate-500 self-center">+{badges.length - 5}</span>
+                        <span className="text-[10px] text-muted-foreground self-center">+{badges.length - 5}</span>
                       )}
                     </div>
                   )}
@@ -261,7 +268,7 @@ function CharacterCard({
                   <div className={`text-2xl sm:text-3xl font-black ${levelStyle.color} ${levelStyle.glow} leading-none`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
                     {level}
                   </div>
-                  <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-widest mt-0.5" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                     LVL
                   </div>
                   <div className={`text-[8px] sm:text-[9px] ${levelStyle.color} uppercase tracking-wider mt-0.5 opacity-70`} style={{ fontFamily: "'Press Start 2P', cursive", fontSize: "7px" }}>
@@ -279,9 +286,9 @@ function CharacterCard({
               {/* XP Progress bar */}
               <div className="mt-2.5">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">{xp.toLocaleString()} XP</span>
+                  <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">{xp.toLocaleString()} XP</span>
                 </div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden border border-border">
                   <div 
                     className="h-full bg-gradient-to-r from-red-700 via-red-600 to-amber-500 transition-all duration-1000 relative"
                     style={{ width: `${Math.min((xp % 500) / 5, 100)}%` }}
@@ -294,8 +301,8 @@ function CharacterCard({
           </div>
         </div>
         
-        {/* Stats section - dark panel */}
-        <div className="bg-slate-900 p-3 sm:p-4 space-y-1.5">
+        {/* Stats section */}
+        <div className="bg-card p-3 sm:p-4 space-y-1.5">
           <StatBar label="CALLS" value={totalCalls} max={maxCalls} color="bg-gradient-to-r from-red-700 to-red-500" />
           <StatBar label="SCORE" value={avgScore ? Math.round(avgScore) : 0} max={maxScore} color="bg-gradient-to-r from-amber-600 to-amber-400" />
           <StatBar label="A & B" value={abCount} max={maxAB} color="bg-gradient-to-r from-red-600 to-amber-500" />
@@ -303,7 +310,7 @@ function CharacterCard({
           
           {/* Grade distribution mini bar */}
           {totalCalls > 0 && (
-            <div className="pt-1.5 mt-1 border-t border-slate-800">
+            <div className="pt-1.5 mt-1 border-t border-border">
               <div className="flex h-1.5 rounded-full overflow-hidden">
                 {gradeDistribution.A > 0 && <div className="bg-emerald-500" style={{ width: `${(gradeDistribution.A / totalCalls) * 100}%` }} />}
                 {gradeDistribution.B > 0 && <div className="bg-teal-500" style={{ width: `${(gradeDistribution.B / totalCalls) * 100}%` }} />}
@@ -319,7 +326,7 @@ function CharacterCard({
                   { label: "D", count: gradeDistribution.D, color: "bg-orange-500" },
                   { label: "F", count: gradeDistribution.F, color: "bg-red-500" },
                 ].map(g => (
-                  <span key={g.label} className="flex items-center gap-0.5 text-[9px] text-slate-500">
+                  <span key={g.label} className="flex items-center gap-0.5 text-[9px] text-muted-foreground">
                     <span className={`w-1.5 h-1.5 rounded-full ${g.color}`} />{g.label}
                   </span>
                 ))}
@@ -353,10 +360,10 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
   const roleGlow = roleGlowColors[member.teamRole] || "from-slate-500 to-slate-700";
 
   return (
-    <div className="relative rounded-xl overflow-hidden border-2 border-slate-700/60 bg-slate-900">
+    <div className="relative rounded-xl overflow-hidden border-2 border-border bg-card">
       {/* Header with gradient */}
       <div className={`bg-gradient-to-r ${roleGlow} p-0.5`}>
-        <div className="bg-slate-900/95 backdrop-blur-sm p-4 sm:p-6">
+        <div className="bg-card/95 dark:bg-slate-900/95 backdrop-blur-sm p-4 sm:p-6">
           <div className="flex items-center gap-4 sm:gap-6">
             {/* Large avatar */}
             <div className="relative shrink-0">
@@ -365,7 +372,7 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
               }`}>
                 <Avatar className="h-24 w-24 sm:h-32 sm:w-32 rounded-none">
                   <AvatarImage src={member.user?.profilePicture || undefined} className="object-cover" />
-                  <AvatarFallback className="text-4xl sm:text-5xl font-black bg-gradient-to-br from-slate-700 to-slate-800 text-white rounded-none" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                  <AvatarFallback className="text-4xl sm:text-5xl font-black bg-gradient-to-br from-primary/80 to-primary text-primary-foreground rounded-none" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                     {member.name?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -383,7 +390,7 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
             
             {/* Teammate info */}
             <div className="flex-1 min-w-0">
-              <h2 className="text-xl sm:text-3xl font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+              <h2 className="text-xl sm:text-3xl font-black text-foreground tracking-wide" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                 {member.name}
               </h2>
               <div className={`inline-block text-xs px-3 py-1 rounded mt-1 border ${roleBadgeColors[member.teamRole] || "bg-slate-500/80 text-white"}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
@@ -396,7 +403,7 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
                     LVL {level}
                   </span>
                 </div>
-                <div className="text-slate-400">
+                <div className="text-muted-foreground">
                   <div className="text-sm font-bold" style={{ fontFamily: "'Orbitron', sans-serif" }}>{title}</div>
                   <div className="text-xs font-mono">{xp.toLocaleString()} XP</div>
                 </div>
@@ -416,16 +423,16 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
       {/* Stats grid */}
       <div className="p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "CALLS", value: totalCalls, color: "from-red-700 to-red-600", textColor: "text-red-400" },
-          { label: "AVG SCORE", value: avgScore ? `${Math.round(avgScore)}%` : "N/A", color: "from-amber-600 to-amber-500", textColor: "text-amber-400" },
-          { label: "A & B GRADES", value: gradeDistribution.A + gradeDistribution.B, color: "from-red-600 to-amber-500", textColor: "text-red-300" },
-          { label: "BADGES", value: badges.length, color: "from-red-800 to-red-600", textColor: "text-red-400" },
+          { label: "CALLS", value: totalCalls, color: "from-red-700 to-red-600", textColor: "text-red-600 dark:text-red-400" },
+          { label: "AVG SCORE", value: avgScore ? `${Math.round(avgScore)}%` : "N/A", color: "from-amber-600 to-amber-500", textColor: "text-amber-600 dark:text-amber-400" },
+          { label: "A & B GRADES", value: gradeDistribution.A + gradeDistribution.B, color: "from-red-600 to-amber-500", textColor: "text-red-500 dark:text-red-300" },
+          { label: "BADGES", value: badges.length, color: "from-red-800 to-red-600", textColor: "text-red-600 dark:text-red-400" },
         ].map(stat => (
-          <div key={stat.label} className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/50 text-center">
+          <div key={stat.label} className="bg-muted/60 rounded-lg p-3 border border-border text-center">
             <div className={`text-2xl sm:text-3xl font-black ${stat.textColor}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
               {stat.value}
             </div>
-            <div className="text-[9px] text-slate-500 uppercase tracking-widest mt-1" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+            <div className="text-[9px] text-muted-foreground uppercase tracking-widest mt-1" style={{ fontFamily: "'Orbitron', sans-serif" }}>
               {stat.label}
             </div>
           </div>
@@ -436,14 +443,14 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
       {badges.length > 0 && (
         <div className="px-4 sm:px-6 pb-4 sm:pb-6">
           <div className="flex items-center gap-2 mb-2">
-            <Award className="h-4 w-4 text-red-400" />
-            <span className="text-xs text-slate-400 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Achievements</span>
+            <Award className="h-4 w-4 text-primary" />
+            <span className="text-xs text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Achievements</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {badges.map((badge: any, i: number) => (
-              <div key={i} className="bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-700/50 flex items-center gap-1.5" title={`${badge.name} (${badge.tier})`}>
+              <div key={i} className="bg-muted/80 px-2.5 py-1.5 rounded-lg border border-border flex items-center gap-1.5" title={`${badge.name} (${badge.tier})`}>
                 <span className="text-base">{badge.icon}</span>
-                <span className="text-[10px] text-slate-400 font-medium">{badge.name}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{badge.name}</span>
               </div>
             ))}
           </div>
@@ -455,9 +462,9 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
 
 // ─── PROFILE BADGE CARD ─────────────────────────────────
 const profileTierColors: Record<string, { bg: string; border: string; text: string }> = {
-  bronze: { bg: "bg-amber-900/30", border: "border-amber-700/50", text: "text-amber-400" },
-  silver: { bg: "bg-slate-800/50", border: "border-slate-500/50", text: "text-slate-300" },
-  gold: { bg: "bg-yellow-900/30", border: "border-yellow-500/50", text: "text-yellow-400" },
+  bronze: { bg: "bg-amber-100 dark:bg-amber-900/30", border: "border-amber-300 dark:border-amber-700/50", text: "text-amber-700 dark:text-amber-400" },
+  silver: { bg: "bg-slate-100 dark:bg-slate-800/50", border: "border-slate-300 dark:border-slate-500/50", text: "text-slate-600 dark:text-slate-300" },
+  gold: { bg: "bg-yellow-100 dark:bg-yellow-900/30", border: "border-yellow-300 dark:border-yellow-500/50", text: "text-yellow-700 dark:text-yellow-400" },
 };
 
 interface BadgeTier { target: number; earned: boolean; earnedAt?: Date | string; }
@@ -484,26 +491,26 @@ function ProfileBadgeCard({ badge }: { badge: BadgeData }) {
 
   return (
     <div className={`relative rounded-lg overflow-hidden transition-all border ${
-      isEarned ? `${tierStyle.bg} ${tierStyle.border}` : "bg-slate-800/30 border-slate-700/30 border-dashed opacity-60"
+      isEarned ? `${tierStyle.bg} ${tierStyle.border}` : "bg-muted/30 border-border border-dashed opacity-60"
     }`}>
       <div className="p-4">
         <div className="flex items-start gap-3">
           <div className={`text-3xl ${!isEarned && "grayscale opacity-50"}`}>{badge.icon}</div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className={`font-bold text-sm ${isEarned ? tierStyle.text : "text-slate-500"}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
+              <h4 className={`font-bold text-sm ${isEarned ? tierStyle.text : "text-muted-foreground"}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
                 {badge.name}
               </h4>
-              {isEarned ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Lock className="h-4 w-4 text-slate-600" />}
+              {isEarned ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">{badge.description}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{badge.description}</p>
             {nextTargetTier && (
               <div className="mt-2">
-                <div className="flex justify-between text-[10px] text-slate-500 mb-1 font-mono">
+                <div className="flex justify-between text-[10px] text-muted-foreground mb-1 font-mono">
                   <span>{nextTargetTier.toUpperCase()}</span>
                   <span>{badge.currentProgress} / {nextTarget}</span>
                 </div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden border border-border">
                   <div className="h-full bg-gradient-to-r from-red-700 to-amber-500 transition-all" style={{ width: `${progressPercent}%` }} />
                 </div>
               </div>
@@ -535,40 +542,40 @@ function MyProfileContent() {
   return (
     <div className="space-y-6">
       {/* XP & Level */}
-      <div className="rounded-xl overflow-hidden border-2 border-slate-700/60 bg-slate-900">
+      <div className="rounded-xl overflow-hidden border-2 border-border bg-card">
         <div className="bg-gradient-to-r from-red-800 to-red-600 p-0.5">
-          <div className="bg-slate-900/95 p-4 sm:p-6">
+          <div className="bg-card/95 dark:bg-slate-900/95 p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
-              <Trophy className="h-5 w-5 text-yellow-400" />
-              <h3 className="text-sm text-slate-400 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Level & Experience</h3>
+              <Trophy className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+              <h3 className="text-sm text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Level & Experience</h3>
             </div>
             {gamificationLoading ? (
-              <Skeleton className="h-24 w-full bg-slate-800" />
+              <Skeleton className="h-24 w-full" />
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-4xl font-black text-white" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                    <p className="text-4xl font-black text-foreground" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                       Level {gamification?.xp.level ?? 1}
                     </p>
-                    <p className="text-lg text-amber-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>{gamification?.xp.title ?? "Rookie"}</p>
+                    <p className="text-lg text-amber-600 dark:text-amber-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>{gamification?.xp.title ?? "Rookie"}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-black text-red-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                    <p className="text-2xl font-black text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                       {gamification?.xp.totalXp?.toLocaleString() ?? 0} XP
                     </p>
-                    <p className="text-sm text-slate-500 font-mono">
+                    <p className="text-sm text-muted-foreground font-mono">
                       {((gamification?.xp.nextLevelXp ?? 500) - (gamification?.xp.totalXp ?? 0)).toLocaleString()} XP to next level
                     </p>
                   </div>
                 </div>
                 <div>
-                    <div className="h-4 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                    <div className="h-4 bg-muted rounded-full overflow-hidden border border-border">
                     <div className="h-full bg-gradient-to-r from-red-700 via-red-600 to-amber-500 transition-all duration-500 relative" style={{ width: `${gamification?.xp.progress ?? 0}%` }}>
                       <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20" />
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 text-right font-mono">{gamification?.xp.progress ?? 0}% to Level {(gamification?.xp.level ?? 1) + 1}</p>
+                  <p className="text-xs text-muted-foreground mt-1 text-right font-mono">{gamification?.xp.progress ?? 0}% to Level {(gamification?.xp.level ?? 1) + 1}</p>
                 </div>
               </div>
             )}
@@ -578,27 +585,27 @@ function MyProfileContent() {
 
       {/* Streaks */}
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl overflow-hidden border-2 border-slate-700/60 bg-slate-900">
+        <div className="rounded-xl overflow-hidden border-2 border-border bg-card">
           <div className="bg-gradient-to-r from-orange-500 to-red-500 p-0.5">
-            <div className="bg-slate-900/95 p-4">
+            <div className="bg-card/95 dark:bg-slate-900/95 p-4">
               <div className="flex items-center gap-2 mb-3">
-                <Flame className="h-5 w-5 text-orange-400" />
-                <h3 className="text-xs text-slate-400 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Hot Streak</h3>
+                <Flame className="h-5 w-5 text-orange-500 dark:text-orange-400" />
+                <h3 className="text-xs text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Hot Streak</h3>
               </div>
-              <p className="text-[10px] text-slate-500 mb-3">Consecutive C+ or better grades</p>
-              {gamificationLoading ? <Skeleton className="h-16 w-full bg-slate-800" /> : (
+              <p className="text-[10px] text-muted-foreground mb-3">Consecutive C+ or better grades</p>
+              {gamificationLoading ? <Skeleton className="h-16 w-full" /> : (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-4xl font-black text-orange-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                    <p className="text-4xl font-black text-orange-500 dark:text-orange-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                       {gamification?.streaks.hotStreakCurrent ?? 0}
                     </p>
-                    <p className="text-xs text-slate-500 font-mono">Current</p>
+                    <p className="text-xs text-muted-foreground font-mono">Current</p>
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-black text-orange-600" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                       {gamification?.streaks.hotStreakBest ?? 0}
                     </p>
-                    <p className="text-xs text-slate-500 font-mono">Best</p>
+                    <p className="text-xs text-muted-foreground font-mono">Best</p>
                   </div>
                 </div>
               )}
@@ -606,27 +613,27 @@ function MyProfileContent() {
           </div>
         </div>
 
-        <div className="rounded-xl overflow-hidden border-2 border-slate-700/60 bg-slate-900">
+        <div className="rounded-xl overflow-hidden border-2 border-border bg-card">
           <div className="bg-gradient-to-r from-blue-500 to-indigo-500 p-0.5">
-            <div className="bg-slate-900/95 p-4">
+            <div className="bg-card/95 dark:bg-slate-900/95 p-4">
               <div className="flex items-center gap-2 mb-3">
-                <Target className="h-5 w-5 text-blue-400" />
-                <h3 className="text-xs text-slate-400 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Consistency</h3>
+                <Target className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+                <h3 className="text-xs text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>Consistency</h3>
               </div>
-              <p className="text-[10px] text-slate-500 mb-3">Days with at least one graded call</p>
-              {gamificationLoading ? <Skeleton className="h-16 w-full bg-slate-800" /> : (
+              <p className="text-[10px] text-muted-foreground mb-3">Days with at least one graded call</p>
+              {gamificationLoading ? <Skeleton className="h-16 w-full" /> : (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-4xl font-black text-blue-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                    <p className="text-4xl font-black text-blue-500 dark:text-blue-400" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                       {gamification?.streaks.consistencyStreakCurrent ?? 0}
                     </p>
-                    <p className="text-xs text-slate-500 font-mono">Current</p>
+                    <p className="text-xs text-muted-foreground font-mono">Current</p>
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-black text-blue-600" style={{ fontFamily: "'Orbitron', sans-serif" }}>
                       {gamification?.streaks.consistencyStreakBest ?? 0}
                     </p>
-                    <p className="text-xs text-slate-500 font-mono">Best</p>
+                    <p className="text-xs text-muted-foreground font-mono">Best</p>
                   </div>
                 </div>
               )}
@@ -638,48 +645,48 @@ function MyProfileContent() {
       {/* Badges */}
       <div className="space-y-6">
         <div>
-          <h2 className="text-sm font-bold mb-4 flex items-center gap-2 text-slate-300 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-            <Award className="h-5 w-5 text-red-400" />
+          <h2 className="text-sm font-bold mb-4 flex items-center gap-2 text-foreground/80 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+            <Award className="h-5 w-5 text-primary" />
             Earned ({earnedBadges.length})
           </h2>
           {badgesLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full bg-slate-800 rounded-lg" />)}
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
             </div>
           ) : earnedBadges.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {earnedBadges.map((badge: BadgeData) => <ProfileBadgeCard key={badge.code} badge={badge} />)}
             </div>
           ) : (
-            <div className="rounded-lg border border-slate-700/50 bg-slate-800/30 flex flex-col items-center justify-center py-8">
-              <Award className="h-12 w-12 text-slate-600 mb-2" />
-              <p className="text-slate-500 text-sm">No badges earned yet. Keep grinding!</p>
+            <div className="rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center py-8">
+              <Award className="h-12 w-12 text-muted-foreground mb-2" />
+              <p className="text-muted-foreground text-sm">No badges earned yet. Keep grinding!</p>
             </div>
           )}
         </div>
 
         <div>
-          <h2 className="text-sm font-bold mb-4 flex items-center gap-2 text-slate-300 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-            <Zap className="h-5 w-5 text-orange-400" />
+          <h2 className="text-sm font-bold mb-4 flex items-center gap-2 text-foreground/80 uppercase tracking-wider" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+            <Zap className="h-5 w-5 text-orange-500 dark:text-orange-400" />
             In Progress ({inProgressBadges.length})
           </h2>
           {badgesLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full bg-slate-800 rounded-lg" />)}
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
             </div>
           ) : inProgressBadges.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {inProgressBadges.map((badge: BadgeData) => <ProfileBadgeCard key={badge.code} badge={badge} />)}
             </div>
           ) : earnedBadges.length === allBadges?.length ? (
-            <div className="rounded-lg border border-slate-700/50 bg-slate-800/30 flex flex-col items-center justify-center py-8">
+            <div className="rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center py-8">
               <CheckCircle className="h-12 w-12 text-green-500/50 mb-2" />
-              <p className="text-slate-500 text-sm">All badges earned! You're a legend!</p>
+              <p className="text-muted-foreground text-sm">All badges earned! You're a legend!</p>
             </div>
           ) : (
-            <div className="rounded-lg border border-slate-700/50 bg-slate-800/30 flex flex-col items-center justify-center py-8">
+            <div className="rounded-lg border border-border bg-muted/30 flex flex-col items-center justify-center py-8">
               <Zap className="h-12 w-12 text-orange-500/50 mb-2" />
-              <p className="text-slate-500 text-sm">Start making calls to unlock badges!</p>
+              <p className="text-muted-foreground text-sm">Start making calls to unlock badges!</p>
             </div>
           )}
         </div>
@@ -767,12 +774,12 @@ function TeamMembersContent() {
       {isLoading ? (
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="rounded-xl border-2 border-slate-700/60 bg-slate-900 overflow-hidden">
-              <div className="p-4"><Skeleton className="h-24 w-full bg-slate-800" /></div>
+            <div key={i} className="rounded-xl border-2 border-border bg-card overflow-hidden">
+              <div className="p-4"><Skeleton className="h-24 w-full" /></div>
               <div className="p-4 space-y-2">
-                <Skeleton className="h-3 w-full bg-slate-800" />
-                <Skeleton className="h-3 w-full bg-slate-800" />
-                <Skeleton className="h-3 w-3/4 bg-slate-800" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
               </div>
             </div>
           ))}
@@ -797,10 +804,10 @@ function TeamMembersContent() {
           })}
         </div>
       ) : (
-        <div className="rounded-xl border-2 border-slate-700/60 bg-slate-900 flex flex-col items-center justify-center py-16">
-          <Users className="h-16 w-16 text-slate-600 mb-4" />
-          <h3 className="text-lg font-bold text-slate-300" style={{ fontFamily: "'Orbitron', sans-serif" }}>No Teammates Found</h3>
-          <p className="text-slate-500 text-center max-w-md mb-4 text-sm">
+        <div className="rounded-xl border-2 border-border bg-card flex flex-col items-center justify-center py-16">
+          <Users className="h-16 w-16 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: "'Orbitron', sans-serif" }}>No Teammates Found</h3>
+          <p className="text-muted-foreground text-center max-w-md mb-4 text-sm">
             Add your first team members to start tracking call performance and coaching.
           </p>
           <Button onClick={() => window.location.href = "/settings"} className="bg-gradient-to-r from-red-800 to-red-600 text-white border-0">
@@ -810,9 +817,9 @@ function TeamMembersContent() {
       )}
 
       {/* Team Roles Legend - arcade style */}
-      <div className="rounded-xl border-2 border-slate-700/60 bg-slate-900 overflow-hidden">
-        <div className="p-4 border-b border-slate-800">
-          <h3 className="text-xs text-slate-400 uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+      <div className="rounded-xl border-2 border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border">
+          <h3 className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Orbitron', sans-serif" }}>
             <Swords className="h-4 w-4" /> Teammate Classes
           </h3>
         </div>
@@ -824,11 +831,11 @@ function TeamMembersContent() {
           ].map(r => (
             <div key={r.role} className="relative rounded-lg overflow-hidden">
               <div className={`bg-gradient-to-r ${r.glow} p-px`}>
-                <div className="bg-slate-900/95 p-3 rounded-lg">
+                <div className="bg-card/95 dark:bg-slate-900/95 p-3 rounded-lg">
                   <div className={`inline-block text-[10px] px-2 py-0.5 rounded border ${roleBadgeColors[r.role]}`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
                     {r.label}
                   </div>
-                  <p className="text-xs text-slate-500 mt-2 leading-relaxed">{r.desc}</p>
+                  <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{r.desc}</p>
                 </div>
               </div>
             </div>
@@ -857,12 +864,12 @@ export default function TeamMembers() {
       </div>
 
       <Tabs defaultValue="team" className="w-full">
-        <TabsList className="bg-slate-900 border border-red-900/40">
-          <TabsTrigger value="team" className="flex items-center gap-2 text-slate-300 data-[state=active]:bg-red-900/40 data-[state=active]:text-white">
+        <TabsList className="bg-muted border border-primary/20">
+          <TabsTrigger value="team" className="flex items-center gap-2 data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
             <Users className="h-4 w-4" />
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11px" }}>ROSTER</span>
           </TabsTrigger>
-          <TabsTrigger value="profile" className="flex items-center gap-2 text-slate-300 data-[state=active]:bg-red-900/40 data-[state=active]:text-white">
+          <TabsTrigger value="profile" className="flex items-center gap-2 data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
             <User className="h-4 w-4" />
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11px" }}>MY PROFILE</span>
           </TabsTrigger>

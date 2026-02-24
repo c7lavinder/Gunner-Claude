@@ -2765,3 +2765,13 @@
 
 ## Bug: MY PROFILE tab text not visible
 - [x] Fix inactive tab text color to be readable against dark background
+
+## Obsidian Design System Redesign
+- [x] Apply Obsidian design system - update global CSS theme (index.css) with new color palette, typography, shadows
+- [x] Add dark/light mode toggle support with theme persistence
+- [x] Update DashboardLayout/navigation with Obsidian styling
+- [x] Update TeamMembers page styling to match Obsidian lookbook
+- [x] Update Home/Dashboard page styling to match Obsidian lookbook
+- [x] Update CallInbox page styling to match Obsidian lookbook
+- [x] Ensure all existing functionality is preserved after redesign
+- [x] Test both light and dark modes across all pages
