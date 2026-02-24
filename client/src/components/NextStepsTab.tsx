@@ -27,8 +27,6 @@ import {
   Sparkles,
   Loader2,
   Send,
-  ChevronDown,
-  ChevronUp,
   Check,
   X,
   Plus,
@@ -123,75 +121,69 @@ const ALL_ACTION_TYPES = [
   "schedule_sms", "add_to_workflow", "remove_from_workflow",
 ];
 
-/** Generate a short human-readable preview string from the action payload */
-function getPayloadPreview(actionType: string, payload: Record<string, any>): string {
+/** Get the field config for each action type — defines which fields to show and how */
+function getFieldsForAction(actionType: string): { key: string; label: string; type: "text" | "textarea" | "date" | "time" | "datetime" }[] {
   switch (actionType) {
     case "check_off_task":
-      return payload.taskKeyword
-        ? `Complete task matching "${payload.taskKeyword}"`
-        : "Complete a task";
+      return [{ key: "taskKeyword", label: "Task keyword to match", type: "text" }];
     case "update_task":
       return [
-        payload.taskKeyword && `Update "${payload.taskKeyword}"`,
-        payload.dueDate && `due ${payload.dueDate}`,
-        payload.description && `— ${truncate(payload.description, 60)}`,
-      ].filter(Boolean).join(" ") || "Update a task";
+        { key: "taskKeyword", label: "Task keyword to match", type: "text" },
+        { key: "dueDate", label: "New due date", type: "date" },
+        { key: "description", label: "New description", type: "textarea" },
+      ];
     case "create_task":
       return [
-        payload.title && `"${payload.title}"`,
-        payload.dueDate && `due ${payload.dueDate}`,
-      ].filter(Boolean).join(" ") || "Create a new task";
+        { key: "title", label: "Task title", type: "text" },
+        { key: "description", label: "Description", type: "textarea" },
+        { key: "dueDate", label: "Due date", type: "date" },
+      ];
     case "add_note":
-      return payload.noteBody
-        ? truncate(payload.noteBody, 120)
-        : "Add a note";
+      return [{ key: "noteBody", label: "Note content", type: "textarea" }];
     case "create_appointment":
       return [
-        payload.title && `"${payload.title}"`,
-        payload.startTime && `on ${formatDateTime(payload.startTime)}`,
-        payload.calendarName && `(${payload.calendarName})`,
-      ].filter(Boolean).join(" ") || "Create an appointment";
+        { key: "title", label: "Appointment title", type: "text" },
+        { key: "startTime", label: "Start time", type: "datetime" },
+        { key: "endTime", label: "End time", type: "datetime" },
+        { key: "calendarName", label: "Calendar", type: "text" },
+      ];
     case "change_pipeline_stage":
       return [
-        payload.pipelineName && `${payload.pipelineName}`,
-        payload.stageName && `→ ${payload.stageName}`,
-      ].filter(Boolean).join(" ") || "Move to a new stage";
+        { key: "pipelineName", label: "Pipeline", type: "text" },
+        { key: "stageName", label: "Stage", type: "text" },
+      ];
     case "send_sms":
-      return payload.message
-        ? `"${truncate(payload.message, 100)}"`
-        : "Send an SMS";
+      return [{ key: "message", label: "SMS message", type: "textarea" }];
     case "schedule_sms":
       return [
-        payload.message && `"${truncate(payload.message, 80)}"`,
-        payload.scheduledDate && `on ${payload.scheduledDate}`,
-        payload.scheduledTime && `at ${payload.scheduledTime}`,
-      ].filter(Boolean).join(" ") || "Schedule an SMS";
+        { key: "message", label: "SMS message", type: "textarea" },
+        { key: "scheduledDate", label: "Send date", type: "date" },
+        { key: "scheduledTime", label: "Send time", type: "time" },
+      ];
     case "add_to_workflow":
-      return payload.workflowName
-        ? `Start "${payload.workflowName}"`
-        : "Start a workflow";
+      return [{ key: "workflowName", label: "Workflow", type: "text" }];
     case "remove_from_workflow":
-      return payload.workflowName
-        ? `Remove from "${payload.workflowName}"`
-        : "Remove from a workflow";
+      return [{ key: "workflowName", label: "Workflow", type: "text" }];
     default:
-      return Object.values(payload).filter(v => typeof v === "string" && v).join(" | ") || "Action";
+      return [];
   }
 }
 
-function truncate(s: string, max: number): string {
-  if (s.length <= max) return s;
-  return s.slice(0, max - 1) + "…";
-}
-
-function formatDateTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, {
-      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-    });
-  } catch {
-    return iso;
+function getPayloadPreview(actionType: string, payload: Record<string, any>): string {
+  switch (actionType) {
+    case "add_note":
+      return payload.noteBody || "Add a note";
+    case "create_task":
+      return payload.title || "Create a task";
+    case "send_sms":
+    case "schedule_sms":
+      return payload.message || "Send SMS";
+    case "change_pipeline_stage":
+      return `${payload.pipelineName || ""} → ${payload.stageName || ""}`.trim();
+    case "add_to_workflow":
+      return payload.workflowName || "Start workflow";
+    default:
+      return actionType.replace(/_/g, " ");
   }
 }
 
@@ -210,9 +202,8 @@ function ActionCard({
   onDelete: (action: NextStepAction) => void;
   isPushing: boolean;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedPayload, setEditedPayload] = useState<Record<string, any>>(action.payload);
+  const [editedPayload, setEditedPayload] = useState<Record<string, any>>({ ...action.payload });
 
   const config = ACTION_TYPE_CONFIG[action.actionType] || {
     label: action.actionType.replace(/_/g, " "),
@@ -221,55 +212,29 @@ function ActionCard({
     bgColor: "bg-gray-50",
   };
 
+  const fields = getFieldsForAction(action.actionType);
+
+  const handleStartEdit = () => {
+    setEditedPayload({ ...action.payload });
+    setIsEditing(true);
+  };
+
   const handleSaveEdit = () => {
     onEdit(action, { payload: editedPayload });
     setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
-    setEditedPayload(action.payload);
+    setEditedPayload({ ...action.payload });
     setIsEditing(false);
   };
 
-  const renderPayloadField = (key: string, value: any) => {
-    if (key === "contactId" || key === "contactName") return null;
-    const label = key.replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
-
-    if (isEditing) {
-      if (typeof value === "string" && value.length > 60) {
-        return (
-          <div key={key} className="space-y-1">
-            <Label className="text-xs text-muted-foreground">{label}</Label>
-            <Textarea
-              value={editedPayload[key] || ""}
-              onChange={(e) => setEditedPayload({ ...editedPayload, [key]: e.target.value })}
-              className="text-sm min-h-[60px]"
-            />
-          </div>
-        );
-      }
-      return (
-        <div key={key} className="space-y-1">
-          <Label className="text-xs text-muted-foreground">{label}</Label>
-          <Input
-            value={editedPayload[key] || ""}
-            onChange={(e) => setEditedPayload({ ...editedPayload, [key]: e.target.value })}
-            className="text-sm"
-          />
-        </div>
-      );
-    }
-
-    return (
-      <div key={key} className="flex gap-2 text-sm">
-        <span className="text-muted-foreground shrink-0">{label}:</span>
-        <span className="font-medium">{String(value)}</span>
-      </div>
-    );
+  const updateField = (key: string, value: string) => {
+    setEditedPayload(prev => ({ ...prev, [key]: value }));
   };
 
   const isDone = action.status === "pushed" || action.status === "skipped";
-  const preview = getPayloadPreview(action.actionType, action.payload);
+  const currentPayload = isEditing ? editedPayload : action.payload;
 
   return (
     <div className={`border rounded-lg overflow-hidden transition-all ${
@@ -302,43 +267,104 @@ function ActionCard({
               </Badge>
             )}
             {action.status === "failed" && (
-              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4">
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-red-50 text-red-600 border-red-300 dark:bg-red-950 dark:text-red-400">
+                <X className="h-2.5 w-2.5 mr-0.5" />
                 Failed
               </Badge>
             )}
           </div>
         </div>
-        {!isDone && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
-        )}
       </div>
 
-      {/* Payload Preview — always visible */}
-      <div className="px-4 py-2.5">
-        <p className="text-sm text-foreground leading-snug">{preview}</p>
-        {action.reasoning && !isEditing && (
-          <p className="text-xs text-muted-foreground mt-1 italic">{action.reasoning}</p>
+      {/* Payload Content — ALWAYS visible, shows exactly what will be pushed */}
+      <div className="px-4 py-3 space-y-2">
+        {fields.length > 0 ? (
+          fields.map(field => {
+            const value = currentPayload[field.key];
+            if (!isEditing && (!value || (typeof value === "string" && !value.trim()))) return null;
+
+            if (isEditing) {
+              return (
+                <div key={field.key} className="space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">{field.label}</Label>
+                  {field.type === "textarea" ? (
+                    <Textarea
+                      value={editedPayload[field.key] || ""}
+                      onChange={(e) => updateField(field.key, e.target.value)}
+                      className="text-sm min-h-[80px] bg-background"
+                      placeholder={`Enter ${field.label.toLowerCase()}...`}
+                    />
+                  ) : (
+                    <Input
+                      type={field.type === "date" ? "date" : field.type === "time" ? "time" : field.type === "datetime" ? "datetime-local" : "text"}
+                      value={editedPayload[field.key] || ""}
+                      onChange={(e) => updateField(field.key, e.target.value)}
+                      className="text-sm bg-background"
+                      placeholder={`Enter ${field.label.toLowerCase()}...`}
+                    />
+                  )}
+                </div>
+              );
+            }
+
+            // Read-only display
+            const isLongText = field.type === "textarea";
+            return (
+              <div key={field.key}>
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{field.label}</span>
+                {isLongText ? (
+                  <p className="text-sm text-foreground mt-0.5 whitespace-pre-wrap leading-relaxed bg-muted/40 rounded px-3 py-2">
+                    {String(value)}
+                  </p>
+                ) : (
+                  <p className="text-sm font-medium text-foreground mt-0.5">{String(value)}</p>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          // Fallback: show all payload keys if no field config
+          Object.entries(currentPayload)
+            .filter(([key]) => key !== "contactId" && key !== "contactName")
+            .map(([key, value]) => {
+              if (!value || (typeof value === "string" && !value.trim())) return null;
+              const label = key.replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
+              if (isEditing) {
+                return (
+                  <div key={key} className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">{label}</Label>
+                    <Input
+                      value={editedPayload[key] || ""}
+                      onChange={(e) => updateField(key, e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+                );
+              }
+              return (
+                <div key={key}>
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+                  <p className="text-sm font-medium text-foreground mt-0.5">{String(value)}</p>
+                </div>
+              );
+            })
         )}
+
+        {/* AI Reasoning — shown below the content */}
+        {action.reasoning && !isEditing && (
+          <p className="text-xs text-muted-foreground italic border-t pt-2 mt-2">
+            <Sparkles className="h-3 w-3 inline mr-1 text-purple-400" />
+            {action.reasoning}
+          </p>
+        )}
+
+        {/* Result message */}
         {action.result && (
           <p className={`text-xs mt-1 ${action.status === "failed" ? "text-red-500" : "text-green-600"}`}>
             {action.result}
           </p>
         )}
       </div>
-
-      {/* Expanded Details / Edit Mode */}
-      {(isExpanded || isEditing) && (
-        <div className="px-4 pb-3 space-y-2 border-t pt-3">
-          {Object.entries(action.payload).map(([key, value]) => renderPayloadField(key, value))}
-        </div>
-      )}
 
       {/* Action Buttons */}
       {!isDone && (
@@ -371,7 +397,7 @@ function ActionCard({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setIsEditing(true)}
+                onClick={handleStartEdit}
                 className="h-7 text-xs"
               >
                 <Pencil className="h-3 w-3 mr-1" />
@@ -512,7 +538,6 @@ export default function NextStepsTab({
           : a
       ));
 
-      // Persist status to DB
       if (action.dbId) {
         updateStatusMutation.mutate({
           nextStepId: action.dbId,
@@ -582,7 +607,6 @@ export default function NextStepsTab({
     }
 
     const defaultPayload = buildDefaultPayload(newActionType, contactName, ghlContactId);
-    // Put the summary into the most relevant payload field
     const enrichedPayload = { ...defaultPayload };
     if (newActionType === "create_task") enrichedPayload.title = newActionSummary;
     else if (newActionType === "add_note") enrichedPayload.noteBody = newActionSummary;
