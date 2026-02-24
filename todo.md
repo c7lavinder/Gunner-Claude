@@ -2816,3 +2816,11 @@
 - [x] Rewrite Team Roster (TeamMembers.tsx) with premium Obsidian components
 - [x] Update remaining pages for new layout
 - [x] Verify compilation and deliver
+
+## Dashboard Rebuild - Match Lookbook Screenshots
+- [x] Simplify stat cards to exactly 6 (Calls Made, Conversations, Leads Generated, Appointments, Offer Calls, Avg Score)
+- [x] Add Score Trends bar chart (8 weeks, red gradient bars) alongside Leaderboard panel
+- [x] Add Recent Activity feed (dot indicators, bold highlights, relative timestamps)
+- [x] Add Call History table with search bar, filter pills (All/Completed/Needs Review), and data table
+- [x] Remove excessive numbers and stat overload from current dashboard
+- [x] Match dark card backgrounds, icon styling, and change percentage badges from lookbook

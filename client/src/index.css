@@ -1815,4 +1815,101 @@
   .processing-card.queued { background: rgba(37,99,235,0.04); border-color: rgba(37,99,235,0.15); }
   .processing-card.scored { background: rgba(22,163,74,0.04); border-color: rgba(22,163,74,0.15); }
   .processing-card.skipped { background: var(--obs-bg-inset); opacity: 0.6; }
+
+  /* ─── Dashboard Section Title ─── */
+  .obs-section-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--foreground);
+  }
+
+  /* ─── Accent Badge (e.g. "Last 7 Days") ─── */
+  .obs-badge-accent {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--obs-accent-soft);
+    color: var(--obs-accent-text);
+    border: 1px solid var(--obs-accent-medium);
+  }
+
+  /* ─── Change Badge (stat card comparison) ─── */
+  .change-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .change-badge.change-up {
+    background: rgba(22,163,74,0.1);
+    color: #16a34a;
+  }
+  .change-badge.change-down {
+    background: rgba(220,38,38,0.1);
+    color: #dc2626;
+  }
+
+  /* ─── Call Filter Pills ─── */
+  .call-filter-pill {
+    padding: 6px 16px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--obs-border-subtle);
+    background: transparent;
+    color: var(--obs-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .call-filter-pill:hover {
+    background: var(--obs-bg-elevated);
+  }
+  .call-filter-pill.active {
+    background: var(--obs-accent-soft);
+    color: var(--obs-accent-text);
+    border-color: var(--obs-accent-medium);
+    font-weight: 600;
+  }
+
+  /* ─── Data Table ─── */
+  .obs-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .obs-table thead tr {
+    background: var(--obs-bg-inset);
+  }
+  .obs-table th {
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--obs-text-tertiary);
+    text-align: left;
+    border-bottom: 1px solid var(--obs-border-subtle);
+  }
+  .obs-table td {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--obs-text-secondary);
+    border-bottom: 1px solid var(--obs-border-subtle);
+    vertical-align: middle;
+  }
+  .obs-table tbody tr {
+    transition: background 0.15s;
+  }
+  .obs-table tbody tr:hover {
+    background: var(--obs-bg-card-hover);
+  }
+  .obs-table tbody tr:last-child td {
+    border-bottom: none;
+  }
 }
