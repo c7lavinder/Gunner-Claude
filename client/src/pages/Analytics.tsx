@@ -74,17 +74,6 @@ export default function Analytics() {
       ? pct(stats.gradeDistribution.A + stats.gradeDistribution.B, totalGrades)
       : 0;
 
-  /* Funnel data */
-  const funnel = useMemo(() => {
-    if (!stats) return [];
-    return [
-      { label: "Calls Made", value: stats.totalCalls, icon: Phone, color: "#8B1A1A" },
-      { label: "Conversations", value: stats.gradedCalls, icon: MessageSquare, color: "#a52525" },
-      { label: "Leads Generated", value: stats.leadsGenerated, icon: Target, color: "#c41e3a" },
-      { label: "Appointments", value: stats.appointmentsSet, icon: Calendar, color: "#d97706" },
-      { label: "Offer Calls", value: stats.offerCallsCompleted, icon: CheckCircle, color: "#16a34a" },
-    ];
-  }, [stats]);
 
   /* Classification breakdown */
   const classifications = useMemo(() => {
@@ -309,67 +298,6 @@ export default function Analytics() {
             })}
       </div>
 
-      {/* ═══ CONVERSION FUNNEL ═══ */}
-      <div
-        className="obs-panel"
-        style={{
-          padding: "24px 28px",
-          borderRadius: 12,
-          border: "1px solid var(--border)",
-          background: "var(--card)",
-          marginBottom: 32,
-        }}
-      >
-        <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20 }}>
-          Conversion Funnel
-        </h2>
-        {statsLoading ? (
-          <Skeleton className="h-20 w-full" />
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
-            {funnel.map((step, i) => {
-              const Icon = step.icon;
-              const convRate = i > 0 && funnel[i - 1].value > 0 ? pct(step.value, funnel[i - 1].value) : null;
-              return (
-                <div key={i} style={{ display: "flex", alignItems: "center", flex: 1 }}>
-                  <div style={{ flex: 1, textAlign: "center" }}>
-                    <div
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 12,
-                        background: `${step.color}12`,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <Icon size={22} style={{ color: step.color }} />
-                    </div>
-                    <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>
-                      {step.value.toLocaleString()}
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 2 }}>
-                      {step.label}
-                    </div>
-                  </div>
-                  {i < funnel.length - 1 && (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0 4px", minWidth: 48 }}>
-                      <ArrowRight size={16} style={{ color: "var(--muted-foreground)", opacity: 0.4 }} />
-                      {convRate !== null && (
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", marginTop: 2 }}>
-                          {convRate}%
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       {/* ═══ MIDDLE ROW: Score Trends + Grade Distribution ═══ */}
       <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 24, marginBottom: 32 }}>

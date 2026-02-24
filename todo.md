@@ -2865,3 +2865,5 @@
 - [x] Add lead count box for lead generators
 - [x] Polish with lookbook CSS system
 - [x] Verify compilation and run tests
+
+- [x] Remove Conversion Funnel section from Analytics page
