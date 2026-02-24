@@ -2746,3 +2746,12 @@
 - [x] Reorder Team Leaderboard tabs: Acquisition Managers, Lead Managers, Lead Generators
 - [x] Reorder TeamTraining page role tabs
 - [x] Reorder Methodology page tabs: Acquisition Manager, Lead Manager
+
+## Team Page Video Game Redesign
+- [x] Dark arcade-style background with slate-900 dark panels
+- [x] Character portrait cards in grid layout with glowing borders based on rank (gold/silver/bronze)
+- [x] Stat bars like fighting game (Calls, Score, A&B, Badges) with gradient fills
+- [x] Level/rank badges with arcade-style icons and glow effects
+- [x] Click to expand showing full stats in CharacterDetailPanel (Mario Kart character detail feel)
+- [x] Streak flames and XP progress bars with arcade styling (cyan-to-purple gradient)
+- [x] Retro/gaming typography using Orbitron + Press Start 2P Google Fonts
