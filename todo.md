@@ -2889,3 +2889,7 @@
 - [x] Standardize all tab bars across site to match the sharp pill style from Dashboard
 - [x] Update Training page tab bars to match sharp pill style
 - [x] Update Signals page tab bars to match sharp pill style
+- [x] Remove Acquisition Managers / Lead Generators role leaderboards from Analytics
+- [x] Remove Call Classification bar from Analytics
+- [x] Remove Team Performance table from Analytics
+- [x] Remove "All" filter button from Dashboard Call History, keep only Completed and Needs Review, default to Completed

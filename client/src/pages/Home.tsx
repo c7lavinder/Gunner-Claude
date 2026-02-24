@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 
 type DateRange = "today" | "week" | "month" | "ytd" | "all";
-type CallFilter = "all" | "completed" | "needs_review";
+type CallFilter = "completed" | "needs_review";
 
 /* ─── Stat Card ─── */
 function StatCard({ 
@@ -360,7 +360,7 @@ function RecentActivityFeed({ calls, loading }: { calls: any[] | undefined; load
 
 /* ─── Call History Table ─── */
 function CallHistoryTable({ dateRange }: { dateRange: DateRange }) {
-  const [filter, setFilter] = useState<CallFilter>("all");
+  const [filter, setFilter] = useState<CallFilter>("completed");
   const [searchQuery, setSearchQuery] = useState("");
 
   const statuses = useMemo(() => {
@@ -431,13 +431,13 @@ function CallHistoryTable({ dateRange }: { dateRange: DateRange }) {
             />
           </div>
           <div className="flex gap-2 shrink-0">
-            {(["all", "completed", "needs_review"] as CallFilter[]).map(f => (
+            {(["completed", "needs_review"] as CallFilter[]).map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`call-filter-pill ${filter === f ? 'active' : ''}`}
               >
-                {f === "all" ? "All" : f === "completed" ? "Completed" : "Needs Review"}
+                {f === "completed" ? "Completed" : "Needs Review"}
               </button>
             ))}
           </div>
