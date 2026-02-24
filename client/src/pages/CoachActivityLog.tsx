@@ -32,6 +32,11 @@ import {
   CalendarDays,
   ChevronDown,
   X,
+  CalendarCheck,
+  CalendarX,
+  Workflow,
+  RefreshCw,
+  ChevronRight,
 } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -49,6 +54,12 @@ const ACTION_TYPE_LABELS: Record<string, { label: string; icon: any; color: stri
   add_tag: { label: "Add Tag", icon: Tag, color: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400" },
   remove_tag: { label: "Remove Tag", icon: Tag, color: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400" },
   update_field: { label: "Update Field", icon: FileEdit, color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" },
+  update_task: { label: "Update Task", icon: RefreshCw, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+  add_to_workflow: { label: "Add to Workflow", icon: Workflow, color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400" },
+  remove_from_workflow: { label: "Remove from Workflow", icon: Workflow, color: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400" },
+  create_appointment: { label: "Create Appointment", icon: CalendarCheck, color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
+  update_appointment: { label: "Update Appointment", icon: CalendarCheck, color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
+  cancel_appointment: { label: "Cancel Appointment", icon: CalendarX, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
 };
 
 // Deduplicated filter options for the dropdown (one entry per visible label)
@@ -57,10 +68,12 @@ const ACTION_TYPE_FILTER_OPTIONS: { value: string; label: string; keys: string[]
   { value: "add_note", label: "Add Note", keys: ["add_note", "add_note_contact", "add_note_opportunity"] },
   { value: "change_pipeline_stage", label: "Move Stage", keys: ["change_pipeline_stage"] },
   { value: "send_sms", label: "Send SMS", keys: ["send_sms"] },
-  { value: "create_task", label: "Create Task", keys: ["create_task"] },
+  { value: "create_task", label: "Create Task", keys: ["create_task", "update_task"] },
   { value: "add_tag", label: "Add Tag", keys: ["add_tag"] },
   { value: "remove_tag", label: "Remove Tag", keys: ["remove_tag"] },
   { value: "update_field", label: "Update Field", keys: ["update_field"] },
+  { value: "appointment", label: "Appointment", keys: ["create_appointment", "update_appointment", "cancel_appointment"] },
+  { value: "workflow", label: "Workflow", keys: ["add_to_workflow", "remove_from_workflow"] },
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
@@ -514,24 +527,99 @@ export default function CoachActivityLog() {
   );
 }
 
+/**
+ * Build a clear, human-readable summary of what was actually done,
+ * based on the action type, contact name, and payload data.
+ */
+function buildActionSummary(actionType: string, contactName?: string, payload?: any): string {
+  const contact = contactName || "contact";
+  
+  switch (actionType) {
+    case "change_pipeline_stage": {
+      const stage = payload?.stageName || "new stage";
+      return `Moved ${contact} → ${stage}`;
+    }
+    case "send_sms": {
+      const msg = payload?.message;
+      if (msg) {
+        const preview = msg.length > 100 ? msg.substring(0, 100) + "..." : msg;
+        return `Sent SMS to ${contact}: "${preview}"`;
+      }
+      return `Sent SMS to ${contact}`;
+    }
+    case "create_task": {
+      const title = payload?.title || "task";
+      return `Created task for ${contact}: "${title}"`;
+    }
+    case "update_task": {
+      const title = payload?.title;
+      const dueDate = payload?.dueDate;
+      if (title && dueDate) {
+        return `Updated task for ${contact}: "${title}" — due ${new Date(dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+      }
+      if (title) return `Updated task for ${contact}: "${title}"`;
+      return `Updated task for ${contact}`;
+    }
+    case "add_note":
+    case "add_note_contact":
+    case "add_note_opportunity": {
+      const body = payload?.noteBody;
+      if (body) {
+        const preview = body.length > 100 ? body.substring(0, 100) + "..." : body;
+        return `Added note on ${contact}: "${preview}"`;
+      }
+      return `Added note on ${contact}`;
+    }
+    case "add_tag": {
+      const tag = payload?.tags || payload?.tag || "tag";
+      return `Added tag "${tag}" to ${contact}`;
+    }
+    case "remove_tag": {
+      const tag = payload?.tags || payload?.tag || "tag";
+      return `Removed tag "${tag}" from ${contact}`;
+    }
+    case "update_field": {
+      const field = payload?.fieldName || payload?.field || "field";
+      const value = payload?.fieldValue || payload?.value;
+      if (value) return `Updated ${field} → "${value}" on ${contact}`;
+      return `Updated ${field} on ${contact}`;
+    }
+    case "add_to_workflow": {
+      const workflow = payload?.workflowName || payload?.workflow || "workflow";
+      return `Added ${contact} to workflow: ${workflow}`;
+    }
+    case "remove_from_workflow": {
+      const workflow = payload?.workflowName || payload?.workflow || "workflow";
+      return `Removed ${contact} from workflow: ${workflow}`;
+    }
+    case "create_appointment": {
+      const title = payload?.title || "appointment";
+      return `Created appointment for ${contact}: "${title}"`;
+    }
+    case "update_appointment": {
+      const title = payload?.title || "appointment";
+      return `Updated appointment for ${contact}: "${title}"`;
+    }
+    case "cancel_appointment": {
+      return `Cancelled appointment for ${contact}`;
+    }
+    default:
+      return `${actionType.replace(/_/g, " ")} — ${contact}`;
+  }
+}
+
 // Action item component
 function ActionItem({ item }: { item: any }) {
   const actionConfig = ACTION_TYPE_LABELS[item.actionType] || { label: item.actionType, icon: Zap, color: "bg-gray-100 text-gray-700" };
   const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
   const ActionIcon = actionConfig.icon;
   const StatusIcon = statusConfig.icon;
+  const [showOriginal, setShowOriginal] = useState(false);
 
-  // Extract useful payload info
-  const payloadSummary = useMemo(() => {
-    if (!item.payload) return null;
-    const parts: string[] = [];
-    if (item.payload.noteBody) parts.push(`Note: "${item.payload.noteBody.substring(0, 80)}${item.payload.noteBody.length > 80 ? "..." : ""}"`);
-    if (item.payload.message) parts.push(`SMS: "${item.payload.message.substring(0, 80)}${item.payload.message.length > 80 ? "..." : ""}"`);
-    if (item.payload.title) parts.push(`Task: "${item.payload.title}"`);
-    if (item.payload.stageName) parts.push(`Stage: ${item.payload.stageName}`);
-    if (item.payload.tags) parts.push(`Tag: ${item.payload.tags}`);
-    return parts.length > 0 ? parts.join(" · ") : null;
-  }, [item.payload]);
+  // Build the clear action summary
+  const summary = useMemo(() => {
+    return buildActionSummary(item.actionType, item.contactName, item.payload);
+  }, [item.actionType, item.contactName, item.payload]);
 
   return (
     <div className="flex gap-3">
@@ -551,17 +639,21 @@ function ActionItem({ item }: { item: any }) {
                 {statusConfig.label}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground mt-0.5 break-words">
-              "{item.content}"
+            {/* Primary: Clear action summary */}
+            <p className="text-sm mt-1 break-words text-foreground/90">
+              {summary}
             </p>
-            {item.contactName && (
-              <p className="text-xs text-muted-foreground/70 mt-0.5">
-                Contact: <span className="font-medium text-foreground/70">{item.contactName}</span>
-              </p>
-            )}
-            {payloadSummary && (
-              <p className="text-xs text-muted-foreground/60 mt-1 italic break-words">
-                {payloadSummary}
+            {/* Toggle to show original request */}
+            <button
+              onClick={() => setShowOriginal(!showOriginal)}
+              className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground/80 mt-1 flex items-center gap-0.5 cursor-pointer transition-colors"
+            >
+              <ChevronRight className={`h-3 w-3 transition-transform ${showOriginal ? "rotate-90" : ""}`} />
+              {showOriginal ? "Hide original request" : "Show original request"}
+            </button>
+            {showOriginal && (
+              <p className="text-xs text-muted-foreground/50 mt-0.5 break-words italic pl-3.5 border-l-2 border-muted-foreground/20">
+                "{item.content}"
               </p>
             )}
             {item.error && (
