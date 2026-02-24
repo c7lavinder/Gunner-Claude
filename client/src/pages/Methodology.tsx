@@ -37,15 +37,15 @@ export default function Methodology() {
         </p>
       </div>
 
-      <Tabs defaultValue="lead_manager" className="space-y-6">
+      <Tabs defaultValue="acquisition_manager" className="space-y-6">
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="lead_manager" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Lead Manager
-          </TabsTrigger>
           <TabsTrigger value="acquisition_manager" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
             Acquisition Manager
+          </TabsTrigger>
+          <TabsTrigger value="lead_manager" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Lead Manager
           </TabsTrigger>
         </TabsList>
 

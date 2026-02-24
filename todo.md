@@ -2740,3 +2740,9 @@
 - [x] Added hasPlatformAccess() function that checks both role === 'super_admin' AND isPlatformOwner(openId)
 - [x] Updated all 30 tenant router procedures in routers.ts to use hasPlatformAccess
 - [x] Removed hardcoded openId check in SuperAdmin.tsx frontend, now uses role-based check
+
+## Tab Order: Acquisition Manager before Lead Manager
+- [x] Reorder Training page role tabs: All Roles, Acquisition Manager, Lead Manager, Lead Generator
+- [x] Reorder Team Leaderboard tabs: Acquisition Managers, Lead Managers, Lead Generators
+- [x] Reorder TeamTraining page role tabs
+- [x] Reorder Methodology page tabs: Acquisition Manager, Lead Manager

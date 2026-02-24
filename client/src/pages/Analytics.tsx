@@ -167,10 +167,10 @@ export default function Analytics() {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-3 sm:px-6">
-          <Tabs defaultValue="lead_managers" className="w-full">
+          <Tabs defaultValue="acquisition_managers" className="w-full">
             <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6">
-              <TabsTrigger value="lead_managers">Lead Managers</TabsTrigger>
               <TabsTrigger value="acquisition_managers">Acquisition Managers</TabsTrigger>
+              <TabsTrigger value="lead_managers">Lead Managers</TabsTrigger>
               <TabsTrigger value="lead_generators">Lead Generators</TabsTrigger>
             </TabsList>
 

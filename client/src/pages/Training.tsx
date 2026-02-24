@@ -672,8 +672,8 @@ function TeamTrainingContent() {
             <Tabs value={selectedRole} onValueChange={(value) => setSelectedRole(value as any)} className="w-full">
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="all"><Users className="h-4 w-4 mr-2" />All Roles</TabsTrigger>
-                <TabsTrigger value="lead_manager">Lead Manager</TabsTrigger>
                 <TabsTrigger value="acquisition_manager">Acquisition Manager</TabsTrigger>
+                <TabsTrigger value="lead_manager">Lead Manager</TabsTrigger>
                 <TabsTrigger value="lead_generator">Lead Generator</TabsTrigger>
               </TabsList>
             </Tabs>
