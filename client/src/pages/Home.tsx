@@ -4,7 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useSearch } from "wouter";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, TrendingUp, TrendingDown, Award, Calendar, CheckCircle2, MessageSquare, Loader2, CheckCircle, XCircle, Clock, PhoneOff, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap, AlertTriangle, Lightbulb, ArrowRight, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { Phone, TrendingUp, TrendingDown, Award, Calendar, CheckCircle2, MessageSquare, Loader2, XCircle, Clock, VoicemailIcon, PhoneMissed, AlertCircle, Flame, Trophy, Target, Zap, AlertTriangle, Lightbulb, ArrowRight, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -56,13 +56,18 @@ function StatCard({
     : null;
   
   return (
-    <Card className="p-3 sm:p-4 relative overflow-hidden">
-      {/* Comparison badge in top-right corner */}
+    <div className="relative overflow-hidden rounded-[10px] p-4" style={{
+      background: 'var(--card)',
+      border: '1px solid var(--obs-border-subtle)',
+      boxShadow: 'var(--obs-shadow-card)',
+      transition: 'all 0.2s',
+    }}>
+      {/* Comparison badge — top right */}
       {badgeLabel && change && (
-        <div className={`absolute top-1.5 right-1.5 sm:top-2 sm:right-2 flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] sm:text-xs font-semibold ${
+        <div className={`absolute top-3 right-3 flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
           change.direction === 'up' 
-            ? 'text-emerald-700 bg-emerald-50' 
-            : 'text-red-600 bg-red-50'
+            ? 'change-up' 
+            : 'change-down'
         }`}>
           {change.direction === 'up' ? (
             <ArrowUpRight className="h-3 w-3 shrink-0" />
@@ -72,20 +77,19 @@ function StatCard({
           {badgeLabel}
         </div>
       )}
-      <div className="flex items-center gap-2 sm:gap-3">
-        <div className="p-1.5 sm:p-2 rounded-lg bg-primary/8 dark:bg-primary/12 shrink-0">
-          <Icon className="h-4 w-4 text-primary" />
-        </div>
-        <div className="min-w-0">
-          {loading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div className="text-xl sm:text-2xl font-extrabold tracking-tight truncate">{value}</div>
-          )}
-          <p className="text-xs text-muted-foreground truncate">{title}</p>
-        </div>
+      {/* Icon container with accent bg */}
+      <div className="stat-icon-wrap mb-2.5">
+        <Icon className="h-4 w-4" />
       </div>
-    </Card>
+      {/* Value */}
+      {loading ? (
+        <Skeleton className="h-7 w-16" />
+      ) : (
+        <div className="stat-value">{value}</div>
+      )}
+      {/* Label */}
+      <p className="stat-label">{title}</p>
+    </div>
   );
 }
 
@@ -256,209 +260,227 @@ export default function Home() {
       {/* Admin: Pipeline Signals Summary | Non-admin: Gamification Stats */}
       {isAdmin ? (
         <Link href="/opportunities">
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 cursor-pointer group pb-2">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4 cursor-pointer group pb-2">
             {/* Missed */}
-            <Card className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950 dark:to-rose-950 p-3 sm:p-4 border-red-200 dark:border-red-800 group-hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900">
-                    <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  </div>
-                  <span className="text-xs font-medium text-red-700 dark:text-red-300">Missed</span>
+            <div className="rounded-xl p-4" style={{
+              background: 'var(--card)',
+              border: '1px solid rgba(220,38,38,0.15)',
+              boxShadow: 'var(--obs-shadow-card)',
+              transition: 'all 0.25s',
+            }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="signal-icon signal-icon-missed">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
                 </div>
-                {(signalCounts?.missed ?? 0) > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 font-medium">
-                    {signalCounts?.missed} active
-                  </span>
-                )}
+                <span className="text-xs font-semibold" style={{color: 'var(--obs-text-secondary)'}}>Missed</span>
               </div>
               {signalsLoading ? (
                 <Skeleton className="h-8 w-12" />
               ) : (
                 <>
-                  <div className="text-2xl sm:text-3xl font-bold text-red-900 dark:text-red-100">
+                  <div className="signal-count" style={{color: '#dc2626'}}>
                     {signalCounts?.missed ?? 0}
                   </div>
-                  <p className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 mt-1">
-                    Deals slipping through the cracks
+                  <p className="text-xs mt-1" style={{color: 'var(--obs-text-tertiary)'}}>
+                    Deals slipping through the cracks — act now
                   </p>
                 </>
               )}
-            </Card>
+            </div>
 
             {/* At Risk */}
-            <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950 p-3 sm:p-4 border-amber-200 dark:border-amber-800 group-hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900">
-                    <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <span className="text-xs font-medium text-amber-700 dark:text-amber-300">At Risk</span>
+            <div className="rounded-xl p-4" style={{
+              background: 'var(--card)',
+              border: '1px solid rgba(217,119,6,0.15)',
+              boxShadow: 'var(--obs-shadow-card)',
+              transition: 'all 0.25s',
+            }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="signal-icon signal-icon-at-risk">
+                  <Clock className="h-4 w-4 text-amber-500" />
                 </div>
-                {(signalCounts?.warning ?? 0) > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 font-medium">
-                    {signalCounts?.warning} active
-                  </span>
-                )}
+                <span className="text-xs font-semibold" style={{color: 'var(--obs-text-secondary)'}}>At Risk</span>
               </div>
               {signalsLoading ? (
                 <Skeleton className="h-8 w-12" />
               ) : (
                 <>
-                  <div className="text-2xl sm:text-3xl font-bold text-amber-900 dark:text-amber-100">
+                  <div className="signal-count" style={{color: '#d97706'}}>
                     {signalCounts?.warning ?? 0}
                   </div>
-                  <p className="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 mt-1">
-                    Needs attention within 24h
+                  <p className="text-xs mt-1" style={{color: 'var(--obs-text-tertiary)'}}>
+                    Leads going cold — needs attention within 24h
                   </p>
                 </>
               )}
-            </Card>
+            </div>
 
             {/* Worth a Look */}
-            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-3 sm:p-4 border-blue-200 dark:border-blue-800 group-hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900">
-                    <Lightbulb className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Worth a Look</span>
+            <div className="rounded-xl p-4" style={{
+              background: 'var(--card)',
+              border: '1px solid rgba(37,99,235,0.15)',
+              boxShadow: 'var(--obs-shadow-card)',
+              transition: 'all 0.25s',
+            }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="signal-icon signal-icon-worth">
+                  <Lightbulb className="h-4 w-4 text-blue-500" />
                 </div>
-                {(signalCounts?.possible ?? 0) > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 font-medium">
-                    {signalCounts?.possible} active
-                  </span>
-                )}
+                <span className="text-xs font-semibold" style={{color: 'var(--obs-text-secondary)'}}>Worth a Look</span>
               </div>
               {signalsLoading ? (
                 <Skeleton className="h-8 w-12" />
               ) : (
                 <>
-                  <div className="text-2xl sm:text-3xl font-bold text-blue-900 dark:text-blue-100">
+                  <div className="signal-count" style={{color: '#2563eb'}}>
                     {signalCounts?.possible ?? 0}
                   </div>
-                  <p className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    Potential deals to review
+                  <p className="text-xs mt-1" style={{color: 'var(--obs-text-tertiary)'}}>
+                    Potential deals that deserve a second look
                   </p>
                 </>
               )}
-            </Card>
+            </div>
           </div>
         </Link>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-          {/* Level & XP - Compact */}
-          <Card className="bg-gradient-to-br from-orange-50 to-amber-50 p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Trophy className="h-4 w-4 text-orange-500 shrink-0" />
-              <span className="text-xs font-medium text-orange-700">Level & XP</span>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {/* Level & XP */}
+          <div className="rounded-xl p-4" style={{
+            background: 'var(--card)',
+            border: '1px solid var(--obs-border-subtle)',
+            boxShadow: 'var(--obs-shadow-card)',
+          }}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="stat-icon-wrap" style={{background: 'rgba(234,88,12,0.08)'}}>
+                <Trophy className="h-4 w-4" style={{color: '#ea580c'}} />
+              </div>
+              <span className="text-xs font-semibold" style={{color: 'var(--obs-text-secondary)'}}>Level & XP</span>
             </div>
             {gamificationLoading ? (
               <Skeleton className="h-6 w-16" />
             ) : (
               <>
-                <div className="text-lg sm:text-xl font-bold text-orange-900">
+                <div className="text-lg sm:text-xl font-extrabold" style={{letterSpacing: '-0.02em'}}>
                   Lvl {gamification?.xp.level ?? 1} &middot; {gamification?.xp.title ?? "Rookie"}
                 </div>
-                <div className="mt-1.5 h-1.5 bg-orange-200 rounded-full overflow-hidden">
+                <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{background: 'var(--obs-bg-elevated)'}}>
                   <div 
-                    className="h-full bg-orange-500 transition-all duration-500" 
-                    style={{ width: `${gamification?.xp.progress ?? 0}%` }}
+                    className="h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${gamification?.xp.progress ?? 0}%`, background: 'var(--obs-accent-text)' }}
                   />
                 </div>
-                <p className="text-[10px] sm:text-xs text-orange-600 mt-1 truncate">
-                  {gamification?.xp.totalXp?.toLocaleString() ?? 0} / {gamification?.xp.nextLevelXp?.toLocaleString() ?? 500} XP to next level
+                <p className="text-[10px] sm:text-xs mt-1.5 truncate" style={{color: 'var(--obs-text-tertiary)'}}>
+                  {gamification?.xp.totalXp?.toLocaleString() ?? 0} / {gamification?.xp.nextLevelXp?.toLocaleString() ?? 500} XP
                 </p>
               </>
             )}
-          </Card>
+          </div>
 
-          {/* Hot Streak - Compact */}
-          <Card className="bg-gradient-to-br from-red-50 to-orange-50 p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Flame className="h-4 w-4 text-red-500 shrink-0" />
-              <span className="text-xs font-medium text-red-700">Hot Streak</span>
+          {/* Hot Streak */}
+          <div className="rounded-xl p-4" style={{
+            background: 'var(--card)',
+            border: '1px solid var(--obs-border-subtle)',
+            boxShadow: 'var(--obs-shadow-card)',
+          }}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="stat-icon-wrap" style={{background: 'rgba(220,38,38,0.08)'}}>
+                <Flame className="h-4 w-4" style={{color: '#dc2626'}} />
+              </div>
+              <span className="text-xs font-semibold" style={{color: 'var(--obs-text-secondary)'}}>Hot Streak</span>
             </div>
             {gamificationLoading ? (
               <Skeleton className="h-6 w-16" />
             ) : (
               <>
-                <div className="text-lg sm:text-xl font-bold text-red-900">
+                <div className="text-2xl sm:text-3xl font-extrabold" style={{letterSpacing: '-0.02em'}}>
                   {gamification?.streaks.hotStreakCurrent ?? 0} 🔥
                 </div>
-                <p className="text-[10px] sm:text-xs text-red-600 mt-1">
+                <p className="text-xs mt-1" style={{color: 'var(--obs-text-tertiary)'}}>
                   Best: {gamification?.streaks.hotStreakBest ?? 0}
                 </p>
               </>
             )}
-          </Card>
+          </div>
 
-          {/* Consistency Streak - Compact */}
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Target className="h-4 w-4 text-blue-500 shrink-0" />
-              <span className="text-xs font-medium text-blue-700">Consistency</span>
+          {/* Consistency Streak */}
+          <div className="rounded-xl p-4" style={{
+            background: 'var(--card)',
+            border: '1px solid var(--obs-border-subtle)',
+            boxShadow: 'var(--obs-shadow-card)',
+          }}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="stat-icon-wrap" style={{background: 'rgba(37,99,235,0.08)'}}>
+                <Target className="h-4 w-4" style={{color: '#2563eb'}} />
+              </div>
+              <span className="text-xs font-semibold" style={{color: 'var(--obs-text-secondary)'}}>Consistency</span>
             </div>
             {gamificationLoading ? (
               <Skeleton className="h-6 w-16" />
             ) : (
               <>
-                <div className="text-lg sm:text-xl font-bold text-blue-900">
-                  {gamification?.streaks.consistencyStreakCurrent ?? 0} days
+                <div className="text-2xl sm:text-3xl font-extrabold" style={{letterSpacing: '-0.02em'}}>
+                  {gamification?.streaks.consistencyStreakCurrent ?? 0} <span className="text-sm font-semibold" style={{color: 'var(--obs-text-tertiary)'}}>days</span>
                 </div>
-                <p className="text-[10px] sm:text-xs text-blue-600 mt-1">
+                <p className="text-xs mt-1" style={{color: 'var(--obs-text-tertiary)'}}>
                   Best: {gamification?.streaks.consistencyStreakBest ?? 0}
                 </p>
               </>
             )}
-          </Card>
+          </div>
 
-          {/* Badges - Compact */}
-          <Card className="bg-gradient-to-br from-purple-50 to-pink-50 p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Award className="h-4 w-4 text-purple-500 shrink-0" />
-              <span className="text-xs font-medium text-purple-700">Badges</span>
+          {/* Badges */}
+          <div className="rounded-xl p-4" style={{
+            background: 'var(--card)',
+            border: '1px solid var(--obs-border-subtle)',
+            boxShadow: 'var(--obs-shadow-card)',
+          }}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="stat-icon-wrap" style={{background: 'rgba(124,58,237,0.08)'}}>
+                <Award className="h-4 w-4" style={{color: '#7c3aed'}} />
+              </div>
+              <span className="text-xs font-semibold" style={{color: 'var(--obs-text-secondary)'}}>Badges</span>
             </div>
             {gamificationLoading ? (
               <Skeleton className="h-6 w-16" />
             ) : (
               <>
-                <div className="text-lg sm:text-xl font-bold text-purple-900">
-                  {gamification?.badgeCount ?? 0} earned
+                <div className="text-2xl sm:text-3xl font-extrabold" style={{letterSpacing: '-0.02em'}}>
+                  {gamification?.badgeCount ?? 0} <span className="text-sm font-semibold" style={{color: 'var(--obs-text-tertiary)'}}>earned</span>
                 </div>
-                <div className="flex flex-col gap-0.5 mt-1">
+                <div className="flex flex-col gap-0.5 mt-1.5">
                   {gamification?.badges.slice(0, 3).map((badge: { code: string; name: string; icon: string; tier: string }, i: number) => (
-                    <span key={i} className="text-[10px] sm:text-xs text-purple-700 truncate" title={badge.name}>
-                      {badge.icon} {badge.name} <span className="text-purple-400 capitalize">({badge.tier})</span>
+                    <span key={i} className="text-[10px] sm:text-xs truncate" style={{color: 'var(--obs-text-secondary)'}} title={badge.name}>
+                      {badge.icon} {badge.name} <span style={{color: 'var(--obs-text-tertiary)'}} className="capitalize">({badge.tier})</span>
                     </span>
                   ))}
                   {(gamification?.badgeCount ?? 0) > 3 && (
-                    <span className="text-[10px] text-purple-500">+{(gamification?.badgeCount ?? 0) - 3} more</span>
+                    <span className="text-[10px]" style={{color: 'var(--obs-text-tertiary)'}}>+{(gamification?.badgeCount ?? 0) - 3} more</span>
                   )}
                   {(gamification?.badgeCount ?? 0) === 0 && (
-                    <span className="text-[10px] text-purple-400">Grade calls to earn badges</span>
+                    <span className="text-[10px]" style={{color: 'var(--obs-text-tertiary)'}}>Grade calls to earn badges</span>
                   )}
                 </div>
               </>
             )}
-          </Card>
+          </div>
         </div>
       )}
 
       {/* Recent Calls & Leaderboard - Stack on mobile */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Recent Calls */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6 pb-2 sm:pb-2">
+        <div className="obs-panel">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <CardTitle className="text-base sm:text-lg">Recent Calls</CardTitle>
-             <CardDescription className="text-xs sm:text-sm">Last 5 graded calls</CardDescription>
+              <h3 className="text-sm font-semibold" style={{color: 'var(--foreground)', marginBottom: '2px'}}>Recent Calls</h3>
+              <p className="text-xs" style={{color: 'var(--obs-text-tertiary)'}}>Last 5 graded calls</p>
             </div>
             <Link href="/calls">
-              <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm">View All</Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs">View All</Button>
             </Link>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-2 sm:pt-2">
+          </div>
+          <div>
             {callsLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
@@ -469,17 +491,20 @@ export default function Home() {
               <div className="space-y-2">
                 {recentCalls.items.map((call: any) => (
                   <Link key={call.id} href={`/calls/${call.id}`}>
-                    <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer">
+                    <div className="flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all" style={{
+                      border: '1px solid var(--obs-border-subtle)',
+                      background: 'var(--card)',
+                    }}>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">
+                        <p className="font-semibold text-sm truncate">
                           {call.contactName || call.contactPhone || "Unknown"}
                         </p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-muted-foreground truncate">
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs" style={{color: 'var(--obs-text-tertiary)'}}>
                             {call.teamMemberName || "Unassigned"}
                           </p>
-                          <span className="text-xs text-muted-foreground">•</span>
-                          <p className="text-xs text-muted-foreground">
+                          <span className="text-xs" style={{color: 'var(--obs-text-tertiary)'}}>•</span>
+                          <p className="text-xs" style={{color: 'var(--obs-text-tertiary)'}}>
                             {(() => {
                               const now = Date.now();
                               const callTime = new Date(call.createdAt).getTime();
@@ -498,7 +523,7 @@ export default function Home() {
                         {call.grade ? (
                           <GradeBadge grade={call.grade.overallGrade || "?"} />
                         ) : (
-                          <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
+                          <span className="text-xs px-2 py-1 rounded" style={{background: 'var(--obs-bg-inset)', color: 'var(--obs-text-tertiary)'}}>
                             {call.status}
                           </span>
                         )}
@@ -508,27 +533,27 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-muted-foreground">
+              <div className="text-center py-6" style={{color: 'var(--obs-text-tertiary)'}}>
                 <Phone className="h-10 w-10 mx-auto mb-2 opacity-50" />
                 <p className="text-sm font-medium">No graded calls today</p>
                 <p className="text-xs mt-1">Calls will appear here once they're graded</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Leaderboard Preview - Horizontal top 3 on mobile */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6 pb-2 sm:pb-2">
+        {/* Leaderboard Preview */}
+        <div className="obs-panel">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <CardTitle className="text-base sm:text-lg">Team Leaderboard</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Top performers</CardDescription>
+              <h3 className="text-sm font-semibold" style={{color: 'var(--foreground)', marginBottom: '2px'}}>Team Leaderboard</h3>
+              <p className="text-xs" style={{color: 'var(--obs-text-tertiary)'}}>Top performers</p>
             </div>
             <Link href="/analytics">
-              <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm">View Full</Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs">View Full</Button>
             </Link>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-2 sm:pt-2">
+          </div>
+          <div>
             {leaderboardLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
@@ -537,57 +562,35 @@ export default function Home() {
               </div>
             ) : leaderboard && leaderboard.length > 0 ? (
               <>
-                {/* Mobile: Horizontal podium for top 3 */}
-                <div className="flex gap-2 sm:hidden">
-                  {leaderboard.slice(0, 3).map((entry, index) => (
-                    <div 
-                      key={entry.teamMember.id} 
-                      className={`flex-1 p-2 rounded-lg border text-center ${
-                        index === 0 ? "bg-yellow-50 border-yellow-200" :
-                        index === 1 ? "bg-gray-50 border-gray-200" :
-                        "bg-amber-50 border-amber-200"
-                      }`}
-                    >
-                      <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center font-bold text-xs ${
-                        index === 0 ? "bg-yellow-500 text-white" :
-                        index === 1 ? "bg-gray-400 text-white" :
-                        "bg-amber-700 text-white"
-                      }`}>
-                        {index + 1}
-                      </div>
-                      <p className="font-medium text-xs mt-1 truncate">{entry.teamMember.name.split(' ')[0]}</p>
-                      <p className="font-bold text-sm">
-                        {entry.averageScore ? `${Math.round(entry.averageScore)}%` : "N/A"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                {/* Desktop: Vertical list */}
-                <div className="hidden sm:block space-y-2">
+                <div className="space-y-2">
                   {leaderboard.slice(0, 5).map((entry, index) => (
                     <div 
                       key={entry.teamMember.id} 
-                      className="flex items-center gap-3 p-3 rounded-lg border"
+                      className="flex items-center gap-3 p-3 rounded-lg transition-all"
+                      style={{
+                        border: '1px solid var(--obs-border-subtle)',
+                        background: 'var(--card)',
+                      }}
                     >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                        index === 0 ? "bg-yellow-500 text-white" :
-                        index === 1 ? "bg-gray-400 text-white" :
-                        index === 2 ? "bg-amber-700 text-white" :
-                        "bg-zinc-300 text-zinc-700"
+                      <div className={`lb-rank ${
+                        index === 0 ? "lb-rank-1" :
+                        index === 1 ? "lb-rank-2" :
+                        index === 2 ? "lb-rank-3" :
+                        "lb-rank-default"
                       }`}>
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium">{entry.teamMember.name}</p>
-                        <p className="text-sm text-muted-foreground capitalize">
+                        <p className="font-semibold text-sm">{entry.teamMember.name}</p>
+                        <p className="text-xs capitalize" style={{color: 'var(--obs-text-tertiary)'}}>
                           {entry.teamMember.teamRole?.replace("_", " ")}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-lg">
+                        <p className="font-bold text-lg" style={{letterSpacing: '-0.02em'}}>
                           {entry.averageScore ? `${Math.round(entry.averageScore)}%` : "N/A"}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs" style={{color: 'var(--obs-text-tertiary)'}}>
                           {entry.totalCalls} calls
                         </p>
                       </div>
@@ -596,66 +599,17 @@ export default function Home() {
                 </div>
               </>
             ) : (
-              <div className="text-center py-6 text-muted-foreground">
+              <div className="text-center py-6" style={{color: 'var(--obs-text-tertiary)'}}>
                 <Award className="h-10 w-10 mx-auto mb-2 opacity-50" />
                 <p className="text-sm font-medium">No leaderboard data yet</p>
                 <p className="text-xs mt-1">Team rankings appear after calls are graded</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Call Processing Status - De-emphasized skipped calls */}
-      <Card>
-        <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
-              Call Processing
-            </CardTitle>
-            {!statsLoading && stats && (
-              <p className="text-xs text-muted-foreground">
-                {stats.totalCalls} calls — {stats.gradedCalls} graded, {stats.skippedCalls} skipped
-              </p>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-2 sm:pt-2">
-          {statsLoading ? (
-            <div className="grid grid-cols-4 gap-2">
-              {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-4 gap-2 sm:gap-4">
-              <Link href="/calls?tab=review">
-                <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors">
-                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 mb-1" />
-                  <p className="text-lg sm:text-2xl font-bold text-blue-700 dark:text-blue-300">{stats?.pendingCalls ?? 0}</p>
-                  <p className="text-[10px] sm:text-sm text-blue-600 dark:text-blue-400">Queued</p>
-                </div>
-              </Link>
-              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800">
-                <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 dark:text-emerald-400 mb-1" />
-                <p className="text-lg sm:text-2xl font-bold text-emerald-700 dark:text-emerald-300">{stats?.gradedCalls ?? 0}</p>
-                <p className="text-[10px] sm:text-sm text-emerald-600 dark:text-emerald-400">Scored</p>
-              </div>
-              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 opacity-60">
-                <PhoneOff className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 dark:text-gray-500 mb-1" />
-                <p className="text-lg sm:text-2xl font-bold text-gray-400 dark:text-gray-500">{stats?.skippedCalls ?? 0}</p>
-                <p className="text-[10px] sm:text-sm text-gray-400 dark:text-gray-500">Skipped</p>
-              </div>
-              <div className="flex flex-col items-center p-2 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-                <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600 dark:text-gray-400 mb-1" />
-                <p className="text-lg sm:text-2xl font-bold text-gray-700 dark:text-gray-300">{stats?.totalCalls ?? 0}</p>
-                <p className="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400">Total</p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
     </div>
   );
 }

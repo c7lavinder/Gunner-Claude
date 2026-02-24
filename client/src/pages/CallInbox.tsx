@@ -126,93 +126,123 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
   const timeAgo = call.createdAt ? formatDistanceToNow(new Date(call.createdAt), { addSuffix: true }) : "Unknown";
   const callTypeInfo = CALL_TYPE_LABELS[call.callType] || CALL_TYPE_LABELS.qualification;
   const outcomeInfo = call.callOutcome ? OUTCOME_LABELS[call.callOutcome] : null;
+  const gradeVal = grade?.overallGrade?.toUpperCase() || "";
+  const scoreVal = grade?.overallScore ? Math.round(parseFloat(grade.overallScore)) : null;
   
+  // Map call type to pill class
+  const pillClassMap: Record<string, string> = {
+    cold_call: "call-pill-cold-call",
+    qualification: "call-pill-qualification",
+    follow_up: "call-pill-follow-up",
+    offer: "call-pill-offer",
+    seller_callback: "call-pill-other",
+    admin_callback: "call-pill-other",
+  };
+  const outcomePillMap: Record<string, string> = {
+    interested: "call-pill-interested",
+    not_interested: "call-pill-not-interested",
+    appointment_set: "call-pill-appointment",
+    callback_scheduled: "call-pill-follow-up",
+    offer_made: "call-pill-offer",
+    offer_accepted: "call-pill-interested",
+    offer_rejected: "call-pill-not-interested",
+    left_voicemail: "call-pill-other",
+    no_answer: "call-pill-other",
+    wrong_number: "call-pill-not-interested",
+    do_not_call: "call-pill-do-not-call",
+    other: "call-pill-other",
+  };
+
   return (
     <Link href={`/calls/${call.id}`}>
-      <Card className="card-hover cursor-pointer">
-        <CardContent className="p-3 sm:p-4">
-          <div className="flex items-start justify-between gap-2 sm:gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                <h3 className="font-semibold text-sm sm:text-base truncate">
-                  {call.contactName || call.contactPhone || "Unknown Contact"}
-                </h3>
-                {/* Call direction badge - hidden on mobile */}
-                {call.callDirection === "inbound" ? (
-                  <Badge variant="outline" className="hidden sm:flex text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                    <PhoneIncoming className="h-3 w-3 mr-1" />
-                    Inbound
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="hidden sm:flex text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
-                    <PhoneOutgoing className="h-3 w-3 mr-1" />
-                    Outbound
-                  </Badge>
-                )}
-                {/* Call type badge */}
-                <Badge variant="outline" className={`text-[10px] sm:text-xs ${callTypeInfo.color}`}>
-                  {callTypeInfo.label}
-                </Badge>
-                {/* Outcome tag */}
-                {outcomeInfo && (
-                  <Badge variant="secondary" className={`text-[10px] sm:text-xs ${outcomeInfo.color}`}>
-                    {outcomeInfo.label}
-                  </Badge>
-                )}
-              </div>
-              
-              <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-muted-foreground">
-                {call.teamMemberName && (
-                  <span className="flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    {call.teamMemberName}
-                  </span>
-                )}
-                {call.duration && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {Math.floor(call.duration / 60)}:{(call.duration % 60).toString().padStart(2, "0")}
-                  </span>
-                )}
-                <span className="hidden sm:flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  {timeAgo}
+      <div className="call-card-obsidian">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            {/* Name + pills row */}
+            <div className="flex items-center flex-wrap gap-1.5">
+              <span className="call-name">
+                {call.contactName || call.contactPhone || "Unknown Contact"}
+              </span>
+              {/* Direction pill */}
+              {call.callDirection === "inbound" ? (
+                <span className="call-pill call-pill-inbound">
+                  <PhoneIncoming className="h-3 w-3" />
+                  Inbound
                 </span>
-                <span className="sm:hidden text-[10px]">{timeAgo}</span>
-              </div>
-
-              {/* Property address pill */}
-              {call.propertyAddress && (
-                <div className="mt-1.5">
-                  <Badge variant="outline" className="text-[10px] sm:text-xs font-normal bg-muted/50 border-muted-foreground/20">
-                    <MapPin className="h-3 w-3 mr-1 shrink-0" />
-                    <span className="truncate max-w-[200px] sm:max-w-[300px]">{call.propertyAddress}</span>
-                  </Badge>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col items-end gap-1 sm:gap-2 shrink-0">
-              {call.status === "completed" && grade ? (
-                <>
-                  <GradeBadge grade={grade.overallGrade || "?"} />
-                  <span className="text-xs sm:text-sm font-medium">
-                    {grade.overallScore ? `${Math.round(parseFloat(grade.overallScore))}%` : ""}
-                  </span>
-                </>
               ) : (
-                <StatusBadge status={call.status} />
+                <span className="call-pill call-pill-outbound">
+                  <PhoneOutgoing className="h-3 w-3" />
+                  Outbound
+                </span>
+              )}
+              {/* Call type pill */}
+              <span className={`call-pill ${pillClassMap[call.callType] || "call-pill-other"}`}>
+                {callTypeInfo.label}
+              </span>
+              {/* Outcome pill */}
+              {outcomeInfo && (
+                <span className={`call-pill ${outcomePillMap[call.callOutcome] || "call-pill-other"}`}>
+                  {outcomeInfo.label}
+                </span>
               )}
             </div>
+            
+            {/* Meta row */}
+            <div className="call-meta mt-2">
+              {call.teamMemberName && (
+                <span className="call-meta-item">
+                  <User className="h-3.5 w-3.5" />
+                  {call.teamMemberName}
+                </span>
+              )}
+              {call.duration && (
+                <span className="call-meta-item">
+                  <Clock className="h-3.5 w-3.5" />
+                  {Math.floor(call.duration / 60)}:{(call.duration % 60).toString().padStart(2, "0")}
+                </span>
+              )}
+              <span className="call-meta-item">
+                <Phone className="h-3.5 w-3.5" />
+                {timeAgo}
+              </span>
+            </div>
+
+            {/* Property address */}
+            {call.propertyAddress && (
+              <div className="mt-2">
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md" style={{background: 'var(--obs-bg-inset)', border: '1px solid var(--obs-border-subtle)', color: 'var(--obs-text-secondary)'}}>
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate max-w-[300px]">{call.propertyAddress}</span>
+                </span>
+              </div>
+            )}
           </div>
 
-          {grade?.summary && (
-            <p className="text-xs sm:text-sm text-muted-foreground mt-2 sm:mt-3 line-clamp-2 border-t pt-2 sm:pt-3">
-              {grade.summary}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          {/* Grade circle + score */}
+          <div className="flex flex-col items-center gap-1 shrink-0">
+            {call.status === "completed" && grade ? (
+              <>
+                <div className={`call-grade-circle grade-${gradeVal.toLowerCase()}`}>
+                  {gradeVal}
+                </div>
+                {scoreVal !== null && (
+                  <span className="call-card-score">{scoreVal}%</span>
+                )}
+              </>
+            ) : (
+              <StatusBadge status={call.status} />
+            )}
+          </div>
+        </div>
+
+        {/* Divider + summary */}
+        {grade?.summary && (
+          <>
+            <div className="call-card-divider" />
+            <p className="call-card-summary">{grade.summary}</p>
+          </>
+        )}
+      </div>
     </Link>
   );
 }

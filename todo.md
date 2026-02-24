@@ -2784,3 +2784,24 @@
 - [x] Polish filter tabs and badges with refined styling
 - [x] Add subtle hover animations and transitions for premium feel
 - [x] Ensure visual distinction between current basic look and premium Obsidian aesthetic
+
+## Match Obsidian Lookbook Exactly (All Pages)
+- [ ] Sidebar: match lookbook nav styling (spacing, hover states, icon sizing, active indicator)
+- [ ] Dashboard: match lookbook stat cards, signal cards, leaderboard, activity feed
+- [ ] Call History: match lookbook call cards, filter tabs, processing status cards
+- [ ] Team Roster: match lookbook character cards, role tabs, detail panel
+- [ ] Analytics: match lookbook styling consistency
+- [ ] Global: match lookbook page backgrounds, card borders, spacing system
+- [ ] Verify all pages visually match the lookbook
+
+## Visual Overhaul - Match Obsidian Lookbook
+- [x] Rewrite index.css with complete Obsidian design system
+- [x] Overhaul Dashboard (Home.tsx) stat cards, signal cards, leaderboard
+- [x] Overhaul Call History (CallInbox.tsx) call cards
+- [x] Overhaul DashboardLayout sidebar with premium feel
+- [x] Verify compilation and test
+
+## Dashboard Cleanup
+- [x] Remove Call Processing Status section (redundant with stat cards)
+- [x] Simplify mobile leaderboard to use same vertical list as desktop
+- [x] Keep gamification stats but match Team gamification page styling

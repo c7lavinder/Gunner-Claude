@@ -44,90 +44,132 @@
 }
 
 /* ═══════════════════════════════════════════════════════
-   OBSIDIAN LIGHT MODE — Premium clean white + Gunner crimson
+   OBSIDIAN LIGHT MODE
    ═══════════════════════════════════════════════════════ */
 :root {
-  --primary: oklch(0.42 0.16 25);
-  --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.42 0.16 25);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.55 0.14 25);
-  --chart-2: oklch(0.48 0.15 25);
-  --chart-3: oklch(0.42 0.16 25);
-  --chart-4: oklch(0.38 0.15 25);
-  --chart-5: oklch(0.34 0.14 25);
   --radius: 0.625rem;
-  --background: oklch(0.995 0 0);
-  --foreground: oklch(0.145 0.015 285);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.015 285);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.015 285);
-  --secondary: oklch(0.965 0.001 286);
-  --secondary-foreground: oklch(0.38 0.015 285);
-  --muted: oklch(0.96 0.001 286);
-  --muted-foreground: oklch(0.50 0.016 286);
-  --accent: oklch(0.965 0.001 286);
-  --accent-foreground: oklch(0.145 0.005 286);
-  --destructive: oklch(0.577 0.245 27);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.925 0.004 286);
-  --input: oklch(0.925 0.004 286);
-  --ring: oklch(0.42 0.16 25);
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.145 0.015 285);
-  --sidebar-accent: oklch(0.965 0.001 286);
-  --sidebar-accent-foreground: oklch(0.145 0.005 286);
-  --sidebar-border: oklch(0.925 0.004 286);
-  --sidebar-ring: oklch(0.42 0.16 25);
+  /* Core surfaces */
+  --background: #ffffff;
+  --foreground: #111113;
+  --card: #ffffff;
+  --card-foreground: #111113;
+  --popover: #ffffff;
+  --popover-foreground: #111113;
+  /* Accent — Gunner crimson */
+  --primary: #8B1A1A;
+  --primary-foreground: #ffffff;
+  /* Secondary/Muted */
+  --secondary: #f4f4f5;
+  --secondary-foreground: #52525b;
+  --muted: #f4f4f5;
+  --muted-foreground: rgba(17,17,19,0.5);
+  --accent: #f4f4f5;
+  --accent-foreground: #111113;
+  /* Destructive */
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  /* Borders — very subtle like lookbook */
+  --border: rgba(0,0,0,0.06);
+  --input: rgba(0,0,0,0.06);
+  --ring: #8B1A1A;
+  /* Charts */
+  --chart-1: #8B1A1A;
+  --chart-2: #a52525;
+  --chart-3: #c41e3a;
+  --chart-4: #d97706;
+  --chart-5: #16a34a;
+  /* Sidebar */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111113;
+  --sidebar-primary: #8B1A1A;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #111113;
+  --sidebar-border: rgba(0,0,0,0.06);
+  --sidebar-ring: #8B1A1A;
+  /* Obsidian extended palette */
+  --obs-bg-surface: #f8f8f9;
+  --obs-bg-inset: #f4f4f5;
+  --obs-bg-elevated: #f0f0f2;
+  --obs-border-subtle: rgba(0,0,0,0.06);
+  --obs-border-medium: rgba(0,0,0,0.1);
+  --obs-text-secondary: rgba(17,17,19,0.6);
+  --obs-text-tertiary: rgba(17,17,19,0.4);
+  --obs-shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --obs-shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --obs-shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --obs-shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.04);
+  --obs-accent-soft: rgba(139,26,26,0.06);
+  --obs-accent-medium: rgba(139,26,26,0.12);
+  --obs-accent-text: #8B1A1A;
 }
 
 /* ═══════════════════════════════════════════════════════
-   OBSIDIAN DARK MODE — Deep dark surfaces + crimson accent
+   OBSIDIAN DARK MODE
    ═══════════════════════════════════════════════════════ */
 .dark {
-  --primary: oklch(0.58 0.18 22);
-  --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.58 0.18 22);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --background: oklch(0.115 0.005 286);
-  --foreground: oklch(0.93 0.005 286);
-  --card: oklch(0.155 0.006 286);
-  --card-foreground: oklch(0.93 0.005 286);
-  --popover: oklch(0.155 0.006 286);
-  --popover-foreground: oklch(0.93 0.005 286);
-  --secondary: oklch(0.20 0.006 286);
-  --secondary-foreground: oklch(0.75 0.005 286);
-  --muted: oklch(0.22 0.006 286);
-  --muted-foreground: oklch(0.65 0.015 286);
-  --accent: oklch(0.22 0.006 286);
-  --accent-foreground: oklch(0.93 0.005 286);
-  --destructive: oklch(0.65 0.22 25);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.58 0.18 22);
-  --chart-1: oklch(0.65 0.15 22);
-  --chart-2: oklch(0.55 0.16 22);
-  --chart-3: oklch(0.50 0.17 22);
-  --chart-4: oklch(0.45 0.16 22);
-  --chart-5: oklch(0.40 0.15 22);
-  --sidebar: oklch(0.135 0.006 286);
-  --sidebar-foreground: oklch(0.93 0.005 286);
-  --sidebar-accent: oklch(0.22 0.006 286);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.58 0.18 22);
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #111113;
+  --card-foreground: #fafafa;
+  --popover: #111113;
+  --popover-foreground: #fafafa;
+  --primary: #c41e3a;
+  --primary-foreground: #ffffff;
+  --secondary: #18181b;
+  --secondary-foreground: #a1a1aa;
+  --muted: #18181b;
+  --muted-foreground: rgba(255,255,255,0.5);
+  --accent: #18181b;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255,255,255,0.06);
+  --input: rgba(255,255,255,0.1);
+  --ring: #c41e3a;
+  --chart-1: #c41e3a;
+  --chart-2: #e8364f;
+  --chart-3: #ef4444;
+  --chart-4: #f97316;
+  --chart-5: #22c55e;
+  --sidebar: #0c0c0e;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #c41e3a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #18181b;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: rgba(255,255,255,0.06);
+  --sidebar-ring: #c41e3a;
+  --obs-bg-surface: #111113;
+  --obs-bg-inset: #0a0a0c;
+  --obs-bg-elevated: #18181b;
+  --obs-border-subtle: rgba(255,255,255,0.06);
+  --obs-border-medium: rgba(255,255,255,0.1);
+  --obs-text-secondary: rgba(255,255,255,0.6);
+  --obs-text-tertiary: rgba(255,255,255,0.35);
+  --obs-shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --obs-shadow-md: 0 2px 8px rgba(0,0,0,0.4);
+  --obs-shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
+  --obs-shadow-card: 0 0 0 1px rgba(255,255,255,0.06);
+  --obs-accent-soft: rgba(196,30,58,0.08);
+  --obs-accent-medium: rgba(196,30,58,0.15);
+  --obs-accent-text: #e8364f;
 }
 
+/* ═══════════════════════════════════════════════════════
+   BASE LAYER
+   ═══════════════════════════════════════════════════════ */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    background: var(--background);
+    color: var(--foreground);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    line-height: 1.5;
+    transition: background 0.3s, color 0.3s;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -140,22 +182,27 @@
   input[type="radio"]:not(:disabled) {
     @apply cursor-pointer;
   }
+  /* Tighter tracking on headings */
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+  }
 }
 
-/* Noise texture overlay for dark mode only */
+/* Noise texture overlay for dark mode */
 .dark body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
   pointer-events: none;
   z-index: 9999;
 }
 
+/* ═══════════════════════════════════════════════════════
+   COMPONENTS LAYER
+   ═══════════════════════════════════════════════════════ */
 @layer components {
-  /**
-   * Custom container utility that centers content and adds responsive padding.
-   */
+  /* Container */
   .container {
     width: 100%;
     margin-left: auto;
@@ -163,19 +210,16 @@
     padding-left: 1rem;
     padding-right: 1rem;
   }
-
   .flex {
     min-height: 0;
     min-width: 0;
   }
-
   @media (min-width: 640px) {
     .container {
       padding-left: 1.5rem;
       padding-right: 1.5rem;
     }
   }
-
   @media (min-width: 1024px) {
     .container {
       padding-left: 2rem;
@@ -184,129 +228,317 @@
     }
   }
 
-  /* Grade badge base — see Obsidian override below */
-
-  .grade-a {
-    @apply bg-emerald-500 text-white;
-  }
-
-  .grade-b {
-    @apply bg-teal-500 text-white;
-  }
-
-  .grade-c {
-    @apply bg-yellow-500 text-white;
-  }
-
-  .grade-d {
-    @apply bg-orange-500 text-white;
-  }
-
-  .grade-f {
-    @apply bg-red-500 text-white;
-  }
-
-  /* Score progress bar */
-  .score-bar {
-    @apply h-2 rounded-full overflow-hidden bg-muted;
-  }
-
-  .score-bar-fill {
-    @apply h-full rounded-full transition-all duration-500;
-  }
-
-  /* Card hover — see Obsidian call cards override below */
+  /* Grade badge colors */
+  .grade-a { @apply bg-emerald-500 text-white; }
+  .grade-b { @apply bg-teal-500 text-white; }
+  .grade-c { @apply bg-yellow-500 text-white; }
+  .grade-d { @apply bg-orange-500 text-white; }
+  .grade-f { @apply bg-red-500 text-white; }
+  .score-bar { @apply h-2 rounded-full overflow-hidden bg-muted; }
+  .score-bar-fill { @apply h-full rounded-full transition-all duration-500; }
 
   /* ═══════════════════════════════════════════════════════
-     OBSIDIAN SHADOWS — Subtle in light, deep in dark
+     OBSIDIAN CARD OVERHAUL — Every [data-slot="card"]
      ═══════════════════════════════════════════════════════ */
-  .obsidian-shadow-sm {
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  [data-slot="card"] {
+    box-shadow: var(--obs-shadow-card) !important;
+    border-color: var(--obs-border-subtle) !important;
+    border-radius: 12px !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
-  .dark .obsidian-shadow-sm {
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-  }
-  .obsidian-shadow-md {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  }
-  .dark .obsidian-shadow-md {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-  }
-  .obsidian-shadow-card {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.04);
-  }
-  .dark .obsidian-shadow-card {
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
+  [data-slot="card"]:hover {
+    box-shadow: var(--obs-shadow-md) !important;
+    transform: translateY(-1px);
   }
 
   /* ═══════════════════════════════════════════════════════
-     OBSIDIAN GRADE BADGES — Round circles like lookbook
+     OBSIDIAN SIDEBAR — Premium refined feel
      ═══════════════════════════════════════════════════════ */
-  .grade-badge {
-    @apply inline-flex items-center justify-center font-bold rounded-full w-10 h-10 text-sm;
+  [data-slot="sidebar"] {
+    border-right: 1px solid var(--obs-border-subtle) !important;
+    background: var(--sidebar) !important;
+  }
+  /* Active sidebar item — crimson accent */
+  [data-slot="sidebar-menu-button"][data-active="true"] {
+    background: var(--obs-accent-soft) !important;
+    color: var(--obs-accent-text) !important;
+    font-weight: 600 !important;
+    border-radius: 8px;
+  }
+  [data-slot="sidebar-menu-button"] {
+    transition: all 0.2s !important;
+    border-radius: 8px;
+  }
+  [data-slot="sidebar-menu-button"]:hover {
+    background: var(--obs-accent-soft) !important;
   }
 
   /* ═══════════════════════════════════════════════════════
-     OBSIDIAN TYPOGRAPHY — Tighter tracking, premium weights
+     OBSIDIAN STAT CARDS — Icon container with accent bg
      ═══════════════════════════════════════════════════════ */
-  h1, h2, h3 {
+  /* Target stat card icon containers (the small icon wrappers in stat cards) */
+  .stat-icon-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--obs-accent-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .stat-icon-wrap svg {
+    width: 16px;
+    height: 16px;
+    color: var(--obs-accent-text);
+  }
+  /* Stat values — big bold numbers */
+  .stat-value {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--foreground);
+  }
+  /* Stat labels */
+  .stat-label {
+    font-size: 12px;
+    color: var(--obs-text-tertiary);
+    margin-top: 2px;
+  }
+  /* Change badges */
+  .change-up {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 100px;
+    color: #16a34a;
+    background: rgba(22,163,74,0.08);
+  }
+  .change-down {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 100px;
+    color: #dc2626;
+    background: rgba(220,38,38,0.08);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN CALL CARDS — Left accent border, premium layout
+     ═══════════════════════════════════════════════════════ */
+  .call-card-obsidian {
+    background: var(--card);
+    border: 1px solid var(--obs-border-subtle);
+    border-left: 3px solid var(--obs-accent-text);
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: var(--obs-shadow-card);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+  }
+  .call-card-obsidian:hover {
+    box-shadow: var(--obs-shadow-lg);
+    transform: translateY(-2px);
+  }
+  /* Call card name */
+  .call-card-obsidian .call-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--foreground);
+    display: inline;
+    margin-right: 10px;
+  }
+  /* Call pills */
+  .call-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1.5px solid;
+    vertical-align: middle;
+  }
+  .call-pill-outbound { color: #16a34a; border-color: #16a34a; background: rgba(22,163,74,0.06); }
+  .call-pill-inbound { color: #2563eb; border-color: #2563eb; background: rgba(37,99,235,0.06); }
+  .call-pill-qualification { color: #7c3aed; border-color: #7c3aed; background: rgba(124,58,237,0.06); }
+  .call-pill-offer { color: #0891b2; border-color: #0891b2; background: rgba(8,145,178,0.06); }
+  .call-pill-cold-call { color: #6366f1; border-color: #6366f1; background: rgba(99,102,241,0.06); }
+  .call-pill-not-interested { color: #dc2626; border-color: #dc2626; background: rgba(220,38,38,0.06); }
+  .call-pill-interested { color: #16a34a; border-color: #16a34a; background: rgba(22,163,74,0.06); }
+  .call-pill-follow-up { color: #d97706; border-color: #d97706; background: rgba(217,119,6,0.06); }
+  .call-pill-appointment { color: #0891b2; border-color: #0891b2; background: rgba(8,145,178,0.06); }
+  .call-pill-do-not-call { color: #dc2626; border-color: #dc2626; background: rgba(220,38,38,0.06); }
+  .call-pill-other { color: #6b7280; border-color: #6b7280; background: rgba(107,114,128,0.06); }
+  /* Call card meta row */
+  .call-card-obsidian .call-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--obs-text-tertiary);
+  }
+  .call-card-obsidian .call-meta svg {
+    width: 14px;
+    height: 14px;
+    opacity: 0.6;
+  }
+  .call-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  /* Grade circle */
+  .call-grade-circle {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .call-grade-circle.grade-a { background: #16a34a; }
+  .call-grade-circle.grade-b { background: #0d9488; }
+  .call-grade-circle.grade-c { background: #ca8a04; }
+  .call-grade-circle.grade-d { background: #ea580c; }
+  .call-grade-circle.grade-f { background: #dc2626; }
+  /* Call card score */
+  .call-card-score {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--obs-text-secondary);
+  }
+  /* Call card divider */
+  .call-card-divider {
+    height: 1px;
+    background: var(--obs-border-subtle);
+    margin: 14px 0;
+  }
+  /* Call card summary */
+  .call-card-summary {
+    font-size: 13px;
+    color: var(--obs-text-secondary);
+    line-height: 1.65;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN PANELS — Dashboard panels
+     ═══════════════════════════════════════════════════════ */
+  .obs-panel {
+    background: var(--card);
+    border: 1px solid var(--obs-border-subtle);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--obs-shadow-card);
+  }
+  .obs-panel h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--obs-text-secondary);
+    margin-bottom: 16px;
+    letter-spacing: -0.01em;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN LEADERBOARD
+     ═══════════════════════════════════════════════════════ */
+  .lb-rank {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: 'Orbitron', sans-serif;
+  }
+  .lb-rank-1 { background: rgba(202,138,4,0.1); color: #ca8a04; }
+  .lb-rank-2 { background: rgba(100,116,139,0.1); color: #64748b; }
+  .lb-rank-3 { background: rgba(180,83,9,0.1); color: #b45309; }
+  .lb-rank-default { background: var(--obs-bg-inset); color: var(--obs-text-tertiary); }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN SIGNAL CARDS (Pipeline)
+     ═══════════════════════════════════════════════════════ */
+  .signal-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .signal-icon-missed { background: rgba(220,38,38,0.08); }
+  .signal-icon-at-risk { background: rgba(217,119,6,0.08); }
+  .signal-icon-worth { background: rgba(37,99,235,0.08); }
+  .signal-count {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--foreground);
     letter-spacing: -0.02em;
   }
 
   /* ═══════════════════════════════════════════════════════
-     OBSIDIAN PAGE BACKGROUND — Subtle warm tint
+     OBSIDIAN TABLE — Refined headers and rows
      ═══════════════════════════════════════════════════════ */
-  body {
-    background-color: oklch(0.975 0.002 286);
+  th {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--obs-text-tertiary);
   }
-  .dark body {
-    background-color: oklch(0.115 0.005 286);
+  tr {
+    transition: background 0.15s;
   }
 
   /* ═══════════════════════════════════════════════════════
-     OBSIDIAN SIDEBAR — Premium left border accent
-     ═══════════════════════════════════════════════════════ */
-  [data-slot="sidebar"] {
-    border-right: 1px solid oklch(0.92 0.004 286) !important;
-  }
-  .dark [data-slot="sidebar"] {
-    border-right: 1px solid oklch(1 0 0 / 6%) !important;
-  }
-
-  /* Active sidebar item gets primary accent */
-  [data-slot="sidebar-menu-button"][data-active="true"] {
-    background: oklch(0.42 0.16 25 / 0.08) !important;
-    color: oklch(0.42 0.16 25) !important;
-    font-weight: 500;
-  }
-  .dark [data-slot="sidebar-menu-button"][data-active="true"] {
-    background: oklch(0.58 0.18 22 / 0.12) !important;
-    color: oklch(0.58 0.18 22) !important;
-  }
-
-  /* ═══════════════════════════════════════════════════════
-     OBSIDIAN CALL CARDS — Left accent border like lookbook
-     ═══════════════════════════════════════════════════════ */
-  .card-hover {
-    @apply transition-all duration-200;
-    border-left: 3px solid transparent;
-  }
-  .card-hover:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-    border-left-color: oklch(0.42 0.16 25 / 0.4);
-    transform: translateY(-1px);
-  }
-  .dark .card-hover:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
-    border-left-color: oklch(0.58 0.18 22 / 0.5);
-  }
-
-  /* ═══════════════════════════════════════════════════════
-     OBSIDIAN BADGE REFINEMENTS — Softer, more premium
+     OBSIDIAN BADGES — Refined
      ═══════════════════════════════════════════════════════ */
   [data-slot="badge"] {
     font-weight: 500;
     letter-spacing: 0.01em;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN TABS — Active state
+     ═══════════════════════════════════════════════════════ */
+  [data-slot="tabs-trigger"][data-state="active"] {
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     OBSIDIAN INPUTS — Refined hover
+     ═══════════════════════════════════════════════════════ */
+  [data-slot="select-trigger"],
+  [data-slot="input"] {
+    transition: all 0.2s;
+  }
+  [data-slot="select-trigger"]:hover,
+  [data-slot="input"]:hover {
+    border-color: var(--obs-accent-medium);
   }
 
   /* ═══════════════════════════════════════════════════════
@@ -320,53 +552,44 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: oklch(0.8 0 0);
+    background: rgba(0,0,0,0.15);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.7 0 0);
+    background: rgba(0,0,0,0.25);
   }
   .dark ::-webkit-scrollbar-thumb {
-    background: oklch(0.3 0 0);
+    background: rgba(255,255,255,0.1);
   }
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.4 0 0);
+    background: rgba(255,255,255,0.2);
   }
 
   /* ═══════════════════════════════════════════════════════
-     OBSIDIAN TABLE HEADERS — Uppercase, spaced, premium
+     OBSIDIAN PROCESSING STATUS CARDS
      ═══════════════════════════════════════════════════════ */
-  th {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: oklch(0.50 0.016 286);
-  }
-  .dark th {
-    color: oklch(0.65 0.015 286);
-  }
-
-  /* ═══════════════════════════════════════════════════════
-     OBSIDIAN SELECT/INPUT — Refined borders
-     ═══════════════════════════════════════════════════════ */
-  [data-slot="select-trigger"],
-  [data-slot="input"] {
+  .processing-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--obs-border-subtle);
     transition: all 0.2s;
   }
-  [data-slot="select-trigger"]:hover,
-  [data-slot="input"]:hover {
-    border-color: oklch(0.42 0.16 25 / 0.3);
-  }
-  .dark [data-slot="select-trigger"]:hover,
-  .dark [data-slot="input"]:hover {
-    border-color: oklch(0.58 0.18 22 / 0.3);
-  }
+  .processing-card:hover { box-shadow: var(--obs-shadow-sm); }
+  .processing-card.queued { background: rgba(37,99,235,0.04); border-color: rgba(37,99,235,0.15); }
+  .processing-card.scored { background: rgba(22,163,74,0.04); border-color: rgba(22,163,74,0.15); }
+  .processing-card.skipped { background: var(--obs-bg-inset); opacity: 0.6; }
 
   /* ═══════════════════════════════════════════════════════
-     OBSIDIAN TABS — Refined active state
+     OBSIDIAN ACTIVITY FEED
      ═══════════════════════════════════════════════════════ */
-  [data-slot="tabs-trigger"][data-state="active"] {
-    font-weight: 600;
+  .activity-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--obs-accent-text);
   }
 }
