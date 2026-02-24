@@ -978,6 +978,7 @@
     font-size: 13px;
     font-weight: 500;
     color: var(--obs-text-tertiary);
+    opacity: 0.5;
     text-align: center;
     cursor: pointer;
     transition: all 0.2s;
@@ -989,11 +990,12 @@
     background: transparent;
     font-family: inherit;
   }
-  .obs-role-tab:hover { color: var(--obs-text-secondary); }
+  .obs-role-tab:hover { color: var(--obs-text-secondary); opacity: 0.75; }
   .obs-role-tab.active {
     background: var(--obs-bg-card);
     color: var(--obs-text-primary);
     font-weight: 600;
+    opacity: 1;
     box-shadow: var(--obs-shadow-sm);
   }
   .obs-role-tab svg { width: 16px; height: 16px; opacity: 0.5; }
@@ -1381,18 +1383,20 @@
     border-radius: 8px;
     background: var(--obs-bg-inset);
     border: 1px solid var(--obs-border-subtle);
-    color: var(--obs-text-secondary);
+    color: var(--obs-text-tertiary);
+    opacity: 0.5;
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
     font-family: inherit;
   }
-  .obs-table-filter:hover { background: var(--obs-bg-elevated); }
+  .obs-table-filter:hover { background: var(--obs-bg-elevated); opacity: 0.75; }
   .obs-table-filter.active {
     background: var(--obs-accent-soft);
     border-color: var(--obs-accent-medium);
     color: var(--obs-accent-text);
+    opacity: 1;
   }
 
   /* Table styling */
@@ -1542,6 +1546,7 @@
     font-size: 13px;
     font-weight: 500;
     color: var(--obs-text-tertiary);
+    opacity: 0.5;
     border: none;
     background: transparent;
     transition: all 0.15s;
@@ -1550,11 +1555,13 @@
   [data-slot="tabs-trigger"]:hover {
     background: var(--obs-bg-inset);
     color: var(--obs-text-secondary);
+    opacity: 0.75;
   }
   [data-slot="tabs-trigger"][data-state="active"] {
     background: var(--obs-accent-soft);
     color: var(--obs-accent-text);
     font-weight: 600;
+    opacity: 1;
     box-shadow: none;
   }
 
@@ -1890,18 +1897,21 @@
     font-weight: 500;
     border: 1px solid var(--obs-border-subtle);
     background: transparent;
-    color: var(--obs-text-secondary);
+    color: var(--obs-text-tertiary);
+    opacity: 0.5;
     cursor: pointer;
     transition: all 0.15s;
   }
   .call-filter-pill:hover {
     background: var(--obs-bg-elevated);
+    opacity: 0.75;
   }
   .call-filter-pill.active {
     background: var(--obs-accent-soft);
     color: var(--obs-accent-text);
     border-color: var(--obs-accent-medium);
     font-weight: 600;
+    opacity: 1;
   }
 
   /* ─── Data Table ─── */
