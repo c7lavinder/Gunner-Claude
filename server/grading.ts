@@ -1599,21 +1599,30 @@ async function generateAndStoreNextSteps(callId: number): Promise<void> {
     }
   }
 
-  // 5. Fetch available pipelines and workflows
+  // 5. Fetch available pipelines and workflows (each wrapped individually to prevent one failure from blocking the other)
   let availableOptions = "";
   if (tenantId) {
     try {
-      const { getPipelinesForTenant, getWorkflowsForTenant } = await import("./ghlActions");
-      const [pipelines, workflows] = await Promise.all([
-        getPipelinesForTenant(tenantId),
-        getWorkflowsForTenant(tenantId),
-      ]);
+      const { getPipelinesForTenant } = await import("./ghlActions");
+      const pipelines = await getPipelinesForTenant(tenantId).catch((e: any) => {
+        console.warn("[NextSteps-Auto] Pipeline fetch failed (non-blocking):", e?.message || e);
+        return [] as any[];
+      });
       if (pipelines.length > 0) {
         availableOptions += "\n\nAVAILABLE PIPELINES AND STAGES:\n";
         for (const p of pipelines) {
           availableOptions += `Pipeline: "${p.name}" → Stages: ${p.stages.map((s: any) => `"${s.name}"`).join(", ")}\n`;
         }
       }
+    } catch (e) {
+      console.warn("[NextSteps-Auto] Pipeline fetch error (non-blocking):", e);
+    }
+    try {
+      const { getWorkflowsForTenant } = await import("./ghlActions");
+      const workflows = await getWorkflowsForTenant(tenantId).catch((e: any) => {
+        console.warn("[NextSteps-Auto] Workflow fetch failed (non-blocking):", e?.message || e);
+        return [] as any[];
+      });
       if (workflows.length > 0) {
         availableOptions += "\nAVAILABLE WORKFLOWS:\n";
         for (const w of workflows) {
@@ -1621,7 +1630,7 @@ async function generateAndStoreNextSteps(callId: number): Promise<void> {
         }
       }
     } catch (e) {
-      console.error("[NextSteps-Auto] Failed to fetch options:", e);
+      console.warn("[NextSteps-Auto] Workflow fetch error (non-blocking):", e);
     }
   }
 

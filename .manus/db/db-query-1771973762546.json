@@ -1,0 +1,49 @@
+{
+  "query": "SELECT * FROM call_next_steps LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT * FROM call_next_steps LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "callId": "2550056",
+      "tenantId": "1",
+      "actionType": "add_note",
+      "reason": "To accurately document the details of the offer call, including the offer made, the seller's motivation, and the agreed-upon next steps.",
+      "suggested": "true",
+      "payload": "{}",
+      "status": "pending",
+      "result": "NULL",
+      "createdAt": "2026-02-24 22:55:04",
+      "updatedAt": "2026-02-24 22:55:04"
+    },
+    {
+      "id": "2",
+      "callId": "2550056",
+      "tenantId": "1",
+      "actionType": "change_pipeline_stage",
+      "reason": "The call resulted in an offer being made and a follow-up call scheduled to get a decision, indicating the lead is now in the 'Offer Apt Scheduled' stage.",
+      "suggested": "true",
+      "payload": "{}",
+      "status": "pending",
+      "result": "NULL",
+      "createdAt": "2026-02-24 22:55:04",
+      "updatedAt": "2026-02-24 22:55:04"
+    },
+    {
+      "id": "3",
+      "callId": "2550056",
+      "tenantId": "1",
+      "actionType": "create_task",
+      "reason": "A callback was explicitly scheduled for tomorrow at 11 AM to get a 'yes' or 'no' on the offer, requiring a task to ensure it's made.",
+      "suggested": "true",
+      "payload": "{}",
+      "status": "pending",
+      "result": "NULL",
+      "createdAt": "2026-02-24 22:55:04",
+      "updatedAt": "2026-02-24 22:55:04"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcallId\ttenantId\tactionType\treason\tsuggested\tpayload\tstatus\tresult\tcreatedAt\tupdatedAt\n1\t2550056\t1\tadd_note\tTo accurately document the details of the offer call, including the offer made, the seller's motivation, and the agreed-upon next steps.\ttrue\t{}\tpending\tNULL\t2026-02-24 22:55:04\t2026-02-24 22:55:04\n2\t2550056\t1\tchange_pipeline_stage\tThe call resulted in an offer being made and a follow-up call scheduled to get a decision, indicating the lead is now in the 'Offer Apt Scheduled' stage.\ttrue\t{}\tpending\tNULL\t2026-02-24 22:55:04\t2026-02-24 22:55:04\n3\t2550056\t1\tcreate_task\tA callback was explicitly scheduled for tomorrow at 11 AM to get a 'yes' or 'no' on the offer, requiring a task to ensure it's made.\ttrue\t{}\tpending\tNULL\t2026-02-24 22:55:04\t2026-02-24 22:55:04\n",
+  "stderr": "",
+  "execution_time_ms": 354
+}

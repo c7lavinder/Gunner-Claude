@@ -2932,3 +2932,7 @@
 - [x] Persist Next Steps to database (call_next_steps table) so they survive page reloads
 - [x] Load stored Next Steps from DB on tab mount — no need to regenerate
 - [x] Persist push/skip/fail status to DB so state is preserved
+
+## Next Steps Bug Fixes
+- [x] Fix generateAndStoreNextSteps crashing when GHL workflow API returns 401 — Promise.all propagates error past try/catch
+- [x] Ensure Generate Next Steps button works for existing calls that were graded before auto-generation was deployed

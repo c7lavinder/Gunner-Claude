@@ -1196,17 +1196,26 @@ export const appRouter = router({
         let availableOptions = "";
         if (tenantId) {
           try {
-            const { getPipelinesForTenant, getWorkflowsForTenant } = await import("./ghlActions");
-            const [pipelines, workflows] = await Promise.all([
-              getPipelinesForTenant(tenantId),
-              getWorkflowsForTenant(tenantId),
-            ]);
+            const { getPipelinesForTenant } = await import("./ghlActions");
+            const pipelines = await getPipelinesForTenant(tenantId).catch((e: any) => {
+              console.warn("[NextSteps] Pipeline fetch failed (non-blocking):", e?.message || e);
+              return [] as any[];
+            });
             if (pipelines.length > 0) {
               availableOptions += "\n\nAVAILABLE PIPELINES AND STAGES:\n";
               for (const p of pipelines) {
-                availableOptions += `Pipeline: "${p.name}" → Stages: ${p.stages.map(s => `"${s.name}"`).join(", ")}\n`;
+                availableOptions += `Pipeline: "${p.name}" → Stages: ${p.stages.map((s: any) => `"${s.name}"`).join(", ")}\n`;
               }
             }
+          } catch (e) {
+            console.warn("[NextSteps] Pipeline fetch error (non-blocking):", e);
+          }
+          try {
+            const { getWorkflowsForTenant } = await import("./ghlActions");
+            const workflows = await getWorkflowsForTenant(tenantId).catch((e: any) => {
+              console.warn("[NextSteps] Workflow fetch failed (non-blocking):", e?.message || e);
+              return [] as any[];
+            });
             if (workflows.length > 0) {
               availableOptions += "\nAVAILABLE WORKFLOWS:\n";
               for (const w of workflows) {
@@ -1214,7 +1223,7 @@ export const appRouter = router({
               }
             }
           } catch (e) {
-            console.error("[NextSteps] Failed to fetch options:", e);
+            console.warn("[NextSteps] Workflow fetch error (non-blocking):", e);
           }
         }
 
