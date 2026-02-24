@@ -15,7 +15,7 @@ interface GHLActionCredentials {
   locationId: string;
 }
 
-async function getCredentialsForTenant(tenantId: number): Promise<GHLActionCredentials | null> {
+export async function getCredentialsForTenant(tenantId: number): Promise<GHLActionCredentials | null> {
   const tenant = await getTenantById(tenantId);
   if (!tenant || !tenant.crmConfig) return null;
   
@@ -28,7 +28,7 @@ async function getCredentialsForTenant(tenantId: number): Promise<GHLActionCrede
   };
 }
 
-async function ghlFetch(
+export async function ghlFetch(
   creds: GHLActionCredentials,
   path: string,
   method: string = "GET",

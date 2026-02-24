@@ -2916,3 +2916,13 @@
 - [x] BUG: AI Coach re-detects already-executed actions when user sends a new command — should only parse the new message, not re-parse conversation history
 - [x] BUG: Too many calls being classified as "Callback" outcome — tighten AI grading criteria for call outcomes to be more specific
 - [x] Fix AI-generated signal titles being too long and truncated — add character limit to keep titles short and fully visible
+
+## Next Steps Tab on Call Detail Page
+- [x] Add "Next Steps" tab to Call Detail page (alongside Coaching, Criteria, Transcript)
+- [x] AI analysis of transcript to generate suggested next steps with pre-filled values
+- [x] Action types: check off task, update task, add new task, add summary note + specific notes, add to calendar, move pipeline stage, send SMS, schedule SMS, start workflow, take off workflow
+- [x] Each action card shows "AI Suggested" badge with pre-filled content, or blank for manual entry
+- [x] All action fields are editable before pushing to GHL
+- [x] "Push to GHL" button on each action that executes via existing AI Coach action system
+- [x] Allow adding manual actions (no AI suggestion) alongside AI-suggested ones
+- [x] Learning system: track user edits to AI suggestions, understand WHY changes were made based on call/communication context, and feed learned patterns back into future suggestions (e.g., seller said 'call me in spring' → user changed to 4 Month Follow Up → learn to suggest longer follow-up when seller gives distant timeline)

@@ -28,6 +28,7 @@ import { Link, useParams } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
+import NextStepsTab from "@/components/NextStepsTab";
 import { Zap } from "lucide-react";
 import { useDemo } from "@/hooks/useDemo";
 // Badge confetti removed - badges are now awarded at grading time, not view time
@@ -629,6 +630,7 @@ export default function CallDetail() {
                 <TabsTrigger value="coaching">Coaching</TabsTrigger>
                 <TabsTrigger value="criteria">Criteria</TabsTrigger>
                 <TabsTrigger value="transcript">Transcript</TabsTrigger>
+                <TabsTrigger value="next-steps">Next Steps</TabsTrigger>
               </TabsList>
 
               <TabsContent value="coaching" className="space-y-4 mt-4">
@@ -768,6 +770,13 @@ export default function CallDetail() {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+              <TabsContent value="next-steps" className="mt-4">
+                <NextStepsTab
+                  callId={callId}
+                  contactName={call.contactName || call.contactPhone || "Unknown"}
+                  ghlContactId={(call as any).ghlContactId}
+                />
               </TabsContent>
             </Tabs>
           </div>

@@ -1047,6 +1047,292 @@ export const appRouter = router({
       const stats = await syncBatchDialerCalls();
       return stats;
     }),
+
+    // ============ NEXT STEPS ============
+    generateNextSteps: protectedProcedure
+      .input(z.object({ callId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const call = await getCallById(input.callId);
+        if (!call) throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
+        if (call.tenantId && ctx.user?.tenantId && call.tenantId !== ctx.user.tenantId) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
+        }
+
+        const tenantId = call.tenantId;
+        const grade = await getCallGradeByCallId(input.callId);
+
+        // 1. Fetch prior calls for same contact
+        let priorCallsSummary = "";
+        if (call.ghlContactId) {
+          const { getDb } = await import("./db");
+          const db1 = await getDb();
+          if (db1) {
+            const { calls: callsTable } = await import("../drizzle/schema");
+            const { eq, and, ne, desc } = await import("drizzle-orm");
+            const priorCalls = await db1.select()
+              .from(callsTable)
+              .where(and(
+                eq(callsTable.ghlContactId, call.ghlContactId),
+                ne(callsTable.id, call.id)
+              ))
+              .orderBy(desc(callsTable.callTimestamp))
+              .limit(5);
+
+            if (priorCalls.length > 0) {
+              priorCallsSummary = "\n\nPRIOR CALLS WITH THIS CONTACT:\n";
+              for (const pc of priorCalls) {
+                priorCallsSummary += `- ${pc.callTimestamp ? new Date(pc.callTimestamp).toLocaleDateString() : 'Unknown date'}`;
+                priorCallsSummary += ` | ${pc.callType || 'unknown'} | Outcome: ${pc.callOutcome || 'none'}`;
+                priorCallsSummary += ` | ${pc.teamMemberName || 'Unknown'}\n`;
+                if (pc.transcript) {
+                  priorCallsSummary += `  Transcript excerpt: ${pc.transcript.substring(0, 1500)}...\n`;
+                }
+              }
+            }
+          }
+        }
+
+        // 2. Fetch GHL conversation messages (SMS history)
+        let smsHistory = "";
+        if (call.ghlContactId && tenantId) {
+          try {
+            const { getCredentialsForTenant, ghlFetch } = await import("./ghlActions");
+            const creds = await getCredentialsForTenant(tenantId);
+            if (creds) {
+              const searchData = await ghlFetch(
+                creds,
+                `/conversations/search?locationId=${creds.locationId}&contactId=${call.ghlContactId}`
+              );
+              const conversations = searchData.conversations || [];
+              if (conversations.length > 0) {
+                const convId = conversations[0].id;
+                const msgData = await ghlFetch(creds, `/conversations/${convId}/messages`);
+                const messages = msgData.messages?.messages || msgData.messages || [];
+                const recentMsgs = messages.slice(-10);
+                if (recentMsgs.length > 0) {
+                  smsHistory = "\n\nRECENT SMS HISTORY WITH THIS CONTACT:\n";
+                  for (const msg of recentMsgs) {
+                    const dir = msg.direction === 1 ? "SENT" : "RECEIVED";
+                    const date = msg.dateAdded ? new Date(msg.dateAdded).toLocaleString() : 'Unknown';
+                    smsHistory += `[${dir}] ${date}: ${msg.body || '(no text)'}\n`;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error("[NextSteps] Failed to fetch SMS history:", e);
+          }
+        }
+
+        // 3. Fetch GHL tasks for this contact
+        let existingTasks = "";
+        if (call.ghlContactId && tenantId) {
+          try {
+            const { getTasksForContact } = await import("./ghlActions");
+            const tasks = await getTasksForContact(tenantId, call.ghlContactId);
+            if (tasks.length > 0) {
+              existingTasks = "\n\nEXISTING TASKS FOR THIS CONTACT:\n";
+              for (const t of tasks) {
+                existingTasks += `- ${t.title} | Due: ${t.dueDate || 'No date'} | ${t.completed ? 'COMPLETED' : 'PENDING'}\n`;
+              }
+            }
+          } catch (e) {
+            console.error("[NextSteps] Failed to fetch tasks:", e);
+          }
+        }
+
+        // 4. Fetch recent executed actions by this user (learning from patterns)
+        let recentActionPatterns = "";
+        if (tenantId) {
+          try {
+            const { getDb: getDb2 } = await import("./db");
+            const db2 = await getDb2();
+            if (db2) {
+              const { coachActionLog } = await import("../drizzle/schema");
+              const { eq, and, desc } = await import("drizzle-orm");
+              const recentActions = await db2.select()
+                .from(coachActionLog)
+                .where(and(
+                  eq(coachActionLog.tenantId, tenantId),
+                  eq(coachActionLog.status, "executed")
+                ))
+                .orderBy(desc(coachActionLog.createdAt))
+                .limit(30);
+
+              if (recentActions.length > 0) {
+                recentActionPatterns = "\n\nRECENT ACTION PATTERNS (learn from what this team typically does after calls):\n";
+                for (const a of recentActions) {
+                  const payload = a.payload as any;
+                  recentActionPatterns += `- ${a.actionType} for ${a.targetContactName || 'unknown'}`;
+                  if (payload?.stageName) recentActionPatterns += ` → Stage: ${payload.stageName}`;
+                  if (payload?.pipelineName) recentActionPatterns += ` in ${payload.pipelineName}`;
+                  if (payload?.dueDate) recentActionPatterns += ` | Due: ${payload.dueDate}`;
+                  if (payload?.title) recentActionPatterns += ` | Title: ${payload.title}`;
+                  if (a.actionType === 'send_sms' && payload?.message) recentActionPatterns += ` | SMS: "${payload.message.substring(0, 80)}..."`;
+                  recentActionPatterns += "\n";
+                }
+              }
+            }
+          } catch (e) {
+            console.error("[NextSteps] Failed to fetch action patterns:", e);
+          }
+        }
+
+        // 5. Fetch user style preferences
+        let styleContext = "";
+        if (tenantId && ctx.user?.id) {
+          try {
+            const { buildPreferenceContext } = await import("./coachPreferences");
+            styleContext = await buildPreferenceContext(tenantId, ctx.user.id);
+            if (styleContext) {
+              styleContext = "\n\nUSER STYLE PREFERENCES (match this style when drafting content):\n" + styleContext;
+            }
+          } catch (e) {
+            console.error("[NextSteps] Failed to fetch preferences:", e);
+          }
+        }
+
+        // 6. Fetch available pipelines and workflows for accurate suggestions
+        let availableOptions = "";
+        if (tenantId) {
+          try {
+            const { getPipelinesForTenant, getWorkflowsForTenant } = await import("./ghlActions");
+            const [pipelines, workflows] = await Promise.all([
+              getPipelinesForTenant(tenantId),
+              getWorkflowsForTenant(tenantId),
+            ]);
+            if (pipelines.length > 0) {
+              availableOptions += "\n\nAVAILABLE PIPELINES AND STAGES:\n";
+              for (const p of pipelines) {
+                availableOptions += `Pipeline: "${p.name}" → Stages: ${p.stages.map(s => `"${s.name}"`).join(", ")}\n`;
+              }
+            }
+            if (workflows.length > 0) {
+              availableOptions += "\nAVAILABLE WORKFLOWS:\n";
+              for (const w of workflows) {
+                availableOptions += `- "${w.name}"\n`;
+              }
+            }
+          } catch (e) {
+            console.error("[NextSteps] Failed to fetch options:", e);
+          }
+        }
+
+        // Build the LLM prompt
+        const systemPrompt = `You are an AI assistant for a real estate flipping business. You analyze call transcripts, prior communication history, and team action patterns to suggest specific, actionable next steps for a lead.
+
+You must deeply understand the FULL context — what was discussed, what was promised, what the seller's situation is, prior conversations, existing tasks, and SMS history — before suggesting actions.
+
+IMPORTANT RULES:
+- Only suggest actions that make sense based on what actually happened in the call and prior communication
+- Learn from the team's recent action patterns — if they typically move contacts to certain stages after certain outcomes, suggest the same
+- Match the user's writing style for SMS and notes based on their style preferences
+- Use EXACT pipeline stage names and workflow names from the available options provided
+- For tasks, suggest realistic due dates based on what was discussed (e.g., seller said "call me in 2 weeks" → due date 2 weeks out)
+- For SMS, draft messages that reference specific details from the call (property address, price discussed, seller's concerns)
+- Do NOT suggest redundant actions (e.g., don't suggest creating a task if one already exists for the same thing)
+- Do NOT suggest actions that contradict what happened (e.g., don't suggest "send offer" if seller said they're not interested)
+- Each action should have a clear reason WHY it's being suggested based on the call/communication context
+
+Return a JSON object with an "actions" array. Each action object has:
+- actionType: one of "check_off_task", "update_task", "create_task", "add_note", "create_appointment", "change_pipeline_stage", "send_sms", "schedule_sms", "add_to_workflow", "remove_from_workflow"
+- reason: 1-2 sentence explanation of WHY this action is suggested based on the call context
+- suggested: boolean — true if AI recommends this action, false if it's just an available option
+- payload: object with the relevant fields for the action type:
+  - check_off_task: { taskKeyword: "keyword to find the task" }
+  - update_task: { taskKeyword: "keyword to find", dueDate: "YYYY-MM-DD", description: "optional new description" }
+  - create_task: { title: "task title", description: "details", dueDate: "YYYY-MM-DD" }
+  - add_note: { noteBody: "the note content — include call summary and specific details" }
+  - create_appointment: { title: "appointment title", startTime: "ISO datetime", endTime: "ISO datetime", calendarName: "calendar name" }
+  - change_pipeline_stage: { pipelineName: "exact pipeline name", stageName: "exact stage name" }
+  - send_sms: { message: "SMS text" }
+  - schedule_sms: { message: "SMS text", scheduledDate: "YYYY-MM-DD", scheduledTime: "HH:mm" }
+  - add_to_workflow: { workflowName: "exact workflow name" }
+  - remove_from_workflow: { workflowName: "exact workflow name" }
+
+For schedule_sms, this will be implemented as a task reminder since GHL doesn't support scheduled SMS directly.
+
+Return ONLY the JSON object, no other text.`;
+
+        const userPrompt = `CALL DETAILS:
+- Contact: ${call.contactName || 'Unknown'}
+- Phone: ${call.contactPhone || 'Unknown'}
+- Property: ${call.propertyAddress || 'Unknown'}
+- Call Type: ${call.callType || 'Unknown'}
+- Call Outcome: ${call.callOutcome || 'None'}
+- Team Member: ${call.teamMemberName || 'Unknown'}
+- Duration: ${call.duration ? Math.floor(call.duration / 60) + 'm ' + (call.duration % 60) + 's' : 'Unknown'}
+- Date: ${call.callTimestamp ? new Date(call.callTimestamp).toLocaleString() : 'Unknown'}
+
+GRADE SUMMARY:
+${grade?.summary || 'No grade available'}
+${grade?.strengths ? 'Strengths: ' + JSON.stringify(grade.strengths) : ''}
+${grade?.improvements ? 'Areas for improvement: ' + JSON.stringify(grade.improvements) : ''}
+
+FULL TRANSCRIPT:
+${call.transcript || 'No transcript available'}
+${priorCallsSummary}${smsHistory}${existingTasks}${recentActionPatterns}${styleContext}${availableOptions}
+
+Based on ALL of the above context, suggest the most relevant next steps for this lead. Only suggest actions that are clearly warranted by the call content and communication history.`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "next_steps",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  actions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        actionType: { type: "string" },
+                        reason: { type: "string" },
+                        suggested: { type: "boolean" },
+                        payload: { type: "object", additionalProperties: true },
+                      },
+                      required: ["actionType", "reason", "suggested", "payload"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["actions"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices?.[0]?.message?.content;
+        if (!content) return { actions: [] };
+
+        try {
+          const parsed = JSON.parse(content as string);
+          const VALID_NEXT_STEP_TYPES = [
+            "check_off_task", "update_task", "create_task", "add_note",
+            "create_appointment", "change_pipeline_stage", "send_sms",
+            "schedule_sms", "add_to_workflow", "remove_from_workflow",
+          ];
+          const validActions = (parsed.actions || []).filter((a: any) =>
+            VALID_NEXT_STEP_TYPES.includes(a.actionType)
+          );
+          return {
+            actions: validActions,
+            contactName: call.contactName,
+            contactId: call.ghlContactId,
+          };
+        } catch (e) {
+          console.error("[NextSteps] Failed to parse LLM response:", e);
+          return { actions: [] };
+        }
+      }),
   }),
 
   // ============ GHL SYNC ============
