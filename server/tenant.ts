@@ -707,8 +707,17 @@ export function getTenantIdFromUser(user: { tenantId?: number | null }): number 
 export function isPlatformOwner(openId: string): boolean {
   // Check against the OWNER_OPEN_ID env var
   const ownerOpenId = process.env.OWNER_OPEN_ID;
-  if (!ownerOpenId) return false;
-  return openId === ownerOpenId;
+  if (ownerOpenId && openId === ownerOpenId) return true;
+  return false;
+}
+
+/**
+ * Check if a user has platform admin access (either by openId match or super_admin role)
+ */
+export function hasPlatformAccess(user: { openId?: string | null; role?: string | null }): boolean {
+  if (user.role === 'super_admin') return true;
+  if (user.openId && isPlatformOwner(user.openId)) return true;
+  return false;
 }
 
 // ============ USER MANAGEMENT ============

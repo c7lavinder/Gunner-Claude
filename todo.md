@@ -2734,3 +2734,9 @@
 - [x] Fix BatchDialer showing "Not Connected" when API key is saved as env var and syncing works
 - [x] Fix getCrmIntegrations to check both tenant crmConfig AND global env fallback for API keys
 - [x] Add connectionStatusEnvFallback.test.ts with 8 tests covering env fallback logic
+
+## Bug: Platform Admin Page Shows Blank Tenants List
+- [x] Root cause: isPlatformOwner only checked OWNER_OPEN_ID env var (Manus OAuth ID), but Corey's openId is now Google OAuth
+- [x] Added hasPlatformAccess() function that checks both role === 'super_admin' AND isPlatformOwner(openId)
+- [x] Updated all 30 tenant router procedures in routers.ts to use hasPlatformAccess
+- [x] Removed hardcoded openId check in SuperAdmin.tsx frontend, now uses role-based check

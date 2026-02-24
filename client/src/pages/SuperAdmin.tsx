@@ -246,8 +246,7 @@ export default function SuperAdmin() {
   };
 
   // Check if user is super admin or platform owner
-  const isPlatformOwner = user?.openId === "U3JEthPNs4UbYRrgRBbShj"; // Corey's openId
-  const isSuperAdmin = user?.role === "super_admin" || isPlatformOwner;
+  const isSuperAdmin = user?.role === "super_admin";
   
   if (!isSuperAdmin) {
     return (

@@ -3512,8 +3512,8 @@ Create content that:
   tenant: router({
     // Super Admin: List all tenants
     list: protectedProcedure.query(async ({ ctx }) => {
-      const { isPlatformOwner, getAllTenants } = await import("./tenant");
-      if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+      const { hasPlatformAccess, getAllTenants } = await import("./tenant");
+      if (!hasPlatformAccess(ctx.user || {})) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
       }
       return getAllTenants();
@@ -3521,8 +3521,8 @@ Create content that:
 
     // Super Admin: Get platform metrics
     getMetrics: protectedProcedure.query(async ({ ctx }) => {
-      const { isPlatformOwner, getPlatformMetrics } = await import("./tenant");
-      if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+      const { hasPlatformAccess, getPlatformMetrics } = await import("./tenant");
+      if (!hasPlatformAccess(ctx.user || {})) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
       }
       return getPlatformMetrics();
@@ -3530,8 +3530,8 @@ Create content that:
 
     // Super Admin: Get recent activity
     getRecentActivity: protectedProcedure.query(async ({ ctx }) => {
-      const { isPlatformOwner, getRecentActivity } = await import("./tenant");
-      if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+      const { hasPlatformAccess, getRecentActivity } = await import("./tenant");
+      if (!hasPlatformAccess(ctx.user || {})) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
       }
       return getRecentActivity();
@@ -3539,8 +3539,8 @@ Create content that:
 
     // Super Admin: Get low usage tenants (churn risk)
     getLowUsageTenants: protectedProcedure.query(async ({ ctx }) => {
-      const { isPlatformOwner, getLowUsageTenants } = await import("./tenant");
-      if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+      const { hasPlatformAccess, getLowUsageTenants } = await import("./tenant");
+      if (!hasPlatformAccess(ctx.user || {})) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
       }
       return getLowUsageTenants();
@@ -3550,8 +3550,8 @@ Create content that:
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
-        const { isPlatformOwner, getTenantById } = await import("./tenant");
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        const { hasPlatformAccess, getTenantById } = await import("./tenant");
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         return getTenantById(input.id);
@@ -3565,8 +3565,8 @@ Create content that:
         subscriptionTier: z.enum(['trial', 'starter', 'growth', 'scale']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { isPlatformOwner, createTenant } = await import("./tenant");
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        const { hasPlatformAccess, createTenant } = await import("./tenant");
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         return createTenant(input);
@@ -3599,8 +3599,8 @@ Create content that:
         })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { isPlatformOwner, setupTenant } = await import("./tenant");
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        const { hasPlatformAccess, setupTenant } = await import("./tenant");
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         return setupTenant(input);
@@ -3617,8 +3617,8 @@ Create content that:
         })).min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { isPlatformOwner, bulkAddTeamMembers } = await import("./tenant");
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        const { hasPlatformAccess, bulkAddTeamMembers } = await import("./tenant");
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         return bulkAddTeamMembers(input.tenantId, input.members);
@@ -3642,8 +3642,8 @@ Create content that:
         }),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { isPlatformOwner, updateTenantSettings } = await import("./tenant");
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        const { hasPlatformAccess, updateTenantSettings } = await import("./tenant");
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         const crmConnected = (input.crmConfig.ghlApiKey && input.crmConfig.ghlLocationId) ? 'true' as const : 'false' as const;
@@ -3913,13 +3913,13 @@ Create content that:
         }),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { isPlatformOwner, updateTenantSettings, parseCrmConfig, getTenantById } = await import("./tenant");
+        const { hasPlatformAccess, updateTenantSettings, parseCrmConfig, getTenantById } = await import("./tenant");
         const targetTenantId = input.tenantId || ctx.user?.tenantId;
         if (!targetTenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant specified' });
         }
         // Check permissions: platform owner can update any tenant, tenant admin can update own
-        if (input.tenantId && (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId))) {
+        if (input.tenantId && !hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         if (!input.tenantId && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
@@ -4006,13 +4006,13 @@ Create content that:
         }),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { isPlatformOwner, updateTenantSettings, parseCrmConfig, getTenantById } = await import("./tenant");
+        const { hasPlatformAccess, updateTenantSettings, parseCrmConfig, getTenantById } = await import("./tenant");
         const targetTenantId = input.tenantId || ctx.user?.tenantId;
         if (!targetTenantId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant specified' });
         }
         // Check permissions
-        if (input.tenantId && (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId))) {
+        if (input.tenantId && !hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         if (!input.tenantId && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
@@ -4278,10 +4278,10 @@ Create content that:
     startImpersonation: protectedProcedure
       .input(z.object({ tenantId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const { isPlatformOwner } = await import("./tenant");
+        const { hasPlatformAccess } = await import("./tenant");
         const { startImpersonation } = await import("./impersonation");
         
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         
@@ -4330,10 +4330,10 @@ Create content that:
     sendChurnOutreach: protectedProcedure
       .input(z.object({ tenantId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const { isPlatformOwner, getTenantById, getTenantUsers } = await import("./tenant");
+        const { hasPlatformAccess, getTenantById, getTenantUsers } = await import("./tenant");
         const { sendTieredChurnOutreachEmail } = await import("./emailService");
         
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         
@@ -4403,9 +4403,9 @@ Create content that:
     // Trigger email sequence jobs (Super Admin only)
     triggerEmailSequence: protectedProcedure
       .mutation(async ({ ctx }) => {
-        const { isPlatformOwner } = await import("./tenant");
+        const { hasPlatformAccess } = await import("./tenant");
         
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         
@@ -4424,9 +4424,9 @@ Create content that:
     getOutreachHistory: protectedProcedure
       .input(z.object({ tenantId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        const { isPlatformOwner } = await import("./tenant");
+        const { hasPlatformAccess } = await import("./tenant");
         
-        if (!ctx.user?.openId || !isPlatformOwner(ctx.user.openId)) {
+        if (!hasPlatformAccess(ctx.user || {})) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
         }
         
