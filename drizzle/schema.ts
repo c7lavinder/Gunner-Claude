@@ -1337,3 +1337,30 @@ export const userInstructions = mysqlTable("user_instructions", {
 });
 export type UserInstruction = typeof userInstructions.$inferSelect;
 export type InsertUserInstruction = typeof userInstructions.$inferInsert;
+
+
+// ============ CALL NEXT STEPS ============
+
+/**
+ * Stores AI-generated next steps for each graded call.
+ * Auto-generated after grading completes so they're ready when the user opens the call.
+ * Each row is one suggested action.
+ */
+export const callNextSteps = mysqlTable("call_next_steps", {
+  id: int("id").autoincrement().primaryKey(),
+  callId: int("callId").references(() => calls.id).notNull(),
+  tenantId: int("tenantId").references(() => tenants.id),
+  // Action details
+  actionType: varchar("actionType", { length: 50 }).notNull(),
+  reason: text("reason").notNull(),
+  suggested: varchar("suggested", { length: 5 }).notNull().default("true"),
+  payload: json("payload").$type<Record<string, any>>().notNull(),
+  // Status tracking
+  status: mysqlEnum("status", ["pending", "pushed", "skipped", "failed"]).default("pending"),
+  result: text("result"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CallNextStep = typeof callNextSteps.$inferSelect;
+export type InsertCallNextStep = typeof callNextSteps.$inferInsert;

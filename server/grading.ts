@@ -1455,10 +1455,282 @@ export async function processCall(callId: number): Promise<void> {
       // Don't block grading if webhook fails
     }
 
+    // Step 10: Auto-generate next steps so they're ready when user opens the call
+    try {
+      await generateAndStoreNextSteps(callId);
+      console.log(`[ProcessCall] Next steps generated for call ${callId}`);
+    } catch (nextStepsError) {
+      console.error(`[ProcessCall] Failed to generate next steps for call ${callId}:`, nextStepsError);
+      // Don't fail the whole process if next steps generation fails
+    }
+
     console.log(`[ProcessCall] Successfully processed call ${callId}`);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[ProcessCall] Error processing call ${callId}:`, errorMsg);
     await updateCall(callId, { status: "failed", classificationReason: errorMsg });
+  }
+}
+
+
+// ============ AUTO-GENERATE NEXT STEPS ============
+
+async function generateAndStoreNextSteps(callId: number): Promise<void> {
+  const call = await getCallById(callId);
+  if (!call) return;
+
+  const grade = await getCallGradeByCallId(callId);
+  const tenantId = call.tenantId;
+
+  // 1. Fetch prior calls for same contact
+  let priorCallsSummary = "";
+  if (call.ghlContactId) {
+    try {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (db) {
+        const { calls: callsTable } = await import("../drizzle/schema");
+        const { eq, and, ne, desc } = await import("drizzle-orm");
+        const priorCalls = await db.select()
+          .from(callsTable)
+          .where(and(
+            eq(callsTable.ghlContactId, call.ghlContactId!),
+            ne(callsTable.id, call.id)
+          ))
+          .orderBy(desc(callsTable.callTimestamp))
+          .limit(5);
+
+        if (priorCalls.length > 0) {
+          priorCallsSummary = "\n\nPRIOR CALLS WITH THIS CONTACT:\n";
+          for (const pc of priorCalls) {
+            priorCallsSummary += `- ${pc.callTimestamp ? new Date(pc.callTimestamp).toLocaleDateString() : 'Unknown date'}`;
+            priorCallsSummary += ` | ${pc.callType || 'unknown'} | Outcome: ${pc.callOutcome || 'none'}`;
+            priorCallsSummary += ` | ${pc.teamMemberName || 'Unknown'}\n`;
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[NextSteps-Auto] Failed to fetch prior calls:", e);
+    }
+  }
+
+  // 2. Fetch GHL SMS history
+  let smsHistory = "";
+  if (call.ghlContactId && tenantId) {
+    try {
+      const { getCredentialsForTenant, ghlFetch } = await import("./ghlActions");
+      const creds = await getCredentialsForTenant(tenantId);
+      if (creds) {
+        const searchData = await ghlFetch(
+          creds,
+          `/conversations/search?locationId=${creds.locationId}&contactId=${call.ghlContactId}`
+        );
+        const conversations = searchData.conversations || [];
+        if (conversations.length > 0) {
+          const convId = conversations[0].id;
+          const msgData = await ghlFetch(creds, `/conversations/${convId}/messages`);
+          const messages = msgData.messages?.messages || msgData.messages || [];
+          const recentMsgs = messages.slice(-10);
+          if (recentMsgs.length > 0) {
+            smsHistory = "\n\nRECENT SMS HISTORY:\n";
+            for (const msg of recentMsgs) {
+              const dir = msg.direction === 1 ? "SENT" : "RECEIVED";
+              const date = msg.dateAdded ? new Date(msg.dateAdded).toLocaleString() : 'Unknown';
+              smsHistory += `[${dir}] ${date}: ${msg.body || '(no text)'}\n`;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[NextSteps-Auto] Failed to fetch SMS history:", e);
+    }
+  }
+
+  // 3. Fetch existing tasks
+  let existingTasks = "";
+  if (call.ghlContactId && tenantId) {
+    try {
+      const { getTasksForContact } = await import("./ghlActions");
+      const tasks = await getTasksForContact(tenantId, call.ghlContactId);
+      if (tasks.length > 0) {
+        existingTasks = "\n\nEXISTING TASKS:\n";
+        for (const t of tasks) {
+          existingTasks += `- ${t.title} | Due: ${t.dueDate || 'No date'} | ${t.completed ? 'COMPLETED' : 'PENDING'}\n`;
+        }
+      }
+    } catch (e) {
+      console.error("[NextSteps-Auto] Failed to fetch tasks:", e);
+    }
+  }
+
+  // 4. Fetch recent action patterns
+  let recentActionPatterns = "";
+  if (tenantId) {
+    try {
+      const { getDb: getDb2 } = await import("./db");
+      const db2 = await getDb2();
+      if (db2) {
+        const { coachActionLog } = await import("../drizzle/schema");
+        const { eq, and, desc } = await import("drizzle-orm");
+        const recentActions = await db2.select()
+          .from(coachActionLog)
+          .where(and(
+            eq(coachActionLog.tenantId, tenantId),
+            eq(coachActionLog.status, "executed")
+          ))
+          .orderBy(desc(coachActionLog.createdAt))
+          .limit(30);
+
+        if (recentActions.length > 0) {
+          recentActionPatterns = "\n\nRECENT ACTION PATTERNS:\n";
+          for (const a of recentActions) {
+            const payload = a.payload as any;
+            recentActionPatterns += `- ${a.actionType} for ${a.targetContactName || 'unknown'}`;
+            if (payload?.stageName) recentActionPatterns += ` → Stage: ${payload.stageName}`;
+            if (payload?.pipelineName) recentActionPatterns += ` in ${payload.pipelineName}`;
+            if (payload?.dueDate) recentActionPatterns += ` | Due: ${payload.dueDate}`;
+            if (payload?.title) recentActionPatterns += ` | Title: ${payload.title}`;
+            recentActionPatterns += "\n";
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[NextSteps-Auto] Failed to fetch action patterns:", e);
+    }
+  }
+
+  // 5. Fetch available pipelines and workflows
+  let availableOptions = "";
+  if (tenantId) {
+    try {
+      const { getPipelinesForTenant, getWorkflowsForTenant } = await import("./ghlActions");
+      const [pipelines, workflows] = await Promise.all([
+        getPipelinesForTenant(tenantId),
+        getWorkflowsForTenant(tenantId),
+      ]);
+      if (pipelines.length > 0) {
+        availableOptions += "\n\nAVAILABLE PIPELINES AND STAGES:\n";
+        for (const p of pipelines) {
+          availableOptions += `Pipeline: "${p.name}" → Stages: ${p.stages.map((s: any) => `"${s.name}"`).join(", ")}\n`;
+        }
+      }
+      if (workflows.length > 0) {
+        availableOptions += "\nAVAILABLE WORKFLOWS:\n";
+        for (const w of workflows) {
+          availableOptions += `- "${w.name}"\n`;
+        }
+      }
+    } catch (e) {
+      console.error("[NextSteps-Auto] Failed to fetch options:", e);
+    }
+  }
+
+  const systemPrompt = `You are an AI assistant for a real estate flipping business. Analyze the call transcript and all context to suggest specific, actionable next steps.
+
+RULES:
+- Only suggest actions clearly warranted by the call content and communication history
+- Learn from recent action patterns — match what the team typically does
+- Use EXACT pipeline stage names and workflow names from available options
+- For tasks, suggest realistic due dates based on what was discussed
+- For SMS, draft messages referencing specific call details (property, price, concerns)
+- Do NOT suggest redundant actions (check existing tasks first)
+- Do NOT suggest actions contradicting the call outcome
+- Each action needs a clear reason WHY based on the call context
+- Keep note content comprehensive but concise — include call summary, key details, and motivation type
+
+Return JSON with "actions" array. Each action:
+- actionType: "check_off_task" | "update_task" | "create_task" | "add_note" | "create_appointment" | "change_pipeline_stage" | "send_sms" | "schedule_sms" | "add_to_workflow" | "remove_from_workflow"
+- reason: 1-2 sentence explanation
+- suggested: boolean
+- payload: relevant fields for the action type`;
+
+  const userPrompt = `CALL DETAILS:
+- Contact: ${call.contactName || 'Unknown'}
+- Phone: ${call.contactPhone || 'Unknown'}
+- Property: ${call.propertyAddress || 'Unknown'}
+- Call Type: ${call.callType || 'Unknown'}
+- Call Outcome: ${call.callOutcome || 'None'}
+- Team Member: ${call.teamMemberName || 'Unknown'}
+- Duration: ${call.duration ? Math.floor(call.duration / 60) + 'm ' + (call.duration % 60) + 's' : 'Unknown'}
+- Date: ${call.callTimestamp ? new Date(call.callTimestamp).toLocaleString() : 'Unknown'}
+
+GRADE: ${grade?.summary || 'No grade available'}
+
+TRANSCRIPT:
+${(call.transcript || 'No transcript').substring(0, 8000)}
+${priorCallsSummary}${smsHistory}${existingTasks}${recentActionPatterns}${availableOptions}
+
+Suggest the most relevant next steps for this lead.`;
+
+  const response = await invokeLLM({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "next_steps",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            actions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  actionType: { type: "string" },
+                  reason: { type: "string" },
+                  suggested: { type: "boolean" },
+                  payload: { type: "object", additionalProperties: true },
+                },
+                required: ["actionType", "reason", "suggested", "payload"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["actions"],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const content = response.choices?.[0]?.message?.content;
+  if (!content) return;
+
+  try {
+    const parsed = JSON.parse(content as string);
+    const VALID_TYPES = [
+      "check_off_task", "update_task", "create_task", "add_note",
+      "create_appointment", "change_pipeline_stage", "send_sms",
+      "schedule_sms", "add_to_workflow", "remove_from_workflow",
+    ];
+    const validActions = (parsed.actions || []).filter((a: any) =>
+      VALID_TYPES.includes(a.actionType)
+    );
+
+    if (validActions.length > 0) {
+      const { getDb: getDb3 } = await import("./db");
+      const db3 = await getDb3();
+      if (db3) {
+        const { callNextSteps } = await import("../drizzle/schema");
+        for (const action of validActions) {
+          await db3.insert(callNextSteps).values({
+            callId,
+            tenantId: tenantId || undefined,
+            actionType: action.actionType,
+            reason: action.reason,
+            suggested: action.suggested ? "true" : "false",
+            payload: action.payload,
+            status: "pending",
+          });
+        }
+        console.log(`[NextSteps-Auto] Stored ${validActions.length} next steps for call ${callId}`);
+      }
+    }
+  } catch (e) {
+    console.error("[NextSteps-Auto] Failed to parse/store next steps:", e);
   }
 }

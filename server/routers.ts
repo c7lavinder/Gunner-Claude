@@ -1323,6 +1323,33 @@ Based on ALL of the above context, suggest the most relevant next steps for this
           const validActions = (parsed.actions || []).filter((a: any) =>
             VALID_NEXT_STEP_TYPES.includes(a.actionType)
           );
+
+          // Persist to database
+          if (validActions.length > 0) {
+            const { getDb: getDbNs } = await import("./db");
+            const dbNs = await getDbNs();
+            if (dbNs) {
+              const { callNextSteps } = await import("../drizzle/schema");
+              const { eq } = await import("drizzle-orm");
+              // Clear any existing pending next steps for this call (regeneration)
+              await dbNs.delete(callNextSteps).where(
+                eq(callNextSteps.callId, input.callId)
+              );
+              for (const action of validActions) {
+                await dbNs.insert(callNextSteps).values({
+                  callId: input.callId,
+                  tenantId: call.tenantId || undefined,
+                  actionType: action.actionType,
+                  reason: action.reason || "",
+                  suggested: action.suggested ? "true" : "false",
+                  payload: action.payload || {},
+                  status: "pending",
+                });
+              }
+              console.log(`[NextSteps] Stored ${validActions.length} next steps for call ${input.callId}`);
+            }
+          }
+
           return {
             actions: validActions,
             contactName: call.contactName,
@@ -1332,6 +1359,84 @@ Based on ALL of the above context, suggest the most relevant next steps for this
           console.error("[NextSteps] Failed to parse LLM response:", e);
           return { actions: [] };
         }
+      }),
+
+    // Get stored next steps for a call
+    getNextSteps: protectedProcedure
+      .input(z.object({ callId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const call = await getCallById(input.callId);
+        if (!call) return { actions: [], contactName: "", contactId: null };
+        if (call.tenantId && ctx.user?.tenantId && call.tenantId !== ctx.user.tenantId) {
+          return { actions: [], contactName: "", contactId: null };
+        }
+
+        const { getDb: getDbNs2 } = await import("./db");
+        const dbNs2 = await getDbNs2();
+        if (!dbNs2) return { actions: [], contactName: call.contactName || "", contactId: call.ghlContactId };
+
+        const { callNextSteps } = await import("../drizzle/schema");
+        const { eq, asc } = await import("drizzle-orm");
+        const rows = await dbNs2.select().from(callNextSteps)
+          .where(eq(callNextSteps.callId, input.callId))
+          .orderBy(asc(callNextSteps.createdAt));
+
+        const actions = rows.map(r => ({
+          dbId: r.id,
+          actionType: r.actionType,
+          reason: r.reason,
+          suggested: r.suggested === "true",
+          payload: r.payload || {},
+          status: r.status || "pending",
+          result: r.result || undefined,
+        }));
+
+        return {
+          actions,
+          contactName: call.contactName || "",
+          contactId: call.ghlContactId,
+        };
+      }),
+
+    // Update a next step status (pushed, skipped, failed)
+    updateNextStepStatus: protectedProcedure
+      .input(z.object({
+        nextStepId: z.number(),
+        status: z.enum(["pending", "pushed", "skipped", "failed"]),
+        result: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { getDb: getDbNs3 } = await import("./db");
+        const dbNs3 = await getDbNs3();
+        if (!dbNs3) return { success: false };
+
+        const { callNextSteps } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        await dbNs3.update(callNextSteps)
+          .set({ status: input.status, result: input.result || null })
+          .where(eq(callNextSteps.id, input.nextStepId));
+
+        return { success: true };
+      }),
+
+    // Get count of pending next steps for a call
+    getNextStepsCount: protectedProcedure
+      .input(z.object({ callId: z.number() }))
+      .query(async ({ input }) => {
+        const { getDb: getDbNs4 } = await import("./db");
+        const dbNs4 = await getDbNs4();
+        if (!dbNs4) return { count: 0 };
+
+        const { callNextSteps } = await import("../drizzle/schema");
+        const { eq, and, sql } = await import("drizzle-orm");
+        const result = await dbNs4.select({ count: sql<number>`count(*)` })
+          .from(callNextSteps)
+          .where(and(
+            eq(callNextSteps.callId, input.callId),
+            eq(callNextSteps.status, "pending")
+          ));
+
+        return { count: result[0]?.count || 0 };
       }),
   }),
 

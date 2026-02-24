@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -40,12 +40,12 @@ import { useDemo } from "@/hooks/useDemo";
 
 interface NextStepAction {
   id: string;
+  dbId?: number;
   actionType: string;
-  summary: string;
   reasoning: string;
   aiSuggested: boolean;
   payload: Record<string, any>;
-  status: "suggested" | "editing" | "pushing" | "pushed" | "failed" | "skipped";
+  status: "pending" | "editing" | "pushing" | "pushed" | "failed" | "skipped";
   result?: string;
 }
 
@@ -123,6 +123,78 @@ const ALL_ACTION_TYPES = [
   "schedule_sms", "add_to_workflow", "remove_from_workflow",
 ];
 
+/** Generate a short human-readable preview string from the action payload */
+function getPayloadPreview(actionType: string, payload: Record<string, any>): string {
+  switch (actionType) {
+    case "check_off_task":
+      return payload.taskKeyword
+        ? `Complete task matching "${payload.taskKeyword}"`
+        : "Complete a task";
+    case "update_task":
+      return [
+        payload.taskKeyword && `Update "${payload.taskKeyword}"`,
+        payload.dueDate && `due ${payload.dueDate}`,
+        payload.description && `— ${truncate(payload.description, 60)}`,
+      ].filter(Boolean).join(" ") || "Update a task";
+    case "create_task":
+      return [
+        payload.title && `"${payload.title}"`,
+        payload.dueDate && `due ${payload.dueDate}`,
+      ].filter(Boolean).join(" ") || "Create a new task";
+    case "add_note":
+      return payload.noteBody
+        ? truncate(payload.noteBody, 120)
+        : "Add a note";
+    case "create_appointment":
+      return [
+        payload.title && `"${payload.title}"`,
+        payload.startTime && `on ${formatDateTime(payload.startTime)}`,
+        payload.calendarName && `(${payload.calendarName})`,
+      ].filter(Boolean).join(" ") || "Create an appointment";
+    case "change_pipeline_stage":
+      return [
+        payload.pipelineName && `${payload.pipelineName}`,
+        payload.stageName && `→ ${payload.stageName}`,
+      ].filter(Boolean).join(" ") || "Move to a new stage";
+    case "send_sms":
+      return payload.message
+        ? `"${truncate(payload.message, 100)}"`
+        : "Send an SMS";
+    case "schedule_sms":
+      return [
+        payload.message && `"${truncate(payload.message, 80)}"`,
+        payload.scheduledDate && `on ${payload.scheduledDate}`,
+        payload.scheduledTime && `at ${payload.scheduledTime}`,
+      ].filter(Boolean).join(" ") || "Schedule an SMS";
+    case "add_to_workflow":
+      return payload.workflowName
+        ? `Start "${payload.workflowName}"`
+        : "Start a workflow";
+    case "remove_from_workflow":
+      return payload.workflowName
+        ? `Remove from "${payload.workflowName}"`
+        : "Remove from a workflow";
+    default:
+      return Object.values(payload).filter(v => typeof v === "string" && v).join(" | ") || "Action";
+  }
+}
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + "…";
+}
+
+function formatDateTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 function ActionCard({
   action,
   onPush,
@@ -140,7 +212,6 @@ function ActionCard({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedSummary, setEditedSummary] = useState(action.summary);
   const [editedPayload, setEditedPayload] = useState<Record<string, any>>(action.payload);
 
   const config = ACTION_TYPE_CONFIG[action.actionType] || {
@@ -151,15 +222,11 @@ function ActionCard({
   };
 
   const handleSaveEdit = () => {
-    onEdit(action, {
-      summary: editedSummary,
-      payload: editedPayload,
-    });
+    onEdit(action, { payload: editedPayload });
     setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
-    setEditedSummary(action.summary);
     setEditedPayload(action.payload);
     setIsEditing(false);
   };
@@ -167,7 +234,7 @@ function ActionCard({
   const renderPayloadField = (key: string, value: any) => {
     if (key === "contactId" || key === "contactName") return null;
     const label = key.replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
-    
+
     if (isEditing) {
       if (typeof value === "string" && value.length > 60) {
         return (
@@ -202,6 +269,7 @@ function ActionCard({
   };
 
   const isDone = action.status === "pushed" || action.status === "skipped";
+  const preview = getPayloadPreview(action.actionType, action.payload);
 
   return (
     <div className={`border rounded-lg overflow-hidden transition-all ${
@@ -214,12 +282,12 @@ function ActionCard({
       <div className={`flex items-center gap-3 px-4 py-3 ${config.bgColor}`}>
         <span className={config.color}>{config.icon}</span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-sm font-semibold ${config.color}`}>{config.label}</span>
             {action.aiSuggested && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800">
                 <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                AI Suggested
+                AI
               </Badge>
             )}
             {action.status === "pushed" && (
@@ -252,25 +320,12 @@ function ActionCard({
         )}
       </div>
 
-      {/* Summary */}
-      <div className="px-4 py-3">
-        {isEditing ? (
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Summary</Label>
-            <Input
-              value={editedSummary}
-              onChange={(e) => setEditedSummary(e.target.value)}
-              className="text-sm"
-            />
-          </div>
-        ) : (
-          <p className="text-sm">{action.summary}</p>
-        )}
-        
+      {/* Payload Preview — always visible */}
+      <div className="px-4 py-2.5">
+        <p className="text-sm text-foreground leading-snug">{preview}</p>
         {action.reasoning && !isEditing && (
           <p className="text-xs text-muted-foreground mt-1 italic">{action.reasoning}</p>
         )}
-
         {action.result && (
           <p className={`text-xs mt-1 ${action.status === "failed" ? "text-red-500" : "text-green-600"}`}>
             {action.result}
@@ -278,7 +333,7 @@ function ActionCard({
         )}
       </div>
 
-      {/* Expanded Details */}
+      {/* Expanded Details / Edit Mode */}
       {(isExpanded || isEditing) && (
         <div className="px-4 pb-3 space-y-2 border-t pt-3">
           {Object.entries(action.payload).map(([key, value]) => renderPayloadField(key, value))}
@@ -358,27 +413,62 @@ export default function NextStepsTab({
   ghlContactId?: string | null;
 }) {
   const [actions, setActions] = useState<NextStepAction[]>([]);
-  const [isGenerated, setIsGenerated] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [pushingActionId, setPushingActionId] = useState<string | null>(null);
   const [showAddAction, setShowAddAction] = useState(false);
   const [newActionType, setNewActionType] = useState("");
   const [newActionSummary, setNewActionSummary] = useState("");
   const { isDemo, guardAction: guardDemoAction } = useDemo();
 
+  // Load stored next steps from DB on mount
+  const storedQuery = trpc.calls.getNextSteps.useQuery(
+    { callId },
+    { enabled: !!callId }
+  );
+
+  // When stored data loads, populate actions
+  useEffect(() => {
+    if (storedQuery.data && !isLoaded) {
+      const stored = storedQuery.data.actions;
+      if (stored.length > 0) {
+        const mapped: NextStepAction[] = stored.map((a, i) => ({
+          id: a.dbId ? `db-${a.dbId}` : `stored-${i}`,
+          dbId: a.dbId,
+          actionType: a.actionType,
+          reasoning: a.reason || "",
+          aiSuggested: a.suggested,
+          payload: a.payload || {},
+          status: (a.status === "pushed" || a.status === "skipped" || a.status === "failed")
+            ? a.status
+            : "pending" as const,
+          result: a.result,
+        }));
+        setActions(mapped);
+      }
+      setIsLoaded(true);
+    }
+  }, [storedQuery.data, isLoaded]);
+
   const generateMutation = trpc.calls.generateNextSteps.useMutation({
     onSuccess: (data) => {
-      const mapped: NextStepAction[] = (data.actions || []).map((a: any, i: number) => ({
-        id: `ai-${i}-${Date.now()}`,
-        actionType: a.actionType,
-        summary: a.summary,
-        reasoning: a.reasoning || "",
-        aiSuggested: true,
-        payload: a.payload || {},
-        status: "suggested" as const,
-      }));
-      setActions(mapped);
-      setIsGenerated(true);
-      if (mapped.length === 0) {
+      // Reload from DB after generation
+      storedQuery.refetch().then((res) => {
+        if (res.data) {
+          const stored = res.data.actions;
+          const mapped: NextStepAction[] = stored.map((a, i) => ({
+            id: a.dbId ? `db-${a.dbId}` : `gen-${i}`,
+            dbId: a.dbId,
+            actionType: a.actionType,
+            reasoning: a.reason || "",
+            aiSuggested: a.suggested,
+            payload: a.payload || {},
+            status: "pending" as const,
+            result: undefined,
+          }));
+          setActions(mapped);
+        }
+      });
+      if ((data.actions || []).length === 0) {
         toast.info("No specific next steps suggested for this call.");
       }
     },
@@ -389,6 +479,7 @@ export default function NextStepsTab({
 
   const createPendingMutation = trpc.coachActions.createPending.useMutation();
   const confirmExecuteMutation = trpc.coachActions.confirmAndExecute.useMutation();
+  const updateStatusMutation = trpc.calls.updateNextStepStatus.useMutation();
 
   const handleGenerate = () => {
     if (guardDemoAction("Generating next steps")) return;
@@ -400,29 +491,35 @@ export default function NextStepsTab({
     setPushingActionId(action.id);
 
     try {
-      // Create pending action
       const pending = await createPendingMutation.mutateAsync({
         actionType: action.actionType,
-        requestText: `Next step from call: ${action.summary}`,
+        requestText: `Next step: ${getPayloadPreview(action.actionType, action.payload)}`,
         targetContactId: ghlContactId || undefined,
         targetContactName: contactName || undefined,
         payload: action.payload,
       });
 
-      // Immediately confirm and execute
       const result = await confirmExecuteMutation.mutateAsync({
         actionId: pending.actionId,
       });
 
+      const newStatus = result.success ? "pushed" as const : "failed" as const;
+      const resultMsg = result.success ? "Action completed successfully!" : (result.error || "Action failed");
+
       setActions(prev => prev.map(a =>
         a.id === action.id
-          ? {
-              ...a,
-              status: result.success ? "pushed" as const : "failed" as const,
-              result: result.success ? "Action completed successfully!" : (result.error || "Action failed"),
-            }
+          ? { ...a, status: newStatus, result: resultMsg }
           : a
       ));
+
+      // Persist status to DB
+      if (action.dbId) {
+        updateStatusMutation.mutate({
+          nextStepId: action.dbId,
+          status: newStatus,
+          result: resultMsg,
+        });
+      }
 
       if (result.success) {
         toast.success(`${ACTION_TYPE_CONFIG[action.actionType]?.label || action.actionType} pushed to GHL!`);
@@ -430,12 +527,20 @@ export default function NextStepsTab({
         toast.error(`Failed: ${result.error || "Unknown error"}`);
       }
     } catch (error: any) {
+      const errMsg = error?.message || "Failed to push";
       setActions(prev => prev.map(a =>
         a.id === action.id
-          ? { ...a, status: "failed" as const, result: error?.message || "Failed to push" }
+          ? { ...a, status: "failed" as const, result: errMsg }
           : a
       ));
-      toast.error(`Failed to push: ${error?.message || "Unknown error"}`);
+      if (action.dbId) {
+        updateStatusMutation.mutate({
+          nextStepId: action.dbId,
+          status: "failed",
+          result: errMsg,
+        });
+      }
+      toast.error(`Failed to push: ${errMsg}`);
     } finally {
       setPushingActionId(null);
     }
@@ -451,10 +556,23 @@ export default function NextStepsTab({
     setActions(prev => prev.map(a =>
       a.id === action.id ? { ...a, status: "skipped" as const } : a
     ));
+    if (action.dbId) {
+      updateStatusMutation.mutate({
+        nextStepId: action.dbId,
+        status: "skipped",
+      });
+    }
   };
 
   const handleDelete = (action: NextStepAction) => {
     setActions(prev => prev.filter(a => a.id !== action.id));
+    if (action.dbId) {
+      updateStatusMutation.mutate({
+        nextStepId: action.dbId,
+        status: "skipped",
+        result: "Deleted by user",
+      });
+    }
   };
 
   const handleAddAction = () => {
@@ -463,14 +581,21 @@ export default function NextStepsTab({
       return;
     }
 
+    const defaultPayload = buildDefaultPayload(newActionType, contactName, ghlContactId);
+    // Put the summary into the most relevant payload field
+    const enrichedPayload = { ...defaultPayload };
+    if (newActionType === "create_task") enrichedPayload.title = newActionSummary;
+    else if (newActionType === "add_note") enrichedPayload.noteBody = newActionSummary;
+    else if (newActionType === "send_sms" || newActionType === "schedule_sms") enrichedPayload.message = newActionSummary;
+    else if (newActionType === "create_appointment") enrichedPayload.title = newActionSummary;
+
     const newAction: NextStepAction = {
       id: `manual-${Date.now()}`,
       actionType: newActionType,
-      summary: newActionSummary,
       reasoning: "",
       aiSuggested: false,
-      payload: buildDefaultPayload(newActionType, contactName, ghlContactId),
-      status: "suggested",
+      payload: enrichedPayload,
+      status: "pending",
     };
 
     setActions(prev => [...prev, newAction]);
@@ -479,7 +604,7 @@ export default function NextStepsTab({
     setShowAddAction(false);
   };
 
-  const pendingActions = useMemo(() => actions.filter(a => a.status === "suggested" || a.status === "editing"), [actions]);
+  const pendingActions = useMemo(() => actions.filter(a => a.status === "pending" || a.status === "editing"), [actions]);
   const completedActions = useMemo(() => actions.filter(a => a.status === "pushed" || a.status === "skipped" || a.status === "failed"), [actions]);
 
   const handlePushAll = async () => {
@@ -489,10 +614,24 @@ export default function NextStepsTab({
     }
   };
 
+  const hasStoredActions = isLoaded && actions.length > 0;
+  const showGeneratePrompt = isLoaded && actions.length === 0;
+  const isLoadingStored = !isLoaded && storedQuery.isLoading;
+
   return (
     <div className="space-y-4">
-      {/* Generate Button */}
-      {!isGenerated && (
+      {/* Loading state */}
+      {isLoadingStored && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-10">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">Loading next steps...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Generate Button — only if no stored actions */}
+      {showGeneratePrompt && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-10">
             <Sparkles className="h-10 w-10 text-purple-500 mb-3" />
@@ -522,14 +661,14 @@ export default function NextStepsTab({
       )}
 
       {/* Actions List */}
-      {isGenerated && (
+      {(hasStoredActions || generateMutation.isPending) && (
         <>
           {/* Header with actions */}
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold">
                 {pendingActions.length > 0
-                  ? `${pendingActions.length} suggested step${pendingActions.length !== 1 ? "s" : ""}`
+                  ? `${pendingActions.length} pending step${pendingActions.length !== 1 ? "s" : ""}`
                   : "All steps processed"}
               </h3>
               <p className="text-xs text-muted-foreground">
@@ -656,7 +795,7 @@ export default function NextStepsTab({
             </div>
           )}
 
-          {actions.length === 0 && (
+          {actions.length === 0 && !generateMutation.isPending && (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-8">
                 <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />

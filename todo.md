@@ -2926,3 +2926,9 @@
 - [x] "Push to GHL" button on each action that executes via existing AI Coach action system
 - [x] Allow adding manual actions (no AI suggestion) alongside AI-suggested ones
 - [x] Learning system: track user edits to AI suggestions, understand WHY changes were made based on call/communication context, and feed learned patterns back into future suggestions (e.g., seller said 'call me in spring' → user changed to 4 Month Follow Up → learn to suggest longer follow-up when seller gives distant timeline)
+- [x] Auto-generate Next Steps when a call is graded so they're ready when user opens call detail
+- [x] Add count badge on "Next Steps" tab trigger showing number of pending actions
+- [x] Show action payload details on each Next Steps card (e.g., note content, task title, pipeline stage name) so users can see what would be done without clicking Edit
+- [x] Persist Next Steps to database (call_next_steps table) so they survive page reloads
+- [x] Load stored Next Steps from DB on tab mount — no need to regenerate
+- [x] Persist push/skip/fail status to DB so state is preserved

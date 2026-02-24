@@ -96,6 +96,11 @@ export default function CallDetail() {
     { enabled: callId > 0 }
   );
 
+  const { data: nextStepsCount } = trpc.calls.getNextStepsCount.useQuery(
+    { callId },
+    { enabled: callId > 0 }
+  );
+
   const reprocessMutation = trpc.calls.reprocess.useMutation({
     onSuccess: () => {
       toast.success("Call queued for reprocessing");
@@ -630,7 +635,14 @@ export default function CallDetail() {
                 <TabsTrigger value="coaching">Coaching</TabsTrigger>
                 <TabsTrigger value="criteria">Criteria</TabsTrigger>
                 <TabsTrigger value="transcript">Transcript</TabsTrigger>
-                <TabsTrigger value="next-steps">Next Steps</TabsTrigger>
+                <TabsTrigger value="next-steps" className="relative">
+                  Next Steps
+                  {(nextStepsCount?.count ?? 0) > 0 && (
+                    <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-purple-600 text-white text-[10px] font-bold">
+                      {nextStepsCount!.count}
+                    </span>
+                  )}
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="coaching" className="space-y-4 mt-4">
