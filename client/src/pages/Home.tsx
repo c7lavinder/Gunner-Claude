@@ -112,23 +112,23 @@ function ScoreTrendsChart({ stats, loading }: { stats: any; loading: boolean }) 
         </div>
       ) : (
         <div style={{ padding: '0 8px' }}>
-          {/* Chart area */}
-          <div className="flex items-end gap-3" style={{ height: 220 }}>
+          {/* Chart area - use fixed pixel heights to avoid flex min-height:0 issues */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 220 }}>
             {weeklyData.map((week, i) => {
-              // Use a minimum of 15% height so bars are always visible, scale up to 95%
-              const rawPct = maxScore > 0 ? (week.averageScore / maxScore) * 100 : 0;
-              const heightPct = week.averageScore > 0 ? Math.max(rawPct * 0.85, 15) : 5;
+              // Calculate pixel height directly: min 20px, max 200px
+              const rawRatio = maxScore > 0 ? week.averageScore / maxScore : 0;
+              const barHeight = week.averageScore > 0 ? Math.max(Math.round(rawRatio * 200), 30) : 8;
               return (
-                <div key={week.weekStart} className="flex-1 flex flex-col items-center gap-0" style={{ height: '100%', justifyContent: 'flex-end' }}>
+                <div key={week.weekStart} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: 220 }}>
                   <div
-                    className="w-full rounded-t-md transition-all duration-700 ease-out"
                     style={{
-                      height: `${heightPct}%`,
-                      background: `linear-gradient(to top, #7a1020, var(--obs-accent), var(--obs-accent-light))`,
+                      width: '100%',
+                      height: barHeight,
+                      background: 'linear-gradient(to top, #7a1020, var(--obs-accent), var(--obs-accent-light))',
                       opacity: 0.6 + (i / weeklyData.length) * 0.4,
-                      minHeight: 12,
                       boxShadow: '0 -4px 20px rgba(196,30,58,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
                       borderRadius: '6px 6px 2px 2px',
+                      transition: 'height 0.7s ease-out',
                     }}
                     title={`Week of ${week.weekStart}: ${week.averageScore}% avg (${week.callCount} calls)`}
                   />
@@ -137,9 +137,9 @@ function ScoreTrendsChart({ stats, loading }: { stats: any; loading: boolean }) 
             })}
           </div>
           {/* Labels below bars */}
-          <div className="flex gap-3 mt-2" style={{ padding: '0' }}>
+          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
             {weeklyData.map((week) => (
-              <div key={week.weekStart + '-label'} className="flex-1 text-center">
+              <div key={week.weekStart + '-label'} style={{ flex: 1, textAlign: 'center' }}>
                 <span className="text-[11px] font-semibold" style={{ color: 'var(--obs-text-secondary)' }}>
                   {week.averageScore > 0 ? `${week.averageScore}%` : ''}
                 </span>

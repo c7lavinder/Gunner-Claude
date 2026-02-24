@@ -2830,3 +2830,14 @@
 - [x] Fix Score Trends chart bars (too flat/thin, should be tall vertical bars like lookbook)
 - [x] Add variety to activity feed (badges earned, milestones, streaks, not just scores)
 - [x] Ensure activity text reads naturally: "Name scored **92%** on call with Contact"
+
+## Dashboard Visual Fixes Round 2
+- [x] Fix Score Trends bars rendering flat/horizontal - need tall vertical bars
+- [x] Fix Activity text still showing jammed "scored on call with Jack Keef86%"
+- [x] Ensure dark mode is the default theme for dashboard
+
+## Score Trends Chart - Match Lookbook 3D Style
+- [ ] Add inset container with light gray/beige background behind bars
+- [ ] Make bars 3D with darker right edge and shadow depth effect
+- [ ] Add gradient fade at bottom of bars blending into container
+- [ ] Ensure bars are proportionally sized with ascending trend look
