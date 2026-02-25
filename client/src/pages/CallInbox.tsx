@@ -502,7 +502,12 @@ function AICoachQA() {
             }
           }
         } catch (error: any) {
-          toast.error("Failed to process action: " + error.message);
+          const errMsg = error.message || "Unknown error";
+          if (errMsg.includes("429") || errMsg.includes("Too Many Requests") || errMsg.includes("rate limit")) {
+            toast.error("CRM is temporarily rate-limited. Please wait a moment and try again.");
+          } else {
+            toast.error("Failed to process action: " + errMsg);
+          }
         }
         setIsAsking(false);
         return;
@@ -662,7 +667,12 @@ function AICoachQA() {
             return;
           }
         } catch (error: any) {
-          toast.error("Failed to process action: " + error.message);
+          const errMsg = error.message || "Unknown error";
+          if (errMsg.includes("429") || errMsg.includes("Too Many Requests") || errMsg.includes("rate limit")) {
+            toast.error("CRM is temporarily rate-limited. Please wait a moment and try again.");
+          } else {
+            toast.error("Failed to process action: " + errMsg);
+          }
         }
         setIsAsking(false);
         return;
@@ -775,7 +785,13 @@ function AICoachQA() {
         return;
       }
     } catch (error: any) {
-      toast.error("Failed to process: " + error.message);
+      const errMsg = error.message || "Unknown error";
+      if (errMsg.includes("429") || errMsg.includes("Too Many Requests") || errMsg.includes("rate limit")) {
+        toast.error("CRM is temporarily rate-limited. Please wait a moment and try again.");
+        setConversation(prev => [...prev, { role: "assistant", content: "The CRM (GoHighLevel) is temporarily rate-limited due to high activity. Please wait about 30 seconds and try your request again. This is a temporary throttle, not an error with your account." }]);
+      } else {
+        toast.error("Failed to process: " + errMsg);
+      }
     }
     setIsAsking(false);
   };

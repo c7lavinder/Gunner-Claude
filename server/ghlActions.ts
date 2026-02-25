@@ -32,7 +32,8 @@ export async function ghlFetch(
   creds: GHLActionCredentials,
   path: string,
   method: string = "GET",
-  body?: any
+  body?: any,
+  retries: number = 3
 ): Promise<any> {
   const url = `${GHL_API_BASE}${path}`;
   const headers: Record<string, string> = {
@@ -41,18 +42,33 @@ export async function ghlFetch(
     "Content-Type": "application/json",
   };
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
 
-  if (!response.ok) {
+    if (response.ok) {
+      return response.json();
+    }
+
     const text = await response.text();
+
+    // Retry on 429 (rate limit) with exponential backoff
+    if (response.status === 429 && attempt < retries - 1) {
+      const delay = Math.min(1000 * Math.pow(2, attempt), 8000); // 1s, 2s, 4s, max 8s
+      console.log(`[GHL] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      lastError = new Error(`GHL API rate limited (429)`);
+      continue;
+    }
+
     throw new Error(`GHL API error: ${response.status} - ${text}`);
   }
 
-  return response.json();
+  throw lastError || new Error("GHL API request failed after retries");
 }
 
 // ============ CONTACT SEARCH ============

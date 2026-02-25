@@ -417,19 +417,31 @@ function isWalkthroughStage(stageName: string): boolean {
 
 // ============ GHL API HELPERS ============
 
-async function ghlFetch(creds: GHLCredentials, path: string): Promise<any> {
+async function ghlFetch(creds: GHLCredentials, path: string, retries = 3): Promise<any> {
   const url = `${GHL_API_BASE}${path}`;
-  const response = await fetch(url, {
-    headers: {
-      "Authorization": `Bearer ${creds.apiKey}`,
-      "Version": "2021-07-28",
-      "Content-Type": "application/json",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`GHL API ${response.status}: ${await response.text()}`);
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${creds.apiKey}`,
+        "Version": "2021-07-28",
+        "Content-Type": "application/json",
+      },
+    });
+    if (response.ok) {
+      return response.json();
+    }
+    const text = await response.text();
+    if (response.status === 429 && attempt < retries - 1) {
+      const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+      console.log(`[OpportunityDetection] GHL rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      lastError = new Error(`GHL API 429: ${text}`);
+      continue;
+    }
+    throw new Error(`GHL API ${response.status}: ${text}`);
   }
-  return response.json();
+  throw lastError || new Error("GHL API request failed after retries");
 }
 
 async function fetchPipelines(creds: GHLCredentials): Promise<Pipeline[]> {

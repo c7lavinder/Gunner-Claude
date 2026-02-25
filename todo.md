@@ -3138,3 +3138,8 @@
 - [x] Update TeamMembers, Leaderboard, Profile, LeadGenDashboard to use image badges
 - [x] Created shared/badgeIcons.ts with CDN URLs for all badge codes
 - [x] Ensure all earned badges display properly on profile cards
+
+## Bug Fix - AI Coach GHL 429 Error (Feb 25, 2026)
+- [x] Fix AI Coach crashing with GHL API 429 "Too Many Requests" when summarizing conversations
+- [x] Add graceful error handling so coach doesn't show raw API errors to users
+- [x] Add retry logic with backoff for GHL rate-limited requests in coach (ghlActions, ghlService, opportunityDetection)

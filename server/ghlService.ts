@@ -252,31 +252,48 @@ async function fetchGHLConversations(params: {
   // Note: We don't use startAfterDate here because it filters by conversation creation date,
   // not by message date. We filter calls by date after fetching messages instead.
 
-  try {
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${creds.apiKey}`,
-        "Version": "2021-07-28",
-        "Accept": "application/json",
-      },
-    });
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${creds.apiKey}`,
+          "Version": "2021-07-28",
+          "Accept": "application/json",
+        },
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[GHL] API error: ${response.status} - ${errorText}`);
-      throw new Error(`GHL API error: ${response.status}`);
+      if (response.status === 429 && attempt < maxRetries - 1) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        console.log(`[GHL] Rate limited (429) fetching conversations, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[GHL] API error: ${response.status} - ${errorText}`);
+        throw new Error(`GHL API error: ${response.status}`);
+      }
+
+      const data: GHLSearchResponse = await response.json();
+      
+      // Filter for phone type conversations
+      const phoneConversations = data.conversations?.filter(c => c.type === "TYPE_PHONE") || [];
+      return phoneConversations;
+    } catch (error: any) {
+      if (attempt < maxRetries - 1 && error?.message?.includes("429")) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        console.log(`[GHL] Rate limited, retrying in ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      console.error("[GHL] Error fetching conversations:", error);
+      throw error;
     }
-
-    const data: GHLSearchResponse = await response.json();
-    
-    // Filter for phone type conversations
-    const phoneConversations = data.conversations?.filter(c => c.type === "TYPE_PHONE") || [];
-    return phoneConversations;
-  } catch (error) {
-    console.error("[GHL] Error fetching conversations:", error);
-    throw error;
   }
+  return [];
 }
 
 /**
@@ -286,28 +303,44 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
   const url = new URL(`${GHL_API_BASE}/conversations/${conversationId}/messages`);
   const creds = getActiveCredentials();
 
-  try {
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${creds.apiKey}`,
-        "Version": "2021-07-28",
-        "Accept": "application/json",
-      },
-    });
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${creds.apiKey}`,
+          "Version": "2021-07-28",
+          "Accept": "application/json",
+        },
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[GHL] Messages API error: ${response.status} - ${errorText}`);
+      if (response.status === 429 && attempt < maxRetries - 1) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        console.log(`[GHL] Rate limited (429) fetching messages, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[GHL] Messages API error: ${response.status} - ${errorText}`);
+        return [];
+      }
+
+      const data: GHLMessagesResponse = await response.json();
+      return data.messages?.messages || [];
+    } catch (error) {
+      console.error(`[GHL] Error fetching messages for conversation ${conversationId}:`, error);
+      if (attempt < maxRetries - 1) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
       return [];
     }
-
-    const data: GHLMessagesResponse = await response.json();
-    return data.messages?.messages || [];
-  } catch (error) {
-    console.error(`[GHL] Error fetching messages for conversation ${conversationId}:`, error);
-    return [];
   }
+  return [];
 }
 
 /**
@@ -1090,28 +1123,43 @@ async function fetchOpportunities(startDate?: Date): Promise<GHLOpportunity[]> {
  * Get pipelines to find the Dispo Pipeline ID
  */
 async function getPipelines(): Promise<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>> {
-  try {
-    const creds = getActiveCredentials();
-    const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${creds.locationId}`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${creds.apiKey}`,
-        "Version": "2021-07-28",
-        "Content-Type": "application/json",
-      },
-    });
-    
-    if (!response.ok) {
-      console.error(`[GHL Pipelines] API error: ${response.status}`);
+  const creds = getActiveCredentials();
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${creds.locationId}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${creds.apiKey}`,
+          "Version": "2021-07-28",
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (response.status === 429 && attempt < maxRetries - 1) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        console.log(`[GHL Pipelines] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (!response.ok) {
+        console.error(`[GHL Pipelines] API error: ${response.status}`);
+        return [];
+      }
+      
+      const data = await response.json();
+      return data.pipelines || [];
+    } catch (error) {
+      console.error("[GHL Pipelines] Fetch error:", error);
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        continue;
+      }
       return [];
     }
-    
-    const data = await response.json();
-    return data.pipelines || [];
-  } catch (error) {
-    console.error("[GHL Pipelines] Fetch error:", error);
-    return [];
   }
+  return [];
 }
 
 /**
