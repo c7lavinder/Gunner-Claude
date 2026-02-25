@@ -136,7 +136,7 @@ const ALL_ACTION_TYPES = [
 ];
 
 /** Field definitions for each action type — now includes "select" type for dropdowns */
-type FieldType = "text" | "textarea" | "date" | "time" | "datetime" | "select-pipeline" | "select-stage" | "select-task" | "select-workflow" | "select-calendar";
+type FieldType = "text" | "textarea" | "date" | "time" | "datetime" | "select-pipeline" | "select-stage" | "select-task" | "select-workflow" | "select-calendar" | "select-assignee";
 
 function getFieldsForAction(actionType: string): { key: string; label: string; type: FieldType }[] {
   switch (actionType) {
@@ -147,6 +147,7 @@ function getFieldsForAction(actionType: string): { key: string; label: string; t
         { key: "taskKeyword", label: "Task to update", type: "select-task" },
         { key: "title", label: "New title", type: "text" },
         { key: "dueDate", label: "New due date", type: "date" },
+        { key: "assignedTo", label: "Assign to", type: "select-assignee" },
         { key: "description", label: "Updated description", type: "textarea" },
       ];
     case "create_task":
@@ -154,6 +155,7 @@ function getFieldsForAction(actionType: string): { key: string; label: string; t
         { key: "title", label: "Task title", type: "text" },
         { key: "description", label: "Description", type: "textarea" },
         { key: "dueDate", label: "Due date", type: "date" },
+        { key: "assignedTo", label: "Assign to", type: "select-assignee" },
       ];
     case "add_note":
       return [{ key: "noteBody", label: "Note content", type: "textarea" }];
@@ -259,12 +261,17 @@ function useGhlDropdownData(ghlContactId?: string | null) {
       retry: 1,
     }
   );
+  const teamMembersQuery = trpc.coachActions.smsTeamSenders.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
 
   return {
     pipelines: pipelinesQuery.data?.pipelines || [],
     workflows: workflowsQuery.data?.workflows || [],
     calendars: calendarsQuery.data?.calendars || [],
     tasks: tasksQuery.data?.tasks || [],
+    teamMembers: teamMembersQuery.data || [],
     isLoading: pipelinesQuery.isLoading || workflowsQuery.isLoading || calendarsQuery.isLoading,
   };
 }
@@ -447,7 +454,7 @@ function ActionCard({
                       )}
                       {t.assignedTo && (
                         <span className="inline-flex items-center gap-0.5">
-                          <span className="text-[9px]">\u2022</span> {t.assignedTo}
+                          <span className="text-[9px]">{"\u2022"}</span> {t.assignedTo}
                         </span>
                       )}
                     </div>
@@ -505,6 +512,33 @@ function ActionCard({
                 options.map(c => (
                   <SelectItem key={c.id} value={c.name}>
                     {c.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        );
+      }
+
+      case "select-assignee": {
+        const members = ghlData.teamMembers;
+        return (
+          <Select
+            value={value}
+            onValueChange={(v) => updateField(field.key, v)}
+          >
+            <SelectTrigger className="text-sm bg-background">
+              <SelectValue placeholder="Select team member..." />
+            </SelectTrigger>
+            <SelectContent>
+              {members.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  {ghlData.isLoading ? "Loading team members..." : "No team members found"}
+                </div>
+              ) : (
+                members.map(m => (
+                  <SelectItem key={m.ghlUserId} value={m.ghlUserId}>
+                    {m.name}
                   </SelectItem>
                 ))
               )}

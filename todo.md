@@ -2970,3 +2970,5 @@
 - [x] Fix Calendar field still showing as text input instead of dropdown select (was a publish issue)
 - [x] Filter task dropdown to only show incomplete/open tasks
 - [x] Show task assignee name in task dropdown items
+- [x] Fix unicode bullet rendering as literal \u2022 in task dropdown
+- [x] Add assignee change dropdown for tasks in Next Steps edit mode

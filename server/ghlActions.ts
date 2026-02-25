@@ -868,7 +868,7 @@ export async function updateTask(
   tenantId: number,
   contactId: string,
   taskId: string,
-  updates: { title?: string; body?: string; dueDate?: string; completed?: boolean }
+  updates: { title?: string; body?: string; dueDate?: string; completed?: boolean; assignedTo?: string }
 ): Promise<{ success: boolean }> {
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured");
@@ -876,6 +876,7 @@ export async function updateTask(
   const body: any = {};
   if (updates.title !== undefined) body.title = updates.title;
   if (updates.body !== undefined) body.body = updates.body;
+  if (updates.assignedTo !== undefined) body.assignedTo = updates.assignedTo;
   if (updates.dueDate !== undefined) {
     // Normalize the due date
     try {
@@ -1596,7 +1597,7 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
       }
       case "create_task":
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
-        result = await createTask(action.tenantId, contactId, payload.title, payload.description, payload.dueDate, finalTaskAssignee);
+        result = await createTask(action.tenantId, contactId, payload.title, payload.description, payload.dueDate, payload.assignedTo || finalTaskAssignee);
         break;
       case "add_tag":
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
@@ -1623,13 +1624,14 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
           console.log(`[GHLActions] Resolved task: "${matched.title}" (${taskId})`);
         }
 
-        const updates: { title?: string; body?: string; dueDate?: string; completed?: boolean } = {};
+        const updates: { title?: string; body?: string; dueDate?: string; completed?: boolean; assignedTo?: string } = {};
         // Map from LLM payload field names to updateTask parameter names
         if (payload.dueDate) updates.dueDate = payload.dueDate;
         if (payload.newDueDate) updates.dueDate = payload.newDueDate; // fallback alias
         if (payload.description) updates.body = payload.description;
         if (payload.newBody !== undefined) updates.body = payload.newBody; // fallback alias
         if (payload.newTitle) updates.title = payload.newTitle;
+        if (payload.assignedTo) updates.assignedTo = payload.assignedTo;
         // Handle taskStatus from LLM ("completed" string) → completed boolean
         if (payload.taskStatus === "completed") updates.completed = true;
         if (payload.completed !== undefined) updates.completed = payload.completed; // fallback alias
