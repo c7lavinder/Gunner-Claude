@@ -724,7 +724,7 @@ export async function pollForNewCalls(): Promise<{
 }
 
 // Current polling interval in minutes
-let currentIntervalMinutes: number = 30;
+let currentIntervalMinutes: number = 5;
 
 // Archival job interval (runs daily)
 let archivalInterval: ReturnType<typeof setInterval> | null = null;
@@ -867,7 +867,7 @@ async function checkAndRunWeeklyInsights(): Promise<void> {
 /**
  * Start automatic polling at the specified interval (in minutes)
  */
-export function startPolling(intervalMinutes: number = 30): void {
+export function startPolling(intervalMinutes: number = 5): void {
   if (pollInterval) {
     console.log("[GHL] Polling already started");
     return;

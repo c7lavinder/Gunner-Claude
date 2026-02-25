@@ -3059,3 +3059,4 @@
 - [x] Rewrite ALL signal classification logic for dramatically improved accuracy across all three categories
 - [x] Update Signals page frontend for all three sections
 - [x] Fix AI assistant "Update Task" failing with "No contact ID available" — should auto-search for contact by name before updating task
+- [x] Reduce CRM sync interval from 30 minutes to 5 minutes so actions show up faster

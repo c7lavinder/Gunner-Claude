@@ -91,13 +91,13 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     
-    // Start GHL automatic polling every 30 minutes
+    // Start GHL automatic polling every 5 minutes
     // Delay start to let server fully initialize
     setTimeout(() => {
-      startPolling(30);
+      startPolling(5);
     }, 10000);
     
-    // Start BatchDialer automatic polling every 30 minutes
+    // Start BatchDialer automatic polling every 2 minutes
     setTimeout(() => {
       startBatchDialerPolling();
     }, 15000);
