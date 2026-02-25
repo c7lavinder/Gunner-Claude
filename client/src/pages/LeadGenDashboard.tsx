@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { BADGE_ICON_URLS } from "../../../shared/badgeIcons";
 
 function GradeBadge({ grade }: { grade: string }) {
   const gradeClass = `grade-${grade.toLowerCase()}`;
@@ -319,7 +320,11 @@ export default function LeadGenDashboard() {
               <div className="space-y-2">
                 {badges.slice(0, 5).map((badge: any) => (
                   <div key={badge.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
-                    <div className="text-2xl">{badge.icon}</div>
+                    <div className="text-2xl">
+                      {BADGE_ICON_URLS[badge.code] ? (
+                        <img src={BADGE_ICON_URLS[badge.code]} alt={badge.name} style={{width: 28, height: 28, borderRadius: '50%', objectFit: 'cover'}} />
+                      ) : badge.icon}
+                    </div>
                     <div className="flex-1">
                       <p className="font-semibold text-sm">{badge.name}</p>
                       <p className="text-xs text-muted-foreground">{badge.description}</p>

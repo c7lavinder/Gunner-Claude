@@ -3131,3 +3131,10 @@
 - [x] Nav: light bg with dark text links
 - [x] All sections: appropriate light color palette
 - [x] Maintain red/crimson accent colors from Gunner branding
+
+## Badge System Improvements (Feb 25, 2026)
+- [x] Fix bug: only 3 badges showing (server was slicing to 3, now 10)
+- [x] Replace emoji badges with custom Call of Duty-style badge icons (20 badges generated)
+- [x] Update TeamMembers, Leaderboard, Profile, LeadGenDashboard to use image badges
+- [x] Created shared/badgeIcons.ts with CDN URLs for all badge codes
+- [x] Ensure all earned badges display properly on profile cards

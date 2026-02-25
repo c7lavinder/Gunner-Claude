@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { BADGE_ICON_URLS } from "../../../shared/badgeIcons";
 import { useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -67,8 +68,10 @@ function BadgeCard({ badge }: { badge: BadgeData }) {
     }`}>
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <div className={`text-3xl ${!isEarned && "grayscale opacity-50"}`}>
-            {badge.icon}
+          <div className={`${!isEarned && "grayscale opacity-50"}`}>
+            {BADGE_ICON_URLS[badge.code] ? (
+              <img src={BADGE_ICON_URLS[badge.code]} alt={badge.name} className="rounded-full object-cover" style={{width: 40, height: 40}} />
+            ) : <span className="text-3xl">{badge.icon}</span>}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">

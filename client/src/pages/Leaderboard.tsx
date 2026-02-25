@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Award, Trophy, Medal, TrendingUp, Phone, Flame, Zap, Target } from "lucide-react";
+import { BADGE_ICON_URLS } from "../../../shared/badgeIcons";
 
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) {
@@ -44,17 +45,19 @@ function BadgeDisplay({ badges }: { badges: Array<{ code: string; name: string; 
   
   return (
     <div className="flex flex-wrap gap-1">
-      {badges.slice(0, 5).map((badge, i) => (
+      {badges.slice(0, 6).map((badge, i) => (
         <span 
           key={i} 
           className={`text-sm px-1.5 py-0.5 rounded ${tierColors[badge.tier] || "bg-gray-200"}`}
           title={`${badge.name} (${badge.tier})`}
         >
-          {badge.icon}
+          {BADGE_ICON_URLS[badge.code] ? (
+            <img src={BADGE_ICON_URLS[badge.code]} alt={badge.name} style={{width: 20, height: 20, borderRadius: '50%', objectFit: 'cover', display: 'inline-block'}} />
+          ) : badge.icon}
         </span>
       ))}
-      {badges.length > 5 && (
-        <span className="text-xs text-muted-foreground">+{badges.length - 5}</span>
+      {badges.length > 6 && (
+        <span className="text-xs text-muted-foreground">+{badges.length - 6}</span>
       )}
     </div>
   );

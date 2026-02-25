@@ -816,7 +816,7 @@ export async function getGamificationLeaderboard(tenantId?: number): Promise<Arr
       hotStreak: streakData.hotStreakCurrent,
       consistencyStreak: streakData.consistencyStreakCurrent,
       badgeCount: badgesData.length,
-      topBadges: badgesData.slice(0, 3).map(b => ({
+      topBadges: badgesData.slice(0, 10).map(b => ({
         code: b.code,
         name: b.name,
         icon: b.icon,

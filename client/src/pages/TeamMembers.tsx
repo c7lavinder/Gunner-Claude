@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useDemo } from "@/hooks/useDemo";
+import { BADGE_ICON_URLS } from "../../../shared/badgeIcons";
 
 // ─── ROLE CONFIG ────────────────────────────────────────
 const roleLabels: Record<string, string> = {
@@ -178,13 +179,15 @@ function CharacterCard({
               </div>
               {badges.length > 0 && (
                 <div className="obs-badges-row">
-                  {badges.slice(0, 5).map((badge: any, i: number) => (
+                  {badges.slice(0, 6).map((badge: any, i: number) => (
                     <span key={i} className="obs-badge-icon" title={`${badge.name} (${badge.tier})`}>
-                      {badge.icon}
+                      {BADGE_ICON_URLS[badge.code] ? (
+                        <img src={BADGE_ICON_URLS[badge.code]} alt={badge.name} style={{width: 22, height: 22, borderRadius: '50%', objectFit: 'cover'}} />
+                      ) : badge.icon}
                     </span>
                   ))}
-                  {badges.length > 5 && (
-                    <span style={{fontSize: '10px', color: 'var(--obs-text-tertiary)'}}>+{badges.length - 5}</span>
+                  {badges.length > 6 && (
+                    <span style={{fontSize: '10px', color: 'var(--obs-text-tertiary)'}}>+{badges.length - 6}</span>
                   )}
                 </div>
               )}
@@ -362,7 +365,9 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
                 alignItems: 'center',
                 gap: 6,
               }} title={`${badge.name} (${badge.tier})`}>
-                <span style={{fontSize: 14}}>{badge.icon}</span>
+                {BADGE_ICON_URLS[badge.code] ? (
+                  <img src={BADGE_ICON_URLS[badge.code]} alt={badge.name} style={{width: 20, height: 20, borderRadius: '50%', objectFit: 'cover'}} />
+                ) : <span style={{fontSize: 14}}>{badge.icon}</span>}
                 <span style={{fontSize: 10, color: 'var(--obs-text-secondary)'}}>{badge.name}</span>
               </div>
             ))}
@@ -414,7 +419,11 @@ function ProfileBadgeCard({ badge }: { badge: BadgeData }) {
     }}>
       <div style={{padding: 16}}>
         <div className="flex items-start gap-3">
-          <div style={{fontSize: 28, filter: isEarned ? 'none' : 'grayscale(1) opacity(0.5)'}}>{badge.icon}</div>
+          <div style={{filter: isEarned ? 'none' : 'grayscale(1) opacity(0.5)'}}>
+              {BADGE_ICON_URLS[badge.code] ? (
+                <img src={BADGE_ICON_URLS[badge.code]} alt={badge.name} style={{width: 36, height: 36, borderRadius: '50%', objectFit: 'cover'}} />
+              ) : <span style={{fontSize: 28}}>{badge.icon}</span>}
+            </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h4 style={{fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 12, color: isEarned ? tierStyle.text : 'var(--obs-text-tertiary)'}}>
