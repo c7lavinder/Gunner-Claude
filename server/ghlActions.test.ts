@@ -95,14 +95,14 @@ describe("executeAction user resolution logic", () => {
     const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
     
     // Verify sendSms is called with the user's GHL ID
-    expect(ghlActionsSource).toContain("sendSms(action.tenantId, contactId, payload.message, requestingUserGhlId)");
+    expect(ghlActionsSource).toContain("sendSms(action.tenantId, contactId, payload.message, smsUserId)");
   });
 
   it("should pass finalTaskAssignee to createTask", async () => {
     const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
     
     // Verify createTask is called with the resolved assignee
-    expect(ghlActionsSource).toContain("createTask(action.tenantId, contactId, payload.title, payload.description, payload.dueDate, finalTaskAssignee)");
+    expect(ghlActionsSource).toContain("createTask(action.tenantId, contactId, payload.title, payload.description, payload.dueDate, payload.assignedTo || finalTaskAssignee)");
   });
 
   it("should prioritize named assignee over creator for tasks", async () => {

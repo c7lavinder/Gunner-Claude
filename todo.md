@@ -3091,8 +3091,8 @@
 - [x] Hide Watch Demo button entirely when no video URL is configured (no placeholder)
 
 ## Signals Detection Fix (Feb 25, 2026)
-- [ ] Review signal feedback from Corey to understand what's being missed
-- [ ] Fix signal detection logic based on feedback
+- [x] Review signal feedback from Corey to understand what's being missed
+- [x] Fix signal detection logic based on feedback (added task checks, price gap filtering, weekend awareness, daily cap)
 
 ## CallInbox Pill Limit Fix (Feb 25, 2026)
 - [x] Limit CallInbox to max 3 pills — removed Follow-Up as a separate pill, now only shows Direction + Call Type + Outcome
@@ -3102,3 +3102,6 @@
 - [x] Add daily cap: max ~5 new signals per day per tenant, only the highest priority ones
 - [x] Clean up existing duplicate signals in database (deleted 93 duplicates, 18 remaining)
 - [x] Include actual dollar amounts in signal reasons when available (already handled by price gap enrichment)
+
+## GHL Push Fix (Feb 25, 2026)
+- [x] Fix "Push to GHL" failing for "check_off_task" action type — added case to switch + schema enum

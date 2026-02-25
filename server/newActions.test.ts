@@ -200,7 +200,9 @@ describe("SMS sender routing verification", () => {
   it("should pass requestingUserGhlId (not opportunity assignee) to sendSms", async () => {
     const ghlActionsSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
     // The SMS case should use requestingUserGhlId, not any opportunity-based ID
-    expect(ghlActionsSource).toContain("sendSms(action.tenantId, contactId, payload.message, requestingUserGhlId)");
+    // The SMS case uses smsUserId which defaults to requestingUserGhlId but can be overridden for sender routing
+    expect(ghlActionsSource).toContain("let smsUserId = requestingUserGhlId");
+    expect(ghlActionsSource).toContain("sendSms(action.tenantId, contactId, payload.message, smsUserId)");
   });
 });
 

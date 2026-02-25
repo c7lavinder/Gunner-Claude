@@ -16,6 +16,33 @@ import { getTenantsWithCrm, parseCrmConfig, type TenantCrmConfig } from "./tenan
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
+/**
+ * Calculate business hours elapsed (excludes weekends).
+ * If the time window spans a weekend, add 48 hours of grace.
+ * This prevents false "no follow-up" signals on Friday evening through Monday morning.
+ */
+function includesWeekend(since: Date): boolean {
+  const now = new Date();
+  const daysSince = Math.floor((now.getTime() - since.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysSince <= 1) {
+    // Check if the period crosses a weekend day
+    const sinceDay = since.getDay(); // 0=Sun, 6=Sat
+    const nowDay = now.getDay();
+    return sinceDay === 0 || sinceDay === 6 || nowDay === 0 || nowDay === 6;
+  }
+  // For multi-day periods, any span > 2 days likely includes a weekend
+  return daysSince >= 2;
+}
+
+/**
+ * Get a weekend-adjusted threshold. If the time window includes a weekend,
+ * add 48 hours of grace to the threshold to avoid false positives.
+ */
+function weekendAdjustedThreshold(baseHours: number, since: Date | null): Date {
+  const adjustedHours = since && includesWeekend(since) ? baseHours + 48 : baseHours;
+  return new Date(Date.now() - adjustedHours * 60 * 60 * 1000);
+}
+
 // ============ TYPES ============
 
 interface GHLCredentials {
@@ -510,9 +537,19 @@ async function fetchContactAppointments(creds: GHLCredentials, contactId: string
 }
 
 /**
- * Check if a contact has any upcoming (future) appointments.
- * Returns true if there's at least one appointment scheduled in the future.
+ * Check if a contact has open (uncompleted) tasks in GHL — if so, the team has a follow-up planned.
  */
+async function hasOpenFollowUpTask(creds: GHLCredentials | null, contactId: string | null): Promise<boolean> {
+  if (!creds || !contactId) return false;
+  try {
+    const data = await ghlFetch(creds, `/contacts/${contactId}/tasks`);
+    const tasks = data.tasks || [];
+    return tasks.some((t: any) => !t.completed);
+  } catch {
+    return false;
+  }
+}
+
 async function hasUpcomingAppointment(creds: GHLCredentials | null, contactId: string | null): Promise<boolean> {
   if (!creds || !contactId) return false;
   try {
@@ -966,9 +1003,11 @@ async function detectOfferNoFollowUp(
   const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
   if (stageChangeAt > fortyEightHoursAgo) return null; // Still within window
 
-  // APPOINTMENT CHECK: If there's a future appointment, the team has a next step planned
+  // APPOINTMENT/TASK CHECK: If there's a future appointment or open task, the team has a next step planned
   const hasFutureApt = await hasUpcomingAppointment(creds, opp.contactId);
   if (hasFutureApt) return null; // Appointment scheduled — team is working it
+  const hasTask = await hasOpenFollowUpTask(creds, opp.contactId);
+  if (hasTask) return null; // Open task exists — team has follow-up planned
 
   // Check if there's been any outbound activity since the offer
   const recentOutbound = await db
@@ -1127,9 +1166,11 @@ async function detectPriceStatedNoFollowUp(
 
     if (followUp.length > 1) continue; // There was a follow-up
 
-    // APPOINTMENT CHECK: If there's a future appointment, the team has a next step planned
+    // APPOINTMENT/TASK CHECK: If there's a future appointment or open task, the team has a next step planned
     const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
     if (hasFutureApt) continue; // Appointment scheduled — team is working it
+    const hasTask = await hasOpenFollowUpTask(creds, call.ghlContactId);
+    if (hasTask) continue; // Open task exists — team has follow-up planned
 
     // PIPELINE CHECK: If contact is in an advanced stage, suppress
     const progression = await getContactPipelineProgression(creds, call.ghlContactId, contactOppMap);
@@ -1268,9 +1309,11 @@ async function detectMotivatedOneDone(
       }
     }
 
-    // APPOINTMENT CHECK: If there's a future appointment, the team has a next step planned
+    // APPOINTMENT/TASK CHECK: If there's a future appointment or open task, the team has a next step planned
     const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
     if (hasFutureApt) continue; // Appointment scheduled — team is working it
+    const hasTask = await hasOpenFollowUpTask(creds, call.ghlContactId);
+    if (hasTask) continue; // Open task exists — team has follow-up planned
 
     // Check if any call was an offer or walkthrough type
     const hasAdvancedCallType = allCalls.some((c: any) => 
@@ -1326,9 +1369,11 @@ async function detectStaleActiveStage(
   
   if (stageChangeAt > fiveDaysAgo) return null; // Not stale yet
 
-  // APPOINTMENT CHECK: If there's a future appointment, the stage isn't really stale
+  // APPOINTMENT/TASK CHECK: If there's a future appointment or open task, the stage isn't really stale
   const hasFutureApt = await hasUpcomingAppointment(creds, opp.contactId);
   if (hasFutureApt) return null; // Appointment scheduled — stage is active
+  const hasTask = await hasOpenFollowUpTask(creds, opp.contactId);
+  if (hasTask) return null; // Open task exists — team has follow-up planned
 
   // Check for any recent activity (calls in Gunner DB)
   const recentCalls = await db
@@ -1537,9 +1582,11 @@ async function detectWalkthroughNoOffer(
   if (!stageChangeAt) return null;
 
   if (isScheduledNotDone) {
-    // APPOINTMENT CHECK: If there's a future appointment, the team has a plan — suppress.
+    // APPOINTMENT/TASK CHECK: If there's a future appointment or open task, the team has a plan — suppress.
     const hasFutureApt = await hasUpcomingAppointment(creds, opp.contactId);
     if (hasFutureApt) return null; // Walkthrough is scheduled for the future — not a problem
+    const hasTask = await hasOpenFollowUpTask(creds, opp.contactId);
+    if (hasTask) return null; // Open task exists — team has follow-up planned
 
     // For scheduled walkthroughs with no future appointment, only flag if 5+ days have passed
     // (increased from 3 to reduce false positives — gives time for walkthrough + offer prep)
@@ -1758,9 +1805,11 @@ async function detectMissedCallback(
 
     if (hasOutboundFollowUp) continue; // Team followed up via GHL (calls/SMS)
 
-    // APPOINTMENT CHECK: If there's a future appointment, the callback was effectively handled
+    // APPOINTMENT/TASK CHECK: If there's a future appointment or open task, the callback was effectively handled
     const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
     if (hasFutureApt) continue; // Appointment scheduled — callback was addressed
+    const hasTask = await hasOpenFollowUpTask(creds, call.ghlContactId);
+    if (hasTask) continue; // Open task exists — callback was addressed
 
     results.push({
       tier: "warning",
@@ -1957,9 +2006,11 @@ async function detectTimelineNoCommitment(
 
     if (followUp.length > 1) continue; // A follow-up call was made
 
-    // APPOINTMENT CHECK: If there's a future appointment, the team locked in a next step
+    // APPOINTMENT/TASK CHECK: If there's a future appointment or open task, the team locked in a next step
     const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
     if (hasFutureApt) continue; // Appointment scheduled — commitment was made
+    const hasTask = await hasOpenFollowUpTask(creds, call.ghlContactId);
+    if (hasTask) continue; // Open task exists — team has follow-up planned
 
     // Extract the timeline mention for the excerpt
     let timelineExcerpt = "";
@@ -2131,9 +2182,11 @@ async function detectPostWalkthroughGhosting(
         (c: any) => c.classification !== "conversation"
       ).length;
 
-      // APPOINTMENT CHECK: If there's a future appointment, they're not ghosting
+      // APPOINTMENT/TASK CHECK: If there's a future appointment or open task, they're not ghosting
       const hasFutureApt = await hasUpcomingAppointment(creds, contactId);
       if (hasFutureApt) continue;
+      const hasTask = await hasOpenFollowUpTask(creds, contactId);
+      if (hasTask) continue; // Open task exists — team has follow-up planned
 
       // Get the most recent transcript for context
       const latestTranscript = await db
@@ -2286,9 +2339,11 @@ async function detectPostWalkthroughGhosting(
       }
     }
 
-    // APPOINTMENT CHECK
+    // APPOINTMENT/TASK CHECK
     const hasFutureApt = await hasUpcomingAppointment(creds, call.ghlContactId);
     if (hasFutureApt) continue;
+    const hasTask = await hasOpenFollowUpTask(creds, call.ghlContactId);
+    if (hasTask) continue; // Open task exists — team has follow-up planned
 
     // Count outbound attempts
     const outboundAttempts = await db
@@ -2644,10 +2699,14 @@ async function generateAIReason(detection: DetectedOpportunity, db: any, tenantI
     }
 
     // 5. Price gap context
-    if (detection.priceGap && detection.priceGap >= 120_000) {
-      facts.push(`\nPrice gap analysis: The $${detection.priceGap.toLocaleString()} gap between our offer and seller's ask is significant ($120k+ threshold). This deal may require creative structuring or may not be viable at current numbers.`);
-    } else if (detection.priceGap && detection.priceGap < 50_000) {
-      facts.push(`\nPrice gap analysis: The $${detection.priceGap.toLocaleString()} gap is relatively small — this deal may be closeable with negotiation.`);
+    if (detection.priceGap && detection.sellerAsk) {
+      const gapPercent = Math.round((detection.priceGap / detection.sellerAsk) * 100);
+      if (detection.priceGap < 30_000 || gapPercent < 20) {
+        facts.push(`\nPrice gap analysis: The $${detection.priceGap.toLocaleString()} gap (${gapPercent}% of ask) is small — this deal is likely closeable with negotiation.`);
+      } else if (detection.priceGap < 75_000 || gapPercent < 40) {
+        facts.push(`\nPrice gap analysis: The $${detection.priceGap.toLocaleString()} gap (${gapPercent}% of ask) is moderate — may require creative structuring.`);
+      }
+      // Note: gaps > $100k or > 50% of ask are filtered out entirely before reaching this point
     }
   }
   
@@ -5128,20 +5187,15 @@ async function scanTenant(
         }
       }
 
-      // PRICE GAP DOWNGRADE: If the gap between our offer and seller's ask is $120k+,
-      // the deal is likely unrealistic — downgrade from Missed to Possible, reduce priority.
-      // This prevents high-gap deals from cluttering the urgent tier.
-      const LARGE_GAP_THRESHOLD = 120_000;
-      if (detection.priceGap && detection.priceGap >= LARGE_GAP_THRESHOLD) {
-        if (detection.tier === "missed") {
-          detection.tier = "possible";
-          detection.priorityScore = Math.max(detection.priorityScore - 30, 30);
-        } else if (detection.tier === "warning") {
-          detection.tier = "possible";
-          detection.priorityScore = Math.max(detection.priorityScore - 20, 30);
-        } else {
-          // Already "possible" — just reduce priority
-          detection.priorityScore = Math.max(detection.priorityScore - 10, 25);
+      // PRICE GAP FILTER: Skip signals entirely if the price gap is too large to be viable.
+      // Corey's feedback: "if we are 120k off the price, it is not worth a look"
+      // Rule: Skip if gap > $100k OR gap > 50% of seller's asking price
+      const LARGE_GAP_THRESHOLD = 100_000;
+      if (detection.priceGap && detection.sellerAsk) {
+        const gapPercent = detection.priceGap / detection.sellerAsk;
+        if (detection.priceGap >= LARGE_GAP_THRESHOLD || gapPercent >= 0.5) {
+          console.log(`[Signals] Skipping ${detection.contactName}: price gap $${detection.priceGap.toLocaleString()} (${(gapPercent * 100).toFixed(0)}% of ask) exceeds threshold`);
+          continue; // Skip this signal entirely
         }
       }
 

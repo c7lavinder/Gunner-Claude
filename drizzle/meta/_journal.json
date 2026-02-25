@@ -414,6 +414,13 @@
       "when": 1772049682181,
       "tag": "0058_motionless_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "5",
+      "when": 1772053931362,
+      "tag": "0059_daily_starbolt",
+      "breakpoints": true
     }
   ]
 }

@@ -1632,6 +1632,22 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
         result = await updateContactField(action.tenantId, contactId, payload.fieldKey, payload.fieldValue);
         break;
+      case "check_off_task": {
+        if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
+        
+        // Find the task to check off
+        let checkOffTaskId = payload.taskId;
+        if (!checkOffTaskId) {
+          const matchedTask = await findTaskByKeyword(action.tenantId, contactId, payload.taskKeyword || payload.title);
+          if (!matchedTask) throw new Error("No tasks found for this contact.");
+          checkOffTaskId = matchedTask.id;
+          console.log(`[GHLActions] Resolved task to check off: "${matchedTask.title}" (${checkOffTaskId})`);
+        }
+        
+        console.log(`[GHLActions] check_off_task: contactId=${contactId}, taskId=${checkOffTaskId}`);
+        result = await updateTask(action.tenantId, contactId, checkOffTaskId, { completed: true });
+        break;
+      }
       case "update_task": {
         if (!contactId) throw new Error("No contact ID available. Please search for the contact first.");
         
