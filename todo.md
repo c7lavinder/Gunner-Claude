@@ -3043,3 +3043,5 @@
 - [x] Final browser verification: Micro-interactions confirmed (obs-panel hover, obs-stagger, obs-fade-in, button press, table row hover, grade badge hover)
 - [x] Final browser verification: Light mode across all pages confirmed working
 - [x] Final browser verification: Call Detail page layout and tabs confirmed
+- [x] Fix player level title inconsistency: Team roster card shows "EPIC" but profile/detail shows "PLAYMAKER" — standardize to PLAYMAKER style
+- [x] Fix badge count mismatch: Team roster card shows 3 badges for Daniel but profile shows 4 earned badges — ensure consistent count

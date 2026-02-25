@@ -34,13 +34,8 @@ function getRoleClass(teamRole: string): string {
 }
 
 // ─── LEVEL TIER LABELS ─────────────────────────────────
-function getLevelTitle(level: number): string {
-  if (level >= 5) return "LEGENDARY";
-  if (level >= 4) return "EPIC";
-  if (level >= 3) return "RARE";
-  if (level >= 2) return "UNCOMMON";
-  return "COMMON";
-}
+// Titles now come from server-side LEVEL_THRESHOLDS (gamification.ts)
+// Rookie → Starter → Playmaker → All-Star → Captain → MVP → Champion → Elite → Dynasty → Legend → GOAT → Hall of Fame
 
 // ─── PROFILE PICTURE UPLOAD ─────────────────────────────
 function ProfilePictureUpload({ currentPicture, onUpload }: { currentPicture?: string | null; onUpload: (base64: string, mimeType: string) => void }) {
@@ -94,6 +89,7 @@ function CharacterCard({
   const title = gamificationData?.title || "Rookie";
   const hotStreak = gamificationData?.hotStreak || 0;
   const badges = gamificationData?.badges || [];
+  const badgeCount = gamificationData?.badgeCount ?? badges.length;
   
   const avgScore = scoreData?.averageScore;
   const totalCalls = scoreData?.totalCalls || 0;
@@ -101,7 +97,6 @@ function CharacterCard({
   const abCount = gradeDistribution.A + gradeDistribution.B;
   
   const roleClass = getRoleClass(member.teamRole);
-  const levelTitle = getLevelTitle(level);
   
   // Max values for stat bars
   const maxCalls = 200;
@@ -112,7 +107,7 @@ function CharacterCard({
   const callsPct = maxCalls > 0 ? Math.min((totalCalls / maxCalls) * 100, 100) : 0;
   const scorePct = avgScore ? Math.min(avgScore, 100) : 0;
   const abPct = maxAB > 0 ? Math.min((abCount / maxAB) * 100, 100) : 0;
-  const badgesPct = maxBadges > 0 ? Math.min((badges.length / maxBadges) * 100, 100) : 0;
+  const badgesPct = maxBadges > 0 ? Math.min((badgeCount / maxBadges) * 100, 100) : 0;
   const xpProgress = Math.min((xp % 500) / 5, 100);
   
   // Grade distribution percentages
@@ -199,7 +194,7 @@ function CharacterCard({
             <div className="obs-level-display">
               <div className="obs-level-number">{level}</div>
               <div className="obs-level-label">LVL</div>
-              <div className="obs-level-title">{levelTitle}</div>
+              <div className="obs-level-title">{title}</div>
               {hotStreak > 0 && (
                 <div className="obs-streak-badge">🔥 {hotStreak}</div>
               )}
@@ -236,7 +231,7 @@ function CharacterCard({
         <div className="obs-stat-bar-row">
           <span className="obs-stat-bar-label">Badge</span>
           <div className="obs-stat-bar-track"><div className="obs-stat-bar-fill badges" style={{width: `${badgesPct}%`}} /></div>
-          <span className="obs-stat-bar-value">{badges.length}</span>
+          <span className="obs-stat-bar-value">{badgeCount}</span>
         </div>
       </div>
       
@@ -272,6 +267,7 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
   const title = gamificationData?.title || "Rookie";
   const hotStreak = gamificationData?.hotStreak || 0;
   const badges = gamificationData?.badges || [];
+  const badgeCount = gamificationData?.badgeCount ?? badges.length;
   const avgScore = scoreData?.averageScore;
   const totalCalls = scoreData?.totalCalls || 0;
   const gradeDistribution = scoreData?.gradeDistribution || { A: 0, B: 0, C: 0, D: 0, F: 0 };
@@ -329,7 +325,7 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
           { label: "CALLS", value: totalCalls, color: 'var(--obs-accent-text)' },
           { label: "AVG SCORE", value: avgScore ? `${Math.round(avgScore)}%` : "N/A", color: '#d97706' },
           { label: "A & B GRADES", value: gradeDistribution.A + gradeDistribution.B, color: 'var(--obs-accent-text)' },
-          { label: "BADGES", value: badges.length, color: '#7f1d1d' },
+          { label: "BADGES", value: badgeCount, color: '#7f1d1d' },
         ].map(stat => (
           <div key={stat.label} style={{
             background: 'var(--obs-bg-card)',
@@ -670,7 +666,7 @@ function TeamMembersContent() {
     const m = new Map();
     if (gamificationLeaderboard) {
       gamificationLeaderboard.forEach((entry: any) => {
-        m.set(entry.teamMemberId, { xp: entry.totalXp, level: entry.level, title: entry.title, hotStreak: entry.hotStreak, badges: entry.topBadges });
+        m.set(entry.teamMemberId, { xp: entry.totalXp, level: entry.level, title: entry.title, hotStreak: entry.hotStreak, badges: entry.topBadges, badgeCount: entry.badgeCount });
       });
     }
     return m;
