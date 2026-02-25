@@ -441,11 +441,16 @@ function ActionCard({
                 <SelectItem key={t.id} value={t.title}>
                   <div className="flex flex-col">
                     <span>{t.title}</span>
-                    {t.dueDate && (
-                      <span className="text-[10px] text-muted-foreground">
-                        Due: {new Date(t.dueDate).toLocaleDateString()}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      {t.dueDate && (
+                        <span>Due: {new Date(t.dueDate).toLocaleDateString()}</span>
+                      )}
+                      {t.assignedTo && (
+                        <span className="inline-flex items-center gap-0.5">
+                          <span className="text-[9px]">\u2022</span> {t.assignedTo}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </SelectItem>
               ))}

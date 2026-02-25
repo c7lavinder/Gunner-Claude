@@ -1563,10 +1563,24 @@ Based on ALL of the above context, suggest the most relevant next steps for this
         if (!tenantId) return { tasks: [] };
         try {
           const { getTasksForContact } = await import("./ghlActions");
-          const tasks = await getTasksForContact(tenantId, input.ghlContactId);
+          const { getGhlUserIdMap } = await import("./db");
+          const [tasks, ghlUserMap] = await Promise.all([
+            getTasksForContact(tenantId, input.ghlContactId),
+            getGhlUserIdMap(tenantId),
+          ]);
           // Only show incomplete/open tasks in the dropdown
           const incompleteTasks = tasks.filter((t: any) => !t.completed);
-          return { tasks: incompleteTasks.map((t: any) => ({ id: t.id, title: t.title || t.body || "Untitled Task", dueDate: t.dueDate })) };
+          return {
+            tasks: incompleteTasks.map((t: any) => {
+              const assigneeName = t.assignedTo ? ghlUserMap.get(t.assignedTo)?.name || null : null;
+              return {
+                id: t.id,
+                title: t.title || t.body || "Untitled Task",
+                dueDate: t.dueDate,
+                assignedTo: assigneeName,
+              };
+            }),
+          };
         } catch (e: any) {
           console.warn("[NextSteps] Failed to fetch tasks for dropdown:", e?.message);
           return { tasks: [] };

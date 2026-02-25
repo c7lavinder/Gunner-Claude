@@ -2969,3 +2969,4 @@
 - [x] Fix Workflow field still showing as text input instead of dropdown select (was a publish issue)
 - [x] Fix Calendar field still showing as text input instead of dropdown select (was a publish issue)
 - [x] Filter task dropdown to only show incomplete/open tasks
+- [x] Show task assignee name in task dropdown items
