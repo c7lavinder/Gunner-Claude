@@ -3105,3 +3105,22 @@
 
 ## GHL Push Fix (Feb 25, 2026)
 - [x] Fix "Push to GHL" failing for "check_off_task" action type — added case to switch + schema enum
+
+## Landing Page Rebuild (Feb 25, 2026)
+- [x] Section 1: Hero — dark charcoal bg, pill badge, headline, subheadline, CTA buttons, stats bar, dashboard screenshot
+- [x] Section 3: The Problem — 3 pain point cards (hours lost, no visibility, missed follow-ups)
+- [x] Section 4: How It Works — 3-step visual flow with connecting arrows
+- [x] Section 5: Features Deep-Dive — tabbed interface (AI Call Scoring, Leaderboard, AI Coach) with generated screenshots
+- [x] Section 6: Before & After ROI — two-column comparison with crimson banner
+- [x] Section 7: Testimonials — 6 testimonial cards in grid
+- [x] Section 8: Pricing — 3 tiers ($199/$499/$999) with monthly/yearly toggle, 3-day trial
+- [x] Section 9: Integrations — GHL featured prominently, BatchDialer/BatchLeads secondary
+- [x] Section 10: About/Story — Pablo founder story, two-column layout
+- [x] Section 11: FAQ — accordion with 7 questions (no AI callers references)
+- [x] Section 12: Final CTA — dark charcoal bg, push to free trial signup
+- [x] Footer — comprehensive 5-column footer with dark bg
+- [x] Navigation — sticky top nav with smooth scroll, Features/How It Works/Pricing/About links
+- [x] Remove all AI Callers references from spec
+- [x] Use 3-day free trial, credit card required everywhere
+- [x] Generated AI mockup screenshots for feature sections (real screenshots can be swapped later)
+- [x] Mobile-responsive design throughout
