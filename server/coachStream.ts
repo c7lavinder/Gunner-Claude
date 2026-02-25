@@ -316,6 +316,20 @@ Do NOT use [ACTION_REDIRECT] for these types of messages — they are CONVERSATI
 - Questions about how something worked (e.g., "Why did it send from Chris's number?", "Which number did that go from?")
 - Confirmations or acknowledgments (e.g., "Thanks", "Got it", "OK")
 - General conversation or follow-up about a previous interaction
+- COACHING/ADVICE QUESTIONS — when the user is asking for HELP on what to say, how to respond, or what to do. These are NOT action requests:
+  - "What do I say to this text?" → COACHING (asking for advice, NOT requesting to send a text)
+  - "How should I respond to this?" → COACHING
+  - "What should I text back?" → COACHING (asking what to write, NOT asking you to send it)
+  - "How do I handle this objection?" → COACHING
+  - "What's the best way to follow up?" → COACHING
+  - "What would you say to a seller who says..." → COACHING
+  - "How do I negotiate this?" → COACHING
+  - "What's a good response to..." → COACHING
+  - "Help me with what to say" → COACHING
+  - "What should I tell them?" → COACHING
+  - "How do I close this deal?" → COACHING
+  - "What's the play here?" → COACHING
+  KEY DISTINCTION: "What do I say to this text" = asking for ADVICE (coaching). "Send a text to John saying..." = requesting an ACTION. "Text John and ask if..." = requesting an ACTION. The difference is whether the user is asking YOU to draft/advise vs asking YOU to execute/send. If the user is asking WHAT to say, HOW to respond, or for HELP with a message — that is coaching. If the user is telling you TO send, TO text, TO add, TO create — that is an action.
 For these, respond conversationally. Acknowledge the issue, explain what you know, and offer to help fix it.
 
 CRITICAL RULES:

@@ -5472,6 +5472,20 @@ These types of messages are NOT CRM actions and MUST return an empty actions arr
 - Confirmations or acknowledgments (e.g., "Thanks", "Got it", "OK", "Perfect")
 - General conversation or follow-up about a previous interaction
 - Greetings (e.g., "Hey", "Hello", "What's up")
+- COACHING/ADVICE QUESTIONS — when the user is asking for HELP on what to say, how to respond, or what to do:
+  - "What do I say to this text?" → NOT an action (asking for advice on how to respond)
+  - "How should I respond to this?" → NOT an action
+  - "What should I text back?" → NOT an action (asking what to write, not asking to send)
+  - "How do I handle this objection?" → NOT an action
+  - "What's the best way to follow up?" → NOT an action
+  - "What would you say to a seller who says..." → NOT an action
+  - "How do I negotiate this?" → NOT an action
+  - "What's a good response to..." → NOT an action
+  - "Help me with what to say" → NOT an action
+  - "What should I tell them?" → NOT an action
+  - "How do I close this deal?" → NOT an action
+  - "What's the play here?" → NOT an action
+  KEY DISTINCTION: "What do I say to this text" = asking for ADVICE (return empty). "Send a text to John saying..." = ACTION. "Text John and ask if..." = ACTION. The difference: asking WHAT/HOW to say something = coaching. Telling you TO send/text/add/create = action.
 Do NOT try to parse these as CRM actions. Return an empty actions array so the coaching system can handle them conversationally.
 
 IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions conversationally rather than as direct commands. ALL of these are action requests and MUST be parsed into actions:
