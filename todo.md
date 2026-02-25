@@ -2961,3 +2961,11 @@
 - [x] Replace Calendar free-text with dropdown populated from GHL calendars
 - [x] Add getAvailableCalendars tRPC endpoint for calendar dropdown data
 - [x] Add 13 new vitest tests covering dropdown field definitions and pipeline/stage dependency logic
+
+## Next Steps Dropdown Bug Fix
+- [x] Fix Pipeline field still showing as text input instead of dropdown select (was a publish issue)
+- [x] Fix Stage field still showing as text input instead of dropdown select (was a publish issue)
+- [x] Fix Task field still showing as text input instead of dropdown select (was a publish issue)
+- [x] Fix Workflow field still showing as text input instead of dropdown select (was a publish issue)
+- [x] Fix Calendar field still showing as text input instead of dropdown select (was a publish issue)
+- [x] Filter task dropdown to only show incomplete/open tasks

@@ -1564,7 +1564,9 @@ Based on ALL of the above context, suggest the most relevant next steps for this
         try {
           const { getTasksForContact } = await import("./ghlActions");
           const tasks = await getTasksForContact(tenantId, input.ghlContactId);
-          return { tasks: tasks.map((t: any) => ({ id: t.id, title: t.title || t.body || "Untitled Task", dueDate: t.dueDate })) };
+          // Only show incomplete/open tasks in the dropdown
+          const incompleteTasks = tasks.filter((t: any) => !t.completed);
+          return { tasks: incompleteTasks.map((t: any) => ({ id: t.id, title: t.title || t.body || "Untitled Task", dueDate: t.dueDate })) };
         } catch (e: any) {
           console.warn("[NextSteps] Failed to fetch tasks for dropdown:", e?.message);
           return { tasks: [] };
