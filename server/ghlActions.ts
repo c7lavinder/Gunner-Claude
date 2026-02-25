@@ -1428,8 +1428,29 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
   const payload = action.payload as any;
   // Use targetContactId from the action log as the authoritative contact ID
   // (payload.contactId from LLM may be empty; the real ID is resolved during contact search)
-  const contactId = action.targetContactId || payload.contactId;
+  let contactId = action.targetContactId || payload.contactId;
   const opportunityId = action.targetOpportunityId || payload.opportunityId;
+
+  // Auto-resolve contactId by searching GHL if we have a contact name but no ID
+  if (!contactId && (action.targetContactName || payload.contactName)) {
+    const searchName = action.targetContactName || payload.contactName;
+    console.log(`[GHLActions] Auto-resolving contact ID for name: "${searchName}"`);
+    try {
+      const contacts = await searchContacts(action.tenantId, searchName);
+      if (contacts.length > 0) {
+        contactId = contacts[0].id;
+        console.log(`[GHLActions] Auto-resolved contact "${searchName}" to ID: ${contactId}`);
+        // Update the action log with the resolved contact ID for future reference
+        await db.update(coachActionLog)
+          .set({ targetContactId: contactId })
+          .where(eq(coachActionLog.id, actionId));
+      } else {
+        console.log(`[GHLActions] No contacts found for name: "${searchName}"`);
+      }
+    } catch (err) {
+      console.error(`[GHLActions] Failed to auto-resolve contact "${searchName}":`, err);
+    }
+  }
 
   // Resolve the requesting user's GHL user ID for SMS routing and task default assignment
   let requestingUserGhlId: string | undefined;
