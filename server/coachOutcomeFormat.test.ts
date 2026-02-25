@@ -80,9 +80,9 @@ describe("CallDetail.tsx outcome formatting", () => {
   const callDetailContent = fs.readFileSync(callDetailPath, "utf-8");
 
   it("should have proper outcome label mapping instead of raw replace", () => {
-    expect(callDetailContent).toContain("appointment_set: 'Appointment Set'");
-    expect(callDetailContent).toContain("callback_scheduled: 'Callback Scheduled'");
-    expect(callDetailContent).toContain("offer_made: 'Offer Made'");
-    expect(callDetailContent).toContain("left_vm: 'Left Voicemail'");
+    expect(callDetailContent).toContain("appointment_set: { label: 'Appointment Set'");
+    expect(callDetailContent).toContain("callback_scheduled: { label: 'Callback Scheduled'");
+    expect(callDetailContent).toContain("offer_made: { label: 'Offer Made'");
+    expect(callDetailContent).toContain("left_vm: { label: 'Left Voicemail'");
   });
 });

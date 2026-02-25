@@ -3063,3 +3063,4 @@
 - [x] Fix post-call AI actions to check current pipeline stage before suggesting stage changes — don't suggest moving to a stage already in or past
 - [x] Fix rejected offers to move to follow-up stage, not stay at Made Offer
 - [x] Fix AI assistant intent classification: coaching questions like "what do I say to this text" are misclassified as CRM actions (Send SMS) instead of coaching/advice requests
+- [x] Fix call outcome classification: "Callback" should not override substantive outcomes (Rejected, Offer Accepted, Appointment Set, etc.) — callback should only be used when nothing else happened on the call
