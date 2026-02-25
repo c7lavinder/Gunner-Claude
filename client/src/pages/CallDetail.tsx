@@ -548,27 +548,32 @@ export default function CallDetail() {
                      call.callType === 'admin_callback' ? 'Admin' :
                      String(call.callType || '').replace(/_/g, ' ') || 'Unknown'}
                   </Badge>
-                  {(call as any).callOutcome && (call as any).callOutcome !== 'pending' && (
-                    <Badge variant="outline" className="capitalize">
-                      {{
-                        appointment_set: 'Appointment Set',
-                        offer_made: 'Offer Made',
-                        offer_rejected: 'Offer Rejected',
-                        callback_scheduled: 'Callback Scheduled',
-                        callback_requested: 'Callback Requested',
-                        interested: 'Interested',
-                        left_vm: 'Left Voicemail',
-                        left_voicemail: 'Left Voicemail',
-                        no_answer: 'No Answer',
-                        not_interested: 'Not Interested',
-                        dead: 'Dead Lead',
-                        wrong_number: 'Wrong Number',
-                        do_not_call: 'Do Not Call',
-                        follow_up: 'Follow Up',
-                        offer_accepted: 'Offer Accepted',
-                      }[(call as any).callOutcome as string] || (call as any).callOutcome?.replace(/_/g, ' ')}
-                    </Badge>
-                  )}
+                  {(call as any).callOutcome && (call as any).callOutcome !== 'pending' && (call as any).callOutcome !== 'none' && (() => {
+                    const outcomeColors: Record<string, { label: string; color: string }> = {
+                      appointment_set: { label: 'Appointment Set', color: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
+                      offer_made: { label: 'Offer Made', color: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800' },
+                      offer_rejected: { label: 'Offer Rejected', color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-800' },
+                      offer_accepted: { label: 'Offer Accepted', color: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
+                      callback_scheduled: { label: 'Callback Scheduled', color: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+                      callback_requested: { label: 'Callback Requested', color: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+                      interested: { label: 'Interested', color: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-300 dark:border-green-800' },
+                      not_interested: { label: 'Not Interested', color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-800' },
+                      left_vm: { label: 'Left Voicemail', color: 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700' },
+                      left_voicemail: { label: 'Left Voicemail', color: 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700' },
+                      no_answer: { label: 'No Answer', color: 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700' },
+                      dead: { label: 'Dead Lead', color: 'bg-gray-200 text-gray-700 border-gray-400 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600' },
+                      wrong_number: { label: 'Wrong Number', color: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800' },
+                      do_not_call: { label: 'Do Not Call', color: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-800' },
+                      follow_up: { label: 'Follow Up', color: 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800' },
+                    };
+                    const outcome = (call as any).callOutcome as string;
+                    const config = outcomeColors[outcome];
+                    return (
+                      <Badge variant="outline" className={config?.color || 'bg-gray-100 text-gray-600'}>
+                        {config?.label || outcome.replace(/_/g, ' ')}
+                      </Badge>
+                    );
+                  })()}
                   {call.propertyAddress && (
                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800">
                       {call.propertyAddress}

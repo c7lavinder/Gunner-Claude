@@ -2973,3 +2973,4 @@
 - [x] Fix unicode bullet rendering as literal \u2022 in task dropdown
 - [x] Add assignee change dropdown for tasks in Next Steps edit mode
 - [x] Fix call outcome: rejected offers should not be labeled 'Offer Made' — add 'offer_rejected' outcome
+- [x] Add color-coded outcome badges (Offer Rejected=red, Offer Made=blue/green, etc.) in call inbox and call detail
