@@ -240,7 +240,7 @@ export const calls = mysqlTable("calls", {
   // How the call type was determined
   callTypeSource: mysqlEnum("callTypeSource", ["ai_suggested", "manual", "auto"]).default("ai_suggested"),
   // Call outcome - what was achieved on this call
-  callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_made", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"]).default("none"),
+  callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_made", "offer_rejected", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"]).default("none"),
   // Call classification - determines if call should be graded
   classification: mysqlEnum("classification", ["pending", "conversation", "voicemail", "no_answer", "callback_request", "wrong_number", "too_short", "admin_call", "limit_reached"]).default("pending"),
   classificationReason: text("classificationReason"), // AI explanation for classification

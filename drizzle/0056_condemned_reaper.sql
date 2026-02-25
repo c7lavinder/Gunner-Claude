@@ -1,0 +1,1 @@
+ALTER TABLE `calls` MODIFY COLUMN `callOutcome` enum('none','appointment_set','offer_made','offer_rejected','callback_scheduled','interested','left_vm','no_answer','not_interested','dead') DEFAULT 'none';

@@ -132,6 +132,7 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       const outcomeLabels: Record<string, string> = {
         appointment_set: 'Appointment Set',
         offer_made: 'Offer Made',
+        offer_rejected: 'Offer Rejected',
         callback_scheduled: 'Callback Scheduled',
         callback_requested: 'Callback Requested',
         interested: 'Interested',

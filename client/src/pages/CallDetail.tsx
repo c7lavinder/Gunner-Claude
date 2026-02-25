@@ -553,6 +553,7 @@ export default function CallDetail() {
                       {{
                         appointment_set: 'Appointment Set',
                         offer_made: 'Offer Made',
+                        offer_rejected: 'Offer Rejected',
                         callback_scheduled: 'Callback Scheduled',
                         callback_requested: 'Callback Requested',
                         interested: 'Interested',
@@ -565,7 +566,6 @@ export default function CallDetail() {
                         do_not_call: 'Do Not Call',
                         follow_up: 'Follow Up',
                         offer_accepted: 'Offer Accepted',
-                        offer_rejected: 'Offer Rejected',
                       }[(call as any).callOutcome as string] || (call as any).callOutcome?.replace(/_/g, ' ')}
                     </Badge>
                   )}

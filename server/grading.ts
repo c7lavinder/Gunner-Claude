@@ -387,7 +387,7 @@ export const ADMIN_CALLBACK_RUBRIC = {
 // ============ GRADING FUNCTION ============
 
 // Must match the callOutcome enum in drizzle/schema.ts
-export type CallOutcome = "none" | "appointment_set" | "offer_made" | "callback_scheduled" | "interested" | "left_vm" | "no_answer" | "not_interested" | "dead";
+export type CallOutcome = "none" | "appointment_set" | "offer_made" | "offer_rejected" | "callback_scheduled" | "interested" | "left_vm" | "no_answer" | "not_interested" | "dead";
 
 export interface ObjectionHandlingItem {
   objection: string; // The objection identified (e.g., "Price too high", "Need to think about it")
@@ -616,12 +616,13 @@ Respond with a JSON object in this exact format:
     {"objection": "Price too high", "context": "Seller said: 'I was hoping for at least $200k'", "suggestedResponses": ["Response 1", "Response 2"]}
   ],
   "summary": "brief overall summary",
-  "callOutcome": "appointment_set" or "offer_made" or "callback_scheduled" or "interested" or "left_vm" or "no_answer" or "not_interested" or "dead" or "none" (see CALL OUTCOME DEFINITIONS below for strict criteria — default to 'interested' over 'callback_scheduled' when in doubt)
+  "callOutcome": "appointment_set" or "offer_made" or "offer_rejected" or "callback_scheduled" or "interested" or "left_vm" or "no_answer" or "not_interested" or "dead" or "none" (see CALL OUTCOME DEFINITIONS below for strict criteria — default to 'interested' over 'callback_scheduled' when in doubt)
 }
 
 CALL OUTCOME DEFINITIONS (choose the MOST SPECIFIC outcome that fits):
 - appointment_set: A walkthrough, meeting, or in-person appointment was scheduled with a SPECIFIC date/time. The seller and agent agreed on an exact day and time to meet. Vague statements like "call me next week" do NOT count.
-- offer_made: A specific dollar amount was presented to the seller as an offer, OR the agent discussed specific pricing/numbers with the seller. This takes priority over callback_scheduled if an offer was discussed.
+- offer_made: A specific dollar amount was presented to the seller as an offer AND the seller did NOT immediately reject it. The offer is still open, being considered, or the seller said they'd think about it. This takes priority over callback_scheduled if an offer was discussed and not rejected.
+- offer_rejected: A specific dollar amount was presented to the seller as an offer, BUT the seller clearly rejected, declined, or refused the offer during the call. Signs of rejection include: seller saying "no", "that's too low", "I'm not interested at that price", "absolutely not", or any clear refusal of the offered amount. Use this instead of offer_made when the offer was explicitly turned down.
 - callback_scheduled: The seller explicitly agreed to receive a call back at a SPECIFIC date/time (e.g., "Call me Tuesday at 3pm"). STRICT REQUIREMENTS: There must be a mutually agreed-upon specific time. These do NOT qualify as callback_scheduled:
   * "I'll call you back" or "We'll follow up" (agent-initiated, no seller agreement to specific time)
   * "Call me sometime next week" (no specific time)
@@ -685,7 +686,7 @@ IMPORTANT: Default to "interested" over "callback_scheduled" when in doubt. Most
               summary: { type: "string" },
               callOutcome: { 
                 type: "string", 
-                enum: ["none", "appointment_set", "offer_made", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"] 
+                enum: ["none", "appointment_set", "offer_made", "offer_rejected", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"] 
               },
             },
             required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "objectionHandling", "summary", "callOutcome"],

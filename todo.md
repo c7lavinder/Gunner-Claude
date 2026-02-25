@@ -2972,3 +2972,4 @@
 - [x] Show task assignee name in task dropdown items
 - [x] Fix unicode bullet rendering as literal \u2022 in task dropdown
 - [x] Add assignee change dropdown for tasks in Next Steps edit mode
+- [x] Fix call outcome: rejected offers should not be labeled 'Offer Made' — add 'offer_rejected' outcome
