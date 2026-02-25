@@ -9,7 +9,7 @@
  * NOT a call coach reviewing technique.
  */
 import { getDb, getGhlUserIdMap } from "./db";
-import { calls, callGrades, opportunities, teamMembers } from "../drizzle/schema";
+import { calls, callGrades, opportunities, teamMembers, coachMessages, users } from "../drizzle/schema";
 import { eq, and, desc, gte, isNull, inArray, sql, not, lt } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { getTenantsWithCrm, parseCrmConfig, type TenantCrmConfig } from "./tenant";
@@ -85,7 +85,7 @@ interface DetectedOpportunity {
   teamMemberId: number | null;
   teamMemberName: string | null;
   assignedTo: string | null;
-  detectionSource: "pipeline" | "conversation" | "transcript" | "hybrid";
+  detectionSource: "pipeline" | "conversation" | "transcript" | "hybrid" | "call_grade" | "system";
   lastActivityAt: Date | null;
   lastStageChangeAt: Date | null;
   transcriptExcerpt: string;
@@ -813,9 +813,9 @@ async function detectFollowUpInboundIgnored(
   }
 
   return {
-    tier: "missed",
+    tier: "warning",
     triggerRules: ["followup_inbound_ignored"],
-    priorityScore: 85,
+    priorityScore: 80,
     contactName: conversation.fullName || conversation.contactName || null,
     contactPhone: conversation.phone || null,
     propertyAddress: null,
@@ -993,9 +993,9 @@ async function detectOfferNoFollowUp(
   }
 
   return {
-    tier: "missed",
+    tier: "warning",
     triggerRules: ["offer_no_followup"],
-    priorityScore: 80,
+    priorityScore: 78,
     contactName: opp.name || opp.contact?.name || null,
     contactPhone: opp.contact?.phone || null,
     propertyAddress: null,
@@ -1763,9 +1763,9 @@ async function detectMissedCallback(
     if (hasFutureApt) continue; // Appointment scheduled — callback was addressed
 
     results.push({
-      tier: "possible",
+      tier: "warning",
       triggerRules: ["missed_callback_request"],
-      priorityScore: 50,
+      priorityScore: 72,
       contactName: call.contactName,
       contactPhone: call.contactPhone,
       propertyAddress: call.propertyAddress,
@@ -2348,17 +2348,17 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
   followup_inbound_ignored: {
     label: "Follow Up Lead Reached Out — Awaiting Response",
     context: "A lead in the follow-up pipeline sent an inbound message. It has been 4+ hours without a logged response.",
-    tier: "missed"
+    tier: "at_risk"
   },
   offer_no_followup: {
     label: "Offer Made — No Follow Up Logged",
     context: "An offer was made and 48+ hours have passed. No follow-up call or message has been logged since the offer.",
-    tier: "missed"
+    tier: "at_risk"
   },
   new_lead_sla_breach: {
     label: "New Lead — No Call Within 15 Min",
     context: "A new lead entered the pipeline. No outbound call was logged within the 15-minute SLA window.",
-    tier: "warning"
+    tier: "at_risk"
   },
   price_stated_no_followup: {
     label: "Seller Stated Price — Worth a Look",
@@ -2367,17 +2367,17 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
   },
   motivated_one_and_done: {
     label: "Motivated Seller — Only 1 Call Attempt",
-    context: "The seller showed motivation signals (life event, timeline, urgency) during the call. Only one call attempt has been logged with no follow-up in 72 hours.",
+    context: "The seller showed motivation signals (life event, timeline, urgency) during the call. Only one call attempt has been logged with no follow-up in 72 hours. This is a critical SOP failure — motivated sellers need aggressive follow-up.",
     tier: "at_risk"
   },
   stale_active_stage: {
     label: "Stale in Active Stage",
-    context: "This lead has been in an active stage (Pending Apt or Walkthrough) for 5+ days with no recent outbound activity in the last 3 business days. Check GHL conversations and call logs for the full picture.",
+    context: "This lead has been sitting in an active pipeline stage (Pending Apt, Walkthrough Scheduled, etc.) for 5+ days with no recent outbound activity. Deals die when they stall — this needs immediate attention.",
     tier: "at_risk"
   },
   dead_with_selling_signals: {
     label: "DQ'd Lead Had Selling Signals",
-    context: "This lead was moved to dead/ghosted status. However, the call transcript contains selling signals such as timeline mentions, property condition details, or life events.",
+    context: "This lead was moved to dead/ghosted status, but the call transcript contains real selling signals — timeline mentions, property condition details, life events, or price discussion. Someone may have made a bad DQ call.",
     tier: "at_risk"
   },
   walkthrough_no_offer: {
@@ -2393,7 +2393,7 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
   missed_callback_request: {
     label: "Seller Asked for Callback — No Follow Up Logged",
     context: "During a call, the seller requested a callback at a specific time. No subsequent outbound call or message has been logged after that request.",
-    tier: "possible"
+    tier: "at_risk"
   },
   high_talk_time_dq: {
     label: "Long Conversation — DQ'd After One Attempt",
@@ -2428,7 +2428,7 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
   delayed_scheduled_callback: {
     label: "Scheduled Callback Was Delayed",
     context: "A callback was scheduled during a previous call, but the follow-up call was made late. The agent acknowledged the delay in the transcript (apologized for being late, mentioned running behind, etc.). This may have damaged rapport with the seller.",
-    tier: "warning"
+    tier: "at_risk"
   },
   skipped_walkthrough: {
     label: "Skipped Walkthrough \u2014 Went Straight to Offer",
@@ -2436,15 +2436,71 @@ const RULE_DESCRIPTIONS: Record<string, { label: string; context: string; tier: 
     tier: "possible"
   },
   deal_fell_through: {
-    label: "Previous Deal Fell Through \u2014 Re-engagement Opportunity",
-    context: "The seller mentioned that a previous buyer's deal, contract, or financing fell through. The property is back on the market and the seller may be more motivated to close quickly. This is a re-engagement opportunity.",
+    label: "Previous Deal Fell Through — Re-engagement Window",
+    context: "The seller mentioned that a previous buyer's deal, contract, or financing fell through. The property is back on the market and the seller is likely more motivated to close quickly. This is a prime re-engagement opportunity — they've already been through the process once.",
+    tier: "possible"
+  },
+  // ===== NEW RULES =====
+  deal_lost_on_call: {
+    label: "Deal Lost — Seller Confirmed on Call",
+    context: "During a phone call, the seller explicitly stated they already sold the property, listed with an agent, went with another investor, or are no longer selling. This deal is lost and needs post-mortem review.",
+    tier: "missed"
+  },
+  bad_call_performance: {
+    label: "Very Bad Call Performance — Grade D/F",
+    context: "A recent call was graded D or F (score below 40). The rep performed very poorly on key areas like qualification, rapport, motivation extraction, or offer presentation. This is a coaching emergency.",
+    tier: "at_risk"
+  },
+  missed_appointment: {
+    label: "Appointment Missed — No Activity at Scheduled Time",
+    context: "An appointment was scheduled with this seller but no call or activity was logged around the scheduled time. Missing appointments destroys credibility and kills deals.",
+    tier: "at_risk"
+  },
+  extreme_motivation: {
+    label: "Extreme Seller Motivation Detected",
+    context: "The seller expressed high-urgency motivation signals during a call: foreclosure with timeline, divorce with property division, death in family, tax sale deadline, code violation deadline, or health emergency forcing sale. This seller is under real pressure to sell.",
+    tier: "possible"
+  },
+  close_on_price: {
+    label: "Close on Price — Gap Under $30K",
+    context: "Our offer and the seller's asking price are within $30,000 of each other. This deal could close with one more conversation. The numbers are workable.",
+    tier: "possible"
+  },
+  seller_re_engagement: {
+    label: "Seller Came Back After Long Silence",
+    context: "A contact in follow-up (30+ days old) suddenly has new inbound activity — the seller reached back out. Follow-up leads that re-engage are significantly more likely to convert because they've had time to think and are now ready.",
+    tier: "possible"
+  },
+  seller_texted_number: {
+    label: "Seller Proactively Shared Contact Info via SMS",
+    context: "The seller sent an inbound text message containing a phone number, email address, or explicitly asked to be called. This is a warm signal — they want to be contacted and are actively engaged.",
+    tier: "possible"
+  },
+  seller_out_of_agreement: {
+    label: "Seller Just Got Out of Agreement",
+    context: "The seller mentioned their listing agreement expired, their agent contract ended, a previous buyer backed out, or they just got out of an agreement with someone else. They're back on the market and may be frustrated with the traditional process.",
+    tier: "possible"
+  },
+  ai_coach_inactive: {
+    label: "Team Member Not Using AI Coach",
+    context: "This team member hasn't accessed the AI coaching features in 7+ days. Consistent coaching usage correlates with call quality improvement. This is a team development signal for the owner.",
+    tier: "possible"
+  },
+  consistent_call_weakness: {
+    label: "Consistent Weakness Across Multiple Calls",
+    context: "This team member has scored below average on the same call category across 5+ recent calls. This is a pattern, not a one-off — they need targeted coaching on this specific skill area.",
+    tier: "possible"
+  },
+  bad_temperament: {
+    label: "Unprofessional Tone Detected on Call",
+    context: "The call transcript shows signs of frustration, rudeness, dismissive language, talking over the seller, or unprofessional tone. This is a coaching opportunity — sellers pick up on attitude and it kills deals.",
     tier: "possible"
   },
 };
 
 async function generateAIReason(detection: DetectedOpportunity, db: any, tenantId: number): Promise<{ reason: string; suggestion: string; missedItems?: string[] }> {
   const ruleDesc = RULE_DESCRIPTIONS[detection.triggerRules[0]];
-  const tierLabel = ruleDesc?.tier === "missed" ? "Missed (urgent)" : (ruleDesc?.tier === "at_risk" || ruleDesc?.tier === "warning") ? "At Risk" : "Worth a Look";
+  const tierLabel = ruleDesc?.tier === "missed" ? "Missed (urgent)" : ruleDesc?.tier === "at_risk" ? "At Risk" : ruleDesc?.tier === "warning" ? "At Risk" : "Worth a Look";
   
   // Build a rich factual timeline from available data
   const facts: string[] = [];
@@ -2607,7 +2663,7 @@ CRITICAL RULES:
 - Use phrases like "no follow-up has been logged" instead of "we completely missed it" or "the team dropped the ball."
 - If you don't know whether the team took action, say "no activity was logged" — do NOT say they failed or missed it.
 - The tone should be neutral and informative, like a CRM status update — not accusatory or dramatic.
-- Tier context: "${tierLabel}" — ${ruleDesc?.tier === "missed" ? "This appears to be a gap that needs attention." : (ruleDesc?.tier === "at_risk" || ruleDesc?.tier === "warning") ? "This lead may need re-engagement." : "This is flagged for the owner to review — focus on deal potential and what makes this lead worth pursuing, not on rep failures."}
+- Tier context: "${tierLabel}" — ${ruleDesc?.tier === "missed" ? "This is a deal we LOST — seller sold, went with a competitor, or we couldn't close. Focus on what happened and what we can learn." : (ruleDesc?.tier === "at_risk" || ruleDesc?.tier === "warning") ? "This is a RED FLAG in our process — SOP failure, missed appointment, bad call, slow response, or stale pipeline. Focus on what went wrong and what needs to happen immediately." : "This is a SUBTLE OPPORTUNITY or team insight worth investigating — possible deal, interesting seller situation, coaching opportunity, or pattern the owner should see. Focus on why this is worth the owner's time."}
 
 SPECIFICITY REQUIREMENTS:
 - If the transcript mentions a MOTIVATION (divorce, foreclosure, tax lien, death in family, job relocation, inheritance, vacant property, code violations, financial hardship, medical bills, behind on payments, tired landlord, etc.), you MUST name the specific motivation in the reason. Say "seller mentioned going through a divorce" NOT "seller showed motivation signals."
@@ -3354,6 +3410,934 @@ async function detectDealFellThrough(
   return results;
 }
 
+// ============ NEW RULE: Deal Lost on Call ============
+// Scans recent transcripts for seller explicitly stating they sold, listed, or went with competitor
+
+const DEAL_LOST_ON_CALL_PATTERNS = [
+  /(?:i|we)\s+(?:already|just|recently)\s+(?:sold|listed|closed)/i,
+  /(?:went|going)\s+with\s+(?:another|a\s+different|someone\s+else|other)\s+(?:investor|buyer|company|offer)/i,
+  /(?:listed|listing)\s+(?:it\s+)?with\s+(?:an?\s+)?(?:agent|realtor|real\s+estate)/i,
+  /(?:not|no\s+longer)\s+(?:selling|interested|looking\s+to\s+sell)/i,
+  /(?:someone\s+else|another\s+(?:buyer|investor))\s+(?:already\s+)?(?:bought|purchased|closed)/i,
+  /(?:took|accepted|went\s+with)\s+(?:another|a\s+different|their|someone)\s+(?:offer|deal)/i,
+  /(?:property|house|home)\s+(?:is\s+)?(?:already\s+)?(?:sold|under\s+contract|pending)/i,
+  /(?:i|we)\s+(?:decided|chose)\s+(?:to\s+)?(?:go\s+with|list\s+with|use)\s+(?:a|an|another|someone)/i,
+  /(?:signed|signing)\s+(?:a\s+)?(?:listing|contract|agreement)\s+with/i,
+];
+
+async function detectDealLostOnCall(
+  db: any,
+  tenantId: number,
+  creds: GHLCredentials | null
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  // Get recent calls with transcripts
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.callTimestamp, fourteenDaysAgo),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`,
+        sql`LENGTH(${calls.transcript}) > 100`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(100);
+
+  for (const call of recentCalls) {
+    if (!call.ghlContactId) continue;
+    const transcript = call.transcript;
+    if (!transcript) continue;
+
+    // Check for deal-lost patterns
+    const matchedPattern = DEAL_LOST_ON_CALL_PATTERNS.find(p => p.test(transcript));
+    if (!matchedPattern) continue;
+
+    // Extract the matching excerpt for context
+    const match = transcript.match(matchedPattern);
+    const excerptStart = Math.max(0, (match?.index || 0) - 100);
+    const excerptEnd = Math.min(transcript.length, (match?.index || 0) + (match?.[0]?.length || 0) + 200);
+    const excerpt = transcript.substring(excerptStart, excerptEnd);
+
+    results.push({
+      tier: "missed",
+      triggerRules: ["deal_lost_on_call"],
+      priorityScore: 92,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "transcript",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: excerpt.substring(0, 500),
+      ...NO_PRICE_DATA,
+    });
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: Bad Call Performance ============
+// Flags calls graded D or F (score below 40) — very bad performance needing coaching
+
+async function detectBadCallPerformance(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Get recent calls with bad grades
+  const badCalls = await db
+    .select({
+      call: calls,
+      grade: callGrades,
+    })
+    .from(callGrades)
+    .innerJoin(calls, eq(calls.id, callGrades.callId))
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.callTimestamp, sevenDaysAgo),
+        sql`(${callGrades.overallGrade} IN ('D', 'F') OR ${callGrades.overallScore} < 40)`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(20);
+
+  for (const { call, grade } of badCalls) {
+    if (!call.ghlContactId) continue;
+
+    // Extract weak areas from criteriaScores
+    let weakAreas: string[] = [];
+    try {
+      const criteria = typeof grade.criteriaScores === 'string' ? JSON.parse(grade.criteriaScores) : grade.criteriaScores;
+      if (criteria && typeof criteria === 'object') {
+        for (const [key, val] of Object.entries(criteria)) {
+          const score = typeof val === 'object' && val !== null ? (val as any).score : val;
+          if (typeof score === 'number' && score < 5) {
+            weakAreas.push(key.replace(/_/g, ' '));
+          }
+        }
+      }
+    } catch (e) { /* non-critical */ }
+
+    const weakAreasText = weakAreas.length > 0 ? ` Weak areas: ${weakAreas.join(', ')}.` : '';
+
+    results.push({
+      tier: "warning",
+      triggerRules: ["bad_call_performance"],
+      priorityScore: 75,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "call_grade",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: `Grade: ${grade.overallGrade} (${grade.overallScore}/100).${weakAreasText} ${(call.transcript || '').substring(0, 300)}`,
+      ...NO_PRICE_DATA,
+    });
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: Extreme Motivation ============
+// Detects high-urgency motivation signals regardless of call count
+
+const EXTREME_MOTIVATION_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /foreclos(?:ure|ing|ed)/i, label: "foreclosure" },
+  { pattern: /(?:tax\s+(?:sale|lien|deed)|delinquent\s+taxes|back\s+taxes.*deadline)/i, label: "tax sale/lien" },
+  { pattern: /(?:divorce|divorcing|separated.*(?:sell|split))/i, label: "divorce" },
+  { pattern: /(?:passed\s+away|death\s+in|died|deceased|probate|estate\s+(?:sale|settlement))/i, label: "death/probate" },
+  { pattern: /(?:code\s+violation|condemned|uninhabitable).*(?:deadline|fine|must)/i, label: "code violation deadline" },
+  { pattern: /(?:hospital|cancer|surgery|terminal|disabled).*(?:sell|need\s+money|can't\s+(?:afford|maintain))/i, label: "health emergency" },
+  { pattern: /(?:evict|sheriff|marshal).*(?:sale|auction|deadline)/i, label: "eviction/auction" },
+  { pattern: /(?:bankruptcy|chapter\s+(?:7|11|13)).*(?:sell|liquidat)/i, label: "bankruptcy" },
+  { pattern: /(?:need|have)\s+to\s+sell.*(?:immediately|asap|right\s+away|this\s+(?:week|month)|by\s+(?:monday|tuesday|wednesday|thursday|friday|end\s+of))/i, label: "urgent timeline" },
+  { pattern: /(?:relocat|moving|transfer).*(?:next\s+(?:week|month)|already|soon|immediately)/i, label: "urgent relocation" },
+];
+
+async function detectExtremeMotivation(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.callTimestamp, fourteenDaysAgo),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`,
+        sql`LENGTH(${calls.transcript}) > 200`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(100);
+
+  // Group by contact to avoid duplicate signals
+  const contactMotivations = new Map<string, { call: any; motivations: string[]; excerpt: string }>();
+
+  for (const call of recentCalls) {
+    if (!call.ghlContactId) continue;
+    const transcript = call.transcript;
+    if (!transcript) continue;
+
+    const foundMotivations: string[] = [];
+    let bestExcerpt = '';
+
+    for (const { pattern, label } of EXTREME_MOTIVATION_PATTERNS) {
+      const match = transcript.match(pattern);
+      if (match) {
+        foundMotivations.push(label);
+        if (!bestExcerpt) {
+          const start = Math.max(0, (match.index || 0) - 100);
+          const end = Math.min(transcript.length, (match.index || 0) + match[0].length + 200);
+          bestExcerpt = transcript.substring(start, end);
+        }
+      }
+    }
+
+    if (foundMotivations.length === 0) continue;
+
+    // Only flag if we found 2+ motivation signals OR 1 very strong one
+    const strongMotivations = ['foreclosure', 'tax sale/lien', 'death/probate', 'eviction/auction', 'bankruptcy', 'health emergency'];
+    const hasStrong = foundMotivations.some(m => strongMotivations.includes(m));
+    if (foundMotivations.length < 2 && !hasStrong) continue;
+
+    const existing = contactMotivations.get(call.ghlContactId);
+    if (!existing || foundMotivations.length > existing.motivations.length) {
+      contactMotivations.set(call.ghlContactId, { call, motivations: foundMotivations, excerpt: bestExcerpt });
+    }
+  }
+
+  for (const [contactId, { call, motivations, excerpt }] of Array.from(contactMotivations.entries())) {
+    results.push({
+      tier: "possible",
+      triggerRules: ["extreme_motivation"],
+      priorityScore: 68,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: contactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "transcript",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: `[Motivations: ${motivations.join(', ')}] ${excerpt.substring(0, 400)}`,
+      ...NO_PRICE_DATA,
+    });
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: Close on Price ============
+// Flags leads where our offer and seller ask are within $30k
+
+async function detectCloseOnPrice(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Get recent calls with transcripts that might have price info
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.callTimestamp, thirtyDaysAgo),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`,
+        sql`LENGTH(${calls.transcript}) > 200`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(80);
+
+  // Group by contact — only need one signal per contact
+  const contactPrices = new Map<string, { call: any; ourOffer: number; sellerAsk: number; gap: number }>();
+
+  for (const call of recentCalls) {
+    if (!call.ghlContactId) continue;
+    if (contactPrices.has(call.ghlContactId)) continue; // Already found for this contact
+
+    try {
+      const prices = await extractPricesFromTranscriptLLM(call.transcript);
+      if (prices.ourOffer && prices.sellerAsk) {
+        const gap = Math.abs(prices.sellerAsk - prices.ourOffer);
+        if (gap <= 30000 && gap > 0) {
+          contactPrices.set(call.ghlContactId, {
+            call,
+            ourOffer: prices.ourOffer,
+            sellerAsk: prices.sellerAsk,
+            gap,
+          });
+        }
+      }
+    } catch (e) { /* non-critical */ }
+  }
+
+  for (const [contactId, { call, ourOffer, sellerAsk, gap }] of Array.from(contactPrices.entries())) {
+    results.push({
+      tier: "possible",
+      triggerRules: ["close_on_price"],
+      priorityScore: 72,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: contactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "transcript",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: `Our offer: $${ourOffer.toLocaleString()}, Seller ask: $${sellerAsk.toLocaleString()}, Gap: $${gap.toLocaleString()}. ${(call.transcript || '').substring(0, 300)}`,
+      ourOffer,
+      sellerAsk,
+      priceGap: gap,
+    });
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: Seller Re-engagement ============
+// Detects follow-up leads (30+ days old) with new inbound activity
+
+async function detectSellerReEngagement(
+  db: any,
+  tenantId: number,
+  creds: GHLCredentials | null
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  if (!creds) return results;
+
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  try {
+    // Get recent conversations with inbound messages
+    const conversations = await ghlFetch(
+      creds,
+      `/conversations/search?locationId=${creds.locationId}&sort=desc&limit=50`
+    );
+    const convList = conversations.conversations || [];
+
+    for (const conv of convList) {
+      if (!conv.contactId) continue;
+      // Must have recent inbound message
+      const lastMsgTime = conv.lastMessageDate ? new Date(conv.lastMessageDate) : null;
+      if (!lastMsgTime || lastMsgTime < threeDaysAgo) continue;
+      if (conv.lastMessageDirection !== 'inbound') continue;
+
+      // Check if this contact has old calls (30+ days ago) but the most recent activity is new
+      const oldCalls = await db
+        .select({ id: calls.id, callTimestamp: calls.callTimestamp })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.ghlContactId, conv.contactId),
+            lt(calls.callTimestamp, thirtyDaysAgo)
+          )
+        )
+        .limit(1);
+
+      if (oldCalls.length === 0) continue; // Not an old lead
+
+      // Make sure there's no recent call (within 7 days) — they truly went silent and came back
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const recentCalls = await db
+        .select({ id: calls.id })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.ghlContactId, conv.contactId),
+            gte(calls.callTimestamp, sevenDaysAgo)
+          )
+        )
+        .limit(1);
+
+      if (recentCalls.length > 0) continue; // Already being worked
+
+      // Get the latest call for context
+      const latestCall = await db
+        .select()
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.ghlContactId, conv.contactId)
+          )
+        )
+        .orderBy(desc(calls.callTimestamp))
+        .limit(1);
+
+      const call = latestCall[0];
+      const daysSinceLastCall = call ? Math.round((Date.now() - new Date(call.callTimestamp).getTime()) / (1000 * 60 * 60 * 24)) : 30;
+
+      results.push({
+        tier: "possible",
+        triggerRules: ["seller_re_engagement"],
+        priorityScore: 65,
+        contactName: conv.fullName || conv.contactName || call?.contactName || null,
+        contactPhone: conv.phone || call?.contactPhone || null,
+        propertyAddress: call?.propertyAddress || null,
+        ghlContactId: conv.contactId,
+        ghlOpportunityId: null,
+        ghlPipelineStageId: null,
+        ghlPipelineStageName: null,
+        relatedCallId: call?.id || null,
+        teamMemberId: call?.teamMemberId || null,
+        teamMemberName: call?.teamMemberName || null,
+        assignedTo: null,
+        detectionSource: "conversation",
+        lastActivityAt: lastMsgTime,
+        lastStageChangeAt: null,
+        transcriptExcerpt: `Seller came back after ${daysSinceLastCall} days of silence. Last inbound: "${(conv.lastMessageBody || '').substring(0, 300)}"`,
+        ...NO_PRICE_DATA,
+      });
+    }
+  } catch (err) {
+    // Non-critical
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: Seller Texted Number ============
+// Detects when seller proactively shares contact info via SMS
+
+const SELLER_SHARED_CONTACT_PATTERNS = [
+  /(?:call|reach|text|contact)\s+me\s+(?:at|on)\s+\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/i,
+  /(?:my|the)\s+(?:number|cell|phone|mobile)\s+(?:is|:)\s+\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/i,
+  /(?:email|reach)\s+me\s+(?:at|on)\s+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i,
+  /(?:my|the)\s+(?:email|e-mail)\s+(?:is|:)\s+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i,
+  /(?:give\s+me\s+a\s+call|call\s+me\s+back|please\s+call)/i,
+  /(?:here'?s?\s+my\s+(?:number|cell|phone|email))/i,
+];
+
+async function detectSellerTextedNumber(
+  db: any,
+  tenantId: number,
+  creds: GHLCredentials | null
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  if (!creds) return results;
+
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+  try {
+    const conversations = await ghlFetch(
+      creds,
+      `/conversations/search?locationId=${creds.locationId}&sort=desc&limit=50`
+    );
+    const convList = conversations.conversations || [];
+
+    for (const conv of convList) {
+      if (!conv.contactId) continue;
+      const lastMsgTime = conv.lastMessageDate ? new Date(conv.lastMessageDate) : null;
+      if (!lastMsgTime || lastMsgTime < threeDaysAgo) continue;
+
+      // Get recent inbound messages
+      try {
+        const messages = await fetchConversationMessages(creds, conv.id, 15);
+        const recentInbound = messages.filter((m: GHLMessageDetail) => {
+          if (m.direction !== 'inbound') return false;
+          const msgTime = m.dateAdded ? new Date(m.dateAdded) : null;
+          return msgTime && msgTime >= threeDaysAgo;
+        });
+
+        for (const msg of recentInbound) {
+          if (!msg.body) continue;
+          const matched = SELLER_SHARED_CONTACT_PATTERNS.some(p => p.test(msg.body!));
+          if (!matched) continue;
+
+          // Check if there's been an outbound response after this message
+          const msgTime = new Date(msg.dateAdded);
+          const hasResponse = messages.some((m: GHLMessageDetail) => {
+            if (m.direction !== 'outbound') return false;
+            const outTime = m.dateAdded ? new Date(m.dateAdded) : null;
+            return outTime && outTime > msgTime;
+          });
+
+          if (hasResponse) continue; // Already responded
+
+          const latestCall = await db
+            .select()
+            .from(calls)
+            .where(
+              and(
+                eq(calls.tenantId, tenantId),
+                eq(calls.ghlContactId, conv.contactId)
+              )
+            )
+            .orderBy(desc(calls.callTimestamp))
+            .limit(1);
+
+          const call = latestCall[0];
+
+          results.push({
+            tier: "possible",
+            triggerRules: ["seller_texted_number"],
+            priorityScore: 62,
+            contactName: conv.fullName || conv.contactName || call?.contactName || null,
+            contactPhone: conv.phone || call?.contactPhone || null,
+            propertyAddress: call?.propertyAddress || null,
+            ghlContactId: conv.contactId,
+            ghlOpportunityId: null,
+            ghlPipelineStageId: null,
+            ghlPipelineStageName: null,
+            relatedCallId: call?.id || null,
+            teamMemberId: call?.teamMemberId || null,
+            teamMemberName: call?.teamMemberName || null,
+            assignedTo: null,
+            detectionSource: "conversation",
+            lastActivityAt: lastMsgTime,
+            lastStageChangeAt: null,
+            transcriptExcerpt: `[Seller SMS]: ${msg.body.substring(0, 500)}`,
+            ...NO_PRICE_DATA,
+          });
+
+          break; // One signal per conversation
+        }
+      } catch (msgErr) {
+        // Non-critical
+      }
+    }
+  } catch (err) {
+    // Non-critical
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: Seller Out of Agreement ============
+// Detects when seller mentions they just got out of a listing/agreement
+
+const OUT_OF_AGREEMENT_PATTERNS = [
+  /(?:listing|contract|agreement)\s+(?:expired|ended|ran\s+out|is\s+up|just\s+ended)/i,
+  /(?:agent|realtor|broker)\s+(?:contract|agreement|listing)\s+(?:expired|ended|is\s+up|ran\s+out)/i,
+  /(?:just|recently)\s+(?:got\s+out|came\s+out|finished|ended)\s+(?:of|with)\s+(?:a|an|my|the)\s+(?:listing|contract|agreement)/i,
+  /(?:fired|dropped|let\s+go)\s+(?:of\s+)?(?:my|the|our)\s+(?:agent|realtor|broker)/i,
+  /(?:didn't|did\s+not|couldn't|could\s+not)\s+(?:sell|close|get\s+an\s+offer)\s+(?:with|through)\s+(?:my|the|our|an?)\s+(?:agent|realtor)/i,
+  /(?:took\s+it|taking\s+it|pulled\s+it)\s+off\s+(?:the\s+)?(?:market|mls|listing)/i,
+  /(?:previous|last|other)\s+(?:buyer|investor|deal)\s+(?:backed\s+out|fell\s+through|didn't\s+close|walked\s+away)/i,
+];
+
+async function detectSellerOutOfAgreement(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.callTimestamp, fourteenDaysAgo),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`,
+        sql`LENGTH(${calls.transcript}) > 100`
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(100);
+
+  const seenContacts = new Set<string>();
+
+  for (const call of recentCalls) {
+    if (!call.ghlContactId || seenContacts.has(call.ghlContactId)) continue;
+    const transcript = call.transcript;
+    if (!transcript) continue;
+
+    const matchedPattern = OUT_OF_AGREEMENT_PATTERNS.find(p => p.test(transcript));
+    if (!matchedPattern) continue;
+
+    seenContacts.add(call.ghlContactId);
+
+    const match = transcript.match(matchedPattern);
+    const excerptStart = Math.max(0, (match?.index || 0) - 100);
+    const excerptEnd = Math.min(transcript.length, (match?.index || 0) + (match?.[0]?.length || 0) + 200);
+    const excerpt = transcript.substring(excerptStart, excerptEnd);
+
+    results.push({
+      tier: "possible",
+      triggerRules: ["seller_out_of_agreement"],
+      priorityScore: 66,
+      contactName: call.contactName,
+      contactPhone: call.contactPhone,
+      propertyAddress: call.propertyAddress,
+      ghlContactId: call.ghlContactId,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: call.id,
+      teamMemberId: call.teamMemberId,
+      teamMemberName: call.teamMemberName,
+      assignedTo: null,
+      detectionSource: "transcript",
+      lastActivityAt: call.callTimestamp,
+      lastStageChangeAt: null,
+      transcriptExcerpt: excerpt.substring(0, 500),
+      ...NO_PRICE_DATA,
+    });
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: AI Coach Inactive ============
+// Flags team members who haven't used AI coach in 7+ days
+
+async function detectAICoachInactive(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Get all active team members for this tenant
+  const members = await db
+    .select()
+    .from(teamMembers)
+    .where(
+      and(
+        eq(teamMembers.tenantId, tenantId),
+        eq(teamMembers.isActive, "true")
+      )
+    );
+
+  for (const member of members) {
+    if (!member.userId) continue;
+
+    // Check if they have any coach messages in the last 7 days
+    const recentCoachActivity = await db
+      .select({ id: coachMessages.id })
+      .from(coachMessages)
+      .where(
+        and(
+          eq(coachMessages.tenantId, tenantId),
+          eq(coachMessages.userId, member.userId),
+          gte(coachMessages.createdAt, sevenDaysAgo)
+        )
+      )
+      .limit(1);
+
+    if (recentCoachActivity.length > 0) continue; // Active user
+
+    // Check if they've EVER used the coach (don't flag brand new users)
+    const anyCoachActivity = await db
+      .select({ id: coachMessages.id })
+      .from(coachMessages)
+      .where(
+        and(
+          eq(coachMessages.tenantId, tenantId),
+          eq(coachMessages.userId, member.userId)
+        )
+      )
+      .limit(1);
+
+    if (anyCoachActivity.length === 0) continue; // Never used coach — not a re-engagement signal
+
+    // Get last coach activity date
+    const lastActivity = await db
+      .select({ createdAt: coachMessages.createdAt })
+      .from(coachMessages)
+      .where(
+        and(
+          eq(coachMessages.tenantId, tenantId),
+          eq(coachMessages.userId, member.userId)
+        )
+      )
+      .orderBy(desc(coachMessages.createdAt))
+      .limit(1);
+
+    const lastDate = lastActivity[0]?.createdAt;
+    const daysSince = lastDate ? Math.round((Date.now() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24)) : 7;
+
+    results.push({
+      tier: "possible",
+      triggerRules: ["ai_coach_inactive"],
+      priorityScore: 40,
+      contactName: member.name || `Team Member #${member.id}`,
+      contactPhone: null,
+      propertyAddress: null,
+      ghlContactId: null,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: null,
+      teamMemberId: member.id,
+      teamMemberName: member.name,
+      assignedTo: null,
+      detectionSource: "system",
+      lastActivityAt: lastDate || null,
+      lastStageChangeAt: null,
+      transcriptExcerpt: `${member.name} hasn't used the AI Coach in ${daysSince} days. Last session: ${lastDate ? new Date(lastDate).toLocaleDateString() : 'unknown'}.`,
+      ...NO_PRICE_DATA,
+    });
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: Consistent Call Weakness ============
+// Detects team members with the same low-scoring category across 5+ calls
+
+async function detectConsistentCallWeakness(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Get all team members
+  const members = await db
+    .select()
+    .from(teamMembers)
+    .where(
+      and(
+        eq(teamMembers.tenantId, tenantId),
+        eq(teamMembers.isActive, "true")
+      )
+    );
+
+  for (const member of members) {
+    // Get recent graded calls for this team member
+    const gradedCalls = await db
+      .select({
+        criteriaScores: callGrades.criteriaScores,
+      })
+      .from(callGrades)
+      .innerJoin(calls, eq(calls.id, callGrades.callId))
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.teamMemberId, member.id),
+          gte(calls.callTimestamp, thirtyDaysAgo)
+        )
+      )
+      .orderBy(desc(calls.callTimestamp))
+      .limit(10);
+
+    if (gradedCalls.length < 5) continue; // Not enough data
+
+    // Aggregate scores by category
+    const categoryScores: Record<string, number[]> = {};
+    for (const { criteriaScores } of gradedCalls) {
+      try {
+        const criteria = typeof criteriaScores === 'string' ? JSON.parse(criteriaScores) : criteriaScores;
+        if (!criteria || typeof criteria !== 'object') continue;
+        for (const [key, val] of Object.entries(criteria)) {
+          const score = typeof val === 'object' && val !== null ? (val as any).score : val;
+          if (typeof score === 'number') {
+            if (!categoryScores[key]) categoryScores[key] = [];
+            categoryScores[key].push(score);
+          }
+        }
+      } catch (e) { /* non-critical */ }
+    }
+
+    // Find categories where the average is below 5/10 across 5+ calls
+    const weakCategories: Array<{ name: string; avg: number; count: number }> = [];
+    for (const [category, scores] of Object.entries(categoryScores)) {
+      if (scores.length < 5) continue;
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      if (avg < 5) {
+        weakCategories.push({ name: category.replace(/_/g, ' '), avg: Math.round(avg * 10) / 10, count: scores.length });
+      }
+    }
+
+    if (weakCategories.length === 0) continue;
+
+    // Sort by worst average
+    weakCategories.sort((a, b) => a.avg - b.avg);
+    const worstCategory = weakCategories[0];
+
+    results.push({
+      tier: "possible",
+      triggerRules: ["consistent_call_weakness"],
+      priorityScore: 45,
+      contactName: member.name || `Team Member #${member.id}`,
+      contactPhone: null,
+      propertyAddress: null,
+      ghlContactId: null,
+      ghlOpportunityId: null,
+      ghlPipelineStageId: null,
+      ghlPipelineStageName: null,
+      relatedCallId: null,
+      teamMemberId: member.id,
+      teamMemberName: member.name,
+      assignedTo: null,
+      detectionSource: "call_grade",
+      lastActivityAt: null,
+      lastStageChangeAt: null,
+      transcriptExcerpt: `${member.name} consistently scores low on "${worstCategory.name}" (avg ${worstCategory.avg}/10 across ${worstCategory.count} calls). ${weakCategories.length > 1 ? `Also weak on: ${weakCategories.slice(1).map(c => `${c.name} (${c.avg}/10)`).join(', ')}.` : ''}`,
+      ...NO_PRICE_DATA,
+    });
+  }
+
+  return results;
+}
+
+// ============ NEW RULE: Bad Temperament ============
+// Uses LLM to detect frustration, rudeness, or unprofessional tone
+
+async function detectBadTemperament(
+  db: any,
+  tenantId: number
+): Promise<DetectedOpportunity[]> {
+  const results: DetectedOpportunity[] = [];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Get recent calls with transcripts — focus on longer calls where tone matters
+  const recentCalls = await db
+    .select()
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.callTimestamp, sevenDaysAgo),
+        sql`${calls.transcript} IS NOT NULL AND ${calls.transcript} != ''`,
+        sql`LENGTH(${calls.transcript}) > 500`,
+        sql`${calls.duration} > 120` // 2+ minute calls
+      )
+    )
+    .orderBy(desc(calls.callTimestamp))
+    .limit(30);
+
+  // Quick pre-filter with regex before sending to LLM
+  const TEMPERAMENT_PREFILTER = [
+    /(?:i\s+(?:don't|do\s+not)\s+(?:care|give\s+a)|whatever\s+(?:man|dude|lady|sir))/i,
+    /(?:that's\s+(?:not\s+my|your)\s+problem|figure\s+it\s+out\s+yourself)/i,
+    /(?:look,?\s+(?:i\s+(?:already|just)|you\s+(?:need|have)\s+to)|listen\s+(?:here|to\s+me))/i,
+    /(?:(?:are\s+you|you)\s+(?:serious|kidding|joking)\s+(?:right\s+now|me))/i,
+    /(?:(?:sigh|ugh|oh\s+my\s+god|come\s+on)\s)/i,
+    /(?:(?:hung\s+up|cut.*off|interrupted|talked\s+over))/i,
+  ];
+
+  for (const call of recentCalls) {
+    if (!call.ghlContactId) continue;
+    const transcript = call.transcript;
+    if (!transcript) continue;
+
+    // Quick pre-filter — only send to LLM if there are potential indicators
+    const hasIndicators = TEMPERAMENT_PREFILTER.some(p => p.test(transcript));
+    if (!hasIndicators) continue;
+
+    try {
+      const response = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `You analyze call transcripts between a real estate acquisition team member and a property seller. Detect if the TEAM MEMBER (not the seller) showed unprofessional behavior: frustration, rudeness, dismissiveness, talking over the seller, impatience, condescension, or aggressive tone. Sellers being rude is normal and expected — only flag issues with OUR team member's behavior. Return JSON.`
+          },
+          {
+            role: "user",
+            content: `Analyze this transcript for unprofessional behavior by the TEAM MEMBER (our rep, not the seller):
+
+${transcript.substring(0, 2000)}
+
+Return JSON: { "detected": true/false, "severity": "mild"|"moderate"|"severe", "description": "brief description of what happened", "excerpt": "the specific problematic exchange" }`
+          }
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "temperament_analysis",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                detected: { type: "boolean" },
+                severity: { type: "string", description: "mild, moderate, or severe" },
+                description: { type: "string" },
+                excerpt: { type: "string" }
+              },
+              required: ["detected", "severity", "description", "excerpt"],
+              additionalProperties: false
+            }
+          }
+        }
+      });
+
+      const content = response.choices?.[0]?.message?.content;
+      if (!content || typeof content !== 'string') continue;
+      const analysis = JSON.parse(content as string);
+      if (!analysis.detected) continue;
+      if (analysis.severity === 'mild') continue; // Only flag moderate+ issues
+
+      results.push({
+        tier: "possible",
+        triggerRules: ["bad_temperament"],
+        priorityScore: analysis.severity === 'severe' ? 70 : 55,
+        contactName: call.contactName,
+        contactPhone: call.contactPhone,
+        propertyAddress: call.propertyAddress,
+        ghlContactId: call.ghlContactId,
+        ghlOpportunityId: null,
+        ghlPipelineStageId: null,
+        ghlPipelineStageName: null,
+        relatedCallId: call.id,
+        teamMemberId: call.teamMemberId,
+        teamMemberName: call.teamMemberName,
+        assignedTo: null,
+        detectionSource: "transcript",
+        lastActivityAt: call.callTimestamp,
+        lastStageChangeAt: null,
+        transcriptExcerpt: `[${analysis.severity.toUpperCase()} tone issue] ${analysis.description}. Excerpt: ${analysis.excerpt.substring(0, 400)}`,
+        ...NO_PRICE_DATA,
+      });
+    } catch (e) {
+      // Non-critical — LLM analysis failed
+    }
+  }
+
+  return results;
+}
+
 // ============ DEDUPLICATION ============
 
 async function isAlreadyFlagged(
@@ -3892,8 +4876,90 @@ async function scanTenant(
     if (filteredDealFellDetections.length > 0) {
       console.log(`[OpportunityDetection] Rule 21: Found ${filteredDealFellDetections.length} deals that fell through`);
     }
+
+    // ===== NEW RULES =====
+
+    // Rule 22: Deal lost on call — seller explicitly said they sold/listed/went with competitor
+    const dealLostOnCallDetections = await detectDealLostOnCall(db, tenantId, creds);
+    const filteredDealLostOnCall = dealLostOnCallDetections.filter(d => !d.ghlContactId || !terminalStageContactIds.has(d.ghlContactId));
+    detections.push(...filteredDealLostOnCall);
+    if (filteredDealLostOnCall.length > 0) {
+      console.log(`[OpportunityDetection] Rule 22: Found ${filteredDealLostOnCall.length} deals lost on call`);
+    }
+
+    // Rule 23: Bad call performance — D/F grade or score below 40
+    const badCallDetections = await detectBadCallPerformance(db, tenantId);
+    detections.push(...badCallDetections);
+    if (badCallDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 23: Found ${badCallDetections.length} bad call performances`);
+    }
+
+    // Rule 24: Extreme motivation — foreclosure, divorce, death, tax sale, etc.
+    const extremeMotivationDetections = await detectExtremeMotivation(db, tenantId);
+    const filteredExtremeMotivation = extremeMotivationDetections.filter(d => !d.ghlContactId || !terminalStageContactIds.has(d.ghlContactId));
+    detections.push(...filteredExtremeMotivation);
+    if (filteredExtremeMotivation.length > 0) {
+      console.log(`[OpportunityDetection] Rule 24: Found ${filteredExtremeMotivation.length} extreme motivation signals`);
+    }
+
+    // Rule 25: Close on price — offer and ask within $30k
+    const closeOnPriceDetections = await detectCloseOnPrice(db, tenantId);
+    const filteredCloseOnPrice = closeOnPriceDetections.filter(d => !d.ghlContactId || !terminalStageContactIds.has(d.ghlContactId));
+    detections.push(...filteredCloseOnPrice);
+    if (filteredCloseOnPrice.length > 0) {
+      console.log(`[OpportunityDetection] Rule 25: Found ${filteredCloseOnPrice.length} close-on-price opportunities`);
+    }
+
+    // Rule 26: Seller re-engagement — follow-up lead came back after 30+ days
+    const reEngagementDetections = await detectSellerReEngagement(db, tenantId, creds);
+    detections.push(...reEngagementDetections);
+    if (reEngagementDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 26: Found ${reEngagementDetections.length} seller re-engagements`);
+    }
+
+    // Rule 27: Seller texted number — proactively shared contact info via SMS
+    const sellerTextedDetections = await detectSellerTextedNumber(db, tenantId, creds);
+    detections.push(...sellerTextedDetections);
+    if (sellerTextedDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 27: Found ${sellerTextedDetections.length} sellers who texted contact info`);
+    }
+
+    // Rule 28: Seller out of agreement — listing expired, agent contract ended, etc.
+    const outOfAgreementDetections = await detectSellerOutOfAgreement(db, tenantId);
+    const filteredOutOfAgreement = outOfAgreementDetections.filter(d => !d.ghlContactId || !terminalStageContactIds.has(d.ghlContactId));
+    detections.push(...filteredOutOfAgreement);
+    if (filteredOutOfAgreement.length > 0) {
+      console.log(`[OpportunityDetection] Rule 28: Found ${filteredOutOfAgreement.length} sellers out of agreement`);
+    }
+
+    // Rule 29: Bad temperament — unprofessional tone detected on call
+    const badTemperamentDetections = await detectBadTemperament(db, tenantId);
+    detections.push(...badTemperamentDetections);
+    if (badTemperamentDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 29: Found ${badTemperamentDetections.length} bad temperament signals`);
+    }
   } catch (transcriptError) {
     console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
+    result.errors++;
+  }
+
+  // ========== PHASE 3.5B: TEAM-LEVEL DETECTION (not contact-specific) ==========
+  try {
+    // Rule 30: AI coach inactive — team member hasn't used coach in 7+ days
+    const coachInactiveDetections = await detectAICoachInactive(db, tenantId);
+    detections.push(...coachInactiveDetections);
+    if (coachInactiveDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 30: Found ${coachInactiveDetections.length} inactive AI coach users`);
+    }
+
+    // Rule 31: Consistent call weakness — same category low across 5+ calls
+    const weaknessDetections = await detectConsistentCallWeakness(db, tenantId);
+    detections.push(...weaknessDetections);
+    if (weaknessDetections.length > 0) {
+      console.log(`[OpportunityDetection] Rule 31: Found ${weaknessDetections.length} consistent call weaknesses`);
+    }
+  } catch (teamError) {
+    console.error(`[OpportunityDetection] Team-level detection error:`, teamError);
     result.errors++;
   }
 

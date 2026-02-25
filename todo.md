@@ -3045,3 +3045,16 @@
 - [x] Final browser verification: Call Detail page layout and tabs confirmed
 - [x] Fix player level title inconsistency: Team roster card shows "EPIC" but profile/detail shows "PLAYMAKER" — standardize to PLAYMAKER style
 - [x] Fix badge count mismatch: Team roster card shows 3 badges for Daniel but profile shows 4 earned badges — ensure consistent count
+- [x] Signals page full audit and overhaul
+- [x] Redefine "Worth a Look" signals: subtle opportunities, possible deals, price negotiation potential, interesting seller situations
+- [x] Redefine "At Risk" signals: red flags — slow response, missed appointments, SOP violations, bad offer calls, not reaching leads quickly
+- [x] Redefine "Missed" signals: major losses — house sold to competitor, seller went elsewhere, failed to close deals, drastic missed opportunities
+- [x] Improve signal detection backend logic for all three categories
+- [x] Improve Signals page frontend presentation
+- [x] Research wholesaling real estate signals, red flags, and missed opportunity patterns
+- [x] Rewrite signal detection LLM prompts with wholesaling domain expertise
+- [x] Rewrite signal classification logic for dramatically improved accuracy
+- [x] Research wholesaling real estate signals, red flags, and missed opportunity patterns
+- [x] Rewrite ALL signal detection LLM prompts with wholesaling domain expertise (Worth a Look, At Risk, Missed)
+- [x] Rewrite ALL signal classification logic for dramatically improved accuracy across all three categories
+- [x] Update Signals page frontend for all three sections

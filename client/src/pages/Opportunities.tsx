@@ -54,7 +54,7 @@ const tierConfig = {
     bgColor: "bg-red-500/10",
     borderColor: "border-red-500/30",
     badgeVariant: "destructive" as const,
-    description: "Deals slipping through the cracks — act now",
+    description: "Deals we lost — seller sold, went with competitor, or we couldn't close",
   },
   warning: {
     label: "At Risk",
@@ -63,7 +63,7 @@ const tierConfig = {
     bgColor: "bg-amber-500/10",
     borderColor: "border-amber-500/30",
     badgeVariant: "secondary" as const,
-    description: "Leads going cold — needs attention within 24h",
+    description: "Red flags in process — SOP failures, missed appointments, bad calls",
   },
   possible: {
     label: "Worth a Look",
@@ -72,7 +72,7 @@ const tierConfig = {
     bgColor: "bg-blue-500/10",
     borderColor: "border-blue-500/30",
     badgeVariant: "outline" as const,
-    description: "Potential deals that deserve a second look",
+    description: "Subtle opportunities, team insights, and possible deals worth investigating",
   },
 };
 
@@ -192,6 +192,62 @@ const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string 
     icon: Ban,
     shortLabel: "Deal Fell Through",
   },
+  // ===== NEW RULES =====
+  deal_lost_on_call: {
+    label: "Deal Lost — Seller Confirmed on Call",
+    icon: XCircle,
+    shortLabel: "Deal Lost (Call)",
+  },
+  bad_call_performance: {
+    label: "Very Bad Call — Grade D/F",
+    icon: TrendingDown,
+    shortLabel: "Bad Call",
+  },
+  missed_appointment: {
+    label: "Appointment Missed — No Activity",
+    icon: CalendarX,
+    shortLabel: "Missed Apt",
+  },
+  extreme_motivation: {
+    label: "Extreme Seller Motivation Detected",
+    icon: Flame,
+    shortLabel: "High Motivation",
+  },
+  close_on_price: {
+    label: "Close on Price — Gap Under $30K",
+    icon: DollarSign,
+    shortLabel: "Close on Price",
+  },
+  seller_re_engagement: {
+    label: "Seller Came Back After Long Silence",
+    icon: Repeat,
+    shortLabel: "Re-engagement",
+  },
+  seller_texted_number: {
+    label: "Seller Shared Contact Info via SMS",
+    icon: MessageSquare,
+    shortLabel: "Seller Texted",
+  },
+  seller_out_of_agreement: {
+    label: "Seller Just Got Out of Agreement",
+    icon: Ban,
+    shortLabel: "Out of Agreement",
+  },
+  ai_coach_inactive: {
+    label: "Team Member Not Using AI Coach",
+    icon: User,
+    shortLabel: "Coach Inactive",
+  },
+  consistent_call_weakness: {
+    label: "Consistent Weakness Across Calls",
+    icon: TrendingDown,
+    shortLabel: "Weak Pattern",
+  },
+  bad_temperament: {
+    label: "Unprofessional Tone on Call",
+    icon: AlertCircle,
+    shortLabel: "Bad Tone",
+  },
 };
 
 const sourceConfig: Record<string, { label: string; icon: any; color: string }> = {
@@ -199,6 +255,8 @@ const sourceConfig: Record<string, { label: string; icon: any; color: string }> 
   conversation: { label: "Conversation", icon: MessageSquare, color: "text-blue-500" },
   transcript: { label: "Transcript", icon: FileText, color: "text-green-500" },
   hybrid: { label: "Pipeline + Transcript", icon: Layers, color: "text-orange-500" },
+  call_grade: { label: "Call Grade", icon: TrendingDown, color: "text-red-500" },
+  system: { label: "System", icon: AlertCircle, color: "text-gray-500" },
 };
 
 export default function Opportunities() {
@@ -291,7 +349,7 @@ export default function Opportunities() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">Pipeline Signals</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--obs-text-tertiary)' }}>
-            Deals your team might be missing — detected from pipeline activity, conversations, and call data
+            Opportunities, red flags, and losses — detected from pipeline activity, conversations, call grades, and team patterns
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -531,20 +589,24 @@ export default function Opportunities() {
                               <div className={`mt-2 rounded-lg p-2.5 ${
                                 (opp as any).tier === "possible"
                                   ? "bg-blue-500/5 border border-blue-500/20"
-                                  : "bg-amber-500/5 border border-amber-500/20"
+                                  : (opp as any).tier === "missed"
+                                    ? "bg-red-500/5 border border-red-500/20"
+                                    : "bg-amber-500/5 border border-amber-500/20"
                               }`}>
                                 <p className={`text-[11px] font-semibold mb-1.5 flex items-center gap-1 ${
                                   (opp as any).tier === "possible"
                                     ? "text-blue-600 dark:text-blue-400"
-                                    : "text-amber-600 dark:text-amber-400"
+                                    : (opp as any).tier === "missed"
+                                      ? "text-red-600 dark:text-red-400"
+                                      : "text-amber-600 dark:text-amber-400"
                                 }`}>
                                   <Eye className="h-3 w-3" />
-                                  {(opp as any).tier === "possible" ? "Why This Is Worth a Look" : "What They Missed"}
+                                  {(opp as any).tier === "possible" ? "Why This Is Worth a Look" : (opp as any).tier === "missed" ? "What Happened" : "Red Flags"}
                                 </p>
                                 <ul className="space-y-1">
                                   {((opp as any).missedItems as string[]).map((item: string, idx: number) => (
                                     <li key={idx} className="text-xs text-foreground/70 flex items-start gap-1.5">
-                                      <span className={`mt-0.5 shrink-0 ${(opp as any).tier === "possible" ? "text-blue-500" : "text-amber-500"}`}>•</span>
+                                      <span className={`mt-0.5 shrink-0 ${(opp as any).tier === "possible" ? "text-blue-500" : (opp as any).tier === "missed" ? "text-red-500" : "text-amber-500"}`}>•</span>
                                       <span>{item}</span>
                                     </li>
                                   ))}
