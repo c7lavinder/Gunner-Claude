@@ -278,7 +278,7 @@ export default function SuperAdmin() {
       case "past_due":
         return <Badge className="bg-red-100 text-red-700">Past Due</Badge>;
       case "canceled":
-        return <Badge className="bg-gray-100 text-gray-700">Canceled</Badge>;
+        return <Badge className="bg-muted text-muted-foreground">Canceled</Badge>;
       default:
         return <Badge variant="outline">{status || "Unknown"}</Badge>;
     }
@@ -405,7 +405,7 @@ export default function SuperAdmin() {
           <button className={`obs-role-tab ${activeTab === "emails" ? "active" : ""}`} onClick={() => setActiveTab("emails")}>Emails</button>
         </div>
 
-        {activeTab === "overview" && (<div className="space-y-6">
+        {activeTab === "overview" && (<div key="overview" className="space-y-6 obs-fade-in">
           {/* Key Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="obs-panel">
@@ -487,7 +487,7 @@ export default function SuperAdmin() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Churned</span>
-                      <Badge className="bg-gray-100 text-gray-700">{metrics?.churnedTenants || 0}</Badge>
+                      <Badge className="bg-muted text-muted-foreground">{metrics?.churnedTenants || 0}</Badge>
                     </div>
                   </div>
                 )}
@@ -521,7 +521,7 @@ export default function SuperAdmin() {
           </div>
         </div>)}
 
-        {activeTab === "tenants" && (<div className="space-y-4">
+        {activeTab === "tenants" && (<div key="tenants" className="space-y-4 obs-fade-in">
           {/* Search + New Tenant */}
           <div className="flex items-center gap-4">
             <div className="relative flex-1 max-w-sm">
@@ -629,7 +629,7 @@ export default function SuperAdmin() {
           </div>
         </div>)}
 
-        {activeTab === "revenue" && (<div className="space-y-4">
+        {activeTab === "revenue" && (<div key="revenue" className="space-y-4 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title">Revenue by Plan</h3>
@@ -670,7 +670,7 @@ export default function SuperAdmin() {
           </div>
         </div>)}
 
-        {activeTab === "activity" && (<div className="space-y-4">
+        {activeTab === "activity" && (<div key="activity" className="space-y-4 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title flex items-center gap-2">
@@ -720,7 +720,7 @@ export default function SuperAdmin() {
           </div>
         </div>)}
 
-        {activeTab === "churn-risk" && (<div className="space-y-4">
+        {activeTab === "churn-risk" && (<div key="churn-risk" className="space-y-4 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title flex items-center gap-2">
@@ -853,7 +853,7 @@ export default function SuperAdmin() {
           </div>
         </div>)}
 
-        {activeTab === "outreach-history" && (<div className="space-y-4">
+        {activeTab === "outreach-history" && (<div key="outreach-history" className="space-y-4 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title flex items-center gap-2">
@@ -943,7 +943,7 @@ export default function SuperAdmin() {
         </div>)}
 
         {/* Plans Management Tab */}
-        {activeTab === "plans" && (<div className="space-y-6">
+        {activeTab === "plans" && (<div key="plans" className="space-y-6 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
@@ -994,7 +994,7 @@ export default function SuperAdmin() {
                   {plans.map((plan) => (
                     <div
                       key={plan.id}
-                      className={`border rounded-lg p-4 ${plan.isActive === "false" ? "opacity-50 bg-gray-50" : ""} ${plan.isPopular === "true" ? "border-primary ring-1 ring-primary" : ""}`}
+                      className={`border rounded-lg p-4 ${plan.isActive === "false" ? "opacity-50 bg-muted" : ""} ${plan.isPopular === "true" ? "border-primary ring-1 ring-primary" : ""}`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -1290,7 +1290,7 @@ export default function SuperAdmin() {
           )}
         </div>)}
 
-        {activeTab === "alerts" && (<div className="space-y-4">
+        {activeTab === "alerts" && (<div key="alerts" className="space-y-4 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title flex items-center gap-2">
@@ -1349,7 +1349,7 @@ export default function SuperAdmin() {
           </div>
         </div>)}
 
-        {activeTab === "emails" && (<div className="space-y-6">
+        {activeTab === "emails" && (<div key="emails" className="space-y-6 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
@@ -1458,7 +1458,7 @@ export default function SuperAdmin() {
         </div>)}
 
         {/* Tenant Detail Tab (hidden from tab bar, accessed via Manage button) */}
-        {activeTab === "tenant-detail" && (<div className="space-y-4">
+        {activeTab === "tenant-detail" && (<div key="tenant-detail" className="space-y-4 obs-fade-in">
           {selectedTenantId && (
             <TenantDetailPanel
               tenantId={selectedTenantId}

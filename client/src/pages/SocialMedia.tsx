@@ -37,7 +37,7 @@ const platformLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-800",
+  draft: "bg-muted text-muted-foreground",
   scheduled: "bg-blue-100 text-blue-800",
   published: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
@@ -328,7 +328,7 @@ export default function SocialMedia() {
         </div>
 
         {/* Posts Tab */}
-        {socialTab === "posts" && (<div className="space-y-4">
+        {socialTab === "posts" && (<div key="posts" className="space-y-4 obs-fade-in">
           <div className="flex gap-2">
             <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
               <DialogTrigger asChild>
@@ -543,7 +543,7 @@ export default function SocialMedia() {
         </div>)}
 
         {/* Calendar Tab */}
-        {socialTab === "calendar" && (<div className="space-y-4">
+        {socialTab === "calendar" && (<div key="calendar" className="space-y-4 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
@@ -606,7 +606,7 @@ export default function SocialMedia() {
         </div>)}
 
         {/* Ideas Tab (Creator only) */}
-        {socialTab === "ideas" && (<div className="space-y-4">
+        {socialTab === "ideas" && (<div key="ideas" className="space-y-4 obs-fade-in">
             <div className="flex gap-2">
               <Dialog open={isCreateIdeaOpen} onOpenChange={setIsCreateIdeaOpen}>
                 <DialogTrigger asChild>
@@ -710,7 +710,7 @@ export default function SocialMedia() {
           </div>)}
 
         {/* Branding Tab (Brand only) */}
-        {socialTab === "branding" && (<div className="space-y-6">
+        {socialTab === "branding" && (<div key="branding" className="space-y-6 obs-fade-in">
             {/* Brand Profile Section */}
             <div className="obs-panel">
               <div style={{marginBottom: 16}}>

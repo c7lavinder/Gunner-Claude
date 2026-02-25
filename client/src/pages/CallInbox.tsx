@@ -2276,7 +2276,7 @@ export default function CallInbox() {
             </div>
 
             {/* === TAB: All Calls (paginated, filtered) === */}
-            {activeTab === "calls" && (<div>
+            {activeTab === "calls" && (<div key="calls" className="obs-fade-in">
               <div className="grid gap-4 lg:grid-cols-3">
               {/* AI Coach - inline in first tab */}
               <div className="lg:col-span-1 order-first lg:order-last">
@@ -2360,7 +2360,7 @@ export default function CallInbox() {
             </div>)}
 
             {/* === TAB: Needs Review (pending + failed + flagged feedback) === */}
-            {activeTab === "review" && (<div className="space-y-6">
+            {activeTab === "review" && (<div key="review" className="space-y-6 obs-fade-in">
               {/* Stuck calls warning — includes pending calls stuck for >1 hour */}
               {pendingCalls.some((c: any) => 
                 (c.status === 'transcribing' || c.status === 'grading' || c.status === 'classifying' || c.status === 'pending') && 
@@ -2545,7 +2545,7 @@ export default function CallInbox() {
             </div>)}
 
             {/* === TAB: Skipped === */}
-            {activeTab === "skipped" && (<div className="space-y-4">
+            {activeTab === "skipped" && (<div key="skipped" className="space-y-4 obs-fade-in">
               {skippedCalls.length > 0 ? (
                 <div className="space-y-4">
                   {skippedCalls.map((item: any) => (

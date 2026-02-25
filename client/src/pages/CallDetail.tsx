@@ -568,7 +568,7 @@ export default function CallDetail() {
                     const outcome = (call as any).callOutcome as string;
                     const config = outcomeColors[outcome];
                     return (
-                      <Badge variant="outline" className={config?.color || 'bg-gray-100 text-gray-600'}>
+                      <Badge variant="outline" className={config?.color || 'bg-muted text-muted-foreground'}>
                         {config?.label || outcome.replace(/_/g, ' ')}
                       </Badge>
                     );
@@ -649,7 +649,7 @@ export default function CallDetail() {
                 </button>
               </div>
 
-              {detailTab === "coaching" && (<div className="space-y-4 mt-4">
+              {detailTab === "coaching" && (<div key="coaching" className="space-y-4 mt-4 obs-fade-in">
                 {/* Summary */}
                 {grade?.summary && (
                   <div className="obs-panel">
@@ -758,7 +758,7 @@ export default function CallDetail() {
                 )}
               </div>)}
 
-              {detailTab === "criteria" && (<div className="mt-4">
+              {detailTab === "criteria" && (<div key="criteria" className="mt-4 obs-fade-in">
                 <div className="grid gap-4 sm:grid-cols-2">
                   {criteriaScores.map((criteria, i) => (
                     <CriteriaCard key={i} criteria={criteria} />
@@ -766,7 +766,7 @@ export default function CallDetail() {
                 </div>
               </div>)}
 
-              {detailTab === "transcript" && (<div className="mt-4">
+              {detailTab === "transcript" && (<div key="transcript" className="mt-4 obs-fade-in">
                 <div className="obs-panel">
                   <div style={{marginBottom: 16}}>
                     <h3 className="obs-section-title text-sm">Call Transcript</h3>
@@ -787,7 +787,7 @@ export default function CallDetail() {
                   </div>
                 </div>
               </div>)}
-              {detailTab === "next-steps" && (<div className="mt-4">
+              {detailTab === "next-steps" && (<div key="next-steps" className="mt-4 obs-fade-in">
                 <NextStepsTab
                   callId={callId}
                   contactName={call.contactName || call.contactPhone || "Unknown"}

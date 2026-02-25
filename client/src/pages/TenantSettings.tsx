@@ -595,7 +595,7 @@ export default function TenantSettings() {
         </div>
 
         {/* General Settings */}
-        {activeTab === "general" && (<div className="space-y-6">
+        {activeTab === "general" && (<div key="general" className="space-y-6 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title">Company Information</h3>
@@ -641,7 +641,7 @@ export default function TenantSettings() {
         </div>)}
 
         {/* Team Management */}
-        {activeTab === "team" && (<div className="space-y-6">
+        {activeTab === "team" && (<div key="team" className="space-y-6 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title">Invite Team Members</h3>
@@ -865,7 +865,7 @@ export default function TenantSettings() {
         </div>)}
 
         {/* Roles & Assignments */}
-        {activeTab === "roles" && (<div className="space-y-6">
+        {activeTab === "roles" && (<div key="roles" className="space-y-6 obs-fade-in">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">Roles & Assignments</h2>
@@ -1267,7 +1267,7 @@ export default function TenantSettings() {
         </div>)}
 
         {/* Billing */}
-        {activeTab === "billing" && (<div className="space-y-6">
+        {activeTab === "billing" && (<div key="billing" className="space-y-6 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title">Current Plan</h3>
@@ -1290,7 +1290,7 @@ export default function TenantSettings() {
                         ? "bg-green-100 text-green-700" 
                         : settings?.subscriptionTier === 'trial'
                         ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-700"
+                        : "bg-muted text-muted-foreground"
                     }>
                       {settings?.subscriptionStatus === 'active' ? 'Active' : 
                        settings?.subscriptionTier === 'trial' ? 'Trial' : 
@@ -1605,7 +1605,7 @@ export default function TenantSettings() {
         </div>)}
 
         {/* CRM Integrations */}
-        {activeTab === "integrations" && (<div className="space-y-6">
+        {activeTab === "integrations" && (<div key="integrations" className="space-y-6 obs-fade-in">
           {/* CRM Integration Card */}
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
@@ -2078,7 +2078,7 @@ export default function TenantSettings() {
         </div>)}
 
         {/* Grading Rubrics */}
-        {activeTab === "rubrics" && (<div className="space-y-6">
+        {activeTab === "rubrics" && (<div key="rubrics" className="space-y-6 obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <h3 className="obs-section-title">Grading Rubrics</h3>

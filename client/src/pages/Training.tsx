@@ -687,7 +687,7 @@ function TeamTrainingContent() {
           <button className={`obs-role-tab ${mainTab === "agenda" ? "active" : ""}`} onClick={() => setMainTab("agenda")}>Meeting Agenda</button>
         </div>
 
-        {mainTab === "overview" && (<div className="space-y-6">
+        {mainTab === "overview" && (<div key="overview" className="space-y-6 obs-fade-in">
           <div className="grid gap-6 lg:grid-cols-2">
             <TeamIssuesSection roleFilter={selectedRole} />
             <TeamWinsSection roleFilter={selectedRole} />
@@ -695,7 +695,7 @@ function TeamTrainingContent() {
           <TeamSkillsSection roleFilter={selectedRole} />
         </div>)}
 
-        {mainTab === "agenda" && (<div>
+        {mainTab === "agenda" && (<div key="agenda" className="obs-fade-in">
           <TeamAgendaSection roleFilter={selectedRole} />
         </div>)}
       </div>
@@ -1081,12 +1081,12 @@ export default function Training() {
         </div>
 
         {/* Team Training Tab */}
-        {mainTab === "team" && (<div className="space-y-6">
+        {mainTab === "team" && (<div key="team" className="space-y-6 obs-fade-in">
           <TeamTrainingContent />
         </div>)}
 
         {/* Training Materials Tab */}
-        {mainTab === "materials" && (<div className="space-y-4">
+        {mainTab === "materials" && (<div key="materials" className="space-y-4 obs-fade-in">
           {isLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
@@ -1131,7 +1131,7 @@ export default function Training() {
                 })}
               </div>
 
-              {materialCat === "all" && (<div className="space-y-4">
+              {materialCat === "all" && (<div key="all" className="space-y-4 obs-fade-in">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {materials?.map((material) => (
                     <MaterialCard
@@ -1165,7 +1165,7 @@ export default function Training() {
         </div>)}
 
         {/* Methodology Tab */}
-        {mainTab === "methodology" && (<div className="space-y-6">
+        {mainTab === "methodology" && (<div key="methodology" className="space-y-6 obs-fade-in">
           <MethodologyTab 
             rubrics={rubrics}
             rubricsLoading={rubricsLoading}

@@ -218,7 +218,7 @@ export default function Leaderboard() {
           </button>
         </div>
 
-        {leaderTab === "xp" && (<div className="mt-6">
+        {leaderTab === "xp" && (<div key="xp" className="mt-6 obs-fade-in">
           {gamificationLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
@@ -248,7 +248,7 @@ export default function Leaderboard() {
           )}
         </div>)}
 
-        {leaderTab === "score" && (<div className="mt-6">
+        {leaderTab === "score" && (<div key="score" className="mt-6 obs-fade-in">
           {scoreLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (

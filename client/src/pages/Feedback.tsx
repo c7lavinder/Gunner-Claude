@@ -131,7 +131,7 @@ export default function Feedback() {
             </button>
           </div>
 
-          {feedbackTab === "pending" && (<div className="space-y-4">
+          {feedbackTab === "pending" && (<div key="pending" className="space-y-4 obs-fade-in">
             {pendingFeedback.length === 0 ? (
               <div className="obs-panel">
                 <div className="py-8 text-center text-muted-foreground">
@@ -150,7 +150,7 @@ export default function Feedback() {
             )}
           </div>)}
 
-          {feedbackTab === "reviewed" && (<div className="space-y-4">
+          {feedbackTab === "reviewed" && (<div key="reviewed" className="space-y-4 obs-fade-in">
             {reviewedFeedback.length === 0 ? (
               <div className="obs-panel">
                 <div className="py-8 text-center text-muted-foreground">
@@ -169,7 +169,7 @@ export default function Feedback() {
             )}
           </div>)}
 
-          {feedbackTab === "incorporated" && (<div className="space-y-4">
+          {feedbackTab === "incorporated" && (<div key="incorporated" className="space-y-4 obs-fade-in">
             {incorporatedFeedback.length === 0 ? (
               <div className="obs-panel">
                 <div className="py-8 text-center text-muted-foreground">
@@ -183,7 +183,7 @@ export default function Feedback() {
             )}
           </div>)}
 
-          {feedbackTab === "dismissed" && (<div className="space-y-4">
+          {feedbackTab === "dismissed" && (<div key="dismissed" className="space-y-4 obs-fade-in">
             {dismissedFeedback.length === 0 ? (
               <div className="obs-panel">
                 <div className="py-8 text-center text-muted-foreground">

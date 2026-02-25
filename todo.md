@@ -3030,3 +3030,16 @@
 - [x] Audit: Landing page - hero, features, pricing sections
 - [x] Audit: Onboarding flow - all steps
 - [x] Fix all issues found during visual audit (zero issues found)
+
+## Fixes & Enhancements (Round 3)
+- [x] Fix Signals page stat card orange border/highlight on selected card
+- [x] Fix Signals page tab styling (Missed/At Risk/Worth a Look) inconsistency
+- [x] Fix dark mode across all pages — ensure obs- classes have proper dark variants
+- [x] Add micro-interactions: hover animations on obs-panel cards
+- [x] Add micro-interactions: smooth tab transitions (fade-in on tab switch)
+- [x] Add micro-interactions: button hover/press effects for premium feel
+- [x] Final browser verification: Dark mode across all pages (Dashboard, Call History, Analytics, Signals, Training, Team, Settings, Platform Admin)
+- [x] Final browser verification: Signals stat card fix confirmed (subtle ring accent, no thick orange border)
+- [x] Final browser verification: Micro-interactions confirmed (obs-panel hover, obs-stagger, obs-fade-in, button press, table row hover, grade badge hover)
+- [x] Final browser verification: Light mode across all pages confirmed working
+- [x] Final browser verification: Call Detail page layout and tabs confirmed

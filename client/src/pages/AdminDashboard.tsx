@@ -242,7 +242,7 @@ export default function AdminDashboard() {
 
   const getTierBadge = (tier: string) => {
     const colors: Record<string, string> = {
-      trial: "bg-gray-100 text-gray-800",
+      trial: "bg-muted text-muted-foreground",
       starter: "bg-blue-100 text-blue-800",
       growth: "bg-green-100 text-green-800",
       scale: "bg-purple-100 text-purple-800",
@@ -398,7 +398,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tenants Tab */}
-        {mainTab === "tenants" && (<div>
+        {mainTab === "tenants" && (<div key="tenants" className="obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
@@ -498,7 +498,7 @@ export default function AdminDashboard() {
                                     <button className={`obs-role-tab ${defaultTab === "users" ? "active" : ""}`} onClick={() => setDefaultTab("users")}>Users</button>
                                     <button className={`obs-role-tab ${defaultTab === "settings" ? "active" : ""}`} onClick={() => setDefaultTab("settings")}>Settings</button>
                                   </div>
-                                  {defaultTab === "overview" && (<div className="space-y-4">
+                                  {defaultTab === "overview" && (<div key="overview" className="space-y-4 obs-fade-in">
                                     <div className="grid grid-cols-2 gap-4">
                                       <div>
                                         <label className="text-sm font-medium">Company Name</label>
@@ -552,7 +552,7 @@ export default function AdminDashboard() {
                                       </div>
                                     </div>
                                   </div>)}
-                                  {defaultTab === "users" && (<div>
+                                  {defaultTab === "users" && (<div key="users" className="obs-fade-in">
                                     <table className="obs-table">
                                       <thead>
                                         <tr>
@@ -580,7 +580,7 @@ export default function AdminDashboard() {
                                       </tbody>
                                     </table>
                                   </div>)}
-                                  {defaultTab === "settings" && (<div className="space-y-4">
+                                  {defaultTab === "settings" && (<div key="settings" className="space-y-4 obs-fade-in">
                                     <div className="space-y-4">
                                       <div>
                                         <label className="text-sm font-medium">Subscription Tier</label>
@@ -704,7 +704,7 @@ export default function AdminDashboard() {
         </div>)}
 
         {/* Plans Tab */}
-        {mainTab === "plans" && (<div>
+        {mainTab === "plans" && (<div key="plans" className="obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
@@ -1086,7 +1086,7 @@ export default function AdminDashboard() {
         </div>)}
 
         {/* Usage Tab */}
-        {mainTab === "usage" && (<div>
+        {mainTab === "usage" && (<div key="usage" className="obs-fade-in">
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">

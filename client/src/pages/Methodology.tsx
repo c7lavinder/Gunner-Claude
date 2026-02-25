@@ -49,7 +49,7 @@ export default function Methodology() {
           </button>
         </div>
 
-        {methodTab === "lead_manager" && (<div className="space-y-6">
+        {methodTab === "lead_manager" && (<div key="lead_manager" className="space-y-6 obs-fade-in">
           <RubricDisplay 
             rubric={rubrics?.leadManager} 
             context={qualificationContext}
@@ -58,7 +58,7 @@ export default function Methodology() {
           />
         </div>)}
 
-        {methodTab === "acquisition_manager" && (<div className="space-y-6">
+        {methodTab === "acquisition_manager" && (<div key="acquisition_manager" className="space-y-6 obs-fade-in">
           <RubricDisplay 
             rubric={rubrics?.acquisitionManager} 
             context={offerContext}

@@ -367,7 +367,7 @@ function ActionCard({
     label: action.actionType.replace(/_/g, " "),
     icon: <ListTodo className="h-4 w-4" />,
     color: "text-gray-600",
-    bgColor: "bg-gray-50",
+    bgColor: "bg-muted",
     borderColor: "border-l-gray-500",
   };
 

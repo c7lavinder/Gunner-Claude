@@ -316,17 +316,17 @@ export default function Opportunities() {
       </div>
 
       {/* Tier Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 obs-stagger">
         {(["missed", "warning", "possible"] as const).map(tier => {
           const config = tierConfig[tier];
           const count = counts?.[tier] || 0;
           const Icon = config.icon;
           return (
             <div key={tier}
-              className={`cursor-pointer transition-all hover:shadow-md ${activeTab === tier ? `${config.borderColor} border-2` : ""}`}
+              className={`obs-panel cursor-pointer transition-all duration-200 hover:shadow-md ${activeTab === tier ? "ring-2 ring-[var(--obs-accent)] shadow-md" : ""}`}
               onClick={() => setActiveTab(activeTab === tier ? "all" : tier)}
             >
-              <div className="pt-6">
+              <div className="p-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${config.bgColor}`}>

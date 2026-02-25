@@ -619,7 +619,7 @@ export default function Home() {
       </div>
 
       {/* ─── 6 Stat Cards ─── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 obs-stagger">
         <StatCard title="Calls Made" value={stats?.totalCalls ?? 0} icon={Phone} loading={statsLoading} priorValue={stats?.priorPeriod?.totalCalls} />
         <StatCard title="Conversations" value={stats?.gradedCalls ?? 0} icon={MessageSquare} loading={statsLoading} priorValue={stats?.priorPeriod?.gradedCalls} />
         <StatCard title="Leads Generated" value={stats?.leadsGenerated ?? 0} icon={Target} loading={statsLoading} priorValue={stats?.priorPeriod?.leadsGenerated} />

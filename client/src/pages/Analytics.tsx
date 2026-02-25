@@ -94,7 +94,7 @@ export default function Analytics() {
       </div>
 
       {/* ═══ EXECUTIVE KPI ROW ═══ */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 obs-stagger">
         {statsLoading
           ? Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="obs-stat-card">

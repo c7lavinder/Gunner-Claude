@@ -41,7 +41,7 @@ export default function VerifyEmail() {
   }, [token]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="obs-panel w-full max-w-md">
         <div className="text-center" style={{marginBottom: 16}}>
           <div className="mx-auto mb-4">

@@ -608,7 +608,7 @@ function buildActionSummary(actionType: string, contactName?: string, payload?: 
 
 // Action item component
 function ActionItem({ item }: { item: any }) {
-  const actionConfig = ACTION_TYPE_LABELS[item.actionType] || { label: item.actionType, icon: Zap, color: "bg-gray-100 text-gray-700" };
+  const actionConfig = ACTION_TYPE_LABELS[item.actionType] || { label: item.actionType, icon: Zap, color: "bg-muted text-muted-foreground" };
   const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
   const ActionIcon = actionConfig.icon;
   const StatusIcon = statusConfig.icon;
