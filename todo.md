@@ -3081,3 +3081,8 @@
 - [x] Display Follow-Up Scheduled badge in CallDetail page
 - [x] Display Follow-Up indicator in CallInbox page
 - [x] Fix updateCallOutcome enum to include offer_rejected
+
+## Watch Demo Video Modal (Feb 25, 2026)
+- [x] Build video modal component for landing page "Watch Demo" button
+- [x] Add placeholder state for when no video URL is configured yet
+- [x] Ensure demo account shows tenant admin view (not super admin pages) — demo already uses admin role, not super admin

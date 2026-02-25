@@ -3,7 +3,14 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
-import { Check, Phone, BarChart3, Trophy, Brain, Users, Zap, ArrowRight, Star } from "lucide-react";
+import { Check, Phone, BarChart3, Trophy, Brain, Users, Zap, ArrowRight, Star, Play, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const features = [
   {
@@ -83,6 +90,11 @@ const testimonials = [
 
 export default function Landing() {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [showDemoVideo, setShowDemoVideo] = useState(false);
+  
+  // Replace this URL with your actual demo video when ready
+  // Supports YouTube, Loom, Vimeo embed URLs, or direct video file URLs
+  const demoVideoUrl = ""; // e.g. "https://www.youtube.com/embed/YOUR_VIDEO_ID"
   
   // Fetch plans from database
   const { data: dbPlans } = trpc.tenant.getPlans.useQuery();
@@ -170,8 +182,8 @@ export default function Landing() {
                   Start {trialDays}-Day Free Trial <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline">
-                Watch Demo
+              <Button size="lg" variant="outline" className="gap-2" onClick={() => setShowDemoVideo(true)}>
+                <Play className="h-4 w-4" /> Watch Demo
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mt-4">
@@ -368,6 +380,46 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {/* Watch Demo Video Modal */}
+      <Dialog open={showDemoVideo} onOpenChange={setShowDemoVideo}>
+        <DialogContent className="sm:max-w-4xl p-0 overflow-hidden bg-black border-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Watch Gunner Demo</DialogTitle>
+            <DialogDescription>See how Gunner helps your team close more deals</DialogDescription>
+          </DialogHeader>
+          {demoVideoUrl ? (
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                src={demoVideoUrl}
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                title="Gunner Demo Video"
+              />
+            </div>
+          ) : (
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-800">
+                <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mb-6">
+                  <Play className="h-10 w-10 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Demo Video Coming Soon</h3>
+                <p className="text-zinc-400 text-center max-w-md px-4 mb-6">
+                  We're putting together a walkthrough showing how Gunner grades calls, coaches your team, and tracks performance.
+                </p>
+                <div className="flex gap-3">
+                  <Link href="/signup">
+                    <Button size="lg" className="gap-2" onClick={() => setShowDemoVideo(false)}>
+                      Start {trialDays}-Day Free Trial <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
