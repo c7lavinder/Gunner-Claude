@@ -2976,3 +2976,4 @@
 - [x] Add color-coded outcome badges (Offer Rejected=red, Offer Made=blue/green, etc.) in call inbox and call detail
 - [x] Auto-select assignee for new tasks to the team member who made the call
 - [x] Auto-select assignee for update tasks to the task's current assignee
+- [x] Manually added actions should auto-open in edit mode with all editable fields visible

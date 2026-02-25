@@ -287,6 +287,8 @@ function ActionCard({
   isAiEditing,
   ghlData,
   teamMemberName,
+  autoEdit,
+  onAutoEditConsumed,
 }: {
   action: NextStepAction;
   onPush: (action: NextStepAction) => void;
@@ -298,11 +300,21 @@ function ActionCard({
   isAiEditing: boolean;
   ghlData: ReturnType<typeof useGhlDropdownData>;
   teamMemberName?: string | null;
+  autoEdit?: boolean;
+  onAutoEditConsumed?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedPayload, setEditedPayload] = useState<Record<string, any>>({});
   const [aiInstruction, setAiInstruction] = useState("");
   const [showReasoning, setShowReasoning] = useState(false);
+
+  // Auto-open edit mode for manually added actions
+  useEffect(() => {
+    if (autoEdit && !isEditing) {
+      handleStartEdit();
+      onAutoEditConsumed?.();
+    }
+  }, [autoEdit]);
 
   const config = ACTION_TYPE_CONFIG[action.actionType] || {
     label: action.actionType.replace(/_/g, " "),
@@ -821,6 +833,7 @@ export default function NextStepsTab({
 }) {
   const [actions, setActions] = useState<NextStepAction[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [autoEditActionId, setAutoEditActionId] = useState<string | null>(null);
   const [pushingActionId, setPushingActionId] = useState<string | null>(null);
   const [aiEditingActionId, setAiEditingActionId] = useState<string | null>(null);
   const [showAddAction, setShowAddAction] = useState(false);
@@ -1044,6 +1057,7 @@ export default function NextStepsTab({
     };
 
     setActions(prev => [...prev, newAction]);
+    setAutoEditActionId(newAction.id);
     setNewActionType("");
     setNewActionSummary("");
     setShowAddAction(false);
@@ -1219,6 +1233,8 @@ export default function NextStepsTab({
                   isAiEditing={aiEditingActionId === action.id}
                   ghlData={ghlData}
                   teamMemberName={teamMemberName}
+                  autoEdit={autoEditActionId === action.id}
+                  onAutoEditConsumed={() => setAutoEditActionId(null)}
                 />
               ))}
             </div>
@@ -1243,6 +1259,8 @@ export default function NextStepsTab({
                   isAiEditing={aiEditingActionId === action.id}
                   ghlData={ghlData}
                   teamMemberName={teamMemberName}
+                  autoEdit={autoEditActionId === action.id}
+                  onAutoEditConsumed={() => setAutoEditActionId(null)}
                 />
               ))}
             </div>
