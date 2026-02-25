@@ -400,6 +400,13 @@
       "when": 1771982553519,
       "tag": "0056_condemned_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "5",
+      "when": 1772036454809,
+      "tag": "0057_flippant_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

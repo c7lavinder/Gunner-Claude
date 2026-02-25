@@ -1600,7 +1600,38 @@ async function generateAndStoreNextSteps(callId: number): Promise<void> {
     }
   }
 
-  // 5. Fetch available pipelines and workflows (each wrapped individually to prevent one failure from blocking the other)
+  // 5. Fetch current pipeline stage for this contact
+  let currentStageInfo = "";
+  let currentStageName = "";
+  let currentPipelineName = "";
+  let currentStageIndex = -1;
+  let allStageNames: string[] = [];
+  if (call.ghlContactId && tenantId) {
+    try {
+      const { findAllOpportunitiesByContact, getPipelinesForTenant } = await import("./ghlActions");
+      const opps = await findAllOpportunitiesByContact(tenantId, call.ghlContactId).catch(() => []);
+      const pipelines = await getPipelinesForTenant(tenantId).catch(() => [] as any[]);
+      
+      if (opps.length > 0 && pipelines.length > 0) {
+        const currentOpp = opps[0]; // most recently updated
+        for (const p of pipelines) {
+          const stageMatch = p.stages.find((s: any) => s.id === currentOpp.stageId);
+          if (stageMatch) {
+            currentPipelineName = p.name;
+            currentStageName = stageMatch.name;
+            allStageNames = p.stages.map((s: any) => s.name);
+            currentStageIndex = p.stages.findIndex((s: any) => s.id === currentOpp.stageId);
+            currentStageInfo = `\n\nCURRENT PIPELINE POSITION:\n- Pipeline: "${p.name}"\n- Current Stage: "${stageMatch.name}" (position ${currentStageIndex + 1} of ${p.stages.length})\n- Stage Order: ${p.stages.map((s: any, i: number) => i === currentStageIndex ? `[${s.name}] ← CURRENT` : s.name).join(" → ")}\n`;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[NextSteps-Auto] Current stage fetch error (non-blocking):", e);
+    }
+  }
+
+  // 6. Fetch available pipelines and workflows (each wrapped individually to prevent one failure from blocking the other)
   let availableOptions = "";
   if (tenantId) {
     try {
@@ -1635,7 +1666,7 @@ async function generateAndStoreNextSteps(callId: number): Promise<void> {
     }
   }
 
-  const systemPrompt = `You are an AI assistant for a real estate flipping business. Analyze the call transcript and all context to suggest specific, actionable next steps.
+  const systemPrompt = `You are an AI assistant for a real estate flipping/wholesaling business. Analyze the call transcript and all context to suggest specific, actionable next steps.
 
 RULES:
 - Only suggest actions clearly warranted by the call content and communication history
@@ -1647,6 +1678,18 @@ RULES:
 - Do NOT suggest actions contradicting the call outcome
 - Each action needs a clear reason WHY based on the call context
 - Keep note content comprehensive but concise — include call summary, key details, and motivation type
+
+PIPELINE STAGE CHANGE RULES (CRITICAL):
+- ALWAYS check the CURRENT PIPELINE POSITION before suggesting any stage change
+- NEVER suggest moving to the stage the contact is ALREADY in — that's pointless
+- NEVER suggest moving BACKWARD in the pipeline unless the deal fell apart completely
+- Only suggest moving FORWARD (to a later stage) based on what happened on the call
+- If the contact is already at or past "Made Offer", do NOT suggest "Made Offer" again
+- If an offer was REJECTED: move to a follow-up stage (e.g., "Follow Up", "Nurture", "Long Term Follow Up") — NOT back to "Made Offer"
+- If an offer was ACCEPTED: move forward past "Made Offer" to the next stage (e.g., "Under Contract", "Closing", "Pending")
+- If the seller needs time to think: keep them at current stage or move to follow-up, do NOT re-suggest the same stage
+- If the call was just a follow-up check-in with no new developments: do NOT suggest any stage change
+- Think about it: what stage should this contact ACTUALLY be in based on where they are NOW and what happened on THIS call?
 
 Return JSON with "actions" array. Each action:
 - actionType: "check_off_task" | "update_task" | "create_task" | "add_note" | "create_appointment" | "change_pipeline_stage" | "send_sms" | "schedule_sms" | "add_to_workflow" | "remove_from_workflow"
@@ -1670,9 +1713,9 @@ GRADE: ${grade?.summary || 'No grade available'}
 
 TRANSCRIPT:
 ${(call.transcript || 'No transcript').substring(0, 8000)}
-${priorCallsSummary}${smsHistory}${existingTasks}${recentActionPatterns}${availableOptions}
+${priorCallsSummary}${smsHistory}${existingTasks}${recentActionPatterns}${currentStageInfo}${availableOptions}
 
-Suggest the most relevant next steps for this lead.`;
+Suggest the most relevant next steps for this lead. Remember: check the CURRENT PIPELINE POSITION before suggesting any stage changes — never suggest the stage they're already in.`;
 
   const response = await invokeLLM({
     messages: [

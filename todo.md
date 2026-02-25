@@ -3060,3 +3060,5 @@
 - [x] Update Signals page frontend for all three sections
 - [x] Fix AI assistant "Update Task" failing with "No contact ID available" — should auto-search for contact by name before updating task
 - [x] Reduce CRM sync interval from 30 minutes to 5 minutes so actions show up faster
+- [x] Fix post-call AI actions to check current pipeline stage before suggesting stage changes — don't suggest moving to a stage already in or past
+- [x] Fix rejected offers to move to follow-up stage, not stay at Made Offer

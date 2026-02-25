@@ -1,0 +1,1 @@
+ALTER TABLE `opportunities` MODIFY COLUMN `detectionSource` enum('pipeline','conversation','transcript','hybrid','call_grade','system') NOT NULL DEFAULT 'pipeline';

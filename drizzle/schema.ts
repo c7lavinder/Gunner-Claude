@@ -1183,7 +1183,7 @@ export const opportunities = mysqlTable("opportunities", {
   triggerRules: json("triggerRules").$type<string[]>().notNull(),
   reason: text("reason").notNull(),
   suggestion: text("suggestion").notNull(),
-  detectionSource: mysqlEnum("detectionSource", ["pipeline", "conversation", "transcript", "hybrid"]).notNull().default("pipeline"),
+  detectionSource: mysqlEnum("detectionSource", ["pipeline", "conversation", "transcript", "hybrid", "call_grade", "system"]).notNull().default("pipeline"),
   relatedCallId: int("relatedCallId").references(() => calls.id),
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
