@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,19 +81,19 @@ const ACTION_TYPE_CONFIG: Record<string, {
   add_note: {
     label: "Add Note",
     icon: <StickyNote className="h-4 w-4" />,
-    color: "text-amber-600 dark:text-amber-400",
-    bgColor: "bg-amber-50 dark:bg-amber-950",
-    borderColor: "border-l-amber-500",
+    color: "text-yellow-600 dark:text-yellow-400",
+    bgColor: "bg-yellow-50 dark:bg-yellow-950",
+    borderColor: "border-l-yellow-500",
   },
   create_appointment: {
-    label: "Add to Calendar",
+    label: "Create Appointment",
     icon: <Calendar className="h-4 w-4" />,
-    color: "text-purple-600 dark:text-purple-400",
-    bgColor: "bg-purple-50 dark:bg-purple-950",
-    borderColor: "border-l-purple-500",
+    color: "text-pink-600 dark:text-pink-400",
+    bgColor: "bg-pink-50 dark:bg-pink-950",
+    borderColor: "border-l-pink-500",
   },
   change_pipeline_stage: {
-    label: "Move Pipeline Stage",
+    label: "Change Pipeline Stage",
     icon: <ArrowRightLeft className="h-4 w-4" />,
     color: "text-orange-600 dark:text-orange-400",
     bgColor: "bg-orange-50 dark:bg-orange-950",
@@ -114,7 +114,7 @@ const ACTION_TYPE_CONFIG: Record<string, {
     borderColor: "border-l-cyan-500",
   },
   add_to_workflow: {
-    label: "Start Workflow",
+    label: "Add to Workflow",
     icon: <Play className="h-4 w-4" />,
     color: "text-emerald-600 dark:text-emerald-400",
     bgColor: "bg-emerald-50 dark:bg-emerald-950",
@@ -135,14 +135,16 @@ const ALL_ACTION_TYPES = [
   "schedule_sms", "add_to_workflow", "remove_from_workflow",
 ];
 
-/** Field definitions for each action type */
-function getFieldsForAction(actionType: string): { key: string; label: string; type: "text" | "textarea" | "date" | "time" | "datetime" }[] {
+/** Field definitions for each action type — now includes "select" type for dropdowns */
+type FieldType = "text" | "textarea" | "date" | "time" | "datetime" | "select-pipeline" | "select-stage" | "select-task" | "select-workflow" | "select-calendar";
+
+function getFieldsForAction(actionType: string): { key: string; label: string; type: FieldType }[] {
   switch (actionType) {
     case "check_off_task":
-      return [{ key: "taskKeyword", label: "Task to check off", type: "text" }];
+      return [{ key: "taskKeyword", label: "Task to check off", type: "select-task" }];
     case "update_task":
       return [
-        { key: "taskKeyword", label: "Task to update", type: "text" },
+        { key: "taskKeyword", label: "Task to update", type: "select-task" },
         { key: "title", label: "New title", type: "text" },
         { key: "dueDate", label: "New due date", type: "date" },
         { key: "description", label: "Updated description", type: "textarea" },
@@ -160,12 +162,12 @@ function getFieldsForAction(actionType: string): { key: string; label: string; t
         { key: "title", label: "Appointment title", type: "text" },
         { key: "startTime", label: "Start time", type: "datetime" },
         { key: "endTime", label: "End time", type: "datetime" },
-        { key: "calendarName", label: "Calendar", type: "text" },
+        { key: "calendarName", label: "Calendar", type: "select-calendar" },
       ];
     case "change_pipeline_stage":
       return [
-        { key: "pipelineName", label: "Pipeline", type: "text" },
-        { key: "stageName", label: "Move to stage", type: "text" },
+        { key: "pipelineName", label: "Pipeline", type: "select-pipeline" },
+        { key: "stageName", label: "Move to stage", type: "select-stage" },
       ];
     case "send_sms":
       return [{ key: "message", label: "Message", type: "textarea" }];
@@ -176,9 +178,9 @@ function getFieldsForAction(actionType: string): { key: string; label: string; t
         { key: "scheduledTime", label: "Send time", type: "time" },
       ];
     case "add_to_workflow":
-      return [{ key: "workflowName", label: "Workflow", type: "text" }];
+      return [{ key: "workflowName", label: "Workflow", type: "select-workflow" }];
     case "remove_from_workflow":
-      return [{ key: "workflowName", label: "Workflow", type: "text" }];
+      return [{ key: "workflowName", label: "Workflow", type: "select-workflow" }];
     default:
       return [];
   }
@@ -200,7 +202,7 @@ function getPrimaryContent(actionType: string, payload: Record<string, any>): { 
     case "schedule_sms":
       return val("message") ? { label: "Message", value: val("message") } : null;
     case "change_pipeline_stage":
-      return val("stageName") ? { label: "Stage", value: `${val("pipelineName") ? val("pipelineName") + " → " : ""}${val("stageName")}` } : null;
+      return val("stageName") ? { label: "Stage", value: `${val("pipelineName") ? val("pipelineName") + " \u2192 " : ""}${val("stageName")}` } : null;
     case "add_to_workflow":
     case "remove_from_workflow":
       return val("workflowName") ? { label: "Workflow", value: val("workflowName") } : null;
@@ -235,6 +237,38 @@ function getSecondaryDetails(actionType: string, payload: Record<string, any>): 
   return details;
 }
 
+/** Shared GHL data hook — fetches pipelines, workflows, calendars, and tasks once */
+function useGhlDropdownData(ghlContactId?: string | null) {
+  const pipelinesQuery = trpc.calls.getAvailablePipelines.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: 1,
+  });
+  const workflowsQuery = trpc.calls.getAvailableWorkflows.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+  const calendarsQuery = trpc.calls.getAvailableCalendars.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+  const tasksQuery = trpc.calls.getContactTasks.useQuery(
+    { ghlContactId: ghlContactId || "" },
+    {
+      enabled: !!ghlContactId,
+      staleTime: 2 * 60 * 1000,
+      retry: 1,
+    }
+  );
+
+  return {
+    pipelines: pipelinesQuery.data?.pipelines || [],
+    workflows: workflowsQuery.data?.workflows || [],
+    calendars: calendarsQuery.data?.calendars || [],
+    tasks: tasksQuery.data?.tasks || [],
+    isLoading: pipelinesQuery.isLoading || workflowsQuery.isLoading || calendarsQuery.isLoading,
+  };
+}
+
 function ActionCard({
   action,
   onPush,
@@ -244,6 +278,7 @@ function ActionCard({
   onDelete,
   isPushing,
   isAiEditing,
+  ghlData,
 }: {
   action: NextStepAction;
   onPush: (action: NextStepAction) => void;
@@ -253,6 +288,7 @@ function ActionCard({
   onDelete: (action: NextStepAction) => void;
   isPushing: boolean;
   isAiEditing: boolean;
+  ghlData: ReturnType<typeof useGhlDropdownData>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedPayload, setEditedPayload] = useState<Record<string, any>>({});
@@ -271,6 +307,16 @@ function ActionCard({
   const primaryContent = getPrimaryContent(action.actionType, action.payload);
   const secondaryDetails = getSecondaryDetails(action.actionType, action.payload);
   const hasContent = primaryContent !== null;
+
+  // Determine stages for the currently selected pipeline
+  const selectedPipelineName = editedPayload.pipelineName || "";
+  const stagesForSelectedPipeline = useMemo(() => {
+    if (!selectedPipelineName) return [];
+    const pipeline = ghlData.pipelines.find(
+      p => p.name.toLowerCase() === selectedPipelineName.toLowerCase()
+    );
+    return pipeline?.stages || [];
+  }, [selectedPipelineName, ghlData.pipelines]);
 
   const handleStartEdit = () => {
     setEditedPayload({ ...action.payload });
@@ -300,6 +346,190 @@ function ActionCard({
   };
 
   const isDone = action.status === "pushed" || action.status === "skipped";
+
+  /** Render a single field — either a dropdown select or a standard input */
+  const renderField = (field: { key: string; label: string; type: FieldType }) => {
+    const value = editedPayload[field.key] || "";
+
+    switch (field.type) {
+      case "select-pipeline": {
+        const options = ghlData.pipelines;
+        return (
+          <Select
+            value={value}
+            onValueChange={(v) => {
+              updateField(field.key, v);
+              // When pipeline changes, clear the stage since it depends on pipeline
+              updateField("stageName", "");
+            }}
+          >
+            <SelectTrigger className="text-sm bg-background">
+              <SelectValue placeholder="Select pipeline..." />
+            </SelectTrigger>
+            <SelectContent>
+              {options.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  {ghlData.isLoading ? "Loading pipelines..." : "No pipelines found"}
+                </div>
+              ) : (
+                options.map(p => (
+                  <SelectItem key={p.id} value={p.name}>
+                    {p.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        );
+      }
+
+      case "select-stage": {
+        const options = stagesForSelectedPipeline;
+        return (
+          <Select
+            value={value}
+            onValueChange={(v) => updateField(field.key, v)}
+          >
+            <SelectTrigger className="text-sm bg-background">
+              <SelectValue placeholder={selectedPipelineName ? "Select stage..." : "Select a pipeline first..."} />
+            </SelectTrigger>
+            <SelectContent>
+              {!selectedPipelineName ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  Select a pipeline first
+                </div>
+              ) : options.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  No stages found for this pipeline
+                </div>
+              ) : (
+                options.map(s => (
+                  <SelectItem key={s.id} value={s.name}>
+                    {s.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        );
+      }
+
+      case "select-task": {
+        const options = ghlData.tasks;
+        // If there are tasks, show dropdown; otherwise fallback to text input
+        if (options.length === 0) {
+          return (
+            <Input
+              type="text"
+              value={value}
+              onChange={(e) => updateField(field.key, e.target.value)}
+              className="text-sm bg-background"
+              placeholder="Enter task name or keyword..."
+            />
+          );
+        }
+        return (
+          <Select
+            value={value}
+            onValueChange={(v) => updateField(field.key, v)}
+          >
+            <SelectTrigger className="text-sm bg-background">
+              <SelectValue placeholder="Select task..." />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map(t => (
+                <SelectItem key={t.id} value={t.title}>
+                  <div className="flex flex-col">
+                    <span>{t.title}</span>
+                    {t.dueDate && (
+                      <span className="text-[10px] text-muted-foreground">
+                        Due: {new Date(t.dueDate).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      }
+
+      case "select-workflow": {
+        const options = ghlData.workflows;
+        return (
+          <Select
+            value={value}
+            onValueChange={(v) => updateField(field.key, v)}
+          >
+            <SelectTrigger className="text-sm bg-background">
+              <SelectValue placeholder="Select workflow..." />
+            </SelectTrigger>
+            <SelectContent>
+              {options.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  {ghlData.isLoading ? "Loading workflows..." : "No workflows found"}
+                </div>
+              ) : (
+                options.map(w => (
+                  <SelectItem key={w.id} value={w.name}>
+                    {w.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        );
+      }
+
+      case "select-calendar": {
+        const options = ghlData.calendars;
+        return (
+          <Select
+            value={value}
+            onValueChange={(v) => updateField(field.key, v)}
+          >
+            <SelectTrigger className="text-sm bg-background">
+              <SelectValue placeholder="Select calendar..." />
+            </SelectTrigger>
+            <SelectContent>
+              {options.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  {ghlData.isLoading ? "Loading calendars..." : "No calendars found"}
+                </div>
+              ) : (
+                options.map(c => (
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        );
+      }
+
+      case "textarea":
+        return (
+          <Textarea
+            value={value}
+            onChange={(e) => updateField(field.key, e.target.value)}
+            className="text-sm min-h-[80px] bg-background"
+            placeholder={`Enter ${field.label.toLowerCase()}...`}
+          />
+        );
+
+      default:
+        return (
+          <Input
+            type={field.type === "date" ? "date" : field.type === "time" ? "time" : field.type === "datetime" ? "datetime-local" : "text"}
+            value={value}
+            onChange={(e) => updateField(field.key, e.target.value)}
+            className="text-sm bg-background"
+            placeholder={`Enter ${field.label.toLowerCase()}...`}
+          />
+        );
+    }
+  };
 
   return (
     <div className={`border rounded-lg overflow-hidden transition-all border-l-4 ${config.borderColor} ${
@@ -338,32 +568,13 @@ function ActionCard({
         {isEditing ? (
           /* ===== EDIT MODE ===== */
           <div className="space-y-3">
-            {/* Manual field editing */}
-            {fields.map(field => {
-              const value = editedPayload[field.key] || "";
-              // Skip empty fields that aren't relevant to this action type
-              return (
-                <div key={field.key} className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">{field.label}</Label>
-                  {field.type === "textarea" ? (
-                    <Textarea
-                      value={value}
-                      onChange={(e) => updateField(field.key, e.target.value)}
-                      className="text-sm min-h-[80px] bg-background"
-                      placeholder={`Enter ${field.label.toLowerCase()}...`}
-                    />
-                  ) : (
-                    <Input
-                      type={field.type === "date" ? "date" : field.type === "time" ? "time" : field.type === "datetime" ? "datetime-local" : "text"}
-                      value={value}
-                      onChange={(e) => updateField(field.key, e.target.value)}
-                      className="text-sm bg-background"
-                      placeholder={`Enter ${field.label.toLowerCase()}...`}
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {/* Manual field editing with dropdowns */}
+            {fields.map(field => (
+              <div key={field.key} className="space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">{field.label}</Label>
+                {renderField(field)}
+              </div>
+            ))}
 
             {/* AI-assisted edit input */}
             <div className="border-t pt-3 mt-3">
@@ -543,6 +754,9 @@ export default function NextStepsTab({
   const [newActionSummary, setNewActionSummary] = useState("");
   const { isDemo, guardAction: guardDemoAction } = useDemo();
 
+  // Fetch GHL dropdown data (pipelines, workflows, calendars, tasks)
+  const ghlData = useGhlDropdownData(ghlContactId);
+
   // Load stored next steps from DB on mount
   const storedQuery = trpc.calls.getNextSteps.useQuery(
     { callId },
@@ -701,7 +915,7 @@ export default function NextStepsTab({
         ));
         toast.success("AI updated the action");
       } else {
-        toast.error("AI edit failed — try again or edit manually");
+        toast.error("AI edit failed \u2014 try again or edit manually");
       }
     } catch (error: any) {
       toast.error(`AI edit failed: ${error?.message || "Unknown error"}`);
@@ -929,6 +1143,7 @@ export default function NextStepsTab({
                   onDelete={handleDelete}
                   isPushing={pushingActionId === action.id}
                   isAiEditing={aiEditingActionId === action.id}
+                  ghlData={ghlData}
                 />
               ))}
             </div>
@@ -951,6 +1166,7 @@ export default function NextStepsTab({
                   onDelete={handleDelete}
                   isPushing={pushingActionId === action.id}
                   isAiEditing={aiEditingActionId === action.id}
+                  ghlData={ghlData}
                 />
               ))}
             </div>

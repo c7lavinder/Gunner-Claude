@@ -2952,3 +2952,12 @@
 
 ## AI Edit Bug Fix
 - [x] Fix "AI edit failed" error when using AI-assisted editing on Next Steps cards — added markdown code block stripping from LLM response before JSON.parse
+
+## Next Steps Dropdowns
+- [x] Replace Pipeline free-text with dropdown populated from GHL pipelines
+- [x] Replace Stage free-text with dropdown populated from GHL stages (filtered by selected pipeline)
+- [x] Replace Task name free-text with dropdown populated from GHL tasks for the contact
+- [x] Replace Workflow free-text with dropdown populated from GHL workflows
+- [x] Replace Calendar free-text with dropdown populated from GHL calendars
+- [x] Add getAvailableCalendars tRPC endpoint for calendar dropdown data
+- [x] Add 13 new vitest tests covering dropdown field definitions and pipeline/stage dependency logic

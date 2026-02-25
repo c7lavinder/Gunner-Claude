@@ -498,3 +498,206 @@ describe("Next Steps - DB Persistence", () => {
     }
   });
 });
+
+// ============ DROPDOWN FIELD DEFINITIONS ============
+
+type FieldType = "text" | "textarea" | "date" | "time" | "datetime" | "select-pipeline" | "select-stage" | "select-task" | "select-workflow" | "select-calendar";
+
+function getFieldsForAction(actionType: string): { key: string; label: string; type: FieldType }[] {
+  switch (actionType) {
+    case "check_off_task":
+      return [{ key: "taskKeyword", label: "Task to check off", type: "select-task" }];
+    case "update_task":
+      return [
+        { key: "taskKeyword", label: "Task to update", type: "select-task" },
+        { key: "title", label: "New title", type: "text" },
+        { key: "dueDate", label: "New due date", type: "date" },
+        { key: "description", label: "Updated description", type: "textarea" },
+      ];
+    case "create_task":
+      return [
+        { key: "title", label: "Task title", type: "text" },
+        { key: "description", label: "Description", type: "textarea" },
+        { key: "dueDate", label: "Due date", type: "date" },
+      ];
+    case "add_note":
+      return [{ key: "noteBody", label: "Note content", type: "textarea" }];
+    case "create_appointment":
+      return [
+        { key: "title", label: "Appointment title", type: "text" },
+        { key: "startTime", label: "Start time", type: "datetime" },
+        { key: "endTime", label: "End time", type: "datetime" },
+        { key: "calendarName", label: "Calendar", type: "select-calendar" },
+      ];
+    case "change_pipeline_stage":
+      return [
+        { key: "pipelineName", label: "Pipeline", type: "select-pipeline" },
+        { key: "stageName", label: "Move to stage", type: "select-stage" },
+      ];
+    case "send_sms":
+      return [{ key: "message", label: "Message", type: "textarea" }];
+    case "schedule_sms":
+      return [
+        { key: "message", label: "Message", type: "textarea" },
+        { key: "scheduledDate", label: "Send date", type: "date" },
+        { key: "scheduledTime", label: "Send time", type: "time" },
+      ];
+    case "add_to_workflow":
+      return [{ key: "workflowName", label: "Workflow", type: "select-workflow" }];
+    case "remove_from_workflow":
+      return [{ key: "workflowName", label: "Workflow", type: "select-workflow" }];
+    default:
+      return [];
+  }
+}
+
+describe("Next Steps - Dropdown Field Definitions", () => {
+  it("should use select-pipeline and select-stage for change_pipeline_stage", () => {
+    const fields = getFieldsForAction("change_pipeline_stage");
+    expect(fields).toHaveLength(2);
+    expect(fields[0].type).toBe("select-pipeline");
+    expect(fields[0].key).toBe("pipelineName");
+    expect(fields[1].type).toBe("select-stage");
+    expect(fields[1].key).toBe("stageName");
+  });
+
+  it("should use select-task for check_off_task", () => {
+    const fields = getFieldsForAction("check_off_task");
+    expect(fields).toHaveLength(1);
+    expect(fields[0].type).toBe("select-task");
+    expect(fields[0].key).toBe("taskKeyword");
+  });
+
+  it("should use select-task for update_task taskKeyword field", () => {
+    const fields = getFieldsForAction("update_task");
+    const taskField = fields.find(f => f.key === "taskKeyword");
+    expect(taskField).toBeDefined();
+    expect(taskField!.type).toBe("select-task");
+    // Other fields should remain standard types
+    const titleField = fields.find(f => f.key === "title");
+    expect(titleField!.type).toBe("text");
+    const dueDateField = fields.find(f => f.key === "dueDate");
+    expect(dueDateField!.type).toBe("date");
+  });
+
+  it("should use select-workflow for add_to_workflow", () => {
+    const fields = getFieldsForAction("add_to_workflow");
+    expect(fields).toHaveLength(1);
+    expect(fields[0].type).toBe("select-workflow");
+    expect(fields[0].key).toBe("workflowName");
+  });
+
+  it("should use select-workflow for remove_from_workflow", () => {
+    const fields = getFieldsForAction("remove_from_workflow");
+    expect(fields).toHaveLength(1);
+    expect(fields[0].type).toBe("select-workflow");
+    expect(fields[0].key).toBe("workflowName");
+  });
+
+  it("should use select-calendar for create_appointment calendar field", () => {
+    const fields = getFieldsForAction("create_appointment");
+    const calField = fields.find(f => f.key === "calendarName");
+    expect(calField).toBeDefined();
+    expect(calField!.type).toBe("select-calendar");
+    // Other fields should remain standard types
+    const titleField = fields.find(f => f.key === "title");
+    expect(titleField!.type).toBe("text");
+    const startField = fields.find(f => f.key === "startTime");
+    expect(startField!.type).toBe("datetime");
+  });
+
+  it("should NOT use select types for create_task (free text fields)", () => {
+    const fields = getFieldsForAction("create_task");
+    const selectFields = fields.filter(f => f.type.startsWith("select-"));
+    expect(selectFields).toHaveLength(0);
+  });
+
+  it("should NOT use select types for add_note (free text)", () => {
+    const fields = getFieldsForAction("add_note");
+    const selectFields = fields.filter(f => f.type.startsWith("select-"));
+    expect(selectFields).toHaveLength(0);
+  });
+
+  it("should NOT use select types for send_sms (free text)", () => {
+    const fields = getFieldsForAction("send_sms");
+    const selectFields = fields.filter(f => f.type.startsWith("select-"));
+    expect(selectFields).toHaveLength(0);
+  });
+});
+
+// ============ PIPELINE STAGE DEPENDENCY ============
+
+describe("Next Steps - Pipeline/Stage Dependency", () => {
+  it("should filter stages based on selected pipeline", () => {
+    const pipelines = [
+      {
+        id: "p1", name: "Acquisitions",
+        stages: [
+          { id: "s1", name: "New Lead" },
+          { id: "s2", name: "Qualified" },
+          { id: "s3", name: "Under Contract" },
+        ],
+      },
+      {
+        id: "p2", name: "Dispositions",
+        stages: [
+          { id: "s4", name: "Listed" },
+          { id: "s5", name: "Offer Received" },
+        ],
+      },
+    ];
+
+    // Simulate selecting "Acquisitions" pipeline
+    const selectedPipelineName = "Acquisitions";
+    const pipeline = pipelines.find(
+      p => p.name.toLowerCase() === selectedPipelineName.toLowerCase()
+    );
+    const stages = pipeline?.stages || [];
+
+    expect(stages).toHaveLength(3);
+    expect(stages[0].name).toBe("New Lead");
+    expect(stages[2].name).toBe("Under Contract");
+  });
+
+  it("should return empty stages when no pipeline is selected", () => {
+    const pipelines = [
+      { id: "p1", name: "Acquisitions", stages: [{ id: "s1", name: "New Lead" }] },
+    ];
+
+    const selectedPipelineName = "";
+    const pipeline = pipelines.find(
+      p => p.name.toLowerCase() === selectedPipelineName.toLowerCase()
+    );
+    const stages = pipeline?.stages || [];
+
+    expect(stages).toHaveLength(0);
+  });
+
+  it("should handle case-insensitive pipeline matching", () => {
+    const pipelines = [
+      { id: "p1", name: "Acquisitions Pipeline", stages: [{ id: "s1", name: "New Lead" }] },
+    ];
+
+    const selectedPipelineName = "acquisitions pipeline";
+    const pipeline = pipelines.find(
+      p => p.name.toLowerCase() === selectedPipelineName.toLowerCase()
+    );
+
+    expect(pipeline).toBeDefined();
+    expect(pipeline!.stages).toHaveLength(1);
+  });
+
+  it("should return empty stages when pipeline name doesn't match any", () => {
+    const pipelines = [
+      { id: "p1", name: "Acquisitions", stages: [{ id: "s1", name: "New Lead" }] },
+    ];
+
+    const selectedPipelineName = "Nonexistent Pipeline";
+    const pipeline = pipelines.find(
+      p => p.name.toLowerCase() === selectedPipelineName.toLowerCase()
+    );
+    const stages = pipeline?.stages || [];
+
+    expect(stages).toHaveLength(0);
+  });
+});

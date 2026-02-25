@@ -1525,6 +1525,67 @@ Based on ALL of the above context, suggest the most relevant next steps for this
         return { success: false, action: null };
       }),
 
+    // Get available pipelines and stages for dropdown
+    getAvailablePipelines: protectedProcedure
+      .query(async ({ ctx }) => {
+        const tenantId = ctx.user.tenantId;
+        if (!tenantId) return { pipelines: [] };
+        try {
+          const { getPipelinesForTenant } = await import("./ghlActions");
+          const pipelines = await getPipelinesForTenant(tenantId);
+          return { pipelines: pipelines.map(p => ({ id: p.id, name: p.name, stages: p.stages })) };
+        } catch (e: any) {
+          console.warn("[NextSteps] Failed to fetch pipelines for dropdown:", e?.message);
+          return { pipelines: [] };
+        }
+      }),
+
+    // Get available workflows for dropdown
+    getAvailableWorkflows: protectedProcedure
+      .query(async ({ ctx }) => {
+        const tenantId = ctx.user.tenantId;
+        if (!tenantId) return { workflows: [] };
+        try {
+          const { getWorkflowsForTenant } = await import("./ghlActions");
+          const workflows = await getWorkflowsForTenant(tenantId);
+          return { workflows: workflows.map(w => ({ id: w.id, name: w.name })) };
+        } catch (e: any) {
+          console.warn("[NextSteps] Failed to fetch workflows for dropdown:", e?.message);
+          return { workflows: [] };
+        }
+      }),
+
+    // Get tasks for a specific contact for dropdown
+    getContactTasks: protectedProcedure
+      .input(z.object({ ghlContactId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const tenantId = ctx.user.tenantId;
+        if (!tenantId) return { tasks: [] };
+        try {
+          const { getTasksForContact } = await import("./ghlActions");
+          const tasks = await getTasksForContact(tenantId, input.ghlContactId);
+          return { tasks: tasks.map((t: any) => ({ id: t.id, title: t.title || t.body || "Untitled Task", dueDate: t.dueDate })) };
+        } catch (e: any) {
+          console.warn("[NextSteps] Failed to fetch tasks for dropdown:", e?.message);
+          return { tasks: [] };
+        }
+      }),
+
+    // Get available calendars for dropdown
+    getAvailableCalendars: protectedProcedure
+      .query(async ({ ctx }) => {
+        const tenantId = ctx.user.tenantId;
+        if (!tenantId) return { calendars: [] };
+        try {
+          const { getCalendarsForTenant } = await import("./ghlActions");
+          const calendars = await getCalendarsForTenant(tenantId);
+          return { calendars: calendars.map(c => ({ id: c.id, name: c.name })) };
+        } catch (e: any) {
+          console.warn("[NextSteps] Failed to fetch calendars for dropdown:", e?.message);
+          return { calendars: [] };
+        }
+      }),
+
     // Get count of pending next steps for a call
     getNextStepsCount: protectedProcedure
       .input(z.object({ callId: z.number() }))
