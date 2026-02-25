@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ArrowLeft } from "lucide-react";
@@ -139,19 +138,19 @@ export default function Login() {
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <Card>
-            <CardHeader className="text-center">
+          <div className="obs-panel">
+            <div className="text-center" style={{marginBottom: 16}}>
               <div className="flex items-center justify-center gap-2 mb-4">
                 <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
                   <span className="text-primary-foreground font-bold text-xl">G</span>
                 </div>
               </div>
-              <CardTitle className="text-2xl">Welcome back</CardTitle>
-              <CardDescription>
+              <h3 className="obs-section-title text-2xl">Welcome back</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                 Sign in to your Gunner account
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+              </p>
+            </div>
+            <div className="space-y-6">
               {/* Google Sign-In Button */}
               <Button
                 type="button"
@@ -231,8 +230,8 @@ export default function Login() {
                   Start free trial
                 </Link>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

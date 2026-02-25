@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -1165,18 +1165,18 @@ export default function NextStepsTab({
     <div className="space-y-4">
       {/* Loading state */}
       {isLoadingStored && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-10">
+        <div className="obs-panel">
+          <div className="flex flex-col items-center justify-center py-10">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">Loading next steps...</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Generate Button — only if no stored actions */}
       {showGeneratePrompt && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-10">
+        <div className="obs-panel">
+          <div className="flex flex-col items-center justify-center py-10">
             <Sparkles className="h-10 w-10 text-purple-500 mb-3" />
             <h3 className="text-lg font-semibold mb-1">AI-Suggested Next Steps</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
@@ -1199,8 +1199,8 @@ export default function NextStepsTab({
                 </>
               )}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Actions List */}
@@ -1257,8 +1257,8 @@ export default function NextStepsTab({
 
           {/* Add Action Form */}
           {showAddAction && (
-            <Card className="border-dashed">
-              <CardContent className="py-4 space-y-3">
+            <div className="obs-panel" style={{ borderStyle: 'dashed' }}>
+              <div className="py-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Action Type</Label>
@@ -1297,8 +1297,8 @@ export default function NextStepsTab({
                     Cancel
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Pending Actions */}
@@ -1351,8 +1351,8 @@ export default function NextStepsTab({
           )}
 
           {actions.length === 0 && !generateMutation.isPending && (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-8">
+            <div className="obs-panel">
+              <div className="flex flex-col items-center justify-center py-8">
                 <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
                 <p className="text-sm text-muted-foreground">
                   No next steps suggested. The AI didn't identify specific actions needed for this call.
@@ -1366,8 +1366,8 @@ export default function NextStepsTab({
                   <Plus className="h-3 w-3 mr-1" />
                   Add Action Manually
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
         </>
       )}

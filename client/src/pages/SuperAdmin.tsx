@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Building2, 
@@ -251,17 +248,17 @@ export default function SuperAdmin() {
   if (!isSuperAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>Access Denied</CardTitle>
-            <CardDescription>
+        <div className="obs-panel max-w-md">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title">Access Denied</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               You don't have permission to access the Platform Admin dashboard.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <Button onClick={() => setLocation("/dashboard")}>Back to Dashboard</Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -395,83 +392,83 @@ export default function SuperAdmin() {
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="tenants">Tenants</TabsTrigger>
-          <TabsTrigger value="revenue">Revenue</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="churn-risk">Churn Risk</TabsTrigger>
-          <TabsTrigger value="outreach-history">Outreach History</TabsTrigger>
-          <TabsTrigger value="alerts">Alerts</TabsTrigger>
-          <TabsTrigger value="plans">Plans</TabsTrigger>
-          <TabsTrigger value="emails">Emails</TabsTrigger>
-        </TabsList>
+      <div>
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${activeTab === "overview" ? "active" : ""}`} onClick={() => setActiveTab("overview")}>Overview</button>
+          <button className={`obs-role-tab ${activeTab === "tenants" ? "active" : ""}`} onClick={() => setActiveTab("tenants")}>Tenants</button>
+          <button className={`obs-role-tab ${activeTab === "revenue" ? "active" : ""}`} onClick={() => setActiveTab("revenue")}>Revenue</button>
+          <button className={`obs-role-tab ${activeTab === "activity" ? "active" : ""}`} onClick={() => setActiveTab("activity")}>Activity</button>
+          <button className={`obs-role-tab ${activeTab === "churn-risk" ? "active" : ""}`} onClick={() => setActiveTab("churn-risk")}>Churn Risk</button>
+          <button className={`obs-role-tab ${activeTab === "outreach-history" ? "active" : ""}`} onClick={() => setActiveTab("outreach-history")}>Outreach History</button>
+          <button className={`obs-role-tab ${activeTab === "alerts" ? "active" : ""}`} onClick={() => setActiveTab("alerts")}>Alerts</button>
+          <button className={`obs-role-tab ${activeTab === "plans" ? "active" : ""}`} onClick={() => setActiveTab("plans")}>Plans</button>
+          <button className={`obs-role-tab ${activeTab === "emails" ? "active" : ""}`} onClick={() => setActiveTab("emails")}>Emails</button>
+        </div>
 
-        <TabsContent value="overview" className="space-y-6">
+        {activeTab === "overview" && (<div className="space-y-6">
           {/* Key Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Monthly Recurring Revenue</CardDescription>
+            <div className="obs-panel">
+              <div className="pb-2" style={{marginBottom: 16}}>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Monthly Recurring Revenue</p>
                 {metricsLoading ? (
                   <Skeleton className="h-9 w-24" />
                 ) : (
-                  <CardTitle className="text-3xl flex items-center gap-2">
+                  <h3 className="obs-section-title text-3xl flex items-center gap-2">
                     <DollarSign className="h-6 w-6 text-green-500" />
                     ${(metrics?.totalMrr || 0).toLocaleString()}
-                  </CardTitle>
+                  </h3>
                 )}
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Annual Recurring Revenue</CardDescription>
+              </div>
+            </div>
+            <div className="obs-panel">
+              <div className="pb-2" style={{marginBottom: 16}}>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Annual Recurring Revenue</p>
                 {metricsLoading ? (
                   <Skeleton className="h-9 w-24" />
                 ) : (
-                  <CardTitle className="text-3xl flex items-center gap-2">
+                  <h3 className="obs-section-title text-3xl flex items-center gap-2">
                     <TrendingUp className="h-6 w-6 text-blue-500" />
                     ${(metrics?.totalArr || 0).toLocaleString()}
-                  </CardTitle>
+                  </h3>
                 )}
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Total Tenants</CardDescription>
+              </div>
+            </div>
+            <div className="obs-panel">
+              <div className="pb-2" style={{marginBottom: 16}}>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Total Tenants</p>
                 {metricsLoading ? (
                   <Skeleton className="h-9 w-16" />
                 ) : (
-                  <CardTitle className="text-3xl flex items-center gap-2">
+                  <h3 className="obs-section-title text-3xl flex items-center gap-2">
                     <Building2 className="h-6 w-6 text-purple-500" />
                     {metrics?.totalTenants || 0}
-                  </CardTitle>
+                  </h3>
                 )}
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Total Users</CardDescription>
+              </div>
+            </div>
+            <div className="obs-panel">
+              <div className="pb-2" style={{marginBottom: 16}}>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Total Users</p>
                 {metricsLoading ? (
                   <Skeleton className="h-9 w-16" />
                 ) : (
-                  <CardTitle className="text-3xl flex items-center gap-2">
+                  <h3 className="obs-section-title text-3xl flex items-center gap-2">
                     <Users className="h-6 w-6 text-amber-500" />
                     {metrics?.totalUsers || 0}
-                  </CardTitle>
+                  </h3>
                 )}
-              </CardHeader>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Tenant Breakdown */}
           <div className="grid md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Tenant Status</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="obs-panel">
+              <div style={{marginBottom: 16}}>
+                <h3 className="obs-section-title">Tenant Status</h3>
+              </div>
+              <div>
                 {metricsLoading ? (
                   <div className="space-y-4">
                     <Skeleton className="h-6 w-full" />
@@ -494,14 +491,14 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Platform Usage</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="obs-panel">
+              <div style={{marginBottom: 16}}>
+                <h3 className="obs-section-title">Platform Usage</h3>
+              </div>
+              <div>
                 {metricsLoading ? (
                   <div className="space-y-4">
                     <Skeleton className="h-6 w-full" />
@@ -519,12 +516,12 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
-        </TabsContent>
+        </div>)}
 
-        <TabsContent value="tenants" className="space-y-4">
+        {activeTab === "tenants" && (<div className="space-y-4">
           {/* Search + New Tenant */}
           <div className="flex items-center gap-4">
             <div className="relative flex-1 max-w-sm">
@@ -543,40 +540,40 @@ export default function SuperAdmin() {
           </div>
 
           {/* Tenants Table */}
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Users</TableHead>
-                  <TableHead>Calls</TableHead>
-                  <TableHead>MRR</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <div className="obs-panel">
+            <table className="obs-table">
+              <thead>
+                <tr>
+                  <th>Tenant</th>
+                  <th>Plan</th>
+                  <th>Status</th>
+                  <th>Users</th>
+                  <th>Calls</th>
+                  <th>MRR</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
                 {tenantsLoading ? (
                   Array.from({ length: 3 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-10 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-8" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-12" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-12" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-24" /></TableCell>
-                    </TableRow>
+                    <tr key={i}>
+                      <td><Skeleton className="h-10 w-32" /></td>
+                      <td><Skeleton className="h-6 w-16" /></td>
+                      <td><Skeleton className="h-6 w-16" /></td>
+                      <td><Skeleton className="h-6 w-8" /></td>
+                      <td><Skeleton className="h-6 w-12" /></td>
+                      <td><Skeleton className="h-6 w-12" /></td>
+                      <td><Skeleton className="h-6 w-20" /></td>
+                      <td><Skeleton className="h-8 w-24" /></td>
+                    </tr>
                   ))
                 ) : filteredTenants.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-muted-foreground">
                       No tenants found
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ) : (
                   filteredTenants.map((tenant) => {
                     const planPrices: Record<string, number> = {
@@ -589,20 +586,20 @@ export default function SuperAdmin() {
                       : 0;
                     
                     return (
-                      <TableRow key={tenant.id}>
-                        <TableCell>
+                      <tr key={tenant.id}>
+                        <td>
                           <div>
                             <div className="font-medium">{tenant.name}</div>
                             <div className="text-sm text-muted-foreground">{tenant.slug}</div>
                           </div>
-                        </TableCell>
-                        <TableCell>{getPlanBadge(tenant.subscriptionTier)}</TableCell>
-                        <TableCell>{getStatusBadge(tenant.subscriptionStatus)}</TableCell>
-                        <TableCell>{tenant.userCount}</TableCell>
-                        <TableCell>{(tenant.callCount || 0).toLocaleString()}</TableCell>
-                        <TableCell>${mrr}</TableCell>
-                        <TableCell>{new Date(tenant.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell>
+                        </td>
+                        <td>{getPlanBadge(tenant.subscriptionTier)}</td>
+                        <td>{getStatusBadge(tenant.subscriptionStatus)}</td>
+                        <td>{tenant.userCount}</td>
+                        <td>{(tenant.callCount || 0).toLocaleString()}</td>
+                        <td>${mrr}</td>
+                        <td>{new Date(tenant.createdAt).toLocaleDateString()}</td>
+                        <td>
                           <div className="flex gap-2">
                             <Button 
                               variant="outline" 
@@ -622,22 +619,22 @@ export default function SuperAdmin() {
                               Manage
                             </Button>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     );
                   })
                 )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
+              </tbody>
+            </table>
+          </div>
+        </div>)}
 
-        <TabsContent value="revenue" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Revenue by Plan</CardTitle>
-            </CardHeader>
-            <CardContent>
+        {activeTab === "revenue" && (<div className="space-y-4">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title">Revenue by Plan</h3>
+            </div>
+            <div>
               {tenantsLoading ? (
                 <div className="space-y-4">
                   <Skeleton className="h-6 w-full" />
@@ -669,20 +666,20 @@ export default function SuperAdmin() {
                   })}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
-        <TabsContent value="activity" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+        {activeTab === "activity" && (<div className="space-y-4">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title flex items-center gap-2">
                 <Activity className="h-5 w-5 text-primary" />
                 Recent Activity
-              </CardTitle>
-              <CardDescription>Latest signups, upgrades, and cancellations</CardDescription>
-            </CardHeader>
-            <CardContent>
+              </h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Latest signups, upgrades, and cancellations</p>
+            </div>
+            <div>
               {activityLoading ? (
                 <div className="space-y-4">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -719,22 +716,22 @@ export default function SuperAdmin() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
-        <TabsContent value="churn-risk" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+        {activeTab === "churn-risk" && (<div className="space-y-4">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-amber-500 rotate-180" />
                 Low Usage Tenants (Churn Risk)
-              </CardTitle>
-              <CardDescription>
+              </h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                 Tenants with no call activity in the last 7+ days. Send re-engagement emails to bring them back.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+              </p>
+            </div>
+            <div>
               {lowUsageLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
@@ -815,59 +812,59 @@ export default function SuperAdmin() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Churn Risk Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>7-13 Days Inactive</CardDescription>
-                <CardTitle className="text-2xl text-amber-600">
+            <div className="obs-panel">
+              <div className="pb-2" style={{marginBottom: 16}}>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>7-13 Days Inactive</p>
+                <h3 className="obs-section-title text-2xl text-amber-600">
                   {lowUsageTenants?.filter(t => t.daysSinceLastCall >= 7 && t.daysSinceLastCall < 14).length || 0}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                </h3>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground">Moderate risk - consider outreach</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>14-30 Days Inactive</CardDescription>
-                <CardTitle className="text-2xl text-orange-600">
+              </div>
+            </div>
+            <div className="obs-panel">
+              <div className="pb-2" style={{marginBottom: 16}}>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>14-30 Days Inactive</p>
+                <h3 className="obs-section-title text-2xl text-orange-600">
                   {lowUsageTenants?.filter(t => t.daysSinceLastCall >= 14 && t.daysSinceLastCall < 30).length || 0}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                </h3>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground">High risk - urgent outreach needed</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>30+ Days Inactive</CardDescription>
-                <CardTitle className="text-2xl text-red-600">
+              </div>
+            </div>
+            <div className="obs-panel">
+              <div className="pb-2" style={{marginBottom: 16}}>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>30+ Days Inactive</p>
+                <h3 className="obs-section-title text-2xl text-red-600">
                   {lowUsageTenants?.filter(t => t.daysSinceLastCall >= 30).length || 0}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                </h3>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground">Critical - likely to churn</p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
-        </TabsContent>
+        </div>)}
 
-        <TabsContent value="outreach-history" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+        {activeTab === "outreach-history" && (<div className="space-y-4">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title flex items-center gap-2">
                 <Mail className="h-5 w-5" />
                 Outreach History
-              </CardTitle>
-              <CardDescription>
+              </h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                 Track all re-engagement emails sent to tenants at risk of churning
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+              </p>
+            </div>
+            <div>
               {outreachLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
@@ -881,25 +878,25 @@ export default function SuperAdmin() {
                   <p className="text-sm">Send re-engagement emails from the Churn Risk tab</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>Template</TableHead>
-                      <TableHead>Recipient</TableHead>
-                      <TableHead>Days Inactive</TableHead>
-                      <TableHead>Sent By</TableHead>
-                      <TableHead>Sent At</TableHead>
-                      <TableHead>Reactivated</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <table className="obs-table">
+                  <thead>
+                    <tr>
+                      <th>Tenant</th>
+                      <th>Template</th>
+                      <th>Recipient</th>
+                      <th>Days Inactive</th>
+                      <th>Sent By</th>
+                      <th>Sent At</th>
+                      <th>Reactivated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {outreachHistory.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">
+                      <tr key={record.id}>
+                        <td className="font-medium">
                           {record.tenantName || 'Unknown'}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <Badge variant="outline" className={
                             record.templateType === '30_day' ? 'bg-red-100 text-red-700' :
                             record.templateType === '14_day' ? 'bg-amber-100 text-amber-700' :
@@ -910,23 +907,23 @@ export default function SuperAdmin() {
                              record.templateType === '30_day' ? '30-Day Win-back' :
                              record.templateType}
                           </Badge>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <div>
                             <p className="font-medium">{record.recipientName || 'Unknown'}</p>
                             <p className="text-sm text-muted-foreground">{record.recipientEmail}</p>
                           </div>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <span className="font-mono">{record.daysInactive} days</span>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           {record.sentByName || 'System'}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           {formatTimeAgo(record.createdAt)}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           {record.tenantReactivated === 'true' ? (
                             <Badge className="bg-green-100 text-green-700">
                               <CheckCircle className="h-3 w-3 mr-1" />
@@ -935,29 +932,29 @@ export default function SuperAdmin() {
                           ) : (
                             <Badge variant="outline">No</Badge>
                           )}
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
         {/* Plans Management Tab */}
-        <TabsContent value="plans" className="space-y-6">
-          <Card>
-            <CardHeader>
+        {activeTab === "plans" && (<div className="space-y-6">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <h3 className="obs-section-title flex items-center gap-2">
                     <Settings className="h-5 w-5" />
                     Subscription Plans
-                  </CardTitle>
-                  <CardDescription>
+                  </h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                     Manage pricing plans, trial periods, and features
-                  </CardDescription>
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   {(!plans || plans.length === 0) && (
@@ -978,8 +975,8 @@ export default function SuperAdmin() {
                   </Button>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               {plansLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
@@ -1075,16 +1072,16 @@ export default function SuperAdmin() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Plan Edit/Create Form */}
           {(showNewPlanForm || editingPlan) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{editingPlan ? "Edit Plan" : "Create New Plan"}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <div className="obs-panel">
+              <div style={{marginBottom: 16}}>
+                <h3 className="obs-section-title">{editingPlan ? "Edit Plan" : "Create New Plan"}</h3>
+              </div>
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Plan Name</label>
@@ -1288,20 +1285,20 @@ export default function SuperAdmin() {
                     Cancel
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
-        </TabsContent>
+        </div>)}
 
-        <TabsContent value="alerts" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+        {activeTab === "alerts" && (<div className="space-y-4">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-amber-500" />
                 Attention Required
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div>
               {tenantsLoading ? (
                 <div className="space-y-4">
                   <Skeleton className="h-16 w-full" />
@@ -1348,22 +1345,22 @@ export default function SuperAdmin() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
-        <TabsContent value="emails" className="space-y-6">
-          <Card>
-            <CardHeader>
+        {activeTab === "emails" && (<div className="space-y-6">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <h3 className="obs-section-title flex items-center gap-2">
                     <Mail className="h-5 w-5" />
                     Email Sequence Management
-                  </CardTitle>
-                  <CardDescription>
+                  </h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                     Manage automated email sequences for trial conversion and engagement
-                  </CardDescription>
+                  </p>
                 </div>
                 <Button
                   onClick={() => triggerEmailSequence.mutate()}
@@ -1377,16 +1374,16 @@ export default function SuperAdmin() {
                   Run Email Sequence Now
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               <div className="space-y-6">
                 {/* Email Sequence Info */}
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Card className="bg-muted/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg">Time-Based Emails</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm space-y-2">
+                  <div className="obs-panel bg-muted/50">
+                    <div className="pb-2" style={{marginBottom: 16}}>
+                      <h3 className="obs-section-title text-lg">Time-Based Emails</h3>
+                    </div>
+                    <div className="text-sm space-y-2">
                       <div className="flex justify-between">
                         <span>Day 0</span>
                         <span className="text-muted-foreground">Welcome Email</span>
@@ -1419,14 +1416,14 @@ export default function SuperAdmin() {
                         <span>Day 14</span>
                         <span className="text-muted-foreground">Two-Week Check-in</span>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
 
-                  <Card className="bg-muted/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg">Trigger-Based Emails</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm space-y-2">
+                  <div className="obs-panel bg-muted/50">
+                    <div className="pb-2" style={{marginBottom: 16}}>
+                      <h3 className="obs-section-title text-lg">Trigger-Based Emails</h3>
+                    </div>
+                    <div className="text-sm space-y-2">
                       <div className="flex justify-between">
                         <span>No Calls 48h</span>
                         <span className="text-muted-foreground">Re-engagement prompt</span>
@@ -1439,8 +1436,8 @@ export default function SuperAdmin() {
                         <span>Payment Failed</span>
                         <span className="text-muted-foreground">Dunning sequence</span>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
@@ -1456,12 +1453,12 @@ export default function SuperAdmin() {
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
         {/* Tenant Detail Tab (hidden from tab bar, accessed via Manage button) */}
-        <TabsContent value="tenant-detail" className="space-y-4">
+        {activeTab === "tenant-detail" && (<div className="space-y-4">
           {selectedTenantId && (
             <TenantDetailPanel
               tenantId={selectedTenantId}
@@ -1472,8 +1469,8 @@ export default function SuperAdmin() {
               setBulkMembers={setBulkMembers}
             />
           )}
-        </TabsContent>
-      </Tabs>
+        </div>)}
+      </div>
     </div>
   );
 }
@@ -1619,12 +1616,12 @@ function TenantDetailPanel({
       </div>
 
       {/* CRM Config Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">CRM Configuration</CardTitle>
-          <CardDescription>Update CRM and BatchDialer credentials for this tenant</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
+          <h3 className="obs-section-title text-base">CRM Configuration</h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Update CRM and BatchDialer credentials for this tenant</p>
+        </div>
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>CRM API Key</Label>
@@ -1673,16 +1670,16 @@ function TenantDetailPanel({
             {updateCrmMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Save CRM Config
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Bulk Import Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Bulk Add Team Members</CardTitle>
-          <CardDescription>Paste team member names (one per line) or CSV: Name, Role</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
+          <h3 className="obs-section-title text-base">Bulk Add Team Members</h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Paste team member names (one per line) or CSV: Name, Role</p>
+        </div>
+        <div className="space-y-4">
           <textarea
             className="w-full min-h-[120px] p-3 border rounded-md text-sm bg-background"
             placeholder={"John Smith, Lead Manager\nJane Doe, Lead Generator\nMike Johnson, Acquisition Manager"}
@@ -1703,28 +1700,28 @@ function TenantDetailPanel({
 
           {bulkMembers.length > 0 && (
             <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <table className="obs-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {bulkMembers.map((m, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{m.name}</TableCell>
-                      <TableCell>
+                    <tr key={i}>
+                      <td>{m.name}</td>
+                      <td>
                         <Badge variant="outline">{m.teamRole.replace(/_/g, ' ')}</Badge>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   ))}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

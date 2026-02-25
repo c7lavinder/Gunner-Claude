@@ -1,9 +1,7 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
@@ -280,25 +278,25 @@ function FeedbackCard({
   const StatusIcon = statusInfo.icon;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <div className="obs-panel">
+      <div className="pb-3" style={{marginBottom: 16}}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg bg-muted ${feedbackType.color}`}>
               <Icon className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-base flex items-center gap-2">
+              <h3 className="obs-section-title text-base flex items-center gap-2">
                 {feedbackType.label}
                 <Badge variant={statusInfo.variant}>
                   <StatusIcon className="h-3 w-3 mr-1" />
                   {statusInfo.label}
                 </Badge>
-              </CardTitle>
-              <CardDescription>
+              </h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                 {feedback.criteriaName && `Criteria: ${feedback.criteriaName} • `}
                 {new Date(feedback.createdAt).toLocaleString()}
-              </CardDescription>
+              </p>
             </div>
           </div>
           {feedback.callId && (
@@ -310,8 +308,8 @@ function FeedbackCard({
             </Link>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </div>
+      <div className="space-y-4">
         {(feedback.originalScore || feedback.suggestedScore) && (
           <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
             {feedback.originalScore && (
@@ -373,8 +371,8 @@ function FeedbackCard({
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1063,13 +1061,13 @@ function AICoachQA() {
   };
 
   return (
-    <Card className="h-[650px] flex flex-col border-2 overflow-hidden">
-      <CardHeader className="pb-2 flex-shrink-0 px-3 pt-3">
+    <div className="obs-panel h-[650px] flex flex-col border-2 overflow-hidden">
+      <div className="pb-2 flex-shrink-0 px-3 pt-3" style={{marginBottom: 16}}>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <h3 className="obs-section-title flex items-center gap-2 text-base">
             <Bot className="h-4 w-4 text-primary" />
             AI Coach
-          </CardTitle>
+          </h3>
           {conversation.length > 0 && (
             <Button variant="ghost" size="sm" onClick={clearConversation} className="h-7 text-xs">
               Clear
@@ -1077,8 +1075,8 @@ function AICoachQA() {
           )}
         </div>
         <p className="text-[10px] text-muted-foreground mt-0.5">{currentUser?.teamRole === 'lead_generator' ? 'Cold calling tips, lead notes & CRM commands' : 'Ask questions or give CRM commands'}</p>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col overflow-hidden px-3 pb-3 pt-0">
+      </div>
+      <div className="flex-1 flex flex-col overflow-hidden px-3 pb-3 pt-0">
         <div className="flex-1 overflow-y-auto">
           {conversation.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-4 text-center">
@@ -1479,8 +1477,8 @@ function AICoachQA() {
             <Send className="h-4 w-4" />
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -2174,27 +2172,27 @@ export default function CallInbox() {
       <div className="space-y-4">
         {/* Main Content - Calls and Feedback */}
         <div>
-          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setPage(0); }}>
+          <div>
             {/* 3 Clean Tabs */}
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-              <TabsList className="mb-4 w-max sm:w-auto">
-                <TabsTrigger value="calls" className="text-xs sm:text-sm px-3 sm:px-4">
+              <div className="obs-role-tabs mb-4 w-max sm:w-auto">
+                <button className={`obs-role-tab ${activeTab === "calls" ? "active" : ""}`} onClick={() => setActiveTab("calls")}>
                   <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   All Calls
                   {totalCalls > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{totalCalls}</Badge>}
-                </TabsTrigger>
+                </button>
                 {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                  <TabsTrigger value="review" className="text-xs sm:text-sm px-3 sm:px-4">
+                  <button className={`obs-role-tab ${activeTab === "review" ? "active" : ""}`} onClick={() => setActiveTab("review")}>
                     <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                     Needs Review
                     {needsReviewCount > 0 && <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0">{needsReviewCount}</Badge>}
-                  </TabsTrigger>
+                  </button>
                 )}
-                <TabsTrigger value="skipped" className="text-xs sm:text-sm px-3 sm:px-4">
+                <button className={`obs-role-tab ${activeTab === "skipped" ? "active" : ""}`} onClick={() => setActiveTab("skipped")}>
                   Skipped
                   {skippedCalls.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{skippedCalls.length >= 100 ? "100+" : skippedCalls.length}</Badge>}
-                </TabsTrigger>
-              </TabsList>
+                </button>
+              </div>
             </div>
 
             {/* Shared date filter - visible on all tabs */}
@@ -2278,7 +2276,7 @@ export default function CallInbox() {
             </div>
 
             {/* === TAB: All Calls (paginated, filtered) === */}
-            <TabsContent value="calls">
+            {activeTab === "calls" && (<div>
               <div className="grid gap-4 lg:grid-cols-3">
               {/* AI Coach - inline in first tab */}
               <div className="lg:col-span-1 order-first lg:order-last">
@@ -2290,11 +2288,11 @@ export default function CallInbox() {
               {isLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <Card key={i}>
-                      <CardContent className="p-4">
+                    <div className="obs-panel" key={i}>
+                      <div className="p-4">
                         <Skeleton className="h-20 w-full" />
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : filteredGradedCalls.length > 0 ? (
@@ -2338,8 +2336,8 @@ export default function CallInbox() {
                   )}
                 </>
               ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="obs-panel">
+                  <div className="flex flex-col items-center justify-center py-16">
                     <Phone className="h-16 w-16 text-muted-foreground/50 mb-4" />
                     <h3 className="text-lg font-semibold mb-2">
                       {hasActiveFilters || dateRange !== "all" ? "No calls match filters" : "No graded calls yet"}
@@ -2354,15 +2352,15 @@ export default function CallInbox() {
                         Clear all filters
                       </Button>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
               </div>
               </div>
-            </TabsContent>
+            </div>)}
 
             {/* === TAB: Needs Review (pending + failed + flagged feedback) === */}
-            <TabsContent value="review" className="space-y-6">
+            {activeTab === "review" && (<div className="space-y-6">
               {/* Stuck calls warning — includes pending calls stuck for >1 hour */}
               {pendingCalls.some((c: any) => 
                 (c.status === 'transcribing' || c.status === 'grading' || c.status === 'classifying' || c.status === 'pending') && 
@@ -2401,8 +2399,8 @@ export default function CallInbox() {
                     {pendingCalls.map((item: any) => {
                       const isStuck = item.updatedAt && new Date(item.updatedAt) < new Date(Date.now() - 60 * 60 * 1000);
                       return (
-                        <Card key={item.id} className={isStuck ? "border-amber-300 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20" : "border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20"}>
-                          <CardContent className="p-4">
+                        <div key={item.id} className={isStuck ? "border-amber-300 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20" : "border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20"}>
+                          <div className="p-4">
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
@@ -2456,8 +2454,8 @@ export default function CallInbox() {
                                 )}
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -2470,8 +2468,8 @@ export default function CallInbox() {
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Failed ({failedCalls.length})</h3>
                   <div className="space-y-3">
                     {failedCalls.map((item: any) => (
-                      <Card key={item.id} className="border-red-200 bg-red-50/30 dark:border-red-900 dark:bg-red-950/20">
-                        <CardContent className="p-4">
+                      <div key={item.id} className="obs-panel border-red-200 bg-red-50/30 dark:border-red-900 dark:bg-red-950/20">
+                        <div className="p-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
@@ -2508,8 +2506,8 @@ export default function CallInbox() {
                               </Button>
                             </Link>
                           </div>
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -2534,25 +2532,25 @@ export default function CallInbox() {
 
               {/* Empty state */}
               {needsReviewCount === 0 && (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="obs-panel">
+                  <div className="flex flex-col items-center justify-center py-16">
                     <CheckCircle className="h-16 w-16 text-green-500/50 mb-4" />
                     <h3 className="text-lg font-semibold mb-2">All caught up</h3>
                     <p className="text-muted-foreground text-center max-w-md">
                       No calls need review right now. Processing calls, failed transcriptions, and flagged feedback will appear here.
                     </p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
-            </TabsContent>
+            </div>)}
 
             {/* === TAB: Skipped === */}
-            <TabsContent value="skipped" className="space-y-4">
+            {activeTab === "skipped" && (<div className="space-y-4">
               {skippedCalls.length > 0 ? (
                 <div className="space-y-4">
                   {skippedCalls.map((item: any) => (
-                    <Card key={item.id} className="opacity-75">
-                      <CardContent className="p-4">
+                    <div key={item.id} className="obs-panel opacity-75">
+                      <div className="p-4">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
@@ -2628,23 +2626,23 @@ export default function CallInbox() {
                             )}
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="obs-panel">
+                  <div className="flex flex-col items-center justify-center py-16">
                     <CheckCircle className="h-16 w-16 text-muted-foreground/50 mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No skipped calls</h3>
                     <p className="text-muted-foreground text-center max-w-md">
                       Voicemails, no-answers, and brief callbacks will appear here.
                     </p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
-            </TabsContent>
-          </Tabs>
+            </div>)}
+          </div>
         </div>
 
 

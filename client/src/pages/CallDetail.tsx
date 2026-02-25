@@ -1,9 +1,7 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -80,6 +78,7 @@ export default function CallDetail() {
     explanation: "",
     correctBehavior: "",
   });
+  const [detailTab, setDetailTab] = useState("coaching");
 
   const { data: call, isLoading: callLoading } = trpc.calls.getById.useQuery(
     { id: callId },
@@ -451,8 +450,8 @@ export default function CallDetail() {
 
       {/* Existing Feedback Notice */}
       {existingFeedback && existingFeedback.length > 0 && (
-        <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-          <CardContent className="flex items-center gap-4 py-4">
+        <div className="obs-panel bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-4 py-4">
             <MessageSquare className="h-5 w-5 text-blue-600" />
             <div className="flex-1">
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -468,14 +467,14 @@ export default function CallDetail() {
                 View All Feedback
               </Button>
             </Link>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Main Content */}
       {call.status !== "completed" ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
+        <div className="obs-panel">
+          <div className="flex flex-col items-center justify-center py-16">
             {call.status === "skipped" ? (
               <>
                 <AlertTriangle className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -507,8 +506,8 @@ export default function CallDetail() {
                 )}
               </>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left Column - Grade Overview */}
@@ -590,14 +589,14 @@ export default function CallDetail() {
 
             {/* Strengths */}
             {strengths.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
+              <div className="obs-panel">
+                <div className="pb-2" style={{marginBottom: 16}}>
+                  <h3 className="obs-section-title text-sm flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-green-500" />
                     Strengths
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+                  </h3>
+                </div>
+                <div>
                   <ul className="space-y-2">
                     {strengths.map((strength, i) => (
                       <li key={i} className="text-sm flex items-start gap-2">
@@ -606,20 +605,20 @@ export default function CallDetail() {
                       </li>
                     ))}
                   </ul>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
 
             {/* Red Flags */}
             {redFlags.length > 0 && (
-              <Card className="border-red-200 dark:border-red-900">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2 text-red-600 dark:text-red-400">
+              <div className="obs-panel border-red-200 dark:border-red-900">
+                <div className="pb-2" style={{marginBottom: 16}}>
+                  <h3 className="obs-section-title text-sm flex items-center gap-2 text-red-600 dark:text-red-400">
                     <AlertTriangle className="h-4 w-4" />
                     Red Flags
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+                  </h3>
+                </div>
+                <div>
                   <ul className="space-y-2">
                     {redFlags.map((flag, i) => (
                       <li key={i} className="text-sm flex items-start gap-2 text-red-600 dark:text-red-400">
@@ -628,54 +627,54 @@ export default function CallDetail() {
                       </li>
                     ))}
                   </ul>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
           </div>
 
           {/* Right Column - Details */}
           <div className="lg:col-span-2 space-y-6">
-            <Tabs defaultValue="coaching" className="w-full">
-              <TabsList>
-                <TabsTrigger value="coaching">Coaching</TabsTrigger>
-                <TabsTrigger value="criteria">Criteria</TabsTrigger>
-                <TabsTrigger value="transcript">Transcript</TabsTrigger>
-                <TabsTrigger value="next-steps" className="relative">
+            <div className="w-full">
+              <div className="obs-role-tabs">
+                <button className={`obs-role-tab ${detailTab === "coaching" ? "active" : ""}`} onClick={() => setDetailTab("coaching")}>Coaching</button>
+                <button className={`obs-role-tab ${detailTab === "criteria" ? "active" : ""}`} onClick={() => setDetailTab("criteria")}>Criteria</button>
+                <button className={`obs-role-tab ${detailTab === "transcript" ? "active" : ""}`} onClick={() => setDetailTab("transcript")}>Transcript</button>
+                <button className={`obs-role-tab ${detailTab === "next-steps" ? "active" : ""}`} onClick={() => setDetailTab("next-steps")}>
                   Next Steps
                   {(nextStepsCount?.count ?? 0) > 0 && (
                     <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-purple-600 text-white text-[10px] font-bold">
                       {nextStepsCount!.count}
                     </span>
                   )}
-                </TabsTrigger>
-              </TabsList>
+                </button>
+              </div>
 
-              <TabsContent value="coaching" className="space-y-4 mt-4">
+              {detailTab === "coaching" && (<div className="space-y-4 mt-4">
                 {/* Summary */}
                 {grade?.summary && (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
+                  <div className="obs-panel">
+                    <div className="pb-2" style={{marginBottom: 16}}>
+                      <h3 className="obs-section-title text-sm flex items-center gap-2">
                         <FileText className="h-4 w-4" />
                         Summary
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                      </h3>
+                    </div>
+                    <div>
                       <p className="text-sm">{grade.summary}</p>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
 
                 {/* Improvements */}
                 {improvements.length > 0 && (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
+                  <div className="obs-panel">
+                    <div className="pb-2" style={{marginBottom: 16}}>
+                      <h3 className="obs-section-title text-sm flex items-center gap-2">
                         <TrendingUp className="h-4 w-4 text-orange-500" />
                         Areas for Improvement
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                      </h3>
+                    </div>
+                    <div>
                       <ul className="space-y-2">
                         {improvements.map((item, i) => (
                           <li key={i} className="text-sm flex items-start gap-2">
@@ -684,20 +683,20 @@ export default function CallDetail() {
                           </li>
                         ))}
                       </ul>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
 
                 {/* Coaching Tips */}
                 {coachingTips.length > 0 && (
-                  <Card className="border-blue-200 dark:border-blue-900">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <div className="obs-panel border-blue-200 dark:border-blue-900">
+                    <div className="pb-2" style={{marginBottom: 16}}>
+                      <h3 className="obs-section-title text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400">
                         <Lightbulb className="h-4 w-4" />
                         Coaching Tips
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                      </h3>
+                    </div>
+                    <div>
                       <ul className="space-y-3">
                         {coachingTips.map((tip, i) => (
                           <li key={i} className="text-sm p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
@@ -705,23 +704,23 @@ export default function CallDetail() {
                           </li>
                         ))}
                       </ul>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
 
                 {/* Objection Handling - Potential Replies */}
                 {objectionHandling.length > 0 && (
-                  <Card className="border-purple-200 dark:border-purple-900">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                  <div className="obs-panel border-purple-200 dark:border-purple-900">
+                    <div className="pb-2" style={{marginBottom: 16}}>
+                      <h3 className="obs-section-title text-sm flex items-center gap-2 text-purple-600 dark:text-purple-400">
                         <MessageCircle className="h-4 w-4" />
                         Potential Replies to Objections
-                      </CardTitle>
-                      <CardDescription className="text-xs">
+                      </h3>
+                      <p className="text-xs" style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                         Objections identified in this call with suggested responses
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+                      </p>
+                    </div>
+                    <div className="space-y-4">
                       {objectionHandling.map((item, i) => (
                         <div key={i} className="border rounded-lg overflow-hidden">
                           {/* Objection Header */}
@@ -754,28 +753,28 @@ export default function CallDetail() {
                           </div>
                         </div>
                       ))}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
-              </TabsContent>
+              </div>)}
 
-              <TabsContent value="criteria" className="mt-4">
+              {detailTab === "criteria" && (<div className="mt-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   {criteriaScores.map((criteria, i) => (
                     <CriteriaCard key={i} criteria={criteria} />
                   ))}
                 </div>
-              </TabsContent>
+              </div>)}
 
-              <TabsContent value="transcript" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Call Transcript</CardTitle>
-                    <CardDescription>
+              {detailTab === "transcript" && (<div className="mt-4">
+                <div className="obs-panel">
+                  <div style={{marginBottom: 16}}>
+                    <h3 className="obs-section-title text-sm">Call Transcript</h3>
+                    <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                       Full transcription of the call
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                    </p>
+                  </div>
+                  <div>
                     {call.transcript ? (
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         <p className="whitespace-pre-wrap">{call.transcript}</p>
@@ -785,18 +784,18 @@ export default function CallDetail() {
                         No transcript available
                       </p>
                     )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              <TabsContent value="next-steps" className="mt-4">
+                  </div>
+                </div>
+              </div>)}
+              {detailTab === "next-steps" && (<div className="mt-4">
                 <NextStepsTab
                   callId={callId}
                   contactName={call.contactName || call.contactPhone || "Unknown"}
                   ghlContactId={(call as any).ghlContactId}
                   teamMemberName={call.teamMemberName}
                 />
-              </TabsContent>
-            </Tabs>
+              </div>)}
+            </div>
           </div>
         </div>
       )}

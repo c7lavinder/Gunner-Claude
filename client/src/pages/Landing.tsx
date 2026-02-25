@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, Phone, BarChart3, Trophy, Brain, Users, Zap, ArrowRight, Star } from "lucide-react";
 
@@ -196,19 +195,19 @@ export default function Landing() {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <Card key={index} className="border-0 shadow-lg">
-                <CardHeader>
+              <div key={index} className="obs-panel border-0 shadow-lg">
+                <div style={{marginBottom: 16}}>
                   <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
                     <feature.icon className="h-6 w-6 text-primary" />
                   </div>
-                  <CardTitle>{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-base">
+                  <h3 className="obs-section-title">{feature.title}</h3>
+                </div>
+                <div>
+                  <p className="text-base" style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                     {feature.description}
-                  </CardDescription>
-                </CardContent>
-              </Card>
+                  </p>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -249,20 +248,19 @@ export default function Landing() {
           </div>
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {plans.map((plan, index) => (
-              <Card 
-                key={index} 
-                className={`relative ${plan.popular ? 'border-primary shadow-xl scale-105' : ''}`}
+              <div key={index}
+                className={`obs-panel relative ${plan.popular ? 'border-primary shadow-xl scale-105' : ''}`}
               >
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge className="bg-primary">Most Popular</Badge>
                   </div>
                 )}
-                <CardHeader className="text-center pb-2">
-                  <CardTitle className="text-2xl">{plan.name}</CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="text-center">
+                <div className="text-center pb-2" style={{marginBottom: 16}}>
+                  <h3 className="obs-section-title text-2xl">{plan.name}</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{plan.description}</p>
+                </div>
+                <div className="text-center">
                   <div className="mb-6">
                     <span className="text-4xl font-bold">
                       ${billingPeriod === 'yearly' ? Math.round((plan.yearlyPrice || plan.price * 10) / 12) : plan.price}
@@ -290,8 +288,8 @@ export default function Landing() {
                       </li>
                     ))}
                   </ul>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -307,8 +305,8 @@ export default function Landing() {
           </div>
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {testimonials.map((testimonial, index) => (
-              <Card key={index} className="border-0 shadow-lg">
-                <CardContent className="pt-6">
+              <div key={index} className="obs-panel border-0 shadow-lg">
+                <div className="pt-6">
                   <div className="flex gap-1 mb-4">
                     {[...Array(5)].map((_, i) => (
                       <Star key={i} className="h-5 w-5 fill-primary text-primary" />
@@ -319,8 +317,8 @@ export default function Landing() {
                     <p className="font-semibold">{testimonial.author}</p>
                     <p className="text-sm text-muted-foreground">{testimonial.company}</p>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
         </div>

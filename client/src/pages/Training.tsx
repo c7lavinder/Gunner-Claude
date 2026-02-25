@@ -1,12 +1,10 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
@@ -299,14 +297,14 @@ function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   const hasMore = totalCount > DISPLAY_LIMIT;
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <div className="obs-panel">
+      <div className="flex flex-row items-center justify-between" style={{marginBottom: 16}}>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-blue-100 text-blue-600"><Target className="h-5 w-5" /></div>
-          <div><CardTitle className="text-lg">Long-Term Skills {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle><CardDescription>Top development areas · Refreshes every Monday</CardDescription></div>
+          <div><h3 className="obs-section-title text-lg">Long-Term Skills {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</h3><p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Top development areas · Refreshes every Monday</p></div>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}</div> : displayItems.length > 0 ? (
           <div className="space-y-1.5">
             {displayItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}
@@ -317,8 +315,8 @@ function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
             )}
           </div>
         ) : <div className="text-center py-8 text-muted-foreground"><Target className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No skills being tracked</p></div>}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -348,14 +346,14 @@ function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   const hasMore = totalCount > DISPLAY_LIMIT;
 
   return (
-    <Card className="border-red-200">
-      <CardHeader className="flex flex-row items-center justify-between">
+    <div className="obs-panel border-red-200">
+      <div className="flex flex-row items-center justify-between" style={{marginBottom: 16}}>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-red-100 text-red-600"><AlertTriangle className="h-5 w-5" /></div>
-          <div><CardTitle className="text-lg">Issues to Address {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle><CardDescription>Urgent incompetencies from call analysis</CardDescription></div>
+          <div><h3 className="obs-section-title text-lg">Issues to Address {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</h3><p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Urgent incompetencies from call analysis</p></div>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}</div> : displayItems && displayItems.length > 0 ? (
           <div className="space-y-1.5">
             {displayItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} isAdmin={isAdmin} />)}
@@ -366,8 +364,8 @@ function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
             )}
           </div>
         ) : <div className="text-center py-8 text-muted-foreground"><AlertTriangle className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No issues to address</p></div>}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -393,14 +391,14 @@ function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" |
   const hasMore = totalCount > DISPLAY_LIMIT;
 
   return (
-    <Card className="border-green-200">
-      <CardHeader className="flex flex-row items-center justify-between">
+    <div className="obs-panel border-green-200">
+      <div className="flex flex-row items-center justify-between" style={{marginBottom: 16}}>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-green-100 text-green-600"><Trophy className="h-5 w-5" /></div>
-          <div><CardTitle className="text-lg">Wins to Celebrate {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle><CardDescription>Small victories to recognize</CardDescription></div>
+          <div><h3 className="obs-section-title text-lg">Wins to Celebrate {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</h3><p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Small victories to recognize</p></div>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         {isLoading ? <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : displayItems && displayItems.length > 0 ? (
           <div className="space-y-1.5">
             {displayItems.map((item) => <TeamItemCard key={item.id} item={item as TrainingItem} onComplete={handleRefresh} onDelete={handleRefresh} showPriority={false} isAdmin={isAdmin} />)}
@@ -411,8 +409,8 @@ function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" |
             )}
           </div>
         ) : <div className="text-center py-8 text-muted-foreground"><Trophy className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No wins recorded yet</p></div>}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -497,17 +495,17 @@ function MeetingFacilitator({ agendaItems, onClose }: { agendaItems: Array<{ id:
   if (!isStarted) {
     return (
       <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl">
-          <CardHeader>
+        <div className="obs-panel w-full max-w-2xl">
+          <div style={{marginBottom: 16}}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white"><Bot className="h-6 w-6" /></div>
-                <div><CardTitle>AI Meeting Facilitator</CardTitle><CardDescription>Your AI-powered training session guide</CardDescription></div>
+                <div><h3 className="obs-section-title">AI Meeting Facilitator</h3><p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Your AI-powered training session guide</p></div>
               </div>
               <Button variant="ghost" size="icon" onClick={onClose}><X className="h-5 w-5" /></Button>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
+          </div>
+          <div className="space-y-6">
             <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-4">
               <h3 className="font-semibold mb-2">Today's Agenda ({agendaItems.length} items)</h3>
               <div className="space-y-2">
@@ -526,8 +524,8 @@ function MeetingFacilitator({ agendaItems, onClose }: { agendaItems: Array<{ id:
               <div className="p-4 border rounded-lg"><div className="flex items-center gap-2 mb-2"><MessageCircle className="h-5 w-5 text-purple-600" /><span className="font-medium">Guided Discussion</span></div><p className="text-sm text-muted-foreground">AI guides you through each topic</p></div>
             </div>
             <Button className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700" size="lg" onClick={startMeeting}><Play className="h-5 w-5 mr-2" />Start Meeting</Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -606,17 +604,17 @@ function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   return (
     <>
       {showFacilitator && agendaForFacilitator.length > 0 && <MeetingFacilitator agendaItems={agendaForFacilitator} onClose={() => setShowFacilitator(false)} />}
-      <Card className="border-purple-200">
-        <CardHeader className="flex flex-row items-center justify-between">
+      <div className="obs-panel border-purple-200">
+        <div className="flex flex-row items-center justify-between" style={{marginBottom: 16}}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-purple-100 text-purple-600"><Calendar className="h-5 w-5" /></div>
-            <div><CardTitle className="text-lg">Weekly Team Call Agenda</CardTitle><CardDescription>AI-suggested topics based on call analysis</CardDescription></div>
+            <div><h3 className="obs-section-title text-lg">Weekly Team Call Agenda</h3><p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>AI-suggested topics based on call analysis</p></div>
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={() => setShowFacilitator(true)} className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700" disabled={!sortedItems || sortedItems.length === 0}><Play className="h-4 w-4 mr-2" />Start Meeting</Button>
           </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         {isLoading ? <div className="space-y-1.5">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div> : sortedItems && sortedItems.length > 0 ? (
           <div className="space-y-1.5">
             {sortedItems.map((item, index) => (
@@ -634,8 +632,8 @@ function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
             ))}
           </div>
         ) : <div className="text-center py-8 text-muted-foreground"><Calendar className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No agenda items</p></div>}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
     </>
   );
 }
@@ -645,6 +643,8 @@ function TeamTrainingContent() {
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator">("all");
+  const [materialCat, setMaterialCat] = useState("all");
+  const [mainTab, setMainTab] = useState("overview");
   const handleInsightsGenerated = () => utils.teamTraining.list.invalidate();
 
   return (
@@ -667,38 +667,38 @@ function TeamTrainingContent() {
       </div>
 
       {isAdmin && (
-        <Card>
-          <CardContent className="pt-6">
-            <Tabs value={selectedRole} onValueChange={(value) => setSelectedRole(value as any)} className="w-full">
-              <TabsList>
-                <TabsTrigger value="all"><Users className="h-4 w-4 mr-2" />All Roles</TabsTrigger>
-                <TabsTrigger value="acquisition_manager">Acquisition Manager</TabsTrigger>
-                <TabsTrigger value="lead_manager">Lead Manager</TabsTrigger>
-                <TabsTrigger value="lead_generator">Lead Generator</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </CardContent>
-        </Card>
+        <div className="obs-panel">
+          <div className="pt-6">
+            <div className="w-full">
+              <div className="obs-role-tabs">
+                <button className={`obs-role-tab ${materialCat === "all" ? "active" : ""}`} onClick={() => setMaterialCat("all")}><Users className="h-4 w-4 mr-2" />All Roles</button>
+                <button className={`obs-role-tab ${materialCat === "acquisition_manager" ? "active" : ""}`} onClick={() => setMaterialCat("acquisition_manager")}>Acquisition Manager</button>
+                <button className={`obs-role-tab ${materialCat === "lead_manager" ? "active" : ""}`} onClick={() => setMaterialCat("lead_manager")}>Lead Manager</button>
+                <button className={`obs-role-tab ${materialCat === "lead_generator" ? "active" : ""}`} onClick={() => setMaterialCat("lead_generator")}>Lead Generator</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="agenda">Meeting Agenda</TabsTrigger>
-        </TabsList>
+      <div className="space-y-6">
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${mainTab === "overview" ? "active" : ""}`} onClick={() => setMainTab("overview")}>Overview</button>
+          <button className={`obs-role-tab ${mainTab === "agenda" ? "active" : ""}`} onClick={() => setMainTab("agenda")}>Meeting Agenda</button>
+        </div>
 
-        <TabsContent value="overview" className="space-y-6">
+        {mainTab === "overview" && (<div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <TeamIssuesSection roleFilter={selectedRole} />
             <TeamWinsSection roleFilter={selectedRole} />
           </div>
           <TeamSkillsSection roleFilter={selectedRole} />
-        </TabsContent>
+        </div>)}
 
-        <TabsContent value="agenda">
+        {mainTab === "agenda" && (<div>
           <TeamAgendaSection roleFilter={selectedRole} />
-        </TabsContent>
-      </Tabs>
+        </div>)}
+      </div>
     </div>
   );
 }
@@ -708,6 +708,7 @@ export default function Training() {
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [mainTab, setMainTab] = useState("team");
+  const [materialCat, setMaterialCat] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<any>(null);
   const [formData, setFormData] = useState({
@@ -1063,46 +1064,46 @@ export default function Training() {
       </div>
 
       {/* Main Tabs - Team Training, Materials, Methodology */}
-      <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="team" className="flex items-center gap-2">
+      <div className="space-y-6">
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${mainTab === "team" ? "active" : ""}`} onClick={() => setMainTab("team")}>
             <Sparkles className="h-4 w-4" />
             Team Training
-          </TabsTrigger>
-          <TabsTrigger value="materials" className="flex items-center gap-2">
+          </button>
+          <button className={`obs-role-tab ${mainTab === "materials" ? "active" : ""}`} onClick={() => setMainTab("materials")}>
             <BookOpen className="h-4 w-4" />
             Materials
-          </TabsTrigger>
-          <TabsTrigger value="methodology" className="flex items-center gap-2">
+          </button>
+          <button className={`obs-role-tab ${mainTab === "methodology" ? "active" : ""}`} onClick={() => setMainTab("methodology")}>
             <Scale className="h-4 w-4" />
             Methodology
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
         {/* Team Training Tab */}
-        <TabsContent value="team" className="space-y-6">
+        {mainTab === "team" && (<div className="space-y-6">
           <TeamTrainingContent />
-        </TabsContent>
+        </div>)}
 
         {/* Training Materials Tab */}
-        <TabsContent value="materials" className="space-y-4">
+        {mainTab === "materials" && (<div className="space-y-4">
           {isLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardHeader>
+                <div className="obs-panel" key={i}>
+                  <div style={{marginBottom: 16}}>
                     <Skeleton className="h-5 w-3/4" />
                     <Skeleton className="h-4 w-1/2" />
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <Skeleton className="h-20 w-full" />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           ) : materials?.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="obs-panel">
+              <div className="flex flex-col items-center justify-center py-12">
                 <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Training Materials Yet</h3>
                 <p className="text-muted-foreground text-center max-w-md mb-4">
@@ -1113,24 +1114,24 @@ export default function Training() {
                   <Plus className="h-4 w-4 mr-2" />
                   Add Your First Material
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
-            <Tabs defaultValue="all" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="all">All ({materials?.length || 0})</TabsTrigger>
+            <div className="space-y-4">
+              <div className="obs-role-tabs">
+                <button className={`obs-role-tab ${materialCat === "all" ? "active" : ""}`} onClick={() => setMaterialCat("all")}>All ({materials?.length || 0})</button>
                 {CATEGORIES.map((cat) => {
                   const count = groupedMaterials?.[cat.value]?.length || 0;
                   if (count === 0) return null;
                   return (
-                    <TabsTrigger key={cat.value} value={cat.value}>
+                    <button key={cat.value} className={`obs-role-tab ${materialCat === cat.value ? "active" : ""}`} onClick={() => setMaterialCat(cat.value)}>
                       {cat.label} ({count})
-                    </TabsTrigger>
+                    </button>
                   );
                 })}
-              </TabsList>
+              </div>
 
-              <TabsContent value="all" className="space-y-4">
+              {materialCat === "all" && (<div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {materials?.map((material) => (
                     <MaterialCard
@@ -1142,10 +1143,10 @@ export default function Training() {
                     />
                   ))}
                 </div>
-              </TabsContent>
+              </div>)}
 
               {CATEGORIES.map((cat) => (
-                <TabsContent key={cat.value} value={cat.value} className="space-y-4">
+                materialCat === cat.value && (<div key={cat.value} className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {groupedMaterials?.[cat.value]?.map((material) => (
                       <MaterialCard
@@ -1157,14 +1158,14 @@ export default function Training() {
                       />
                     ))}
                   </div>
-                </TabsContent>
+                </div>)
               ))}
-            </Tabs>
+            </div>
           )}
-        </TabsContent>
+        </div>)}
 
         {/* Methodology Tab */}
-        <TabsContent value="methodology" className="space-y-6">
+        {mainTab === "methodology" && (<div className="space-y-6">
           <MethodologyTab 
             rubrics={rubrics}
             rubricsLoading={rubricsLoading}
@@ -1175,8 +1176,8 @@ export default function Training() {
             sellerCallbackContext={sellerCallbackContext}
             adminCallbackContext={adminCallbackContext}
           />
-        </TabsContent>
-      </Tabs>
+        </div>)}
+      </div>
     </div>
   );
 }
@@ -1195,23 +1196,23 @@ function MaterialCard({
   const Icon = getCategoryIcon(material.category);
   
   return (
-    <Card className="flex flex-col">
-      <CardHeader className="pb-3">
+    <div className="obs-panel flex flex-col">
+      <div className="pb-3" style={{marginBottom: 16}}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Icon className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-base">{material.title}</CardTitle>
-              <CardDescription className="text-xs">
+              <h3 className="obs-section-title text-base">{material.title}</h3>
+              <p className="text-xs" style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                 {getCategoryLabel(material.category)}
-              </CardDescription>
+              </p>
             </div>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col">
+      </div>
+      <div className="flex-1 flex flex-col">
         {material.description && (
           <p className="text-sm text-muted-foreground mb-3">{material.description}</p>
         )}
@@ -1260,8 +1261,8 @@ function MaterialCard({
           </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1283,15 +1284,15 @@ function RubricDisplay({
   return (
     <div className="space-y-6">
       {/* Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
+          <h3 className="obs-section-title flex items-center gap-2">
             <Scale className="h-5 w-5" />
             {title}
-          </CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent>
+          </h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{description}</p>
+        </div>
+        <div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="p-4 bg-muted/50 rounded-lg text-center">
               <p className="text-2xl font-bold">{rubric.criteria?.length || 0}</p>
@@ -1306,21 +1307,21 @@ function RubricDisplay({
               <p className="text-sm text-muted-foreground">Training Materials</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Criteria */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
+          <h3 className="obs-section-title text-lg flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-500" />
             Grading Criteria
-          </CardTitle>
-          <CardDescription>
+          </h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
             Each call is evaluated on these criteria
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div>
           <div className="space-y-4">
             {rubric.criteria?.map((criterion: any, index: number) => (
               <div key={index} className="p-4 border rounded-lg">
@@ -1332,22 +1333,22 @@ function RubricDisplay({
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Red Flags */}
       {rubric.redFlags && rubric.redFlags.length > 0 && (
-        <Card className="border-red-200 dark:border-red-900">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
+        <div className="obs-panel border-red-200 dark:border-red-900">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
               <AlertTriangle className="h-5 w-5" />
               Red Flags
-            </CardTitle>
-            <CardDescription>
+            </h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               Issues that will be flagged during grading
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <ul className="space-y-2">
               {rubric.redFlags.map((flag: string, index: number) => (
                 <li key={index} className="flex items-start gap-2 text-sm">
@@ -1356,8 +1357,8 @@ function RubricDisplay({
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1411,6 +1412,9 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
   });
 
   const hasCustomRubrics = tenantRubrics && tenantRubrics.length > 0;
+
+  // Tab state for call type tabs
+  const [methodTab, setMethodTab] = useState("lead_manager");
 
   // Editing state
   const [editingCallType, setEditingCallType] = useState<string | null>(null);
@@ -1596,8 +1600,8 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
     <div className="space-y-6">
       {/* Customization Banner for Admins */}
       {isAdmin && (
-        <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
-          <CardContent className="pt-6">
+        <div className="obs-panel border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
+          <div className="pt-6">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400">
                 <PenLine className="h-5 w-5" />
@@ -1624,23 +1628,23 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Call Type Tabs */}
-      <Tabs defaultValue="lead_manager" className="space-y-6">
-        <TabsList className="flex flex-wrap gap-1 w-full max-w-4xl">
+      <div className="space-y-6">
+        <div className="obs-role-tabs flex flex-wrap gap-1 w-full max-w-4xl">
           {CALL_TYPE_CONFIG.map((config) => {
             const IconComponent = config.icon;
             return (
-              <TabsTrigger key={config.tabValue} value={config.tabValue} className="flex items-center gap-2">
+              <button key={config.tabValue} className={`obs-role-tab flex items-center gap-2 ${methodTab === config.tabValue ? "active" : ""}`} onClick={() => setMethodTab(config.tabValue)}>
                 <IconComponent className="h-4 w-4" />
                 {config.label}
-              </TabsTrigger>
+              </button>
             );
           })}
-        </TabsList>
+        </div>
 
         {CALL_TYPE_CONFIG.map((config) => {
           const rubric = getRubricForCallType(config.callType, config.rubricKey);
@@ -1648,20 +1652,20 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
           const isEditing = editingCallType === config.callType;
 
           return (
-            <TabsContent key={config.tabValue} value={config.tabValue} className="space-y-6">
+            methodTab === config.tabValue && (<div key={config.tabValue} className="space-y-6">
               {isEditing && editState ? (
                 // ============ EDIT MODE ============
                 <div className="space-y-6">
                   {/* Edit Header */}
-                  <Card>
-                    <CardHeader>
+                  <div className="obs-panel">
+                    <div style={{marginBottom: 16}}>
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="flex items-center gap-2">
+                          <h3 className="obs-section-title flex items-center gap-2">
                             <PenLine className="h-5 w-5 text-blue-500" />
                             Editing: {config.label} Rubric
-                          </CardTitle>
-                          <CardDescription>Modify criteria, point values, descriptions, and red flags</CardDescription>
+                          </h3>
+                          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Modify criteria, point values, descriptions, and red flags</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <Button variant="outline" size="sm" onClick={cancelEditing}>
@@ -1672,8 +1676,8 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                           </Button>
                         </div>
                       </div>
-                    </CardHeader>
-                    <CardContent>
+                    </div>
+                    <div>
                       <div className="space-y-4">
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
@@ -1701,26 +1705,26 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                           />
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
 
                   {/* Editable Criteria */}
-                  <Card>
-                    <CardHeader>
+                  <div className="obs-panel">
+                    <div style={{marginBottom: 16}}>
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-lg flex items-center gap-2">
+                          <h3 className="obs-section-title text-lg flex items-center gap-2">
                             <CheckCircle className="h-5 w-5 text-green-500" />
                             Grading Criteria ({editState.criteria.length})
-                          </CardTitle>
-                          <CardDescription>Each call is scored on these criteria. Drag to reorder.</CardDescription>
+                          </h3>
+                          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Each call is scored on these criteria. Drag to reorder.</p>
                         </div>
                         <Button size="sm" variant="outline" onClick={addCriterion}>
                           <Plus className="h-4 w-4 mr-1" />Add Criterion
                         </Button>
                       </div>
-                    </CardHeader>
-                    <CardContent>
+                    </div>
+                    <div>
                       <div className="space-y-4">
                         {editState.criteria.map((criterion, index) => (
                           <div key={index} className="p-4 border rounded-lg bg-card hover:border-blue-300 transition-colors">
@@ -1775,19 +1779,19 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                           </div>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
 
                   {/* Editable Red Flags */}
-                  <Card className="border-red-200 dark:border-red-900">
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <div className="obs-panel border-red-200 dark:border-red-900">
+                    <div style={{marginBottom: 16}}>
+                      <h3 className="obs-section-title text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
                         <AlertTriangle className="h-5 w-5" />
                         Red Flags ({editState.redFlags.length})
-                      </CardTitle>
-                      <CardDescription>Issues that will be flagged during grading</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                      </h3>
+                      <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Issues that will be flagged during grading</p>
+                    </div>
+                    <div>
                       <div className="space-y-2">
                         {editState.redFlags.map((flag, index) => (
                           <div key={index} className="flex items-center gap-2">
@@ -1820,8 +1824,8 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                           </Button>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
 
                   {/* Bottom Save Bar */}
                   <div className="flex items-center justify-end gap-2 sticky bottom-4 bg-background/95 backdrop-blur-sm p-4 rounded-lg border shadow-lg">
@@ -1837,11 +1841,11 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                   {/* Rubric Overview */}
                   {rubric && (
                     <>
-                      <Card>
-                        <CardHeader>
+                      <div className="obs-panel">
+                        <div style={{marginBottom: 16}}>
                           <div className="flex items-center justify-between">
                             <div>
-                              <CardTitle className="flex items-center gap-2">
+                              <h3 className="obs-section-title flex items-center gap-2">
                                 <Scale className="h-5 w-5" />
                                 {rubric.name || config.title}
                                 {rubric.isCustom && (
@@ -1849,8 +1853,8 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                                     <PenLine className="h-3 w-3 mr-1" />Custom
                                   </Badge>
                                 )}
-                              </CardTitle>
-                              <CardDescription>{rubric.description || config.description}</CardDescription>
+                              </h3>
+                              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{rubric.description || config.description}</p>
                             </div>
                             {isAdmin && !isDemo && (hasCustomRubrics || rubric.isCustom) && (
                               <div className="flex items-center gap-2">
@@ -1886,8 +1890,8 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                               </div>
                             )}
                           </div>
-                        </CardHeader>
-                        <CardContent>
+                        </div>
+                        <div>
                           <div className="grid gap-4 sm:grid-cols-3">
                             <div className="p-4 bg-muted/50 rounded-lg text-center">
                               <p className="text-2xl font-bold">{rubric.criteria?.length || 0}</p>
@@ -1902,19 +1906,19 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                               <p className="text-sm text-muted-foreground">Training Materials</p>
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </div>
 
                       {/* Criteria List */}
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-lg flex items-center gap-2">
+                      <div className="obs-panel">
+                        <div style={{marginBottom: 16}}>
+                          <h3 className="obs-section-title text-lg flex items-center gap-2">
                             <CheckCircle className="h-5 w-5 text-green-500" />
                             Grading Criteria
-                          </CardTitle>
-                          <CardDescription>Each call is evaluated on these criteria</CardDescription>
-                        </CardHeader>
-                        <CardContent>
+                          </h3>
+                          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Each call is evaluated on these criteria</p>
+                        </div>
+                        <div>
                           <div className="space-y-4">
                             {rubric.criteria?.map((criterion: any, index: number) => (
                               <div key={index} className="p-4 border rounded-lg">
@@ -1926,20 +1930,20 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                               </div>
                             ))}
                           </div>
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </div>
 
                       {/* Red Flags */}
                       {rubric.redFlags && rubric.redFlags.length > 0 && (
-                        <Card className="border-red-200 dark:border-red-900">
-                          <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
+                        <div className="obs-panel border-red-200 dark:border-red-900">
+                          <div style={{marginBottom: 16}}>
+                            <h3 className="obs-section-title text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
                               <AlertTriangle className="h-5 w-5" />
                               Red Flags
-                            </CardTitle>
-                            <CardDescription>Issues that will be flagged during grading</CardDescription>
-                          </CardHeader>
-                          <CardContent>
+                            </h3>
+                            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Issues that will be flagged during grading</p>
+                          </div>
+                          <div>
                             <ul className="space-y-2">
                               {rubric.redFlags.map((flag: string, index: number) => (
                                 <li key={index} className="flex items-start gap-2 text-sm">
@@ -1948,17 +1952,17 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                                 </li>
                               ))}
                             </ul>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       )}
                     </>
                   )}
                 </div>
               )}
-            </TabsContent>
+            </div>)
           );
         })}
-      </Tabs>
+      </div>
     </div>
   );
 }

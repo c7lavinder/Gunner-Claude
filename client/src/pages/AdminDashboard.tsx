@@ -1,23 +1,13 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -217,18 +207,18 @@ export default function AdminDashboard() {
   if (user?.role !== "super_admin") {
     return (
       <div className="flex items-center justify-center h-screen">
-        <Card className="w-96">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
+        <div className="obs-panel w-96">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
               Access Denied
-            </CardTitle>
-            <CardDescription>
+            </h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               You don't have permission to access the admin dashboard.
               This area is restricted to platform administrators.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -335,86 +325,86 @@ export default function AdminDashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Tenants</CardTitle>
+        <div className="obs-panel">
+          <div className="flex flex-row items-center justify-between pb-2" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-sm font-medium">Total Tenants</h3>
             <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div>
             <div className="text-2xl font-bold">{stats?.totalTenants || 0}</div>
             <p className="text-xs text-muted-foreground">
               {stats?.activeTenants || 0} active
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+        <div className="obs-panel">
+          <div className="flex flex-row items-center justify-between pb-2" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-sm font-medium">Total Users</h3>
             <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div>
             <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
             <p className="text-xs text-muted-foreground">
               Across all tenants
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
+        <div className="obs-panel">
+          <div className="flex flex-row items-center justify-between pb-2" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-sm font-medium">Total Calls</h3>
             <Phone className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div>
             <div className="text-2xl font-bold">{stats?.totalCalls || 0}</div>
             <p className="text-xs text-muted-foreground">
               {stats?.gradedCalls || 0} graded
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Revenue (MRR)</CardTitle>
+        <div className="obs-panel">
+          <div className="flex flex-row items-center justify-between pb-2" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-sm font-medium">Revenue (MRR)</h3>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div>
             <div className="text-2xl font-bold">
               ${((stats?.monthlyRevenue || 0) / 100).toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground">
               Monthly recurring
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Main Tabs */}
-      <Tabs value={mainTab} onValueChange={setMainTab}>
-        <TabsList>
-          <TabsTrigger value="tenants" className="flex items-center gap-2">
+      <div>
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${mainTab === "tenants" ? "active" : ""}`} onClick={() => setMainTab("tenants")}>
             <Building2 className="h-4 w-4" />
             Tenants
-          </TabsTrigger>
-          <TabsTrigger value="plans" className="flex items-center gap-2">
+          </button>
+          <button className={`obs-role-tab ${mainTab === "plans" ? "active" : ""}`} onClick={() => setMainTab("plans")}>
             <CreditCard className="h-4 w-4" />
             Plans
-          </TabsTrigger>
-          <TabsTrigger value="usage" className="flex items-center gap-2">
+          </button>
+          <button className={`obs-role-tab ${mainTab === "usage" ? "active" : ""}`} onClick={() => setMainTab("usage")}>
             <Activity className="h-4 w-4" />
             Usage
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
         {/* Tenants Tab */}
-        <TabsContent value="tenants">
-          <Card>
-            <CardHeader>
+        {mainTab === "tenants" && (<div>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Tenants</CardTitle>
-                  <CardDescription>Manage all platform tenants</CardDescription>
+                  <h3 className="obs-section-title">Tenants</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Manage all platform tenants</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -432,42 +422,42 @@ export default function AdminDashboard() {
                   </Button>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               {tenantsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Tier</TableHead>
-                      <TableHead>Users</TableHead>
-                      <TableHead>Calls</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <table className="obs-table">
+                  <thead>
+                    <tr>
+                      <th>Tenant</th>
+                      <th>Status</th>
+                      <th>Tier</th>
+                      <th>Users</th>
+                      <th>Calls</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {tenants?.map((tenant: any) => (
-                      <TableRow key={tenant.id}>
-                        <TableCell>
+                      <tr key={tenant.id}>
+                        <td>
                           <div>
                             <div className="font-medium">{tenant.name}</div>
                             <div className="text-sm text-muted-foreground">{tenant.slug}</div>
                           </div>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(tenant.subscriptionStatus || "active")}</TableCell>
-                        <TableCell>{getTierBadge(tenant.subscriptionTier || "trial")}</TableCell>
-                        <TableCell>{tenant.userCount}</TableCell>
-                        <TableCell>{tenant.callCount}</TableCell>
-                        <TableCell>
+                        </td>
+                        <td>{getStatusBadge(tenant.subscriptionStatus || "active")}</td>
+                        <td>{getTierBadge(tenant.subscriptionTier || "trial")}</td>
+                        <td>{tenant.userCount}</td>
+                        <td>{tenant.callCount}</td>
+                        <td>
                           {tenant.createdAt ? formatDistanceToNow(new Date(tenant.createdAt), { addSuffix: true }) : "N/A"}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <div className="flex items-center gap-2">
                             <Button
                               variant="ghost"
@@ -502,13 +492,13 @@ export default function AdminDashboard() {
                                     Tenant details and management
                                   </DialogDescription>
                                 </DialogHeader>
-                                <Tabs value={defaultTab} onValueChange={setDefaultTab}>
-                                  <TabsList>
-                                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                                    <TabsTrigger value="users">Users</TabsTrigger>
-                                    <TabsTrigger value="settings">Settings</TabsTrigger>
-                                  </TabsList>
-                                  <TabsContent value="overview" className="space-y-4">
+                                <div>
+                                  <div className="obs-role-tabs">
+                                    <button className={`obs-role-tab ${defaultTab === "overview" ? "active" : ""}`} onClick={() => setDefaultTab("overview")}>Overview</button>
+                                    <button className={`obs-role-tab ${defaultTab === "users" ? "active" : ""}`} onClick={() => setDefaultTab("users")}>Users</button>
+                                    <button className={`obs-role-tab ${defaultTab === "settings" ? "active" : ""}`} onClick={() => setDefaultTab("settings")}>Settings</button>
+                                  </div>
+                                  {defaultTab === "overview" && (<div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                       <div>
                                         <label className="text-sm font-medium">Company Name</label>
@@ -542,55 +532,55 @@ export default function AdminDashboard() {
                                       </div>
                                     </div>
                                     <div className="grid grid-cols-3 gap-4 pt-4 border-t">
-                                      <Card>
-                                        <CardContent className="pt-4">
+                                      <div className="obs-panel">
+                                        <div className="pt-4">
                                           <div className="text-2xl font-bold">{tenantDetails?.stats?.userCount || 0}</div>
                                           <p className="text-xs text-muted-foreground">Users</p>
-                                        </CardContent>
-                                      </Card>
-                                      <Card>
-                                        <CardContent className="pt-4">
+                                        </div>
+                                      </div>
+                                      <div className="obs-panel">
+                                        <div className="pt-4">
                                           <div className="text-2xl font-bold">{tenantDetails?.stats?.callCount || 0}</div>
                                           <p className="text-xs text-muted-foreground">Total Calls</p>
-                                        </CardContent>
-                                      </Card>
-                                      <Card>
-                                        <CardContent className="pt-4">
+                                        </div>
+                                      </div>
+                                      <div className="obs-panel">
+                                        <div className="pt-4">
                                           <div className="text-2xl font-bold">{tenantDetails?.stats?.gradedCallCount || 0}</div>
                                           <p className="text-xs text-muted-foreground">Graded Calls</p>
-                                        </CardContent>
-                                      </Card>
+                                        </div>
+                                      </div>
                                     </div>
-                                  </TabsContent>
-                                  <TabsContent value="users">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Name</TableHead>
-                                          <TableHead>Email</TableHead>
-                                          <TableHead>Role</TableHead>
-                                          <TableHead>Last Active</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
+                                  </div>)}
+                                  {defaultTab === "users" && (<div>
+                                    <table className="obs-table">
+                                      <thead>
+                                        <tr>
+                                          <th>Name</th>
+                                          <th>Email</th>
+                                          <th>Role</th>
+                                          <th>Last Active</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
                                         {tenantDetails?.users?.map((u: any) => (
-                                          <TableRow key={u.id}>
-                                            <TableCell>{u.name}</TableCell>
-                                            <TableCell>{u.email}</TableCell>
-                                            <TableCell>
+                                          <tr key={u.id}>
+                                            <td>{u.name}</td>
+                                            <td>{u.email}</td>
+                                            <td>
                                               <Badge variant="outline">{u.teamRole}</Badge>
-                                            </TableCell>
-                                            <TableCell>
+                                            </td>
+                                            <td>
                                               {u.lastSignedIn 
                                                 ? formatDistanceToNow(new Date(u.lastSignedIn), { addSuffix: true })
                                                 : "Never"}
-                                            </TableCell>
-                                          </TableRow>
+                                            </td>
+                                          </tr>
                                         ))}
-                                      </TableBody>
-                                    </Table>
-                                  </TabsContent>
-                                  <TabsContent value="settings" className="space-y-4">
+                                      </tbody>
+                                    </table>
+                                  </div>)}
+                                  {defaultTab === "settings" && (<div className="space-y-4">
                                     <div className="space-y-4">
                                       <div>
                                         <label className="text-sm font-medium">Subscription Tier</label>
@@ -687,8 +677,8 @@ export default function AdminDashboard() {
                                         </AlertDialog>
                                       </div>
                                     </div>
-                                  </TabsContent>
-                                </Tabs>
+                                  </div>)}
+                                </div>
                               </DialogContent>
                             </Dialog>
                             <Button 
@@ -703,27 +693,27 @@ export default function AdminDashboard() {
                               <Settings className="h-4 w-4" />
                             </Button>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
         {/* Plans Tab */}
-        <TabsContent value="plans">
-          <Card>
-            <CardHeader>
+        {mainTab === "plans" && (<div>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <h3 className="obs-section-title flex items-center gap-2">
                     <CreditCard className="h-5 w-5" />
                     Subscription Plans
-                  </CardTitle>
-                  <CardDescription>Manage pricing, features, and Stripe integration</CardDescription>
+                  </h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Manage pricing, features, and Stripe integration</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button 
@@ -745,8 +735,8 @@ export default function AdminDashboard() {
                   </Button>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               {plansLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -757,23 +747,23 @@ export default function AdminDashboard() {
                   <p>No plans configured yet. Click "Seed Default Plans" to create the default subscription tiers.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Plan</TableHead>
-                      <TableHead>Monthly</TableHead>
-                      <TableHead>Yearly</TableHead>
-                      <TableHead>Trial</TableHead>
-                      <TableHead>Limits</TableHead>
-                      <TableHead>Stripe IDs</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <table className="obs-table">
+                  <thead>
+                    <tr>
+                      <th>Plan</th>
+                      <th>Monthly</th>
+                      <th>Yearly</th>
+                      <th>Trial</th>
+                      <th>Limits</th>
+                      <th>Stripe IDs</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {plans.map((plan: SubscriptionPlan) => (
-                      <TableRow key={plan.id}>
-                        <TableCell>
+                      <tr key={plan.id}>
+                        <td>
                           <div className="flex items-center gap-2">
                             <div className="font-medium">{plan.name}</div>
                             {plan.isPopular === "true" && (
@@ -784,25 +774,25 @@ export default function AdminDashboard() {
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground">{plan.code}</div>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <div className="font-medium">${(plan.priceMonthly / 100).toFixed(0)}/mo</div>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <div className="font-medium">${((plan.priceYearly || 0) / 100).toFixed(0)}/yr</div>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <Badge variant="outline">{plan.trialDays} days</Badge>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <div className="text-sm">
                             <div>{plan.maxUsers === 999 ? "Unlimited" : plan.maxUsers} users</div>
                             <div className="text-muted-foreground">
                               {plan.maxCallsPerMonth === -1 ? "Unlimited" : plan.maxCallsPerMonth} calls/mo
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <div className="text-xs">
                             {plan.stripePriceIdMonthly ? (
                               <Badge variant="default" className="mb-1">Monthly ✓</Badge>
@@ -816,8 +806,8 @@ export default function AdminDashboard() {
                               <Badge variant="outline">Yearly ✗</Badge>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           {plan.isActive === "true" ? (
                             <Badge variant="default" className="flex items-center gap-1 w-fit">
                               <CheckCircle className="h-3 w-3" />
@@ -829,8 +819,8 @@ export default function AdminDashboard() {
                               Inactive
                             </Badge>
                           )}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -841,14 +831,14 @@ export default function AdminDashboard() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Plan Edit Dialog */}
           <Dialog open={planDialogOpen} onOpenChange={(open) => {
@@ -1093,67 +1083,67 @@ export default function AdminDashboard() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </TabsContent>
+        </div>)}
 
         {/* Usage Tab */}
-        <TabsContent value="usage">
-          <Card>
-            <CardHeader>
+        {mainTab === "usage" && (<div>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <h3 className="obs-section-title flex items-center gap-2">
                     <Activity className="h-5 w-5" />
                     API Usage Analytics
-                  </CardTitle>
-                  <CardDescription>Track API usage per tenant (since server start)</CardDescription>
+                  </h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Track API usage per tenant (since server start)</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => refetchUsage()}>
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               {!usageAnalytics || usageAnalytics.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Zap className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>No usage data yet. Usage tracking starts when tenants make API calls.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>AI Chat</TableHead>
-                      <TableHead>Content Gen</TableHead>
-                      <TableHead>Total Requests</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <table className="obs-table">
+                  <thead>
+                    <tr>
+                      <th>Tenant</th>
+                      <th>AI Chat</th>
+                      <th>Content Gen</th>
+                      <th>Total Requests</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {usageAnalytics.map((item: { tenantId: number; tenantName: string; usage: Record<string, number>; totalRequests: number }) => (
-                      <TableRow key={item.tenantId}>
-                        <TableCell>
+                      <tr key={item.tenantId}>
+                        <td>
                           <div className="font-medium">{item.tenantName}</div>
                           <div className="text-xs text-muted-foreground">ID: {item.tenantId}</div>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <Badge variant="outline">{item.usage.ai_chat || 0}</Badge>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <Badge variant="outline">{item.usage.content_generation || 0}</Badge>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <Badge variant="secondary">{item.totalRequests}</Badge>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          </div>
+        </div>)}
+      </div>
     </div>
   );
 }

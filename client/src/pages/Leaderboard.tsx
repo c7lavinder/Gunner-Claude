@@ -1,7 +1,6 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Award, Trophy, Medal, TrendingUp, Phone, Flame, Zap, Target } from "lucide-react";
 
 function RankBadge({ rank }: { rank: number }) {
@@ -65,12 +64,12 @@ function GamificationLeaderboardCard({ entry, rank }: { entry: any; rank: number
   const { teamMember, xp, level, title, hotStreak, badges } = entry;
 
   return (
-    <Card className={`${rank <= 3 ? "border-2" : ""} ${
+    <div className={`obs-panel ${rank <= 3 ? "border-2" : ""} ${
       rank === 1 ? "border-yellow-400" : 
       rank === 2 ? "border-gray-400" : 
       rank === 3 ? "border-amber-600" : ""
     }`}>
-      <CardContent className="p-6">
+      <div className="p-6">
         <div className="flex items-center gap-6">
           <RankBadge rank={rank} />
           
@@ -97,8 +96,8 @@ function GamificationLeaderboardCard({ entry, rank }: { entry: any; rank: number
             <p className="text-xs text-orange-500">{xp.toLocaleString()} XP</p>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -107,12 +106,12 @@ function ScoreLeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
   const totalGrades = gradeDistribution.A + gradeDistribution.B + gradeDistribution.C + gradeDistribution.D + gradeDistribution.F;
 
   return (
-    <Card className={`${rank <= 3 ? "border-2" : ""} ${
+    <div className={`obs-panel ${rank <= 3 ? "border-2" : ""} ${
       rank === 1 ? "border-yellow-400" : 
       rank === 2 ? "border-gray-400" : 
       rank === 3 ? "border-amber-600" : ""
     }`}>
-      <CardContent className="p-6">
+      <div className="p-6">
         <div className="flex items-center gap-6">
           <RankBadge rank={rank} />
           
@@ -190,12 +189,13 @@ function ScoreLeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 export default function Leaderboard() {
+  const [leaderTab, setLeaderTab] = useState("xp");
   const { data: scoreLeaderboard, isLoading: scoreLoading } = trpc.leaderboard.get.useQuery();
   const { data: gamificationLeaderboard, isLoading: gamificationLoading } = trpc.gamification.getLeaderboard.useQuery();
 
@@ -208,25 +208,25 @@ export default function Leaderboard() {
         </p>
       </div>
 
-      <Tabs defaultValue="xp" className="w-full">
-        <TabsList>
-          <TabsTrigger value="xp" className="flex items-center gap-2">
+      <div className="w-full">
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${leaderTab === "xp" ? "active" : ""}`} onClick={() => setLeaderTab("xp")}>
             <Zap className="h-4 w-4" /> XP & Level
-          </TabsTrigger>
-          <TabsTrigger value="score" className="flex items-center gap-2">
+          </button>
+          <button className={`obs-role-tab ${leaderTab === "score" ? "active" : ""}`} onClick={() => setLeaderTab("score")}>
             <TrendingUp className="h-4 w-4" /> Avg Score
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
-        <TabsContent value="xp" className="mt-6">
+        {leaderTab === "xp" && (<div className="mt-6">
           {gamificationLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardContent className="p-6">
+                <div className="obs-panel" key={i}>
+                  <div className="p-6">
                     <Skeleton className="h-24 w-full" />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           ) : gamificationLeaderboard && gamificationLeaderboard.length > 0 ? (
@@ -236,27 +236,27 @@ export default function Leaderboard() {
               ))}
             </div>
           ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="obs-panel">
+              <div className="flex flex-col items-center justify-center py-16">
                 <Zap className="h-16 w-16 text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No XP earned yet</h3>
                 <p className="text-muted-foreground text-center max-w-md">
                   XP rankings will appear here once team members view their graded calls.
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
-        </TabsContent>
+        </div>)}
 
-        <TabsContent value="score" className="mt-6">
+        {leaderTab === "score" && (<div className="mt-6">
           {scoreLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardContent className="p-6">
+                <div className="obs-panel" key={i}>
+                  <div className="p-6">
                     <Skeleton className="h-32 w-full" />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           ) : scoreLeaderboard && scoreLeaderboard.length > 0 ? (
@@ -266,18 +266,18 @@ export default function Leaderboard() {
               ))}
             </div>
           ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="obs-panel">
+              <div className="flex flex-col items-center justify-center py-16">
                 <Award className="h-16 w-16 text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No rankings yet</h3>
                 <p className="text-muted-foreground text-center max-w-md">
                   Rankings will appear here once team members have graded calls.
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>)}
+      </div>
     </div>
   );
 }

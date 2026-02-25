@@ -1,7 +1,6 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
   Target, 
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 
 export default function Methodology() {
+  const [methodTab, setMethodTab] = useState("acquisition_manager");
   const { data: rubrics, isLoading: rubricsLoading } = trpc.rubrics.getAll.useQuery();
   const { data: qualificationContext, isLoading: qualContextLoading } = trpc.rubrics.getContext.useQuery({ callType: "qualification" });
   const { data: offerContext, isLoading: offerContextLoading } = trpc.rubrics.getContext.useQuery({ callType: "offer" });
@@ -37,36 +37,36 @@ export default function Methodology() {
         </p>
       </div>
 
-      <Tabs defaultValue="acquisition_manager" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="acquisition_manager" className="flex items-center gap-2">
+      <div className="space-y-6">
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${methodTab === "acquisition_manager" ? "active" : ""}`} onClick={() => setMethodTab("acquisition_manager")}>
             <Target className="h-4 w-4" />
             Acquisition Manager
-          </TabsTrigger>
-          <TabsTrigger value="lead_manager" className="flex items-center gap-2">
+          </button>
+          <button className={`obs-role-tab ${methodTab === "lead_manager" ? "active" : ""}`} onClick={() => setMethodTab("lead_manager")}>
             <Users className="h-4 w-4" />
             Lead Manager
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
-        <TabsContent value="lead_manager" className="space-y-6">
+        {methodTab === "lead_manager" && (<div className="space-y-6">
           <RubricDisplay 
             rubric={rubrics?.leadManager} 
             context={qualificationContext}
             title="Lead Manager Rubric"
             description="Used for qualification calls by Lead Managers"
           />
-        </TabsContent>
+        </div>)}
 
-        <TabsContent value="acquisition_manager" className="space-y-6">
+        {methodTab === "acquisition_manager" && (<div className="space-y-6">
           <RubricDisplay 
             rubric={rubrics?.acquisitionManager} 
             context={offerContext}
             title="Acquisition Manager Rubric"
             description="Used for offer calls by Acquisition Managers"
           />
-        </TabsContent>
-      </Tabs>
+        </div>)}
+      </div>
     </div>
   );
 }
@@ -89,15 +89,15 @@ function RubricDisplay({
   return (
     <div className="space-y-6">
       {/* Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
+          <h3 className="obs-section-title flex items-center gap-2">
             <Scale className="h-5 w-5" />
             {title}
-          </CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent>
+          </h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{description}</p>
+        </div>
+        <div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="p-4 bg-muted/50 rounded-lg text-center">
               <p className="text-2xl font-bold">{rubric.criteria?.length || 0}</p>
@@ -112,21 +112,21 @@ function RubricDisplay({
               <p className="text-sm text-muted-foreground">Training Materials</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Criteria */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
+          <h3 className="obs-section-title text-lg flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-500" />
             Grading Criteria
-          </CardTitle>
-          <CardDescription>
+          </h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
             Each call is evaluated on these criteria
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div>
           <div className="space-y-4">
             {rubric.criteria?.map((criterion: any, index: number) => (
               <div key={index} className="p-4 border rounded-lg">
@@ -138,22 +138,22 @@ function RubricDisplay({
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Red Flags */}
       {rubric.redFlags && rubric.redFlags.length > 0 && (
-        <Card className="border-red-200 dark:border-red-900">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
+        <div className="obs-panel border-red-200 dark:border-red-900">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-lg flex items-center gap-2 text-red-600 dark:text-red-400">
               <AlertTriangle className="h-5 w-5" />
               Red Flags
-            </CardTitle>
-            <CardDescription>
+            </h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               Issues that will be flagged during grading
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <ul className="space-y-2">
               {rubric.redFlags.map((flag: string, index: number) => (
                 <li key={index} className="flex items-start gap-2 text-sm">
@@ -162,23 +162,23 @@ function RubricDisplay({
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Active Training Materials */}
       {context?.trainingMaterials && context.trainingMaterials.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
+        <div className="obs-panel">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-lg flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-blue-500" />
               Active Training Materials
-            </CardTitle>
-            <CardDescription>
+            </h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               Training content used to evaluate calls
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <div className="space-y-3">
               {context.trainingMaterials.map((material: any) => (
                 <div key={material.id} className="p-3 border rounded-lg">
@@ -194,23 +194,23 @@ function RubricDisplay({
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Active Grading Rules */}
       {context?.gradingRules && context.gradingRules.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
+        <div className="obs-panel">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-lg flex items-center gap-2">
               <Scale className="h-5 w-5 text-purple-500" />
               Custom Grading Rules
-            </CardTitle>
-            <CardDescription>
+            </h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               Additional rules applied during grading
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <div className="space-y-3">
               {context.gradingRules.map((rule: any) => (
                 <div key={rule.id} className="p-3 border rounded-lg">
@@ -224,8 +224,8 @@ function RubricDisplay({
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

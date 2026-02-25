@@ -2,12 +2,9 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   Building2, 
   CreditCard, 
@@ -530,19 +527,19 @@ export default function TenantSettings() {
   if (!user?.tenantId) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>No Organization</CardTitle>
-            <CardDescription>
+        <div className="obs-panel max-w-md">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title">No Organization</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               You're not associated with any organization yet.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <Button onClick={() => window.location.href = "/onboarding"}>
               Create Organization
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -560,51 +557,51 @@ export default function TenantSettings() {
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <div>
         {/* Mobile: Horizontal scroll tabs with text labels */}
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="general" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+          <div className="obs-role-tabs flex-wrap">
+            <button className={`obs-role-tab ${activeTab === "general" ? "active" : ""}`} onClick={() => setActiveTab("general")}>
               <Building2 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>General</span>
-            </TabsTrigger>
-            <TabsTrigger value="team" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+            </button>
+            <button className={`obs-role-tab ${activeTab === "team" ? "active" : ""}`} onClick={() => setActiveTab("team")}>
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Team</span>
-            </TabsTrigger>
-            <TabsTrigger value="roles" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+            </button>
+            <button className={`obs-role-tab ${activeTab === "roles" ? "active" : ""}`} onClick={() => setActiveTab("roles")}>
               <Shield className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Roles</span>
-            </TabsTrigger>
-            <TabsTrigger value="billing" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+            </button>
+            <button className={`obs-role-tab ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>
               <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Billing</span>
-            </TabsTrigger>
-            <TabsTrigger value="integrations" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+            </button>
+            <button className={`obs-role-tab ${activeTab === "integrations" ? "active" : ""}`} onClick={() => setActiveTab("integrations")}>
               <Link2 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>CRM</span>
-            </TabsTrigger>
-            <TabsTrigger value="rubrics" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+            </button>
+            <button className={`obs-role-tab ${activeTab === "rubrics" ? "active" : ""}`} onClick={() => setActiveTab("rubrics")}>
               <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Rubrics</span>
-            </TabsTrigger>
+            </button>
             {(user?.role === 'admin' || user?.role === 'super_admin') && (
-              <TabsTrigger value="impersonate" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+              <button className={`obs-role-tab ${activeTab === "impersonate" ? "active" : ""}`} onClick={() => setActiveTab("impersonate")}>
                 <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span>View As</span>
-              </TabsTrigger>
+              </button>
             )}
-          </TabsList>
+          </div>
         </div>
 
         {/* General Settings */}
-        <TabsContent value="general" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Company Information</CardTitle>
-              <CardDescription>Basic information about your organization</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        {activeTab === "general" && (<div className="space-y-6">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title">Company Information</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Basic information about your organization</p>
+            </div>
+            <div className="space-y-4">
               {settingsLoading ? (
                 <div className="space-y-4">
                   <Skeleton className="h-10 w-full" />
@@ -637,20 +634,20 @@ export default function TenantSettings() {
                   </Button>
                 </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
 
-        </TabsContent>
+        </div>)}
 
         {/* Team Management */}
-        <TabsContent value="team" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Invite Team Members</CardTitle>
-              <CardDescription>Add new members to your organization</CardDescription>
-            </CardHeader>
-            <CardContent>
+        {activeTab === "team" && (<div className="space-y-6">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title">Invite Team Members</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Add new members to your organization</p>
+            </div>
+            <div>
               <div className="flex flex-wrap gap-4">
                 <Input
                   placeholder="email@company.com"
@@ -686,15 +683,15 @@ export default function TenantSettings() {
               <p className="text-sm text-muted-foreground mt-2">
                 Enter the email of the person you want to invite. They'll be added when they sign in.
               </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Team Members</CardTitle>
-                  <CardDescription>Manage your team's access and roles</CardDescription>
+                  <h3 className="obs-section-title">Team Members</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Manage your team's access and roles</p>
                 </div>
                 <Button
                   variant="outline"
@@ -710,43 +707,43 @@ export default function TenantSettings() {
                   Sync Phone Numbers
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+            </div>
+            <div>
+              <table className="obs-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
                   {teamLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-32" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-28" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                        <TableCell><Skeleton className="h-8 w-8" /></TableCell>
-                      </TableRow>
+                      <tr key={i}>
+                        <td><Skeleton className="h-6 w-24" /></td>
+                        <td><Skeleton className="h-6 w-32" /></td>
+                        <td><Skeleton className="h-6 w-28" /></td>
+                        <td><Skeleton className="h-6 w-16" /></td>
+                        <td><Skeleton className="h-6 w-16" /></td>
+                        <td><Skeleton className="h-8 w-8" /></td>
+                      </tr>
                     ))
                   ) : (teamMembers || []).length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-muted-foreground">
                         No team members found
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   ) : (
                     (teamMembers || []).map((member) => (
-                      <TableRow key={member.id}>
-                        <TableCell className="font-medium">{member.name}</TableCell>
-                        <TableCell>{member.email}</TableCell>
-                        <TableCell>
+                      <tr key={member.id}>
+                        <td className="font-medium">{member.name}</td>
+                        <td>{member.email}</td>
+                        <td>
                           {member.lcPhone ? (
                             <span className="text-sm text-emerald-600 font-medium">
                               {member.lcPhone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3')}
@@ -754,8 +751,8 @@ export default function TenantSettings() {
                           ) : (
                             <span className="text-sm text-muted-foreground">—</span>
                           )}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <div className="flex flex-col gap-1">
                             <Badge variant="outline" className="capitalize w-fit">
                               {member.role}
@@ -764,11 +761,11 @@ export default function TenantSettings() {
                               {member.teamRole?.replace('_', ' ')}
                             </span>
                           </div>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <Badge className="bg-green-100 text-green-700">Active</Badge>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <div className="flex gap-1">
                             <Button 
                               variant="ghost" 
@@ -796,41 +793,41 @@ export default function TenantSettings() {
                               </Button>
                             )}
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))
                   )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {/* Pending Invitations */}
           {(user?.role === 'admin' || user?.role === 'super_admin') && (pendingInvitations || []).length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <div className="obs-panel">
+              <div style={{marginBottom: 16}}>
+                <h3 className="obs-section-title flex items-center gap-2">
                   <Clock className="h-5 w-5" />
                   Pending Invitations
-                </CardTitle>
-                <CardDescription>Users who haven't signed in yet</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Invited</TableHead>
-                      <TableHead>Expires</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                </h3>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Users who haven't signed in yet</p>
+              </div>
+              <div>
+                <table className="obs-table">
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Invited</th>
+                      <th>Expires</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {(pendingInvitations || []).map((invitation: any) => (
-                      <TableRow key={invitation.id}>
-                        <TableCell className="font-medium">{invitation.email}</TableCell>
-                        <TableCell>
+                      <tr key={invitation.id}>
+                        <td className="font-medium">{invitation.email}</td>
+                        <td>
                           <div className="flex flex-col gap-1">
                             <Badge variant="outline" className="capitalize w-fit">
                               {invitation.role}
@@ -839,14 +836,14 @@ export default function TenantSettings() {
                               {invitation.teamRole?.replace('_', ' ')}
                             </span>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        </td>
+                        <td className="text-muted-foreground">
                           {new Date(invitation.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        </td>
+                        <td className="text-muted-foreground">
                           {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString() : 'Never'}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -857,18 +854,18 @@ export default function TenantSettings() {
                           >
                             <X className="h-4 w-4" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
-        </TabsContent>
+        </div>)}
 
         {/* Roles & Assignments */}
-        <TabsContent value="roles" className="space-y-6">
+        {activeTab === "roles" && (<div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">Roles & Assignments</h2>
@@ -896,19 +893,19 @@ export default function TenantSettings() {
           </div>
 
           {/* Users & Roles Section */}
-          <Card>
-            <CardHeader>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
                   <Shield className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">Users & Roles</CardTitle>
-                  <CardDescription>Assign roles to users who have logged in</CardDescription>
+                  <h3 className="obs-section-title text-lg">Users & Roles</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Assign roles to users who have logged in</p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               {allUsersLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
@@ -1005,23 +1002,23 @@ export default function TenantSettings() {
                   <p>No users have logged in yet</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Team Assignments Section */}
-          <Card>
-            <CardHeader>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
                   <Link2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">Team Assignments</CardTitle>
-                  <CardDescription>Assign Lead Managers to Acquisition Managers, and Lead Generators to Lead Managers</CardDescription>
+                  <h3 className="obs-section-title text-lg">Team Assignments</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Assign Lead Managers to Acquisition Managers, and Lead Generators to Lead Managers</p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               {acquisitionManagers.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
@@ -1210,23 +1207,23 @@ export default function TenantSettings() {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Team Members from CRM */}
-          <Card>
-            <CardHeader>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-green-100 text-green-600">
                   <Users className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">Team Members (from CRM)</CardTitle>
-                  <CardDescription>Team members synced from CRM</CardDescription>
+                  <h3 className="obs-section-title text-lg">Team Members (from CRM)</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Team members synced from CRM</p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               {ghlTeamLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -1265,18 +1262,18 @@ export default function TenantSettings() {
                   <p>No team members synced from CRM</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
         {/* Billing */}
-        <TabsContent value="billing" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Current Plan</CardTitle>
-              <CardDescription>Your subscription details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        {activeTab === "billing" && (<div className="space-y-6">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title">Current Plan</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Your subscription details</p>
+            </div>
+            <div className="space-y-4">
               {settingsLoading ? (
                 <Skeleton className="h-20 w-full" />
               ) : (
@@ -1497,15 +1494,15 @@ export default function TenantSettings() {
                   </div>
                 </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Usage</CardTitle>
-              <CardDescription>Your current usage this billing period</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title">Usage</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Your current usage this billing period</p>
+            </div>
+            <div>
               {settingsLoading ? (
                 <div className="space-y-4">
                   <Skeleton className="h-6 w-full" />
@@ -1603,23 +1600,23 @@ export default function TenantSettings() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
         {/* CRM Integrations */}
-        <TabsContent value="integrations" className="space-y-6">
+        {activeTab === "integrations" && (<div className="space-y-6">
           {/* CRM Integration Card */}
-          <Card>
-            <CardHeader>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
                     <Link2 className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-base">CRM (GoHighLevel)</CardTitle>
-                    <CardDescription>Sync contacts, call recordings, and pipeline data</CardDescription>
+                    <h3 className="obs-section-title text-base">CRM (GoHighLevel)</h3>
+                    <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Sync contacts, call recordings, and pipeline data</p>
                     {crmIntegrations?.ghl?.lastSynced && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Last synced: {formatRelativeTime(crmIntegrations.ghl.lastSynced)}
@@ -1639,8 +1636,8 @@ export default function TenantSettings() {
                   </Badge>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </div>
+            <div className="space-y-4">
               {settingsLoading ? (
                 <Skeleton className="h-10 w-full" />
               ) : (
@@ -1726,20 +1723,20 @@ export default function TenantSettings() {
                   </p>
                 </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* BatchDialer Integration Card */}
-          <Card>
-            <CardHeader>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center">
                     <Phone className="h-5 w-5 text-orange-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-base">BatchDialer</CardTitle>
-                    <CardDescription>Sync cold calling campaigns and call recordings</CardDescription>
+                    <h3 className="obs-section-title text-base">BatchDialer</h3>
+                    <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Sync cold calling campaigns and call recordings</p>
                     {crmIntegrations?.batchDialer?.lastSynced && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Last synced: {formatRelativeTime(crmIntegrations.batchDialer.lastSynced)}
@@ -1759,8 +1756,8 @@ export default function TenantSettings() {
                   </Badge>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </div>
+            <div className="space-y-4">
               {settingsLoading ? (
                 <Skeleton className="h-10 w-full" />
               ) : (
@@ -1834,20 +1831,20 @@ export default function TenantSettings() {
                   </p>
                 </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* BatchLeads Integration Card */}
-          <Card>
-            <CardHeader>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <Home className="h-5 w-5 text-emerald-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-base">BatchLeads</CardTitle>
-                    <CardDescription>Enrich calls with property data, owner info, and estimated values</CardDescription>
+                    <h3 className="obs-section-title text-base">BatchLeads</h3>
+                    <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Enrich calls with property data, owner info, and estimated values</p>
                     {crmIntegrations?.batchLeads?.lastSynced && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Last synced: {formatRelativeTime(crmIntegrations.batchLeads.lastSynced)}
@@ -1867,8 +1864,8 @@ export default function TenantSettings() {
                   </Badge>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </div>
+            <div className="space-y-4">
               {settingsLoading ? (
                 <Skeleton className="h-10 w-full" />
               ) : (
@@ -1942,23 +1939,23 @@ export default function TenantSettings() {
                   </p>
                 </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Advanced Configuration Card */}
-          <Card>
-            <CardHeader>
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
                   <Zap className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">Advanced Configuration</CardTitle>
-                  <CardDescription>Pipeline stages, industry, and webhook settings</CardDescription>
+                  <h3 className="obs-section-title text-base">Advanced Configuration</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Pipeline stages, industry, and webhook settings</p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
+            </div>
+            <div className="space-y-6">
               {/* Industry */}
               <div className="space-y-2">
                 <Label htmlFor="industry">Industry / Business Type</Label>
@@ -2063,55 +2060,54 @@ export default function TenantSettings() {
               >
                 {updateAdvancedConfigMutation.isPending ? "Saving..." : "Save Advanced Config"}
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Other CRMs - Coming Soon */}
-          <Card className="opacity-60">
-            <CardHeader>
+          <div className="obs-panel opacity-60">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">More Integrations Coming Soon</CardTitle>
-                  <CardDescription>HubSpot, Salesforce, Close.io, Pipedrive</CardDescription>
+                  <h3 className="obs-section-title text-base">More Integrations Coming Soon</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>HubSpot, Salesforce, Close.io, Pipedrive</p>
                 </div>
                 <Badge variant="outline">Coming Soon</Badge>
               </div>
-            </CardHeader>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
         {/* Grading Rubrics */}
-        <TabsContent value="rubrics" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Grading Rubrics</CardTitle>
-              <CardDescription>Customize how calls are evaluated</CardDescription>
-            </CardHeader>
-            <CardContent>
+        {activeTab === "rubrics" && (<div className="space-y-6">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title">Grading Rubrics</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Customize how calls are evaluated</p>
+            </div>
+            <div>
               <p className="text-muted-foreground mb-4">
                 Grading rubrics are managed in the Training section. Visit the Training page to create and edit rubrics.
               </p>
               <Button variant="outline" onClick={() => window.location.href = "/training"}>
                 Go to Training
               </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
         {/* View As / Impersonation (Admin Only) */}
-        {(user?.role === 'admin' || user?.role === 'super_admin') && (
-          <TabsContent value="impersonate" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+        {(user?.role === 'admin' || user?.role === 'super_admin') && activeTab === "impersonate" && (<div className="space-y-6">
+            <div className="obs-panel">
+              <div style={{marginBottom: 16}}>
+                <h3 className="obs-section-title flex items-center gap-2">
                   <Eye className="h-5 w-5" />
                   View As Team Member
-                </CardTitle>
-                <CardDescription>
+                </h3>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                   View the app as any team member to see what they see. This is useful for troubleshooting and understanding their experience.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </p>
+              </div>
+              <div>
                 {teamLoading ? (
                   <div className="space-y-2">
                     <Skeleton className="h-12 w-full" />
@@ -2168,11 +2164,11 @@ export default function TenantSettings() {
                     No team members found. Invite team members to use this feature.
                   </p>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="border-amber-200 bg-amber-50/50">
-              <CardContent className="pt-6">
+            <div className="obs-panel border-amber-200 bg-amber-50/50">
+              <div className="pt-6">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
                   <div>
@@ -2184,11 +2180,10 @@ export default function TenantSettings() {
                     </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-      </Tabs>
+              </div>
+            </div>
+          </div>)}
+      </div>
 
       {/* Edit Member Dialog */}
       <Dialog open={!!editingMember} onOpenChange={(open) => !open && setEditingMember(null)}>

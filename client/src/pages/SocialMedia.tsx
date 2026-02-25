@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -47,6 +45,7 @@ const statusColors: Record<string, string> = {
 
 export default function SocialMedia() {
   const [contentMode, setContentMode] = useState<ContentMode>("brand");
+  const [socialTab, setSocialTab] = useState("posts");
   const [activeTab, setActiveTab] = useState("posts");
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
@@ -289,14 +288,14 @@ export default function SocialMedia() {
 
       {/* Content Data Preview */}
       {contentData && (
-        <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
+        <div className="obs-panel bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+          <div className="pb-2" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-sm flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-purple-600" />
               AI Content Generation Data
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground">Calls Available</p>
@@ -315,21 +314,21 @@ export default function SocialMedia() {
                 <p className="font-semibold">{contentData.stories.length} high-score calls</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="posts">Posts</TabsTrigger>
-          <TabsTrigger value="calendar">Calendar</TabsTrigger>
-          {contentMode === "creator" && <TabsTrigger value="ideas">Ideas</TabsTrigger>}
-          {contentMode === "brand" && <TabsTrigger value="branding">Branding</TabsTrigger>}
-        </TabsList>
+      <div>
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${socialTab === "posts" ? "active" : ""}`} onClick={() => setSocialTab("posts")}>Posts</button>
+          <button className={`obs-role-tab ${socialTab === "calendar" ? "active" : ""}`} onClick={() => setSocialTab("calendar")}>Calendar</button>
+          {contentMode === "creator" && <button className={`obs-role-tab ${socialTab === "ideas" ? "active" : ""}`} onClick={() => setSocialTab("ideas")}>Ideas</button>}
+          {contentMode === "brand" && <button className={`obs-role-tab ${socialTab === "branding" ? "active" : ""}`} onClick={() => setSocialTab("branding")}>Branding</button>}
+        </div>
 
         {/* Posts Tab */}
-        <TabsContent value="posts" className="space-y-4">
+        {socialTab === "posts" && (<div className="space-y-4">
           <div className="flex gap-2">
             <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
               <DialogTrigger asChild>
@@ -491,17 +490,17 @@ export default function SocialMedia() {
           {/* Posts list */}
           <div className="grid gap-4">
             {posts?.length === 0 && (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="obs-panel">
+                <div className="flex flex-col items-center justify-center py-12">
                   <FileText className="h-12 w-12 text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">No posts yet</p>
                   <p className="text-sm text-muted-foreground">Create your first post or generate one from your call data</p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
             {posts?.map((post) => (
-              <Card key={post.id}>
-                <CardHeader className="pb-2">
+              <div className="obs-panel" key={post.id}>
+                <div className="pb-2" style={{marginBottom: 16}}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
                       {platformIcons[post.platform]}
@@ -524,9 +523,9 @@ export default function SocialMedia() {
                       <Trash2 className="h-4 w-4 text-muted-foreground" />
                     </Button>
                   </div>
-                  {post.title && <CardTitle className="text-lg">{post.title}</CardTitle>}
-                </CardHeader>
-                <CardContent>
+                  {post.title && <h3 className="obs-section-title text-lg">{post.title}</h3>}
+                </div>
+                <div>
                   <p className="text-sm whitespace-pre-wrap">{post.content}</p>
                   {post.hashtags && (
                     <p className="text-sm text-blue-600 mt-2">{post.hashtags}</p>
@@ -537,18 +536,18 @@ export default function SocialMedia() {
                       Scheduled: {format(new Date(post.scheduledAt), "PPp")}
                     </p>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
-        </TabsContent>
+        </div>)}
 
         {/* Calendar Tab */}
-        <TabsContent value="calendar" className="space-y-4">
-          <Card>
-            <CardHeader>
+        {socialTab === "calendar" && (<div className="space-y-4">
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
               <div className="flex items-center justify-between">
-                <CardTitle>Content Calendar</CardTitle>
+                <h3 className="obs-section-title">Content Calendar</h3>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="icon" onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}>
                     <ChevronLeft className="h-4 w-4" />
@@ -561,8 +560,8 @@ export default function SocialMedia() {
                   </Button>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               <div className="grid grid-cols-7 gap-1">
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                   <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
@@ -602,13 +601,12 @@ export default function SocialMedia() {
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </div>
+        </div>)}
 
         {/* Ideas Tab (Creator only) */}
-        {contentMode === "creator" && (
-          <TabsContent value="ideas" className="space-y-4">
+        {socialTab === "ideas" && (<div className="space-y-4">
             <div className="flex gap-2">
               <Dialog open={isCreateIdeaOpen} onOpenChange={setIsCreateIdeaOpen}>
                 <DialogTrigger asChild>
@@ -678,17 +676,17 @@ export default function SocialMedia() {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {ideas?.length === 0 && (
-                <Card className="col-span-full">
-                  <CardContent className="flex flex-col items-center justify-center py-12">
+                <div className="obs-panel col-span-full">
+                  <div className="flex flex-col items-center justify-center py-12">
                     <Lightbulb className="h-12 w-12 text-muted-foreground mb-4" />
                     <p className="text-muted-foreground">No content ideas yet</p>
                     <p className="text-sm text-muted-foreground">Add your own or generate some with AI</p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
               {ideas?.map((idea) => (
-                <Card key={idea.id}>
-                  <CardHeader className="pb-2">
+                <div className="obs-panel" key={idea.id}>
+                  <div className="pb-2" style={{marginBottom: 16}}>
                     <div className="flex items-start justify-between">
                       <Badge variant="secondary">{idea.targetPlatform}</Badge>
                       <Button
@@ -699,34 +697,32 @@ export default function SocialMedia() {
                         <Trash2 className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     </div>
-                    <CardTitle className="text-base">{idea.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                    <h3 className="obs-section-title text-base">{idea.title}</h3>
+                  </div>
+                  <div>
                     {idea.description && (
                       <p className="text-sm text-muted-foreground">{idea.description}</p>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
-          </TabsContent>
-        )}
+          </div>)}
 
         {/* Branding Tab (Brand only) */}
-        {contentMode === "brand" && (
-          <TabsContent value="branding" className="space-y-6">
+        {socialTab === "branding" && (<div className="space-y-6">
             {/* Brand Profile Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <div className="obs-panel">
+              <div style={{marginBottom: 16}}>
+                <h3 className="obs-section-title flex items-center gap-2">
                   <Building2 className="h-5 w-5" />
                   Brand Profile
-                </CardTitle>
-                <CardDescription>
+                </h3>
+                <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                   Define your brand identity to help AI generate consistent content
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </p>
+              </div>
+              <div>
                 <BrandProfileForm 
                   profile={brandProfile} 
                   onUpdate={(data) => updateBrandProfile.mutate(data)}
@@ -734,21 +730,21 @@ export default function SocialMedia() {
                   isPending={updateBrandProfile.isPending}
                   isExtracting={extractFromWebsite.isPending}
                 />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {/* Brand Assets Section */}
-            <Card>
-              <CardHeader>
+            <div className="obs-panel">
+              <div style={{marginBottom: 16}}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="flex items-center gap-2">
+                    <h3 className="obs-section-title flex items-center gap-2">
                       <ImageIcon className="h-5 w-5" />
                       Brand Assets
-                    </CardTitle>
-                    <CardDescription>
+                    </h3>
+                    <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                       Logos, images, and other brand materials
-                    </CardDescription>
+                    </p>
                   </div>
                   <Dialog>
                     <DialogTrigger asChild>
@@ -765,8 +761,8 @@ export default function SocialMedia() {
                     </DialogContent>
                   </Dialog>
                 </div>
-              </CardHeader>
-              <CardContent>
+              </div>
+              <div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {brandAssets?.length === 0 && (
                     <div className="col-span-full text-center py-8 text-muted-foreground">
@@ -774,8 +770,8 @@ export default function SocialMedia() {
                     </div>
                   )}
                   {brandAssets?.map((asset) => (
-                    <Card key={asset.id}>
-                      <CardHeader className="pb-2">
+                    <div className="obs-panel" key={asset.id}>
+                      <div className="pb-2" style={{marginBottom: 16}}>
                         <div className="flex items-start justify-between">
                           <Badge variant="secondary">{asset.assetType.replace("_", " ")}</Badge>
                           <Button
@@ -786,9 +782,9 @@ export default function SocialMedia() {
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         </div>
-                        <CardTitle className="text-base">{asset.name}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
+                        <h3 className="obs-section-title text-base">{asset.name}</h3>
+                      </div>
+                      <div>
                         {asset.description && (
                           <p className="text-sm text-muted-foreground mb-2">{asset.description}</p>
                         )}
@@ -802,15 +798,14 @@ export default function SocialMedia() {
                             View File
                           </a>
                         )}
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-      </Tabs>
+              </div>
+            </div>
+          </div>)}
+      </div>
     </div>
   );
 }

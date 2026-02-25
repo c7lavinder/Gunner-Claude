@@ -3,7 +3,6 @@ import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
@@ -392,22 +391,21 @@ export default function Onboarding() {
             </p>
             <div className="grid md:grid-cols-2 gap-4">
               {CRM_OPTIONS.map((crm) => (
-                <Card
-                  key={crm.id}
-                  className={`cursor-pointer transition-all ${
+                <div key={crm.id}
+                  className={`obs-panel cursor-pointer transition-all ${
                     crm.available ? "hover:border-primary" : "opacity-60"
                   } ${formData.selectedCrm === crm.id ? "border-primary ring-2 ring-primary/20" : ""}`}
                   onClick={() => crm.available && setFormData({ ...formData, selectedCrm: crm.id })}
                 >
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
+                  <div className="pb-2" style={{marginBottom: 16}}>
+                    <h3 className="obs-section-title text-base flex items-center gap-2">
                       {formData.selectedCrm === crm.id && <Check className="h-4 w-4 text-green-500" />}
                       {crm.name}
                       {!crm.available && <Badge variant="secondary" className="ml-auto">Coming Soon</Badge>}
-                    </CardTitle>
-                    <CardDescription className="text-sm">{crm.description}</CardDescription>
-                  </CardHeader>
-                </Card>
+                    </h3>
+                    <p className="text-sm" style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{crm.description}</p>
+                  </div>
+                </div>
               ))}
             </div>
             
@@ -798,23 +796,22 @@ export default function Onboarding() {
             </p>
             <div className="grid md:grid-cols-2 gap-4">
               {ROLE_TEMPLATES.map((role) => (
-                <Card
-                  key={role.id}
-                  className={`cursor-pointer transition-all hover:border-primary ${
+                <div key={role.id}
+                  className={`obs-panel cursor-pointer transition-all hover:border-primary ${
                     formData.selectedRoles.includes(role.id) ? "border-primary ring-2 ring-primary/20" : ""
                   }`}
                   onClick={() => toggleRole(role.id)}
                 >
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
+                  <div className="pb-2" style={{marginBottom: 16}}>
+                    <h3 className="obs-section-title text-base flex items-center gap-2">
                       {formData.selectedRoles.includes(role.id) && (
                         <Check className="h-4 w-4 text-green-500" />
                       )}
                       {role.name}
-                    </CardTitle>
-                    <CardDescription className="text-sm">{role.description}</CardDescription>
-                  </CardHeader>
-                </Card>
+                    </h3>
+                    <p className="text-sm" style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{role.description}</p>
+                  </div>
+                </div>
               ))}
             </div>
             <p className="text-xs text-muted-foreground text-center">
@@ -990,13 +987,13 @@ export default function Onboarding() {
         </div>
 
         {/* Step Content */}
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle>{STEPS[currentStep - 1].title}</CardTitle>
-            <CardDescription>{STEPS[currentStep - 1].description}</CardDescription>
-          </CardHeader>
-          <CardContent>{renderStepContent()}</CardContent>
-        </Card>
+        <div className="obs-panel">
+          <div className="text-center" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title">{STEPS[currentStep - 1].title}</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{STEPS[currentStep - 1].description}</p>
+          </div>
+          <div>{renderStepContent()}</div>
+        </div>
 
         {/* Navigation */}
         <div className="flex justify-between mt-6">

@@ -2978,3 +2978,37 @@
 - [x] Auto-select assignee for update tasks to the task's current assignee
 - [x] Manually added actions should auto-open in edit mode with all editable fields visible
 - [x] Add validation before pushing actions to GHL — highlight required empty fields and block push
+
+- [x] Full Obsidian overhaul: CallInbox.tsx - replace all Card/Tabs with obs-panel/obs-role-tabs
+- [x] Full Obsidian overhaul: CallDetail.tsx - replace all Card/Tabs with obs-panel/obs-role-tabs
+- [x] Full Obsidian overhaul: TenantSettings.tsx - replace all Card/Tabs with obs-panel/obs-role-tabs
+- [x] Full Obsidian overhaul: Training.tsx - replace all Card/Tabs with obs-panel/obs-role-tabs
+- [x] Full Obsidian overhaul: Profile.tsx - replace all Card with obs-panel
+- [x] Full Obsidian overhaul: Opportunities.tsx - replace all Card/Tabs with obs-panel
+- [x] Full Obsidian overhaul: AdminDashboard.tsx - replace all Card with obs-panel
+- [x] Full Obsidian overhaul: SuperAdmin.tsx - replace all Card/Tabs with obs-panel
+- [x] Full Obsidian overhaul: Leaderboard.tsx - replace all Card/Tabs with obs-panel
+- [x] Full Obsidian overhaul: Feedback.tsx - replace all Card/Tabs with obs-panel
+- [x] Full Obsidian overhaul: SocialMedia.tsx - replace all Card/Tabs with obs-panel
+- [x] Full Obsidian overhaul: CoachActivityLog.tsx - replace all Card/Tabs with obs-panel
+- [x] Fix all TypeScript errors after conversion
+- [x] Visual audit and verify all pages render correctly
+
+- [x] Triple audit: Fix all TypeScript errors from bulk Obsidian conversion
+- [x] Triple audit: Visual check Dashboard page
+- [x] Triple audit: Visual check CallInbox page
+- [x] Triple audit: Visual check CallDetail page
+- [x] Triple audit: Visual check TeamMembers page
+- [x] Triple audit: Visual check TenantSettings page
+- [x] Triple audit: Visual check Training page
+- [x] Triple audit: Visual check Profile page
+- [x] Triple audit: Visual check AdminDashboard page
+- [x] Triple audit: Visual check Analytics page
+- [x] Triple audit: Visual check Opportunities page
+- [x] Triple audit: Visual check Leaderboard page
+- [x] Triple audit: Visual check all remaining pages (Feedback, SocialMedia, CoachActivityLog, etc.)
+- [x] Triple audit: Buttons consistency (size, color, hover states, active states)
+- [x] Triple audit: Spacing and padding consistency across all panels
+- [x] Triple audit: Transitions and animations smoothness
+- [x] Triple audit: Empty states and loading states consistency
+- [x] Triple audit: Auth pages (Login, Signup, etc.) visual consistency

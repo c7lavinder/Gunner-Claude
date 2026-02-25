@@ -1,9 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Streamdown } from "streamdown";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -329,8 +327,8 @@ export default function CoachActivityLog() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-3 sm:p-4">
+        <div className="obs-panel">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-primary/10">
                 <Zap className="h-4 w-4 text-primary" />
@@ -340,10 +338,10 @@ export default function CoachActivityLog() {
                 <p className="text-lg font-bold">{stats.totalActions}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 sm:p-4">
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-blue-100 dark:bg-blue-900/30">
                 <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -353,10 +351,10 @@ export default function CoachActivityLog() {
                 <p className="text-lg font-bold">{stats.totalQuestions}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 sm:p-4">
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-green-100 dark:bg-green-900/30">
                 <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -366,10 +364,10 @@ export default function CoachActivityLog() {
                 <p className="text-lg font-bold">{stats.executed}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 sm:p-4">
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-red-100 dark:bg-red-900/30">
                 <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -379,13 +377,13 @@ export default function CoachActivityLog() {
                 <p className="text-lg font-bold">{stats.failed}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="p-3 sm:p-4 space-y-3">
+      <div className="obs-panel">
+        <div className="p-3 sm:p-4 space-y-3">
           {/* Date range presets */}
           <div className="flex flex-wrap items-center gap-2">
             <CalendarDays className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -439,71 +437,71 @@ export default function CoachActivityLog() {
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Tabs + Content */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="all" className="text-xs sm:text-sm">
+      <div>
+        <div className="obs-role-tabs mb-4">
+          <button className={`obs-role-tab ${activeTab === "all" ? "active" : ""}`} onClick={() => setActiveTab("all")}>
             All Activity
             {timelineItems.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{timelineItems.length}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="actions" className="text-xs sm:text-sm">
+          </button>
+          <button className={`obs-role-tab ${activeTab === "actions" ? "active" : ""}`} onClick={() => setActiveTab("actions")}>
             <Zap className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
             Actions
             {(stats.totalActions || 0) > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{stats.totalActions}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="questions" className="text-xs sm:text-sm">
+          </button>
+          <button className={`obs-role-tab ${activeTab === "questions" ? "active" : ""}`} onClick={() => setActiveTab("questions")}>
             <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
             Questions
             {(stats.totalQuestions || 0) > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{stats.totalQuestions}</Badge>}
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
-        <TabsContent value={activeTab} className="mt-0">
+        {activeTab && (<div className="mt-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : filteredItems.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
+            <div className="obs-panel">
+              <div className="py-12 text-center">
                 <Bot className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground">No activity found</p>
                 <p className="text-xs text-muted-foreground/70 mt-1">
                   {searchQuery ? "Try adjusting your search or filters" : "Coach interactions will appear here as your team uses the AI Coach"}
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
             <div className="space-y-2">
               {filteredItems.map((item) => (
-                <Card key={item.id} className="hover:shadow-sm transition-shadow">
-                  <CardContent className="p-3 sm:p-4">
+                <div key={item.id} className="obs-panel hover:shadow-sm transition-shadow">
+                  <div className="p-3 sm:p-4">
                     {item.type === "action" ? (
                       <ActionItem item={item} />
                     ) : (
                       <QuestionItem item={item} />
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>)}
+      </div>
 
       {/* Team member breakdown */}
       {teamMembers.length > 1 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+        <div className="obs-panel">
+          <div className="pb-3" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-sm font-medium flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
               Team Usage
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
+            </h3>
+          </div>
+          <div className="pt-0">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {teamMembers.map(name => {
                 const memberActions = timelineItems.filter(i => i.userName === name && i.type === "action").length;
@@ -520,8 +518,8 @@ export default function CoachActivityLog() {
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

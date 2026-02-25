@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,7 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Target, AlertTriangle, Trophy, Calendar, Plus, Check, Trash2, 
@@ -376,20 +374,20 @@ function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
   const hasMore = totalCount > DISPLAY_LIMIT;
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <div className="obs-panel">
+      <div className="flex flex-row items-center justify-between" style={{marginBottom: 16}}>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
             <Target className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle className="text-lg">Long-Term Skills {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
-            <CardDescription>Top development areas · Refreshes every Monday</CardDescription>
+            <h3 className="obs-section-title text-lg">Long-Term Skills {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Top development areas · Refreshes every Monday</p>
           </div>
         </div>
         <AddItemDialog itemType="skill" onSuccess={handleRefresh} />
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
@@ -425,8 +423,8 @@ function SkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
             <p className="text-sm">Click "Generate AI Insights" or add manually</p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -473,20 +471,20 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
   const hasMore = totalCount > DISPLAY_LIMIT;
 
   return (
-    <Card className="border-red-200">
-      <CardHeader className="flex flex-row items-center justify-between">
+    <div className="obs-panel border-red-200">
+      <div className="flex flex-row items-center justify-between" style={{marginBottom: 16}}>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-red-100 text-red-600">
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle className="text-lg">Issues to Address {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
-            <CardDescription>Top issues this week · Refreshes every Monday</CardDescription>
+            <h3 className="obs-section-title text-lg">Issues to Address {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Top issues this week · Refreshes every Monday</p>
           </div>
         </div>
         <AddItemDialog itemType="issue" onSuccess={handleRefresh} />
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
@@ -522,8 +520,8 @@ function IssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
             <p className="text-sm">Click "Generate AI Insights" to analyze calls</p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -564,20 +562,20 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
   const hasMore = totalCount > DISPLAY_LIMIT;
 
   return (
-    <Card className="border-green-200">
-      <CardHeader className="flex flex-row items-center justify-between">
+    <div className="obs-panel border-green-200">
+      <div className="flex flex-row items-center justify-between" style={{marginBottom: 16}}>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-green-100 text-green-600">
             <Trophy className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle className="text-lg">Wins to Celebrate {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
-            <CardDescription>Top wins this week · Refreshes every Monday</CardDescription>
+            <h3 className="obs-section-title text-lg">Wins to Celebrate {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Top wins this week · Refreshes every Monday</p>
           </div>
         </div>
         <AddItemDialog itemType="win" onSuccess={handleRefresh} />
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
@@ -614,8 +612,8 @@ function WinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "ac
             <p className="text-sm">Click "Generate AI Insights" to find wins</p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -759,24 +757,24 @@ function MeetingFacilitator({
   if (!isStarted) {
     return (
       <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl">
-          <CardHeader>
+        <div className="obs-panel w-full max-w-2xl">
+          <div style={{marginBottom: 16}}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
                   <Bot className="h-6 w-6" />
                 </div>
                 <div>
-                  <CardTitle>AI Meeting Facilitator</CardTitle>
-                  <CardDescription>Your AI-powered training session guide</CardDescription>
+                  <h3 className="obs-section-title">AI Meeting Facilitator</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Your AI-powered training session guide</p>
                 </div>
               </div>
               <Button variant="ghost" size="icon" onClick={onClose}>
                 <X className="h-5 w-5" />
               </Button>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
+          </div>
+          <div className="space-y-6">
             <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-4">
               <h3 className="font-semibold mb-2">Today's Agenda ({agendaItems.length} items)</h3>
               <div className="space-y-2">
@@ -830,8 +828,8 @@ function MeetingFacilitator({
               <Play className="h-5 w-5 mr-2" />
               Start Meeting
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1048,15 +1046,15 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
           onClose={() => setShowFacilitator(false)} 
         />
       )}
-      <Card className="border-purple-200">
-        <CardHeader className="flex flex-row items-center justify-between">
+      <div className="obs-panel border-purple-200">
+        <div className="flex flex-row items-center justify-between" style={{marginBottom: 16}}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
               <Calendar className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">Weekly Team Call Agenda {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</CardTitle>
-              <CardDescription>AI-suggested topics based on call analysis</CardDescription>
+              <h3 className="obs-section-title text-lg">Weekly Team Call Agenda {totalCount > 0 && <span className="text-sm font-normal text-muted-foreground">({totalCount})</span>}</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>AI-suggested topics based on call analysis</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1070,8 +1068,8 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
             </Button>
             <AddItemDialog itemType="agenda" onSuccess={handleRefresh} />
           </div>
-        </CardHeader>
-      <CardContent>
+        </div>
+      <div>
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
@@ -1132,8 +1130,8 @@ function AgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "
             <p className="text-sm">Click "Generate AI Insights" to create agenda</p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
     </>
   );
 }
@@ -1142,6 +1140,7 @@ export default function TeamTraining() {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator">("all");
+  const [trainingTab, setTrainingTab] = useState("overview");
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.isTenantAdmin === 'true';
 
@@ -1162,22 +1161,22 @@ export default function TeamTraining() {
       </div>
 
       {isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Filter by Role</CardTitle>
-            <CardDescription>View training insights for specific team roles</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={selectedRole} onValueChange={(value) => setSelectedRole(value as any)} className="w-full">
-              <TabsList>
-                <TabsTrigger value="all">All Roles</TabsTrigger>
-                <TabsTrigger value="acquisition_manager">Acquisition Manager</TabsTrigger>
-                <TabsTrigger value="lead_manager">Lead Manager</TabsTrigger>
-                <TabsTrigger value="lead_generator">Lead Generator</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </CardContent>
-        </Card>
+        <div className="obs-panel">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title text-lg">Filter by Role</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>View training insights for specific team roles</p>
+          </div>
+          <div>
+            <div className="w-full">
+              <div className="obs-role-tabs">
+                <button className={`obs-role-tab ${trainingTab === "all" ? "active" : ""}`} onClick={() => setTrainingTab("all")}>All Roles</button>
+                <button className={`obs-role-tab ${trainingTab === "acquisition_manager" ? "active" : ""}`} onClick={() => setTrainingTab("acquisition_manager")}>Acquisition Manager</button>
+                <button className={`obs-role-tab ${trainingTab === "lead_manager" ? "active" : ""}`} onClick={() => setTrainingTab("lead_manager")}>Lead Manager</button>
+                <button className={`obs-role-tab ${trainingTab === "lead_generator" ? "active" : ""}`} onClick={() => setTrainingTab("lead_generator")}>Lead Generator</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
@@ -1194,24 +1193,24 @@ export default function TeamTraining() {
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="agenda">Meeting Agenda</TabsTrigger>
-        </TabsList>
+      <div className="space-y-6">
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${trainingTab === "overview" ? "active" : ""}`} onClick={() => setTrainingTab("overview")}>Overview</button>
+          <button className={`obs-role-tab ${trainingTab === "agenda" ? "active" : ""}`} onClick={() => setTrainingTab("agenda")}>Meeting Agenda</button>
+        </div>
 
-        <TabsContent value="overview" className="space-y-6">
+        {trainingTab === "overview" && (<div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <IssuesSection roleFilter={selectedRole} />
             <WinsSection roleFilter={selectedRole} />
           </div>
           <SkillsSection roleFilter={selectedRole} />
-        </TabsContent>
+        </div>)}
 
-        <TabsContent value="agenda">
+        {trainingTab === "agenda" && (<div>
           <AgendaSection roleFilter={selectedRole} />
-        </TabsContent>
-      </Tabs>
+        </div>)}
+      </div>
     </div>
   );
 }

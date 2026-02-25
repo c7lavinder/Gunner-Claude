@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -324,12 +322,11 @@ export default function Opportunities() {
           const count = counts?.[tier] || 0;
           const Icon = config.icon;
           return (
-            <Card
-              key={tier}
+            <div key={tier}
               className={`cursor-pointer transition-all hover:shadow-md ${activeTab === tier ? `${config.borderColor} border-2` : ""}`}
               onClick={() => setActiveTab(activeTab === tier ? "all" : tier)}
             >
-              <CardContent className="pt-6">
+              <div className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${config.bgColor}`}>
@@ -347,50 +344,50 @@ export default function Opportunities() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">{config.description}</p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           );
         })}
       </div>
 
       {/* Opportunities List */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">
+      <div>
+        <div className="obs-role-tabs">
+          <button className={`obs-role-tab ${activeTab === "all" ? "active" : ""}`} onClick={() => setActiveTab("all")}>
             All
             {counts?.total ? <Badge variant="secondary" className="ml-1.5 text-xs">{counts.total}</Badge> : null}
-          </TabsTrigger>
-          <TabsTrigger value="missed">
+          </button>
+          <button className={`obs-role-tab ${activeTab === "missed" ? "active" : ""}`} onClick={() => setActiveTab("missed")}>
             <AlertTriangle className="h-3.5 w-3.5 mr-1 text-red-500" />
             Missed
             {counts?.missed ? <Badge variant="destructive" className="ml-1.5 text-xs">{counts.missed}</Badge> : null}
-          </TabsTrigger>
-          <TabsTrigger value="warning">
+          </button>
+          <button className={`obs-role-tab ${activeTab === "warning" ? "active" : ""}`} onClick={() => setActiveTab("warning")}>
             <AlertCircle className="h-3.5 w-3.5 mr-1 text-amber-500" />
             At Risk
             {counts?.warning ? <Badge variant="secondary" className="ml-1.5 text-xs">{counts.warning}</Badge> : null}
-          </TabsTrigger>
-          <TabsTrigger value="possible">
+          </button>
+          <button className={`obs-role-tab ${activeTab === "possible" ? "active" : ""}`} onClick={() => setActiveTab("possible")}>
             <Lightbulb className="h-3.5 w-3.5 mr-1 text-blue-500" />
             Worth a Look
             {counts?.possible ? <Badge variant="outline" className="ml-1.5 text-xs">{counts.possible}</Badge> : null}
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
-        <TabsContent value={activeTab} className="mt-4">
+        <div className="mt-4">
           {isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map(i => (
-                <Card key={i} className="animate-pulse">
-                  <CardContent className="pt-6">
+                <div key={i} className="obs-panel animate-pulse">
+                  <div className="pt-6">
                     <div className="h-20 bg-muted rounded" />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           ) : !opportunities?.length ? (
-            <Card>
-              <CardContent className="pt-6">
+            <div className="obs-panel">
+              <div className="pt-6">
                 <div className="text-center py-12">
                   <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" />
                   <h3 className="text-lg font-semibold">No Urgent Signals — Your Team Is on Track</h3>
@@ -410,8 +407,8 @@ export default function Opportunities() {
                     Scan Pipeline Now
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
             <div className="space-y-3">
               {opportunities.map(opp => {
@@ -425,11 +422,10 @@ export default function Opportunities() {
                 const source = sourceConfig[(opp as any).detectionSource || "pipeline"];
 
                 return (
-                  <Card
-                    key={opp.id}
-                    className={`transition-all ${isResolved ? "opacity-60" : ""} ${config.borderColor} border-l-4`}
+                  <div key={opp.id}
+                    className={`obs-panel transition-all ${isResolved ? "opacity-60" : ""} ${config.borderColor} border-l-4`}
                   >
-                    <CardContent className="pt-4 pb-3">
+                    <div className="pt-4 pb-3">
                       {/* Main Row */}
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -676,14 +672,14 @@ export default function Opportunities() {
                           )}
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })}
             </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
 
       {/* Dismiss Reason Dialog */}
       <Dialog open={dismissDialogId !== null} onOpenChange={(open) => { if (!open) setDismissDialogId(null); }}>

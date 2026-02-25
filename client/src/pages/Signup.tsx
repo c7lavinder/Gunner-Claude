@@ -3,7 +3,6 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -220,14 +219,14 @@ export default function Signup() {
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Create your account</CardTitle>
-              <CardDescription>
+          <div className="obs-panel">
+            <div className="text-center" style={{marginBottom: 16}}>
+              <h3 className="obs-section-title text-2xl">Create your account</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                 Get started with your 14-day free trial
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+              </p>
+            </div>
+            <div className="space-y-6">
               {/* Google Sign-Up Button (only show if not already using Google) */}
               {!googleUser && (
                 <>
@@ -388,8 +387,8 @@ export default function Signup() {
                   Sign in
                 </Link>
               </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,4 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -154,19 +153,19 @@ export default function TeamManagement() {
       </div>
 
       {/* Users & Roles Section */}
-      <Card>
-        <CardHeader>
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
               <Shield className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">Users & Roles</CardTitle>
-              <CardDescription>Assign roles to users who have logged in</CardDescription>
+              <h3 className="obs-section-title text-lg">Users & Roles</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Assign roles to users who have logged in</p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div>
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
@@ -260,23 +259,23 @@ export default function TeamManagement() {
               <p>No users have logged in yet</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Team Assignments Section */}
-      <Card>
-        <CardHeader>
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
               <Link2 className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">Team Assignments</CardTitle>
-              <CardDescription>Assign Lead Managers to Acquisition Managers</CardDescription>
+              <h3 className="obs-section-title text-lg">Team Assignments</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Assign Lead Managers to Acquisition Managers</p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div>
           {acquisitionManagers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
@@ -369,23 +368,23 @@ export default function TeamManagement() {
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Team Members from CRM */}
-      <Card>
-        <CardHeader>
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-green-100 text-green-600">
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">Team Members (from CRM)</CardTitle>
-              <CardDescription>Team members synced from CRM</CardDescription>
+              <h3 className="obs-section-title text-lg">Team Members (from CRM)</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Team members synced from CRM</p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div>
           {membersLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -415,8 +414,8 @@ export default function TeamManagement() {
               <p>No team members synced from CRM</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Award, Trophy, Flame, Target, Zap, Lock, CheckCircle, Camera, Loader2, KeyRound, User, Mail, Eye, EyeOff, Settings } from "lucide-react";
@@ -61,12 +60,12 @@ function BadgeCard({ badge }: { badge: BadgeData }) {
   const progressPercent = nextTarget > 0 ? Math.min((badge.currentProgress / nextTarget) * 100, 100) : 100;
 
   return (
-    <Card className={`relative overflow-hidden transition-all ${
+    <div className={`obs-panel relative overflow-hidden transition-all ${
       isEarned 
         ? `${tierStyle.bg} ${tierStyle.border} border-2` 
         : "bg-muted/30 border-dashed opacity-70"
     }`}>
-      <CardContent className="p-4">
+      <div className="p-4">
         <div className="flex items-start gap-3">
           <div className={`text-3xl ${!isEarned && "grayscale opacity-50"}`}>
             {badge.icon}
@@ -112,8 +111,8 @@ function BadgeCard({ badge }: { badge: BadgeData }) {
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -186,26 +185,26 @@ function AccountSettings() {
   
   if (accountLoading) {
     return (
-      <Card>
-        <CardContent className="p-6">
+      <div className="obs-panel">
+        <div className="p-6">
           <Skeleton className="h-48 w-full" />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
   
   return (
     <div className="space-y-6">
       {/* Profile Information */}
-      <Card>
-        <CardHeader>
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
+              <h3 className="obs-section-title flex items-center gap-2">
                 <User className="h-5 w-5" />
                 Profile Information
-              </CardTitle>
-              <CardDescription>Update your name and email address</CardDescription>
+              </h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Update your name and email address</p>
             </div>
             {!isEditingProfile && (
               <Button variant="outline" size="sm" onClick={() => setIsEditingProfile(true)}>
@@ -213,8 +212,8 @@ function AccountSettings() {
               </Button>
             )}
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
@@ -279,20 +278,20 @@ function AccountSettings() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
       
       {/* Change Password - only for email/password users */}
       {!isGoogleUser && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <div className="obs-panel">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title flex items-center gap-2">
               <KeyRound className="h-5 w-5" />
               Change Password
-            </CardTitle>
-            <CardDescription>Update your password to keep your account secure</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Update your password to keep your account secure</p>
+          </div>
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="current-password">Current Password</Label>
               <div className="relative">
@@ -355,21 +354,21 @@ function AccountSettings() {
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Changing...</>
               ) : 'Change Password'}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
       
       {/* Google users see a note */}
       {isGoogleUser && (
-        <Card className="bg-muted/30">
-          <CardContent className="flex items-center gap-3 py-4">
+        <div className="obs-panel bg-muted/30">
+          <div className="flex items-center gap-3 py-4">
             <Lock className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="text-sm font-medium">Password managed by Google</p>
               <p className="text-xs text-muted-foreground">You signed in with Google. To change your password, visit your Google account settings.</p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -489,27 +488,19 @@ export default function Profile() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 border-b">
+      <div className="obs-role-tabs">
         <button
           onClick={() => setActiveTab('achievements')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'achievements'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+          className={`obs-role-tab ${activeTab === 'achievements' ? 'active' : ''}`}
         >
-          <Trophy className="h-4 w-4 inline mr-2" />
+          <Trophy className="h-4 w-4 mr-2" />
           Achievements
         </button>
         <button
           onClick={() => setActiveTab('account')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'account'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+          className={`obs-role-tab ${activeTab === 'account' ? 'active' : ''}`}
         >
-          <Settings className="h-4 w-4 inline mr-2" />
+          <Settings className="h-4 w-4 mr-2" />
           Account Settings
         </button>
       </div>
@@ -519,14 +510,14 @@ export default function Profile() {
       ) : (
       <>
       {/* XP & Level Card */}
-      <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-orange-800">
+      <div className="obs-panel bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
+        <div style={{marginBottom: 16}}>
+          <h3 className="obs-section-title flex items-center gap-2 text-orange-800">
             <Trophy className="h-5 w-5" />
             Level & Experience
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </h3>
+        </div>
+        <div>
           {gamificationLoading ? (
             <Skeleton className="h-24 w-full" />
           ) : (
@@ -560,20 +551,20 @@ export default function Profile() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Streaks */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="bg-gradient-to-br from-red-50 to-orange-50 border-red-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-red-800 text-lg">
+        <div className="obs-panel bg-gradient-to-br from-red-50 to-orange-50 border-red-200">
+          <div className="pb-2" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title flex items-center gap-2 text-red-800 text-lg">
               <Flame className="h-5 w-5" />
               Hot Streak
-            </CardTitle>
-            <CardDescription>Consecutive C+ or better grades</CardDescription>
-          </CardHeader>
-          <CardContent>
+            </h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Consecutive C+ or better grades</p>
+          </div>
+          <div>
             {gamificationLoading ? (
               <Skeleton className="h-16 w-full" />
             ) : (
@@ -592,18 +583,18 @@ export default function Profile() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-blue-800 text-lg">
+        <div className="obs-panel bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+          <div className="pb-2" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title flex items-center gap-2 text-blue-800 text-lg">
               <Target className="h-5 w-5" />
               Consistency Streak
-            </CardTitle>
-            <CardDescription>Days with at least one graded call</CardDescription>
-          </CardHeader>
-          <CardContent>
+            </h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Days with at least one graded call</p>
+          </div>
+          <div>
             {gamificationLoading ? (
               <Skeleton className="h-16 w-full" />
             ) : (
@@ -622,8 +613,8 @@ export default function Profile() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Badges Section */}
@@ -637,11 +628,11 @@ export default function Profile() {
           {badgesLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardContent className="p-4">
+                <div className="obs-panel" key={i}>
+                  <div className="p-4">
                     <Skeleton className="h-20 w-full" />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           ) : earnedBadges.length > 0 ? (
@@ -651,12 +642,12 @@ export default function Profile() {
               ))}
             </div>
           ) : (
-            <Card className="bg-muted/30">
-              <CardContent className="flex flex-col items-center justify-center py-8">
+            <div className="obs-panel bg-muted/30">
+              <div className="flex flex-col items-center justify-center py-8">
                 <Award className="h-12 w-12 text-muted-foreground/50 mb-2" />
                 <p className="text-muted-foreground">No badges earned yet. Keep grinding!</p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
         </div>
 
@@ -669,11 +660,11 @@ export default function Profile() {
           {badgesLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardContent className="p-4">
+                <div className="obs-panel" key={i}>
+                  <div className="p-4">
                     <Skeleton className="h-20 w-full" />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           ) : inProgressBadges.length > 0 ? (
@@ -683,19 +674,19 @@ export default function Profile() {
               ))}
             </div>
           ) : earnedBadges.length === allBadges?.length ? (
-            <Card className="bg-muted/30">
-              <CardContent className="flex flex-col items-center justify-center py-8">
+            <div className="obs-panel bg-muted/30">
+              <div className="flex flex-col items-center justify-center py-8">
                 <CheckCircle className="h-12 w-12 text-green-500/50 mb-2" />
                 <p className="text-muted-foreground">All badges earned! You're a legend!</p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
-            <Card className="bg-muted/30">
-              <CardContent className="flex flex-col items-center justify-center py-8">
+            <div className="obs-panel bg-muted/30">
+              <div className="flex flex-col items-center justify-center py-8">
                 <Zap className="h-12 w-12 text-orange-500/50 mb-2" />
                 <p className="text-muted-foreground">Start making calls to unlock badges!</p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
         </div>
       </div>

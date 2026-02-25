@@ -1,9 +1,8 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   MessageSquare, 
   CheckCircle, 
@@ -35,6 +34,7 @@ const STATUS_BADGES = {
 };
 
 export default function Feedback() {
+  const [feedbackTab, setFeedbackTab] = useState("pending");
   const { data: allFeedback, isLoading } = trpc.feedback.list.useQuery({ limit: 100 });
   const updateStatusMutation = trpc.feedback.updateStatus.useMutation();
   const utils = trpc.useUtils();
@@ -60,46 +60,46 @@ export default function Feedback() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Pending</CardDescription>
-            <CardTitle className="text-2xl">{pendingFeedback.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Reviewed</CardDescription>
-            <CardTitle className="text-2xl">{reviewedFeedback.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Incorporated</CardDescription>
-            <CardTitle className="text-2xl">{incorporatedFeedback.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Dismissed</CardDescription>
-            <CardTitle className="text-2xl">{dismissedFeedback.length}</CardTitle>
-          </CardHeader>
-        </Card>
+        <div className="obs-panel">
+          <div className="pb-2" style={{marginBottom: 16}}>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Pending</p>
+            <h3 className="obs-section-title text-2xl">{pendingFeedback.length}</h3>
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="pb-2" style={{marginBottom: 16}}>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Reviewed</p>
+            <h3 className="obs-section-title text-2xl">{reviewedFeedback.length}</h3>
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="pb-2" style={{marginBottom: 16}}>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Incorporated</p>
+            <h3 className="obs-section-title text-2xl">{incorporatedFeedback.length}</h3>
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="pb-2" style={{marginBottom: 16}}>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Dismissed</p>
+            <h3 className="obs-section-title text-2xl">{dismissedFeedback.length}</h3>
+          </div>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader>
+            <div className="obs-panel" key={i}>
+              <div style={{marginBottom: 16}}>
                 <Skeleton className="h-5 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
-              </CardHeader>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       ) : allFeedback?.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
+        <div className="obs-panel">
+          <div className="flex flex-col items-center justify-center py-12">
             <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Feedback Yet</h3>
             <p className="text-muted-foreground text-center max-w-md mb-4">
@@ -112,32 +112,32 @@ export default function Feedback() {
                 View Calls
               </Button>
             </Link>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
-        <Tabs defaultValue="pending" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="pending">
+        <div className="space-y-4">
+          <div className="obs-role-tabs">
+            <button className={`obs-role-tab ${feedbackTab === "pending" ? "active" : ""}`} onClick={() => setFeedbackTab("pending")}>
               Pending ({pendingFeedback.length})
-            </TabsTrigger>
-            <TabsTrigger value="reviewed">
+            </button>
+            <button className={`obs-role-tab ${feedbackTab === "reviewed" ? "active" : ""}`} onClick={() => setFeedbackTab("reviewed")}>
               Reviewed ({reviewedFeedback.length})
-            </TabsTrigger>
-            <TabsTrigger value="incorporated">
+            </button>
+            <button className={`obs-role-tab ${feedbackTab === "incorporated" ? "active" : ""}`} onClick={() => setFeedbackTab("incorporated")}>
               Incorporated ({incorporatedFeedback.length})
-            </TabsTrigger>
-            <TabsTrigger value="dismissed">
+            </button>
+            <button className={`obs-role-tab ${feedbackTab === "dismissed" ? "active" : ""}`} onClick={() => setFeedbackTab("dismissed")}>
               Dismissed ({dismissedFeedback.length})
-            </TabsTrigger>
-          </TabsList>
+            </button>
+          </div>
 
-          <TabsContent value="pending" className="space-y-4">
+          {feedbackTab === "pending" && (<div className="space-y-4">
             {pendingFeedback.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
+              <div className="obs-panel">
+                <div className="py-8 text-center text-muted-foreground">
                   No pending feedback to review
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ) : (
               pendingFeedback.map((feedback) => (
                 <FeedbackCard
@@ -148,15 +148,15 @@ export default function Feedback() {
                 />
               ))
             )}
-          </TabsContent>
+          </div>)}
 
-          <TabsContent value="reviewed" className="space-y-4">
+          {feedbackTab === "reviewed" && (<div className="space-y-4">
             {reviewedFeedback.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
+              <div className="obs-panel">
+                <div className="py-8 text-center text-muted-foreground">
                   No reviewed feedback
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ) : (
               reviewedFeedback.map((feedback) => (
                 <FeedbackCard
@@ -167,36 +167,36 @@ export default function Feedback() {
                 />
               ))
             )}
-          </TabsContent>
+          </div>)}
 
-          <TabsContent value="incorporated" className="space-y-4">
+          {feedbackTab === "incorporated" && (<div className="space-y-4">
             {incorporatedFeedback.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
+              <div className="obs-panel">
+                <div className="py-8 text-center text-muted-foreground">
                   No incorporated feedback yet
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ) : (
               incorporatedFeedback.map((feedback) => (
                 <FeedbackCard key={feedback.id} feedback={feedback} />
               ))
             )}
-          </TabsContent>
+          </div>)}
 
-          <TabsContent value="dismissed" className="space-y-4">
+          {feedbackTab === "dismissed" && (<div className="space-y-4">
             {dismissedFeedback.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
+              <div className="obs-panel">
+                <div className="py-8 text-center text-muted-foreground">
                   No dismissed feedback
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ) : (
               dismissedFeedback.map((feedback) => (
                 <FeedbackCard key={feedback.id} feedback={feedback} />
               ))
             )}
-          </TabsContent>
-        </Tabs>
+          </div>)}
+        </div>
       )}
     </div>
   );
@@ -217,25 +217,25 @@ function FeedbackCard({
   const StatusIcon = statusInfo.icon;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <div className="obs-panel">
+      <div className="pb-3" style={{marginBottom: 16}}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg bg-muted ${feedbackType.color}`}>
               <Icon className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-base flex items-center gap-2">
+              <h3 className="obs-section-title text-base flex items-center gap-2">
                 {feedbackType.label}
                 <Badge variant={statusInfo.variant}>
                   <StatusIcon className="h-3 w-3 mr-1" />
                   {statusInfo.label}
                 </Badge>
-              </CardTitle>
-              <CardDescription>
+              </h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
                 {feedback.criteriaName && `Criteria: ${feedback.criteriaName} • `}
                 {new Date(feedback.createdAt).toLocaleString()}
-              </CardDescription>
+              </p>
             </div>
           </div>
           {feedback.callId && (
@@ -247,8 +247,8 @@ function FeedbackCard({
             </Link>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </div>
+      <div className="space-y-4">
         {/* Score change if applicable */}
         {(feedback.originalScore || feedback.suggestedScore) && (
           <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
@@ -343,7 +343,7 @@ function FeedbackCard({
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

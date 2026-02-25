@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, Mail, CheckCircle2, Loader2 } from "lucide-react";
 
@@ -42,17 +41,17 @@ export default function ForgotPassword() {
   if (isSubmitted) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
+        <div className="obs-panel w-full max-w-md">
+          <div className="text-center" style={{marginBottom: 16}}>
             <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
               <CheckCircle2 className="h-6 w-6 text-green-600" />
             </div>
-            <CardTitle>Check Your Email</CardTitle>
-            <CardDescription>
+            <h3 className="obs-section-title">Check Your Email</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               If an account exists with <strong>{email}</strong>, you'll receive a password reset link shortly.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </p>
+          </div>
+          <div className="space-y-4">
             <p className="text-sm text-muted-foreground text-center">
               The link will expire in 1 hour. If you don't see the email, check your spam folder.
             </p>
@@ -74,25 +73,25 @@ export default function ForgotPassword() {
                 Try a different email
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+      <div className="obs-panel w-full max-w-md">
+        <div className="text-center" style={{marginBottom: 16}}>
           <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <Mail className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle>Forgot Password?</CardTitle>
-          <CardDescription>
+          <h3 className="obs-section-title">Forgot Password?</h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
             Enter your email address and we'll send you a link to reset your password.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <Alert variant="destructive">
@@ -131,8 +130,8 @@ export default function ForgotPassword() {
               </Link>
             </div>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

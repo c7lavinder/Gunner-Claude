@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -288,31 +287,30 @@ export default function Pricing() {
         {isLoading ? (
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {[1, 2, 3].map((i) => (
-              <Card key={i} className="flex flex-col">
-                <CardHeader className="text-center pb-2">
+              <div key={i} className="obs-panel flex flex-col">
+                <div className="text-center pb-2" style={{marginBottom: 16}}>
                   <Skeleton className="h-8 w-24 mx-auto mb-2" />
                   <Skeleton className="h-4 w-48 mx-auto" />
-                </CardHeader>
-                <CardContent className="flex-1">
+                </div>
+                <div className="flex-1">
                   <Skeleton className="h-12 w-32 mx-auto mb-6" />
                   <div className="space-y-3">
                     {[1, 2, 3, 4, 5].map((j) => (
                       <Skeleton key={j} className="h-4 w-full" />
                     ))}
                   </div>
-                </CardContent>
-                <CardFooter>
+                </div>
+                <div>
                   <Skeleton className="h-10 w-full" />
-                </CardFooter>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
         ) : (
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {plans.map((plan: any) => (
-              <Card
-                key={plan.id}
-                className={`relative flex flex-col ${
+              <div key={plan.id}
+                className={`obs-panel relative flex flex-col ${
                   plan.popular ? "border-primary shadow-lg scale-105" : ""
                 }`}
               >
@@ -324,11 +322,11 @@ export default function Pricing() {
                     </Badge>
                   </div>
                 )}
-                <CardHeader className="text-center pb-2">
-                  <CardTitle className="text-2xl">{plan.name}</CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1">
+                <div className="text-center pb-2" style={{marginBottom: 16}}>
+                  <h3 className="obs-section-title text-2xl">{plan.name}</h3>
+                  <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{plan.description}</p>
+                </div>
+                <div className="flex-1">
                   <div className="text-center mb-6">
                     <span className="text-5xl font-bold">
                       ${billingPeriod === "yearly" ? Math.round(plan.priceYearly / 12) : plan.priceMonthly}
@@ -354,8 +352,8 @@ export default function Pricing() {
                       <FeatureItem key={i} featureId={featureId} />
                     ))}
                   </ul>
-                </CardContent>
-                <CardFooter>
+                </div>
+                <div>
                   <Button
                     className="w-full"
                     variant={plan.popular ? "default" : "outline"}
@@ -364,8 +362,8 @@ export default function Pricing() {
                   >
                     {plan.id === "scale" ? "Contact Sales" : "Start Free Trial"}
                   </Button>
-                </CardFooter>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
         )}

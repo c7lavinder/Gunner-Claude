@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, CreditCard, Shield, Zap, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -177,9 +176,8 @@ export default function Paywall() {
               const isPopular = plan.isPopular;
 
               return (
-                <Card
-                  key={planCode}
-                  className={`cursor-pointer transition-all relative ${
+                <div key={planCode}
+                  className={`obs-panel cursor-pointer transition-all relative ${
                     isSelected
                       ? "border-primary ring-2 ring-primary/20"
                       : "hover:border-primary/50"
@@ -191,8 +189,8 @@ export default function Paywall() {
                       Most Popular
                     </Badge>
                   )}
-                  <CardHeader className="text-center pb-2">
-                    <CardTitle className="capitalize">{plan.name}</CardTitle>
+                  <div className="text-center pb-2" style={{marginBottom: 16}}>
+                    <h3 className="obs-section-title capitalize">{plan.name}</h3>
                     <div className="mt-2">
                       <span className="text-3xl font-bold">
                         ${billingPeriod === "monthly" ? price.monthly : Math.round(price.yearly / 12)}
@@ -204,8 +202,8 @@ export default function Paywall() {
                         ${price.yearly}/year (billed annually)
                       </p>
                     )}
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <ul className="space-y-2">
                       {FEATURES_BY_TIER[planCode]?.map((feature, i) => (
                         <li key={i} className="flex items-center gap-2 text-sm">
@@ -221,8 +219,8 @@ export default function Paywall() {
                         </Badge>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               );
             })}
           </div>

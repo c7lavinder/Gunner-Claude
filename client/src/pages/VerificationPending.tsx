@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Mail, Loader2, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -44,19 +43,19 @@ export default function VerificationPending() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+      <div className="obs-panel w-full max-w-md">
+        <div className="text-center" style={{marginBottom: 16}}>
           <div className="mx-auto mb-4">
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
               <Mail className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Verify Your Email</CardTitle>
-          <CardDescription className="text-base">
+          <h3 className="obs-section-title text-2xl">Verify Your Email</h3>
+          <p className="text-base" style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
             We've sent a verification email to your inbox. Please click the link in the email to verify your account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+          </p>
+        </div>
+        <div className="flex flex-col gap-4">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
             <p className="font-medium mb-1">Check your inbox</p>
             <p>The verification link expires in 24 hours. If you don't see the email, check your spam folder.</p>
@@ -94,8 +93,8 @@ export default function VerificationPending() {
               Sign in with a different account
             </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

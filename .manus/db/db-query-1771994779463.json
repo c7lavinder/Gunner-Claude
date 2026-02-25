@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, email, name, role, loginMethod FROM users LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, email, name, role, loginMethod FROM users LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "email": "corey@newagainhouses.com",
+      "name": "Corey Lavinder",
+      "role": "super_admin",
+      "loginMethod": "google"
+    },
+    {
+      "id": "90493",
+      "email": "kbarks@newagainhouses.com",
+      "name": "Kyle Barks",
+      "role": "admin",
+      "loginMethod": "google"
+    },
+    {
+      "id": "180239",
+      "email": "xhakalavinder@gmail.com",
+      "name": "Xhaka Lavinder",
+      "role": "admin",
+      "loginMethod": "google"
+    },
+    {
+      "id": "180249",
+      "email": "alvarez.lozano@hotmail.com",
+      "name": "Daniel Lozano",
+      "role": "user",
+      "loginMethod": "google"
+    },
+    {
+      "id": "390001",
+      "email": "c.segura9393@gmail.com",
+      "name": "Christian Segura",
+      "role": "user",
+      "loginMethod": "google"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tname\trole\tloginMethod\n1\tcorey@newagainhouses.com\tCorey Lavinder\tsuper_admin\tgoogle\n90493\tkbarks@newagainhouses.com\tKyle Barks\tadmin\tgoogle\n180239\txhakalavinder@gmail.com\tXhaka Lavinder\tadmin\tgoogle\n180249\talvarez.lozano@hotmail.com\tDaniel Lozano\tuser\tgoogle\n390001\tc.segura9393@gmail.com\tChristian Segura\tuser\tgoogle\n",
+  "stderr": "",
+  "execution_time_ms": 49
+}

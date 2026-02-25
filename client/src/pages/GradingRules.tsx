@@ -1,5 +1,4 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -275,8 +274,8 @@ export default function GradingRules() {
       </div>
 
       {/* Info Card */}
-      <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-        <CardContent className="flex items-start gap-4 pt-6">
+      <div className="obs-panel bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+        <div className="flex items-start gap-4 pt-6">
           <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
           <div>
             <h4 className="font-medium text-blue-900 dark:text-blue-100">How Grading Rules Work</h4>
@@ -286,23 +285,23 @@ export default function GradingRules() {
               Rules with higher priority are considered first.
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {isLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader>
+            <div className="obs-panel" key={i}>
+              <div style={{marginBottom: 16}}>
                 <Skeleton className="h-5 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
-              </CardHeader>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       ) : sortedRules?.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
+        <div className="obs-panel">
+          <div className="flex flex-col items-center justify-center py-12">
             <Scale className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Custom Rules Yet</h3>
             <p className="text-muted-foreground text-center max-w-md mb-4">
@@ -313,27 +312,27 @@ export default function GradingRules() {
               <Plus className="h-4 w-4 mr-2" />
               Add Your First Rule
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
           {sortedRules?.map((rule) => (
-            <Card key={rule.id} className={rule.isActive === "false" ? "opacity-60" : ""}>
-              <CardHeader className="pb-3">
+            <div key={rule.id} className={rule.isActive === "false" ? "opacity-60" : ""}>
+              <div className="pb-3" style={{marginBottom: 16}}>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
                       {rule.priority || 0}
                     </div>
                     <div>
-                      <CardTitle className="text-lg flex items-center gap-2">
+                      <h3 className="obs-section-title text-lg flex items-center gap-2">
                         {rule.title}
                         {rule.isActive === "false" && (
                           <Badge variant="secondary">Disabled</Badge>
                         )}
-                      </CardTitle>
+                      </h3>
                       {rule.description && (
-                        <CardDescription>{rule.description}</CardDescription>
+                        <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{rule.description}</p>
                       )}
                     </div>
                   </div>
@@ -344,8 +343,8 @@ export default function GradingRules() {
                     />
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
+              </div>
+              <div>
                 <div className="bg-muted/50 rounded-lg p-4 mb-4">
                   <p className="text-sm whitespace-pre-wrap">{rule.ruleText}</p>
                 </div>
@@ -386,8 +385,8 @@ export default function GradingRules() {
                     </AlertDialog>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}

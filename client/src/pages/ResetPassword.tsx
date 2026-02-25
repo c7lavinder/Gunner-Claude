@@ -3,7 +3,6 @@ import { Link, useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, KeyRound, CheckCircle2, Loader2, XCircle } from "lucide-react";
 
@@ -92,12 +91,12 @@ export default function ResetPassword() {
   if (isVerifying) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="py-12 text-center">
+        <div className="obs-panel w-full max-w-md">
+          <div className="py-12 text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
             <p className="text-muted-foreground">Verifying reset link...</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -106,15 +105,15 @@ export default function ResetPassword() {
   if (tokenError) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
+        <div className="obs-panel w-full max-w-md">
+          <div className="text-center" style={{marginBottom: 16}}>
             <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
               <XCircle className="h-6 w-6 text-red-600" />
             </div>
-            <CardTitle>Invalid Reset Link</CardTitle>
-            <CardDescription>{tokenError}</CardDescription>
-          </CardHeader>
-          <CardContent>
+            <h3 className="obs-section-title">Invalid Reset Link</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{tokenError}</p>
+          </div>
+          <div>
             <div className="flex flex-col gap-2">
               <Link href="/forgot-password">
                 <Button className="w-full">Request New Reset Link</Button>
@@ -126,8 +125,8 @@ export default function ResetPassword() {
                 </Button>
               </Link>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -136,24 +135,24 @@ export default function ResetPassword() {
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
+        <div className="obs-panel w-full max-w-md">
+          <div className="text-center" style={{marginBottom: 16}}>
             <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
               <CheckCircle2 className="h-6 w-6 text-green-600" />
             </div>
-            <CardTitle>Password Reset Successfully</CardTitle>
-            <CardDescription>
+            <h3 className="obs-section-title">Password Reset Successfully</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
               Your password has been updated. You can now log in with your new password.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <Link href="/login">
               <Button className="w-full">
                 Continue to Login
               </Button>
             </Link>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -161,17 +160,17 @@ export default function ResetPassword() {
   // Reset password form
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+      <div className="obs-panel w-full max-w-md">
+        <div className="text-center" style={{marginBottom: 16}}>
           <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <KeyRound className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle>Reset Your Password</CardTitle>
-          <CardDescription>
+          <h3 className="obs-section-title">Reset Your Password</h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
             Enter your new password below.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <Alert variant="destructive">
@@ -225,8 +224,8 @@ export default function ResetPassword() {
               </Link>
             </div>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -51,12 +50,12 @@ function StatCard({
   trend?: string;
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+    <div className="obs-panel">
+      <div className="flex flex-row items-center justify-between space-y-0 pb-2" style={{marginBottom: 16}}>
+        <h3 className="obs-section-title text-sm font-medium">{title}</h3>
         <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         <div className="text-2xl font-bold">{value}</div>
         {description && (
           <p className="text-xs text-muted-foreground mt-1">{description}</p>
@@ -67,8 +66,8 @@ function StatCard({
             {trend}
           </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -271,14 +270,14 @@ export default function LeadGenDashboard() {
 
       {/* XP and Badges */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <div className="obs-panel">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title flex items-center gap-2">
               <Award className="h-5 w-5" />
               Your Progress
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div>
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -305,17 +304,17 @@ export default function LeadGenDashboard() {
                 <p className="text-sm text-muted-foreground">Current title</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <div className="obs-panel">
+          <div style={{marginBottom: 16}}>
+            <h3 className="obs-section-title flex items-center gap-2">
               <Award className="h-5 w-5" />
               Recent Badges
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div>
             {badges && badges.length > 0 ? (
               <div className="space-y-2">
                 {badges.slice(0, 5).map((badge: any) => (
@@ -332,22 +331,22 @@ export default function LeadGenDashboard() {
             ) : (
               <p className="text-sm text-muted-foreground">No badges earned yet. Keep making calls!</p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Recent Calls */}
-      <Card>
-        <CardHeader>
+      <div className="obs-panel">
+        <div style={{marginBottom: 16}}>
           <div className="flex items-center justify-between">
-            <CardTitle>Recent Calls</CardTitle>
+            <h3 className="obs-section-title">Recent Calls</h3>
             <Link href="/calls">
               <Button variant="outline" size="sm">View All</Button>
             </Link>
           </div>
-          <CardDescription>Your most recent graded calls</CardDescription>
-        </CardHeader>
-        <CardContent>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Your most recent graded calls</p>
+        </div>
+        <div>
           {recentCalls.length > 0 ? (
             <div className="space-y-3">
               {recentCalls.map((call: any) => {
@@ -385,8 +384,8 @@ export default function LeadGenDashboard() {
               <p>No calls yet. Upload your first call to get started!</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

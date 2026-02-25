@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle, Loader2, Mail } from "lucide-react";
 
@@ -43,8 +42,8 @@ export default function VerifyEmail() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+      <div className="obs-panel w-full max-w-md">
+        <div className="text-center" style={{marginBottom: 16}}>
           <div className="mx-auto mb-4">
             {status === "loading" && (
               <Loader2 className="h-16 w-16 text-primary animate-spin" />
@@ -56,18 +55,18 @@ export default function VerifyEmail() {
               <XCircle className="h-16 w-16 text-red-500" />
             )}
           </div>
-          <CardTitle className="text-2xl">
+          <h3 className="obs-section-title text-2xl">
             {status === "loading" && "Verifying Email..."}
             {status === "success" && "Email Verified!"}
             {status === "error" && "Verification Failed"}
-          </CardTitle>
-          <CardDescription>
+          </h3>
+          <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
             {status === "loading" && "Please wait while we verify your email address."}
             {status === "success" && "Your email has been successfully verified. You can now access all features."}
             {status === "error" && errorMessage}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+          </p>
+        </div>
+        <div className="flex flex-col gap-3">
           {status === "success" && (
             <Button onClick={() => setLocation("/dashboard")} className="w-full">
               Go to Dashboard
@@ -88,8 +87,8 @@ export default function VerifyEmail() {
               </Button>
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

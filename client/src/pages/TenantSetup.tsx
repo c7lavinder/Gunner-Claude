@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -799,22 +798,22 @@ export default function TenantSetup() {
             </div>
 
             <div className="space-y-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Company</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm space-y-1">
+              <div className="obs-panel">
+                <div className="pb-2" style={{marginBottom: 16}}>
+                  <h3 className="obs-section-title text-base">Company</h3>
+                </div>
+                <div className="text-sm space-y-1">
                   <div><span className="text-muted-foreground">Name:</span> <strong>{formData.companyName}</strong></div>
                   <div><span className="text-muted-foreground">Slug:</span> {formData.companySlug}</div>
                   <div><span className="text-muted-foreground">Plan:</span> <Badge variant="outline">{formData.subscriptionTier}</Badge></div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">CRM Integration</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm space-y-1">
+              <div className="obs-panel">
+                <div className="pb-2" style={{marginBottom: 16}}>
+                  <h3 className="obs-section-title text-base">CRM Integration</h3>
+                </div>
+                <div className="text-sm space-y-1">
                   {formData.ghlApiKey ? (
                     <>
                       <div className="flex items-center gap-2">
@@ -849,14 +848,14 @@ export default function TenantSetup() {
                       BatchDialer connected
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Team Members ({validMemberCount})</CardTitle>
-                </CardHeader>
-                <CardContent>
+              <div className="obs-panel">
+                <div className="pb-2" style={{marginBottom: 16}}>
+                  <h3 className="obs-section-title text-base">Team Members ({validMemberCount})</h3>
+                </div>
+                <div>
                   {validMemberCount > 0 ? (
                     <div className="space-y-2">
                       {formData.teamMembers.filter(m => m.name.trim()).map((member, i) => (
@@ -890,8 +889,8 @@ export default function TenantSetup() {
                   ) : (
                     <p className="text-sm text-muted-foreground">No team members added (can add later)</p>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -952,13 +951,13 @@ export default function TenantSetup() {
         </div>
 
         {/* Step Content */}
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle>{STEPS[currentStep - 1].title}</CardTitle>
-            <CardDescription>{STEPS[currentStep - 1].description}</CardDescription>
-          </CardHeader>
-          <CardContent>{renderStepContent()}</CardContent>
-        </Card>
+        <div className="obs-panel">
+          <div className="text-center" style={{marginBottom: 16}}>
+            <h3 className="obs-section-title">{STEPS[currentStep - 1].title}</h3>
+            <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>{STEPS[currentStep - 1].description}</p>
+          </div>
+          <div>{renderStepContent()}</div>
+        </div>
 
         {/* Navigation */}
         <div className="flex justify-between mt-6">
