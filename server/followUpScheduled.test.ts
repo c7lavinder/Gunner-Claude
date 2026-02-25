@@ -62,8 +62,9 @@ describe("Follow-Up Scheduled Feature", () => {
       "utf-8"
     );
 
-    it("should display Follow-Up indicator", () => {
-      expect(callInboxContent).toContain("followUpScheduled");
+    it("should reference follow-up in stage classification (follow_up stage)", () => {
+      // Follow-Up was removed as a separate pill in CallInbox (only 3 pills: direction, type, outcome)
+      // but follow_up still exists as a stage classification label
       expect(callInboxContent).toContain("Follow-Up");
     });
   });

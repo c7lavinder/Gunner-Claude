@@ -4344,8 +4344,26 @@ async function isAlreadyFlagged(
   db: any,
   tenantId: number,
   ghlContactId: string | null,
-  triggerRule: string
+  triggerRule: string,
+  teamMemberId?: number | null
 ): Promise<boolean> {
+  // For team-level signals (no ghlContactId), deduplicate by teamMemberId + rule
+  if (!ghlContactId && teamMemberId) {
+    const existingTeamSignal = await db
+      .select({ id: opportunities.id })
+      .from(opportunities)
+      .where(
+        and(
+          eq(opportunities.tenantId, tenantId),
+          eq(opportunities.teamMemberId, teamMemberId),
+          sql`JSON_CONTAINS(${opportunities.triggerRules}, ${JSON.stringify(triggerRule)})`,
+          sql`(${opportunities.status} = 'active' OR (${opportunities.status} IN ('handled', 'dismissed') AND ${opportunities.resolvedAt} > DATE_SUB(NOW(), INTERVAL 7 DAY)))`
+        )
+      )
+      .limit(1);
+    return existingTeamSignal.length > 0;
+  }
+
   if (!ghlContactId) return false;
 
   // Check 1: Same contact + same rule — active or recently handled/dismissed
@@ -4993,10 +5011,48 @@ async function scanTenant(
   // ========== PHASE 4: DEDUPLICATE & SAVE ==========
   console.log(`[OpportunityDetection] Phase 4: Saving ${detections.length} potential detections for tenant ${tenantId}`);
 
+  // DAILY CAP: Only allow ~5 new signals per tenant per day
+  // Check how many were already created today
+  const DAILY_SIGNAL_CAP = 5;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const [todayCountResult] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(opportunities)
+    .where(
+      and(
+        eq(opportunities.tenantId, tenantId),
+        gte(opportunities.createdAt, todayStart)
+      )
+    );
+  const alreadyCreatedToday = Number(todayCountResult?.count || 0);
+  const remainingSlots = Math.max(0, DAILY_SIGNAL_CAP - alreadyCreatedToday);
+
+  if (remainingSlots === 0) {
+    console.log(`[OpportunityDetection] Daily cap reached (${DAILY_SIGNAL_CAP}) for tenant ${tenantId}. Skipping new signals.`);
+    return;
+  }
+
+  // Sort detections by priority (highest first) so we save the most important ones
+  // Tier priority: missed > warning > possible
+  const tierWeight: Record<string, number> = { missed: 300, warning: 200, possible: 100 };
+  detections.sort((a, b) => {
+    const aScore = (tierWeight[a.tier] || 0) + a.priorityScore;
+    const bScore = (tierWeight[b.tier] || 0) + b.priorityScore;
+    return bScore - aScore;
+  });
+
   // In-memory dedup: prevent same contact+rule from being saved multiple times in one scan
   const seenInThisScan = new Set<string>();
+  let savedThisScan = 0;
 
   for (const detection of detections) {
+    // Enforce daily cap
+    if (savedThisScan >= remainingSlots) {
+      console.log(`[OpportunityDetection] Reached remaining daily slots (${remainingSlots}) for tenant ${tenantId}. Stopping.`);
+      break;
+    }
+
     try {
       // Skip if already flagged
       const primaryRule = detection.triggerRules[0];
@@ -5004,7 +5060,7 @@ async function scanTenant(
       if (seenInThisScan.has(dedupKey)) continue;
       seenInThisScan.add(dedupKey);
 
-      if (await isAlreadyFlagged(db, tenantId, detection.ghlContactId, primaryRule)) {
+      if (await isAlreadyFlagged(db, tenantId, detection.ghlContactId, primaryRule, detection.teamMemberId)) {
         continue;
       }
 
@@ -5169,6 +5225,7 @@ async function scanTenant(
       });
 
       result.detected++;
+      savedThisScan++;
     } catch (saveError) {
       console.error(`[OpportunityDetection] Error saving detection:`, saveError);
       result.errors++;

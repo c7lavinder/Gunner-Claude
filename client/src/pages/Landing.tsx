@@ -182,9 +182,11 @@ export default function Landing() {
                   Start {trialDays}-Day Free Trial <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="gap-2" onClick={() => setShowDemoVideo(true)}>
-                <Play className="h-4 w-4" /> Watch Demo
-              </Button>
+              {demoVideoUrl && (
+                <Button size="lg" variant="outline" className="gap-2" onClick={() => setShowDemoVideo(true)}>
+                  <Play className="h-4 w-4" /> Watch Demo
+                </Button>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-4">
               3-day free trial • Credit card required to start
