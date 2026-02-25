@@ -793,6 +793,7 @@ export default function CallDetail() {
                   callId={callId}
                   contactName={call.contactName || call.contactPhone || "Unknown"}
                   ghlContactId={(call as any).ghlContactId}
+                  teamMemberName={call.teamMemberName}
                 />
               </TabsContent>
             </Tabs>

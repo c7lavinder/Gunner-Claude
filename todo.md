@@ -2974,3 +2974,5 @@
 - [x] Add assignee change dropdown for tasks in Next Steps edit mode
 - [x] Fix call outcome: rejected offers should not be labeled 'Offer Made' — add 'offer_rejected' outcome
 - [x] Add color-coded outcome badges (Offer Rejected=red, Offer Made=blue/green, etc.) in call inbox and call detail
+- [x] Auto-select assignee for new tasks to the team member who made the call
+- [x] Auto-select assignee for update tasks to the task's current assignee

@@ -286,6 +286,7 @@ function ActionCard({
   isPushing,
   isAiEditing,
   ghlData,
+  teamMemberName,
 }: {
   action: NextStepAction;
   onPush: (action: NextStepAction) => void;
@@ -296,6 +297,7 @@ function ActionCard({
   isPushing: boolean;
   isAiEditing: boolean;
   ghlData: ReturnType<typeof useGhlDropdownData>;
+  teamMemberName?: string | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedPayload, setEditedPayload] = useState<Record<string, any>>({});
@@ -326,7 +328,29 @@ function ActionCard({
   }, [selectedPipelineName, ghlData.pipelines]);
 
   const handleStartEdit = () => {
-    setEditedPayload({ ...action.payload });
+    const payload = { ...action.payload };
+
+    // Auto-assign for create_task: default to the team member who made the call
+    if (action.actionType === "create_task" && !payload.assignedTo && teamMemberName) {
+      const match = ghlData.teamMembers.find(
+        m => m.name.toLowerCase() === teamMemberName.toLowerCase()
+      );
+      if (match) {
+        payload.assignedTo = match.ghlUserId;
+      }
+    }
+
+    // Auto-assign for update_task: default to the task's current assignee
+    if (action.actionType === "update_task" && !payload.assignedTo && payload.taskKeyword) {
+      const matchedTask = ghlData.tasks.find(
+        t => t.title.toLowerCase() === payload.taskKeyword.toLowerCase()
+      );
+      if (matchedTask && (matchedTask as any).assignedToGhlId) {
+        payload.assignedTo = (matchedTask as any).assignedToGhlId;
+      }
+    }
+
+    setEditedPayload(payload);
     setIsEditing(true);
   };
 
@@ -438,7 +462,16 @@ function ActionCard({
         return (
           <Select
             value={value}
-            onValueChange={(v) => updateField(field.key, v)}
+            onValueChange={(v) => {
+              updateField(field.key, v);
+              // Auto-populate assignedTo when a task is selected (for update_task)
+              if (action.actionType === "update_task") {
+                const selectedTask = options.find(t => t.title === v);
+                if (selectedTask && (selectedTask as any).assignedToGhlId) {
+                  updateField("assignedTo", (selectedTask as any).assignedToGhlId);
+                }
+              }
+            }}
           >
             <SelectTrigger className="text-sm bg-background">
               <SelectValue placeholder="Select task..." />
@@ -779,10 +812,12 @@ export default function NextStepsTab({
   callId,
   contactName,
   ghlContactId,
+  teamMemberName,
 }: {
   callId: number;
   contactName: string;
   ghlContactId?: string | null;
+  teamMemberName?: string | null;
 }) {
   const [actions, setActions] = useState<NextStepAction[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -1183,6 +1218,7 @@ export default function NextStepsTab({
                   isPushing={pushingActionId === action.id}
                   isAiEditing={aiEditingActionId === action.id}
                   ghlData={ghlData}
+                  teamMemberName={teamMemberName}
                 />
               ))}
             </div>
@@ -1206,6 +1242,7 @@ export default function NextStepsTab({
                   isPushing={pushingActionId === action.id}
                   isAiEditing={aiEditingActionId === action.id}
                   ghlData={ghlData}
+                  teamMemberName={teamMemberName}
                 />
               ))}
             </div>

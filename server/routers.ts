@@ -1578,6 +1578,7 @@ Based on ALL of the above context, suggest the most relevant next steps for this
                 title: t.title || t.body || "Untitled Task",
                 dueDate: t.dueDate,
                 assignedTo: assigneeName,
+                assignedToGhlId: t.assignedTo || null,
               };
             }),
           };
