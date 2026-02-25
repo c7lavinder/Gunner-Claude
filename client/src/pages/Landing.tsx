@@ -227,7 +227,7 @@ export default function Landing() {
          ═══════════════════════════════════════════════════════ */}
       <nav
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled ? "bg-white/95 backdrop-blur-md shadow-sm" : "bg-transparent"
+          scrolled ? "bg-white/95 backdrop-blur-md shadow-sm" : "bg-white"
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -242,9 +242,7 @@ export default function Landing() {
                 <button
                   key={link.target}
                   onClick={() => scrollTo(link.target)}
-                  className={`text-sm font-medium transition-colors hover:text-[#B91C1C] ${
-                    scrolled ? "text-[#111827]" : "text-white"
-                  }`}
+                  className={`text-sm font-medium transition-colors hover:text-[#B91C1C] text-[#111827]`}
                 >
                   {link.label}
                 </button>
@@ -255,7 +253,7 @@ export default function Landing() {
               <Link href="/login">
                 <Button
                   variant="ghost"
-                  className={`${scrolled ? "text-[#111827] hover:text-[#B91C1C]" : "text-white hover:text-white/80 hover:bg-white/10"}`}
+                  className={`text-[#111827] hover:text-[#B91C1C]`}
                 >
                   Sign In
                 </Button>
@@ -272,9 +270,9 @@ export default function Landing() {
               className="md:hidden p-2"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              <div className={`w-6 h-0.5 ${scrolled ? "bg-[#111827]" : "bg-white"} transition-all ${mobileMenuOpen ? "rotate-45 translate-y-1.5" : ""}`} />
-              <div className={`w-6 h-0.5 ${scrolled ? "bg-[#111827]" : "bg-white"} mt-1.5 transition-all ${mobileMenuOpen ? "opacity-0" : ""}`} />
-              <div className={`w-6 h-0.5 ${scrolled ? "bg-[#111827]" : "bg-white"} mt-1.5 transition-all ${mobileMenuOpen ? "-rotate-45 -translate-y-1.5" : ""}`} />
+              <div className={`w-6 h-0.5 bg-[#111827] transition-all ${mobileMenuOpen ? "rotate-45 translate-y-1.5" : ""}`} />
+              <div className={`w-6 h-0.5 bg-[#111827] mt-1.5 transition-all ${mobileMenuOpen ? "opacity-0" : ""}`} />
+              <div className={`w-6 h-0.5 bg-[#111827] mt-1.5 transition-all ${mobileMenuOpen ? "-rotate-45 -translate-y-1.5" : ""}`} />
             </button>
           </div>
         </div>
@@ -308,25 +306,25 @@ export default function Landing() {
       {/* ═══════════════════════════════════════════════════════
           SECTION 1: HERO
          ═══════════════════════════════════════════════════════ */}
-      <section className="relative bg-[#1A1A1A] pt-24 pb-16 md:pt-32 md:pb-24 overflow-hidden">
+      <section className="relative bg-white pt-24 pb-16 md:pt-32 md:pb-24 overflow-hidden">
         {/* Subtle gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#1A1A1A] via-[#1A1A1A] to-[#2D1111] opacity-80" />
+        <div className="absolute inset-0 bg-gradient-to-br from-white via-[#FAFAFA] to-[#FEF2F2] opacity-80" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: Copy */}
             <div>
-              <div className="inline-flex items-center gap-2 bg-[#B91C1C]/20 border border-[#B91C1C]/30 rounded-full px-4 py-1.5 mb-6">
-                <span className="text-[#F87171] text-xs font-semibold tracking-wide uppercase">
+              <div className="inline-flex items-center gap-2 bg-[#B91C1C]/10 border border-[#B91C1C]/20 rounded-full px-4 py-1.5 mb-6">
+                <span className="text-[#B91C1C] text-xs font-semibold tracking-wide uppercase">
                   Built for Real Estate Wholesalers on GoHighLevel
                 </span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-[1.1] mb-6">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#111827] tracking-tight leading-[1.1] mb-6">
                 Stop Babysitting Your Sales Reps.
               </h1>
 
-              <p className="text-lg sm:text-xl text-gray-300 leading-relaxed mb-8 max-w-xl">
+              <p className="text-lg sm:text-xl text-gray-600 leading-relaxed mb-8 max-w-xl">
                 Gunner AI automatically scores every sales call, ranks your team, and flags critical moments — so you can focus on scaling, not hand-holding.
               </p>
 
@@ -339,14 +337,14 @@ export default function Landing() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="border-white/30 text-white hover:bg-white/10 rounded-lg text-base px-8 h-12 gap-2 bg-transparent"
+                  className="border-gray-300 text-[#111827] hover:bg-gray-50 rounded-lg text-base px-8 h-12 gap-2 bg-transparent"
                   onClick={() => scrollTo("how-it-works")}
                 >
                   Watch It Work
                 </Button>
               </div>
 
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-500">
                 Trusted by 50+ real estate wholesaling teams nationwide
               </p>
             </div>
@@ -354,11 +352,11 @@ export default function Landing() {
             {/* Right: Dashboard screenshot */}
             <div className="hidden lg:block">
               <div className="relative">
-                <div className="absolute -inset-4 bg-gradient-to-r from-[#B91C1C]/20 to-transparent rounded-2xl blur-2xl" />
+                <div className="absolute -inset-4 bg-gradient-to-r from-[#B91C1C]/10 to-transparent rounded-2xl blur-2xl" />
                 <img
                   src={HERO_DASHBOARD}
                   alt="Gunner AI Dashboard"
-                  className="relative rounded-xl shadow-2xl border border-white/10 w-full"
+                  className="relative rounded-xl shadow-2xl border border-gray-200 w-full"
                   loading="eager"
                 />
               </div>
@@ -366,7 +364,7 @@ export default function Landing() {
           </div>
 
           {/* Stats bar */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 border-t border-white/10 pt-10">
+          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 border-t border-gray-200 pt-10">
             {[
               { value: "18,000+", label: "Calls Scored Monthly" },
               { value: "4.1x", label: "Average ROI in 90 Days" },
@@ -374,8 +372,8 @@ export default function Landing() {
               { value: "5 min", label: "Setup Time" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-2xl sm:text-3xl font-bold text-white">{stat.value}</div>
-                <div className="text-sm text-gray-400 mt-1">{stat.label}</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[#111827]">{stat.value}</div>
+                <div className="text-sm text-gray-500 mt-1">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -903,22 +901,22 @@ export default function Landing() {
       {/* ═══════════════════════════════════════════════════════
           SECTION 12: FINAL CTA
          ═══════════════════════════════════════════════════════ */}
-      <section id="final-cta" className="py-20 md:py-28 bg-[#1A1A1A]">
+      <section id="final-cta" className="py-20 md:py-28 bg-[#B91C1C]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
             Ready to Stop Babysitting and Start Scaling?
           </h2>
-          <p className="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
+          <p className="text-lg text-white/80 mb-10 max-w-xl mx-auto">
             Start your {trialDays}-day free trial and see exactly how Gunner AI can increase your team's close rate in the next 30 days.
           </p>
 
           <Link href="/signup">
-            <Button size="lg" className="bg-[#B91C1C] hover:bg-[#991B1B] text-white rounded-lg text-lg px-10 h-14 gap-2">
+            <Button size="lg" className="bg-white hover:bg-gray-100 text-[#B91C1C] rounded-lg text-lg px-10 h-14 gap-2 font-bold">
               Start {trialDays}-Day Free Trial <ArrowRight className="h-5 w-5" />
             </Button>
           </Link>
 
-          <p className="text-sm text-gray-400 mt-6">
+          <p className="text-sm text-white/60 mt-6">
             {trialDays}-day free trial. Credit card required. Cancel anytime.
           </p>
         </div>
@@ -927,7 +925,7 @@ export default function Landing() {
       {/* ═══════════════════════════════════════════════════════
           FOOTER
          ═══════════════════════════════════════════════════════ */}
-      <footer className="bg-[#111827] py-16">
+      <footer className="bg-[#1A1A1A] py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-5 gap-12 mb-12">
             {/* Brand */}
@@ -1008,7 +1006,7 @@ export default function Landing() {
           </div>
 
           {/* Bottom bar */}
-          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="border-t border-gray-700 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-gray-500">
               &copy; {new Date().getFullYear()} Gunner AI. All rights reserved.
             </p>

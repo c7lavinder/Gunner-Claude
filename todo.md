@@ -3124,3 +3124,10 @@
 - [x] Use 3-day free trial, credit card required everywhere
 - [x] Generated AI mockup screenshots for feature sections (real screenshots can be swapped later)
 - [x] Mobile-responsive design throughout
+
+## Landing Page Light Theme (Feb 25, 2026)
+- [x] Convert landing page from dark to light theme so logo blends with background
+- [x] Hero: white/light bg with dark text
+- [x] Nav: light bg with dark text links
+- [x] All sections: appropriate light color palette
+- [x] Maintain red/crimson accent colors from Gunner branding
