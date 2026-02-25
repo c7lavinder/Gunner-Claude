@@ -411,6 +411,7 @@ export interface GradingResult {
   objectionHandling: ObjectionHandlingItem[];
   summary: string;
   callOutcome: CallOutcome;
+  followUpScheduled: boolean;
 }
 
 function getGradeFromScore(score: number): "A" | "B" | "C" | "D" | "F" {
@@ -616,7 +617,8 @@ Respond with a JSON object in this exact format:
     {"objection": "Price too high", "context": "Seller said: 'I was hoping for at least $200k'", "suggestedResponses": ["Response 1", "Response 2"]}
   ],
   "summary": "brief overall summary",
-  "callOutcome": "offer_rejected" or "offer_made" or "appointment_set" or "not_interested" or "interested" or "callback_scheduled" or "left_vm" or "no_answer" or "dead" or "none" (see PRIORITY HIERARCHY below — outcome reflects the DEAL STATUS, not follow-up logistics. 'callback_scheduled' is almost never correct for real conversations)
+  "callOutcome": "offer_rejected" or "offer_made" or "appointment_set" or "not_interested" or "interested" or "callback_scheduled" or "left_vm" or "no_answer" or "dead" or "none" (see PRIORITY HIERARCHY below — outcome reflects the DEAL STATUS, not follow-up logistics. 'callback_scheduled' is almost never correct for real conversations),
+  "followUpScheduled": true or false (SEPARATE from callOutcome — set to true if a callback or follow-up was agreed to at ANY point during the call, regardless of what the primary outcome is. Example: offer was rejected but they said 'call me next week' → callOutcome='offer_rejected', followUpScheduled=true)
 }
 
 CALL OUTCOME DEFINITIONS — PRIORITY HIERARCHY:
@@ -701,8 +703,9 @@ CRITICAL RULE: "callback_scheduled" should almost NEVER be used for calls where 
                 type: "string", 
                 enum: ["none", "appointment_set", "offer_made", "offer_rejected", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"] 
               },
+              followUpScheduled: { type: "boolean" },
             },
-            required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "objectionHandling", "summary", "callOutcome"],
+            required: ["criteriaScores", "strengths", "improvements", "coachingTips", "redFlags", "objectionHandling", "summary", "callOutcome", "followUpScheduled"],
             additionalProperties: false,
           },
         },
@@ -748,6 +751,7 @@ CRITICAL RULE: "callback_scheduled" should almost NEVER be used for calls where 
       objectionHandling: parsed.objectionHandling || [],
       summary: parsed.summary,
       callOutcome: parsed.callOutcome,
+      followUpScheduled: parsed.followUpScheduled === true,
     };
   } catch (error) {
     console.error("[Grading] Error grading call:", error);
@@ -1229,6 +1233,7 @@ export async function processCall(callId: number): Promise<void> {
           callTypeSource: "auto",
           classification: "admin_call",
           callOutcome: gradeResult.callOutcome,
+          followUpScheduled: gradeResult.followUpScheduled ? "true" : "false",
         });
         
         console.log(`[ProcessCall] Admin call ${callId} auto-graded: ${gradeResult.overallGrade} (${gradeResult.overallScore}%)`);
@@ -1416,6 +1421,7 @@ export async function processCall(callId: number): Promise<void> {
       callTypeSource,
       classification: "conversation",
       callOutcome: gradeResult.callOutcome,
+      followUpScheduled: gradeResult.followUpScheduled ? "true" : "false",
     });
 
     // Step 7: Award XP automatically

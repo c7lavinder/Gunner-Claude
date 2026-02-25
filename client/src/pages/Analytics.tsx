@@ -469,6 +469,7 @@ export default function Analytics() {
                 {stats.weeklyTrends
                   .slice()
                   .reverse()
+                  .filter((week: any) => week.totalCalls > 0 || week.gradedCalls > 0)
                   .slice(0, 8)
                   .map((week, i, arr) => {
                     const prevWeek = arr[i + 1];

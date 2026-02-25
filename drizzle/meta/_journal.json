@@ -407,6 +407,13 @@
       "when": 1772036454809,
       "tag": "0057_flippant_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "5",
+      "when": 1772049682181,
+      "tag": "0058_motionless_living_lightning",
+      "breakpoints": true
     }
   ]
 }

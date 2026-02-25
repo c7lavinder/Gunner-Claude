@@ -93,7 +93,7 @@ function ScoreTrendsChart({ stats, loading }: { stats: any; loading: boolean }) 
   if (loading) {
     return (
       <div className="obs-panel" style={{ minHeight: 320 }}>
-        <h3 className="obs-section-title mb-6">Score Trends — 8 Weeks</h3>
+        <h3 className="obs-section-title mb-6">Score Trends</h3>
         <div className="flex items-end gap-3 h-48">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="flex-1 rounded-md" style={{ height: `${30 + Math.random() * 60}%` }} />
@@ -105,7 +105,7 @@ function ScoreTrendsChart({ stats, loading }: { stats: any; loading: boolean }) 
 
   return (
     <div className="obs-panel" style={{ minHeight: 320 }}>
-      <h3 className="obs-section-title mb-6">Score Trends — 8 Weeks</h3>
+      <h3 className="obs-section-title mb-6">Score Trends{weeklyData.length > 0 ? ` — ${weeklyData.length} Week${weeklyData.length === 1 ? '' : 's'}` : ''}</h3>
       {weeklyData.length === 0 ? (
         <div className="flex items-center justify-center h-48" style={{ color: 'var(--obs-text-tertiary)' }}>
           <p className="text-sm">No score data yet</p>

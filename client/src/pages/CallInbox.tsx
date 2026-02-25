@@ -183,6 +183,11 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
                   {outcomeInfo.label}
                 </span>
               )}
+              {(call as any).followUpScheduled === 'true' && (
+                <span className="call-pill" style={{ background: 'rgba(14, 165, 233, 0.1)', color: 'rgb(14, 165, 233)', border: '1px solid rgba(14, 165, 233, 0.3)', fontSize: '0.65rem' }}>
+                  Follow-Up
+                </span>
+              )}
             </div>
             
             {/* Meta row */}

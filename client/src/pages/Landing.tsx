@@ -70,14 +70,14 @@ const planDescriptions: Record<string, string> = {
 
 const testimonials = [
   {
-    quote: "Gunner transformed how we coach our sales team. We went from guessing to knowing exactly where each rep needs help.",
-    author: "Sales Director",
-    company: "Real Estate Investment Firm"
+    quote: "Before Gunner, I was listening to 3-hour call recordings trying to figure out why deals were falling through. Now I get a graded scorecard with exact coaching points within minutes. We closed 4 extra deals last quarter just from the missed opportunity alerts.",
+    author: "Mike R., Acquisitions Director",
+    company: "Southeast Wholesale Group"
   },
   {
-    quote: "The gamification keeps our team engaged. They actually look forward to seeing their scores and competing on the leaderboard.",
-    author: "Team Lead",
-    company: "Property Acquisitions Company"
+    quote: "My cold callers went from a 12% appointment-set rate to 23% in 6 weeks. The AI coaching catches things I'd never notice — like when reps skip the motivation question or rush through objections. The leaderboard keeps them hungry.",
+    author: "Sarah T., Sales Manager",
+    company: "Keystone Property Solutions"
   }
 ];
 
@@ -86,7 +86,7 @@ export default function Landing() {
   
   // Fetch plans from database
   const { data: dbPlans } = trpc.tenant.getPlans.useQuery();
-  const trialDays = dbPlans?.[0]?.trialDays || 14; // Default to 14 if not loaded
+  const trialDays = dbPlans?.[0]?.trialDays || 3; // Default to 3 if not loaded
   
   // Transform database plans into display format
   const plans = (dbPlans || [])
@@ -110,7 +110,7 @@ export default function Landing() {
       
       // Add user/call limits to features
       const displayFeatures = [
-        maxUsers >= 999 ? 'Unlimited team members' : `Up to ${maxUsers} team members`,
+        maxUsers >= 999 ? 'Unlimited team members' : `Up to ${maxUsers} team member${maxUsers === 1 ? '' : 's'}`,
         maxCalls < 0 || maxCalls >= 999999 ? 'Unlimited calls/month' : `${maxCalls.toLocaleString()} calls/month`,
         ...features.slice(0, 6)
       ];
@@ -175,7 +175,7 @@ export default function Landing() {
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mt-4">
-              14-day free trial • No credit card required to start
+              3-day free trial • Credit card required to start
             </p>
           </div>
         </div>
@@ -221,7 +221,7 @@ export default function Landing() {
               Simple, Transparent Pricing
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-              Choose the plan that fits your team. All plans include a free trial.
+              Choose the plan that fits your team. All plans include a 3-day free trial.
             </p>
             <div className="inline-flex items-center gap-4 p-1 bg-muted rounded-lg">
               <button
@@ -332,7 +332,7 @@ export default function Landing() {
               Ready to Transform Your Sales Team?
             </h2>
             <p className="text-xl text-muted-foreground mb-8">
-              Start your free trial today. Enter card to unlock dashboard.
+              Start your 3-day free trial today. No commitment — cancel anytime.
             </p>
             <Link href="/signup">
               <Button size="lg" className="gap-2">

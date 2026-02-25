@@ -188,10 +188,17 @@ export async function createBillingPortalSession(
  * Get subscription details from Stripe
  */
 export async function getSubscription(subscriptionId: string): Promise<Stripe.Subscription | null> {
+  // Skip Stripe API call for bypass/synthetic subscription IDs
+  if (subscriptionId.startsWith('sub_super_admin') || subscriptionId.startsWith('sub_bypass')) {
+    return null;
+  }
   try {
     return await stripe.subscriptions.retrieve(subscriptionId);
-  } catch (error) {
-    console.error("Error retrieving subscription:", error);
+  } catch (error: any) {
+    // Suppress 404 errors for missing subscriptions (e.g. deleted or test subs)
+    if (error?.statusCode !== 404) {
+      console.error("Error retrieving subscription:", error);
+    }
     return null;
   }
 }

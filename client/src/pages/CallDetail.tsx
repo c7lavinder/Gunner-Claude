@@ -573,6 +573,12 @@ export default function CallDetail() {
                       </Badge>
                     );
                   })()}
+                  {(call as any).followUpScheduled === 'true' && (
+                    <Badge variant="outline" className="bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" /></svg>
+                      Follow-Up Scheduled
+                    </Badge>
+                  )}
                   {call.propertyAddress && (
                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800">
                       {call.propertyAddress}

@@ -1021,7 +1021,7 @@ export const appRouter = router({
     updateCallOutcome: protectedProcedure
       .input(z.object({
         callId: z.number(),
-        callOutcome: z.enum(["none", "appointment_set", "offer_made", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"]),
+        callOutcome: z.enum(["none", "appointment_set", "offer_made", "offer_rejected", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"]),
       }))
       .mutation(async ({ input }) => {
         const call = await getCallById(input.callId);
@@ -1034,6 +1034,63 @@ export const appRouter = router({
         });
 
         return { success: true, callOutcome: input.callOutcome };
+      }),
+
+    // Bulk re-grade calls with latest rubric and outcome classification
+    bulkRegrade: protectedProcedure
+      .input(z.object({
+        filter: z.enum(["callback_only", "all_completed"]),
+        daysBack: z.number().min(1).max(365).default(30),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+
+        const { processCall } = await import("./grading");
+        const { and, eq, gte, isNotNull, sql } = await import("drizzle-orm");
+        const { getDb } = await import("./db");
+        const { calls } = await import("../drizzle/schema");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database unavailable' });
+
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - input.daysBack);
+
+        const conditions = [
+          eq(calls.tenantId, ctx.user.tenantId!),
+          eq(calls.status, "completed"),
+          isNotNull(calls.transcript),
+          gte(calls.callTimestamp, cutoffDate),
+        ];
+
+        if (input.filter === "callback_only") {
+          conditions.push(eq(calls.callOutcome, "callback_scheduled"));
+        }
+
+        const callsToRegrade = await db.select({ id: calls.id })
+          .from(calls)
+          .where(and(...conditions))
+          .orderBy(sql`${calls.callTimestamp} DESC`)
+          .limit(200);
+
+        // Process in background (don't await)
+        const callIds = callsToRegrade.map((c: { id: number }) => c.id);
+        if (callIds.length > 0) {
+          (async () => {
+            for (const callId of callIds) {
+              try {
+                await processCall(callId);
+                console.log(`[BulkRegrade] Re-graded call ${callId}`);
+              } catch (err) {
+                console.error(`[BulkRegrade] Failed to re-grade call ${callId}:`, err);
+              }
+            }
+            console.log(`[BulkRegrade] Completed. Processed ${callIds.length} calls.`);
+          })();
+        }
+
+        return { queued: callIds.length, filter: input.filter, daysBack: input.daysBack };
       }),
 
     // Manual BatchDialer sync

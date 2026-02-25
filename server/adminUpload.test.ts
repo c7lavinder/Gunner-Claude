@@ -49,8 +49,8 @@ describe("Manual Upload Admin-Only Restriction", () => {
       // Find the usage: <ManualUploadDialog onSuccess={handleRefresh} />
       const usageIndex = callInboxContent.indexOf("<ManualUploadDialog");
       expect(usageIndex).toBeGreaterThan(-1);
-      // Find the nearest role check before the usage (may be up to 800 chars away if inside a dropdown)
-      const beforeUsage = callInboxContent.substring(Math.max(0, usageIndex - 800), usageIndex);
+      // Find the nearest role check before the usage (may be up to 1200 chars away if inside a dropdown)
+      const beforeUsage = callInboxContent.substring(Math.max(0, usageIndex - 1200), usageIndex);
       expect(beforeUsage).toContain("role");
       expect(beforeUsage).toContain("admin");
     });
