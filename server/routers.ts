@@ -1496,11 +1496,20 @@ Based on ALL of the above context, suggest the most relevant next steps for this
             ],
           });
 
-          const content = response.choices?.[0]?.message?.content;
-          if (!content) return { success: false, action: null };
+          const rawContent = response.choices?.[0]?.message?.content;
+          if (!rawContent) {
+            console.error("[NextSteps] AI edit returned no content");
+            return { success: false, action: null };
+          }
 
           try {
-            const updatedPayload = JSON.parse(content as string);
+            // Strip markdown code block wrappers if present
+            let content = (rawContent as string).trim();
+            if (content.startsWith("```")) {
+              content = content.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+            }
+            console.log("[NextSteps] AI edit response:", content.substring(0, 200));
+            const updatedPayload = JSON.parse(content);
             // Merge with existing payload
             const mergedPayload = { ...input.currentAction.payload, ...updatedPayload };
             await dbEdit.update(callNextSteps)

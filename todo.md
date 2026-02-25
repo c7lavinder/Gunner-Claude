@@ -2949,3 +2949,6 @@
 - [x] Show exact action content on cards: note text, task title/description/due date, SMS message, pipeline→stage
 - [x] Add AI-assisted edit: user types instruction like "make note shorter" and AI adjusts the payload
 - [x] Manual inline edit: directly modify note text, task title, SMS message fields
+
+## AI Edit Bug Fix
+- [x] Fix "AI edit failed" error when using AI-assisted editing on Next Steps cards — added markdown code block stripping from LLM response before JSON.parse
