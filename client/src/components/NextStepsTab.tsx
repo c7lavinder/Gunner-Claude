@@ -32,6 +32,9 @@ import {
   Plus,
   Pencil,
   Trash2,
+  MessageCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDemo } from "@/hooks/useDemo";
@@ -52,66 +55,77 @@ const ACTION_TYPE_CONFIG: Record<string, {
   icon: React.ReactNode;
   color: string;
   bgColor: string;
+  borderColor: string;
 }> = {
   check_off_task: {
     label: "Check Off Task",
     icon: <CheckCircle2 className="h-4 w-4" />,
     color: "text-green-600 dark:text-green-400",
     bgColor: "bg-green-50 dark:bg-green-950",
+    borderColor: "border-l-green-500",
   },
   update_task: {
     label: "Update Task",
     icon: <Edit3 className="h-4 w-4" />,
     color: "text-blue-600 dark:text-blue-400",
     bgColor: "bg-blue-50 dark:bg-blue-950",
+    borderColor: "border-l-blue-500",
   },
   create_task: {
     label: "Create Task",
     icon: <ListTodo className="h-4 w-4" />,
     color: "text-indigo-600 dark:text-indigo-400",
     bgColor: "bg-indigo-50 dark:bg-indigo-950",
+    borderColor: "border-l-indigo-500",
   },
   add_note: {
     label: "Add Note",
     icon: <StickyNote className="h-4 w-4" />,
     color: "text-amber-600 dark:text-amber-400",
     bgColor: "bg-amber-50 dark:bg-amber-950",
+    borderColor: "border-l-amber-500",
   },
   create_appointment: {
     label: "Add to Calendar",
     icon: <Calendar className="h-4 w-4" />,
     color: "text-purple-600 dark:text-purple-400",
     bgColor: "bg-purple-50 dark:bg-purple-950",
+    borderColor: "border-l-purple-500",
   },
   change_pipeline_stage: {
     label: "Move Pipeline Stage",
     icon: <ArrowRightLeft className="h-4 w-4" />,
     color: "text-orange-600 dark:text-orange-400",
     bgColor: "bg-orange-50 dark:bg-orange-950",
+    borderColor: "border-l-orange-500",
   },
   send_sms: {
     label: "Send SMS",
     icon: <MessageSquare className="h-4 w-4" />,
     color: "text-teal-600 dark:text-teal-400",
     bgColor: "bg-teal-50 dark:bg-teal-950",
+    borderColor: "border-l-teal-500",
   },
   schedule_sms: {
     label: "Schedule SMS",
     icon: <Clock className="h-4 w-4" />,
     color: "text-cyan-600 dark:text-cyan-400",
     bgColor: "bg-cyan-50 dark:bg-cyan-950",
+    borderColor: "border-l-cyan-500",
   },
   add_to_workflow: {
     label: "Start Workflow",
     icon: <Play className="h-4 w-4" />,
     color: "text-emerald-600 dark:text-emerald-400",
     bgColor: "bg-emerald-50 dark:bg-emerald-950",
+    borderColor: "border-l-emerald-500",
   },
   remove_from_workflow: {
     label: "Remove from Workflow",
     icon: <Square className="h-4 w-4" />,
     color: "text-red-600 dark:text-red-400",
     bgColor: "bg-red-50 dark:bg-red-950",
+    borderColor: "border-l-red-500",
   },
 };
 
@@ -121,16 +135,17 @@ const ALL_ACTION_TYPES = [
   "schedule_sms", "add_to_workflow", "remove_from_workflow",
 ];
 
-/** Get the field config for each action type — defines which fields to show and how */
+/** Field definitions for each action type */
 function getFieldsForAction(actionType: string): { key: string; label: string; type: "text" | "textarea" | "date" | "time" | "datetime" }[] {
   switch (actionType) {
     case "check_off_task":
-      return [{ key: "taskKeyword", label: "Task keyword to match", type: "text" }];
+      return [{ key: "taskKeyword", label: "Task to check off", type: "text" }];
     case "update_task":
       return [
-        { key: "taskKeyword", label: "Task keyword to match", type: "text" },
+        { key: "taskKeyword", label: "Task to update", type: "text" },
+        { key: "title", label: "New title", type: "text" },
         { key: "dueDate", label: "New due date", type: "date" },
-        { key: "description", label: "New description", type: "textarea" },
+        { key: "description", label: "Updated description", type: "textarea" },
       ];
     case "create_task":
       return [
@@ -150,13 +165,13 @@ function getFieldsForAction(actionType: string): { key: string; label: string; t
     case "change_pipeline_stage":
       return [
         { key: "pipelineName", label: "Pipeline", type: "text" },
-        { key: "stageName", label: "Stage", type: "text" },
+        { key: "stageName", label: "Move to stage", type: "text" },
       ];
     case "send_sms":
-      return [{ key: "message", label: "SMS message", type: "textarea" }];
+      return [{ key: "message", label: "Message", type: "textarea" }];
     case "schedule_sms":
       return [
-        { key: "message", label: "SMS message", type: "textarea" },
+        { key: "message", label: "Message", type: "textarea" },
         { key: "scheduledDate", label: "Send date", type: "date" },
         { key: "scheduledTime", label: "Send time", type: "time" },
       ];
@@ -169,50 +184,93 @@ function getFieldsForAction(actionType: string): { key: string; label: string; t
   }
 }
 
-function getPayloadPreview(actionType: string, payload: Record<string, any>): string {
+/** Get the primary content to display prominently on the card */
+function getPrimaryContent(actionType: string, payload: Record<string, any>): { label: string; value: string } | null {
+  const val = (key: string) => payload[key] && String(payload[key]).trim() ? String(payload[key]) : "";
   switch (actionType) {
     case "add_note":
-      return payload.noteBody || "Add a note";
+      return val("noteBody") ? { label: "Note", value: val("noteBody") } : null;
     case "create_task":
-      return payload.title || "Create a task";
+      return val("title") ? { label: "Task", value: val("title") } : null;
+    case "update_task":
+      return val("title") || val("taskKeyword") ? { label: "Task", value: val("title") || val("taskKeyword") } : null;
+    case "check_off_task":
+      return val("taskKeyword") ? { label: "Task", value: val("taskKeyword") } : null;
     case "send_sms":
     case "schedule_sms":
-      return payload.message || "Send SMS";
+      return val("message") ? { label: "Message", value: val("message") } : null;
     case "change_pipeline_stage":
-      return `${payload.pipelineName || ""} → ${payload.stageName || ""}`.trim();
+      return val("stageName") ? { label: "Stage", value: `${val("pipelineName") ? val("pipelineName") + " → " : ""}${val("stageName")}` } : null;
     case "add_to_workflow":
-      return payload.workflowName || "Start workflow";
+    case "remove_from_workflow":
+      return val("workflowName") ? { label: "Workflow", value: val("workflowName") } : null;
+    case "create_appointment":
+      return val("title") ? { label: "Appointment", value: val("title") } : null;
     default:
-      return actionType.replace(/_/g, " ");
+      return null;
   }
+}
+
+/** Get secondary details to show below the primary content */
+function getSecondaryDetails(actionType: string, payload: Record<string, any>): { label: string; value: string }[] {
+  const val = (key: string) => payload[key] && String(payload[key]).trim() ? String(payload[key]) : "";
+  const details: { label: string; value: string }[] = [];
+
+  switch (actionType) {
+    case "create_task":
+    case "update_task":
+      if (val("description")) details.push({ label: "Description", value: val("description") });
+      if (val("dueDate")) details.push({ label: "Due", value: val("dueDate") });
+      break;
+    case "schedule_sms":
+      if (val("scheduledDate")) details.push({ label: "Send date", value: val("scheduledDate") });
+      if (val("scheduledTime")) details.push({ label: "Send time", value: val("scheduledTime") });
+      break;
+    case "create_appointment":
+      if (val("startTime")) details.push({ label: "Start", value: val("startTime") });
+      if (val("endTime")) details.push({ label: "End", value: val("endTime") });
+      if (val("calendarName")) details.push({ label: "Calendar", value: val("calendarName") });
+      break;
+  }
+  return details;
 }
 
 function ActionCard({
   action,
   onPush,
-  onEdit,
+  onSaveEdit,
+  onAiEdit,
   onSkip,
   onDelete,
   isPushing,
+  isAiEditing,
 }: {
   action: NextStepAction;
   onPush: (action: NextStepAction) => void;
-  onEdit: (action: NextStepAction, updates: Partial<NextStepAction>) => void;
+  onSaveEdit: (action: NextStepAction, newPayload: Record<string, any>) => void;
+  onAiEdit: (action: NextStepAction, instruction: string) => void;
   onSkip: (action: NextStepAction) => void;
   onDelete: (action: NextStepAction) => void;
   isPushing: boolean;
+  isAiEditing: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedPayload, setEditedPayload] = useState<Record<string, any>>({ ...action.payload });
+  const [editedPayload, setEditedPayload] = useState<Record<string, any>>({});
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [showReasoning, setShowReasoning] = useState(false);
 
   const config = ACTION_TYPE_CONFIG[action.actionType] || {
     label: action.actionType.replace(/_/g, " "),
     icon: <ListTodo className="h-4 w-4" />,
     color: "text-gray-600",
     bgColor: "bg-gray-50",
+    borderColor: "border-l-gray-500",
   };
 
   const fields = getFieldsForAction(action.actionType);
+  const primaryContent = getPrimaryContent(action.actionType, action.payload);
+  const secondaryDetails = getSecondaryDetails(action.actionType, action.payload);
+  const hasContent = primaryContent !== null;
 
   const handleStartEdit = () => {
     setEditedPayload({ ...action.payload });
@@ -220,12 +278,20 @@ function ActionCard({
   };
 
   const handleSaveEdit = () => {
-    onEdit(action, { payload: editedPayload });
+    onSaveEdit(action, editedPayload);
     setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
     setEditedPayload({ ...action.payload });
+    setIsEditing(false);
+    setAiInstruction("");
+  };
+
+  const handleAiEdit = () => {
+    if (!aiInstruction.trim()) return;
+    onAiEdit(action, aiInstruction);
+    setAiInstruction("");
     setIsEditing(false);
   };
 
@@ -234,62 +300,54 @@ function ActionCard({
   };
 
   const isDone = action.status === "pushed" || action.status === "skipped";
-  const currentPayload = isEditing ? editedPayload : action.payload;
 
   return (
-    <div className={`border rounded-lg overflow-hidden transition-all ${
-      action.status === "pushed" ? "border-green-300 dark:border-green-800 opacity-80" :
-      action.status === "skipped" ? "border-gray-200 dark:border-gray-800 opacity-60" :
-      action.status === "failed" ? "border-red-300 dark:border-red-800" :
-      "border-border"
+    <div className={`border rounded-lg overflow-hidden transition-all border-l-4 ${config.borderColor} ${
+      action.status === "pushed" ? "opacity-70" :
+      action.status === "skipped" ? "opacity-50" :
+      action.status === "failed" ? "border-l-red-500" :
+      ""
     }`}>
-      {/* Header */}
-      <div className={`flex items-center gap-3 px-4 py-3 ${config.bgColor}`}>
+      {/* Header — action type + badges */}
+      <div className={`flex items-center gap-2 px-4 py-2.5 ${config.bgColor}`}>
         <span className={config.color}>{config.icon}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-sm font-semibold ${config.color}`}>{config.label}</span>
-            {action.aiSuggested && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800">
-                <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                AI
-              </Badge>
-            )}
-            {action.status === "pushed" && (
-              <Badge className="text-[10px] px-1.5 py-0 h-4 bg-green-100 text-green-700 border-green-300 dark:bg-green-900 dark:text-green-300">
-                <Check className="h-2.5 w-2.5 mr-0.5" />
-                Pushed
-              </Badge>
-            )}
-            {action.status === "skipped" && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                Skipped
-              </Badge>
-            )}
-            {action.status === "failed" && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-red-50 text-red-600 border-red-300 dark:bg-red-950 dark:text-red-400">
-                <X className="h-2.5 w-2.5 mr-0.5" />
-                Failed
-              </Badge>
-            )}
-          </div>
-        </div>
+        <span className={`text-sm font-semibold ${config.color}`}>{config.label}</span>
+        {action.aiSuggested && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800">
+            <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+            AI
+          </Badge>
+        )}
+        {action.status === "pushed" && (
+          <Badge className="text-[10px] px-1.5 py-0 h-4 bg-green-100 text-green-700 border-green-300">
+            <Check className="h-2.5 w-2.5 mr-0.5" /> Pushed
+          </Badge>
+        )}
+        {action.status === "skipped" && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">Skipped</Badge>
+        )}
+        {action.status === "failed" && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-red-50 text-red-600 border-red-300">
+            <X className="h-2.5 w-2.5 mr-0.5" /> Failed
+          </Badge>
+        )}
       </div>
 
-      {/* Payload Content — ALWAYS visible, shows exactly what will be pushed */}
-      <div className="px-4 py-3 space-y-2">
-        {fields.length > 0 ? (
-          fields.map(field => {
-            const value = currentPayload[field.key];
-            if (!isEditing && (!value || (typeof value === "string" && !value.trim()))) return null;
-
-            if (isEditing) {
+      {/* CONTENT AREA — the main event */}
+      <div className="px-4 py-3">
+        {isEditing ? (
+          /* ===== EDIT MODE ===== */
+          <div className="space-y-3">
+            {/* Manual field editing */}
+            {fields.map(field => {
+              const value = editedPayload[field.key] || "";
+              // Skip empty fields that aren't relevant to this action type
               return (
                 <div key={field.key} className="space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">{field.label}</Label>
                   {field.type === "textarea" ? (
                     <Textarea
-                      value={editedPayload[field.key] || ""}
+                      value={value}
                       onChange={(e) => updateField(field.key, e.target.value)}
                       className="text-sm min-h-[80px] bg-background"
                       placeholder={`Enter ${field.label.toLowerCase()}...`}
@@ -297,7 +355,7 @@ function ActionCard({
                   ) : (
                     <Input
                       type={field.type === "date" ? "date" : field.type === "time" ? "time" : field.type === "datetime" ? "datetime-local" : "text"}
-                      value={editedPayload[field.key] || ""}
+                      value={value}
                       onChange={(e) => updateField(field.key, e.target.value)}
                       className="text-sm bg-background"
                       placeholder={`Enter ${field.label.toLowerCase()}...`}
@@ -305,123 +363,161 @@ function ActionCard({
                   )}
                 </div>
               );
-            }
+            })}
 
-            // Read-only display
-            const isLongText = field.type === "textarea";
-            return (
-              <div key={field.key}>
-                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{field.label}</span>
-                {isLongText ? (
-                  <p className="text-sm text-foreground mt-0.5 whitespace-pre-wrap leading-relaxed bg-muted/40 rounded px-3 py-2">
-                    {String(value)}
-                  </p>
-                ) : (
-                  <p className="text-sm font-medium text-foreground mt-0.5">{String(value)}</p>
-                )}
+            {/* AI-assisted edit input */}
+            <div className="border-t pt-3 mt-3">
+              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
+                <MessageCircle className="h-3 w-3" />
+                Or tell AI what to change
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={aiInstruction}
+                  onChange={(e) => setAiInstruction(e.target.value)}
+                  placeholder='e.g. "make the note shorter" or "change due date to next Friday"'
+                  className="text-sm flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && aiInstruction.trim()) {
+                      handleAiEdit();
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAiEdit}
+                  disabled={!aiInstruction.trim() || isAiEditing}
+                  className="h-9 text-xs shrink-0"
+                >
+                  {isAiEditing ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <>
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      Apply
+                    </>
+                  )}
+                </Button>
               </div>
-            );
-          })
-        ) : (
-          // Fallback: show all payload keys if no field config
-          Object.entries(currentPayload)
-            .filter(([key]) => key !== "contactId" && key !== "contactName")
-            .map(([key, value]) => {
-              if (!value || (typeof value === "string" && !value.trim())) return null;
-              const label = key.replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
-              if (isEditing) {
-                return (
-                  <div key={key} className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">{label}</Label>
-                    <Input
-                      value={editedPayload[key] || ""}
-                      onChange={(e) => updateField(key, e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
-                );
-              }
-              return (
-                <div key={key}>
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-                  <p className="text-sm font-medium text-foreground mt-0.5">{String(value)}</p>
-                </div>
-              );
-            })
-        )}
+            </div>
 
-        {/* AI Reasoning — shown below the content */}
-        {action.reasoning && !isEditing && (
-          <p className="text-xs text-muted-foreground italic border-t pt-2 mt-2">
-            <Sparkles className="h-3 w-3 inline mr-1 text-purple-400" />
-            {action.reasoning}
-          </p>
-        )}
-
-        {/* Result message */}
-        {action.result && (
-          <p className={`text-xs mt-1 ${action.status === "failed" ? "text-red-500" : "text-green-600"}`}>
-            {action.result}
-          </p>
-        )}
-      </div>
-
-      {/* Action Buttons */}
-      {!isDone && (
-        <div className="flex items-center gap-2 px-4 py-2 border-t bg-muted/30">
-          {isEditing ? (
-            <>
+            {/* Save / Cancel */}
+            <div className="flex gap-2 pt-1">
               <Button size="sm" onClick={handleSaveEdit} className="h-7 text-xs">
                 <Check className="h-3 w-3 mr-1" />
-                Save
+                Save Changes
               </Button>
               <Button size="sm" variant="ghost" onClick={handleCancelEdit} className="h-7 text-xs">
                 Cancel
               </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                size="sm"
-                onClick={() => onPush(action)}
-                disabled={isPushing}
-                className="h-7 text-xs"
-              >
-                {isPushing ? (
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            </div>
+          </div>
+        ) : (
+          /* ===== READ MODE — content first ===== */
+          <div className="space-y-2">
+            {hasContent ? (
+              <>
+                {/* Primary content — the exact text/value */}
+                {primaryContent!.value.length > 100 ? (
+                  <div className="bg-muted/40 rounded-md px-3 py-2">
+                    <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                      {primaryContent!.value}
+                    </p>
+                  </div>
                 ) : (
-                  <Send className="h-3 w-3 mr-1" />
+                  <p className="text-sm font-medium text-foreground">
+                    {primaryContent!.value}
+                  </p>
                 )}
-                Push to GHL
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleStartEdit}
-                className="h-7 text-xs"
+
+                {/* Secondary details — due date, time, etc. */}
+                {secondaryDetails.length > 0 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {secondaryDetails.map(d => (
+                      <span key={d.label} className="text-xs text-muted-foreground">
+                        <span className="font-medium">{d.label}:</span> {d.value}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              /* No content — show a placeholder prompting to edit */
+              <p className="text-sm text-muted-foreground italic">
+                No content generated yet. Click Edit to add details or Regenerate to retry.
+              </p>
+            )}
+
+            {/* AI Reasoning — collapsible, secondary to content */}
+            {action.reasoning && (
+              <button
+                onClick={() => setShowReasoning(!showReasoning)}
+                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               >
-                <Pencil className="h-3 w-3 mr-1" />
-                Edit
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => onSkip(action)}
-                className="h-7 text-xs text-muted-foreground"
-              >
-                Skip
-              </Button>
-              {!action.aiSuggested && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onDelete(action)}
-                  className="h-7 text-xs text-red-500 hover:text-red-700 ml-auto"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              )}
-            </>
+                <Sparkles className="h-3 w-3 text-purple-400" />
+                <span className="italic">Why this action?</span>
+                {showReasoning ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </button>
+            )}
+            {showReasoning && action.reasoning && (
+              <p className="text-xs text-muted-foreground italic pl-4 border-l-2 border-purple-200 dark:border-purple-800">
+                {action.reasoning}
+              </p>
+            )}
+
+            {/* Result message */}
+            {action.result && (
+              <p className={`text-xs mt-1 ${action.status === "failed" ? "text-red-500" : "text-green-600"}`}>
+                {action.result}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      {!isDone && !isEditing && (
+        <div className="flex items-center gap-2 px-4 py-2 border-t bg-muted/30">
+          <Button
+            size="sm"
+            onClick={() => onPush(action)}
+            disabled={isPushing}
+            className="h-7 text-xs"
+          >
+            {isPushing ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <Send className="h-3 w-3 mr-1" />
+            )}
+            Push to GHL
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleStartEdit}
+            className="h-7 text-xs"
+          >
+            <Pencil className="h-3 w-3 mr-1" />
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onSkip(action)}
+            className="h-7 text-xs text-muted-foreground"
+          >
+            Skip
+          </Button>
+          {!action.aiSuggested && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDelete(action)}
+              className="h-7 text-xs text-red-500 hover:text-red-700 ml-auto"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
           )}
         </div>
       )}
@@ -441,6 +537,7 @@ export default function NextStepsTab({
   const [actions, setActions] = useState<NextStepAction[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [pushingActionId, setPushingActionId] = useState<string | null>(null);
+  const [aiEditingActionId, setAiEditingActionId] = useState<string | null>(null);
   const [showAddAction, setShowAddAction] = useState(false);
   const [newActionType, setNewActionType] = useState("");
   const [newActionSummary, setNewActionSummary] = useState("");
@@ -477,7 +574,6 @@ export default function NextStepsTab({
 
   const generateMutation = trpc.calls.generateNextSteps.useMutation({
     onSuccess: (data) => {
-      // Reload from DB after generation
       storedQuery.refetch().then((res) => {
         if (res.data) {
           const stored = res.data.actions;
@@ -506,9 +602,11 @@ export default function NextStepsTab({
   const createPendingMutation = trpc.coachActions.createPending.useMutation();
   const confirmExecuteMutation = trpc.coachActions.confirmAndExecute.useMutation();
   const updateStatusMutation = trpc.calls.updateNextStepStatus.useMutation();
+  const editNextStepMutation = trpc.calls.editNextStep.useMutation();
 
   const handleGenerate = () => {
     if (guardDemoAction("Generating next steps")) return;
+    setIsLoaded(false);
     generateMutation.mutate({ callId });
   };
 
@@ -517,9 +615,10 @@ export default function NextStepsTab({
     setPushingActionId(action.id);
 
     try {
+      const primary = getPrimaryContent(action.actionType, action.payload);
       const pending = await createPendingMutation.mutateAsync({
         actionType: action.actionType,
-        requestText: `Next step: ${getPayloadPreview(action.actionType, action.payload)}`,
+        requestText: `Next step: ${primary?.value || action.actionType}`,
         targetContactId: ghlContactId || undefined,
         targetContactName: contactName || undefined,
         payload: action.payload,
@@ -533,9 +632,7 @@ export default function NextStepsTab({
       const resultMsg = result.success ? "Action completed successfully!" : (result.error || "Action failed");
 
       setActions(prev => prev.map(a =>
-        a.id === action.id
-          ? { ...a, status: newStatus, result: resultMsg }
-          : a
+        a.id === action.id ? { ...a, status: newStatus, result: resultMsg } : a
       ));
 
       if (action.dbId) {
@@ -554,9 +651,7 @@ export default function NextStepsTab({
     } catch (error: any) {
       const errMsg = error?.message || "Failed to push";
       setActions(prev => prev.map(a =>
-        a.id === action.id
-          ? { ...a, status: "failed" as const, result: errMsg }
-          : a
+        a.id === action.id ? { ...a, status: "failed" as const, result: errMsg } : a
       ));
       if (action.dbId) {
         updateStatusMutation.mutate({
@@ -571,10 +666,48 @@ export default function NextStepsTab({
     }
   };
 
-  const handleEdit = (action: NextStepAction, updates: Partial<NextStepAction>) => {
+  const handleSaveEdit = (action: NextStepAction, newPayload: Record<string, any>) => {
     setActions(prev => prev.map(a =>
-      a.id === action.id ? { ...a, ...updates } : a
+      a.id === action.id ? { ...a, payload: newPayload } : a
     ));
+    // Persist to DB
+    if (action.dbId) {
+      editNextStepMutation.mutate({
+        nextStepId: action.dbId,
+        payload: newPayload,
+      });
+    }
+    toast.success("Changes saved");
+  };
+
+  const handleAiEdit = async (action: NextStepAction, instruction: string) => {
+    if (!action.dbId) {
+      toast.error("Cannot AI-edit an unsaved action");
+      return;
+    }
+    setAiEditingActionId(action.id);
+    try {
+      const result = await editNextStepMutation.mutateAsync({
+        nextStepId: action.dbId,
+        aiInstruction: instruction,
+        currentAction: {
+          actionType: action.actionType,
+          payload: action.payload,
+        },
+      });
+      if (result.success && result.action?.payload) {
+        setActions(prev => prev.map(a =>
+          a.id === action.id ? { ...a, payload: result.action!.payload } : a
+        ));
+        toast.success("AI updated the action");
+      } else {
+        toast.error("AI edit failed — try again or edit manually");
+      }
+    } catch (error: any) {
+      toast.error(`AI edit failed: ${error?.message || "Unknown error"}`);
+    } finally {
+      setAiEditingActionId(null);
+    }
   };
 
   const handleSkip = (action: NextStepAction) => {
@@ -687,7 +820,7 @@ export default function NextStepsTab({
       {/* Actions List */}
       {(hasStoredActions || generateMutation.isPending) && (
         <>
-          {/* Header with actions */}
+          {/* Header */}
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold">
@@ -790,10 +923,12 @@ export default function NextStepsTab({
                   key={action.id}
                   action={action}
                   onPush={handlePush}
-                  onEdit={handleEdit}
+                  onSaveEdit={handleSaveEdit}
+                  onAiEdit={handleAiEdit}
                   onSkip={handleSkip}
                   onDelete={handleDelete}
                   isPushing={pushingActionId === action.id}
+                  isAiEditing={aiEditingActionId === action.id}
                 />
               ))}
             </div>
@@ -810,10 +945,12 @@ export default function NextStepsTab({
                   key={action.id}
                   action={action}
                   onPush={handlePush}
-                  onEdit={handleEdit}
+                  onSaveEdit={handleSaveEdit}
+                  onAiEdit={handleAiEdit}
                   onSkip={handleSkip}
                   onDelete={handleDelete}
                   isPushing={pushingActionId === action.id}
+                  isAiEditing={aiEditingActionId === action.id}
                 />
               ))}
             </div>

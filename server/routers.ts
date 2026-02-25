@@ -1355,6 +1355,12 @@ Based on ALL of the above context, suggest the most relevant next steps for this
             VALID_NEXT_STEP_TYPES.includes(a.actionType)
           );
 
+          // Log payload content for debugging
+          for (const action of validActions) {
+            console.log(`[NextSteps] Action: ${action.actionType}, payload keys with content:`, 
+              Object.entries(action.payload || {}).filter(([_, v]) => v && String(v).trim()).map(([k]) => k));
+          }
+
           // Persist to database
           if (validActions.length > 0) {
             const { getDb: getDbNs } = await import("./db");
@@ -1448,6 +1454,66 @@ Based on ALL of the above context, suggest the most relevant next steps for this
           .where(eq(callNextSteps.id, input.nextStepId));
 
         return { success: true };
+      }),
+
+    // Edit a next step's payload (manual edit or AI-assisted)
+    editNextStep: protectedProcedure
+      .input(z.object({
+        nextStepId: z.number(),
+        payload: z.record(z.string(), z.any()).optional(),
+        aiInstruction: z.string().optional(),
+        currentAction: z.any().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { getDb: getDbEdit } = await import("./db");
+        const dbEdit = await getDbEdit();
+        if (!dbEdit) return { success: false, action: null };
+
+        const { callNextSteps } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+
+        if (input.payload && !input.aiInstruction) {
+          // Direct manual edit — just save the new payload
+          await dbEdit.update(callNextSteps)
+            .set({ payload: input.payload })
+            .where(eq(callNextSteps.id, input.nextStepId));
+          return { success: true, action: { payload: input.payload } };
+        }
+
+        if (input.aiInstruction && input.currentAction) {
+          // AI-assisted edit — send instruction + current state to LLM
+          const { invokeLLM } = await import("./_core/llm");
+          const response = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: `You are editing a CRM action for a real estate business. The user wants to modify an existing action. Return ONLY a JSON object with the updated fields. Keep all fields that weren't mentioned unchanged. Available fields: noteBody, title, description, dueDate, taskKeyword, message, scheduledDate, scheduledTime, pipelineName, stageName, workflowName, startTime, endTime, calendarName.`,
+              },
+              {
+                role: "user",
+                content: `Current action type: ${input.currentAction.actionType}\nCurrent payload: ${JSON.stringify(input.currentAction.payload)}\n\nUser instruction: ${input.aiInstruction}\n\nReturn the updated payload as a JSON object.`,
+              },
+            ],
+          });
+
+          const content = response.choices?.[0]?.message?.content;
+          if (!content) return { success: false, action: null };
+
+          try {
+            const updatedPayload = JSON.parse(content as string);
+            // Merge with existing payload
+            const mergedPayload = { ...input.currentAction.payload, ...updatedPayload };
+            await dbEdit.update(callNextSteps)
+              .set({ payload: mergedPayload })
+              .where(eq(callNextSteps.id, input.nextStepId));
+            return { success: true, action: { payload: mergedPayload } };
+          } catch (e) {
+            console.error("[NextSteps] Failed to parse AI edit response:", e);
+            return { success: false, action: null };
+          }
+        }
+
+        return { success: false, action: null };
       }),
 
     // Get count of pending next steps for a call

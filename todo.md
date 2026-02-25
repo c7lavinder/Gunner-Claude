@@ -2943,3 +2943,9 @@
 ## Next Steps Payload Fix
 - [x] Fix empty payload bug: OpenAI strict JSON schema was stripping all payload properties because additionalProperties:true is incompatible with strict:true — now all 14 payload fields are explicitly defined in schema
 - [x] Fix Edit mode empty fields: root cause was empty payload from DB — now AI returns all fields with empty strings for unused ones
+
+## Next Steps Content Display & AI Edit
+- [x] Fix payload still empty: debug actual LLM response and ensure content populates in payload fields
+- [x] Show exact action content on cards: note text, task title/description/due date, SMS message, pipeline→stage
+- [x] Add AI-assisted edit: user types instruction like "make note shorter" and AI adjusts the payload
+- [x] Manual inline edit: directly modify note text, task title, SMS message fields
