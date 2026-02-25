@@ -35,6 +35,7 @@ import {
   MessageCircle,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDemo } from "@/hooks/useDemo";
@@ -188,6 +189,49 @@ function getFieldsForAction(actionType: string): { key: string; label: string; t
   }
 }
 
+/** Required fields per action type — used for validation before pushing */
+function getRequiredFields(actionType: string): string[] {
+  switch (actionType) {
+    case "check_off_task":
+      return ["taskKeyword"];
+    case "update_task":
+      return ["taskKeyword"];
+    case "create_task":
+      return ["title", "dueDate"];
+    case "add_note":
+      return ["noteBody"];
+    case "create_appointment":
+      return ["title", "startTime", "calendarName"];
+    case "change_pipeline_stage":
+      return ["pipelineName", "stageName"];
+    case "send_sms":
+      return ["message"];
+    case "schedule_sms":
+      return ["message", "scheduledDate"];
+    case "add_to_workflow":
+      return ["workflowName"];
+    case "remove_from_workflow":
+      return ["workflowName"];
+    default:
+      return [];
+  }
+}
+
+/** Validate payload against required fields, returns list of missing field labels */
+function validatePayload(actionType: string, payload: Record<string, any>): string[] {
+  const requiredKeys = getRequiredFields(actionType);
+  const fields = getFieldsForAction(actionType);
+  const missing: string[] = [];
+  for (const key of requiredKeys) {
+    const value = payload[key];
+    if (!value || (typeof value === "string" && !value.trim())) {
+      const field = fields.find(f => f.key === key);
+      missing.push(field?.label || key);
+    }
+  }
+  return missing;
+}
+
 /** Get the primary content to display prominently on the card */
 function getPrimaryContent(actionType: string, payload: Record<string, any>): { label: string; value: string } | null {
   const val = (key: string) => payload[key] && String(payload[key]).trim() ? String(payload[key]) : "";
@@ -307,6 +351,9 @@ function ActionCard({
   const [editedPayload, setEditedPayload] = useState<Record<string, any>>({});
   const [aiInstruction, setAiInstruction] = useState("");
   const [showReasoning, setShowReasoning] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  const requiredFieldKeys = useMemo(() => getRequiredFields(action.actionType), [action.actionType]);
 
   // Auto-open edit mode for manually added actions
   useEffect(() => {
@@ -340,6 +387,7 @@ function ActionCard({
   }, [selectedPipelineName, ghlData.pipelines]);
 
   const handleStartEdit = () => {
+    setValidationErrors([]);
     const payload = { ...action.payload };
 
     // Auto-assign for create_task: default to the team member who made the call
@@ -367,6 +415,19 @@ function ActionCard({
   };
 
   const handleSaveEdit = () => {
+    // Validate required fields before saving
+    const missingKeys = getRequiredFields(action.actionType).filter(key => {
+      const val = editedPayload[key];
+      return !val || (typeof val === "string" && !val.trim());
+    });
+    if (missingKeys.length > 0) {
+      setValidationErrors(missingKeys);
+      const fields = getFieldsForAction(action.actionType);
+      const labels = missingKeys.map(k => fields.find(f => f.key === k)?.label || k);
+      toast.error(`Please fill in: ${labels.join(", ")}`);
+      return;
+    }
+    setValidationErrors([]);
     onSaveEdit(action, editedPayload);
     setIsEditing(false);
   };
@@ -653,12 +714,28 @@ function ActionCard({
           /* ===== EDIT MODE ===== */
           <div className="space-y-3">
             {/* Manual field editing with dropdowns */}
-            {fields.map(field => (
-              <div key={field.key} className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">{field.label}</Label>
-                {renderField(field)}
-              </div>
-            ))}
+            {fields.map(field => {
+              const isRequired = requiredFieldKeys.includes(field.key);
+              const isEmpty = !editedPayload[field.key] || (typeof editedPayload[field.key] === "string" && !editedPayload[field.key].trim());
+              const showError = validationErrors.includes(field.key) && isEmpty;
+              return (
+                <div key={field.key} className="space-y-1">
+                  <Label className={`text-xs font-medium ${showError ? "text-red-500" : "text-muted-foreground"}`}>
+                    {field.label}
+                    {isRequired && <span className="text-red-400 ml-0.5">*</span>}
+                  </Label>
+                  <div className={showError ? "[&>*]:ring-2 [&>*]:ring-red-400 [&>*]:rounded-md" : ""}>
+                    {renderField(field)}
+                  </div>
+                  {showError && (
+                    <p className="text-[11px] text-red-500 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {field.label} is required
+                    </p>
+                  )}
+                </div>
+              );
+            })}
 
             {/* AI-assisted edit input */}
             <div className="border-t pt-3 mt-3">
@@ -776,7 +853,14 @@ function ActionCard({
         <div className="flex items-center gap-2 px-4 py-2 border-t bg-muted/30">
           <Button
             size="sm"
-            onClick={() => onPush(action)}
+            onClick={() => {
+              const missing = validatePayload(action.actionType, action.payload);
+              if (missing.length > 0) {
+                toast.error(`Missing required fields: ${missing.join(", ")}. Click Edit to fill them in.`);
+                return;
+              }
+              onPush(action);
+            }}
             disabled={isPushing}
             className="h-7 text-xs"
           >

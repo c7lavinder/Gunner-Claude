@@ -2977,3 +2977,4 @@
 - [x] Auto-select assignee for new tasks to the team member who made the call
 - [x] Auto-select assignee for update tasks to the task's current assignee
 - [x] Manually added actions should auto-open in edit mode with all editable fields visible
+- [x] Add validation before pushing actions to GHL — highlight required empty fields and block push
