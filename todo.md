@@ -3401,3 +3401,7 @@
 - [x] Track skipped calls in DB: unmatched team member and no-recording calls now create skipped records
 - [x] Improve Skipped tab UI: separate sync-skipped (amber warning) from classification-skipped
 - [x] Add pagination tests (21 tests passing)
+- [x] Fix rate limiter: increase maxRequestsPerMinute from 50 to 85 (GHL allows 100)
+- [x] Fix pagination: reduce MAX_PAGES from 2 to 1 (100 conversations is enough, 200 caused timeouts)
+- [ ] Fix GHL webhook configuration — zero webhook events received, Gunner is 100% polling-dependent
+- [ ] Verify webhooks are receiving real-time call events after fix

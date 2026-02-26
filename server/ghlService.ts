@@ -263,8 +263,13 @@ async function fetchGHLConversations(params: {
   const { startDate, limit = 100 } = params;
   const creds = getActiveCredentials();
   const allPhoneConversations: GHLConversation[] = [];
-  const MAX_PAGES = 5; // Safety cap: 5 pages × 100 = 500 conversations max
-  let cursor: number | undefined = undefined; // startAfterDate cursor for pagination
+  // Pagination strategy: fetch 1 page (100 conversations).
+  // Conversations are sorted by last_message_date DESC, so the first 100 are the most recently active.
+  // With a 3-day polling window, 100 conversations covers all recent activity.
+  // Previously 2 pages (200 convos) took 3-4 minutes due to per-conversation message fetches,
+  // leaving no headroom for the 5-minute timeout.
+  const MAX_PAGES = 1;
+  let cursor: number | undefined = undefined;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     // Fail fast: skip if circuit breaker is open
@@ -282,9 +287,9 @@ async function fetchGHLConversations(params: {
       url.searchParams.set("startAfterDate", cursor.toString());
     }
 
-    // Rate-limit: add 1.5s delay between pages (not on first page)
+    // Rate-limit: add 1s delay between pages (not on first page)
     if (page > 0) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     ghlCircuitBreaker.recordRequest();
@@ -314,7 +319,7 @@ async function fetchGHLConversations(params: {
       if (page === 0) {
         throw new Error(`GHL API error: ${response.status}`);
       }
-      break; // Return what we have from previous pages
+      break;
     }
 
     ghlCircuitBreaker.recordSuccess();
@@ -325,10 +330,7 @@ async function fetchGHLConversations(params: {
 
     console.log(`[GHL] Page ${page}: ${conversations.length} total conversations, ${phoneConversations.length} phone (running total: ${allPhoneConversations.length})`);
 
-    // Stop pagination if:
-    // 1. We got fewer results than the limit (no more pages)
-    // 2. All conversations on this page are older than our startDate (no point going further)
-    // 3. No conversations returned
+    // Stop pagination if fewer results than limit (no more pages) or empty
     if (conversations.length < limit || conversations.length === 0) {
       console.log(`[GHL] Pagination complete — got ${conversations.length} < ${limit} on page ${page}`);
       break;
@@ -344,7 +346,7 @@ async function fetchGHLConversations(params: {
       }
     }
 
-    // Set cursor for next page using the last conversation's sort value (lastMessageDate)
+    // Set cursor for next page
     const lastConv = conversations[conversations.length - 1];
     const lastSortValue = lastConv.lastMessageDate || lastConv.dateUpdated || lastConv.dateAdded;
     if (!lastSortValue) {
@@ -554,9 +556,11 @@ export async function fetchGHLCalls(params: {
   // Add spacing between requests to avoid GHL rate limiting (100 req/min limit)
   for (let convIdx = 0; convIdx < conversations.length; convIdx++) {
     const conv = conversations[convIdx];
-    // Add 1.5s delay between conversation message fetches to stay under rate limit
+    // Add 0.7s delay between conversation message fetches to stay under rate limit
+    // GHL rate limit is 100 req/min = 0.6s/req. 0.7s gives safe margin.
+    // For 200 conversations: 200 × 0.7s = 140s (well within 5min timeout)
     if (convIdx > 0) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 700));
     }
 
     // Fail fast: stop fetching messages if circuit breaker tripped mid-loop

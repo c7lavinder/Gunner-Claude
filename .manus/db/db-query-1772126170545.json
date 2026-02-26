@@ -1,0 +1,22 @@
+{
+  "query": "SELECT id, contactName, duration, status, classification, classificationReason, ghlCallId, callTimestamp, teamMemberId, createdAt FROM calls WHERE ghlCallId = 'IxUAXl4OoCNrYDvS7poO'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, duration, status, classification, classificationReason, ghlCallId, callTimestamp, teamMemberId, createdAt FROM calls WHERE ghlCallId = 'IxUAXl4OoCNrYDvS7poO'",
+  "rows": [
+    {
+      "id": "2610099",
+      "contactName": "Briley Fisher",
+      "duration": "439",
+      "status": "completed",
+      "classification": "conversation",
+      "classificationReason": "The call is an initial qualification and lead generation call. The rep is asking about the property, the seller's motivation, timeline, and desired numbers, which are all aspects of a sales conversation to determine if they are a good fit to work together.",
+      "ghlCallId": "IxUAXl4OoCNrYDvS7poO",
+      "callTimestamp": "2026-02-25 18:41:28",
+      "teamMemberId": "2",
+      "createdAt": "2026-02-25 19:30:21"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tduration\tstatus\tclassification\tclassificationReason\tghlCallId\tcallTimestamp\tteamMemberId\tcreatedAt\n2610099\tBriley Fisher\t439\tcompleted\tconversation\tThe call is an initial qualification and lead generation call. The rep is asking about the property, the seller's motivation, timeline, and desired numbers, which are all aspects of a sales conversation to determine if they are a good fit to work together.\tIxUAXl4OoCNrYDvS7poO\t2026-02-25 18:41:28\t2\t2026-02-25 19:30:21\n",
+  "stderr": "",
+  "execution_time_ms": 348
+}

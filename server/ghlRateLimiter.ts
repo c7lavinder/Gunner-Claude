@@ -50,8 +50,8 @@ interface CircuitBreakerConfig {
 const DEFAULT_CONFIG: CircuitBreakerConfig = {
   failureThreshold: 3,
   cooldownMs: 3 * 60 * 1000, // 3 minutes
-  maxRequestsPerMinute: 50,
-  reservedHighPrioritySlots: 15,
+  maxRequestsPerMinute: 85, // GHL allows 100/min; we use 85 to leave buffer
+  reservedHighPrioritySlots: 10, // Reserve 10 slots for user-initiated actions
 };
 
 let state: CircuitState = "closed";
