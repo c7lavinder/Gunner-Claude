@@ -118,16 +118,16 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
     method: "POST",
     headers: {
       "Accept": "application/json",
-      "Content-Type": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: JSON.stringify({
+    body: new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
       grant_type: "authorization_code",
       code,
       user_type: "Location",
       redirect_uri: redirectUri,
-    }),
+    }).toString(),
   });
 
   if (!response.ok) {
