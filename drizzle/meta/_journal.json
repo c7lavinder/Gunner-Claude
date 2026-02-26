@@ -435,6 +435,13 @@
       "when": 1772078374111,
       "tag": "0061_yielding_anthem",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "5",
+      "when": 1772087826747,
+      "tag": "0062_mean_wiccan",
+      "breakpoints": true
     }
   ]
 }

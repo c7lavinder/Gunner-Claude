@@ -936,18 +936,15 @@ export async function isTenantWebhookActive(tenantId: number): Promise<boolean> 
  */
 export async function batchImportContacts(tenantId: number): Promise<{ imported: number; skipped: number; errors: number }> {
   const { ghlCircuitBreaker } = await import("./ghlRateLimiter");
-  const { getTenantById, parseCrmConfig: parseConfig } = await import("./tenant");
+  const { getCredentialsForTenant } = await import("./ghlActions");
   
-  const tenant = await getTenantById(tenantId);
-  if (!tenant) throw new Error(`Tenant ${tenantId} not found`);
-
-  const config = parseConfig({ crmConfig: tenant.crmConfig as string | null });
-  if (!config.ghlApiKey || !config.ghlLocationId) {
-    throw new Error(`Tenant ${tenantId} has no GHL credentials`);
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) {
+    throw new Error(`Tenant ${tenantId} has no GHL credentials (OAuth or API key)`);
   }
 
-  const apiKey = config.ghlApiKey;
-  const locationId = config.ghlLocationId;
+  const apiKey = creds.apiKey;
+  const locationId = creds.locationId;
   const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
   let imported = 0;

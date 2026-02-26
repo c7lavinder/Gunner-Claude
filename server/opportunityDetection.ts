@@ -14,6 +14,7 @@ import { eq, and, desc, gte, isNull, inArray, sql, not, lt } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { getTenantsWithCrm, parseCrmConfig, type TenantCrmConfig } from "./tenant";
 import { ghlCircuitBreaker } from "./ghlRateLimiter";
+import { loadGHLCredentials } from "./ghlCredentialHelper";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
@@ -4688,11 +4689,13 @@ async function scanTenant(
   if (!tenant) return;
 
   const config = parseCrmConfig(tenant);
-  if (!config.ghlApiKey || !config.ghlLocationId) return;
+  // Load credentials: OAuth tokens first, then legacy API key
+  const pollingCreds = await loadGHLCredentials(tenant.id, tenant.name, config);
+  if (!pollingCreds) return;
 
   const creds: GHLCredentials = {
-    apiKey: config.ghlApiKey,
-    locationId: config.ghlLocationId,
+    apiKey: pollingCreds.apiKey,
+    locationId: pollingCreds.locationId,
   };
 
   // Set tenant-specific stage classification if configured

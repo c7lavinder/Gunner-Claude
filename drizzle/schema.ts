@@ -1428,3 +1428,38 @@ export const contactCache = mysqlTable("contact_cache", {
 });
 export type ContactCacheEntry = typeof contactCache.$inferSelect;
 export type InsertContactCacheEntry = typeof contactCache.$inferInsert;
+
+// ============ GHL OAUTH TOKENS ============
+
+/**
+ * Stores OAuth 2.0 tokens for GHL Marketplace App integration.
+ * Each tenant gets one token set per GHL location (sub-account).
+ * Tokens are automatically refreshed before expiry.
+ * 
+ * This replaces the manual API key model for tenants using the Marketplace app.
+ * Tenants using legacy API keys continue to work via crmConfig.ghlApiKey.
+ */
+export const ghlOAuthTokens = mysqlTable("ghl_oauth_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  // GHL identifiers from token response
+  locationId: varchar("locationId", { length: 255 }).notNull(),
+  companyId: varchar("companyId", { length: 255 }),
+  ghlUserId: varchar("ghlUserId", { length: 255 }),
+  // OAuth tokens
+  accessToken: text("accessToken").notNull(),
+  refreshToken: text("refreshToken").notNull(),
+  // Token metadata
+  expiresAt: timestamp("expiresAt").notNull(), // When the access token expires
+  scopes: text("scopes"), // Space-separated list of granted scopes
+  userType: varchar("userType", { length: 50 }).default("Location"), // 'Location' or 'Company'
+  // Status
+  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  lastRefreshedAt: timestamp("lastRefreshedAt"),
+  lastError: text("lastError"), // Last refresh error message for debugging
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type GhlOAuthToken = typeof ghlOAuthTokens.$inferSelect;
+export type InsertGhlOAuthToken = typeof ghlOAuthTokens.$inferInsert;

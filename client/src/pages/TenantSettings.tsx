@@ -375,6 +375,19 @@ export default function TenantSettings() {
     });
   };
 
+  // GHL OAuth queries
+  const { data: oauthInstallUrl } = trpc.tenant.getGhlOAuthInstallUrl.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  
+  const disconnectOAuthMutation = trpc.tenant.disconnectGhlOAuth.useMutation({
+    onSuccess: () => {
+      toast.success("GHL OAuth disconnected");
+      refetchCrmIntegrations();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   // CRM integration mutations
   const testGhlMutation = trpc.tenant.testGhlConnection.useMutation({
     onSuccess: (result) => {
@@ -1644,85 +1657,153 @@ export default function TenantSettings() {
                 <Skeleton className="h-10 w-full" />
               ) : (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ghlApiKey">API Key</Label>
-                      <Input
-                        id="ghlApiKey"
-                        type="password"
-                        placeholder={crmIntegrations?.ghl?.hasApiKey ? "••••••••••••" : "Enter CRM Private Integration token"}
-                        value={ghlApiKey}
-                        onChange={(e) => setGhlApiKey(e.target.value)}
-                      />
+                  {/* OAuth Connection Status */}
+                  {crmIntegrations?.ghl?.oauthConnected && (
+                    <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                      <Check className="h-5 w-5 text-green-600 shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-green-800 dark:text-green-300">Connected via GoHighLevel Marketplace (OAuth)</p>
+                        {crmIntegrations.ghl.locationId && (
+                          <p className="text-xs text-green-600 dark:text-green-400">Location: {crmIntegrations.ghl.locationId}</p>
+                        )}
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          disconnectOAuthMutation.mutate();
+                        }}
+                        disabled={disconnectOAuthMutation.isPending}
+                      >
+                        <Unlink className="h-4 w-4 mr-1" /> Disconnect OAuth
+                      </Button>
                     </div>
+                  )}
+
+                  {/* OAuth Connect Button (when not connected via OAuth) */}
+                  {crmIntegrations?.ghl?.oauthConfigured && !crmIntegrations?.ghl?.oauthConnected && (
                     <div className="space-y-2">
-                      <Label htmlFor="ghlLocationId">Location ID</Label>
-                      <Input
-                        id="ghlLocationId"
-                        placeholder={crmIntegrations?.ghl?.hasLocationId ? (crmIntegrations.ghl.locationId || "••••••••") : "Enter CRM Location ID"}
-                        value={ghlLocationId}
-                        onChange={(e) => setGhlLocationId(e.target.value)}
-                      />
+                      <Button
+                        className="w-full h-11 gap-2"
+                        onClick={() => {
+                          if (oauthInstallUrl?.url) {
+                            window.open(oauthInstallUrl.url, '_blank');
+                            toast.info("Complete the connection in the GoHighLevel tab, then return here.");
+                          }
+                        }}
+                        disabled={!oauthInstallUrl?.available}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Connect with GoHighLevel (Recommended)
+                      </Button>
+                      <p className="text-xs text-muted-foreground text-center">
+                        One-click setup via GHL Marketplace. No API keys needed.
+                      </p>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Divider between OAuth and manual */}
+                  {crmIntegrations?.ghl?.oauthConfigured && !crmIntegrations?.ghl?.oauthConnected && (
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                      <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">or use API key</span></div>
+                    </div>
+                  )}
+
+                  {/* Manual API Key Fields (always shown for fallback, hidden when OAuth connected) */}
+                  {!crmIntegrations?.ghl?.oauthConnected && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="ghlApiKey">API Key</Label>
+                          <Input
+                            id="ghlApiKey"
+                            type="password"
+                            placeholder={crmIntegrations?.ghl?.hasApiKey ? "••••••••••••" : "Enter CRM Private Integration token"}
+                            value={ghlApiKey}
+                            onChange={(e) => setGhlApiKey(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="ghlLocationId">Location ID</Label>
+                          <Input
+                            id="ghlLocationId"
+                            placeholder={crmIntegrations?.ghl?.hasLocationId ? (crmIntegrations.ghl.locationId || "••••••••") : "Enter CRM Location ID"}
+                            value={ghlLocationId}
+                            onChange={(e) => setGhlLocationId(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (!ghlApiKey && !crmIntegrations?.ghl?.hasApiKey) {
+                              toast.error("Enter an API key first");
+                              return;
+                            }
+                            testGhlMutation.mutate({
+                              apiKey: ghlApiKey || "existing",
+                              locationId: ghlLocationId || crmIntegrations?.ghl?.locationId || "",
+                            });
+                          }}
+                          disabled={testGhlMutation.isPending}
+                        >
+                          {testGhlMutation.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Testing...</> : <><TestTube className="h-4 w-4 mr-1" />Test Connection</>}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            saveCrmIntegrationMutation.mutate({
+                              integration: 'ghl',
+                              enabled: true,
+                              config: {
+                                apiKey: ghlApiKey || undefined,
+                                locationId: ghlLocationId || undefined,
+                              },
+                            });
+                          }}
+                          disabled={saveCrmIntegrationMutation.isPending}
+                        >
+                          {saveCrmIntegrationMutation.isPending ? "Saving..." : "Save"}
+                        </Button>
+                        {crmIntegrations?.ghl?.connected && !crmIntegrations?.ghl?.oauthConnected && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              saveCrmIntegrationMutation.mutate({
+                                integration: 'ghl',
+                                enabled: false,
+                                config: {},
+                              });
+                            }}
+                          >
+                            <Unlink className="h-4 w-4 mr-1" /> Disconnect
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Calls sync via webhooks in real-time, with a fallback poll every 2 hours. Find your API key in your CRM → Settings → Integrations → Private Integrations.
+                      </p>
+                    </>
+                  )}
+
+                  {/* Pipeline info (shown regardless of auth method) */}
                   {crmIntegrations?.ghl?.connected && crmIntegrations.ghl.dispoPipelineName && (
                     <div className="p-3 bg-muted/50 rounded-lg text-sm">
                       <p className="text-muted-foreground">Pipeline: <span className="font-medium text-foreground">{crmIntegrations.ghl.dispoPipelineName}</span></p>
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (!ghlApiKey && !crmIntegrations?.ghl?.hasApiKey) {
-                          toast.error("Enter an API key first");
-                          return;
-                        }
-                        testGhlMutation.mutate({
-                          apiKey: ghlApiKey || "existing",
-                          locationId: ghlLocationId || crmIntegrations?.ghl?.locationId || "",
-                        });
-                      }}
-                      disabled={testGhlMutation.isPending}
-                    >
-                      {testGhlMutation.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Testing...</> : <><TestTube className="h-4 w-4 mr-1" />Test Connection</>}
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        saveCrmIntegrationMutation.mutate({
-                          integration: 'ghl',
-                          enabled: true,
-                          config: {
-                            apiKey: ghlApiKey || undefined,
-                            locationId: ghlLocationId || undefined,
-                          },
-                        });
-                      }}
-                      disabled={saveCrmIntegrationMutation.isPending}
-                    >
-                      {saveCrmIntegrationMutation.isPending ? "Saving..." : "Save"}
-                    </Button>
-                    {crmIntegrations?.ghl?.connected && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          saveCrmIntegrationMutation.mutate({
-                            integration: 'ghl',
-                            enabled: false,
-                            config: {},
-                          });
-                        }}
-                      >
-                        <Unlink className="h-4 w-4 mr-1" /> Disconnect
-                      </Button>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Calls sync via webhooks in real-time, with a fallback poll every 2 hours. Find your API key in your CRM → Settings → Integrations → Private Integrations.
-                  </p>
+
+                  {/* Auth method indicator */}
+                  {crmIntegrations?.ghl?.connected && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Shield className="h-3.5 w-3.5" />
+                      Auth method: <Badge variant="outline" className="text-xs">{crmIntegrations.ghl.authMethod === 'oauth' ? 'OAuth (Marketplace)' : 'API Key'}</Badge>
+                    </div>
+                  )}
                 </>
               )}
             </div>

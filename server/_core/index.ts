@@ -19,6 +19,7 @@ import { startBatchDialerPolling } from "../batchDialerSync";
 import { startBatchLeadsPolling } from "../batchLeadsSync";
 import { startWebhookRetryQueue } from "../webhookRetryQueue";
 import { startWeeklyInsightsRefresh } from "../weeklyInsightsRefresh";
+import { createGHLOAuthRouter } from "../ghlOAuthRoutes";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -56,6 +57,9 @@ async function startServer() {
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   
+  // GHL OAuth install/callback routes
+  app.use(createGHLOAuthRouter());
+
   // Self-serve auth routes (email/password)
   app.use("/api/auth", selfServeAuthRoutes);
 

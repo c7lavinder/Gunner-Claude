@@ -8,15 +8,39 @@ import { coachActionLog } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
 import { ghlCircuitBreaker, getCachedContactSearch, setCachedContactSearch } from "./ghlRateLimiter";
+import { getValidAccessToken, handleTokenRefreshOn401 } from "./ghlOAuth";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
-interface GHLActionCredentials {
+export interface GHLActionCredentials {
   apiKey: string;
   locationId: string;
+  tenantId?: number; // Set when using OAuth, enables 401 auto-refresh
+  isOAuth?: boolean; // True when credentials come from OAuth tokens
 }
 
+/**
+ * Get GHL API credentials for a tenant.
+ * Checks OAuth tokens first (Marketplace app), then falls back to legacy API key.
+ * Returns the same interface regardless of auth method — downstream code is unchanged.
+ */
 export async function getCredentialsForTenant(tenantId: number): Promise<GHLActionCredentials | null> {
+  // Layer 1: Check OAuth tokens (Marketplace app)
+  try {
+    const oauthToken = await getValidAccessToken(tenantId);
+    if (oauthToken) {
+      return {
+        apiKey: oauthToken.accessToken,
+        locationId: oauthToken.locationId,
+        tenantId,
+        isOAuth: true,
+      };
+    }
+  } catch (err) {
+    console.warn(`[GHLActions] OAuth token lookup failed for tenant ${tenantId}, falling back to API key:`, err);
+  }
+
+  // Layer 2: Fall back to legacy API key from crmConfig
   const tenant = await getTenantById(tenantId);
   if (!tenant || !tenant.crmConfig) return null;
   
@@ -26,6 +50,8 @@ export async function getCredentialsForTenant(tenantId: number): Promise<GHLActi
   return {
     apiKey: config.ghlApiKey,
     locationId: config.ghlLocationId,
+    tenantId,
+    isOAuth: false,
   };
 }
 
@@ -63,6 +89,29 @@ export async function ghlFetch(
   }
 
   const text = await response.text();
+
+  // On 401 with OAuth: try refreshing the token and retry once
+  if (response.status === 401 && creds.isOAuth && creds.tenantId) {
+    console.log(`[GHL] 401 on ${method} ${path} — attempting OAuth token refresh`);
+    const newToken = await handleTokenRefreshOn401(creds.tenantId);
+    if (newToken) {
+      // Retry with the new token
+      const retryHeaders = { ...headers, "Authorization": `Bearer ${newToken}` };
+      const retryResponse = await fetch(url, {
+        method,
+        headers: retryHeaders,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (retryResponse.ok) {
+        ghlCircuitBreaker.recordSuccess();
+        // Update creds in-place so subsequent calls in the same batch use the new token
+        creds.apiKey = newToken;
+        return retryResponse.json();
+      }
+      const retryText = await retryResponse.text();
+      throw new Error(`GHL API error after token refresh: ${retryResponse.status} - ${retryText}`);
+    }
+  }
 
   // On 429: record it, trip the breaker, and fail immediately — no retries
   if (response.status === 429) {

@@ -4695,8 +4695,46 @@ Create content that:
       }),
 
     // Get parsed CRM integration status for the current tenant
+    // Get GHL OAuth install URL for the current tenant
+    getGhlOAuthInstallUrl: protectedProcedure.query(async ({ ctx }) => {
+      const { isOAuthConfigured, getInstallUrl } = await import("./ghlOAuth");
+      if (!isOAuthConfigured()) {
+        return { available: false, url: null };
+      }
+      const tenantId = ctx.user?.tenantId;
+      const state = tenantId ? Buffer.from(JSON.stringify({ tenantId })).toString("base64") : undefined;
+      try {
+        const url = getInstallUrl(state);
+        return { available: true, url };
+      } catch {
+        return { available: false, url: null };
+      }
+    }),
+
+    // Get GHL OAuth connection status for the current tenant
+    getGhlOAuthStatus: protectedProcedure.query(async ({ ctx }) => {
+      const { getOAuthStatus, isOAuthConfigured } = await import("./ghlOAuth");
+      if (!ctx.user?.tenantId) {
+        return { oauthConfigured: isOAuthConfigured(), connected: false };
+      }
+      const status = await getOAuthStatus(ctx.user.tenantId);
+      return { oauthConfigured: isOAuthConfigured(), ...status };
+    }),
+
+    // Disconnect GHL OAuth for the current tenant
+    disconnectGhlOAuth: protectedProcedure.mutation(async ({ ctx }) => {
+      if (!ctx.user?.tenantId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant' });
+      if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      const { disconnectOAuth } = await import("./ghlOAuth");
+      await disconnectOAuth(ctx.user.tenantId);
+      return { success: true };
+    }),
+
     getCrmIntegrations: protectedProcedure.query(async ({ ctx }) => {
       const { parseCrmConfig, getTenantById } = await import("./tenant");
+      const { getOAuthStatus, isOAuthConfigured } = await import("./ghlOAuth");
       if (!ctx.user?.tenantId) {
         return {
           ghl: { enabled: false, connected: false },
@@ -4713,21 +4751,31 @@ Create content that:
         };
       }
       const config = parseCrmConfig({ crmConfig: tenant.crmConfig as string | null });
+      // Check OAuth status
+      const oauthStatus = await getOAuthStatus(ctx.user.tenantId);
+      const hasApiKey = !!(config.ghlApiKey && config.ghlLocationId);
+      const hasOAuth = oauthStatus.connected;
+      const ghlConnected = hasOAuth || hasApiKey;
       // Check both tenant-specific config AND global env fallback for API keys
       // (sync code uses env fallback, so connection status should reflect that)
       const hasBdKey = !!(config.batchDialerApiKey || process.env.BATCHDIALER_API_KEY);
       const hasBlKey = !!(config.batchLeadsApiKey || process.env.BATCHLEADS_API_KEY);
       return {
         ghl: {
-          enabled: !!(config.ghlApiKey && config.ghlLocationId),
-          connected: !!(config.ghlApiKey && config.ghlLocationId),
+          enabled: ghlConnected,
+          connected: ghlConnected,
           hasApiKey: !!config.ghlApiKey,
-          hasLocationId: !!config.ghlLocationId,
-          locationId: config.ghlLocationId || undefined,
+          hasLocationId: !!(config.ghlLocationId || oauthStatus.locationId),
+          locationId: oauthStatus.locationId || config.ghlLocationId || undefined,
           dispoPipelineName: config.dispoPipelineName || undefined,
           dispoPipelineId: config.dispoPipelineId || undefined,
           newDealStageName: config.newDealStageName || undefined,
           lastSynced: tenant.lastGhlSync ? tenant.lastGhlSync.toISOString() : null,
+          // OAuth-specific fields
+          authMethod: hasOAuth ? 'oauth' as const : hasApiKey ? 'apikey' as const : 'none' as const,
+          oauthConfigured: isOAuthConfigured(),
+          oauthConnected: hasOAuth,
+          oauthLastError: oauthStatus.lastError || undefined,
         },
         // Advanced config
         stageClassification: config.stageClassification || null,

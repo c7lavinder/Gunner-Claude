@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch, Copy, Webhook, AlertTriangle, Zap } from "lucide-react";
+import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch, Copy, Webhook, AlertTriangle, Zap, ExternalLink } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -145,6 +145,16 @@ export default function Onboarding() {
   const completeOnboardingMutation = trpc.tenant.completeOnboarding.useMutation();
   const testConnectionMut = trpc.tenant.testGhlConnection.useMutation();
   const fetchPipelinesMut = trpc.tenant.fetchGhlPipelines.useMutation();
+  
+  // OAuth queries
+  const { data: oauthInstallUrl } = trpc.tenant.getGhlOAuthInstallUrl.useQuery(undefined, {
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: oauthStatus, refetch: refetchOAuthStatus } = trpc.tenant.getGhlOAuthStatus.useQuery(undefined, {
+    enabled: !!user,
+    refetchInterval: 5000, // Poll every 5s while onboarding to detect OAuth callback completion
+  });
 
   const progress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
@@ -168,12 +178,15 @@ export default function Onboarding() {
       }
       
       if (currentStep === 2 && formData.selectedCrm) {
-        if (formData.selectedCrm === 'ghl' && formData.ghlApiKey && formData.ghlLocationId) {
+        const isOAuthConnected = oauthStatus?.connected;
+        const hasManualKeys = formData.ghlApiKey && formData.ghlLocationId;
+        
+        if (formData.selectedCrm === 'ghl' && (isOAuthConnected || hasManualKeys)) {
           // Build crmConfig JSON with all CRM credentials
-          const crmConfig: Record<string, unknown> = {
-            ghlApiKey: formData.ghlApiKey,
-            ghlLocationId: formData.ghlLocationId,
-          };
+          const crmConfig: Record<string, unknown> = {};
+          // Only include API key/location if manually entered (OAuth handles its own)
+          if (formData.ghlApiKey) crmConfig.ghlApiKey = formData.ghlApiKey;
+          if (formData.ghlLocationId) crmConfig.ghlLocationId = formData.ghlLocationId;
           if (formData.batchDialerApiKey) {
             crmConfig.batchDialerEnabled = true;
             crmConfig.batchDialerApiKey = formData.batchDialerApiKey;
@@ -412,94 +425,142 @@ export default function Onboarding() {
             {formData.selectedCrm === "ghl" && (
               <div className="mt-6 space-y-4 p-4 bg-muted/50 rounded-lg">
                 <h4 className="font-medium">CRM Connection</h4>
-                <div className="space-y-2">
-                  <Label htmlFor="ghlApiKey">API Key</Label>
-                  <Input
-                    id="ghlApiKey"
-                    type="password"
-                    placeholder="Enter your CRM API key"
-                    value={formData.ghlApiKey}
-                    onChange={(e) => setFormData({ ...formData, ghlApiKey: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Find this in your CRM → Settings → Business Profile → API Keys
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ghlLocationId">Location ID</Label>
-                  <Input
-                    id="ghlLocationId"
-                    placeholder="Enter your CRM Location ID"
-                    value={formData.ghlLocationId}
-                    onChange={(e) => {
-                      setFormData({ ...formData, ghlLocationId: e.target.value });
-                      setConnectionStatus({ tested: false, success: false });
-                    }}
-                  />
-                </div>
+                
+                {/* OAuth Connect Button — Primary Method */}
+                {oauthInstallUrl?.available && (
+                  <div className="space-y-3">
+                    {oauthStatus?.connected ? (
+                      <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                        <Check className="h-5 w-5 text-green-600" />
+                        <div>
+                          <p className="text-sm font-medium text-green-800 dark:text-green-300">Connected via GoHighLevel Marketplace</p>
+                          {oauthStatus.locationId && (
+                            <p className="text-xs text-green-600 dark:text-green-400">Location: {oauthStatus.locationId}</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          className="w-full h-12 text-base gap-2"
+                          onClick={() => {
+                            if (oauthInstallUrl.url) {
+                              window.open(oauthInstallUrl.url, '_blank');
+                              toast.info("Complete the connection in the GoHighLevel tab, then return here.");
+                            }
+                          }}
+                        >
+                          <ExternalLink className="h-5 w-5" />
+                          Connect with GoHighLevel
+                        </Button>
+                        <p className="text-xs text-muted-foreground text-center">
+                          One-click setup — no API keys needed. Automatically connects your GHL account.
+                        </p>
+                      </>
+                    )}
+                    
+                    {!oauthStatus?.connected && (
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-muted/50 px-2 text-muted-foreground">or connect manually</span></div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                {/* Test Connection Button */}
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant={connectionStatus.success ? "outline" : "default"}
-                    size="sm"
-                    onClick={async () => {
-                      if (!formData.ghlApiKey || !formData.ghlLocationId) {
-                        toast.error("Enter both API Key and Location ID first");
-                        return;
-                      }
-                      setTestingConnection(true);
-                      setConnectionStatus({ tested: false, success: false });
-                      try {
-                        const result = await testConnectionMut.mutateAsync({
-                          apiKey: formData.ghlApiKey,
-                          locationId: formData.ghlLocationId,
-                        });
-                        if (result.success) {
-                          setConnectionStatus({ tested: true, success: true, locationName: result.locationName });
-                          toast.success(result.message || "Connection successful!");
-                          // Auto-fetch pipelines
-                          setLoadingPipelines(true);
+                {/* Manual API Key Fields — Fallback / shown when OAuth not available or not connected */}
+                {(!oauthInstallUrl?.available || !oauthStatus?.connected) && (
+                  <div className={`space-y-4 ${oauthInstallUrl?.available && !oauthStatus?.connected ? '' : ''}`}>
+                    <div className="space-y-2">
+                      <Label htmlFor="ghlApiKey">API Key</Label>
+                      <Input
+                        id="ghlApiKey"
+                        type="password"
+                        placeholder="Enter your CRM API key"
+                        value={formData.ghlApiKey}
+                        onChange={(e) => setFormData({ ...formData, ghlApiKey: e.target.value })}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Find this in your CRM → Settings → Business Profile → API Keys
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ghlLocationId">Location ID</Label>
+                      <Input
+                        id="ghlLocationId"
+                        placeholder="Enter your CRM Location ID"
+                        value={formData.ghlLocationId}
+                        onChange={(e) => {
+                          setFormData({ ...formData, ghlLocationId: e.target.value });
+                          setConnectionStatus({ tested: false, success: false });
+                        }}
+                      />
+                    </div>
+
+                    {/* Test Connection Button */}
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant={connectionStatus.success ? "outline" : "default"}
+                        size="sm"
+                        onClick={async () => {
+                          if (!formData.ghlApiKey || !formData.ghlLocationId) {
+                            toast.error("Enter both API Key and Location ID first");
+                            return;
+                          }
+                          setTestingConnection(true);
+                          setConnectionStatus({ tested: false, success: false });
                           try {
-                            const pResult = await fetchPipelinesMut.mutateAsync({
+                            const result = await testConnectionMut.mutateAsync({
                               apiKey: formData.ghlApiKey,
                               locationId: formData.ghlLocationId,
                             });
-                            if (pResult.success && pResult.pipelines.length > 0) {
-                              setPipelines(pResult.pipelines);
-                              if (!selectedPipelineId) setSelectedPipelineId(pResult.pipelines[0].id);
+                            if (result.success) {
+                              setConnectionStatus({ tested: true, success: true, locationName: result.locationName });
+                              toast.success(result.message || "Connection successful!");
+                              // Auto-fetch pipelines
+                              setLoadingPipelines(true);
+                              try {
+                                const pResult = await fetchPipelinesMut.mutateAsync({
+                                  apiKey: formData.ghlApiKey,
+                                  locationId: formData.ghlLocationId,
+                                });
+                                if (pResult.success && pResult.pipelines.length > 0) {
+                                  setPipelines(pResult.pipelines);
+                                  if (!selectedPipelineId) setSelectedPipelineId(pResult.pipelines[0].id);
+                                }
+                              } catch {} finally { setLoadingPipelines(false); }
+                            } else {
+                              setConnectionStatus({ tested: true, success: false, error: result.error });
+                              toast.error(result.error || "Connection failed");
                             }
-                          } catch {} finally { setLoadingPipelines(false); }
-                        } else {
-                          setConnectionStatus({ tested: true, success: false, error: result.error });
-                          toast.error(result.error || "Connection failed");
-                        }
-                      } catch (error: any) {
-                        setConnectionStatus({ tested: true, success: false, error: error.message });
-                        toast.error(error.message || "Connection test failed");
-                      } finally { setTestingConnection(false); }
-                    }}
-                    disabled={testingConnection || !formData.ghlApiKey || !formData.ghlLocationId}
-                  >
-                    {testingConnection ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : connectionStatus.success ? (
-                      <Wifi className="h-4 w-4 mr-2 text-green-500" />
-                    ) : (
-                      <Wifi className="h-4 w-4 mr-2" />
-                    )}
-                    {testingConnection ? "Testing..." : connectionStatus.success ? "Re-test" : "Test Connection"}
-                  </Button>
-                  {connectionStatus.tested && (
-                    <div className="flex items-center gap-2 text-sm">
-                      {connectionStatus.success ? (
-                        <><Check className="h-4 w-4 text-green-500" /><span className="text-green-600">Connected to <strong>{connectionStatus.locationName}</strong></span></>
-                      ) : (
-                        <><WifiOff className="h-4 w-4 text-red-500" /><span className="text-red-600">{connectionStatus.error}</span></>
+                          } catch (error: any) {
+                            setConnectionStatus({ tested: true, success: false, error: error.message });
+                            toast.error(error.message || "Connection test failed");
+                          } finally { setTestingConnection(false); }
+                        }}
+                        disabled={testingConnection || !formData.ghlApiKey || !formData.ghlLocationId}
+                      >
+                        {testingConnection ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : connectionStatus.success ? (
+                          <Wifi className="h-4 w-4 mr-2 text-green-500" />
+                        ) : (
+                          <Wifi className="h-4 w-4 mr-2" />
+                        )}
+                        {testingConnection ? "Testing..." : connectionStatus.success ? "Re-test" : "Test Connection"}
+                      </Button>
+                      {connectionStatus.tested && (
+                        <div className="flex items-center gap-2 text-sm">
+                          {connectionStatus.success ? (
+                            <><Check className="h-4 w-4 text-green-500" /><span className="text-green-600">Connected to <strong>{connectionStatus.locationName}</strong></span></>
+                          ) : (
+                            <><WifiOff className="h-4 w-4 text-red-500" /><span className="text-red-600">{connectionStatus.error}</span></>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Webhook Setup Wizard Card */}
                 {connectionStatus.success && (

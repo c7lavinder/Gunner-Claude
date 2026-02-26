@@ -3294,3 +3294,45 @@
 - [x] Switch polling interval from 2-hour to 6-hour when webhookActive=true (adaptive setTimeout)
 - [ ] Reset webhookActive if no webhooks received in 24 hours (future enhancement)
 - [x] Show webhook status in Settings CRM section (via WebhookHealthWidget)
+
+## GHL Marketplace OAuth App Migration (Feb 26, 2026)
+
+### Research & Design
+- [x] Research GHL Marketplace OAuth flow, app distribution, and token management
+- [x] Design OAuth install flow: install URL → authorization → callback → token storage
+
+### OAuth Token Management
+- [x] Create ghl_oauth_tokens table (location_id, access_token, refresh_token, expires_at, scopes)
+- [x] Build token management service: getToken, refreshToken, revokeToken
+- [x] Implement automatic token refresh before expiry
+- [x] Store GHL App Client ID and Client Secret as env secrets
+
+### OAuth Install Flow
+- [x] Build /api/ghl/install endpoint that redirects to GHL authorization URL
+- [x] Build /api/ghl/callback endpoint that exchanges auth code for tokens
+- [x] Auto-create or link tenant on successful OAuth callback
+- [x] Trigger batch contact import after successful OAuth install
+
+### Refactor GHL API Calls
+- [x] Create unified getGHLAuthHeader(tenantId) that returns OAuth token or API key
+- [x] Update ghlFetch in ghlActions.ts to use OAuth tokens
+- [x] Update ghlFetch in ghlService.ts to use OAuth tokens
+- [x] Update ghlFetch in opportunityDetection.ts to use OAuth tokens
+- [x] Handle token refresh transparently on 401 responses
+
+### Onboarding Update
+- [x] Replace manual API key entry with "Connect with GoHighLevel" OAuth button
+- [x] Keep API key option as fallback for users not on Marketplace
+- [ ] Remove manual webhook setup wizard (webhooks are automatic with Marketplace app — deferred, keep for API key users)
+- [x] Show connection status after OAuth install completes
+
+### Backward Compatibility
+- [x] Keep existing API key flow working for current users
+- [x] Detect auth method per tenant (OAuth vs API key) and route accordingly
+- [x] Migrate path: existing API key users can upgrade to OAuth without losing data
+
+### Testing
+- [x] Write tests for token storage and refresh logic
+- [x] Write tests for OAuth callback handler
+- [x] Write tests for unified auth header resolution
+- [x] Write tests for backward compatibility (API key still works)

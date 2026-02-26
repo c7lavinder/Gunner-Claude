@@ -20,6 +20,8 @@ import { getTenantsWithCrm, parseCrmConfig, getTenantById, type TenantCrmConfig 
 import { runOpportunityDetection } from "./opportunityDetection";
 import { startCorrectionMonitor, stopCorrectionMonitor } from "./correctionMonitor";
 import { ghlCircuitBreaker } from "./ghlRateLimiter";
+import { getValidAccessToken } from "./ghlOAuth";
+import { loadGHLCredentials } from "./ghlCredentialHelper";
 
 // GHL API Configuration
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
@@ -716,19 +718,21 @@ export async function pollForNewCalls(): Promise<{
     
     for (const tenant of crmTenants) {
       const config = parseCrmConfig(tenant);
-      if (!config.ghlApiKey || !config.ghlLocationId) {
-        console.log(`[GHL] Tenant ${tenant.id} (${tenant.name}) missing GHL credentials, skipping`);
+      // Load credentials: OAuth tokens first, then legacy API key
+      const pollingCreds = await loadGHLCredentials(tenant.id, tenant.name, config);
+      if (!pollingCreds) {
+        console.log(`[GHL] Tenant ${tenant.id} (${tenant.name}) no GHL credentials (OAuth or API key), skipping`);
         continue;
       }
 
       // Set active credentials for this tenant
       setActiveCredentials({
-        apiKey: config.ghlApiKey,
-        locationId: config.ghlLocationId,
+        apiKey: pollingCreds.apiKey,
+        locationId: pollingCreds.locationId,
         tenantId: tenant.id,
         tenantName: tenant.name,
-        dispoPipelineName: config.dispoPipelineName,
-        newDealStageName: config.newDealStageName,
+        dispoPipelineName: pollingCreds.dispoPipelineName,
+        newDealStageName: pollingCreds.newDealStageName,
       });
 
       // Add delay between tenants to avoid GHL rate limiting
@@ -1344,7 +1348,9 @@ export async function pollOpportunities(): Promise<{ processed: number; errors: 
     
     for (const tenant of crmTenants) {
       const config = parseCrmConfig(tenant);
-      if (!config.ghlApiKey || !config.ghlLocationId) continue;
+      // Load credentials: OAuth tokens first, then legacy API key
+      const pollingCreds = await loadGHLCredentials(tenant.id, tenant.name, config);
+      if (!pollingCreds) continue;
 
       // Add delay between tenants to avoid GHL rate limiting
       if (crmTenants.indexOf(tenant) > 0) {
@@ -1352,12 +1358,12 @@ export async function pollOpportunities(): Promise<{ processed: number; errors: 
       }
 
       setActiveCredentials({
-        apiKey: config.ghlApiKey,
-        locationId: config.ghlLocationId,
+        apiKey: pollingCreds.apiKey,
+        locationId: pollingCreds.locationId,
         tenantId: tenant.id,
         tenantName: tenant.name,
-        dispoPipelineName: config.dispoPipelineName,
-        newDealStageName: config.newDealStageName,
+        dispoPipelineName: pollingCreds.dispoPipelineName,
+        newDealStageName: pollingCreds.newDealStageName,
       });
 
       try {
@@ -1507,19 +1513,20 @@ export async function resyncCallRecording(callId: number): Promise<{
       return { success: false, message: "Call does not have a GHL call ID - cannot re-sync" };
     }
 
-    // Load tenant credentials for this call
+    // Load tenant credentials for this call (OAuth first, then API key)
     if (call.tenantId) {
       const tenant = await getTenantById(call.tenantId);
       if (tenant) {
         const config = parseCrmConfig(tenant);
-        if (config.ghlApiKey && config.ghlLocationId) {
+        const pollingCreds = await loadGHLCredentials(tenant.id, tenant.name, config);
+        if (pollingCreds) {
           setActiveCredentials({
-            apiKey: config.ghlApiKey,
-            locationId: config.ghlLocationId,
+            apiKey: pollingCreds.apiKey,
+            locationId: pollingCreds.locationId,
             tenantId: tenant.id,
             tenantName: tenant.name,
-            dispoPipelineName: config.dispoPipelineName,
-            newDealStageName: config.newDealStageName,
+            dispoPipelineName: pollingCreds.dispoPipelineName,
+            newDealStageName: pollingCreds.newDealStageName,
           });
         }
       }
@@ -1617,19 +1624,20 @@ export async function backfillGHLPropertyAddresses(): Promise<{
     }
 
     for (const [tenantId, tenantCalls] of Array.from(byTenant.entries())) {
-      // Load tenant credentials
+      // Load tenant credentials (OAuth first, then API key)
       const tenant = await getTenantById(tenantId);
       if (!tenant) continue;
       const config = parseCrmConfig(tenant);
-      if (!config.ghlApiKey || !config.ghlLocationId) continue;
+      const pollingCreds = await loadGHLCredentials(tenant.id, tenant.name, config);
+      if (!pollingCreds) continue;
 
       setActiveCredentials({
-        apiKey: config.ghlApiKey,
-        locationId: config.ghlLocationId,
+        apiKey: pollingCreds.apiKey,
+        locationId: pollingCreds.locationId,
         tenantId: tenant.id,
         tenantName: tenant.name,
-        dispoPipelineName: config.dispoPipelineName,
-        newDealStageName: config.newDealStageName,
+        dispoPipelineName: pollingCreds.dispoPipelineName,
+        newDealStageName: pollingCreds.newDealStageName,
       });
 
       // Cache contact addresses to avoid duplicate lookups
