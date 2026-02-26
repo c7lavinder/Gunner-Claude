@@ -947,19 +947,24 @@ export function startPolling(intervalMinutes: number = 5): void {
   }
 
   currentIntervalMinutes = intervalMinutes;
-  console.log(`[GHL] Starting automatic polling every ${intervalMinutes} minutes`);
+  console.log(`[GHL] Starting hybrid polling mode (initial sync + 2-hour fallback)`);
   
-  // Do an initial call poll (opportunity poll is handled separately by startOpportunityPolling)
+  // HYBRID MODE:
+  // 1. Initial sync runs immediately for onboarding (new users see calls within minutes)
+  // 2. Ongoing polling reduced to every 2 hours as a fallback safety net
+  // 3. Primary real-time sync is handled by GHL webhooks at /api/webhook/ghl
+  
+  // Initial sync — fetch recent calls for all tenants
   pollForNewCalls()
-    .catch(err => console.error("[GHL] Initial poll error:", err));
+    .catch(err => console.error("[GHL] Initial sync error:", err));
 
-  // Set up interval — run call poll then opportunity poll sequentially
-  // Use minimum 20 minutes to stay well under GHL 100 req/min rate limit
-  const effectiveInterval = Math.max(intervalMinutes, 20);
+  // Fallback poll every 2 hours (catches any missed webhooks)
+  const FALLBACK_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
   pollInterval = setInterval(() => {
+    console.log("[GHL] Running fallback poll (2-hour safety net)");
     pollForNewCalls()
-      .catch(err => console.error("[GHL] Poll error:", err));
-  }, effectiveInterval * 60 * 1000);
+      .catch(err => console.error("[GHL] Fallback poll error:", err));
+  }, FALLBACK_INTERVAL_MS);
 
   // Start daily archival job (runs every 24 hours)
   if (!archivalInterval) {
@@ -1400,17 +1405,24 @@ export function startOpportunityPolling(): void {
     return; // Already running
   }
   
-  console.log("[GHL Opportunities] Starting opportunity polling (every 30 minutes)");
+  console.log("[GHL Opportunities] Starting hybrid opportunity polling (initial sync + 2-hour fallback)");
+  
+  // HYBRID MODE:
+  // 1. Initial poll after 10 min delay for onboarding
+  // 2. Ongoing polling reduced to every 2 hours as fallback
+  // 3. Primary real-time sync is handled by GHL webhooks (OpportunityCreate/Update events)
   
   // Initial poll after 10 min delay (staggered from call sync)
   setTimeout(() => {
-    pollOpportunities().catch(err => console.error("[GHL Opportunities] Initial poll error:", err));
+    pollOpportunities().catch(err => console.error("[GHL Opportunities] Initial sync error:", err));
   }, 10 * 60 * 1000);
   
-  // Set up interval
+  // Fallback poll every 2 hours
+  const FALLBACK_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
   opportunityPollInterval = setInterval(() => {
-    pollOpportunities().catch(err => console.error("[GHL Opportunities] Poll error:", err));
-  }, 30 * 60 * 1000); // 30 minutes
+    console.log("[GHL Opportunities] Running fallback poll (2-hour safety net)");
+    pollOpportunities().catch(err => console.error("[GHL Opportunities] Fallback poll error:", err));
+  }, FALLBACK_INTERVAL_MS);
 }
 
 /**

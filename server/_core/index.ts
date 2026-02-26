@@ -7,7 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { handleGHLWebhook } from "../webhook";
+import { createGHLWebhookRouter } from "../webhook";
 import { seedTeamMembers } from "../db";
 import { startPolling } from "../ghlService";
 import { initializeBadges } from "../gamification";
@@ -46,14 +46,15 @@ async function startServer() {
   // Stripe webhook endpoint - MUST be before express.json() middleware for signature verification
   app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
   
+  // GHL webhook endpoint - MUST be before express.json() for signature verification
+  // Uses express.raw() internally to capture raw body for RSA signature verification
+  app.use(createGHLWebhookRouter());
+  
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
-  
-  // GoHighLevel webhook endpoint
-  app.post("/api/webhook/ghl", handleGHLWebhook);
   
   // Self-serve auth routes (email/password)
   app.use("/api/auth", selfServeAuthRoutes);

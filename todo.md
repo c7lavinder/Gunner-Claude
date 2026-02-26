@@ -3197,3 +3197,49 @@
 - [x] Stagger jobs so they don't all fire at the same time
 - [x] Eliminate redundant API calls (e.g., fetching pipelines every cycle)
 - [x] Ensure user-initiated actions always have quota headroom
+
+## GHL Webhook Integration — Real-Time CRM Events (Feb 25, 2026)
+
+### Architecture
+- [x] Create CRM-agnostic internal event types (CallEvent, OpportunityEvent, ContactEvent)
+- [x] Build webhook receiver framework with provider-specific handlers and shared processing pipeline
+- [x] Design tenant routing: GHL locationId → internal tenantId lookup
+
+### GHL Webhook Endpoint
+- [x] Create /api/webhook/ghl Express route with raw body parsing (before express.json)
+- [x] Implement GHL webhook signature verification (x-wh-signature RSA public key)
+- [x] Route events by type to appropriate handlers
+- [x] Add webhook event logging for audit trail
+
+### Call Event Handler (InboundMessage/OutboundMessage)
+- [x] Handle InboundMessage webhook with messageType=CALL — create call record immediately
+- [x] Extract contactId, userId, callDuration, callStatus, recording URL from webhook payload
+- [x] Queue call for transcription pipeline (same as current pollForNewCalls flow)
+- [x] Deduplicate against existing calls (prevent double-import from webhook + fallback poll)
+
+### Opportunity Event Handler
+- [x] Handle OpportunityCreate webhook — create/update local opportunity record
+- [x] Handle OpportunityStageUpdate webhook — update pipeline stage, trigger re-evaluation
+- [x] Handle OpportunityStatusUpdate webhook — update status (won/lost/abandoned)
+
+### Contact Event Handler
+- [ ] Handle ContactCreate/ContactUpdate — update contact cache (future)
+- [ ] Handle ContactTagUpdate — update tag data for signal detection (future)
+
+### Hybrid Polling Mode
+- [x] Reduce call sync polling from 20 min to 2 hours (fallback safety net only)
+- [x] Reduce opportunity polling from 30 min to 2 hours (fallback safety net only)
+- [x] Keep initial sync on onboarding (fetch recent calls immediately when user connects GHL)
+- [ ] Add webhook_active flag to tenant config to track which tenants have webhooks configured (future)
+
+### Onboarding Integration
+- [ ] Add webhook setup step to onboarding (show URL + instructions for GHL app config) (future)
+- [ ] Auto-detect when webhooks start arriving and mark tenant as webhook_active (future)
+- [ ] Show webhook status in Settings → Integrations (active/inactive, last event received) (future)
+
+### Testing
+- [x] Write vitest tests for webhook signature verification
+- [x] Write vitest tests for call event normalization (inbound, outbound, skip voicemail/missed)
+- [x] Write vitest tests for opportunity event normalization (create, update, stage change, delete)
+- [x] Write vitest tests for tenant routing and deduplication
+- [x] Write vitest tests for event routing (all GHL event types)
