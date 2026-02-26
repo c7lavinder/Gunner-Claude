@@ -80,17 +80,32 @@ export async function searchContacts(
   tenantId: number,
   query: string
 ): Promise<Array<{ id: string; name: string; phone: string; email: string }>> {
-  // Check cache first to avoid redundant GHL API calls
+  // Layer 1: Check in-memory cache first (fastest, 5-min TTL)
   const cached = getCachedContactSearch(tenantId, query);
   if (cached) {
-    console.log(`[GHLActions] Contact search cache hit for "${query}" (${cached.length} results)`);
+    console.log(`[GHLActions] Contact search in-memory cache hit for "${query}" (${cached.length} results)`);
     return cached;
   }
 
+  // Layer 2: Check local contact_cache database table (no GHL API call needed)
+  try {
+    const localResults = await searchLocalContactCache(tenantId, query);
+    if (localResults.length > 0) {
+      console.log(`[GHLActions] Contact search DB cache hit for "${query}" (${localResults.length} results)`);
+      // Also populate in-memory cache for faster subsequent lookups
+      setCachedContactSearch(tenantId, query, localResults);
+      return localResults;
+    }
+  } catch (err) {
+    console.warn(`[GHLActions] Local contact cache lookup failed, falling through to GHL API:`, err);
+  }
+
+  // Layer 3: Fall through to GHL API (only when both caches miss)
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured for this tenant");
 
   try {
+    console.log(`[GHLActions] Contact search cache miss for "${query}" — calling GHL API`);
     const data = await ghlFetch(
       creds,
       `/contacts/?locationId=${creds.locationId}&query=${encodeURIComponent(query)}&limit=10`,
@@ -104,13 +119,63 @@ export async function searchContacts(
       email: c.email || "",
     }));
 
-    // Cache the results for 5 minutes
+    // Cache the results in-memory for 5 minutes
     setCachedContactSearch(tenantId, query, results);
     return results;
   } catch (error) {
     console.error("[GHLActions] Contact search error:", error);
     throw error;
   }
+}
+
+/**
+ * Search the local contact_cache database table.
+ * Uses LIKE matching on name, phone, and email fields.
+ * Returns results in the same format as GHL API search.
+ */
+async function searchLocalContactCache(
+  tenantId: number,
+  query: string
+): Promise<Array<{ id: string; name: string; phone: string; email: string }>> {
+  const { getDb } = await import("./db");
+  const { contactCache } = await import("../drizzle/schema");
+  const { eq, and, or, like, sql } = await import("drizzle-orm");
+  
+  const db = await getDb();
+  if (!db) return [];
+
+  const searchTerm = `%${query.trim()}%`;
+  
+  const results = await db
+    .select({
+      ghlContactId: contactCache.ghlContactId,
+      name: contactCache.name,
+      firstName: contactCache.firstName,
+      lastName: contactCache.lastName,
+      phone: contactCache.phone,
+      email: contactCache.email,
+    })
+    .from(contactCache)
+    .where(
+      and(
+        eq(contactCache.tenantId, tenantId),
+        or(
+          like(contactCache.name, searchTerm),
+          like(contactCache.firstName, searchTerm),
+          like(contactCache.lastName, searchTerm),
+          like(contactCache.phone, searchTerm),
+          like(contactCache.email, searchTerm)
+        )
+      )
+    )
+    .limit(10);
+
+  return results.map(c => ({
+    id: c.ghlContactId,
+    name: c.name || `${c.firstName || ""} ${c.lastName || ""}`.trim() || "Unknown",
+    phone: c.phone || "",
+    email: c.email || "",
+  }));
 }
 
 // ============ GET CONTACT BY ID ============

@@ -958,13 +958,38 @@ export function startPolling(intervalMinutes: number = 5): void {
   pollForNewCalls()
     .catch(err => console.error("[GHL] Initial sync error:", err));
 
-  // Fallback poll every 2 hours (catches any missed webhooks)
-  const FALLBACK_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
-  pollInterval = setInterval(() => {
-    console.log("[GHL] Running fallback poll (2-hour safety net)");
-    pollForNewCalls()
-      .catch(err => console.error("[GHL] Fallback poll error:", err));
-  }, FALLBACK_INTERVAL_MS);
+  // Adaptive fallback polling:
+  // - 2 hours for tenants without webhooks configured
+  // - 6 hours for webhook-active tenants (webhooks handle real-time sync)
+  const BASE_FALLBACK_MS = 2 * 60 * 60 * 1000; // 2 hours
+  const WEBHOOK_ACTIVE_FALLBACK_MS = 6 * 60 * 60 * 1000; // 6 hours
+  let nextFallbackMs = BASE_FALLBACK_MS;
+
+  const scheduleNextPoll = () => {
+    pollInterval = setTimeout(async () => {
+      console.log(`[GHL] Running fallback poll (${nextFallbackMs / (60 * 60 * 1000)}-hour safety net)`);
+      try {
+        await pollForNewCalls();
+      } catch (err) {
+        console.error("[GHL] Fallback poll error:", err);
+      }
+
+      // Check if any tenant has webhooks active to adjust next interval
+      try {
+        const { isTenantWebhookActive } = await import("./webhook");
+        const tenantsList = await getTenantsWithCrm();
+        const anyWebhookActive = await Promise.all(
+          tenantsList.map(t => isTenantWebhookActive(t.id))
+        ).then(results => results.some(Boolean));
+        nextFallbackMs = anyWebhookActive ? WEBHOOK_ACTIVE_FALLBACK_MS : BASE_FALLBACK_MS;
+      } catch {
+        nextFallbackMs = BASE_FALLBACK_MS;
+      }
+
+      scheduleNextPoll(); // Schedule next iteration
+    }, nextFallbackMs);
+  };
+  scheduleNextPoll();
 
   // Start daily archival job (runs every 24 hours)
   if (!archivalInterval) {
@@ -1051,7 +1076,7 @@ export function stopPolling(): void {
   // Stop opportunity polling
   stopOpportunityPolling();
   if (pollInterval) {
-    clearInterval(pollInterval);
+    clearTimeout(pollInterval);
     pollInterval = null;
     console.log("[GHL] Polling stopped");
   }
@@ -1417,12 +1442,36 @@ export function startOpportunityPolling(): void {
     pollOpportunities().catch(err => console.error("[GHL Opportunities] Initial sync error:", err));
   }, 10 * 60 * 1000);
   
-  // Fallback poll every 2 hours
-  const FALLBACK_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
-  opportunityPollInterval = setInterval(() => {
-    console.log("[GHL Opportunities] Running fallback poll (2-hour safety net)");
-    pollOpportunities().catch(err => console.error("[GHL Opportunities] Fallback poll error:", err));
-  }, FALLBACK_INTERVAL_MS);
+  // Adaptive fallback polling for opportunities (same logic as call sync)
+  const OPP_BASE_FALLBACK_MS = 2 * 60 * 60 * 1000; // 2 hours
+  const OPP_WEBHOOK_ACTIVE_FALLBACK_MS = 6 * 60 * 60 * 1000; // 6 hours
+  let oppNextFallbackMs = OPP_BASE_FALLBACK_MS;
+
+  const scheduleNextOppPoll = () => {
+    opportunityPollInterval = setTimeout(async () => {
+      console.log(`[GHL Opportunities] Running fallback poll (${oppNextFallbackMs / (60 * 60 * 1000)}-hour safety net)`);
+      try {
+        await pollOpportunities();
+      } catch (err) {
+        console.error("[GHL Opportunities] Fallback poll error:", err);
+      }
+
+      // Check webhook activity to adjust next interval
+      try {
+        const { isTenantWebhookActive } = await import("./webhook");
+        const tenantsList = await getTenantsWithCrm();
+        const anyWebhookActive = await Promise.all(
+          tenantsList.map(t => isTenantWebhookActive(t.id))
+        ).then(results => results.some(Boolean));
+        oppNextFallbackMs = anyWebhookActive ? OPP_WEBHOOK_ACTIVE_FALLBACK_MS : OPP_BASE_FALLBACK_MS;
+      } catch {
+        oppNextFallbackMs = OPP_BASE_FALLBACK_MS;
+      }
+
+      scheduleNextOppPoll(); // Schedule next iteration
+    }, oppNextFallbackMs);
+  };
+  scheduleNextOppPoll();
 }
 
 /**
@@ -1430,7 +1479,7 @@ export function startOpportunityPolling(): void {
  */
 export function stopOpportunityPolling(): void {
   if (opportunityPollInterval) {
-    clearInterval(opportunityPollInterval);
+    clearTimeout(opportunityPollInterval);
     opportunityPollInterval = null;
     console.log("[GHL Opportunities] Polling stopped");
   }

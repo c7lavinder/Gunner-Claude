@@ -3271,3 +3271,26 @@
 - [x] Link to GHL app configuration page
 - [ ] Auto-detect when first webhook arrives and mark setup complete (future enhancement)
 - [ ] Show webhook status indicator (waiting/active) during setup (future enhancement)
+
+## Contact Cache Optimization & Webhook Auto-Detection (Feb 26, 2026)
+
+### Wire searchContacts to Local Cache
+- [x] Add cache lookup function to query contact_cache by name/phone/email
+- [x] Modify searchContacts in ghlActions.ts to check local cache first
+- [x] Only fall through to GHL API if cache miss
+- [x] Return cached results in same format as GHL API results
+
+### Batch Contact Import
+- [x] Create batch import function that pages through all GHL contacts (100/page, max 10,000)
+- [x] Trigger batch import on first GHL connection (after successful API key save)
+- [x] Add rate-limiting to batch import (1.5s between pages, circuit breaker aware)
+- [x] Mark tenant as contactCacheImported after completion
+- [ ] Add import status indicator in Settings (future enhancement)
+
+### Webhook Auto-Detection
+- [x] Add webhookActive flag and lastWebhookAt timestamp to tenants table
+- [x] Auto-set webhookActive=true when first webhook arrives for a tenant
+- [x] In-memory cache to avoid repeated DB writes for same tenant
+- [x] Switch polling interval from 2-hour to 6-hour when webhookActive=true (adaptive setTimeout)
+- [ ] Reset webhookActive if no webhooks received in 24 hours (future enhancement)
+- [x] Show webhook status in Settings CRM section (via WebhookHealthWidget)

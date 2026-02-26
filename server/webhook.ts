@@ -19,7 +19,7 @@ import { createCall, getTeamMemberByName, getTeamMemberByGhlUserId, getCallByGhl
 import { processCall } from "./grading";
 import { getTenantsWithCrm, parseCrmConfig } from "./tenant";
 import type { CallEvent, OpportunityEvent, ContactEvent } from "./crmEvents";
-import { webhookEvents, contactCache } from "../drizzle/schema";
+import { webhookEvents, contactCache, tenants } from "../drizzle/schema";
 import { eq, and, desc, sql, gte } from "drizzle-orm";
 import PQueue from "p-queue";
 
@@ -739,6 +739,11 @@ export function createGHLWebhookRouter(): Router {
             await routeGHLEvent(eventType, payload);
             console.log(`[Webhook] Processed ${eventType} in ${Date.now() - startTime}ms`);
 
+            // Auto-detect webhook activity: mark tenant as webhook-active on first event
+            if (resolvedTenantId) {
+              await markTenantWebhookActive(resolvedTenantId);
+            }
+
             // Log successful event
             await logWebhookEvent("ghl", eventType, locationId, resolvedTenantId, "processed");
           } catch (error) {
@@ -865,3 +870,260 @@ export async function handleGHLWebhook(req: Request, res: Response): Promise<voi
 
 // Re-export for backwards compatibility
 export { verifyGHLSignature as verifyWebhookSignature };
+
+// ============ AUTO-DETECT WEBHOOK ACTIVITY ============
+
+// In-memory set of tenants we've already marked as active (avoid repeated DB writes)
+const tenantsMarkedActive = new Set<number>();
+
+/**
+ * Mark a tenant as webhook-active when we receive their first webhook event.
+ * This enables adaptive polling (longer fallback intervals for webhook-active tenants).
+ */
+async function markTenantWebhookActive(tenantId: number): Promise<void> {
+  // Skip if already marked in this process lifetime
+  if (tenantsMarkedActive.has(tenantId)) return;
+
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    await db.update(tenants)
+      .set({
+        webhookActive: "true",
+        lastWebhookAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId));
+
+    tenantsMarkedActive.add(tenantId);
+    console.log(`[Webhook] Tenant ${tenantId} marked as webhook-active`);
+  } catch (error) {
+    console.error(`[Webhook] Failed to mark tenant ${tenantId} as webhook-active:`, error);
+  }
+}
+
+/**
+ * Check if a tenant has active webhooks.
+ * Used by polling to decide whether to use 2-hour or 6-hour fallback interval.
+ */
+export async function isTenantWebhookActive(tenantId: number): Promise<boolean> {
+  // Check in-memory first
+  if (tenantsMarkedActive.has(tenantId)) return true;
+
+  try {
+    const db = await getDb();
+    if (!db) return false;
+
+    const [tenant] = await db.select({ webhookActive: tenants.webhookActive })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+
+    const isActive = tenant?.webhookActive === "true";
+    if (isActive) tenantsMarkedActive.add(tenantId);
+    return isActive;
+  } catch {
+    return false;
+  }
+}
+
+// ============ BATCH CONTACT IMPORT ============
+
+/**
+ * Batch import all contacts from GHL for a tenant.
+ * Called once after initial CRM connection to populate the local contact cache.
+ * Pages through the GHL contacts API (100 per page) with rate limit awareness.
+ */
+export async function batchImportContacts(tenantId: number): Promise<{ imported: number; skipped: number; errors: number }> {
+  const { ghlCircuitBreaker } = await import("./ghlRateLimiter");
+  const { getTenantById, parseCrmConfig: parseConfig } = await import("./tenant");
+  
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) throw new Error(`Tenant ${tenantId} not found`);
+
+  const config = parseConfig({ crmConfig: tenant.crmConfig as string | null });
+  if (!config.ghlApiKey || !config.ghlLocationId) {
+    throw new Error(`Tenant ${tenantId} has no GHL credentials`);
+  }
+
+  const apiKey = config.ghlApiKey;
+  const locationId = config.ghlLocationId;
+  const GHL_API_BASE = "https://services.leadconnectorhq.com";
+
+  let imported = 0;
+  let skipped = 0;
+  let errors = 0;
+  let startAfterId: string | undefined;
+  let page = 0;
+  const MAX_PAGES = 100; // Safety limit: 100 pages * 100 contacts = 10,000 contacts max
+
+  console.log(`[ContactImport] Starting batch import for tenant ${tenantId} (location: ${locationId})`);
+
+  while (page < MAX_PAGES) {
+    // Check circuit breaker — use normal priority so we don't starve user actions
+    if (!ghlCircuitBreaker.canProceed("normal")) {
+      console.log(`[ContactImport] Circuit breaker open, pausing batch import at page ${page}`);
+      break;
+    }
+
+    try {
+      ghlCircuitBreaker.recordRequest();
+      
+      let url = `${GHL_API_BASE}/contacts/?locationId=${locationId}&limit=100`;
+      if (startAfterId) {
+        url += `&startAfterId=${startAfterId}`;
+      }
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Version": "2021-07-28",
+          "Accept": "application/json",
+        },
+      });
+
+      if (response.status === 429) {
+        ghlCircuitBreaker.record429();
+        console.log(`[ContactImport] Rate limited at page ${page}, stopping batch import`);
+        break;
+      }
+
+      if (!response.ok) {
+        errors++;
+        console.error(`[ContactImport] GHL API error ${response.status} at page ${page}`);
+        break;
+      }
+
+      ghlCircuitBreaker.recordSuccess();
+      const data = await response.json() as any;
+      const contacts = data.contacts || [];
+
+      if (contacts.length === 0) {
+        console.log(`[ContactImport] No more contacts at page ${page}, import complete`);
+        break;
+      }
+
+      // Upsert contacts into local cache
+      const db = await getDb();
+      if (!db) break;
+
+      for (const c of contacts) {
+        try {
+          const fullName = `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name || null;
+          
+          // Check if contact already exists
+          const [existing] = await db.select({ id: contactCache.id })
+            .from(contactCache)
+            .where(
+              and(
+                eq(contactCache.tenantId, tenantId),
+                eq(contactCache.ghlContactId, c.id)
+              )
+            )
+            .limit(1);
+
+          if (existing) {
+            // Update existing
+            await db.update(contactCache)
+              .set({
+                name: fullName,
+                firstName: c.firstName || null,
+                lastName: c.lastName || null,
+                phone: c.phone || null,
+                email: c.email || null,
+                tags: c.tags ? JSON.stringify(c.tags) : null,
+                lastSyncedAt: new Date(),
+              })
+              .where(eq(contactCache.id, existing.id));
+            skipped++;
+          } else {
+            // Insert new
+            await db.insert(contactCache).values({
+              tenantId,
+              ghlContactId: c.id,
+              ghlLocationId: locationId,
+              name: fullName,
+              firstName: c.firstName || null,
+              lastName: c.lastName || null,
+              phone: c.phone || null,
+              email: c.email || null,
+              tags: c.tags ? JSON.stringify(c.tags) : null,
+              lastSyncedAt: new Date(),
+            });
+            imported++;
+          }
+        } catch (err) {
+          errors++;
+          console.error(`[ContactImport] Error importing contact ${c.id}:`, err);
+        }
+      }
+
+      console.log(`[ContactImport] Page ${page}: ${contacts.length} contacts (imported: ${imported}, updated: ${skipped})`);
+
+      // Check for next page
+      if (data.meta?.nextPageUrl || data.meta?.startAfterId) {
+        startAfterId = data.meta.startAfterId || contacts[contacts.length - 1]?.id;
+      } else if (contacts.length < 100) {
+        // Less than full page means we've reached the end
+        break;
+      } else {
+        // Use last contact ID as cursor
+        startAfterId = contacts[contacts.length - 1]?.id;
+      }
+
+      page++;
+
+      // Rate limit: wait 1.5 seconds between pages to stay under GHL limits
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    } catch (error) {
+      errors++;
+      console.error(`[ContactImport] Error at page ${page}:`, error);
+      break;
+    }
+  }
+
+  // Mark tenant as having imported contacts
+  try {
+    const db = await getDb();
+    if (db) {
+      await db.update(tenants)
+        .set({ contactCacheImported: "true" })
+        .where(eq(tenants.id, tenantId));
+    }
+  } catch (err) {
+    console.error(`[ContactImport] Failed to mark tenant ${tenantId} as imported:`, err);
+  }
+
+  console.log(`[ContactImport] Batch import complete for tenant ${tenantId}: imported=${imported}, updated=${skipped}, errors=${errors}`);
+  return { imported, skipped, errors };
+}
+
+/**
+ * Check if a tenant needs contact cache import and trigger it if needed.
+ * Called after CRM connection is saved.
+ */
+export async function triggerContactImportIfNeeded(tenantId: number): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    const [tenant] = await db.select({ contactCacheImported: tenants.contactCacheImported })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+
+    if (tenant?.contactCacheImported === "true") {
+      console.log(`[ContactImport] Tenant ${tenantId} already has contacts imported, skipping`);
+      return;
+    }
+
+    // Run import in background (don't block the CRM save)
+    console.log(`[ContactImport] Triggering background batch import for tenant ${tenantId}`);
+    batchImportContacts(tenantId).catch(err => {
+      console.error(`[ContactImport] Background import failed for tenant ${tenantId}:`, err);
+    });
+  } catch (error) {
+    console.error(`[ContactImport] Error checking import status for tenant ${tenantId}:`, error);
+  }
+}

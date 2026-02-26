@@ -38,6 +38,10 @@ export const tenants = mysqlTable("tenants", {
   lastGhlSync: timestamp("lastGhlSync"),
   lastBatchDialerSync: timestamp("lastBatchDialerSync"),
   lastBatchLeadsSync: timestamp("lastBatchLeadsSync"),
+  // Webhook status
+  webhookActive: mysqlEnum("webhookActive", ["true", "false"]).default("false"),
+  lastWebhookAt: timestamp("lastWebhookAt"),
+  contactCacheImported: mysqlEnum("contactCacheImported", ["true", "false"]).default("false"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -4677,11 +4677,21 @@ Create content that:
         // Keep crmType as 'ghl' if GHL is connected, otherwise 'none' (legacy field)
         const crmType = existingConfig.ghlApiKey ? 'ghl' as const : 'none' as const;
 
-        return updateTenantSettings(targetTenantId, {
+        const result = await updateTenantSettings(targetTenantId, {
           crmType,
           crmConfig: JSON.stringify(existingConfig),
           crmConnected,
         });
+
+        // Trigger batch contact import if GHL is connected and not yet imported
+        if (input.integration === 'ghl' && input.enabled && existingConfig.ghlApiKey && existingConfig.ghlLocationId) {
+          const { triggerContactImportIfNeeded } = await import("./webhook");
+          triggerContactImportIfNeeded(targetTenantId).catch(err => {
+            console.error(`[CRM] Failed to trigger contact import for tenant ${targetTenantId}:`, err);
+          });
+        }
+
+        return result;
       }),
 
     // Get parsed CRM integration status for the current tenant
