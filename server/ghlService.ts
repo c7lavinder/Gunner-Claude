@@ -265,7 +265,7 @@ async function fetchGHLConversations(params: {
       });
 
       if (response.status === 429 && attempt < maxRetries - 1) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, 40s, max 60s
         console.log(`[GHL] Rate limited (429) fetching conversations, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
@@ -315,9 +315,9 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
         },
       });
 
-      if (response.status === 429 && attempt < maxRetries - 1) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
-        console.log(`[GHL] Rate limited (429) fetching messages, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+    if (response.status === 429 && attempt < maxRetries - 1) {
+        const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
+        console.log(`[GHL] Rate limited (429) fetching messages for ${conversationId}, retrying in ${delay}ms`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -457,7 +457,8 @@ export async function fetchGHLCalls(params: {
   endDate?: Date;
   limit?: number;
 }): Promise<ProcessedGHLCall[]> {
-  const { startDate, limit = 100 } = params;
+  // Reduced from 100 to 50 to halve GHL API calls per poll cycle
+  const { startDate, limit = 50 } = params;
 
   console.log(`[GHL] Fetching conversations...`);
   const conversations = await fetchGHLConversations({ startDate, limit });
@@ -474,7 +475,13 @@ export async function fetchGHLCalls(params: {
   const allCalls: ProcessedGHLCall[] = [];
 
   // Fetch messages for each conversation to find calls with recordings
-  for (const conv of conversations) {
+  // Add spacing between requests to avoid GHL rate limiting (100 req/min limit)
+  for (let convIdx = 0; convIdx < conversations.length; convIdx++) {
+    const conv = conversations[convIdx];
+    // Add 800ms delay between conversation message fetches to stay under rate limit
+    if (convIdx > 0) {
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
     const messages = await fetchConversationMessages(conv.id);
     const calls = extractCallsFromMessages(conv, messages);
     
@@ -697,6 +704,12 @@ export async function pollForNewCalls(): Promise<{
         newDealStageName: config.newDealStageName,
       });
 
+      // Add delay between tenants to avoid GHL rate limiting
+      if (crmTenants.indexOf(tenant) > 0) {
+        console.log(`[GHL] Waiting 15s before polling next tenant to avoid rate limits...`);
+        await new Promise(resolve => setTimeout(resolve, 15000));
+      }
+
       try {
         const startDate = lastPollTimestamp || new Date(Date.now() - 72 * 60 * 60 * 1000);
         const endDate = new Date();
@@ -910,16 +923,24 @@ export function startPolling(intervalMinutes: number = 5): void {
   console.log(`[GHL] Starting automatic polling every ${intervalMinutes} minutes`);
   
   // Do an initial poll, then opportunity poll (sequential to avoid credential race condition)
+  // Add 30s gap between call poll and opportunity poll to avoid rate limits
   pollForNewCalls()
+    .then(() => new Promise(resolve => setTimeout(resolve, 30000)))
     .then(() => pollOpportunities())
     .catch(err => console.error("[GHL] Initial poll error:", err));
 
   // Set up interval — run call poll then opportunity poll sequentially
+  // Use minimum 10 minutes to avoid GHL rate limiting
+  const effectiveInterval = Math.max(intervalMinutes, 10);
   pollInterval = setInterval(() => {
     pollForNewCalls()
+      .then(() => {
+        // Wait 30 seconds between call poll and opportunity poll to avoid rate limits
+        return new Promise(resolve => setTimeout(resolve, 30000));
+      })
       .then(() => pollOpportunities())
       .catch(err => console.error("[GHL] Poll error:", err));
-  }, intervalMinutes * 60 * 1000);
+  }, effectiveInterval * 60 * 1000);
 
   // Start daily archival job (runs every 24 hours)
   if (!archivalInterval) {
@@ -1137,7 +1158,7 @@ async function getPipelines(): Promise<Array<{ id: string; name: string; stages:
       });
       
       if (response.status === 429 && attempt < maxRetries - 1) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
         console.log(`[GHL Pipelines] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
@@ -1239,6 +1260,11 @@ export async function pollOpportunities(): Promise<{ processed: number; errors: 
     for (const tenant of crmTenants) {
       const config = parseCrmConfig(tenant);
       if (!config.ghlApiKey || !config.ghlLocationId) continue;
+
+      // Add delay between tenants to avoid GHL rate limiting
+      if (crmTenants.indexOf(tenant) > 0) {
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      }
 
       setActiveCredentials({
         apiKey: config.ghlApiKey,

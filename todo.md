@@ -3143,3 +3143,14 @@
 - [x] Fix AI Coach crashing with GHL API 429 "Too Many Requests" when summarizing conversations
 - [x] Add graceful error handling so coach doesn't show raw API errors to users
 - [x] Add retry logic with backoff for GHL rate-limited requests in coach (ghlActions, ghlService, opportunityDetection)
+
+## Bug Fix - AI Coach Still Failing for Jessica (Feb 25, 2026)
+- [x] Root cause: background polling consuming all GHL API quota (100+ calls/cycle)
+- [x] Reduced conversations fetched per poll from 100 to 50
+- [x] Added 800ms delay between conversation message fetches
+- [x] Increased polling interval from 5 to 10 minutes minimum
+- [x] Added 30-second gap between call poll and opportunity poll
+- [x] Increased retry delays from 1-8s to 10-60s across all GHL fetch functions
+- [x] Added delay between tenant polls in opportunity polling
+- [x] Created global GHL rate limiter (server/ghlRateLimiter.ts) with priority queue
+- [x] User-friendly error message for 429 errors in coach UI

@@ -433,7 +433,7 @@ async function ghlFetch(creds: GHLCredentials, path: string, retries = 3): Promi
     }
     const text = await response.text();
     if (response.status === 429 && attempt < retries - 1) {
-      const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+      const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
       console.log(`[OpportunityDetection] GHL rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
       lastError = new Error(`GHL API 429: ${text}`);

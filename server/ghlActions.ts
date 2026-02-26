@@ -58,7 +58,7 @@ export async function ghlFetch(
 
     // Retry on 429 (rate limit) with exponential backoff
     if (response.status === 429 && attempt < retries - 1) {
-      const delay = Math.min(1000 * Math.pow(2, attempt), 8000); // 1s, 2s, 4s, max 8s
+      const delay = Math.min(5000 * Math.pow(2, attempt), 30000); // 5s, 10s, 20s, max 30s
       console.log(`[GHL] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
       lastError = new Error(`GHL API rate limited (429)`);
@@ -1870,6 +1870,10 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
       .set({ status: "failed", error: errorMsg })
       .where(eq(coachActionLog.id, actionId));
 
+    // Return user-friendly message for rate limit errors
+    if (errorMsg.includes("429") || errorMsg.toLowerCase().includes("rate limit") || errorMsg.toLowerCase().includes("too many")) {
+      return { success: false, error: "CRM is temporarily busy. Please wait 30 seconds and try again." };
+    }
     return { success: false, error: errorMsg };
   }
 }
