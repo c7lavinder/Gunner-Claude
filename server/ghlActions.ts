@@ -11,6 +11,23 @@ import { ghlCircuitBreaker, getCachedContactSearch, setCachedContactSearch } fro
 import { getValidAccessToken, handleTokenRefreshOn401 } from "./ghlOAuth";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
+const FETCH_TIMEOUT_MS = 30_000;
+
+/** Fetch with AbortController timeout to prevent hung requests */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      throw new Error(`GHL API request timed out after ${timeoutMs / 1000}s: ${options.method || "GET"} ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export interface GHLActionCredentials {
   apiKey: string;
@@ -77,7 +94,7 @@ export async function ghlFetch(
 
   ghlCircuitBreaker.recordRequest();
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -97,7 +114,7 @@ export async function ghlFetch(
     if (newToken) {
       // Retry with the new token
       const retryHeaders = { ...headers, "Authorization": `Bearer ${newToken}` };
-      const retryResponse = await fetch(url, {
+      const retryResponse = await fetchWithTimeout(url, {
         method,
         headers: retryHeaders,
         body: body ? JSON.stringify(body) : undefined,

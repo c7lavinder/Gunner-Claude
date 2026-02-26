@@ -3408,3 +3408,9 @@
 
 ## GHL Polling Interval Fix
 - [x] Change GHL polling from 2-hour hybrid fallback back to 10-minute interval
+
+## GHL OAuth Token Fix
+- [x] Fix GHL OAuth token 401 error and ensure auto-refresh works reliably for AI Coach actions (401s were only on test tenants, tenant 1 OAuth is working fine)
+
+## Bug: Calls not syncing to Gunner after publish
+- [x] Investigate and fix why recent GHL calls (Feb 26 afternoon) are not appearing in Gunner

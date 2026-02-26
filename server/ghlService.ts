@@ -218,12 +218,16 @@ async function linkTeamMemberGhlUserId(teamMemberId: number, ghlUserId: string):
     try {
       const creds = getActiveCredentials();
       const url = `${GHL_API_BASE}/users/${ghlUserId}`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
       const resp = await fetch(url, {
         headers: {
           "Authorization": `Bearer ${creds.apiKey}`,
           "Version": "2021-07-28",
         },
+        signal: controller.signal,
       });
+      clearTimeout(timer);
       if (resp.ok) {
         const userData = await resp.json();
         if (userData.lcPhone && typeof userData.lcPhone === 'object') {
