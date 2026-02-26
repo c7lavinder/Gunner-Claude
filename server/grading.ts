@@ -840,6 +840,7 @@ Analyze the transcript and classify the call into one of these categories:
    
 2. "admin_call" - Post-sale or administrative calls with NO active selling:
    - POST-OFFER calls: Walking someone through signing documents AFTER an offer was already accepted
+   - POST-OFFER NEXT STEPS: Discussing sending a purchase agreement for review/signature, explaining the closing process, scheduling construction partner visits, coordinating what happens AFTER the deal
    - Document/paperwork calls: Helping with e-signatures, DocuSign, purchase agreements, contracts
    - Technical support: Helping someone access emails, open documents, use platforms
    - Follow-up calls: Checking on status after offer was made, answering questions about closing
@@ -848,6 +849,8 @@ Analyze the transcript and classify the call into one of these categories:
    - Internal team calls
    
    KEY INDICATOR: If the call is about SIGNING or REVIEWING a purchase agreement that was already presented, it's admin_call, NOT conversation.
+   KEY INDICATOR: If the rep says they will SEND the purchase agreement for the seller to review/sign, and the call is about next steps after the offer, it's admin_call.
+   KEY INDICATOR: If the rep is confirming property details (mortgage, ownership, deed) to PREPARE paperwork rather than to NEGOTIATE, it's admin_call.
    
 3. "voicemail" - The rep left a voicemail message (one-sided, no response)
 
@@ -859,9 +862,12 @@ Analyze the transcript and classify the call into one of these categories:
 
 IMPORTANT RULES:
 - If the call mentions "purchase agreement", "sign", "DocuSign", "e-signature", "contract to sign" - and the rep is HELPING them sign (not presenting an offer), it's admin_call
+- If the rep says they will SEND a purchase agreement via email for the seller to review and sign, it's admin_call — the offer was already accepted
+- If the call discusses next steps AFTER a deal (construction partner visit, closing timeline, title work), it's admin_call
+- If the rep is confirming mortgage amounts, ownership details, or deed information to PREPARE the purchase agreement (not to negotiate price), it's admin_call
 - If the call is troubleshooting email/technical issues related to receiving documents, it's admin_call
-- If the offer price is being PRESENTED for the first time, it's conversation
-- If the offer was already made and they're just reviewing/signing paperwork, it's admin_call
+- If the offer price is being PRESENTED for the first time and actively negotiated, it's conversation
+- If the offer was already made and they're discussing signing/reviewing/sending paperwork, it's admin_call
 - Rapport-building (talking about personal topics) is a SALES TECHNIQUE when part of a sales call
 - Only use "wrong_number" if explicitly stated
 
@@ -958,18 +964,21 @@ CALL TYPES:
 
 5. "seller_callback" - INBOUND call where the seller called the company back. High-intent signal. Signs: seller says "I got your letter/postcard/voicemail", "you called me earlier", seller is asking questions, seller initiated the contact. The rep should acknowledge the callback and capitalize on momentum.
 
-6. "admin_callback" - OUTBOUND operational call about documents, scheduling, closing details, title info, walkthrough times, or scheduling a callback. NOT a sales call. Signs: discussing DocuSign, purchase agreements, scheduling inspections, coordinating closing dates, helping with paperwork, vendor coordination, or simply scheduling a time to call back because the person is busy/unavailable. No active selling happening.
+6. "admin_callback" - OUTBOUND operational call about documents, scheduling, closing details, title info, walkthrough times, or scheduling a callback. NOT a sales call. Signs: discussing DocuSign, purchase agreements to sign/review, scheduling inspections, coordinating closing dates, helping with paperwork, vendor coordination, or simply scheduling a time to call back because the person is busy/unavailable. No active selling happening.
+   POST-OFFER ADMIN CALLS: If the rep is discussing SENDING a purchase agreement for the seller to review/sign, walking through the signing process, explaining what happens after they sign, or following up on a deal that's already in progress — this is admin_callback, NOT offer. The offer was already made in a PREVIOUS call. Key phrases: "send you the purchase agreement", "review and sign", "get this signed", "email you the contract", "construction partner visit", "closing process".
 
 CRITICAL RULES FOR CALL TYPE:
-- "offer" includes ANY call where the acquisition manager is discussing price, value, terms, or negotiating with the seller — even if a specific dollar amount is not explicitly stated. If the conversation involves offer strategy, pricing discussion, property valuation, or deal negotiation, it IS an offer call.
-- A SPECIFIC DOLLAR AMOUNT is NOT required to classify as "offer". Discussion of price ranges, comparable sales, repair costs, ARV, or any financial negotiation qualifies.
+- "offer" includes ANY call where the acquisition manager is PRESENTING an offer price or ACTIVELY NEGOTIATING price/terms with the seller for the first time. If the conversation involves first-time offer strategy, pricing discussion, property valuation, or deal negotiation, it IS an offer call.
+- A SPECIFIC DOLLAR AMOUNT is NOT required to classify as "offer". Discussion of price ranges, comparable sales, repair costs, ARV, or any financial negotiation qualifies — BUT ONLY if this is the FIRST TIME the offer is being discussed.
+- POST-OFFER vs OFFER: If the offer was already made in a previous call and this call is about NEXT STEPS (sending purchase agreement, getting signatures, scheduling inspections, coordinating closing), this is "admin_callback" — NOT "offer". Look for clues: "I'll send you the purchase agreement", "review and sign", "get the contract over to you", discussing what happens AFTER the deal is agreed upon.
+- If the rep discusses mortgage amounts, property details, or ownership just to CONFIRM information for the purchase agreement (not to negotiate), it's admin_callback.
 - If the person is busy/unavailable and the rep just schedules a callback, this is "admin_callback" — NOT "offer", "qualification", or "follow_up".
 - If the call is very short (under 2 minutes) and consists only of scheduling a callback time, it is "admin_callback".
 - If the rep mentions wanting to "discuss an offer" but the other person is unavailable and no offer is actually presented, it is "admin_callback".
 
 ROLE-BASED GUIDANCE:
 The team member's role is: ${teamMemberRole || "unknown"}.
-- If the role is "acquisition_manager", DEFAULT to "offer" unless the transcript clearly shows it is an admin_callback, wrong_number, or the AM is doing someone else's job (e.g., cold calling a new lead). Acquisition managers are in the offer stage of the pipeline — their calls are offer calls unless proven otherwise.
+- If the role is "acquisition_manager", DEFAULT to "offer" unless the transcript clearly shows it is an admin_callback, wrong_number, or the AM is doing someone else's job (e.g., cold calling a new lead). Acquisition managers are in the offer stage of the pipeline — their calls are offer calls unless proven otherwise. HOWEVER: If the AM is discussing sending a purchase agreement for signature, walking through closing steps, or coordinating post-offer logistics, classify as "admin_callback" — the offer phase is OVER and this is now administrative.
 - If the role is "lead_manager", DEFAULT to "qualification" unless the transcript clearly shows a different type.
 - If the role is "lead_generator", DEFAULT to "cold_call" with HIGH confidence (0.8+). Lead generators make cold calls — that is their job. A lead generator's call should almost ALWAYS be classified as "cold_call". The ONLY exceptions are: (1) the transcript explicitly references a previous conversation with this specific seller, (2) the call is clearly an admin_callback (scheduling only, no selling). Do NOT classify a lead generator's call as "qualification" just because the seller engaged, shared property details, or discussed price history — that is normal cold call behavior.
 - The transcript can override the role-based default, but only with STRONG clear evidence (e.g., explicit reference to a prior conversation, or LM presenting a specific offer price). A lead generator asking about property condition, motivation, or price on a first call is NOT qualification — it IS cold calling.

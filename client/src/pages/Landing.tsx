@@ -22,10 +22,10 @@ import {
 } from "lucide-react";
 
 // ─── CDN Image URLs ───
-const HERO_DASHBOARD = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/nPQkfYKohVjXIMPw.png";
-const CALL_SCORING_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/ggPZZAhkkIGfyscM.png";
-const LEADERBOARD_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/VFpqCugCAqJdsDHi.png";
-const AI_COACH_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/yciLCtnuSvoqVsYt.png";
+const HERO_DASHBOARD = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/vNQGmAQJzCbyfSPK.png";
+const CALL_SCORING_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/JFwhthFRYPSiFrvr.png";
+const LEADERBOARD_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/vNQGmAQJzCbyfSPK.png";
+const AI_COACH_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/JFwhthFRYPSiFrvr.png";
 const GUNNER_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-small.png";
 
 // ─── Feature label mapping for display ───

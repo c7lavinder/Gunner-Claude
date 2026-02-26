@@ -3154,3 +3154,13 @@
 - [x] Added delay between tenant polls in opportunity polling
 - [x] Created global GHL rate limiter (server/ghlRateLimiter.ts) with priority queue
 - [x] User-friendly error message for 429 errors in coach UI
+
+## Replace Landing Page Screenshots (Feb 25, 2026)
+- [x] Replace AI-generated mockup screenshots with real app screenshots from Corey
+- [x] Upload real Dashboard screenshot to S3
+- [x] Upload real Call Scoring screenshot to S3
+- [x] Update Landing.tsx hero and feature tabs to use real screenshots
+
+## Fix Post-Offer Call Classification (Feb 25, 2026)
+- [x] Update AI classification to detect post-offer/contract calls (purchase agreement signing, paperwork) as Admin
+- [x] These calls should be classified as Admin and graded with admin_callback rubric (still scored)
