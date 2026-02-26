@@ -2060,6 +2060,19 @@ export default function CallInbox() {
   const skippedCalls = skippedItems.filter((c: any) => 
     c.status === "skipped" || (c.classification && c.classification !== "conversation" && c.classification !== "pending" && c.classification !== "admin_call")
   );
+  // Separate sync-skipped calls (unmatched team member, no recording) from classification-skipped
+  const syncSkippedCalls = skippedCalls.filter((c: any) => 
+    c.classificationReason && (
+      c.classificationReason.includes('Could not match team member') ||
+      c.classificationReason.includes('No recording available')
+    )
+  );
+  const classificationSkippedCalls = skippedCalls.filter((c: any) => 
+    !c.classificationReason || (
+      !c.classificationReason.includes('Could not match team member') &&
+      !c.classificationReason.includes('No recording available')
+    )
+  );
 
   // Build team member filter options grouped by team role (from tenant's team list)
   const teamMemberGroups = useMemo(() => {
@@ -2576,9 +2589,83 @@ export default function CallInbox() {
 
             {/* === TAB: Skipped === */}
             {activeTab === "skipped" && (<div key="skipped" className="space-y-4 obs-fade-in">
-              {skippedCalls.length > 0 ? (
+              {/* Sync-skipped calls: unmatched team member or no recording */}
+              {syncSkippedCalls.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                    <span className="text-sm text-amber-800 dark:text-amber-200">
+                      {syncSkippedCalls.length} call(s) were found in CRM but couldn't be processed (unmatched team member or missing recording). Check if team members are linked correctly in Settings → Team.
+                    </span>
+                  </div>
+                  {syncSkippedCalls.map((item: any) => (
+                    <div key={item.id} className="obs-panel border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/20">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold truncate">
+                                {item.contactName || item.contactPhone || "Unknown Contact"}
+                              </h3>
+                              <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">
+                                {item.classificationReason?.includes('Could not match') ? 'Unmatched Team Member' : 'No Recording'}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                              {item.teamMemberName && (
+                                <span className="flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  {item.teamMemberName}
+                                </span>
+                              )}
+                              {item.duration && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, "0")}
+                                </span>
+                              )}
+                              {item.callTimestamp && (
+                                <span>{formatDistanceToNow(new Date(item.callTimestamp), { addSuffix: true })}</span>
+                              )}
+                            </div>
+                            {item.classificationReason && (
+                              <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">
+                                <AlertTriangle className="h-3 w-3 inline mr-1" />
+                                {item.classificationReason}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              reclassifyMutation.mutate({ 
+                                callId: item.id, 
+                                classification: "conversation",
+                                reason: "Manually reclassified for grading"
+                              });
+                            }}
+                            disabled={reclassifyMutation.isPending || !item.recordingUrl}
+                            title={!item.recordingUrl ? 'No recording available to grade' : 'Grade this call'}
+                          >
+                            {reclassifyMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <CheckCircle className="h-4 w-4" />
+                            )}
+                            <span className="ml-1">Grade This Call</span>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Classification-skipped calls (voicemails, no-answers, etc.) */}
+              {classificationSkippedCalls.length > 0 ? (
                 <div className="space-y-4">
-                  {skippedCalls.map((item: any) => (
+                  {classificationSkippedCalls.map((item: any) => (
                     <div key={item.id} className="obs-panel opacity-75">
                       <div className="p-4">
                         <div className="flex items-start justify-between gap-4">
@@ -2660,7 +2747,7 @@ export default function CallInbox() {
                     </div>
                   ))}
                 </div>
-              ) : (
+              ) : syncSkippedCalls.length === 0 ? (
                 <div className="obs-panel">
                   <div className="flex flex-col items-center justify-center py-16">
                     <CheckCircle className="h-16 w-16 text-muted-foreground/50 mb-4" />
@@ -2670,7 +2757,7 @@ export default function CallInbox() {
                     </p>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>)}
           </div>
         </div>

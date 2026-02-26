@@ -3391,3 +3391,13 @@
 - [x] Add periodic token refresh safeguard in polling loop (proactiveRefreshAllTokens at start of each poll cycle)
 - [x] Handle single-use refresh token failure gracefully (error logged to lastError field, token not deactivated if not yet expired)
 - [x] Write tests for OAuth-aware fetch wrapper, proactive refresh, and credential helper (57 OAuth + 19 CRM + 18 ghlActions = 94 tests passing)
+
+## Missing GHL Calls Investigation (Feb 2026)
+- [x] Investigate why some GHL calls may be missing from Gunner
+- [x] Check error handling pipeline — where do failed/stuck calls go
+- [x] Verify "Needs Review" section in Call History shows errors properly
+- [x] Fix any issues found in call sync or error routing
+- [x] Fix GHL polling: add pagination to fetch ALL conversations (was limited to 25)
+- [x] Track skipped calls in DB: unmatched team member and no-recording calls now create skipped records
+- [x] Improve Skipped tab UI: separate sync-skipped (amber warning) from classification-skipped
+- [x] Add pagination tests (21 tests passing)

@@ -261,51 +261,101 @@ async function fetchGHLConversations(params: {
   limit?: number;
 }): Promise<GHLConversation[]> {
   const { startDate, limit = 100 } = params;
-
-  const url = new URL(`${GHL_API_BASE}/conversations/search`);
   const creds = getActiveCredentials();
-  url.searchParams.set("locationId", creds.locationId);
-  url.searchParams.set("limit", limit.toString());
-  url.searchParams.set("sortBy", "last_message_date");
-  url.searchParams.set("sortOrder", "desc");
+  const allPhoneConversations: GHLConversation[] = [];
+  const MAX_PAGES = 5; // Safety cap: 5 pages × 100 = 500 conversations max
+  let cursor: number | undefined = undefined; // startAfterDate cursor for pagination
 
-  // Fail fast: skip if circuit breaker is open
-  if (!ghlCircuitBreaker.canProceed("normal")) {
-    console.log(`[GHL] Circuit breaker open — skipping fetchGHLConversations`);
-    return [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    // Fail fast: skip if circuit breaker is open
+    if (!ghlCircuitBreaker.canProceed("normal")) {
+      console.log(`[GHL] Circuit breaker open — skipping fetchGHLConversations (page ${page})`);
+      break;
+    }
+
+    const url = new URL(`${GHL_API_BASE}/conversations/search`);
+    url.searchParams.set("locationId", creds.locationId);
+    url.searchParams.set("limit", limit.toString());
+    url.searchParams.set("sortBy", "last_message_date");
+    url.searchParams.set("sortOrder", "desc");
+    if (cursor !== undefined) {
+      url.searchParams.set("startAfterDate", cursor.toString());
+    }
+
+    // Rate-limit: add 1.5s delay between pages (not on first page)
+    if (page > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+
+    ghlCircuitBreaker.recordRequest();
+    const response = await oauthAwareFetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${creds.apiKey}`,
+        "Version": "2021-07-28",
+        "Accept": "application/json",
+      },
+    }, {
+      tenantId: creds.tenantId,
+      isOAuth: creds.isOAuth,
+      apiKey: creds.apiKey,
+      onTokenRefreshed: (t) => { creds.apiKey = t; },
+    });
+
+    if (response.status === 429) {
+      ghlCircuitBreaker.record429();
+      console.log(`[GHL] Rate limited (429) fetching conversations page ${page} — failing fast, returning what we have`);
+      break;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[GHL] API error on page ${page}: ${response.status} - ${errorText}`);
+      if (page === 0) {
+        throw new Error(`GHL API error: ${response.status}`);
+      }
+      break; // Return what we have from previous pages
+    }
+
+    ghlCircuitBreaker.recordSuccess();
+    const data: GHLSearchResponse = await response.json();
+    const conversations = data.conversations || [];
+    const phoneConversations = conversations.filter(c => c.type === "TYPE_PHONE");
+    allPhoneConversations.push(...phoneConversations);
+
+    console.log(`[GHL] Page ${page}: ${conversations.length} total conversations, ${phoneConversations.length} phone (running total: ${allPhoneConversations.length})`);
+
+    // Stop pagination if:
+    // 1. We got fewer results than the limit (no more pages)
+    // 2. All conversations on this page are older than our startDate (no point going further)
+    // 3. No conversations returned
+    if (conversations.length < limit || conversations.length === 0) {
+      console.log(`[GHL] Pagination complete — got ${conversations.length} < ${limit} on page ${page}`);
+      break;
+    }
+
+    // If we have a startDate, check if the oldest conversation on this page is already older
+    if (startDate) {
+      const oldestConv = conversations[conversations.length - 1];
+      const oldestDate = oldestConv.lastMessageDate || oldestConv.dateUpdated || oldestConv.dateAdded;
+      if (oldestDate && oldestDate < startDate.getTime()) {
+        console.log(`[GHL] Pagination complete — oldest conversation on page ${page} is before startDate`);
+        break;
+      }
+    }
+
+    // Set cursor for next page using the last conversation's sort value (lastMessageDate)
+    const lastConv = conversations[conversations.length - 1];
+    const lastSortValue = lastConv.lastMessageDate || lastConv.dateUpdated || lastConv.dateAdded;
+    if (!lastSortValue) {
+      console.log(`[GHL] Pagination complete — no sort value on last conversation of page ${page}`);
+      break;
+    }
+    cursor = lastSortValue;
   }
 
-  ghlCircuitBreaker.recordRequest();
-  const response = await oauthAwareFetch(url.toString(), {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${creds.apiKey}`,
-      "Version": "2021-07-28",
-      "Accept": "application/json",
-    },
-  }, {
-    tenantId: creds.tenantId,
-    isOAuth: creds.isOAuth,
-    apiKey: creds.apiKey,
-    onTokenRefreshed: (t) => { creds.apiKey = t; },
-  });
-
-  if (response.status === 429) {
-    ghlCircuitBreaker.record429();
-    console.log(`[GHL] Rate limited (429) fetching conversations — failing fast, no retry`);
-    return [];
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[GHL] API error: ${response.status} - ${errorText}`);
-    throw new Error(`GHL API error: ${response.status}`);
-  }
-
-  ghlCircuitBreaker.recordSuccess();
-  const data: GHLSearchResponse = await response.json();
-  const phoneConversations = data.conversations?.filter(c => c.type === "TYPE_PHONE") || [];
-  return phoneConversations;
+  console.log(`[GHL] Total phone conversations fetched: ${allPhoneConversations.length}`);
+  return allPhoneConversations;
 }
 
 /**
@@ -489,33 +539,32 @@ export async function fetchGHLCalls(params: {
   endDate?: Date;
   limit?: number;
 }): Promise<ProcessedGHLCall[]> {
-  // Reduced from 100 to 25 to minimize GHL API calls per poll cycle
-  // Each conversation = 1 additional message fetch, so 25 conversations = ~26 API calls
-  const { startDate, limit = 25 } = params;
+  // Pagination now handled by fetchGHLConversations — fetches all pages automatically
+  // limit here controls per-page size passed to GHL API (default 100)
+  const { startDate, limit = 100 } = params;
 
-  console.log(`[GHL] Fetching conversations...`);
+  console.log(`[GHL] Fetching conversations with pagination...`);
   const conversations = await fetchGHLConversations({ startDate, limit });
-  console.log(`[GHL] Found ${conversations.length} phone conversations`);
-  
-  // Debug: Check if Joyce's conversation is in the list
-  const joyceConv = conversations.find(c => c.id === '0LgsID8DjHifNZp89VQv');
-  if (joyceConv) {
-    console.log(`[GHL] DEBUG: Found Joyce Garvin's conversation: ${joyceConv.id}`);
-  } else {
-    console.log(`[GHL] DEBUG: Joyce Garvin's conversation NOT found in ${conversations.length} conversations`);
-  }
+  console.log(`[GHL] Found ${conversations.length} phone conversations across all pages`);
 
   const allCalls: ProcessedGHLCall[] = [];
+  let dateFilteredOut = 0;
 
   // Fetch messages for each conversation to find calls with recordings
   // Add spacing between requests to avoid GHL rate limiting (100 req/min limit)
   for (let convIdx = 0; convIdx < conversations.length; convIdx++) {
     const conv = conversations[convIdx];
     // Add 1.5s delay between conversation message fetches to stay under rate limit
-    // With 25 conversations, this spreads ~26 API calls over ~37 seconds
     if (convIdx > 0) {
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
+
+    // Fail fast: stop fetching messages if circuit breaker tripped mid-loop
+    if (!ghlCircuitBreaker.canProceed("normal")) {
+      console.log(`[GHL] Circuit breaker tripped mid-fetch at conversation ${convIdx}/${conversations.length} — returning ${allCalls.length} calls found so far`);
+      break;
+    }
+
     const messages = await fetchConversationMessages(conv.id);
     const calls = extractCallsFromMessages(conv, messages);
     
@@ -526,9 +575,8 @@ export async function fetchGHLCalls(params: {
         const callTime = new Date(c.dateAdded).getTime();
         if (callTime >= startTime) {
           allCalls.push(c);
-          console.log(`[GHL] Including call ${c.id} (${c.duration}s) from ${c.dateAdded}`);
         } else {
-          console.log(`[GHL] Filtering out call ${c.id} - date ${c.dateAdded} is before ${startDate.toISOString()}`);
+          dateFilteredOut++;
         }
       }
     } else {
@@ -536,7 +584,7 @@ export async function fetchGHLCalls(params: {
     }
   }
 
-  console.log(`[GHL] Found ${allCalls.length} calls with duration > 10 seconds`);
+  console.log(`[GHL] Found ${allCalls.length} calls with duration > 10 seconds${dateFilteredOut > 0 ? ` (${dateFilteredOut} filtered out by date)` : ''}`);
   return allCalls;
 }
 
@@ -644,8 +692,33 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
   }
   
   if (!teamMember) {
-    console.log(`[GHL] Could not match team member for call ${ghlCall.id} (userId: ${ghlCall.userId}, userName: ${ghlCall.userName || 'unknown'})`);
-    return { success: true, skipped: true, reason: "Could not match team member" };
+    const skipReason = `Could not match team member (GHL userId: ${ghlCall.userId || 'none'}, userName: ${ghlCall.userName || 'unknown'})`;
+    console.log(`[GHL] ${skipReason} for call ${ghlCall.id}`);
+    // Create a skipped call record so it shows in Needs Review for admin visibility
+    try {
+      await createCall({
+        ghlCallId: ghlCall.id,
+        ghlContactId: ghlCall.contactId,
+        contactName: ghlCall.contactName,
+        contactPhone: ghlCall.contactPhone,
+        duration: ghlCall.duration,
+        callDirection: ghlCall.direction || "outbound",
+        callType: "qualification",
+        status: "skipped",
+        classification: "pending",
+        classificationReason: skipReason,
+        callTimestamp: new Date(ghlCall.dateAdded),
+        tenantId: creds.tenantId,
+      });
+      console.log(`[GHL] Created skipped call record for unmatched call ${ghlCall.id}`);
+    } catch (e) {
+      // Ignore duplicate key errors (call already recorded)
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (!errMsg.includes('Duplicate')) {
+        console.warn(`[GHL] Failed to create skipped record for ${ghlCall.id}:`, e);
+      }
+    }
+    return { success: true, skipped: true, reason: skipReason };
   }
 
   try {
@@ -654,8 +727,34 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
     const recordingBuffer = await fetchCallRecording(ghlCall.id);
     
     if (!recordingBuffer) {
-      console.log(`[GHL] No recording available for call ${ghlCall.id}`);
-      return { success: true, skipped: true, reason: "No recording available" };
+      const skipReason = `No recording available from GHL (call ${ghlCall.duration}s with ${ghlCall.contactName || 'unknown contact'})`;
+      console.log(`[GHL] ${skipReason} for call ${ghlCall.id}`);
+      // Create a skipped call record so admins can see it in Needs Review
+      try {
+        await createCall({
+          ghlCallId: ghlCall.id,
+          ghlContactId: ghlCall.contactId,
+          contactName: ghlCall.contactName,
+          contactPhone: ghlCall.contactPhone,
+          duration: ghlCall.duration,
+          callDirection: ghlCall.direction || "outbound",
+          teamMemberId: teamMember.id,
+          teamMemberName: teamMember.name,
+          callType: teamMember.role === "lead_generator" ? "cold_call" : "qualification",
+          status: "skipped",
+          classification: "pending",
+          classificationReason: skipReason,
+          callTimestamp: new Date(ghlCall.dateAdded),
+          tenantId: teamMember.tenantId,
+        });
+        console.log(`[GHL] Created skipped call record for no-recording call ${ghlCall.id}`);
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        if (!errMsg.includes('Duplicate')) {
+          console.warn(`[GHL] Failed to create skipped record for ${ghlCall.id}:`, e);
+        }
+      }
+      return { success: true, skipped: true, reason: skipReason };
     }
 
     // Upload to S3

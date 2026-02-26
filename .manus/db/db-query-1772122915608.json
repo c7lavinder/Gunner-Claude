@@ -1,0 +1,18 @@
+{
+  "query": "SELECT status, COUNT(*) as cnt FROM calls GROUP BY status ORDER BY cnt DESC",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT status, COUNT(*) as cnt FROM calls GROUP BY status ORDER BY cnt DESC",
+  "rows": [
+    {
+      "status": "skipped",
+      "cnt": "862"
+    },
+    {
+      "status": "completed",
+      "cnt": "421"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\tcnt\nskipped\t862\ncompleted\t421\n",
+  "stderr": "",
+  "execution_time_ms": 369
+}
