@@ -19,6 +19,7 @@ import { createTeamTrainingItem } from "./db";
 import { getTenantsWithCrm, parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
 import { runOpportunityDetection } from "./opportunityDetection";
 import { startCorrectionMonitor, stopCorrectionMonitor } from "./correctionMonitor";
+import { ghlCircuitBreaker } from "./ghlRateLimiter";
 
 // GHL API Configuration
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
@@ -154,8 +155,10 @@ async function fetchGHLUserNames(tenantId: number): Promise<Map<string, string>>
         "Version": "2021-07-28",
       },
     });
+    ghlCircuitBreaker.recordRequest();
 
     if (response.ok) {
+      ghlCircuitBreaker.recordSuccess();
       const data = await response.json() as { users?: Array<{ id: string; name?: string; firstName?: string; lastName?: string }> };
       if (data.users) {
         for (const user of data.users) {
@@ -167,6 +170,7 @@ async function fetchGHLUserNames(tenantId: number): Promise<Map<string, string>>
         console.log(`[GHL] Fetched ${userMap.size} user names for tenant ${tenantId}`);
       }
     } else {
+      if (response.status === 429) ghlCircuitBreaker.record429();
       console.warn(`[GHL] Failed to fetch users for tenant ${tenantId}: ${response.status}`);
     }
   } catch (e) {
@@ -264,11 +268,18 @@ async function fetchGHLConversations(params: {
         },
       });
 
+      ghlCircuitBreaker.recordRequest();
+
       if (response.status === 429 && attempt < maxRetries - 1) {
+        ghlCircuitBreaker.record429();
         const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, 40s, max 60s
         console.log(`[GHL] Rate limited (429) fetching conversations, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
+      }
+
+      if (response.status === 429) {
+        ghlCircuitBreaker.record429();
       }
 
       if (!response.ok) {
@@ -277,6 +288,7 @@ async function fetchGHLConversations(params: {
         throw new Error(`GHL API error: ${response.status}`);
       }
 
+      ghlCircuitBreaker.recordSuccess();
       const data: GHLSearchResponse = await response.json();
       
       // Filter for phone type conversations
@@ -315,11 +327,18 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
         },
       });
 
+    ghlCircuitBreaker.recordRequest();
+
     if (response.status === 429 && attempt < maxRetries - 1) {
+        ghlCircuitBreaker.record429();
         const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
         console.log(`[GHL] Rate limited (429) fetching messages for ${conversationId}, retrying in ${delay}ms`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
+      }
+
+      if (response.status === 429) {
+        ghlCircuitBreaker.record429();
       }
 
       if (!response.ok) {
@@ -328,6 +347,7 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
         return [];
       }
 
+      ghlCircuitBreaker.recordSuccess();
       const data: GHLMessagesResponse = await response.json();
       return data.messages?.messages || [];
     } catch (error) {
@@ -546,10 +566,13 @@ async function fetchGHLContactAddress(contactId: string): Promise<string | null>
         "Version": "2021-07-28",
       },
     });
+    ghlCircuitBreaker.recordRequest();
     if (!response.ok) {
+      if (response.status === 429) ghlCircuitBreaker.record429();
       console.warn(`[GHL] Failed to fetch contact ${contactId}: ${response.status}`);
       return null;
     }
+    ghlCircuitBreaker.recordSuccess();
     const data = await response.json();
     const contact = data.contact || data;
     // Build address from available fields
@@ -684,6 +707,14 @@ export async function pollForNewCalls(): Promise<{
   const results = { success: true, synced: 0, skipped: 0, failed: 0, errors: [] as string[] };
 
   try {
+    // Check circuit breaker before making background GHL calls
+    if (!ghlCircuitBreaker.canProceed("normal")) {
+      const status = ghlCircuitBreaker.getStatus();
+      console.log(`[GHL] Circuit breaker is ${status.state} — skipping background poll (cooldown: ${Math.round(status.cooldownRemainingMs / 1000)}s remaining)`);
+      isPolling = false;
+      return { success: true, synced: 0, skipped: 0, failed: 0, errors: ["Circuit breaker open, skipping poll"] };
+    }
+
     // Get all tenants with CRM connected
     const crmTenants = await getTenantsWithCrm();
     
@@ -1126,12 +1157,15 @@ async function fetchOpportunities(startDate?: Date): Promise<GHLOpportunity[]> {
         "Content-Type": "application/json",
       },
     });
+    ghlCircuitBreaker.recordRequest();
     
     if (!response.ok) {
+      if (response.status === 429) ghlCircuitBreaker.record429();
       console.error(`[GHL Opportunities] API error: ${response.status}`);
       return [];
     }
     
+    ghlCircuitBreaker.recordSuccess();
     const data = await response.json();
     return data.opportunities || [];
   } catch (error) {
@@ -1157,11 +1191,18 @@ async function getPipelines(): Promise<Array<{ id: string; name: string; stages:
         },
       });
       
+      ghlCircuitBreaker.recordRequest();
+
       if (response.status === 429 && attempt < maxRetries - 1) {
+        ghlCircuitBreaker.record429();
         const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
         console.log(`[GHL Pipelines] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
+      }
+
+      if (response.status === 429) {
+        ghlCircuitBreaker.record429();
       }
 
       if (!response.ok) {
@@ -1169,6 +1210,7 @@ async function getPipelines(): Promise<Array<{ id: string; name: string; stages:
         return [];
       }
       
+      ghlCircuitBreaker.recordSuccess();
       const data = await response.json();
       return data.pipelines || [];
     } catch (error) {
@@ -1253,6 +1295,13 @@ async function processNewDeal(opportunity: GHLOpportunity): Promise<boolean> {
 export async function pollOpportunities(): Promise<{ processed: number; errors: number }> {
   const result = { processed: 0, errors: 0 };
   
+  // Check circuit breaker before background GHL calls
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    const status = ghlCircuitBreaker.getStatus();
+    console.log(`[GHL Opportunities] Circuit breaker is ${status.state} — skipping opportunity poll (cooldown: ${Math.round(status.cooldownRemainingMs / 1000)}s remaining)`);
+    return result;
+  }
+
   try {
     // Get all tenants with CRM connected
     const crmTenants = await getTenantsWithCrm();

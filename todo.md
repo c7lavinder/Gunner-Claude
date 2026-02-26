@@ -3171,3 +3171,12 @@
 - [x] Frontend fix: Force needsContactSearch=true when LLM returns contactId as empty string
 - [x] Backend fix: Improve LLM prompt to always set needsContactSearch=true when no contextContactId provided
 - [x] Backend fix: Add server-side safety net in parseIntent to force needsContactSearch when contactId is empty
+
+## GHL Circuit Breaker & Contact Cache (Feb 25, 2026)
+- [x] Implement circuit breaker pattern for GHL API calls to prevent background polling from consuming all quota
+- [x] Circuit breaker should track 429 errors and pause all non-user-initiated GHL calls when tripped
+- [x] Auto-recover after cooldown period (e.g., 2-5 minutes)
+- [x] User-initiated actions (AI Coach) should have priority and bypass circuit breaker
+- [x] Add contact search caching with short TTL (5-10 min) to reduce redundant GHL API calls
+- [x] Cache should be keyed by tenantId + search query
+- [x] Cache should be invalidated on TTL expiry

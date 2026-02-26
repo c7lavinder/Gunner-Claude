@@ -13,6 +13,7 @@ import { calls, callGrades, opportunities, teamMembers, coachMessages, users } f
 import { eq, and, desc, gte, isNull, inArray, sql, not, lt } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { getTenantsWithCrm, parseCrmConfig, type TenantCrmConfig } from "./tenant";
+import { ghlCircuitBreaker } from "./ghlRateLimiter";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
@@ -421,6 +422,7 @@ async function ghlFetch(creds: GHLCredentials, path: string, retries = 3): Promi
   const url = `${GHL_API_BASE}${path}`;
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < retries; attempt++) {
+    ghlCircuitBreaker.recordRequest();
     const response = await fetch(url, {
       headers: {
         "Authorization": `Bearer ${creds.apiKey}`,
@@ -429,15 +431,20 @@ async function ghlFetch(creds: GHLCredentials, path: string, retries = 3): Promi
       },
     });
     if (response.ok) {
+      ghlCircuitBreaker.recordSuccess();
       return response.json();
     }
     const text = await response.text();
     if (response.status === 429 && attempt < retries - 1) {
+      ghlCircuitBreaker.record429();
       const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
       console.log(`[OpportunityDetection] GHL rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
       lastError = new Error(`GHL API 429: ${text}`);
       continue;
+    }
+    if (response.status === 429) {
+      ghlCircuitBreaker.record429();
     }
     throw new Error(`GHL API ${response.status}: ${text}`);
   }
@@ -4478,6 +4485,14 @@ async function isAlreadyFlagged(
 
 export async function runOpportunityDetection(tenantId?: number): Promise<{ detected: number; errors: number }> {
   const result = { detected: 0, errors: 0 };
+
+  // Check circuit breaker before making background GHL calls
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    const status = ghlCircuitBreaker.getStatus();
+    console.log(`[OpportunityDetection] Circuit breaker is ${status.state} — skipping detection run (cooldown: ${Math.round(status.cooldownRemainingMs / 1000)}s remaining)`);
+    return result;
+  }
+
   const db = await getDb();
   if (!db) return result;
 

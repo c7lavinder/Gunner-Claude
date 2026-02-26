@@ -7,6 +7,7 @@ import { getDb, getTeamMemberByUserId, getTeamMembers } from "./db";
 import { coachActionLog } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
+import { ghlCircuitBreaker, getCachedContactSearch, setCachedContactSearch } from "./ghlRateLimiter";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
@@ -44,6 +45,9 @@ export async function ghlFetch(
 
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < retries; attempt++) {
+    // Record the request in the circuit breaker sliding window
+    ghlCircuitBreaker.recordRequest();
+
     const response = await fetch(url, {
       method,
       headers,
@@ -51,6 +55,7 @@ export async function ghlFetch(
     });
 
     if (response.ok) {
+      ghlCircuitBreaker.recordSuccess();
       return response.json();
     }
 
@@ -58,11 +63,17 @@ export async function ghlFetch(
 
     // Retry on 429 (rate limit) with exponential backoff
     if (response.status === 429 && attempt < retries - 1) {
+      ghlCircuitBreaker.record429();
       const delay = Math.min(5000 * Math.pow(2, attempt), 30000); // 5s, 10s, 20s, max 30s
       console.log(`[GHL] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
       lastError = new Error(`GHL API rate limited (429)`);
       continue;
+    }
+
+    // Record final 429 even on last attempt
+    if (response.status === 429) {
+      ghlCircuitBreaker.record429();
     }
 
     throw new Error(`GHL API error: ${response.status} - ${text}`);
@@ -77,6 +88,13 @@ export async function searchContacts(
   tenantId: number,
   query: string
 ): Promise<Array<{ id: string; name: string; phone: string; email: string }>> {
+  // Check cache first to avoid redundant GHL API calls
+  const cached = getCachedContactSearch(tenantId, query);
+  if (cached) {
+    console.log(`[GHLActions] Contact search cache hit for "${query}" (${cached.length} results)`);
+    return cached;
+  }
+
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured for this tenant");
 
@@ -87,12 +105,16 @@ export async function searchContacts(
       "GET"
     );
     
-    return (data.contacts || []).map((c: any) => ({
+    const results = (data.contacts || []).map((c: any) => ({
       id: c.id,
       name: `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name || "Unknown",
       phone: c.phone || "",
       email: c.email || "",
     }));
+
+    // Cache the results for 5 minutes
+    setCachedContactSearch(tenantId, query, results);
+    return results;
   } catch (error) {
     console.error("[GHLActions] Contact search error:", error);
     throw error;
