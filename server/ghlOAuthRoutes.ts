@@ -3,15 +3,18 @@
  * 
  * Handles the OAuth install flow for GHL Marketplace App:
  * 
- * GET /api/ghl/install
+ * GET /api/crm/oauth/install
  *   → Redirects user to GHL authorization page (location picker)
  *   → Accepts optional ?tenantId query param to link installation to a tenant
  * 
- * GET /api/ghl/callback
+ * GET /api/crm/oauth/callback
  *   → Receives authorization code from GHL after user approves
  *   → Exchanges code for access/refresh tokens
  *   → Stores tokens and links to tenant
  *   → Redirects user back to app with success/error status
+ * 
+ * Note: Routes use /api/crm/oauth/* path to avoid GHL Marketplace validation
+ * rejecting URLs that contain "ghl" or "highlevel" substrings.
  */
 
 import { Router, Request, Response } from "express";
@@ -29,7 +32,7 @@ export function createGHLOAuthRouter(): Router {
   const router = Router();
 
   /**
-   * GET /api/ghl/install
+   * GET /api/crm/oauth/install
    * 
    * Initiates the GHL OAuth flow by redirecting to GHL's authorization page.
    * 
@@ -38,7 +41,7 @@ export function createGHLOAuthRouter(): Router {
    *   
    * The tenantId is encoded in the OAuth state parameter and recovered in the callback.
    */
-  router.get("/api/ghl/install", (req: Request, res: Response) => {
+  router.get("/api/crm/oauth/install", (req: Request, res: Response) => {
     if (!isOAuthConfigured()) {
       return res.status(503).json({
         error: "GHL Marketplace integration is not configured. Contact support.",
@@ -51,17 +54,17 @@ export function createGHLOAuthRouter(): Router {
       const state = tenantId ? Buffer.from(JSON.stringify({ tenantId: parseInt(tenantId) })).toString("base64") : undefined;
 
       const installUrl = getInstallUrl(state);
-      console.log(`[GHL OAuth] Redirecting to install URL${tenantId ? ` for tenant ${tenantId}` : ""}`);
+      console.log(`[CRM OAuth] Redirecting to install URL${tenantId ? ` for tenant ${tenantId}` : ""}`);
       
       return res.redirect(installUrl);
     } catch (error: any) {
-      console.error("[GHL OAuth] Install redirect error:", error);
+      console.error("[CRM OAuth] Install redirect error:", error);
       return res.status(500).json({ error: error.message });
     }
   });
 
   /**
-   * GET /api/ghl/callback
+   * GET /api/crm/oauth/callback
    * 
    * OAuth callback handler. GHL redirects here after user approves the app.
    * 
@@ -70,17 +73,17 @@ export function createGHLOAuthRouter(): Router {
    *   state: Base64-encoded state with tenantId (if provided during install)
    *   error: Error code if user denied access
    */
-  router.get("/api/ghl/callback", async (req: Request, res: Response) => {
+  router.get("/api/crm/oauth/callback", async (req: Request, res: Response) => {
     const { code, state, error: oauthError } = req.query;
 
     // Handle user denial
     if (oauthError) {
-      console.log(`[GHL OAuth] User denied access: ${oauthError}`);
+      console.log(`[CRM OAuth] User denied access: ${oauthError}`);
       return res.redirect("/?ghl_oauth=denied");
     }
 
     if (!code || typeof code !== "string") {
-      console.error("[GHL OAuth] Callback missing authorization code");
+      console.error("[CRM OAuth] Callback missing authorization code");
       return res.redirect("/?ghl_oauth=error&reason=missing_code");
     }
 
@@ -89,7 +92,7 @@ export function createGHLOAuthRouter(): Router {
       const tokenResponse = await exchangeCodeForTokens(code);
       
       if (!tokenResponse.locationId) {
-        console.error("[GHL OAuth] Token response missing locationId");
+        console.error("[CRM OAuth] Token response missing locationId");
         return res.redirect("/?ghl_oauth=error&reason=missing_location");
       }
 
@@ -101,7 +104,7 @@ export function createGHLOAuthRouter(): Router {
           const decoded = JSON.parse(Buffer.from(state, "base64").toString("utf-8"));
           tenantId = decoded.tenantId || null;
         } catch {
-          console.warn("[GHL OAuth] Failed to decode state parameter");
+          console.warn("[CRM OAuth] Failed to decode state parameter");
         }
       }
 
@@ -125,8 +128,7 @@ export function createGHLOAuthRouter(): Router {
 
       if (!tenantId) {
         // No matching tenant found — user needs to complete onboarding first
-        // Store the token data in a temporary way so the onboarding can pick it up
-        console.warn(`[GHL OAuth] No tenant found for location ${tokenResponse.locationId}. Redirecting to onboarding.`);
+        console.warn(`[CRM OAuth] No tenant found for location ${tokenResponse.locationId}. Redirecting to onboarding.`);
         
         // Encode the location info in the redirect so the frontend can use it
         const params = new URLSearchParams({
@@ -161,31 +163,31 @@ export function createGHLOAuthRouter(): Router {
 
       // Mark tenant as webhook-active (Marketplace apps get automatic webhooks from GHL)
       markTenantWebhookActiveFromOAuth(tenantId).catch((err: any) => {
-        console.error(`[GHL OAuth] Failed to mark webhook active for tenant ${tenantId}:`, err);
+        console.error(`[CRM OAuth] Failed to mark webhook active for tenant ${tenantId}:`, err);
       });
 
       // Trigger batch contact import
       triggerContactImportIfNeeded(tenantId).catch(err => {
-        console.error(`[GHL OAuth] Failed to trigger contact import for tenant ${tenantId}:`, err);
+        console.error(`[CRM OAuth] Failed to trigger contact import for tenant ${tenantId}:`, err);
       });
 
-      console.log(`[GHL OAuth] Successfully connected tenant ${tenantId} to location ${tokenResponse.locationId}`);
+      console.log(`[CRM OAuth] Successfully connected tenant ${tenantId} to location ${tokenResponse.locationId}`);
       
       // Redirect back to the app with success
       return res.redirect(`/?ghl_oauth=success&locationId=${tokenResponse.locationId}`);
     } catch (error: any) {
-      console.error("[GHL OAuth] Callback error:", error);
+      console.error("[CRM OAuth] Callback error:", error);
       return res.redirect(`/?ghl_oauth=error&reason=${encodeURIComponent(error.message?.substring(0, 100) || "unknown")}`);
     }
   });
 
   /**
-   * GET /api/ghl/status
+   * GET /api/crm/oauth/status
    * 
    * Returns the OAuth connection status for the current user's tenant.
    * Used by the frontend to show connection state.
    */
-  router.get("/api/ghl/status", async (req: Request, res: Response) => {
+  router.get("/api/crm/oauth/status", async (req: Request, res: Response) => {
     // This is a simple status endpoint — auth is handled at the tRPC level
     // For now, return whether OAuth is configured at the app level
     return res.json({

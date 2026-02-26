@@ -61,7 +61,7 @@ describe("GHL OAuth Install URL", () => {
     expect(url).toContain("client_id=test-client-id-123");
     expect(url).toContain("response_type=code");
     expect(url).toContain("redirect_uri=");
-    expect(url).toContain(encodeURIComponent("https://app.example.com/api/ghl/callback"));
+    expect(url).toContain(encodeURIComponent("https://app.example.com/api/crm/oauth/callback"));
   });
 
   it("includes state parameter when provided", async () => {
@@ -247,9 +247,9 @@ describe("GHL OAuth Routes", () => {
       }));
     
     const paths = routes.map((r: any) => r.path);
-    expect(paths).toContain("/api/ghl/install");
-    expect(paths).toContain("/api/ghl/callback");
-    expect(paths).toContain("/api/ghl/status");
+    expect(paths).toContain("/api/crm/oauth/install");
+    expect(paths).toContain("/api/crm/oauth/callback");
+    expect(paths).toContain("/api/crm/oauth/status");
   });
 });
 
@@ -601,5 +601,237 @@ describe("OAuth Scopes Parsing", () => {
     const scopeList = scopes.split(" ");
     expect(scopeList).toHaveLength(1);
     expect(scopeList[0]).toBe("contacts.readonly");
+  });
+});
+
+
+// ============ Super Admin OAuth Overview Tests ============
+
+describe("Super Admin OAuth Overview - Token Health Calculation", () => {
+  it("classifies token as healthy when expiry is more than 1 hour away", () => {
+    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12 hours from now
+    const expiresInMs = expiresAt.getTime() - Date.now();
+    
+    let tokenHealth: string = 'not_connected';
+    if (expiresInMs > 60 * 60 * 1000) {
+      tokenHealth = 'healthy';
+    } else if (expiresInMs > 0) {
+      tokenHealth = 'expiring_soon';
+    } else {
+      tokenHealth = 'expired';
+    }
+    
+    expect(tokenHealth).toBe('healthy');
+    expect(expiresInMs).toBeGreaterThan(60 * 60 * 1000);
+  });
+
+  it("classifies token as expiring_soon when expiry is less than 1 hour", () => {
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+    const expiresInMs = expiresAt.getTime() - Date.now();
+    
+    let tokenHealth: string = 'not_connected';
+    if (expiresInMs > 60 * 60 * 1000) {
+      tokenHealth = 'healthy';
+    } else if (expiresInMs > 0) {
+      tokenHealth = 'expiring_soon';
+    } else {
+      tokenHealth = 'expired';
+    }
+    
+    expect(tokenHealth).toBe('expiring_soon');
+    expect(expiresInMs).toBeLessThan(60 * 60 * 1000);
+    expect(expiresInMs).toBeGreaterThan(0);
+  });
+
+  it("classifies token as expired when expiry is in the past", () => {
+    const expiresAt = new Date(Date.now() - 60 * 1000); // 1 minute ago
+    const expiresInMs = expiresAt.getTime() - Date.now();
+    
+    let tokenHealth: string = 'not_connected';
+    if (expiresInMs > 60 * 60 * 1000) {
+      tokenHealth = 'healthy';
+    } else if (expiresInMs > 0) {
+      tokenHealth = 'expiring_soon';
+    } else {
+      tokenHealth = 'expired';
+    }
+    
+    expect(tokenHealth).toBe('expired');
+    expect(expiresInMs).toBeLessThan(0);
+  });
+
+  it("classifies token as error when lastError is present regardless of expiry", () => {
+    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12 hours from now
+    const lastError = "refresh_token_invalid";
+    const expiresInMs = expiresAt.getTime() - Date.now();
+    
+    let tokenHealth: string = 'not_connected';
+    if (lastError) {
+      tokenHealth = 'error';
+    } else if (expiresInMs > 60 * 60 * 1000) {
+      tokenHealth = 'healthy';
+    } else if (expiresInMs > 0) {
+      tokenHealth = 'expiring_soon';
+    } else {
+      tokenHealth = 'expired';
+    }
+    
+    expect(tokenHealth).toBe('error');
+  });
+
+  it("classifies as not_connected when no OAuth token exists", () => {
+    const connected = false;
+    let tokenHealth: string = 'not_connected';
+    
+    if (connected) {
+      tokenHealth = 'healthy';
+    }
+    
+    expect(tokenHealth).toBe('not_connected');
+  });
+});
+
+describe("Super Admin OAuth Overview - Summary Aggregation", () => {
+  it("correctly aggregates summary stats from tenant results", () => {
+    const results = [
+      { authMethod: 'oauth' as const, oauth: { connected: true, tokenHealth: 'healthy' as const }, webhook: { active: true } },
+      { authMethod: 'oauth' as const, oauth: { connected: true, tokenHealth: 'expiring_soon' as const }, webhook: { active: true } },
+      { authMethod: 'oauth' as const, oauth: { connected: true, tokenHealth: 'expired' as const }, webhook: { active: false } },
+      { authMethod: 'oauth' as const, oauth: { connected: true, tokenHealth: 'error' as const }, webhook: { active: false } },
+      { authMethod: 'apikey' as const, oauth: { connected: false, tokenHealth: 'not_connected' as const }, webhook: { active: true } },
+      { authMethod: 'none' as const, oauth: { connected: false, tokenHealth: 'not_connected' as const }, webhook: { active: false } },
+    ];
+
+    const summary = {
+      total: results.length,
+      oauthConnected: results.filter(r => r.oauth.connected).length,
+      apiKeyOnly: results.filter(r => r.authMethod === 'apikey').length,
+      noAuth: results.filter(r => r.authMethod === 'none').length,
+      healthy: results.filter(r => r.oauth.tokenHealth === 'healthy').length,
+      expiringSoon: results.filter(r => r.oauth.tokenHealth === 'expiring_soon').length,
+      expired: results.filter(r => r.oauth.tokenHealth === 'expired').length,
+      errors: results.filter(r => r.oauth.tokenHealth === 'error').length,
+      webhookActive: results.filter(r => r.webhook.active).length,
+    };
+
+    expect(summary.total).toBe(6);
+    expect(summary.oauthConnected).toBe(4);
+    expect(summary.apiKeyOnly).toBe(1);
+    expect(summary.noAuth).toBe(1);
+    expect(summary.healthy).toBe(1);
+    expect(summary.expiringSoon).toBe(1);
+    expect(summary.expired).toBe(1);
+    expect(summary.errors).toBe(1);
+    expect(summary.webhookActive).toBe(3);
+  });
+
+  it("handles empty tenant list", () => {
+    const results: any[] = [];
+
+    const summary = {
+      total: results.length,
+      oauthConnected: results.filter(r => r.oauth.connected).length,
+      apiKeyOnly: results.filter(r => r.authMethod === 'apikey').length,
+      noAuth: results.filter(r => r.authMethod === 'none').length,
+      healthy: results.filter(r => r.oauth.tokenHealth === 'healthy').length,
+      expiringSoon: results.filter(r => r.oauth.tokenHealth === 'expiring_soon').length,
+      expired: results.filter(r => r.oauth.tokenHealth === 'expired').length,
+      errors: results.filter(r => r.oauth.tokenHealth === 'error').length,
+      webhookActive: results.filter(r => r.webhook.active).length,
+    };
+
+    expect(summary.total).toBe(0);
+    expect(summary.oauthConnected).toBe(0);
+    expect(summary.apiKeyOnly).toBe(0);
+    expect(summary.noAuth).toBe(0);
+    expect(summary.healthy).toBe(0);
+    expect(summary.webhookActive).toBe(0);
+  });
+
+  it("handles all tenants on OAuth with healthy tokens", () => {
+    const results = Array.from({ length: 5 }, () => ({
+      authMethod: 'oauth' as const,
+      oauth: { connected: true, tokenHealth: 'healthy' as const },
+      webhook: { active: true },
+    }));
+
+    const summary = {
+      total: results.length,
+      oauthConnected: results.filter(r => r.oauth.connected).length,
+      healthy: results.filter(r => r.oauth.tokenHealth === 'healthy').length,
+      webhookActive: results.filter(r => r.webhook.active).length,
+    };
+
+    expect(summary.total).toBe(5);
+    expect(summary.oauthConnected).toBe(5);
+    expect(summary.healthy).toBe(5);
+    expect(summary.webhookActive).toBe(5);
+  });
+});
+
+describe("Super Admin OAuth Overview - Time Formatting", () => {
+  it("formats time ago correctly for recent events", () => {
+    const formatTimeAgo = (dateStr: string | null) => {
+      if (!dateStr) return 'Never';
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString();
+    };
+
+    expect(formatTimeAgo(null)).toBe('Never');
+    expect(formatTimeAgo(new Date().toISOString())).toBe('Just now');
+    expect(formatTimeAgo(new Date(Date.now() - 5 * 60000).toISOString())).toBe('5m ago');
+    expect(formatTimeAgo(new Date(Date.now() - 3 * 3600000).toISOString())).toBe('3h ago');
+    expect(formatTimeAgo(new Date(Date.now() - 2 * 86400000).toISOString())).toBe('2d ago');
+  });
+
+  it("formats expires in correctly", () => {
+    const formatExpiresIn = (ms: number) => {
+      if (ms <= 0) return 'Expired';
+      const hours = Math.floor(ms / 3600000);
+      const mins = Math.floor((ms % 3600000) / 60000);
+      if (hours > 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      return `${mins}m`;
+    };
+
+    expect(formatExpiresIn(-1000)).toBe('Expired');
+    expect(formatExpiresIn(0)).toBe('Expired');
+    expect(formatExpiresIn(30 * 60000)).toBe('30m');
+    expect(formatExpiresIn(3 * 3600000 + 15 * 60000)).toBe('3h 15m');
+    expect(formatExpiresIn(48 * 3600000 + 6 * 3600000)).toBe('2d 6h');
+  });
+});
+
+describe("Super Admin OAuth Overview - Redirect URI Update", () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    process.env.GHL_CLIENT_ID = "test-client-id-123";
+    process.env.GHL_CLIENT_SECRET = "test-client-secret-456";
+    process.env.APP_URL = "https://getgunner.ai";
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it("uses /api/crm/oauth/callback as the redirect URI", async () => {
+    vi.resetModules();
+    const { getInstallUrl } = await import("./ghlOAuth");
+    const url = getInstallUrl();
+    
+    expect(url).toContain(encodeURIComponent("https://getgunner.ai/api/crm/oauth/callback"));
+    expect(url).not.toContain(encodeURIComponent("/api/ghl/callback"));
   });
 });

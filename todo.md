@@ -3358,3 +3358,23 @@
 - [x] Show auth method badge (OAuth vs API Key) per tenant
 - [x] Add manual "Refresh Token" button for troubleshooting
 - [x] Show webhook registration status alongside OAuth status
+
+## GHL Marketplace App Setup & Super Admin OAuth Overview (Feb 2026)
+
+### GHL Marketplace App Setup Guide
+- [x] Provide step-by-step instructions for creating GHL Marketplace App
+- [x] Document required redirect URI configuration (https://getgunner.ai/api/crm/oauth/callback)
+- [x] Guide user to paste Client ID and Secret into Settings
+
+### Super Admin OAuth Overview
+- [x] Create tRPC procedure to fetch OAuth token status for ALL tenants (super_admin only)
+- [x] Build OAuth overview table in super admin panel with columns: tenant name, auth method, token health, location ID, last refreshed, last error
+- [x] Add color-coded health badges per tenant row
+- [x] Add force-refresh button per tenant and expandable detail rows for troubleshooting
+- [x] Write tests for token health classification, summary aggregation, time formatting, and redirect URI
+
+### OAuth Route Rename (GHL Marketplace Validation Fix)
+- [x] Rename /api/ghl/install to /api/crm/oauth/install
+- [x] Rename /api/ghl/callback to /api/crm/oauth/callback
+- [x] Rename /api/ghl/status to /api/crm/oauth/status
+- [x] Update all references in ghlOAuth.ts (redirect_uri), ghlOAuthRoutes.ts, and frontend

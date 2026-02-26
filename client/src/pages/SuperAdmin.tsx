@@ -403,6 +403,7 @@ export default function SuperAdmin() {
           <button className={`obs-role-tab ${activeTab === "alerts" ? "active" : ""}`} onClick={() => setActiveTab("alerts")}>Alerts</button>
           <button className={`obs-role-tab ${activeTab === "plans" ? "active" : ""}`} onClick={() => setActiveTab("plans")}>Plans</button>
           <button className={`obs-role-tab ${activeTab === "emails" ? "active" : ""}`} onClick={() => setActiveTab("emails")}>Emails</button>
+          <button className={`obs-role-tab ${activeTab === "oauth" ? "active" : ""}`} onClick={() => setActiveTab("oauth")}>OAuth</button>
         </div>
 
         {activeTab === "overview" && (<div key="overview" className="space-y-6 obs-fade-in">
@@ -1470,6 +1471,8 @@ export default function SuperAdmin() {
             />
           )}
         </div>)}
+
+        {activeTab === "oauth" && <OAuthOverviewTab />}
       </div>
     </div>
   );
@@ -1720,6 +1723,291 @@ function TenantDetailPanel({
               </table>
             </div>
           )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ============ OAuth Overview Tab Component ============
+
+function OAuthOverviewTab() {
+  const { data, isLoading, refetch } = trpc.tenant.getAllOAuthHealth.useQuery(undefined, {
+    refetchInterval: 60000, // Auto-refresh every 60 seconds
+  });
+  const [refreshingTenant, setRefreshingTenant] = useState<number | null>(null);
+  const [expandedTenant, setExpandedTenant] = useState<number | null>(null);
+
+  const forceRefresh = trpc.tenant.forceRefreshTenantOAuth.useMutation({
+    onSuccess: () => {
+      toast.success("Token refreshed successfully");
+      setRefreshingTenant(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to refresh token");
+      setRefreshingTenant(null);
+    },
+  });
+
+  const handleForceRefresh = (tenantId: number) => {
+    setRefreshingTenant(tenantId);
+    forceRefresh.mutate({ tenantId });
+  };
+
+  const getHealthBadge = (health: string) => {
+    switch (health) {
+      case 'healthy':
+        return <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" />Healthy</Badge>;
+      case 'expiring_soon':
+        return <Badge className="bg-amber-100 text-amber-700"><Clock className="h-3 w-3 mr-1" />Expiring</Badge>;
+      case 'expired':
+        return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />Expired</Badge>;
+      case 'error':
+        return <Badge className="bg-red-100 text-red-700"><XCircle className="h-3 w-3 mr-1" />Error</Badge>;
+      default:
+        return <Badge variant="outline">Not Connected</Badge>;
+    }
+  };
+
+  const getAuthMethodBadge = (method: string) => {
+    switch (method) {
+      case 'oauth':
+        return <Badge className="bg-blue-100 text-blue-700">OAuth</Badge>;
+      case 'apikey':
+        return <Badge className="bg-purple-100 text-purple-700">API Key</Badge>;
+      default:
+        return <Badge variant="outline">None</Badge>;
+    }
+  };
+
+  const formatTimeAgo = (dateStr: string | null) => {
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const formatExpiresIn = (ms: number) => {
+    if (ms <= 0) return 'Expired';
+    const hours = Math.floor(ms / 3600000);
+    const mins = Math.floor((ms % 3600000) / 60000);
+    if (hours > 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  };
+
+  if (isLoading) {
+    return (
+      <div key="oauth" className="space-y-6 obs-fade-in">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="obs-panel"><Skeleton className="h-16 w-full" /></div>
+          ))}
+        </div>
+        <div className="obs-panel"><Skeleton className="h-64 w-full" /></div>
+      </div>
+    );
+  }
+
+  const summary = data?.summary;
+  const tenantsList = data?.tenants || [];
+
+  return (
+    <div key="oauth" className="space-y-6 obs-fade-in">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="obs-panel">
+          <div className="pb-2" style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--obs-text-tertiary)', marginTop: 4 }}>OAuth Connected</p>
+            <h3 className="obs-section-title text-3xl flex items-center gap-2">
+              <CheckCircle className="h-6 w-6 text-green-500" />
+              {summary?.oauthConnected || 0}
+            </h3>
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="pb-2" style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--obs-text-tertiary)', marginTop: 4 }}>API Key Only</p>
+            <h3 className="obs-section-title text-3xl flex items-center gap-2">
+              <Settings className="h-6 w-6 text-purple-500" />
+              {summary?.apiKeyOnly || 0}
+            </h3>
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="pb-2" style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--obs-text-tertiary)', marginTop: 4 }}>Healthy Tokens</p>
+            <h3 className="obs-section-title text-3xl flex items-center gap-2">
+              <Activity className="h-6 w-6 text-green-500" />
+              {summary?.healthy || 0}
+            </h3>
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="pb-2" style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--obs-text-tertiary)', marginTop: 4 }}>Needs Attention</p>
+            <h3 className="obs-section-title text-3xl flex items-center gap-2">
+              <AlertTriangle className="h-6 w-6 text-amber-500" />
+              {(summary?.expiringSoon || 0) + (summary?.expired || 0) + (summary?.errors || 0)}
+            </h3>
+          </div>
+        </div>
+        <div className="obs-panel">
+          <div className="pb-2" style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--obs-text-tertiary)', marginTop: 4 }}>Webhooks Active</p>
+            <h3 className="obs-section-title text-3xl flex items-center gap-2">
+              <Activity className="h-6 w-6 text-blue-500" />
+              {summary?.webhookActive || 0}
+            </h3>
+          </div>
+        </div>
+      </div>
+
+      {/* OAuth Config Status */}
+      {!data?.oauthConfigured && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-amber-900">OAuth Not Configured</p>
+            <p className="text-sm text-amber-700">GHL_CLIENT_ID and GHL_CLIENT_SECRET are not set. OAuth connections are unavailable.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Tenants Table */}
+      <div className="obs-panel">
+        <div style={{ marginBottom: 16 }}>
+          <div className="flex items-center justify-between">
+            <h3 className="obs-section-title">All Tenants OAuth Status</h3>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--obs-text-tertiary)', marginTop: 4 }}>
+            {tenantsList.length} tenant{tenantsList.length !== 1 ? 's' : ''} total
+          </p>
+        </div>
+
+        <div className="border rounded-md overflow-x-auto">
+          <table className="obs-table">
+            <thead>
+              <tr>
+                <th>Tenant</th>
+                <th>Auth Method</th>
+                <th>Token Health</th>
+                <th>Location ID</th>
+                <th>Last Refreshed</th>
+                <th>Webhook</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tenantsList.map((t) => (
+                <>
+                  <tr key={t.tenantId} className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedTenant(expandedTenant === t.tenantId ? null : t.tenantId)}>
+                    <td>
+                      <div>
+                        <span className="font-medium">{t.tenantName}</span>
+                        <span className="text-xs text-muted-foreground ml-2">({t.tenantSlug})</span>
+                      </div>
+                    </td>
+                    <td>{getAuthMethodBadge(t.authMethod)}</td>
+                    <td>{getHealthBadge(t.oauth.tokenHealth)}</td>
+                    <td>
+                      <span className="text-xs font-mono">{t.locationId ? t.locationId.substring(0, 12) + '...' : '-'}</span>
+                    </td>
+                    <td>
+                      <span className="text-sm">{formatTimeAgo(t.oauth.lastRefreshedAt)}</span>
+                    </td>
+                    <td>
+                      {t.webhook.active ? (
+                        <Badge className="bg-green-100 text-green-700">Active</Badge>
+                      ) : (
+                        <Badge variant="outline">Inactive</Badge>
+                      )}
+                    </td>
+                    <td>
+                      {t.oauth.connected && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={refreshingTenant === t.tenantId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleForceRefresh(t.tenantId);
+                          }}
+                        >
+                          {refreshingTenant === t.tenantId ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3 w-3" />
+                          )}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                  {expandedTenant === t.tenantId && (
+                    <tr key={`${t.tenantId}-detail`}>
+                      <td colSpan={7} className="bg-muted/30 p-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Token Expires In</p>
+                            <p className="font-medium">{t.oauth.connected ? formatExpiresIn(t.oauth.expiresInMs) : 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Expires At</p>
+                            <p className="font-medium">{t.oauth.expiresAt ? new Date(t.oauth.expiresAt).toLocaleString() : 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Last Webhook Event</p>
+                            <p className="font-medium">{formatTimeAgo(t.webhook.lastEventAt)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Subscription</p>
+                            <p className="font-medium capitalize">{t.subscriptionStatus || 'Unknown'}</p>
+                          </div>
+                          {t.oauth.lastError && (
+                            <div className="col-span-full">
+                              <p className="text-muted-foreground">Last Error</p>
+                              <p className="font-medium text-red-600 text-xs font-mono bg-red-50 p-2 rounded mt-1">{t.oauth.lastError}</p>
+                            </div>
+                          )}
+                          {t.oauth.scopes && (
+                            <div className="col-span-full">
+                              <p className="text-muted-foreground">Granted Scopes</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {t.oauth.scopes.split(' ').map((scope, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">{scope}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+              {tenantsList.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="text-center py-8 text-muted-foreground">
+                    No tenants found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

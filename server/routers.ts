@@ -4795,6 +4795,97 @@ Create content that:
       return { success: true, message: 'Token refreshed successfully' };
     }),
 
+    // Super Admin: Get OAuth health status for ALL tenants
+    getAllOAuthHealth: protectedProcedure.query(async ({ ctx }) => {
+      const { hasPlatformAccess, getAllTenants } = await import("./tenant");
+      if (!hasPlatformAccess(ctx.user || {})) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+      }
+      const { getOAuthStatus, isOAuthConfigured, getAuthMethod } = await import("./ghlOAuth");
+      const { parseCrmConfig } = await import("./tenant");
+      const allTenants = await getAllTenants();
+      const oauthConfigured = isOAuthConfigured();
+
+      const results = await Promise.all(
+        allTenants.map(async (tenant) => {
+          const oauthStatus = await getOAuthStatus(tenant.id);
+          const authMethod = await getAuthMethod(tenant.id);
+          const config = parseCrmConfig({ crmConfig: tenant.crmConfig as string | null });
+
+          // Calculate token health
+          let tokenHealth: 'healthy' | 'expiring_soon' | 'expired' | 'error' | 'not_connected' = 'not_connected';
+          let expiresInMs = 0;
+          if (oauthStatus.connected && oauthStatus.expiresAt) {
+            expiresInMs = new Date(oauthStatus.expiresAt).getTime() - Date.now();
+            if (oauthStatus.lastError) {
+              tokenHealth = 'error';
+            } else if (expiresInMs <= 0) {
+              tokenHealth = 'expired';
+            } else if (expiresInMs < 60 * 60 * 1000) {
+              tokenHealth = 'expiring_soon';
+            } else {
+              tokenHealth = 'healthy';
+            }
+          }
+
+          return {
+            tenantId: tenant.id,
+            tenantName: tenant.name,
+            tenantSlug: tenant.slug,
+            subscriptionStatus: tenant.subscriptionStatus,
+            authMethod,
+            crmConnected: tenant.crmConnected === 'true',
+            locationId: oauthStatus.locationId || config.ghlLocationId || null,
+            oauth: {
+              connected: oauthStatus.connected,
+              tokenHealth,
+              expiresAt: oauthStatus.expiresAt?.toISOString() || null,
+              expiresInMs,
+              lastRefreshedAt: oauthStatus.lastRefreshedAt?.toISOString() || null,
+              lastError: oauthStatus.lastError || null,
+              scopes: oauthStatus.scopes || null,
+            },
+            webhook: {
+              active: tenant.webhookActive === 'true',
+              lastEventAt: tenant.lastWebhookAt?.toISOString() || null,
+            },
+          };
+        })
+      );
+
+      return {
+        oauthConfigured,
+        tenants: results,
+        summary: {
+          total: results.length,
+          oauthConnected: results.filter(r => r.oauth.connected).length,
+          apiKeyOnly: results.filter(r => r.authMethod === 'apikey').length,
+          noAuth: results.filter(r => r.authMethod === 'none').length,
+          healthy: results.filter(r => r.oauth.tokenHealth === 'healthy').length,
+          expiringSoon: results.filter(r => r.oauth.tokenHealth === 'expiring_soon').length,
+          expired: results.filter(r => r.oauth.tokenHealth === 'expired').length,
+          errors: results.filter(r => r.oauth.tokenHealth === 'error').length,
+          webhookActive: results.filter(r => r.webhook.active).length,
+        },
+      };
+    }),
+
+    // Super Admin: Force refresh OAuth token for a specific tenant
+    forceRefreshTenantOAuth: protectedProcedure
+      .input(z.object({ tenantId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { hasPlatformAccess } = await import("./tenant");
+        if (!hasPlatformAccess(ctx.user || {})) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform owner access required' });
+        }
+        const { handleTokenRefreshOn401 } = await import("./ghlOAuth");
+        const newToken = await handleTokenRefreshOn401(input.tenantId);
+        if (!newToken) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Token refresh failed. The refresh token may be expired or revoked.' });
+        }
+        return { success: true, message: 'Token refreshed successfully' };
+      }),
+
     getCrmIntegrations: protectedProcedure.query(async ({ ctx }) => {
       const { parseCrmConfig, getTenantById } = await import("./tenant");
       const { getOAuthStatus, isOAuthConfigured } = await import("./ghlOAuth");

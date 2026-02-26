@@ -56,7 +56,7 @@ export function getInstallUrl(state?: string): string {
     throw new Error("GHL_CLIENT_ID is not configured");
   }
 
-  const redirectUri = `${appUrl}/api/ghl/callback`;
+  const redirectUri = `${appUrl}/api/crm/oauth/callback`;
   const params = new URLSearchParams({
     response_type: "code",
     redirect_uri: redirectUri,
@@ -94,7 +94,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
     throw new Error("GHL OAuth credentials not configured (GHL_CLIENT_ID, GHL_CLIENT_SECRET)");
   }
 
-  const redirectUri = `${appUrl}/api/ghl/callback`;
+  const redirectUri = `${appUrl}/api/crm/oauth/callback`;
 
   const response = await fetch(GHL_TOKEN_URL, {
     method: "POST",
@@ -133,7 +133,7 @@ async function refreshTokenFromGHL(refreshToken: string): Promise<TokenResponse>
     throw new Error("GHL OAuth credentials not configured");
   }
 
-  const redirectUri = `${appUrl}/api/ghl/callback`;
+  const redirectUri = `${appUrl}/api/crm/oauth/callback`;
 
   const response = await fetch(GHL_TOKEN_URL, {
     method: "POST",
