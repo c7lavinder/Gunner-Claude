@@ -5643,7 +5643,7 @@ Return JSON with an "actions" array. Each action object has:
 - params: action-specific parameters (noteBody, message, title, description, dueDate, tags, stageName, pipelineName, fieldKey, fieldValue, workflowName, taskStatus)
 - For change_pipeline_stage: ALWAYS include stageName (the human-readable stage name the user mentioned, e.g. "pending appointment", "offer scheduled", "qualified"). Also include pipelineName if the user mentions a specific pipeline (e.g. "sales pipeline", "acquisition pipeline"). Leave pipelineId and stageId empty strings — the system will resolve the actual IDs automatically.
 - summary: a SHORT one-line summary of the action (e.g. "Send SMS to John" or "Add note to Kimberly"). The full content will be shown separately.
-- needsContactSearch: boolean - true if a contact name was mentioned but we need to search for their ID
+- needsContactSearch: boolean - MUST be true if a contact name was mentioned but we don't have their GHL contact ID. Since there is ${input.contextContactId ? 'a known contact context' : 'NO contact context available'}, you should ${input.contextContactId ? 'set needsContactSearch to false and use the provided contactId' : 'ALWAYS set needsContactSearch to true for any action that references a contact by name'}
 ${preferenceContext ? `\nWhen drafting content (SMS messages, notes, task descriptions), match this user's established style:\n${preferenceContext}` : ""}
 ${instructionContext}`
             },
@@ -5731,11 +5731,25 @@ selectedTimezone: { type: "string" },
             const validActions = parsed.actions.filter((a: any) =>
               a && typeof a.actionType === "string" && a.actionType.trim() !== "" && a.actionType !== "none" && VALID_ACTION_TYPES.includes(a.actionType)
             );
+            // Safety net: force needsContactSearch=true when LLM returned a contactName but no contactId
+            // This prevents the frontend from skipping contact resolution and creating actions without a contact ID
+            for (const action of validActions) {
+              if (action.contactName && action.contactName.trim() !== "" && (!action.contactId || action.contactId.trim() === "")) {
+                if (!action.needsContactSearch) {
+                  console.log(`[parseIntent] Forcing needsContactSearch=true for action "${action.actionType}" — contactName="${action.contactName}" but contactId is empty`);
+                  action.needsContactSearch = true;
+                }
+              }
+            }
             console.log(`[parseIntent] LLM returned ${parsed.actions.length} actions, ${validActions.length} valid. Types: ${validActions.map((a: any) => a.actionType).join(', ') || 'none'}`);
             return { actions: validActions };
           }
           // Legacy fallback: single action format
           if (parsed.actionType && parsed.actionType !== "none" && VALID_ACTION_TYPES.includes(parsed.actionType)) {
+            // Safety net for legacy format too
+            if (parsed.contactName && parsed.contactName.trim() !== "" && (!parsed.contactId || parsed.contactId.trim() === "")) {
+              parsed.needsContactSearch = true;
+            }
             console.log(`[parseIntent] Legacy format detected: ${parsed.actionType}`);
             return { actions: [parsed] };
           }

@@ -3164,3 +3164,10 @@
 ## Fix Post-Offer Call Classification (Feb 25, 2026)
 - [x] Update AI classification to detect post-offer/contract calls (purchase agreement signing, paperwork) as Admin
 - [x] These calls should be classified as Admin and graded with admin_callback rubric (still scored)
+
+## Bug Fix - Add Note "No Contact ID" Error (Feb 25, 2026)
+- [x] Fix AI Coach "Add Note" action failing with "No contact ID available" when contact exists in GHL
+- [x] The action handler needs to resolve the GHL contact ID from the call context before executing
+- [x] Frontend fix: Force needsContactSearch=true when LLM returns contactId as empty string
+- [x] Backend fix: Improve LLM prompt to always set needsContactSearch=true when no contextContactId provided
+- [x] Backend fix: Add server-side safety net in parseIntent to force needsContactSearch when contactId is empty

@@ -468,7 +468,9 @@ function AICoachQA() {
             for (let i = 0; i < actions.length; i++) {
               const action = actions[i];
               const batchIndex = i + 1;
-              if (action.needsContactSearch && action.contactName) {
+              // Force contact search if contactName exists but contactId is empty (safety net)
+              const needsSearch = (action.needsContactSearch || (!action.contactId || !action.contactId.trim())) && action.contactName;
+              if (needsSearch) {
                 const cached = resolvedContacts[action.contactName.toLowerCase()];
                 if (cached) {
                   action.contactId = cached.id;
@@ -617,7 +619,9 @@ function AICoachQA() {
             for (let i = 0; i < actions.length; i++) {
               const action = actions[i];
               const batchIndex = i + 1;
-              if (action.needsContactSearch && action.contactName) {
+              // Force contact search if contactName exists but contactId is empty (safety net)
+              const needsSearch = (action.needsContactSearch || (!action.contactId || !action.contactId.trim())) && action.contactName;
+              if (needsSearch) {
                 const cached = resolvedContacts[action.contactName.toLowerCase()];
                 if (cached) {
                   action.contactId = cached.id;
@@ -743,7 +747,9 @@ function AICoachQA() {
           const action = actions[i];
           const batchIndex = i + 1; // 1-based
           
-          if (action.needsContactSearch && action.contactName) {
+          // Force contact search if contactName exists but contactId is empty (safety net)
+          const needsSearch = (action.needsContactSearch || (!action.contactId || !action.contactId.trim())) && action.contactName;
+          if (needsSearch) {
             // Check if we already resolved this contact name
             const cached = resolvedContacts[action.contactName.toLowerCase()];
             if (cached) {
@@ -876,7 +882,9 @@ function AICoachQA() {
         // Continue the batch index from where we left off
         const batchIdx = (currentBatchIndex || 0) + 1 + i;
         
-        if (action.needsContactSearch && action.contactName) {
+        // Force contact search if contactName exists but contactId is empty (safety net)
+        const needsSearch = (action.needsContactSearch || (!action.contactId || !action.contactId.trim())) && action.contactName;
+        if (needsSearch) {
           const cached = resolvedContacts[action.contactName.toLowerCase()];
           if (cached) {
             action.contactId = cached.id;
