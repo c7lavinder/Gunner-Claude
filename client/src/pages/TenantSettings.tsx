@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { BulkRegradeWidget } from "@/components/BulkRegradeWidget";
+import { WebhookHealthWidget } from "@/components/WebhookHealthWidget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1720,7 +1721,7 @@ export default function TenantSettings() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Calls sync automatically every 30 minutes. Find your API key in your CRM → Settings → Integrations → Private Integrations.
+                    Calls sync via webhooks in real-time, with a fallback poll every 2 hours. Find your API key in your CRM → Settings → Integrations → Private Integrations.
                   </p>
                 </>
               )}
@@ -2015,33 +2016,8 @@ export default function TenantSettings() {
                 </div>
               </div>
 
-              {/* CRM Inbound Webhook URL */}
-              <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-2">
-                <Label className="text-sm font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                  <Webhook className="h-4 w-4" />
-                  CRM Webhook URL
-                </Label>
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  Add this URL to your CRM workflow to send call data to Gunner automatically.
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs bg-white dark:bg-black/30 border border-amber-200 dark:border-amber-700 rounded px-3 py-2 font-mono break-all">
-                    {`${window.location.origin}/api/webhook/ghl`}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/api/webhook/ghl`);
-                      toast.success("Webhook URL copied!");
-                    }}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <p className="text-xs text-amber-600 dark:text-amber-500">CRM Workflow: Trigger on "Call Status Changed" → "Completed" → Webhook POST to this URL</p>
-              </div>
+              {/* Webhook Health & Setup */}
+              <WebhookHealthWidget />
 
               {/* External Webhook URL */}
               <div className="space-y-2">

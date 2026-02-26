@@ -421,6 +421,13 @@
       "when": 1772053931362,
       "tag": "0059_daily_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "5",
+      "when": 1772073817275,
+      "tag": "0060_little_eddie_brock",
+      "breakpoints": true
     }
   ]
 }

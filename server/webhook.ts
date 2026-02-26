@@ -15,10 +15,12 @@
 
 import express, { Request, Response, Router } from "express";
 import crypto from "crypto";
-import { createCall, getTeamMemberByName, getTeamMemberByGhlUserId, getCallByGhlId } from "./db";
+import { createCall, getTeamMemberByName, getTeamMemberByGhlUserId, getCallByGhlId, getDb } from "./db";
 import { processCall } from "./grading";
 import { getTenantsWithCrm, parseCrmConfig } from "./tenant";
-import type { CallEvent, OpportunityEvent } from "./crmEvents";
+import type { CallEvent, OpportunityEvent, ContactEvent } from "./crmEvents";
+import { webhookEvents, contactCache } from "../drizzle/schema";
+import { eq, and, desc, sql, gte } from "drizzle-orm";
 import PQueue from "p-queue";
 
 // Shared processing queue for webhook-triggered calls
@@ -377,6 +379,301 @@ async function processOpportunityEvent(event: OpportunityEvent): Promise<void> {
   }
 }
 
+// ============ CONTACT EVENT NORMALIZATION ============
+
+/**
+ * Normalize a GHL Contact webhook into a ContactEvent.
+ */
+function normalizeGHLContactEvent(
+  payload: Record<string, any>,
+  eventType: string
+): ContactEvent | null {
+  const typeMap: Record<string, ContactEvent["eventType"]> = {
+    "ContactCreate": "created",
+    "ContactUpdate": "updated",
+    "ContactDelete": "deleted",
+    "ContactTagUpdate": "tag_updated",
+  };
+
+  const mappedType = typeMap[eventType];
+  if (!mappedType) return null;
+
+  const contactEvent: ContactEvent = {
+    source: "ghl",
+    eventType: mappedType,
+    sourceContactId: payload.id || payload.contactId || payload.contact_id,
+    sourceLocationId: payload.locationId || payload.location_id,
+    firstName: payload.firstName || payload.first_name,
+    lastName: payload.lastName || payload.last_name,
+    email: payload.email,
+    phone: payload.phone,
+    tags: Array.isArray(payload.tags) ? payload.tags : undefined,
+    eventTimestamp: payload.dateAdded ? new Date(payload.dateAdded) : new Date(),
+    rawPayload: payload,
+  };
+
+  return contactEvent;
+}
+
+// ============ CONTACT EVENT PROCESSOR ============
+
+/**
+ * Process a normalized ContactEvent — upsert into the contact_cache table.
+ */
+async function processContactEvent(event: ContactEvent): Promise<void> {
+  const logPrefix = `[Webhook:Contact:${event.source}]`;
+
+  // Resolve tenant
+  if (!event.tenantId && event.sourceLocationId) {
+    const tenant = await resolveTenantByLocationId(event.sourceLocationId);
+    if (tenant) {
+      event.tenantId = tenant.tenantId;
+    }
+  }
+
+  if (!event.tenantId) {
+    console.error(`${logPrefix} Cannot process contact without tenantId`);
+    return;
+  }
+
+  if (!event.sourceContactId) {
+    console.error(`${logPrefix} Cannot process contact without sourceContactId`);
+    return;
+  }
+
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    if (event.eventType === "deleted") {
+      // Remove from cache
+      await db.delete(contactCache)
+        .where(
+          and(
+            eq(contactCache.tenantId, event.tenantId),
+            eq(contactCache.ghlContactId, event.sourceContactId)
+          )
+        );
+      console.log(`${logPrefix} Removed contact ${event.sourceContactId} from cache`);
+      return;
+    }
+
+    // Build full name
+    const fullName = [event.firstName, event.lastName].filter(Boolean).join(" ") || null;
+
+    // Check if contact exists in cache
+    const [existing] = await db.select()
+      .from(contactCache)
+      .where(
+        and(
+          eq(contactCache.tenantId, event.tenantId),
+          eq(contactCache.ghlContactId, event.sourceContactId)
+        )
+      );
+
+    if (existing) {
+      // Update existing contact
+      const updateData: Record<string, any> = {
+        lastSyncedAt: new Date(),
+      };
+      if (event.firstName !== undefined) updateData.firstName = event.firstName;
+      if (event.lastName !== undefined) updateData.lastName = event.lastName;
+      if (fullName) updateData.name = fullName;
+      if (event.email !== undefined) updateData.email = event.email;
+      if (event.phone !== undefined) updateData.phone = event.phone;
+      if (event.tags) updateData.tags = JSON.stringify(event.tags);
+
+      await db.update(contactCache)
+        .set(updateData)
+        .where(eq(contactCache.id, existing.id));
+      console.log(`${logPrefix} Updated contact ${event.sourceContactId} in cache (${fullName || existing.name})`);
+    } else {
+      // Insert new contact
+      await db.insert(contactCache).values({
+        tenantId: event.tenantId,
+        ghlContactId: event.sourceContactId,
+        ghlLocationId: event.sourceLocationId || null,
+        firstName: event.firstName || null,
+        lastName: event.lastName || null,
+        name: fullName,
+        email: event.email || null,
+        phone: event.phone || null,
+        tags: event.tags ? JSON.stringify(event.tags) : null,
+        lastSyncedAt: new Date(),
+      });
+      console.log(`${logPrefix} Added contact ${event.sourceContactId} to cache (${fullName || "unnamed"})`);
+    }
+  } catch (error) {
+    console.error(`${logPrefix} Error processing contact event:`, error);
+  }
+}
+
+// ============ WEBHOOK EVENT LOGGING ============
+
+/**
+ * Log a webhook event to the webhook_events table for health monitoring.
+ */
+async function logWebhookEvent(
+  provider: string,
+  eventType: string,
+  locationId: string | undefined,
+  tenantId: number | undefined,
+  status: "received" | "processed" | "skipped" | "failed",
+  errorMessage?: string
+): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    await db.insert(webhookEvents).values({
+      provider,
+      eventType,
+      locationId: locationId || null,
+      tenantId: tenantId || null,
+      status,
+      errorMessage: errorMessage || null,
+      processedAt: status !== "received" ? new Date() : null,
+    });
+  } catch (error) {
+    // Don't let logging failures break webhook processing
+    console.error("[Webhook] Failed to log webhook event:", error);
+  }
+}
+
+// ============ WEBHOOK HEALTH QUERIES ============
+
+/**
+ * Get webhook health stats for a tenant (or all tenants).
+ * Used by the Webhook Health widget in Settings.
+ */
+export async function getWebhookHealthStats(tenantId?: number) {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Build where condition
+    const whereCondition = tenantId
+      ? and(eq(webhookEvents.tenantId, tenantId))
+      : undefined;
+
+    // Last event received
+    const [lastEvent] = await db.select({
+      eventType: webhookEvents.eventType,
+      provider: webhookEvents.provider,
+      status: webhookEvents.status,
+      createdAt: webhookEvents.createdAt,
+    })
+      .from(webhookEvents)
+      .where(whereCondition)
+      .orderBy(desc(webhookEvents.createdAt))
+      .limit(1);
+
+    // Events in the last hour
+    const hourCondition = tenantId
+      ? and(eq(webhookEvents.tenantId, tenantId), gte(webhookEvents.createdAt, oneHourAgo))
+      : gte(webhookEvents.createdAt, oneHourAgo);
+
+    const [hourStats] = await db.select({
+      total: sql<number>`count(*)`,
+      processed: sql<number>`sum(case when ${webhookEvents.status} = 'processed' then 1 else 0 end)`,
+      failed: sql<number>`sum(case when ${webhookEvents.status} = 'failed' then 1 else 0 end)`,
+      skipped: sql<number>`sum(case when ${webhookEvents.status} = 'skipped' then 1 else 0 end)`,
+    })
+      .from(webhookEvents)
+      .where(hourCondition);
+
+    // Events in the last 24 hours
+    const dayCondition = tenantId
+      ? and(eq(webhookEvents.tenantId, tenantId), gte(webhookEvents.createdAt, twentyFourHoursAgo))
+      : gte(webhookEvents.createdAt, twentyFourHoursAgo);
+
+    const [dayStats] = await db.select({
+      total: sql<number>`count(*)`,
+      processed: sql<number>`sum(case when ${webhookEvents.status} = 'processed' then 1 else 0 end)`,
+      failed: sql<number>`sum(case when ${webhookEvents.status} = 'failed' then 1 else 0 end)`,
+    })
+      .from(webhookEvents)
+      .where(dayCondition);
+
+    // Events by type in last 24 hours
+    const eventsByType = await db.select({
+      eventType: webhookEvents.eventType,
+      count: sql<number>`count(*)`,
+    })
+      .from(webhookEvents)
+      .where(dayCondition)
+      .groupBy(webhookEvents.eventType)
+      .orderBy(desc(sql`count(*)`));
+
+    // Determine webhook status
+    const isActive = lastEvent && (now.getTime() - new Date(lastEvent.createdAt).getTime()) < 2 * 60 * 60 * 1000; // Active if event in last 2 hours
+    const isHealthy = hourStats && (hourStats.failed || 0) < (hourStats.total || 1) * 0.1; // Healthy if <10% failures
+
+    return {
+      status: !lastEvent ? "never_connected" : isActive ? (isHealthy ? "healthy" : "degraded") : "inactive",
+      lastEvent: lastEvent ? {
+        eventType: lastEvent.eventType,
+        provider: lastEvent.provider,
+        status: lastEvent.status,
+        receivedAt: lastEvent.createdAt,
+      } : null,
+      lastHour: {
+        total: hourStats?.total || 0,
+        processed: hourStats?.processed || 0,
+        failed: hourStats?.failed || 0,
+        skipped: hourStats?.skipped || 0,
+      },
+      last24Hours: {
+        total: dayStats?.total || 0,
+        processed: dayStats?.processed || 0,
+        failed: dayStats?.failed || 0,
+      },
+      eventsByType: eventsByType.map(e => ({ type: e.eventType, count: e.count })),
+    };
+  } catch (error) {
+    console.error("[Webhook] Error getting health stats:", error);
+    return null;
+  }
+}
+
+/**
+ * Search the contact cache for a contact by name, phone, or email.
+ * Used as a fast alternative to GHL API search.
+ */
+export async function searchContactCache(
+  tenantId: number,
+  query: string
+): Promise<Array<{ ghlContactId: string; name: string | null; phone: string | null; email: string | null }>> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+
+    const results = await db.select({
+      ghlContactId: contactCache.ghlContactId,
+      name: contactCache.name,
+      phone: contactCache.phone,
+      email: contactCache.email,
+    })
+      .from(contactCache)
+      .where(
+        and(
+          eq(contactCache.tenantId, tenantId),
+          sql`(${contactCache.name} LIKE ${`%${query}%`} OR ${contactCache.phone} LIKE ${`%${query}%`} OR ${contactCache.email} LIKE ${`%${query}%`})`
+        )
+      )
+      .limit(10);
+
+    return results;
+  } catch (error) {
+    console.error("[ContactCache] Search error:", error);
+    return [];
+  }
+}
+
 // ============ MAIN WEBHOOK HANDLER ============
 
 /**
@@ -429,12 +726,24 @@ export function createGHLWebhookRouter(): Router {
         res.status(200).json({ success: true, webhookId });
 
         // Process asynchronously based on event type
+        const locationId = payload.locationId || payload.location_id;
         setImmediate(async () => {
+          let resolvedTenantId: number | undefined;
           try {
+            // Resolve tenant for logging
+            if (locationId) {
+              const tenant = await resolveTenantByLocationId(locationId);
+              if (tenant) resolvedTenantId = tenant.tenantId;
+            }
+
             await routeGHLEvent(eventType, payload);
             console.log(`[Webhook] Processed ${eventType} in ${Date.now() - startTime}ms`);
+
+            // Log successful event
+            await logWebhookEvent("ghl", eventType, locationId, resolvedTenantId, "processed");
           } catch (error) {
             console.error(`[Webhook] Async processing error for ${eventType}:`, error);
+            await logWebhookEvent("ghl", eventType, locationId, resolvedTenantId, "failed", String(error));
           }
         });
 
@@ -491,13 +800,17 @@ async function routeGHLEvent(eventType: string, payload: Record<string, any>): P
       break;
     }
 
-    // Contact events (future use — log for now)
+    // Contact events
     case "ContactCreate":
     case "ContactUpdate":
     case "ContactDelete":
-    case "ContactTagUpdate":
-      console.log(`[Webhook] Contact event ${eventType} received — not yet handled`);
+    case "ContactTagUpdate": {
+      const contactEvent = normalizeGHLContactEvent(payload, eventType);
+      if (contactEvent) {
+        await processContactEvent(contactEvent);
+      }
       break;
+    }
 
     // Note events (future use)
     case "NoteCreate":

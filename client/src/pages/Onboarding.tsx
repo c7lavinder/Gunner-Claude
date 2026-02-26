@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch, Copy, Webhook, AlertTriangle } from "lucide-react";
+import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch, Copy, Webhook, AlertTriangle, Zap } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -501,22 +501,22 @@ export default function Onboarding() {
                   )}
                 </div>
 
-                {/* Webhook Setup Instruction Card */}
+                {/* Webhook Setup Wizard Card */}
                 {connectionStatus.success && (
                   <div className="border-t pt-4 mt-4">
-                    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4">
-                      <h4 className="font-medium mb-2 flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                    <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-4">
+                      <h4 className="font-medium mb-2 flex items-center gap-2 text-emerald-800 dark:text-emerald-300">
                         <Webhook className="h-4 w-4" />
-                        Required: Set Up CRM Webhook
+                        Recommended: Enable Real-Time Webhooks
                       </h4>
-                      <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-                        For Gunner to receive call data automatically, you need to create a webhook in your CRM workflow that fires when a call is completed.
+                      <p className="text-sm text-emerald-700 dark:text-emerald-400 mb-3">
+                        Webhooks deliver new calls and opportunities to Gunner instantly — within seconds instead of waiting for the next sync cycle. This means faster grading and less API usage.
                       </p>
                       <div className="space-y-3">
                         <div>
-                          <Label className="text-xs font-medium text-amber-800 dark:text-amber-300">Webhook URL (copy this):</Label>
+                          <Label className="text-xs font-medium text-emerald-800 dark:text-emerald-300">Your Webhook URL:</Label>
                           <div className="flex items-center gap-2 mt-1">
-                            <code className="flex-1 text-xs bg-white dark:bg-black/30 border border-amber-200 dark:border-amber-700 rounded px-3 py-2 font-mono break-all">
+                            <code className="flex-1 text-xs bg-white dark:bg-black/30 border border-emerald-200 dark:border-emerald-700 rounded px-3 py-2 font-mono break-all">
                               {`${window.location.origin}/api/webhook/ghl`}
                             </code>
                             <Button
@@ -532,19 +532,25 @@ export default function Onboarding() {
                             </Button>
                           </div>
                         </div>
-                        <div className="text-xs text-amber-700 dark:text-amber-400 space-y-1.5">
-                          <p className="font-medium">Setup steps in your CRM:</p>
+                        <div className="text-xs text-emerald-700 dark:text-emerald-400 space-y-1.5">
+                          <p className="font-medium">How to set up in your GHL app:</p>
                           <ol className="list-decimal list-inside space-y-1 ml-1">
-                            <li>Go to <strong>Automation</strong> → <strong>Workflows</strong></li>
-                            <li>Create a new workflow (or edit an existing one)</li>
-                            <li>Add a trigger: <strong>"Call Status Changed"</strong> → filter for <strong>"Completed"</strong></li>
-                            <li>Add an action: <strong>"Webhook"</strong> → paste the URL above</li>
-                            <li>Set method to <strong>POST</strong> and save the workflow</li>
+                            <li>Go to your <strong>GHL Developer App</strong> settings (or Marketplace app)</li>
+                            <li>Navigate to the <strong>Webhooks</strong> section</li>
+                            <li>Add the URL above as a new webhook endpoint</li>
+                            <li>Subscribe to these events:</li>
                           </ol>
+                          <div className="flex flex-wrap gap-1.5 ml-5 mt-1">
+                            {["InboundMessage", "OutboundMessage", "OpportunityCreate", "OpportunityStageUpdate", "ContactCreate", "ContactUpdate"].map((evt) => (
+                              <span key={evt} className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-100 dark:bg-emerald-900/40 border border-emerald-300 dark:border-emerald-700">
+                                {evt}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-500 bg-amber-100 dark:bg-amber-900/30 rounded p-2">
-                          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          <span>Without this webhook, Gunner won't receive call data from your CRM. You can also set this up later from Settings → Integrations.</span>
+                        <div className="flex items-start gap-2 text-xs text-emerald-600 dark:text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30 rounded p-2">
+                          <Zap className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          <span>Without webhooks, Gunner will still sync your calls via polling every 2 hours. Webhooks just make it instant. You can set this up now or later from Settings → CRM.</span>
                         </div>
                       </div>
                     </div>

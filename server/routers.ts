@@ -4801,6 +4801,51 @@ Create content that:
       return getRetryQueueStatus(ctx.user.tenantId);
     }),
 
+    // Get webhook health stats (admin only)
+    getWebhookHealth: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user?.teamRole !== 'admin' && ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      const { getWebhookHealthStats } = await import("./webhook");
+      const stats = await getWebhookHealthStats(ctx.user?.tenantId || undefined);
+      return stats || {
+        status: 'never_connected' as const,
+        lastEvent: null,
+        lastHour: { total: 0, processed: 0, failed: 0, skipped: 0 },
+        last24Hours: { total: 0, processed: 0, failed: 0 },
+        eventsByType: [],
+      };
+    }),
+
+    // Get webhook URL for setup wizard
+    getWebhookUrl: protectedProcedure.query(async ({ ctx }) => {
+      const appUrl = process.env.APP_URL || ctx.req.headers.origin || 'http://localhost:3000';
+      return {
+        webhookUrl: `${appUrl}/api/webhook/ghl`,
+        supportedEvents: [
+          'InboundMessage',
+          'OutboundMessage',
+          'OpportunityCreate',
+          'OpportunityStageUpdate',
+          'OpportunityStatusUpdate',
+          'OpportunityDelete',
+          'ContactCreate',
+          'ContactUpdate',
+          'ContactDelete',
+          'ContactTagUpdate',
+        ],
+      };
+    }),
+
+    // Search contact cache (for AI Coach contact resolution)
+    searchContactCache: protectedProcedure
+      .input(z.object({ query: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) return [];
+        const { searchContactCache } = await import("./webhook");
+        return searchContactCache(ctx.user.tenantId, input.query);
+      }),
+
     // Create checkout session for subscription
     createCheckout: protectedProcedure
       .input(z.object({

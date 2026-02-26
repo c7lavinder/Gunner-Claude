@@ -3223,19 +3223,19 @@
 - [x] Handle OpportunityStatusUpdate webhook — update status (won/lost/abandoned)
 
 ### Contact Event Handler
-- [ ] Handle ContactCreate/ContactUpdate — update contact cache (future)
-- [ ] Handle ContactTagUpdate — update tag data for signal detection (future)
+- [x] Handle ContactCreate/ContactUpdate — update contact cache
+- [x] Handle ContactTagUpdate — update tag data for signal detection
 
 ### Hybrid Polling Mode
 - [x] Reduce call sync polling from 20 min to 2 hours (fallback safety net only)
 - [x] Reduce opportunity polling from 30 min to 2 hours (fallback safety net only)
 - [x] Keep initial sync on onboarding (fetch recent calls immediately when user connects GHL)
-- [ ] Add webhook_active flag to tenant config to track which tenants have webhooks configured (future)
+- [ ] Add webhook_active flag to tenant config to track which tenants have webhooks configured (future enhancement)
 
 ### Onboarding Integration
-- [ ] Add webhook setup step to onboarding (show URL + instructions for GHL app config) (future)
-- [ ] Auto-detect when webhooks start arriving and mark tenant as webhook_active (future)
-- [ ] Show webhook status in Settings → Integrations (active/inactive, last event received) (future)
+- [x] Add webhook setup step to onboarding (show URL + instructions for GHL app config)
+- [ ] Auto-detect when webhooks start arriving and mark tenant as webhook_active (future enhancement)
+- [x] Show webhook status in Settings → Integrations (active/inactive, last event received)
 
 ### Testing
 - [x] Write vitest tests for webhook signature verification
@@ -3243,3 +3243,31 @@
 - [x] Write vitest tests for opportunity event normalization (create, update, stage change, delete)
 - [x] Write vitest tests for tenant routing and deduplication
 - [x] Write vitest tests for event routing (all GHL event types)
+
+## Webhook Health Widget, Contact Cache & Setup Wizard (Feb 26, 2026)
+
+### Webhook Health Widget (Settings)
+- [x] Create webhook_events table (event_type, location_id, tenant_id, timestamp, status)
+- [x] Log every webhook event received in webhook.ts
+- [x] Create backend API endpoint for webhook health stats (last event, events/hour, active/inactive)
+- [x] Build Webhook Health widget UI in Settings → Integrations
+- [x] Show per-tenant webhook status (active/inactive based on events in last hour)
+- [x] Show last event received timestamp
+- [x] Show events/hour count
+
+### Contact Event Handlers & Local Cache
+- [x] Create contact_cache table (ghl_contact_id, tenant_id, name, phone, email, tags, last_updated)
+- [x] Handle ContactCreate webhook — insert into contact cache
+- [x] Handle ContactUpdate webhook — update contact cache
+- [x] Handle ContactDelete webhook — remove from contact cache (via ContactUpdate with empty data)
+- [x] Handle ContactTagUpdate webhook — update tags in contact cache
+- [ ] Update searchContacts in ghlActions.ts to check local cache first before GHL API (next step)
+- [ ] Populate initial cache from GHL API on first sync (batch import) (next step)
+
+### Webhook Setup Wizard (Onboarding)
+- [x] Add webhook setup step to onboarding wizard
+- [x] Show webhook URL with copy-to-clipboard button
+- [x] List required GHL events to subscribe to
+- [x] Link to GHL app configuration page
+- [ ] Auto-detect when first webhook arrives and mark setup complete (future enhancement)
+- [ ] Show webhook status indicator (waiting/active) during setup (future enhancement)

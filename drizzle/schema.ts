@@ -1366,3 +1366,61 @@ export const callNextSteps = mysqlTable("call_next_steps", {
 });
 export type CallNextStep = typeof callNextSteps.$inferSelect;
 export type InsertCallNextStep = typeof callNextSteps.$inferInsert;
+
+
+// ============ WEBHOOK EVENTS LOG ============
+
+/**
+ * Tracks all incoming webhook events for health monitoring.
+ * Used to show webhook status (active/inactive), events/hour, and last event received.
+ */
+export const webhookEvents = mysqlTable("webhook_events", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id),
+  // Source CRM provider
+  provider: varchar("provider", { length: 50 }).notNull(), // 'ghl', 'hubspot', etc.
+  // GHL location ID for routing
+  locationId: varchar("locationId", { length: 255 }),
+  // Event details
+  eventType: varchar("eventType", { length: 100 }).notNull(), // e.g., 'InboundMessage', 'OpportunityCreate'
+  eventId: varchar("eventId", { length: 255 }), // External event ID for dedup
+  // Processing result
+  status: mysqlEnum("status", ["received", "processed", "skipped", "failed"]).default("received").notNull(),
+  errorMessage: text("errorMessage"),
+  // Timing
+  processedAt: timestamp("processedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+export type InsertWebhookEvent = typeof webhookEvents.$inferInsert;
+
+// ============ CONTACT CACHE ============
+
+/**
+ * Local cache of CRM contacts to reduce API calls.
+ * Populated via webhooks (ContactCreate/ContactUpdate) and initial sync.
+ * Used by searchContacts to avoid GHL API calls for known contacts.
+ */
+export const contactCache = mysqlTable("contact_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  // CRM identifiers
+  ghlContactId: varchar("ghlContactId", { length: 255 }).notNull(),
+  ghlLocationId: varchar("ghlLocationId", { length: 255 }),
+  // Contact info
+  firstName: varchar("firstName", { length: 255 }),
+  lastName: varchar("lastName", { length: 255 }),
+  name: varchar("name", { length: 512 }), // Full name (computed or from CRM)
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 50 }),
+  // Additional data
+  tags: text("tags"), // JSON array of tag strings
+  address: text("address"),
+  companyName: varchar("companyName", { length: 255 }),
+  // Sync metadata
+  lastSyncedAt: timestamp("lastSyncedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ContactCacheEntry = typeof contactCache.$inferSelect;
+export type InsertContactCacheEntry = typeof contactCache.$inferInsert;
