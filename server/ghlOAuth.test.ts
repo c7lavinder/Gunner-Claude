@@ -843,3 +843,211 @@ describe("Super Admin OAuth Overview - Redirect URI Update", () => {
     expect(url).not.toContain(encodeURIComponent("/api/ghl/callback"));
   });
 });
+
+// ============ OAuth-Aware Fetch Wrapper Tests ============
+
+describe("oauthAwareFetch", () => {
+  it("returns response as-is for non-401 status", async () => {
+    const { oauthAwareFetch } = await import("./ghlOAuthFetch");
+    
+    // Mock global fetch to return 200
+    const mockResponse = new Response(JSON.stringify({ data: "test" }), { status: 200 });
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+    const result = await oauthAwareFetch(
+      "https://services.leadconnectorhq.com/contacts/",
+      { method: "GET", headers: { "Authorization": "Bearer test-token" } },
+      { tenantId: 1, isOAuth: true, apiKey: "test-token" }
+    );
+
+    expect(result.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    global.fetch = originalFetch;
+  });
+
+  it("returns 401 as-is for non-OAuth credentials (API key)", async () => {
+    const { oauthAwareFetch } = await import("./ghlOAuthFetch");
+    
+    const mockResponse = new Response("Unauthorized", { status: 401 });
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+    const result = await oauthAwareFetch(
+      "https://services.leadconnectorhq.com/contacts/",
+      { method: "GET", headers: { "Authorization": "Bearer api-key" } },
+      { tenantId: 1, isOAuth: false, apiKey: "api-key" }
+    );
+
+    expect(result.status).toBe(401);
+    // Should NOT attempt retry for non-OAuth
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    global.fetch = originalFetch;
+  });
+
+  it("attempts token refresh on 401 for OAuth credentials", async () => {
+    vi.resetModules();
+    
+    // Mock handleTokenRefreshOn401 to return a new token
+    vi.doMock("./ghlOAuth", () => ({
+      handleTokenRefreshOn401: vi.fn().mockResolvedValue("new-refreshed-token"),
+    }));
+
+    const { oauthAwareFetch } = await import("./ghlOAuthFetch");
+    
+    const originalFetch = global.fetch;
+    const mock401 = new Response("Unauthorized", { status: 401 });
+    const mock200 = new Response(JSON.stringify({ data: "success" }), { status: 200 });
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(mock401)
+      .mockResolvedValueOnce(mock200);
+
+    const onTokenRefreshed = vi.fn();
+    const result = await oauthAwareFetch(
+      "https://services.leadconnectorhq.com/contacts/",
+      { method: "GET", headers: { "Authorization": "Bearer old-token" } },
+      { tenantId: 1, isOAuth: true, apiKey: "old-token", onTokenRefreshed }
+    );
+
+    expect(result.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(onTokenRefreshed).toHaveBeenCalledWith("new-refreshed-token");
+    
+    global.fetch = originalFetch;
+    vi.doUnmock("./ghlOAuth");
+  });
+
+  it("returns original 401 if token refresh fails", async () => {
+    vi.resetModules();
+    
+    vi.doMock("./ghlOAuth", () => ({
+      handleTokenRefreshOn401: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { oauthAwareFetch } = await import("./ghlOAuthFetch");
+    
+    const originalFetch = global.fetch;
+    const mock401 = new Response("Unauthorized", { status: 401 });
+    global.fetch = vi.fn().mockResolvedValue(mock401);
+
+    const result = await oauthAwareFetch(
+      "https://services.leadconnectorhq.com/contacts/",
+      { method: "GET", headers: { "Authorization": "Bearer expired-token" } },
+      { tenantId: 1, isOAuth: true, apiKey: "expired-token" }
+    );
+
+    expect(result.status).toBe(401);
+    // Only 1 call — no retry since refresh failed
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    
+    global.fetch = originalFetch;
+    vi.doUnmock("./ghlOAuth");
+  });
+});
+
+// ============ Proactive Token Refresh Tests ============
+
+describe("proactiveRefreshAllTokens", () => {
+  it("is exported and callable", async () => {
+    const { proactiveRefreshAllTokens } = await import("./ghlOAuth");
+    expect(typeof proactiveRefreshAllTokens).toBe("function");
+  });
+
+  it("does not throw when no database is available", async () => {
+    vi.resetModules();
+    vi.doMock("./db", () => ({
+      getDb: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { proactiveRefreshAllTokens } = await import("./ghlOAuth");
+    await expect(proactiveRefreshAllTokens()).resolves.not.toThrow();
+    
+    vi.doUnmock("./db");
+  });
+});
+
+// ============ GHL Credential Helper Tests ============
+
+describe("loadGHLCredentials", () => {
+  it("returns isOAuth: false for API key credentials", async () => {
+    vi.resetModules();
+    vi.doMock("./ghlOAuth", () => ({
+      getValidAccessToken: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { loadGHLCredentials } = await import("./ghlCredentialHelper");
+    
+    const result = await loadGHLCredentials(1, "Test Tenant", {
+      ghlApiKey: "test-api-key",
+      ghlLocationId: "loc-123",
+    } as any);
+
+    expect(result).not.toBeNull();
+    expect(result!.isOAuth).toBe(false);
+    expect(result!.apiKey).toBe("test-api-key");
+    expect(result!.locationId).toBe("loc-123");
+    expect(result!.tenantId).toBe(1);
+    
+    vi.doUnmock("./ghlOAuth");
+  });
+
+  it("returns isOAuth: true when OAuth token is available", async () => {
+    vi.resetModules();
+    vi.doMock("./ghlOAuth", () => ({
+      getValidAccessToken: vi.fn().mockResolvedValue({
+        accessToken: "oauth-access-token",
+        locationId: "oauth-loc-456",
+      }),
+    }));
+
+    const { loadGHLCredentials } = await import("./ghlCredentialHelper");
+    
+    const result = await loadGHLCredentials(2, "OAuth Tenant", {
+      ghlApiKey: "fallback-key",
+      ghlLocationId: "fallback-loc",
+    } as any);
+
+    expect(result).not.toBeNull();
+    expect(result!.isOAuth).toBe(true);
+    expect(result!.apiKey).toBe("oauth-access-token");
+    expect(result!.locationId).toBe("oauth-loc-456");
+    expect(result!.tenantId).toBe(2);
+    
+    vi.doUnmock("./ghlOAuth");
+  });
+
+  it("falls back to API key when OAuth lookup fails", async () => {
+    vi.resetModules();
+    vi.doMock("./ghlOAuth", () => ({
+      getValidAccessToken: vi.fn().mockRejectedValue(new Error("OAuth error")),
+    }));
+
+    const { loadGHLCredentials } = await import("./ghlCredentialHelper");
+    
+    const result = await loadGHLCredentials(3, "Fallback Tenant", {
+      ghlApiKey: "fallback-api-key",
+      ghlLocationId: "fallback-loc-789",
+    } as any);
+
+    expect(result).not.toBeNull();
+    expect(result!.isOAuth).toBe(false);
+    expect(result!.apiKey).toBe("fallback-api-key");
+    
+    vi.doUnmock("./ghlOAuth");
+  });
+
+  it("returns null when no credentials are available", async () => {
+    vi.resetModules();
+    vi.doMock("./ghlOAuth", () => ({
+      getValidAccessToken: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { loadGHLCredentials } = await import("./ghlCredentialHelper");
+    
+    const result = await loadGHLCredentials(4, "No Creds Tenant", {} as any);
+
+    expect(result).toBeNull();
+    
+    vi.doUnmock("./ghlOAuth");
+  });
+});

@@ -15,6 +15,7 @@ import { invokeLLM } from "./_core/llm";
 import { getTenantsWithCrm, parseCrmConfig, type TenantCrmConfig } from "./tenant";
 import { ghlCircuitBreaker } from "./ghlRateLimiter";
 import { loadGHLCredentials } from "./ghlCredentialHelper";
+import { oauthAwareFetch } from "./ghlOAuthFetch";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
@@ -50,6 +51,8 @@ function weekendAdjustedThreshold(baseHours: number, since: Date | null): Date {
 interface GHLCredentials {
   apiKey: string;
   locationId: string;
+  tenantId?: number;
+  isOAuth?: boolean;
 }
 
 interface GHLPipelineOpportunity {
@@ -429,12 +432,17 @@ async function ghlFetch(creds: GHLCredentials, path: string, _retries = 1): Prom
   }
 
   ghlCircuitBreaker.recordRequest();
-  const response = await fetch(url, {
+  const response = await oauthAwareFetch(url, {
     headers: {
       "Authorization": `Bearer ${creds.apiKey}`,
       "Version": "2021-07-28",
       "Content-Type": "application/json",
     },
+  }, {
+    tenantId: creds.tenantId || 0,
+    isOAuth: creds.isOAuth || false,
+    apiKey: creds.apiKey,
+    onTokenRefreshed: (t) => { creds.apiKey = t; },
   });
 
   if (response.ok) {
@@ -4519,7 +4527,7 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
         if (tenantForCreds) {
           const cfg = parseCrmConfig(tenantForCreds);
           if (cfg.ghlApiKey && cfg.ghlLocationId) {
-            reEvalCreds = { apiKey: cfg.ghlApiKey, locationId: cfg.ghlLocationId };
+            reEvalCreds = { apiKey: cfg.ghlApiKey, locationId: cfg.ghlLocationId, tenantId: tenantForCreds.id, isOAuth: false };
           }
         }
         // After scanning for new opportunities, re-evaluate existing active ones
@@ -4696,6 +4704,8 @@ async function scanTenant(
   const creds: GHLCredentials = {
     apiKey: pollingCreds.apiKey,
     locationId: pollingCreds.locationId,
+    tenantId: tenant.id,
+    isOAuth: pollingCreds.isOAuth,
   };
 
   // Set tenant-specific stage classification if configured

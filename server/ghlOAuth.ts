@@ -325,6 +325,64 @@ export async function getValidAccessToken(tenantId: number): Promise<{
 }
 
 /**
+ * Proactively refresh all OAuth tokens that are within 2 hours of expiry.
+ * Called at the start of each polling cycle to ensure tokens are fresh.
+ * This prevents the scenario where no API calls happen for 24+ hours
+ * and the token silently expires.
+ */
+export async function proactiveRefreshAllTokens(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    // Find all active tokens
+    const activeTokens = await db
+      .select()
+      .from(ghlOAuthTokens)
+      .where(eq(ghlOAuthTokens.isActive, "true"));
+
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    for (const tokenRow of activeTokens) {
+      const expiresAtMs = tokenRow.expiresAt.getTime();
+      const timeUntilExpiry = expiresAtMs - now;
+
+      // Refresh if token expires within 2 hours
+      if (timeUntilExpiry <= TWO_HOURS_MS) {
+        try {
+          console.log(`[GHL OAuth] Proactive refresh for tenant ${tokenRow.tenantId} (expires in ${Math.round(timeUntilExpiry / 60000)}min)`);
+          const newTokens = await refreshTokenFromGHL(tokenRow.refreshToken);
+          const newExpiresAt = new Date(Date.now() + newTokens.expires_in * 1000);
+
+          await db
+            .update(ghlOAuthTokens)
+            .set({
+              accessToken: newTokens.access_token,
+              refreshToken: newTokens.refresh_token,
+              expiresAt: newExpiresAt,
+              scopes: newTokens.scope,
+              lastRefreshedAt: new Date(),
+              lastError: null,
+            })
+            .where(eq(ghlOAuthTokens.id, tokenRow.id));
+
+          console.log(`[GHL OAuth] Proactive refresh succeeded for tenant ${tokenRow.tenantId}, new expiry: ${newExpiresAt.toISOString()}`);
+        } catch (error: any) {
+          console.error(`[GHL OAuth] Proactive refresh FAILED for tenant ${tokenRow.tenantId}:`, error.message);
+          await db
+            .update(ghlOAuthTokens)
+            .set({ lastError: `Proactive refresh failed: ${error.message}` })
+            .where(eq(ghlOAuthTokens.id, tokenRow.id));
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[GHL OAuth] Error during proactive token refresh:`, error);
+  }
+}
+
+/**
  * Get the OAuth connection status for a tenant.
  * Used by the UI to show connection state.
  */

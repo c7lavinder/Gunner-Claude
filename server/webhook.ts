@@ -15,6 +15,7 @@
 
 import express, { Request, Response, Router } from "express";
 import crypto from "crypto";
+import { oauthAwareFetch } from "./ghlOAuthFetch";
 import { createCall, getTeamMemberByName, getTeamMemberByGhlUserId, getCallByGhlId, getDb } from "./db";
 import { processCall } from "./grading";
 import { getTenantsWithCrm, parseCrmConfig } from "./tenant";
@@ -1008,13 +1009,18 @@ export async function batchImportContacts(tenantId: number): Promise<{ imported:
         url += `&startAfterId=${startAfterId}`;
       }
 
-      const response = await fetch(url, {
+      const response = await oauthAwareFetch(url, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Version": "2021-07-28",
           "Accept": "application/json",
         },
+      }, {
+        tenantId,
+        isOAuth: creds.isOAuth || false,
+        apiKey,
+        onTokenRefreshed: (t) => { /* apiKey is const, but the retry already uses the new token in the header */ },
       });
 
       if (response.status === 429) {

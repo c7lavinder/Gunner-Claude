@@ -20,8 +20,9 @@ import { getTenantsWithCrm, parseCrmConfig, getTenantById, type TenantCrmConfig 
 import { runOpportunityDetection } from "./opportunityDetection";
 import { startCorrectionMonitor, stopCorrectionMonitor } from "./correctionMonitor";
 import { ghlCircuitBreaker } from "./ghlRateLimiter";
-import { getValidAccessToken } from "./ghlOAuth";
+import { getValidAccessToken, proactiveRefreshAllTokens } from "./ghlOAuth";
 import { loadGHLCredentials } from "./ghlCredentialHelper";
+import { oauthAwareFetch } from "./ghlOAuthFetch";
 
 // GHL API Configuration
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
@@ -35,6 +36,7 @@ interface GHLCredentials {
   locationId: string;
   tenantId: number;
   tenantName: string;
+  isOAuth: boolean;
   dispoPipelineName?: string;
   newDealStageName?: string;
 }
@@ -159,11 +161,16 @@ async function fetchGHLUserNames(tenantId: number): Promise<Map<string, string>>
     const url = new URL(`${GHL_API_BASE}/users/search`);
     url.searchParams.set("locationId", creds.locationId);
 
-    const response = await fetch(url.toString(), {
+    const response = await oauthAwareFetch(url.toString(), {
       headers: {
         "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
       },
+    }, {
+      tenantId: creds.tenantId,
+      isOAuth: creds.isOAuth,
+      apiKey: creds.apiKey,
+      onTokenRefreshed: (t) => { creds.apiKey = t; },
     });
     ghlCircuitBreaker.recordRequest();
 
@@ -269,13 +276,18 @@ async function fetchGHLConversations(params: {
   }
 
   ghlCircuitBreaker.recordRequest();
-  const response = await fetch(url.toString(), {
+  const response = await oauthAwareFetch(url.toString(), {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${creds.apiKey}`,
       "Version": "2021-07-28",
       "Accept": "application/json",
     },
+  }, {
+    tenantId: creds.tenantId,
+    isOAuth: creds.isOAuth,
+    apiKey: creds.apiKey,
+    onTokenRefreshed: (t) => { creds.apiKey = t; },
   });
 
   if (response.status === 429) {
@@ -311,13 +323,18 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
 
   try {
     ghlCircuitBreaker.recordRequest();
-    const response = await fetch(url.toString(), {
+    const response = await oauthAwareFetch(url.toString(), {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
         "Accept": "application/json",
       },
+    }, {
+      tenantId: creds.tenantId,
+      isOAuth: creds.isOAuth,
+      apiKey: creds.apiKey,
+      onTokenRefreshed: (t) => { creds.apiKey = t; },
     });
 
     if (response.status === 429) {
@@ -358,12 +375,17 @@ async function fetchCallRecording(messageId: string): Promise<Buffer | null> {
   try {
     console.log(`[GHL] Fetching recording for message ${messageId}`);
     ghlCircuitBreaker.recordRequest();
-    const response = await fetch(url, {
+    const response = await oauthAwareFetch(url, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-04-15",
       },
+    }, {
+      tenantId: creds.tenantId,
+      isOAuth: creds.isOAuth,
+      apiKey: creds.apiKey,
+      onTokenRefreshed: (t) => { creds.apiKey = t; },
     });
 
     if (!response.ok) {
@@ -558,11 +580,16 @@ async function fetchGHLContactAddress(contactId: string): Promise<string | null>
   try {
     const creds = getActiveCredentials();
     const url = `${GHL_API_BASE}/contacts/${contactId}`;
-    const response = await fetch(url, {
+    const response = await oauthAwareFetch(url, {
       headers: {
         "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
       },
+    }, {
+      tenantId: creds.tenantId,
+      isOAuth: creds.isOAuth,
+      apiKey: creds.apiKey,
+      onTokenRefreshed: (t) => { creds.apiKey = t; },
     });
     ghlCircuitBreaker.recordRequest();
     if (!response.ok) {
@@ -713,6 +740,13 @@ export async function pollForNewCalls(): Promise<{
       return { success: true, synced: 0, skipped: 0, failed: 0, errors: ["Circuit breaker open, skipping poll"] };
     }
 
+    // Proactively refresh any OAuth tokens that are close to expiry (within 2 hours)
+    try {
+      await proactiveRefreshAllTokens();
+    } catch (err) {
+      console.warn(`[GHL] Proactive token refresh error (non-fatal):`, err);
+    }
+
     // Get all tenants with CRM connected
     const crmTenants = await getTenantsWithCrm();
     
@@ -731,6 +765,7 @@ export async function pollForNewCalls(): Promise<{
         locationId: pollingCreds.locationId,
         tenantId: tenant.id,
         tenantName: tenant.name,
+        isOAuth: pollingCreds.isOAuth,
         dispoPipelineName: pollingCreds.dispoPipelineName,
         newDealStageName: pollingCreds.newDealStageName,
       });
@@ -1182,13 +1217,18 @@ async function fetchOpportunities(startDate?: Date): Promise<GHLOpportunity[]> {
     const url = new URL(`${GHL_API_BASE}/opportunities/search`);
     url.searchParams.set("location_id", creds.locationId);
     
-    const response = await fetch(url.toString(), {
+    const response = await oauthAwareFetch(url.toString(), {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
         "Content-Type": "application/json",
       },
+    }, {
+      tenantId: creds.tenantId,
+      isOAuth: creds.isOAuth,
+      apiKey: creds.apiKey,
+      onTokenRefreshed: (t) => { creds.apiKey = t; },
     });
     ghlCircuitBreaker.recordRequest();
     
@@ -1230,13 +1270,18 @@ async function getPipelines(): Promise<Array<{ id: string; name: string; stages:
 
   try {
     ghlCircuitBreaker.recordRequest();
-    const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${creds.locationId}`, {
+    const response = await oauthAwareFetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${creds.locationId}`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${creds.apiKey}`,
         "Version": "2021-07-28",
         "Content-Type": "application/json",
       },
+    }, {
+      tenantId: creds.tenantId,
+      isOAuth: creds.isOAuth,
+      apiKey: creds.apiKey,
+      onTokenRefreshed: (t) => { creds.apiKey = t; },
     });
 
     if (response.status === 429) {
@@ -1362,6 +1407,7 @@ export async function pollOpportunities(): Promise<{ processed: number; errors: 
         locationId: pollingCreds.locationId,
         tenantId: tenant.id,
         tenantName: tenant.name,
+        isOAuth: pollingCreds.isOAuth,
         dispoPipelineName: pollingCreds.dispoPipelineName,
         newDealStageName: pollingCreds.newDealStageName,
       });
@@ -1525,6 +1571,7 @@ export async function resyncCallRecording(callId: number): Promise<{
             locationId: pollingCreds.locationId,
             tenantId: tenant.id,
             tenantName: tenant.name,
+            isOAuth: pollingCreds.isOAuth,
             dispoPipelineName: pollingCreds.dispoPipelineName,
             newDealStageName: pollingCreds.newDealStageName,
           });
@@ -1636,6 +1683,7 @@ export async function backfillGHLPropertyAddresses(): Promise<{
         locationId: pollingCreds.locationId,
         tenantId: tenant.id,
         tenantName: tenant.name,
+        isOAuth: pollingCreds.isOAuth,
         dispoPipelineName: pollingCreds.dispoPipelineName,
         newDealStageName: pollingCreds.newDealStageName,
       });

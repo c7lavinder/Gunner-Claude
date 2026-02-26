@@ -3382,3 +3382,12 @@
 ## OAuth Scopes Bug Fix (Feb 2026)
 - [x] Fix getInstallUrl to include required scopes in the OAuth authorization URL
 - [x] Update tests for install URL to verify scopes parameter is present
+
+## OAuth Risk Mitigation (Feb 2026)
+- [x] Create shared OAuth-aware fetch wrapper with 401 auto-retry (ghlOAuthFetch.ts)
+- [x] Refactor ghlService.ts (9 direct fetch calls) to use OAuth-aware wrapper
+- [x] Refactor opportunityDetection.ts (1 direct fetch call) to use OAuth-aware wrapper
+- [x] Refactor webhook.ts batchImportContacts (1 direct fetch call) to use OAuth-aware wrapper
+- [x] Add periodic token refresh safeguard in polling loop (proactiveRefreshAllTokens at start of each poll cycle)
+- [x] Handle single-use refresh token failure gracefully (error logged to lastError field, token not deactivated if not yet expired)
+- [x] Write tests for OAuth-aware fetch wrapper, proactive refresh, and credential helper (57 OAuth + 19 CRM + 18 ghlActions = 94 tests passing)
