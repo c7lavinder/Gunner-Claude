@@ -50,6 +50,23 @@ export function isOAuthConfigured(): boolean {
  * This URL redirects the user to GHL where they choose a location,
  * then GHL redirects back to our callback with an authorization code.
  */
+// All scopes required by Gunner based on GHL API endpoints used across the codebase
+const GHL_REQUIRED_SCOPES = [
+  "contacts.readonly",
+  "contacts.write",
+  "conversations.readonly",
+  "conversations/message.readonly",
+  "conversations/message.write",
+  "opportunities.readonly",
+  "opportunities.write",
+  "users.readonly",
+  "calendars.readonly",
+  "calendars/events.readonly",
+  "calendars/events.write",
+  "workflows.readonly",
+  "locations.readonly",
+];
+
 export function getInstallUrl(state?: string): string {
   const { clientId, appUrl } = getOAuthConfig();
   if (!clientId) {
@@ -61,6 +78,7 @@ export function getInstallUrl(state?: string): string {
     response_type: "code",
     redirect_uri: redirectUri,
     client_id: clientId,
+    scope: GHL_REQUIRED_SCOPES.join(" "),
   });
 
   if (state) {

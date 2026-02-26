@@ -3378,3 +3378,7 @@
 - [x] Rename /api/ghl/callback to /api/crm/oauth/callback
 - [x] Rename /api/ghl/status to /api/crm/oauth/status
 - [x] Update all references in ghlOAuth.ts (redirect_uri), ghlOAuthRoutes.ts, and frontend
+
+## OAuth Scopes Bug Fix (Feb 2026)
+- [x] Fix getInstallUrl to include required scopes in the OAuth authorization URL
+- [x] Update tests for install URL to verify scopes parameter is present

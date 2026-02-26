@@ -61,6 +61,14 @@ describe("GHL OAuth Install URL", () => {
     expect(url).toContain("client_id=test-client-id-123");
     expect(url).toContain("response_type=code");
     expect(url).toContain("redirect_uri=");
+    // Verify scopes are included
+    expect(url).toContain("scope=");
+    expect(url).toContain("contacts.readonly");
+    expect(url).toContain("contacts.write");
+    expect(url).toContain("conversations.readonly");
+    expect(url).toContain("opportunities.readonly");
+    expect(url).toContain("users.readonly");
+    expect(url).toContain("locations.readonly");
     expect(url).toContain(encodeURIComponent("https://app.example.com/api/crm/oauth/callback"));
   });
 
