@@ -1035,17 +1035,21 @@ export default function NextStepsTab({
       }
     } catch (error: any) {
       const errMsg = error?.message || "Failed to push";
+      const isRateLimit = errMsg.includes("429") || errMsg.includes("rate limit") || errMsg.includes("Too Many") || errMsg.includes("temporarily busy");
+      const friendlyMsg = isRateLimit
+        ? "CRM is temporarily busy. Please wait a moment and try again."
+        : errMsg;
       setActions(prev => prev.map(a =>
-        a.id === action.id ? { ...a, status: "failed" as const, result: errMsg } : a
+        a.id === action.id ? { ...a, status: "failed" as const, result: friendlyMsg } : a
       ));
       if (action.dbId) {
         updateStatusMutation.mutate({
           nextStepId: action.dbId,
           status: "failed",
-          result: errMsg,
+          result: friendlyMsg,
         });
       }
-      toast.error(`Failed to push: ${errMsg}`);
+      toast.error(isRateLimit ? friendlyMsg : `Failed to push: ${errMsg}`);
     } finally {
       setPushingActionId(null);
     }

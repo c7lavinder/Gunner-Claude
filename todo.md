@@ -3180,3 +3180,20 @@
 - [x] Add contact search caching with short TTL (5-10 min) to reduce redundant GHL API calls
 - [x] Cache should be keyed by tenantId + search query
 - [x] Cache should be invalidated on TTL expiry
+
+## AI Coach 429 Error UX Fix (Feb 25, 2026)
+- [x] Show friendly message instead of raw "GHL API error: 429" when rate limited
+- [x] Backend: Catch 429 errors in coach action execution and return user-friendly error
+- [x] Frontend: Display retry-friendly toast/message when GHL rate limit is hit
+- [x] Stop retrying on 429 — fail fast when circuit breaker is open
+- [x] ghlFetch in ghlActions.ts: check circuit breaker before each attempt, fail immediately on 429
+- [x] ghlFetch in ghlService.ts: same fail-fast behavior
+- [x] ghlFetch in opportunityDetection.ts: same fail-fast behavior
+- [x] searchContacts: fail fast with friendly error when circuit breaker is open
+
+## GHL Rate Limit Root Cause Fix (Feb 25, 2026)
+- [x] Audit all background polling intervals and calculate total API requests/min
+- [x] Reduce polling frequencies to stay well under 100 req/min GHL limit
+- [x] Stagger jobs so they don't all fire at the same time
+- [x] Eliminate redundant API calls (e.g., fetching pipelines every cycle)
+- [x] Ensure user-initiated actions always have quota headroom

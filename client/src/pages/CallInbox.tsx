@@ -792,9 +792,9 @@ function AICoachQA() {
       }
     } catch (error: any) {
       const errMsg = error.message || "Unknown error";
-      if (errMsg.includes("429") || errMsg.includes("Too Many Requests") || errMsg.includes("rate limit")) {
-        toast.error("CRM is temporarily rate-limited. Please wait a moment and try again.");
-        setConversation(prev => [...prev, { role: "assistant", content: "The CRM (GoHighLevel) is temporarily rate-limited due to high activity. Please wait about 30 seconds and try your request again. This is a temporary throttle, not an error with your account." }]);
+      if (errMsg.includes("429") || errMsg.includes("Too Many Requests") || errMsg.includes("rate limit") || errMsg.includes("temporarily busy")) {
+        toast.error("CRM is temporarily busy. Please wait a moment and try again.");
+        setConversation(prev => [...prev, { role: "assistant", content: "The CRM (GoHighLevel) is temporarily busy due to high activity. Please wait about 30 seconds and try your request again. This is a temporary throttle, not an error with your account." }]);
       } else {
         toast.error("Failed to process: " + errMsg);
       }
@@ -1049,12 +1049,17 @@ function AICoachQA() {
         toast.error(result.error || "Action failed");
       }
     } catch (error: any) {
+      const errMsg = error.message || "Unknown error";
+      const isRateLimit = errMsg.includes("429") || errMsg.includes("rate limit") || errMsg.includes("Too Many") || errMsg.includes("temporarily busy");
+      const friendlyMsg = isRateLimit
+        ? "CRM is temporarily busy. Please wait a moment and try again."
+        : errMsg;
       setConversation(prev => prev.map(msg => 
         msg.role === "action_card" && msg.actionId === actionId 
-          ? { ...msg, status: "failed" as const, result: error.message }
+          ? { ...msg, status: "failed" as const, result: friendlyMsg }
           : msg
       ));
-      toast.error("Failed to execute: " + error.message);
+      toast.error(isRateLimit ? friendlyMsg : "Failed to execute: " + errMsg);
     }
   };
 

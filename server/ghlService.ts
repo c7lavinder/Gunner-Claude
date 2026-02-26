@@ -145,6 +145,14 @@ async function fetchGHLUserNames(tenantId: number): Promise<Map<string, string>>
   const creds = getActiveCredentials();
   const userMap = new Map<string, string>();
 
+  // Fail fast: skip if circuit breaker is open (still cache empty result to avoid re-fetching)
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    console.log(`[GHL] Circuit breaker open — skipping fetchGHLUserNames for tenant ${tenantId}`);
+    ghlUserNameCache.set(tenantId, userMap);
+    setTimeout(() => ghlUserNameCache.delete(tenantId), 2 * 60 * 1000); // shorter cache on failure
+    return userMap;
+  }
+
   try {
     const url = new URL(`${GHL_API_BASE}/users/search`);
     url.searchParams.set("locationId", creds.locationId);
@@ -249,63 +257,41 @@ async function fetchGHLConversations(params: {
   const creds = getActiveCredentials();
   url.searchParams.set("locationId", creds.locationId);
   url.searchParams.set("limit", limit.toString());
-  // Sort by last message date to get recent conversations with calls
   url.searchParams.set("sortBy", "last_message_date");
   url.searchParams.set("sortOrder", "desc");
-  
-  // Note: We don't use startAfterDate here because it filters by conversation creation date,
-  // not by message date. We filter calls by date after fetching messages instead.
 
-  const maxRetries = 3;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(url.toString(), {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${creds.apiKey}`,
-          "Version": "2021-07-28",
-          "Accept": "application/json",
-        },
-      });
-
-      ghlCircuitBreaker.recordRequest();
-
-      if (response.status === 429 && attempt < maxRetries - 1) {
-        ghlCircuitBreaker.record429();
-        const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, 40s, max 60s
-        console.log(`[GHL] Rate limited (429) fetching conversations, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      if (response.status === 429) {
-        ghlCircuitBreaker.record429();
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[GHL] API error: ${response.status} - ${errorText}`);
-        throw new Error(`GHL API error: ${response.status}`);
-      }
-
-      ghlCircuitBreaker.recordSuccess();
-      const data: GHLSearchResponse = await response.json();
-      
-      // Filter for phone type conversations
-      const phoneConversations = data.conversations?.filter(c => c.type === "TYPE_PHONE") || [];
-      return phoneConversations;
-    } catch (error: any) {
-      if (attempt < maxRetries - 1 && error?.message?.includes("429")) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
-        console.log(`[GHL] Rate limited, retrying in ${delay}ms`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-      console.error("[GHL] Error fetching conversations:", error);
-      throw error;
-    }
+  // Fail fast: skip if circuit breaker is open
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    console.log(`[GHL] Circuit breaker open — skipping fetchGHLConversations`);
+    return [];
   }
-  return [];
+
+  ghlCircuitBreaker.recordRequest();
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${creds.apiKey}`,
+      "Version": "2021-07-28",
+      "Accept": "application/json",
+    },
+  });
+
+  if (response.status === 429) {
+    ghlCircuitBreaker.record429();
+    console.log(`[GHL] Rate limited (429) fetching conversations — failing fast, no retry`);
+    return [];
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[GHL] API error: ${response.status} - ${errorText}`);
+    throw new Error(`GHL API error: ${response.status}`);
+  }
+
+  ghlCircuitBreaker.recordSuccess();
+  const data: GHLSearchResponse = await response.json();
+  const phoneConversations = data.conversations?.filter(c => c.type === "TYPE_PHONE") || [];
+  return phoneConversations;
 }
 
 /**
@@ -315,52 +301,42 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
   const url = new URL(`${GHL_API_BASE}/conversations/${conversationId}/messages`);
   const creds = getActiveCredentials();
 
-  const maxRetries = 3;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(url.toString(), {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${creds.apiKey}`,
-          "Version": "2021-07-28",
-          "Accept": "application/json",
-        },
-      });
+  // Fail fast: skip if circuit breaker is open
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    console.log(`[GHL] Circuit breaker open — skipping fetchConversationMessages for ${conversationId}`);
+    return [];
+  }
 
+  try {
     ghlCircuitBreaker.recordRequest();
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${creds.apiKey}`,
+        "Version": "2021-07-28",
+        "Accept": "application/json",
+      },
+    });
 
-    if (response.status === 429 && attempt < maxRetries - 1) {
-        ghlCircuitBreaker.record429();
-        const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
-        console.log(`[GHL] Rate limited (429) fetching messages for ${conversationId}, retrying in ${delay}ms`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      if (response.status === 429) {
-        ghlCircuitBreaker.record429();
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[GHL] Messages API error: ${response.status} - ${errorText}`);
-        return [];
-      }
-
-      ghlCircuitBreaker.recordSuccess();
-      const data: GHLMessagesResponse = await response.json();
-      return data.messages?.messages || [];
-    } catch (error) {
-      console.error(`[GHL] Error fetching messages for conversation ${conversationId}:`, error);
-      if (attempt < maxRetries - 1) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
+    if (response.status === 429) {
+      ghlCircuitBreaker.record429();
+      console.log(`[GHL] Rate limited (429) fetching messages for ${conversationId} — failing fast`);
       return [];
     }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[GHL] Messages API error: ${response.status} - ${errorText}`);
+      return [];
+    }
+
+    ghlCircuitBreaker.recordSuccess();
+    const data: GHLMessagesResponse = await response.json();
+    return data.messages?.messages || [];
+  } catch (error) {
+    console.error(`[GHL] Error fetching messages for conversation ${conversationId}:`, error);
+    return [];
   }
-  return [];
 }
 
 /**
@@ -369,20 +345,31 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
  */
 async function fetchCallRecording(messageId: string): Promise<Buffer | null> {
   const creds = getActiveCredentials();
-  // Correct endpoint format: /conversations/messages/:messageId/locations/:locationId/recording
   const url = `${GHL_API_BASE}/conversations/messages/${messageId}/locations/${creds.locationId}/recording`;
+
+  // Fail fast: skip if circuit breaker is open
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    console.log(`[GHL] Circuit breaker open — skipping fetchCallRecording for ${messageId}`);
+    return null;
+  }
 
   try {
     console.log(`[GHL] Fetching recording for message ${messageId}`);
+    ghlCircuitBreaker.recordRequest();
     const response = await fetch(url, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${creds.apiKey}`,
-        "Version": "2021-04-15", // This endpoint requires version 2021-04-15
+        "Version": "2021-04-15",
       },
     });
 
     if (!response.ok) {
+      if (response.status === 429) {
+        ghlCircuitBreaker.record429();
+        console.log(`[GHL] Rate limited (429) fetching recording for ${messageId} — failing fast`);
+        return null;
+      }
       if (response.status === 404) {
         console.log(`[GHL] No recording found for message ${messageId}`);
         return null;
@@ -391,6 +378,7 @@ async function fetchCallRecording(messageId: string): Promise<Buffer | null> {
       console.error(`[GHL] Recording API error: ${response.status} - ${errorText}`);
       return null;
     }
+    ghlCircuitBreaker.recordSuccess();
 
     // The API returns the audio file directly as binary data
     const arrayBuffer = await response.arrayBuffer();
@@ -477,8 +465,9 @@ export async function fetchGHLCalls(params: {
   endDate?: Date;
   limit?: number;
 }): Promise<ProcessedGHLCall[]> {
-  // Reduced from 100 to 50 to halve GHL API calls per poll cycle
-  const { startDate, limit = 50 } = params;
+  // Reduced from 100 to 25 to minimize GHL API calls per poll cycle
+  // Each conversation = 1 additional message fetch, so 25 conversations = ~26 API calls
+  const { startDate, limit = 25 } = params;
 
   console.log(`[GHL] Fetching conversations...`);
   const conversations = await fetchGHLConversations({ startDate, limit });
@@ -498,9 +487,10 @@ export async function fetchGHLCalls(params: {
   // Add spacing between requests to avoid GHL rate limiting (100 req/min limit)
   for (let convIdx = 0; convIdx < conversations.length; convIdx++) {
     const conv = conversations[convIdx];
-    // Add 800ms delay between conversation message fetches to stay under rate limit
+    // Add 1.5s delay between conversation message fetches to stay under rate limit
+    // With 25 conversations, this spreads ~26 API calls over ~37 seconds
     if (convIdx > 0) {
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
     const messages = await fetchConversationMessages(conv.id);
     const calls = extractCallsFromMessages(conv, messages);
@@ -557,6 +547,12 @@ async function matchTeamMember(ghlUserId?: string, userName?: string, tenantId?:
  * Returns a formatted property address string, or null if not available.
  */
 async function fetchGHLContactAddress(contactId: string): Promise<string | null> {
+  // Fail fast: skip if circuit breaker is open
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    console.log(`[GHL] Circuit breaker open — skipping fetchGHLContactAddress for ${contactId}`);
+    return null;
+  }
+
   try {
     const creds = getActiveCredentials();
     const url = `${GHL_API_BASE}/contacts/${contactId}`;
@@ -953,23 +949,15 @@ export function startPolling(intervalMinutes: number = 5): void {
   currentIntervalMinutes = intervalMinutes;
   console.log(`[GHL] Starting automatic polling every ${intervalMinutes} minutes`);
   
-  // Do an initial poll, then opportunity poll (sequential to avoid credential race condition)
-  // Add 30s gap between call poll and opportunity poll to avoid rate limits
+  // Do an initial call poll (opportunity poll is handled separately by startOpportunityPolling)
   pollForNewCalls()
-    .then(() => new Promise(resolve => setTimeout(resolve, 30000)))
-    .then(() => pollOpportunities())
     .catch(err => console.error("[GHL] Initial poll error:", err));
 
   // Set up interval — run call poll then opportunity poll sequentially
-  // Use minimum 10 minutes to avoid GHL rate limiting
-  const effectiveInterval = Math.max(intervalMinutes, 10);
+  // Use minimum 20 minutes to stay well under GHL 100 req/min rate limit
+  const effectiveInterval = Math.max(intervalMinutes, 20);
   pollInterval = setInterval(() => {
     pollForNewCalls()
-      .then(() => {
-        // Wait 30 seconds between call poll and opportunity poll to avoid rate limits
-        return new Promise(resolve => setTimeout(resolve, 30000));
-      })
-      .then(() => pollOpportunities())
       .catch(err => console.error("[GHL] Poll error:", err));
   }, effectiveInterval * 60 * 1000);
 
@@ -1023,10 +1011,10 @@ export function startPolling(intervalMinutes: number = 5): void {
     }, 30 * 60 * 1000); // 30 minutes
   }
 
-  // Start hourly opportunity detection
+  // Start opportunity detection every 2 hours (reduced from 1 hour to save API quota)
   if (!opportunityDetectionInterval) {
-    console.log("[OpportunityDetection] Starting hourly opportunity detection scheduler");
-    // Run initial detection after a 5-minute delay (let other services settle)
+    console.log("[OpportunityDetection] Starting opportunity detection scheduler (every 2 hours)");
+    // Run initial detection after 15-minute delay (staggered from call sync and opportunity poll)
     setTimeout(() => {
       runOpportunityDetection()
         .then(result => {
@@ -1034,17 +1022,17 @@ export function startPolling(intervalMinutes: number = 5): void {
           console.log(`[OpportunityDetection] Initial run: detected ${result.detected}, errors ${result.errors}`);
         })
         .catch(err => console.error("[OpportunityDetection] Initial run error:", err));
-    }, 5 * 60 * 1000); // Wait 5 minutes after startup
+    }, 15 * 60 * 1000); // Wait 15 minutes after startup
 
-    // Then run every hour
+    // Then run every 2 hours
     opportunityDetectionInterval = setInterval(() => {
       runOpportunityDetection()
         .then(result => {
           lastOpportunityDetectionTime = new Date();
-          console.log(`[OpportunityDetection] Hourly run: detected ${result.detected}, errors ${result.errors}`);
+          console.log(`[OpportunityDetection] Scheduled run: detected ${result.detected}, errors ${result.errors}`);
         })
-        .catch(err => console.error("[OpportunityDetection] Hourly run error:", err));
-    }, 60 * 60 * 1000); // 1 hour
+        .catch(err => console.error("[OpportunityDetection] Scheduled run error:", err));
+    }, 2 * 60 * 60 * 1000); // 2 hours
   }
 
   // Start daily correction pattern monitor
@@ -1140,11 +1128,22 @@ let opportunityPollInterval: ReturnType<typeof setInterval> | null = null;
 const DEFAULT_DISPO_PIPELINE_NAME = "dispo pipeline";
 const DEFAULT_NEW_DEAL_STAGE_NAME = "new deal";
 
+// Pipeline cache — pipelines rarely change, so cache for 60 minutes
+const pipelineCache = new Map<string, { data: Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>; expiresAt: number }>();
+const PIPELINE_CACHE_TTL = 60 * 60 * 1000; // 60 minutes
+
 /**
  * Fetch opportunities from GHL
  */
 async function fetchOpportunities(startDate?: Date): Promise<GHLOpportunity[]> {
   const creds = getActiveCredentials();
+
+  // Fail fast: skip if circuit breaker is open
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    console.log(`[GHL Opportunities] Circuit breaker open — skipping fetchOpportunities`);
+    return [];
+  }
+
   try {
     const url = new URL(`${GHL_API_BASE}/opportunities/search`);
     url.searchParams.set("location_id", creds.locationId);
@@ -1179,50 +1178,57 @@ async function fetchOpportunities(startDate?: Date): Promise<GHLOpportunity[]> {
  */
 async function getPipelines(): Promise<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>> {
   const creds = getActiveCredentials();
-  const maxRetries = 3;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${creds.locationId}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${creds.apiKey}`,
-          "Version": "2021-07-28",
-          "Content-Type": "application/json",
-        },
-      });
-      
-      ghlCircuitBreaker.recordRequest();
+  const cacheKey = `${creds.tenantId}-${creds.locationId}`;
 
-      if (response.status === 429 && attempt < maxRetries - 1) {
-        ghlCircuitBreaker.record429();
-        const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
-        console.log(`[GHL Pipelines] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      if (response.status === 429) {
-        ghlCircuitBreaker.record429();
-      }
-
-      if (!response.ok) {
-        console.error(`[GHL Pipelines] API error: ${response.status}`);
-        return [];
-      }
-      
-      ghlCircuitBreaker.recordSuccess();
-      const data = await response.json();
-      return data.pipelines || [];
-    } catch (error) {
-      console.error("[GHL Pipelines] Fetch error:", error);
-      if (attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
-        continue;
-      }
-      return [];
-    }
+  // Check pipeline cache first (pipelines rarely change)
+  const cached = pipelineCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    console.log(`[GHL Pipelines] Using cached pipelines for tenant ${creds.tenantId} (${cached.data.length} pipelines)`);
+    return cached.data;
   }
-  return [];
+
+  // Fail fast: skip if circuit breaker is open
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    console.log(`[GHL Pipelines] Circuit breaker open — skipping getPipelines`);
+    // Return stale cache if available rather than empty
+    return cached?.data || [];
+  }
+
+  try {
+    ghlCircuitBreaker.recordRequest();
+    const response = await fetch(`${GHL_API_BASE}/opportunities/pipelines?locationId=${creds.locationId}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${creds.apiKey}`,
+        "Version": "2021-07-28",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.status === 429) {
+      ghlCircuitBreaker.record429();
+      console.log(`[GHL Pipelines] Rate limited (429) — failing fast`);
+      return cached?.data || [];
+    }
+
+    if (!response.ok) {
+      console.error(`[GHL Pipelines] API error: ${response.status}`);
+      return cached?.data || [];
+    }
+
+    ghlCircuitBreaker.recordSuccess();
+    const data = await response.json();
+    const pipelines = data.pipelines || [];
+
+    // Cache the result for 60 minutes
+    pipelineCache.set(cacheKey, { data: pipelines, expiresAt: Date.now() + PIPELINE_CACHE_TTL });
+    console.log(`[GHL Pipelines] Cached ${pipelines.length} pipelines for tenant ${creds.tenantId}`);
+
+    return pipelines;
+  } catch (error) {
+    console.error("[GHL Pipelines] Fetch error:", error);
+    return cached?.data || [];
+  }
 }
 
 /**
@@ -1386,22 +1392,25 @@ async function pollOpportunitiesForTenant(result: { processed: number; errors: n
 }
 
 /**
- * Start opportunity polling (every 5 minutes)
+ * Start opportunity polling (every 30 minutes)
+ * Reduced from 5 min to 30 min to stay under GHL 100 req/min rate limit
  */
 export function startOpportunityPolling(): void {
   if (opportunityPollInterval) {
     return; // Already running
   }
   
-  console.log("[GHL Opportunities] Starting opportunity polling (every 5 minutes)");
+  console.log("[GHL Opportunities] Starting opportunity polling (every 30 minutes)");
   
-  // Initial poll
-  pollOpportunities().catch(err => console.error("[GHL Opportunities] Initial poll error:", err));
+  // Initial poll after 10 min delay (staggered from call sync)
+  setTimeout(() => {
+    pollOpportunities().catch(err => console.error("[GHL Opportunities] Initial poll error:", err));
+  }, 10 * 60 * 1000);
   
   // Set up interval
   opportunityPollInterval = setInterval(() => {
     pollOpportunities().catch(err => console.error("[GHL Opportunities] Poll error:", err));
-  }, 5 * 60 * 1000); // 5 minutes
+  }, 30 * 60 * 1000); // 30 minutes
 }
 
 /**

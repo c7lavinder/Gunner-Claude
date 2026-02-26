@@ -418,37 +418,37 @@ function isWalkthroughStage(stageName: string): boolean {
 
 // ============ GHL API HELPERS ============
 
-async function ghlFetch(creds: GHLCredentials, path: string, retries = 3): Promise<any> {
+async function ghlFetch(creds: GHLCredentials, path: string, _retries = 1): Promise<any> {
   const url = `${GHL_API_BASE}${path}`;
-  let lastError: Error | null = null;
-  for (let attempt = 0; attempt < retries; attempt++) {
-    ghlCircuitBreaker.recordRequest();
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${creds.apiKey}`,
-        "Version": "2021-07-28",
-        "Content-Type": "application/json",
-      },
-    });
-    if (response.ok) {
-      ghlCircuitBreaker.recordSuccess();
-      return response.json();
-    }
-    const text = await response.text();
-    if (response.status === 429 && attempt < retries - 1) {
-      ghlCircuitBreaker.record429();
-      const delay = Math.min(10000 * Math.pow(2, attempt), 60000); // 10s, 20s, max 60s
-      console.log(`[OpportunityDetection] GHL rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      lastError = new Error(`GHL API 429: ${text}`);
-      continue;
-    }
-    if (response.status === 429) {
-      ghlCircuitBreaker.record429();
-    }
-    throw new Error(`GHL API ${response.status}: ${text}`);
+
+  // Fail fast: skip if circuit breaker is open
+  if (!ghlCircuitBreaker.canProceed("normal")) {
+    console.log(`[OpportunityDetection] Circuit breaker open — skipping ${path}`);
+    throw new Error("CRM is temporarily busy due to rate limiting.");
   }
-  throw lastError || new Error("GHL API request failed after retries");
+
+  ghlCircuitBreaker.recordRequest();
+  const response = await fetch(url, {
+    headers: {
+      "Authorization": `Bearer ${creds.apiKey}`,
+      "Version": "2021-07-28",
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (response.ok) {
+    ghlCircuitBreaker.recordSuccess();
+    return response.json();
+  }
+
+  const text = await response.text();
+  if (response.status === 429) {
+    ghlCircuitBreaker.record429();
+    console.log(`[OpportunityDetection] Rate limited (429) on ${path} — failing fast`);
+    throw new Error("CRM is temporarily busy due to rate limiting.");
+  }
+
+  throw new Error(`GHL API ${response.status}: ${text}`);
 }
 
 async function fetchPipelines(creds: GHLCredentials): Promise<Pipeline[]> {
@@ -4486,8 +4486,11 @@ async function isAlreadyFlagged(
 export async function runOpportunityDetection(tenantId?: number): Promise<{ detected: number; errors: number }> {
   const result = { detected: 0, errors: 0 };
 
-  // Check circuit breaker before making background GHL calls
-  if (!ghlCircuitBreaker.canProceed("normal")) {
+  // When called manually (with specific tenantId), use high priority to bypass circuit breaker
+  // When called by background scheduler (no tenantId), respect circuit breaker
+  const isManualTrigger = !!tenantId;
+  const priority = isManualTrigger ? "high" : "normal";
+  if (!ghlCircuitBreaker.canProceed(priority)) {
     const status = ghlCircuitBreaker.getStatus();
     console.log(`[OpportunityDetection] Circuit breaker is ${status.state} — skipping detection run (cooldown: ${Math.round(status.cooldownRemainingMs / 1000)}s remaining)`);
     return result;

@@ -34,7 +34,7 @@ export async function ghlFetch(
   path: string,
   method: string = "GET",
   body?: any,
-  retries: number = 3
+  _retries: number = 1 // retries disabled — fail fast
 ): Promise<any> {
   const url = `${GHL_API_BASE}${path}`;
   const headers: Record<string, string> = {
@@ -43,43 +43,35 @@ export async function ghlFetch(
     "Content-Type": "application/json",
   };
 
-  let lastError: Error | null = null;
-  for (let attempt = 0; attempt < retries; attempt++) {
-    // Record the request in the circuit breaker sliding window
-    ghlCircuitBreaker.recordRequest();
-
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-
-    if (response.ok) {
-      ghlCircuitBreaker.recordSuccess();
-      return response.json();
-    }
-
-    const text = await response.text();
-
-    // Retry on 429 (rate limit) with exponential backoff
-    if (response.status === 429 && attempt < retries - 1) {
-      ghlCircuitBreaker.record429();
-      const delay = Math.min(5000 * Math.pow(2, attempt), 30000); // 5s, 10s, 20s, max 30s
-      console.log(`[GHL] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      lastError = new Error(`GHL API rate limited (429)`);
-      continue;
-    }
-
-    // Record final 429 even on last attempt
-    if (response.status === 429) {
-      ghlCircuitBreaker.record429();
-    }
-
-    throw new Error(`GHL API error: ${response.status} - ${text}`);
+  // Fail fast: if circuit breaker is open, don't even try
+  if (!ghlCircuitBreaker.canProceed("high")) {
+    console.log(`[GHL] Circuit breaker blocked request to ${path} — API is rate limited`);
+    throw new Error("CRM is temporarily busy due to rate limiting. Please try again in a few minutes.");
   }
 
-  throw lastError || new Error("GHL API request failed after retries");
+  ghlCircuitBreaker.recordRequest();
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (response.ok) {
+    ghlCircuitBreaker.recordSuccess();
+    return response.json();
+  }
+
+  const text = await response.text();
+
+  // On 429: record it, trip the breaker, and fail immediately — no retries
+  if (response.status === 429) {
+    ghlCircuitBreaker.record429();
+    console.log(`[GHL] Rate limited (429) on ${method} ${path} — failing fast, no retry`);
+    throw new Error("CRM is temporarily busy due to rate limiting. Please try again in a few minutes.");
+  }
+
+  throw new Error(`GHL API error: ${response.status} - ${text}`);
 }
 
 // ============ CONTACT SEARCH ============
