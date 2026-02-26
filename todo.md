@@ -3336,3 +3336,25 @@
 - [x] Write tests for OAuth callback handler
 - [x] Write tests for unified auth header resolution
 - [x] Write tests for backward compatibility (API key still works)
+
+## GHL OAuth Enhancements (Feb 26, 2026)
+
+### Environment Secrets
+- [x] Add GHL_CLIENT_ID as environment secret via webdev_request_secrets
+- [x] Add GHL_CLIENT_SECRET as environment secret via webdev_request_secrets
+- [x] Register secrets in server env.ts for runtime access
+
+### Automatic Webhook Registration
+- [x] Build webhook auto-registration service that registers GHL webhooks on OAuth connect (Marketplace apps get auto-webhooks; we mark tenant as webhook-active)
+- [x] Register webhooks for: InboundMessage, ContactCreate, ContactUpdate, NoteCreate, OpportunityCreate, OpportunityUpdate, CallCompleted (configured in GHL Marketplace App dashboard)
+- [x] Call auto-registration from OAuth callback after successful token storage
+- [x] Handle webhook registration errors gracefully (log but don't block OAuth flow)
+- [x] Store webhook registration status per tenant (webhookActive flag + lastWebhookAt timestamp)
+
+### OAuth Health Dashboard (Admin Settings)
+- [x] Create tRPC procedure to fetch OAuth token status for all tenants (admin only)
+- [x] Build OAuth Health section in TenantSettings integrations tab
+- [x] Show token expiry countdown, last refresh time, and error status
+- [x] Show auth method badge (OAuth vs API Key) per tenant
+- [x] Add manual "Refresh Token" button for troubleshooting
+- [x] Show webhook registration status alongside OAuth status

@@ -99,6 +99,7 @@ async function resolveTenantByLocationId(locationId: string): Promise<{ tenantId
   }
 
   try {
+    // Layer 1: Check crmConfig (legacy API key tenants)
     const crmTenants = await getTenantsWithCrm();
     for (const t of crmTenants) {
       const config = parseCrmConfig(t);
@@ -107,6 +108,18 @@ async function resolveTenantByLocationId(locationId: string): Promise<{ tenantId
         tenantCache.set(locationId, { ...result, expiry: Date.now() + TENANT_CACHE_TTL_MS });
         return result;
       }
+    }
+
+    // Layer 2: Check OAuth tokens table (Marketplace app tenants)
+    const { findTenantByOAuthLocation } = await import("./ghlOAuth");
+    const oauthTenantId = await findTenantByOAuthLocation(locationId);
+    if (oauthTenantId) {
+      // Look up tenant name
+      const { getTenantById } = await import("./tenant");
+      const tenant = await getTenantById(oauthTenantId);
+      const result = { tenantId: oauthTenantId, tenantName: tenant?.name || `Tenant ${oauthTenantId}` };
+      tenantCache.set(locationId, { ...result, expiry: Date.now() + TENANT_CACHE_TTL_MS });
+      return result;
     }
   } catch (e) {
     console.error("[Webhook] Failed to resolve tenant from locationId:", e);
@@ -899,6 +912,30 @@ async function markTenantWebhookActive(tenantId: number): Promise<void> {
     console.log(`[Webhook] Tenant ${tenantId} marked as webhook-active`);
   } catch (error) {
     console.error(`[Webhook] Failed to mark tenant ${tenantId} as webhook-active:`, error);
+  }
+}
+
+/**
+ * Mark a tenant as webhook-active from OAuth callback.
+ * Marketplace apps get automatic webhooks from GHL, so we mark them active immediately.
+ * Exported for use by the OAuth callback route.
+ */
+export async function markTenantWebhookActiveFromOAuth(tenantId: number): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    await db.update(tenants)
+      .set({
+        webhookActive: "true",
+        lastWebhookAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId));
+
+    tenantsMarkedActive.add(tenantId);
+    console.log(`[Webhook] Tenant ${tenantId} marked as webhook-active (OAuth Marketplace app)`);
+  } catch (error) {
+    console.error(`[Webhook] Failed to mark tenant ${tenantId} as webhook-active from OAuth:`, error);
   }
 }
 

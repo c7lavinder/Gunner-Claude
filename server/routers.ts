@@ -4732,6 +4732,69 @@ Create content that:
       return { success: true };
     }),
 
+    // Get detailed OAuth health info for the current tenant (admin only)
+    getOAuthHealth: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.tenantId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant' });
+      if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      const { getOAuthStatus, isOAuthConfigured, getAuthMethod } = await import("./ghlOAuth");
+      const { getTenantById } = await import("./tenant");
+      const tenant = await getTenantById(ctx.user.tenantId);
+      const oauthStatus = await getOAuthStatus(ctx.user.tenantId);
+      const authMethod = await getAuthMethod(ctx.user.tenantId);
+
+      // Calculate token health
+      let tokenHealth: 'healthy' | 'expiring_soon' | 'expired' | 'error' | 'not_connected' = 'not_connected';
+      let expiresInMs = 0;
+      if (oauthStatus.connected && oauthStatus.expiresAt) {
+        expiresInMs = new Date(oauthStatus.expiresAt).getTime() - Date.now();
+        if (oauthStatus.lastError) {
+          tokenHealth = 'error';
+        } else if (expiresInMs <= 0) {
+          tokenHealth = 'expired';
+        } else if (expiresInMs < 60 * 60 * 1000) { // less than 1 hour
+          tokenHealth = 'expiring_soon';
+        } else {
+          tokenHealth = 'healthy';
+        }
+      }
+
+      return {
+        oauthConfigured: isOAuthConfigured(),
+        authMethod,
+        oauth: {
+          connected: oauthStatus.connected,
+          locationId: oauthStatus.locationId,
+          companyId: oauthStatus.companyId,
+          expiresAt: oauthStatus.expiresAt?.toISOString() || null,
+          expiresInMs,
+          lastRefreshedAt: oauthStatus.lastRefreshedAt?.toISOString() || null,
+          lastError: oauthStatus.lastError || null,
+          scopes: oauthStatus.scopes || null,
+          tokenHealth,
+        },
+        webhook: {
+          active: tenant?.webhookActive === 'true',
+          lastEventAt: tenant?.lastWebhookAt?.toISOString() || null,
+        },
+      };
+    }),
+
+    // Manually refresh OAuth token (admin only)
+    refreshOAuthToken: protectedProcedure.mutation(async ({ ctx }) => {
+      if (!ctx.user?.tenantId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No tenant' });
+      if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin' && ctx.user?.isTenantAdmin !== 'true') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      const { handleTokenRefreshOn401 } = await import("./ghlOAuth");
+      const newToken = await handleTokenRefreshOn401(ctx.user.tenantId);
+      if (!newToken) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Token refresh failed. The refresh token may be expired or revoked. Try reconnecting via OAuth.' });
+      }
+      return { success: true, message: 'Token refreshed successfully' };
+    }),
+
     getCrmIntegrations: protectedProcedure.query(async ({ ctx }) => {
       const { parseCrmConfig, getTenantById } = await import("./tenant");
       const { getOAuthStatus, isOAuthConfigured } = await import("./ghlOAuth");

@@ -23,7 +23,7 @@ import {
   findTenantByOAuthLocation,
 } from "./ghlOAuth";
 import { getTenantsWithCrm, parseCrmConfig, getTenantById, updateTenantSettings } from "./tenant";
-import { triggerContactImportIfNeeded } from "./webhook";
+import { triggerContactImportIfNeeded, markTenantWebhookActiveFromOAuth } from "./webhook";
 
 export function createGHLOAuthRouter(): Router {
   const router = Router();
@@ -158,6 +158,11 @@ export function createGHLOAuthRouter(): Router {
           await updateTenantSettings(tenantId, { crmConnected: "true" });
         }
       }
+
+      // Mark tenant as webhook-active (Marketplace apps get automatic webhooks from GHL)
+      markTenantWebhookActiveFromOAuth(tenantId).catch((err: any) => {
+        console.error(`[GHL OAuth] Failed to mark webhook active for tenant ${tenantId}:`, err);
+      });
 
       // Trigger batch contact import
       triggerContactImportIfNeeded(tenantId).catch(err => {

@@ -13,4 +13,6 @@ export const ENV = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   batchDialerApiKey: process.env.BATCHDIALER_API_KEY ?? "",
   batchLeadsApiKey: process.env.BATCHLEADS_API_KEY ?? "",
+  ghlClientId: process.env.GHL_CLIENT_ID ?? "",
+  ghlClientSecret: process.env.GHL_CLIENT_SECRET ?? "",
 };

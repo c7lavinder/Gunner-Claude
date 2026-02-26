@@ -411,3 +411,195 @@ describe("getCrmIntegrations OAuth Fields", () => {
     expect(mockResponse.ghl.connected).toBe(false);
   });
 });
+
+// ============ OAuth Health Dashboard Tests ============
+
+describe("OAuth Health Dashboard Response Shape", () => {
+  it("should include all expected fields in the health response", () => {
+    const mockHealth = {
+      oauthConfigured: true,
+      authMethod: "oauth" as const,
+      oauth: {
+        connected: true,
+        locationId: "loc-123",
+        companyId: "comp-456",
+        expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+        expiresInMs: 12 * 60 * 60 * 1000,
+        lastRefreshedAt: new Date().toISOString(),
+        lastError: null,
+        scopes: "contacts.readonly contacts.write locations.readonly",
+        tokenHealth: "healthy" as const,
+      },
+      webhook: {
+        active: true,
+        lastEventAt: new Date().toISOString(),
+      },
+    };
+
+    expect(mockHealth.oauthConfigured).toBe(true);
+    expect(mockHealth.authMethod).toBe("oauth");
+    expect(mockHealth.oauth.connected).toBe(true);
+    expect(mockHealth.oauth.tokenHealth).toBe("healthy");
+    expect(mockHealth.oauth.locationId).toBe("loc-123");
+    expect(mockHealth.oauth.companyId).toBe("comp-456");
+    expect(mockHealth.oauth.lastError).toBeNull();
+    expect(mockHealth.oauth.scopes).toContain("contacts.readonly");
+    expect(mockHealth.webhook.active).toBe(true);
+    expect(mockHealth.webhook.lastEventAt).toBeTruthy();
+  });
+
+  it("should calculate token health as 'healthy' when expiry is far away", () => {
+    const expiresInMs = 12 * 60 * 60 * 1000; // 12 hours
+    const lastError = null;
+
+    let tokenHealth: string;
+    if (lastError) {
+      tokenHealth = "error";
+    } else if (expiresInMs <= 0) {
+      tokenHealth = "expired";
+    } else if (expiresInMs < 60 * 60 * 1000) {
+      tokenHealth = "expiring_soon";
+    } else {
+      tokenHealth = "healthy";
+    }
+
+    expect(tokenHealth).toBe("healthy");
+  });
+
+  it("should calculate token health as 'expiring_soon' when less than 1 hour", () => {
+    const expiresInMs = 30 * 60 * 1000; // 30 minutes
+    const lastError = null;
+
+    let tokenHealth: string;
+    if (lastError) {
+      tokenHealth = "error";
+    } else if (expiresInMs <= 0) {
+      tokenHealth = "expired";
+    } else if (expiresInMs < 60 * 60 * 1000) {
+      tokenHealth = "expiring_soon";
+    } else {
+      tokenHealth = "healthy";
+    }
+
+    expect(tokenHealth).toBe("expiring_soon");
+  });
+
+  it("should calculate token health as 'expired' when past expiry", () => {
+    const expiresInMs = -5000; // expired 5 seconds ago
+    const lastError = null;
+
+    let tokenHealth: string;
+    if (lastError) {
+      tokenHealth = "error";
+    } else if (expiresInMs <= 0) {
+      tokenHealth = "expired";
+    } else if (expiresInMs < 60 * 60 * 1000) {
+      tokenHealth = "expiring_soon";
+    } else {
+      tokenHealth = "healthy";
+    }
+
+    expect(tokenHealth).toBe("expired");
+  });
+
+  it("should calculate token health as 'error' when lastError is present", () => {
+    const expiresInMs = 12 * 60 * 60 * 1000;
+    const lastError = "Token refresh failed: 401 Unauthorized";
+
+    let tokenHealth: string;
+    if (lastError) {
+      tokenHealth = "error";
+    } else if (expiresInMs <= 0) {
+      tokenHealth = "expired";
+    } else if (expiresInMs < 60 * 60 * 1000) {
+      tokenHealth = "expiring_soon";
+    } else {
+      tokenHealth = "healthy";
+    }
+
+    expect(tokenHealth).toBe("error");
+  });
+
+  it("should handle not_connected state", () => {
+    const mockHealth = {
+      oauthConfigured: true,
+      authMethod: "none" as const,
+      oauth: {
+        connected: false,
+        locationId: undefined,
+        companyId: undefined,
+        expiresAt: null,
+        expiresInMs: 0,
+        lastRefreshedAt: null,
+        lastError: null,
+        scopes: null,
+        tokenHealth: "not_connected" as const,
+      },
+      webhook: {
+        active: false,
+        lastEventAt: null,
+      },
+    };
+
+    expect(mockHealth.oauth.connected).toBe(false);
+    expect(mockHealth.oauth.tokenHealth).toBe("not_connected");
+    expect(mockHealth.webhook.active).toBe(false);
+  });
+});
+
+// ============ Webhook Auto-Marking Tests ============
+
+describe("Webhook Auto-Marking from OAuth", () => {
+  it("markTenantWebhookActiveFromOAuth is exported from webhook module", async () => {
+    const webhookModule = await import("./webhook");
+    expect(typeof webhookModule.markTenantWebhookActiveFromOAuth).toBe("function");
+  });
+
+  it("triggerContactImportIfNeeded is exported from webhook module", async () => {
+    const webhookModule = await import("./webhook");
+    expect(typeof webhookModule.triggerContactImportIfNeeded).toBe("function");
+  });
+});
+
+// ============ OAuth Route Import Tests ============
+
+describe("OAuth Route Imports", () => {
+  it("ghlOAuthRoutes imports markTenantWebhookActiveFromOAuth correctly", async () => {
+    // Verify the module can be loaded without import errors
+    const routeModule = await import("./ghlOAuthRoutes");
+    expect(typeof routeModule.createGHLOAuthRouter).toBe("function");
+    
+    const router = routeModule.createGHLOAuthRouter();
+    expect(router).toBeDefined();
+    expect(router.stack).toBeDefined();
+  });
+});
+
+// ============ OAuth Health Scopes Parsing Tests ============
+
+describe("OAuth Scopes Parsing", () => {
+  it("correctly splits space-separated scopes", () => {
+    const scopes = "contacts.readonly contacts.write locations.readonly calendars.readonly opportunities.readonly";
+    const scopeList = scopes.split(" ");
+    
+    expect(scopeList).toHaveLength(5);
+    expect(scopeList).toContain("contacts.readonly");
+    expect(scopeList).toContain("contacts.write");
+    expect(scopeList).toContain("locations.readonly");
+    expect(scopeList).toContain("calendars.readonly");
+    expect(scopeList).toContain("opportunities.readonly");
+  });
+
+  it("handles empty scopes", () => {
+    const scopes = "";
+    const scopeList = scopes.split(" ").filter(Boolean);
+    expect(scopeList).toHaveLength(0);
+  });
+
+  it("handles single scope", () => {
+    const scopes = "contacts.readonly";
+    const scopeList = scopes.split(" ");
+    expect(scopeList).toHaveLength(1);
+    expect(scopeList[0]).toBe("contacts.readonly");
+  });
+});

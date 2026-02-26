@@ -1804,6 +1804,9 @@ export default function TenantSettings() {
                       Auth method: <Badge variant="outline" className="text-xs">{crmIntegrations.ghl.authMethod === 'oauth' ? 'OAuth (Marketplace)' : 'API Key'}</Badge>
                     </div>
                   )}
+
+                  {/* OAuth Health Dashboard (only for OAuth-connected tenants) */}
+                  {crmIntegrations?.ghl?.oauthConnected && <OAuthHealthPanel />}
                 </>
               )}
             </div>
@@ -2307,6 +2310,191 @@ export default function TenantSettings() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+// ============ OAuth Health Dashboard Panel ============
+
+function OAuthHealthPanel() {
+  const { data: health, isLoading, refetch } = trpc.tenant.getOAuthHealth.useQuery(undefined, {
+    refetchInterval: 60_000, // Refresh every minute to keep expiry countdown accurate
+  });
+
+  const refreshTokenMutation = trpc.tenant.refreshOAuthToken.useMutation({
+    onSuccess: () => {
+      toast.success("Token refreshed successfully");
+      refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Token refresh failed");
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="mt-4 p-4 border border-border rounded-lg space-y-3">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+    );
+  }
+
+  if (!health?.oauth?.connected) return null;
+
+  const { oauth, webhook } = health;
+
+  // Format time remaining
+  const formatTimeRemaining = (ms: number): string => {
+    if (ms <= 0) return "Expired";
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  // Format date
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "Never";
+    const d = new Date(iso);
+    return d.toLocaleString();
+  };
+
+  // Health badge color
+  const healthColors: Record<string, string> = {
+    healthy: "bg-green-100 text-green-700 border-green-300",
+    expiring_soon: "bg-yellow-100 text-yellow-700 border-yellow-300",
+    expired: "bg-red-100 text-red-700 border-red-300",
+    error: "bg-red-100 text-red-700 border-red-300",
+    not_connected: "bg-gray-100 text-gray-600 border-gray-300",
+  };
+
+  const healthLabels: Record<string, string> = {
+    healthy: "Healthy",
+    expiring_soon: "Expiring Soon",
+    expired: "Expired",
+    error: "Error",
+    not_connected: "Not Connected",
+  };
+
+  const healthIcons: Record<string, React.ReactNode> = {
+    healthy: <Check className="h-3 w-3" />,
+    expiring_soon: <Clock className="h-3 w-3" />,
+    expired: <AlertCircle className="h-3 w-3" />,
+    error: <AlertCircle className="h-3 w-3" />,
+    not_connected: <Unlink className="h-3 w-3" />,
+  };
+
+  return (
+    <div className="mt-4 p-4 border border-border rounded-lg space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
+          <Cloud className="h-4 w-4 text-blue-500" />
+          OAuth Connection Health
+        </h4>
+        <Badge className={`text-xs gap-1 ${healthColors[oauth.tokenHealth]}`}>
+          {healthIcons[oauth.tokenHealth]}
+          {healthLabels[oauth.tokenHealth]}
+        </Badge>
+      </div>
+
+      {/* Token Status Grid */}
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="space-y-1">
+          <p className="text-muted-foreground">Token Expires</p>
+          <p className="font-medium">
+            {oauth.expiresAt ? (
+              <>
+                {formatTimeRemaining(oauth.expiresInMs)}
+                <span className="text-muted-foreground ml-1">({formatDate(oauth.expiresAt)})</span>
+              </>
+            ) : "N/A"}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">Last Refreshed</p>
+          <p className="font-medium">{formatDate(oauth.lastRefreshedAt)}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">Location ID</p>
+          <p className="font-medium font-mono text-[11px]">{oauth.locationId || "N/A"}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-muted-foreground">Company ID</p>
+          <p className="font-medium font-mono text-[11px]">{oauth.companyId || "N/A"}</p>
+        </div>
+      </div>
+
+      {/* Webhook Status */}
+      <div className="flex items-center justify-between text-xs pt-2 border-t border-border">
+        <div className="flex items-center gap-2">
+          <Webhook className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-muted-foreground">Webhook Status:</span>
+          {webhook.active ? (
+            <Badge className="bg-green-100 text-green-700 border-green-300 text-[10px] px-1.5 py-0">Active</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">Pending</Badge>
+          )}
+        </div>
+        {webhook.lastEventAt && (
+          <span className="text-muted-foreground">Last event: {formatRelativeTime(webhook.lastEventAt)}</span>
+        )}
+      </div>
+
+      {/* Error Display */}
+      {oauth.lastError && (
+        <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded text-xs">
+          <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-red-700 dark:text-red-300">Last Error</p>
+            <p className="text-red-600 dark:text-red-400 mt-0.5">{oauth.lastError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Scopes */}
+      {oauth.scopes && (
+        <details className="text-xs">
+          <summary className="text-muted-foreground cursor-pointer hover:text-foreground">
+            Granted Scopes ({oauth.scopes.split(" ").length})
+          </summary>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {oauth.scopes.split(" ").map((scope: string) => (
+              <Badge key={scope} variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                {scope}
+              </Badge>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-2 pt-1">
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs h-7"
+          onClick={() => refreshTokenMutation.mutate()}
+          disabled={refreshTokenMutation.isPending}
+        >
+          {refreshTokenMutation.isPending ? (
+            <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Refreshing...</>
+          ) : (
+            <><RefreshCw className="h-3 w-3 mr-1" />Refresh Token</>
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs h-7"
+          onClick={() => refetch()}
+        >
+          <RefreshCw className="h-3 w-3 mr-1" />
+          Reload Status
+        </Button>
+      </div>
     </div>
   );
 }
