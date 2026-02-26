@@ -1089,47 +1089,24 @@ export function startPolling(intervalMinutes: number = 5): void {
   }
 
   currentIntervalMinutes = intervalMinutes;
-  console.log(`[GHL] Starting hybrid polling mode (initial sync + 2-hour fallback)`);
+  const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+  console.log(`[GHL] Starting polling mode (every 10 minutes)`);
   
-  // HYBRID MODE:
-  // 1. Initial sync runs immediately for onboarding (new users see calls within minutes)
-  // 2. Ongoing polling reduced to every 2 hours as a fallback safety net
-  // 3. Primary real-time sync is handled by GHL webhooks at /api/webhook/ghl
-  
-  // Initial sync — fetch recent calls for all tenants
+  // Initial sync — fetch recent calls for all tenants immediately
   pollForNewCalls()
     .catch(err => console.error("[GHL] Initial sync error:", err));
 
-  // Adaptive fallback polling:
-  // - 2 hours for tenants without webhooks configured
-  // - 6 hours for webhook-active tenants (webhooks handle real-time sync)
-  const BASE_FALLBACK_MS = 2 * 60 * 60 * 1000; // 2 hours
-  const WEBHOOK_ACTIVE_FALLBACK_MS = 6 * 60 * 60 * 1000; // 6 hours
-  let nextFallbackMs = BASE_FALLBACK_MS;
-
+  // Regular polling every 10 minutes
   const scheduleNextPoll = () => {
     pollInterval = setTimeout(async () => {
-      console.log(`[GHL] Running fallback poll (${nextFallbackMs / (60 * 60 * 1000)}-hour safety net)`);
+      console.log(`[GHL] Running scheduled poll (10-minute interval)`);
       try {
         await pollForNewCalls();
       } catch (err) {
-        console.error("[GHL] Fallback poll error:", err);
+        console.error("[GHL] Poll error:", err);
       }
-
-      // Check if any tenant has webhooks active to adjust next interval
-      try {
-        const { isTenantWebhookActive } = await import("./webhook");
-        const tenantsList = await getTenantsWithCrm();
-        const anyWebhookActive = await Promise.all(
-          tenantsList.map(t => isTenantWebhookActive(t.id))
-        ).then(results => results.some(Boolean));
-        nextFallbackMs = anyWebhookActive ? WEBHOOK_ACTIVE_FALLBACK_MS : BASE_FALLBACK_MS;
-      } catch {
-        nextFallbackMs = BASE_FALLBACK_MS;
-      }
-
       scheduleNextPoll(); // Schedule next iteration
-    }, nextFallbackMs);
+    }, POLL_INTERVAL_MS);
   };
   scheduleNextPoll();
 

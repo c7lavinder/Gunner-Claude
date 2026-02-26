@@ -3405,3 +3405,6 @@
 - [x] Fix pagination: reduce MAX_PAGES from 2 to 1 (100 conversations is enough, 200 caused timeouts)
 - [ ] Fix GHL webhook configuration — zero webhook events received, Gunner is 100% polling-dependent
 - [ ] Verify webhooks are receiving real-time call events after fix
+
+## GHL Polling Interval Fix
+- [x] Change GHL polling from 2-hour hybrid fallback back to 10-minute interval

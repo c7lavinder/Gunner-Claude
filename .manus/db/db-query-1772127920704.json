@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, provider, eventType, status, locationId, createdAt FROM webhook_events ORDER BY createdAt DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, provider, eventType, status, locationId, createdAt FROM webhook_events ORDER BY createdAt DESC LIMIT 10",
+  "rows": [
+    {
+      "id": "5",
+      "provider": "ghl",
+      "eventType": "test_verification",
+      "status": "processed",
+      "locationId": "test",
+      "createdAt": "2026-02-26 17:44:50"
+    },
+    {
+      "id": "4",
+      "provider": "ghl",
+      "eventType": "test_verification",
+      "status": "processed",
+      "locationId": "test",
+      "createdAt": "2026-02-26 17:44:38"
+    },
+    {
+      "id": "3",
+      "provider": "ghl",
+      "eventType": "test_verification",
+      "status": "processed",
+      "locationId": "test",
+      "createdAt": "2026-02-26 17:44:19"
+    },
+    {
+      "id": "2",
+      "provider": "ghl",
+      "eventType": "test",
+      "status": "processed",
+      "locationId": "NULL",
+      "createdAt": "2026-02-26 17:34:35"
+    },
+    {
+      "id": "1",
+      "provider": "ghl",
+      "eventType": "test",
+      "status": "processed",
+      "locationId": "NULL",
+      "createdAt": "2026-02-26 17:34:27"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tprovider\teventType\tstatus\tlocationId\tcreatedAt\n5\tghl\ttest_verification\tprocessed\ttest\t2026-02-26 17:44:50\n4\tghl\ttest_verification\tprocessed\ttest\t2026-02-26 17:44:38\n3\tghl\ttest_verification\tprocessed\ttest\t2026-02-26 17:44:19\n2\tghl\ttest\tprocessed\tNULL\t2026-02-26 17:34:35\n1\tghl\ttest\tprocessed\tNULL\t2026-02-26 17:34:27\n",
+  "stderr": "",
+  "execution_time_ms": 379
+}
