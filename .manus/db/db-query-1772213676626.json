@@ -1,0 +1,190 @@
+{
+  "query": "SELECT id, contactName, duration, status, classification, callTimestamp, teamMemberName FROM calls WHERE callTimestamp >= '2026-02-27 00:00:00' AND ghlCallId IS NOT NULL ORDER BY callTimestamp DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, duration, status, classification, callTimestamp, teamMemberName FROM calls WHERE callTimestamp >= '2026-02-27 00:00:00' AND ghlCallId IS NOT NULL ORDER BY callTimestamp DESC LIMIT 20;",
+  "rows": [
+    {
+      "id": "2730111",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:58:23",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730110",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:58:15",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730109",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:57:40",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730108",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:57:32",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730104",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:49:10",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730103",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:49:00",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730102",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:45:10",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730101",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:44:40",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730100",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:44:31",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730098",
+      "contactName": "NULL",
+      "duration": "1",
+      "status": "skipped",
+      "classification": "too_short",
+      "callTimestamp": "2026-02-27 16:43:30",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730097",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:43:24",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730096",
+      "contactName": "NULL",
+      "duration": "2",
+      "status": "skipped",
+      "classification": "too_short",
+      "callTimestamp": "2026-02-27 16:43:16",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730095",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:40:00",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730094",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:39:50",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730092",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:38:47",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730091",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:38:34",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730090",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:38:05",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730089",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:37:33",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730087",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:36:33",
+      "teamMemberName": "Daniel Lozano"
+    },
+    {
+      "id": "2730086",
+      "contactName": "NULL",
+      "duration": "NULL",
+      "status": "failed",
+      "classification": "pending",
+      "callTimestamp": "2026-02-27 16:36:24",
+      "teamMemberName": "Daniel Lozano"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tduration\tstatus\tclassification\tcallTimestamp\tteamMemberName\n2730111\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:58:23\tDaniel Lozano\n2730110\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:58:15\tDaniel Lozano\n2730109\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:57:40\tDaniel Lozano\n2730108\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:57:32\tDaniel Lozano\n2730104\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:49:10\tDaniel Lozano\n2730103\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:49:00\tDaniel Lozano\n2730102\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:45:10\tDaniel Lozano\n2730101\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:44:40\tDaniel Lozano\n2730100\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:44:31\tDaniel Lozano\n2730098\tNULL\t1\tskipped\ttoo_short\t2026-02-27 16:43:30\tDaniel Lozano\n2730097\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:43:24\tDaniel Lozano\n2730096\tNULL\t2\tskipped\ttoo_short\t2026-02-27 16:43:16\tDaniel Lozano\n2730095\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:40:00\tDaniel Lozano\n2730094\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:39:50\tDaniel Lozano\n2730092\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:38:47\tDaniel Lozano\n2730091\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:38:34\tDaniel Lozano\n2730090\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:38:05\tDaniel Lozano\n2730089\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:37:33\tDaniel Lozano\n2730087\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:36:33\tDaniel Lozano\n2730086\tNULL\tNULL\tfailed\tpending\t2026-02-27 16:36:24\tDaniel Lozano\n",
+  "stderr": "",
+  "execution_time_ms": 371
+}

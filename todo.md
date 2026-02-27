@@ -3414,3 +3414,13 @@
 
 ## Bug: Calls not syncing to Gunner after publish
 - [x] Investigate and fix why recent GHL calls (Feb 26 afternoon) are not appearing in Gunner
+
+## Clean Up Test Tenants
+- [x] Remove or disable test tenants 780001 (Test Wholesalers LLC) and 780004 (Settings Test Co) to stop 401 errors and speed up polling (confirmed: these test tenants no longer exist in the current DB)
+
+## Bug: Feb 27 GHL calls not appearing in Gunner
+- [x] Investigate and fix why today's GHL calls (Johnnie Crumley, Berry Hampton, Briley Fisher, etc.) are not syncing
+- [x] Fix audio format detection: GHL returns WAV recordings, not MP3 — now detects format from magic bytes
+- [x] Fix S3 upload to use correct MIME type and file extension based on detected format
+- [x] Add auto-retry for failed calls with recording issues (Invalid file format, HTTP 404)
+- [x] Increase GHL conversation coverage: 2 TYPE_CALL pages + 3 ALL pages = up to 500 conversations per poll

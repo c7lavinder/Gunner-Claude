@@ -263,22 +263,19 @@ let pollInterval: NodeJS.Timeout | null = null;
 async function fetchGHLConversations(params: {
   startDate?: Date;
   limit?: number;
+  lastMessageType?: string;
+  maxPages?: number;
+  label?: string;
 }): Promise<GHLConversation[]> {
-  const { startDate, limit = 100 } = params;
+  const { startDate, limit = 100, lastMessageType, maxPages = 3, label = "" } = params;
   const creds = getActiveCredentials();
   const allPhoneConversations: GHLConversation[] = [];
-  // Pagination strategy: fetch 1 page (100 conversations).
-  // Conversations are sorted by last_message_date DESC, so the first 100 are the most recently active.
-  // With a 3-day polling window, 100 conversations covers all recent activity.
-  // Previously 2 pages (200 convos) took 3-4 minutes due to per-conversation message fetches,
-  // leaving no headroom for the 5-minute timeout.
-  const MAX_PAGES = 1;
   let cursor: number | undefined = undefined;
 
-  for (let page = 0; page < MAX_PAGES; page++) {
+  for (let page = 0; page < maxPages; page++) {
     // Fail fast: skip if circuit breaker is open
     if (!ghlCircuitBreaker.canProceed("normal")) {
-      console.log(`[GHL] Circuit breaker open — skipping fetchGHLConversations (page ${page})`);
+      console.log(`[GHL]${label} Circuit breaker open — skipping fetchGHLConversations (page ${page})`);
       break;
     }
 
@@ -287,6 +284,9 @@ async function fetchGHLConversations(params: {
     url.searchParams.set("limit", limit.toString());
     url.searchParams.set("sortBy", "last_message_date");
     url.searchParams.set("sortOrder", "desc");
+    if (lastMessageType) {
+      url.searchParams.set("lastMessageType", lastMessageType);
+    }
     if (cursor !== undefined) {
       url.searchParams.set("startAfterDate", cursor.toString());
     }
@@ -313,13 +313,13 @@ async function fetchGHLConversations(params: {
 
     if (response.status === 429) {
       ghlCircuitBreaker.record429();
-      console.log(`[GHL] Rate limited (429) fetching conversations page ${page} — failing fast, returning what we have`);
+      console.log(`[GHL]${label} Rate limited (429) fetching conversations page ${page} — failing fast, returning what we have`);
       break;
     }
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[GHL] API error on page ${page}: ${response.status} - ${errorText}`);
+      console.error(`[GHL]${label} API error on page ${page}: ${response.status} - ${errorText}`);
       if (page === 0) {
         throw new Error(`GHL API error: ${response.status}`);
       }
@@ -332,11 +332,17 @@ async function fetchGHLConversations(params: {
     const phoneConversations = conversations.filter(c => c.type === "TYPE_PHONE");
     allPhoneConversations.push(...phoneConversations);
 
-    console.log(`[GHL] Page ${page}: ${conversations.length} total conversations, ${phoneConversations.length} phone (running total: ${allPhoneConversations.length})`);
+    // Debug: log non-phone conversation types to see what we're filtering out
+    const nonPhone = conversations.filter(c => c.type !== "TYPE_PHONE");
+    if (nonPhone.length > 0) {
+      console.log(`[GHL]${label} Page ${page}: Filtered out ${nonPhone.length} non-phone conversations`);
+    }
+
+    console.log(`[GHL]${label} Page ${page}: ${conversations.length} total, ${phoneConversations.length} phone (running total: ${allPhoneConversations.length})`);
 
     // Stop pagination if fewer results than limit (no more pages) or empty
     if (conversations.length < limit || conversations.length === 0) {
-      console.log(`[GHL] Pagination complete — got ${conversations.length} < ${limit} on page ${page}`);
+      console.log(`[GHL]${label} Pagination complete — got ${conversations.length} < ${limit} on page ${page}`);
       break;
     }
 
@@ -345,7 +351,7 @@ async function fetchGHLConversations(params: {
       const oldestConv = conversations[conversations.length - 1];
       const oldestDate = oldestConv.lastMessageDate || oldestConv.dateUpdated || oldestConv.dateAdded;
       if (oldestDate && oldestDate < startDate.getTime()) {
-        console.log(`[GHL] Pagination complete — oldest conversation on page ${page} is before startDate`);
+        console.log(`[GHL]${label} Pagination complete — oldest conversation on page ${page} is before startDate`);
         break;
       }
     }
@@ -354,13 +360,13 @@ async function fetchGHLConversations(params: {
     const lastConv = conversations[conversations.length - 1];
     const lastSortValue = lastConv.lastMessageDate || lastConv.dateUpdated || lastConv.dateAdded;
     if (!lastSortValue) {
-      console.log(`[GHL] Pagination complete — no sort value on last conversation of page ${page}`);
+      console.log(`[GHL]${label} Pagination complete — no sort value on last conversation of page ${page}`);
       break;
     }
     cursor = lastSortValue;
   }
 
-  console.log(`[GHL] Total phone conversations fetched: ${allPhoneConversations.length}`);
+  console.log(`[GHL]${label} Total phone conversations fetched: ${allPhoneConversations.length}`);
   return allPhoneConversations;
 }
 
@@ -418,7 +424,12 @@ async function fetchConversationMessages(conversationId: string): Promise<GHLMes
  * Fetch recording for a specific message using the correct GHL API endpoint
  * Returns the recording as a Buffer, or null if not available
  */
-async function fetchCallRecording(messageId: string): Promise<Buffer | null> {
+interface RecordingResult {
+  buffer: Buffer;
+  contentType: string;
+}
+
+async function fetchCallRecording(messageId: string): Promise<RecordingResult | null> {
   const creds = getActiveCredentials();
   const url = `${GHL_API_BASE}/conversations/messages/${messageId}/locations/${creds.locationId}/recording`;
 
@@ -470,8 +481,15 @@ async function fetchCallRecording(messageId: string): Promise<Buffer | null> {
       return null;
     }
 
-    console.log(`[GHL] Successfully fetched recording (${buffer.length} bytes)`);
-    return buffer;
+    // Detect actual content type from response headers and magic bytes
+    let contentType = response.headers.get('content-type') || 'audio/mpeg';
+    // Detect format from magic bytes if content-type is generic
+    if (contentType === 'application/octet-stream' || contentType === 'binary/octet-stream' || !contentType.startsWith('audio/')) {
+      contentType = detectAudioFormat(buffer);
+    }
+
+    console.log(`[GHL] Successfully fetched recording (${buffer.length} bytes, type: ${contentType})`);
+    return { buffer, contentType };
   } catch (error) {
     console.error(`[GHL] Error fetching recording for message ${messageId}:`, error);
     return null;
@@ -479,13 +497,59 @@ async function fetchCallRecording(messageId: string): Promise<Buffer | null> {
 }
 
 /**
+ * Detect audio format from magic bytes in the buffer
+ */
+function detectAudioFormat(buffer: Buffer): string {
+  if (buffer.length < 12) return 'audio/mpeg';
+  
+  // WAV: starts with RIFF....WAVE
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+      buffer[8] === 0x57 && buffer[9] === 0x41 && buffer[10] === 0x56 && buffer[11] === 0x45) {
+    return 'audio/wav';
+  }
+  // OGG: starts with OggS
+  if (buffer[0] === 0x4F && buffer[1] === 0x67 && buffer[2] === 0x67 && buffer[3] === 0x53) {
+    return 'audio/ogg';
+  }
+  // FLAC: starts with fLaC
+  if (buffer[0] === 0x66 && buffer[1] === 0x4C && buffer[2] === 0x61 && buffer[3] === 0x43) {
+    return 'audio/flac';
+  }
+  // MP4/M4A: has ftyp marker at offset 4
+  if (buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70) {
+    return 'audio/mp4';
+  }
+  // WebM: starts with 0x1A45DFA3 (EBML header)
+  if (buffer[0] === 0x1A && buffer[1] === 0x45 && buffer[2] === 0xDF && buffer[3] === 0xA3) {
+    return 'audio/webm';
+  }
+  // MP3: starts with ID3 tag or sync bytes (0xFF 0xFB/0xF3/0xF2)
+  if ((buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) ||
+      (buffer[0] === 0xFF && (buffer[1] === 0xFB || buffer[1] === 0xF3 || buffer[1] === 0xF2))) {
+    return 'audio/mpeg';
+  }
+  // Default to WAV since GHL often returns WAV without proper headers
+  console.log(`[GHL] Unknown audio format, first bytes: ${buffer.slice(0, 8).toString('hex')}, defaulting to audio/wav`);
+  return 'audio/wav';
+}
+
+/**
  * Upload recording to S3 and return the URL
  */
-async function uploadRecordingToS3(buffer: Buffer, callId: string): Promise<string | null> {
+async function uploadRecordingToS3(buffer: Buffer, callId: string, contentType: string = 'audio/mpeg'): Promise<string | null> {
   try {
-    const filename = `ghl-recordings/${callId}-${Date.now()}.mp3`;
-    const result = await storagePut(filename, buffer, "audio/mpeg");
-    console.log(`[GHL] Uploaded recording to S3: ${result.url}`);
+    // Map content type to file extension
+    const extMap: Record<string, string> = {
+      'audio/mpeg': 'mp3', 'audio/mp3': 'mp3',
+      'audio/wav': 'wav', 'audio/wave': 'wav', 'audio/x-wav': 'wav',
+      'audio/ogg': 'ogg', 'audio/flac': 'flac',
+      'audio/mp4': 'm4a', 'audio/m4a': 'm4a',
+      'audio/webm': 'webm',
+    };
+    const ext = extMap[contentType] || 'wav';
+    const filename = `ghl-recordings/${callId}-${Date.now()}.${ext}`;
+    const result = await storagePut(filename, buffer, contentType);
+    console.log(`[GHL] Uploaded recording to S3: ${result.url} (${contentType})`);
     return result.url;
   } catch (error) {
     console.error(`[GHL] Error uploading recording to S3:`, error);
@@ -545,13 +609,45 @@ export async function fetchGHLCalls(params: {
   endDate?: Date;
   limit?: number;
 }): Promise<ProcessedGHLCall[]> {
-  // Pagination now handled by fetchGHLConversations — fetches all pages automatically
-  // limit here controls per-page size passed to GHL API (default 100)
   const { startDate, limit = 100 } = params;
 
-  console.log(`[GHL] Fetching conversations with pagination...`);
-  const conversations = await fetchGHLConversations({ startDate, limit });
-  console.log(`[GHL] Found ${conversations.length} phone conversations across all pages`);
+  // Two-pass approach for comprehensive call coverage:
+  // Pass 1 (TYPE_CALL): Conversations where the last message was a call.
+  //   2 pages (200 convos) — catches calls that weren't followed by SMS/email.
+  //   No startDate cutoff since the 100th conversation's lastMessageDate is often
+  //   before startDate even though newer call conversations exist on later pages.
+  // Pass 2 (ALL): Most recently active conversations regardless of message type.
+  //   3 pages (300 convos) — catches calls followed by SMS/email activity,
+  //   which is where GHL dialer calls often end up (call → auto-SMS follow-up).
+  // Deduplicate by conversation ID to avoid processing the same conversation twice.
+
+  console.log(`[GHL] Pass 1: Fetching TYPE_CALL conversations (2 pages)...`);
+  const callConversations = await fetchGHLConversations({
+    limit,
+    lastMessageType: "TYPE_CALL",
+    maxPages: 2,
+    label: " [CALL]",
+  });
+
+  console.log(`[GHL] Pass 2: Fetching recent conversations - all types (3 pages)...`);
+  const recentConversations = await fetchGHLConversations({
+    startDate,
+    limit,
+    maxPages: 3,
+    label: " [ALL]",
+  });
+
+  // Deduplicate: merge both sets, preferring unique conversation IDs
+  const seenIds = new Set<string>();
+  const conversations: typeof callConversations = [];
+  for (const conv of [...callConversations, ...recentConversations]) {
+    if (!seenIds.has(conv.id)) {
+      seenIds.add(conv.id);
+      conversations.push(conv);
+    }
+  }
+
+  console.log(`[GHL] Combined: ${conversations.length} unique phone conversations (${callConversations.length} from TYPE_CALL + ${recentConversations.length} from recent, ${callConversations.length + recentConversations.length - conversations.length} duplicates removed)`);
 
   const allCalls: ProcessedGHLCall[] = [];
   let dateFilteredOut = 0;
@@ -560,11 +656,12 @@ export async function fetchGHLCalls(params: {
   // Add spacing between requests to avoid GHL rate limiting (100 req/min limit)
   for (let convIdx = 0; convIdx < conversations.length; convIdx++) {
     const conv = conversations[convIdx];
-    // Add 0.7s delay between conversation message fetches to stay under rate limit
-    // GHL rate limit is 100 req/min = 0.6s/req. 0.7s gives safe margin.
-    // For 200 conversations: 200 × 0.7s = 140s (well within 5min timeout)
+    // Add 0.25s delay between conversation message fetches to stay under rate limit
+    // GHL rate limit is 100 req/min = 0.6s/req, but we have burst capacity.
+    // 0.25s keeps us under sustained rate while allowing ~450 conversations
+    // within the 12-minute tenant timeout (450 × 0.25s = 112s + API time ≈ 450s).
     if (convIdx > 0) {
-      await new Promise(resolve => setTimeout(resolve, 700));
+      await new Promise(resolve => setTimeout(resolve, 250));
     }
 
     // Fail fast: stop fetching messages if circuit breaker tripped mid-loop
@@ -732,9 +829,9 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
   try {
     // Fetch the recording from GHL
     console.log(`[GHL] Fetching recording for call ${ghlCall.id}...`);
-    const recordingBuffer = await fetchCallRecording(ghlCall.id);
+    const recordingResult = await fetchCallRecording(ghlCall.id);
     
-    if (!recordingBuffer) {
+    if (!recordingResult) {
       const skipReason = `No recording available from GHL (call ${ghlCall.duration}s with ${ghlCall.contactName || 'unknown contact'})`;
       console.log(`[GHL] ${skipReason} for call ${ghlCall.id}`);
       // Create a skipped call record so admins can see it in Needs Review
@@ -765,8 +862,8 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
       return { success: true, skipped: true, reason: skipReason };
     }
 
-    // Upload to S3
-    const recordingUrl = await uploadRecordingToS3(recordingBuffer, ghlCall.id);
+    // Upload to S3 with correct content type
+    const recordingUrl = await uploadRecordingToS3(recordingResult.buffer, ghlCall.id, recordingResult.contentType);
     if (!recordingUrl) {
       return { success: false, reason: "Failed to upload recording to S3" };
     }
@@ -890,7 +987,7 @@ export async function pollForNewCalls(): Promise<{
         console.log(`[GHL] Polling tenant ${tenant.id} (${tenant.name}) from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
         // Per-tenant timeout: 5 minutes max per tenant to prevent blocking
-        const TENANT_TIMEOUT_MS = 5 * 60 * 1000;
+        const TENANT_TIMEOUT_MS = 12 * 60 * 1000; // 12 min to accommodate up to 500 conversations from 5-page TYPE_CALL pass
         const tenantPoll = async () => {
           const ghlCalls = await fetchGHLCalls({ startDate, endDate });
           console.log(`[GHL] Tenant ${tenant.id}: Found ${ghlCalls.length} calls to process`);
@@ -986,15 +1083,30 @@ async function retryStuckCalls(): Promise<void> {
         call.updatedAt && new Date(call.updatedAt) < oneHourAgo
       );
 
-      const stuckCalls = [...stuckProcessing, ...stuckPending];
+      // Also catch failed calls with recording issues that might succeed now
+      // (e.g., after fixing audio format detection or if recording became available)
+      const failedRecording = allCalls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl && // Has a recording URL
+        call.classificationReason && 
+        (call.classificationReason.includes('Invalid file format') || 
+         call.classificationReason.includes('HTTP 404') ||
+         call.classificationReason.includes('Failed to download audio')) &&
+        call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+      );
+
+      const stuckCalls = [...stuckProcessing, ...stuckPending, ...failedRecording];
 
       for (const call of stuckCalls) {
         const isPending = call.status === 'pending';
-        console.log(`[StuckCallRetry] ${isPending ? 'Processing missed' : 'Resetting stuck'} call ${call.id} (${call.contactName}, status: ${call.status}, updated: ${call.updatedAt})`);
+        const isFailed = call.status === 'failed';
+        console.log(`[StuckCallRetry] ${isFailed ? 'Retrying failed' : isPending ? 'Processing missed' : 'Resetting stuck'} call ${call.id} (${call.contactName}, status: ${call.status}, updated: ${call.updatedAt})`);
         if (!isPending) {
           await updateCall(call.id, {
             status: 'pending',
-            classificationReason: `Auto-reset from stuck '${call.status}' state — retrying processing`,
+            classificationReason: isFailed 
+              ? `Auto-retry from failed state — previous error: ${(call.classificationReason || '').substring(0, 100)}`
+              : `Auto-reset from stuck '${call.status}' state — retrying processing`,
           });
         }
         callProcessingQueue.add(() => processCall(call.id)).catch((err: any) => {
@@ -1666,17 +1778,17 @@ export async function resyncCallRecording(callId: number): Promise<{
     console.log(`[GHL Resync] Re-syncing recording for call ${callId} (GHL ID: ${call.ghlCallId})`);
 
     // Fetch fresh recording from GHL
-    const recordingBuffer = await fetchCallRecording(call.ghlCallId);
+    const recordingResult = await fetchCallRecording(call.ghlCallId);
     
-    if (!recordingBuffer) {
+    if (!recordingResult) {
       return { 
         success: false, 
         message: "Recording no longer available from GHL - the file may have been deleted or expired" 
       };
     }
 
-    // Upload to S3
-    const newRecordingUrl = await uploadRecordingToS3(recordingBuffer, call.ghlCallId);
+    // Upload to S3 with correct content type
+    const newRecordingUrl = await uploadRecordingToS3(recordingResult.buffer, call.ghlCallId, recordingResult.contentType);
     if (!newRecordingUrl) {
       return { success: false, message: "Failed to upload recording to S3" };
     }

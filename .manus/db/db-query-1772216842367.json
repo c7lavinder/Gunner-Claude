@@ -1,0 +1,310 @@
+{
+  "query": "SELECT id, contactName, status, duration, callDirection, teamMemberName, recordingUrl IS NOT NULL as has_recording, createdAt FROM calls WHERE DATE(createdAt) >= '2026-02-27' ORDER BY createdAt DESC LIMIT 30;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, status, duration, callDirection, teamMemberName, recordingUrl IS NOT NULL as has_recording, createdAt FROM calls WHERE DATE(createdAt) >= '2026-02-27' ORDER BY createdAt DESC LIMIT 30;",
+  "rows": [
+    {
+      "id": "2730152",
+      "contactName": "Brian Cunningham",
+      "status": "skipped",
+      "duration": "18",
+      "callDirection": "outbound",
+      "teamMemberName": "Alex Diaz",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:23:03"
+    },
+    {
+      "id": "2730151",
+      "contactName": "Lela Settlemyer",
+      "status": "skipped",
+      "duration": "30",
+      "callDirection": "outbound",
+      "teamMemberName": "Mirna Razo",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:21:57"
+    },
+    {
+      "id": "2730150",
+      "contactName": "Harold Stewart",
+      "status": "skipped",
+      "duration": "30",
+      "callDirection": "outbound",
+      "teamMemberName": "Alex Diaz",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:21:56"
+    },
+    {
+      "id": "2730149",
+      "contactName": "Sheila Bounds",
+      "status": "skipped",
+      "duration": "18",
+      "callDirection": "outbound",
+      "teamMemberName": "Efren Valenzuela",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:21:51"
+    },
+    {
+      "id": "2730148",
+      "contactName": "NULL",
+      "status": "failed",
+      "duration": "90",
+      "callDirection": "outbound",
+      "teamMemberName": "Kyle Barks",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:20:41"
+    },
+    {
+      "id": "2730147",
+      "contactName": "Nathaniel Davis",
+      "status": "skipped",
+      "duration": "18",
+      "callDirection": "outbound",
+      "teamMemberName": "Efren Valenzuela",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:19:57"
+    },
+    {
+      "id": "2730146",
+      "contactName": "Cranston Oneal",
+      "status": "skipped",
+      "duration": "30",
+      "callDirection": "outbound",
+      "teamMemberName": "Efren Valenzuela",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:19:00"
+    },
+    {
+      "id": "2730145",
+      "contactName": "NULL",
+      "status": "skipped",
+      "duration": "3",
+      "callDirection": "outbound",
+      "teamMemberName": "Kyle Barks",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:16:59"
+    },
+    {
+      "id": "2730144",
+      "contactName": "George Mosier",
+      "status": "skipped",
+      "duration": "24",
+      "callDirection": "outbound",
+      "teamMemberName": "Efren Valenzuela",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:15:26"
+    },
+    {
+      "id": "2730143",
+      "contactName": "Robert Stepp",
+      "status": "skipped",
+      "duration": "12",
+      "callDirection": "outbound",
+      "teamMemberName": "Alex Diaz",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:15:25"
+    },
+    {
+      "id": "2730142",
+      "contactName": "Ervin Carter",
+      "status": "skipped",
+      "duration": "24",
+      "callDirection": "outbound",
+      "teamMemberName": "Efren Valenzuela",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 18:11:56"
+    },
+    {
+      "id": "2730141",
+      "contactName": "NULL",
+      "status": "skipped",
+      "duration": "14",
+      "callDirection": "inbound",
+      "teamMemberName": "NULL",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:58:16"
+    },
+    {
+      "id": "2730140",
+      "contactName": "NULL",
+      "status": "failed",
+      "duration": "69",
+      "callDirection": "inbound",
+      "teamMemberName": "NULL",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:57:36"
+    },
+    {
+      "id": "2730139",
+      "contactName": "Jose Parra",
+      "status": "skipped",
+      "duration": "30",
+      "callDirection": "outbound",
+      "teamMemberName": "Efren Valenzuela",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:52:09"
+    },
+    {
+      "id": "2730138",
+      "contactName": "Raul Perez",
+      "status": "skipped",
+      "duration": "30",
+      "callDirection": "outbound",
+      "teamMemberName": "Alex Diaz",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:46:59"
+    },
+    {
+      "id": "2730137",
+      "contactName": "Cecil Baldwin",
+      "status": "skipped",
+      "duration": "18",
+      "callDirection": "outbound",
+      "teamMemberName": "Efren Valenzuela",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:46:55"
+    },
+    {
+      "id": "2730136",
+      "contactName": "Nereida Santiago",
+      "status": "skipped",
+      "duration": "24",
+      "callDirection": "outbound",
+      "teamMemberName": "Mirna Razo",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:46:53"
+    },
+    {
+      "id": "2730135",
+      "contactName": "Jonathan Griffin",
+      "status": "skipped",
+      "duration": "239",
+      "callDirection": "outbound",
+      "teamMemberName": "Chris Segura",
+      "has_recording": "0",
+      "createdAt": "2026-02-27 17:42:18"
+    },
+    {
+      "id": "2730134",
+      "contactName": "(615) 619-4262",
+      "status": "skipped",
+      "duration": "276",
+      "callDirection": "outbound",
+      "teamMemberName": "NULL",
+      "has_recording": "0",
+      "createdAt": "2026-02-27 17:42:17"
+    },
+    {
+      "id": "2730133",
+      "contactName": "(815) 685-0979",
+      "status": "skipped",
+      "duration": "77",
+      "callDirection": "inbound",
+      "teamMemberName": "NULL",
+      "has_recording": "0",
+      "createdAt": "2026-02-27 17:42:16"
+    },
+    {
+      "id": "2730132",
+      "contactName": "Nancy Mason",
+      "status": "skipped",
+      "duration": "75",
+      "callDirection": "inbound",
+      "teamMemberName": "Chris Segura",
+      "has_recording": "0",
+      "createdAt": "2026-02-27 17:42:16"
+    },
+    {
+      "id": "2730131",
+      "contactName": "Raymond Donahue",
+      "status": "completed",
+      "duration": "230",
+      "callDirection": "inbound",
+      "teamMemberName": "Chris Segura",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:42:15"
+    },
+    {
+      "id": "2730130",
+      "contactName": "David Sanders",
+      "status": "skipped",
+      "duration": "219",
+      "callDirection": "outbound",
+      "teamMemberName": "Chris Segura",
+      "has_recording": "0",
+      "createdAt": "2026-02-27 17:42:04"
+    },
+    {
+      "id": "2730129",
+      "contactName": "John Carter",
+      "status": "skipped",
+      "duration": "18",
+      "callDirection": "outbound",
+      "teamMemberName": "Efren Valenzuela",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:39:53"
+    },
+    {
+      "id": "2730128",
+      "contactName": "NULL",
+      "status": "failed",
+      "duration": "NULL",
+      "callDirection": "outbound",
+      "teamMemberName": "Kyle Barks",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:34:54"
+    },
+    {
+      "id": "2730127",
+      "contactName": "Michael Hickey",
+      "status": "skipped",
+      "duration": "18",
+      "callDirection": "outbound",
+      "teamMemberName": "Alex Diaz",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:34:34"
+    },
+    {
+      "id": "2730126",
+      "contactName": "Lawrence Gray",
+      "status": "completed",
+      "duration": "148",
+      "callDirection": "outbound",
+      "teamMemberName": "Daniel Lozano",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:32:25"
+    },
+    {
+      "id": "2730125",
+      "contactName": "Susan Hamilton",
+      "status": "skipped",
+      "duration": "20",
+      "callDirection": "inbound",
+      "teamMemberName": "Chris Segura",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:32:19"
+    },
+    {
+      "id": "2730124",
+      "contactName": "(201) 703-7645",
+      "status": "skipped",
+      "duration": "439",
+      "callDirection": "inbound",
+      "teamMemberName": "NULL",
+      "has_recording": "0",
+      "createdAt": "2026-02-27 17:32:16"
+    },
+    {
+      "id": "2730123",
+      "contactName": "Anna Salyers",
+      "status": "completed",
+      "duration": "412",
+      "callDirection": "outbound",
+      "teamMemberName": "Kyle Barks",
+      "has_recording": "1",
+      "createdAt": "2026-02-27 17:32:15"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tstatus\tduration\tcallDirection\tteamMemberName\thas_recording\tcreatedAt\n2730152\tBrian Cunningham\tskipped\t18\toutbound\tAlex Diaz\t1\t2026-02-27 18:23:03\n2730151\tLela Settlemyer\tskipped\t30\toutbound\tMirna Razo\t1\t2026-02-27 18:21:57\n2730150\tHarold Stewart\tskipped\t30\toutbound\tAlex Diaz\t1\t2026-02-27 18:21:56\n2730149\tSheila Bounds\tskipped\t18\toutbound\tEfren Valenzuela\t1\t2026-02-27 18:21:51\n2730148\tNULL\tfailed\t90\toutbound\tKyle Barks\t1\t2026-02-27 18:20:41\n2730147\tNathaniel Davis\tskipped\t18\toutbound\tEfren Valenzuela\t1\t2026-02-27 18:19:57\n2730146\tCranston Oneal\tskipped\t30\toutbound\tEfren Valenzuela\t1\t2026-02-27 18:19:00\n2730145\tNULL\tskipped\t3\toutbound\tKyle Barks\t1\t2026-02-27 18:16:59\n2730144\tGeorge Mosier\tskipped\t24\toutbound\tEfren Valenzuela\t1\t2026-02-27 18:15:26\n2730143\tRobert Stepp\tskipped\t12\toutbound\tAlex Diaz\t1\t2026-02-27 18:15:25\n2730142\tErvin Carter\tskipped\t24\toutbound\tEfren Valenzuela\t1\t2026-02-27 18:11:56\n2730141\tNULL\tskipped\t14\tinbound\tNULL\t1\t2026-02-27 17:58:16\n2730140\tNULL\tfailed\t69\tinbound\tNULL\t1\t2026-02-27 17:57:36\n2730139\tJose Parra\tskipped\t30\toutbound\tEfren Valenzuela\t1\t2026-02-27 17:52:09\n2730138\tRaul Perez\tskipped\t30\toutbound\tAlex Diaz\t1\t2026-02-27 17:46:59\n2730137\tCecil Baldwin\tskipped\t18\toutbound\tEfren Valenzuela\t1\t2026-02-27 17:46:55\n2730136\tNereida Santiago\tskipped\t24\toutbound\tMirna Razo\t1\t2026-02-27 17:46:53\n2730135\tJonathan Griffin\tskipped\t239\toutbound\tChris Segura\t0\t2026-02-27 17:42:18\n2730134\t(615) 619-4262\tskipped\t276\toutbound\tNULL\t0\t2026-02-27 17:42:17\n2730133\t(815) 685-0979\tskipped\t77\tinbound\tNULL\t0\t2026-02-27 17:42:16\n2730132\tNancy Mason\tskipped\t75\tinbound\tChris Segura\t0\t2026-02-27 17:42:16\n2730131\tRaymond Donahue\tcompleted\t230\tinbound\tChris Segura\t1\t2026-02-27 17:42:15\n2730130\tDavid Sanders\tskipped\t219\toutbound\tChris Segura\t0\t2026-02-27 17:42:04\n2730129\tJohn Carter\tskipped\t18\toutbound\tEfren Valenzuela\t1\t2026-02-27 17:39:53\n2730128\tNULL\tfailed\tNULL\toutbound\tKyle Barks\t1\t2026-02-27 17:34:54\n2730127\tMichael Hickey\tskipped\t18\toutbound\tAlex Diaz\t1\t2026-02-27 17:34:34\n2730126\tLawrence Gray\tcompleted\t148\toutbound\tDaniel Lozano\t1\t2026-02-27 17:32:25\n2730125\tSusan Hamilton\tskipped\t20\tinbound\tChris Segura\t1\t2026-02-27 17:32:19\n2730124\t(201) 703-7645\tskipped\t439\tinbound\tNULL\t0\t2026-02-27 17:32:16\n2730123\tAnna Salyers\tcompleted\t412\toutbound\tKyle Barks\t1\t2026-02-27 17:32:15\n",
+  "stderr": "",
+  "execution_time_ms": 380
+}

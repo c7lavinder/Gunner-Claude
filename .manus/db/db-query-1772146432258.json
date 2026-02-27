@@ -1,0 +1,18 @@
+{
+  "query": "SELECT id, tenantId, locationId, companyId, isActive, lastError FROM ghl_oauth_tokens;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, tenantId, locationId, companyId, isActive, lastError FROM ghl_oauth_tokens;",
+  "rows": [
+    {
+      "id": "1",
+      "tenantId": "1",
+      "locationId": "hmD7eWGQJE7EVFpJxj4q",
+      "companyId": "H7s1oGGooRv0k1PGiMad",
+      "isActive": "true",
+      "lastError": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\tlocationId\tcompanyId\tisActive\tlastError\n1\t1\thmD7eWGQJE7EVFpJxj4q\tH7s1oGGooRv0k1PGiMad\ttrue\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 381
+}

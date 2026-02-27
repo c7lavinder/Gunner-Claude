@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, contact_name, status, duration, call_direction, team_member_name, recording_url IS NOT NULL as has_recording, created_at FROM calls WHERE DATE(call_timestamp) = '2026-02-27' ORDER BY call_timestamp DESC LIMIT 30;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contact_name, status, duration, call_direction, team_member_name, recording_url IS NOT NULL as has_recording, created_at FROM calls WHERE DATE(call_timestamp) = '2026-02-27' ORDER BY call_timestamp DESC LIMIT 30;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'call_timestamp' in 'order clause'"
+  ]
+}
