@@ -3454,3 +3454,11 @@
 - [x] Added AM role-based exceptions for follow_up and admin_callback
 - [x] 6 classification prompt tests pass
 - [ ] User should run Bulk Regrade from Tenant Settings to re-classify existing calls with updated prompt
+
+## Bug Fix: Recording 404 & Invalid File Format (Feb 27)
+- [x] Add 404 retry with backoff in transcription download (30s, 60s, 2min retries before failing)
+- [x] Add MIME type normalization (audio/x-wav → audio/wav) in Blob creation for Whisper API
+- [x] Split stuck call retry into tiered backoff: 15 min for 404 errors, 1 hour for other failures
+- [x] Add Invalid transcription response to retry-eligible error list
+- [x] Speed up stuck call retry interval from 30 min to 10 min
+- [x] 28 stuck call tests pass (7 new tests for tiered backoff + 6 MIME normalization tests)

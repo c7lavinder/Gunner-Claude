@@ -204,6 +204,166 @@ describe('Stuck Call Detection', () => {
     });
   });
 
+  describe('Failed call retry with tiered backoff', () => {
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const twentyMinAgo = new Date(Date.now() - 20 * 60 * 1000);
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+
+    it('retries 404 failed calls after 15 minutes (fast backoff)', () => {
+      const calls = [
+        mockCall({ id: 1, status: 'failed', classificationReason: 'Failed to download audio file: HTTP 404', updatedAt: twentyMinAgo.toISOString(), recordingUrl: 'https://twilio.com/rec.wav' }),
+      ];
+
+      const failed404 = calls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl &&
+        call.classificationReason &&
+        (call.classificationReason.includes('HTTP 404') ||
+         call.classificationReason.includes('recording not available')) &&
+        call.updatedAt && new Date(call.updatedAt) < fifteenMinAgo
+      );
+
+      expect(failed404).toHaveLength(1);
+    });
+
+    it('does NOT retry 404 failed calls that are less than 15 minutes old', () => {
+      const calls = [
+        mockCall({ id: 1, status: 'failed', classificationReason: 'Failed to download audio file: HTTP 404', updatedAt: tenMinAgo.toISOString(), recordingUrl: 'https://twilio.com/rec.wav' }),
+      ];
+
+      const failed404 = calls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl &&
+        call.classificationReason &&
+        (call.classificationReason.includes('HTTP 404') ||
+         call.classificationReason.includes('recording not available')) &&
+        call.updatedAt && new Date(call.updatedAt) < fifteenMinAgo
+      );
+
+      expect(failed404).toHaveLength(0);
+    });
+
+    it('retries "recording not available" errors after 15 minutes', () => {
+      const calls = [
+        mockCall({ id: 1, status: 'failed', classificationReason: 'HTTP 404 after 3 retries (recording not available)', updatedAt: twentyMinAgo.toISOString(), recordingUrl: 'https://twilio.com/rec.wav' }),
+      ];
+
+      const failed404 = calls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl &&
+        call.classificationReason &&
+        (call.classificationReason.includes('HTTP 404') ||
+         call.classificationReason.includes('recording not available')) &&
+        call.updatedAt && new Date(call.updatedAt) < fifteenMinAgo
+      );
+
+      expect(failed404).toHaveLength(1);
+    });
+
+    it('retries Invalid file format errors only after 1 hour (slow backoff)', () => {
+      const calls = [
+        mockCall({ id: 1, status: 'failed', classificationReason: 'Transcription service request failed: 400 Bad Request: Invalid file format', updatedAt: twentyMinAgo.toISOString(), recordingUrl: 'https://twilio.com/rec.wav' }),
+      ];
+
+      const failed404 = calls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl &&
+        call.classificationReason &&
+        (call.classificationReason.includes('HTTP 404') ||
+         call.classificationReason.includes('recording not available')) &&
+        call.updatedAt && new Date(call.updatedAt) < fifteenMinAgo
+      );
+
+      const failedOther = calls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl &&
+        call.classificationReason &&
+        !(call.classificationReason.includes('HTTP 404') || call.classificationReason.includes('recording not available')) &&
+        (call.classificationReason.includes('Invalid file format') ||
+         call.classificationReason.includes('Transcription service request failed')) &&
+        call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+      );
+
+      expect(failed404).toHaveLength(0);
+      expect(failedOther).toHaveLength(0); // Only 20 min old, needs 1 hour
+    });
+
+    it('retries Invalid file format errors after 1 hour', () => {
+      const calls = [
+        mockCall({ id: 1, status: 'failed', classificationReason: 'Transcription service request failed: 400 Bad Request: Invalid file format', updatedAt: twoHoursAgo.toISOString(), recordingUrl: 'https://twilio.com/rec.wav' }),
+      ];
+
+      const failedOther = calls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl &&
+        call.classificationReason &&
+        !(call.classificationReason.includes('HTTP 404') || call.classificationReason.includes('recording not available')) &&
+        (call.classificationReason.includes('Invalid file format') ||
+         call.classificationReason.includes('Transcription service request failed')) &&
+        call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+      );
+
+      expect(failedOther).toHaveLength(1);
+    });
+
+    it('retries Invalid transcription response errors after 1 hour', () => {
+      const calls = [
+        mockCall({ id: 1, status: 'failed', classificationReason: 'Invalid transcription response: Transcription service returned an invalid response format', updatedAt: twoHoursAgo.toISOString(), recordingUrl: 'https://twilio.com/rec.wav' }),
+      ];
+
+      const failedOther = calls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl &&
+        call.classificationReason &&
+        !(call.classificationReason.includes('HTTP 404') || call.classificationReason.includes('recording not available')) &&
+        call.classificationReason.includes('Invalid transcription response') &&
+        call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+      );
+
+      expect(failedOther).toHaveLength(1);
+    });
+  });
+
+  describe('MIME type normalization', () => {
+    function normalizeMimeType(mimeType: string): string {
+      const cleanMime = mimeType.split(';')[0].trim().toLowerCase();
+      const mimeMap: Record<string, string> = {
+        'audio/x-wav': 'audio/wav',
+        'audio/x-wave': 'audio/wav',
+        'audio/vnd.wave': 'audio/wav',
+        'audio/x-ogg': 'audio/ogg',
+        'audio/x-m4a': 'audio/m4a',
+        'audio/x-flac': 'audio/flac',
+        'audio/x-mp3': 'audio/mpeg',
+      };
+      return mimeMap[cleanMime] || cleanMime;
+    }
+
+    it('normalizes audio/x-wav to audio/wav', () => {
+      expect(normalizeMimeType('audio/x-wav')).toBe('audio/wav');
+    });
+
+    it('normalizes audio/x-wave to audio/wav', () => {
+      expect(normalizeMimeType('audio/x-wave')).toBe('audio/wav');
+    });
+
+    it('normalizes audio/vnd.wave to audio/wav', () => {
+      expect(normalizeMimeType('audio/vnd.wave')).toBe('audio/wav');
+    });
+
+    it('passes through standard audio/wav unchanged', () => {
+      expect(normalizeMimeType('audio/wav')).toBe('audio/wav');
+    });
+
+    it('passes through audio/mpeg unchanged', () => {
+      expect(normalizeMimeType('audio/mpeg')).toBe('audio/mpeg');
+    });
+
+    it('strips charset suffix before normalizing', () => {
+      expect(normalizeMimeType('audio/x-wav; charset=utf-8')).toBe('audio/wav');
+    });
+  });
+
   describe('UI stuck indicator logic', () => {
     it('marks calls as stuck when updatedAt is more than 1 hour ago', () => {
       const item = mockCall({ updatedAt: twoHoursAgo.toISOString() });

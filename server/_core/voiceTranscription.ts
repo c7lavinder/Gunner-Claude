@@ -68,8 +68,11 @@ async function transcribeBuffer(
 
   // Create FormData for multipart upload to Whisper API
   const formData = new FormData();
+  // Normalize MIME type: Whisper API only accepts standard types (audio/wav, audio/mp3, etc.)
+  // Twilio returns audio/x-wav which Whisper rejects as "Invalid file format"
+  const normalizedMime = normalizeMimeType(mimeType);
   const filename = `audio.${getFileExtension(mimeType)}`;
-  const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+  const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: normalizedMime });
   formData.append("file", audioBlob, filename);
   formData.append("model", "whisper-1");
   formData.append("response_format", "verbose_json");
@@ -172,11 +175,45 @@ export async function transcribeAudio(
       clearTimeout(downloadTimeout);
     }
     if (!response.ok) {
-      return {
-        error: "Failed to download audio file",
-        code: "SERVICE_ERROR",
-        details: `HTTP ${response.status}`
-      };
+      // Twilio/GHL recordings may not be immediately available after a call ends.
+      // Retry up to 3 times with increasing delays for 404 errors.
+      if (response.status === 404) {
+        const retryDelays = [30_000, 60_000, 120_000]; // 30s, 60s, 2min
+        for (let attempt = 0; attempt < retryDelays.length; attempt++) {
+          console.log(`[Transcription] Recording returned 404, retrying in ${retryDelays[attempt] / 1000}s (attempt ${attempt + 1}/${retryDelays.length})...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+          try {
+            const retryResponse = await fetch(options.audioUrl);
+            if (retryResponse.ok) {
+              response = retryResponse;
+              console.log(`[Transcription] Recording available on retry attempt ${attempt + 1}`);
+              break;
+            }
+            if (retryResponse.status !== 404) {
+              return {
+                error: "Failed to download audio file",
+                code: "SERVICE_ERROR",
+                details: `HTTP ${retryResponse.status} on retry`
+              };
+            }
+          } catch (retryErr) {
+            console.warn(`[Transcription] Retry ${attempt + 1} fetch error:`, retryErr);
+          }
+          if (attempt === retryDelays.length - 1) {
+            return {
+              error: "Failed to download audio file",
+              code: "SERVICE_ERROR",
+              details: `HTTP 404 after ${retryDelays.length} retries (recording not available)`
+            };
+          }
+        }
+      } else {
+        return {
+          error: "Failed to download audio file",
+          code: "SERVICE_ERROR",
+          details: `HTTP ${response.status}`
+        };
+      }
     }
 
     const audioBuffer = Buffer.from(await response.arrayBuffer());
@@ -272,6 +309,24 @@ export async function transcribeAudio(
       details: error instanceof Error ? error.message : "An unexpected error occurred"
     };
   }
+}
+
+/**
+ * Normalize non-standard MIME types to standard ones that Whisper API accepts.
+ * Twilio returns audio/x-wav which Whisper rejects as "Invalid file format".
+ */
+function normalizeMimeType(mimeType: string): string {
+  const cleanMime = mimeType.split(';')[0].trim().toLowerCase();
+  const mimeMap: Record<string, string> = {
+    'audio/x-wav': 'audio/wav',
+    'audio/x-wave': 'audio/wav',
+    'audio/vnd.wave': 'audio/wav',
+    'audio/x-ogg': 'audio/ogg',
+    'audio/x-m4a': 'audio/m4a',
+    'audio/x-flac': 'audio/flac',
+    'audio/x-mp3': 'audio/mpeg',
+  };
+  return mimeMap[cleanMime] || cleanMime;
 }
 
 function getFileExtension(mimeType: string): string {

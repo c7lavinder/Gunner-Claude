@@ -1100,6 +1100,8 @@ async function retryStuckCalls(): Promise<void> {
     const allTenants = await getAllTenants();
     let totalReset = 0;
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // Shorter backoff for 404 errors - recordings may become available within minutes
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
 
     for (const tenant of allTenants) {
       // Get all non-completed calls for this tenant (high limit to catch all stuck ones)
@@ -1117,20 +1119,33 @@ async function retryStuckCalls(): Promise<void> {
         call.updatedAt && new Date(call.updatedAt) < oneHourAgo
       );
 
-      // Also catch failed calls with recording/transcription issues that might succeed now
-      // (e.g., after fixing audio format detection, rate limits cleared, or recording became available)
-      const failedRecording = allCalls.filter((call: any) =>
+      // Failed calls with 404 errors (recording not yet available) - retry after 15 min
+      const failed404 = allCalls.filter((call: any) =>
+        call.status === 'failed' &&
+        call.recordingUrl &&
+        call.classificationReason &&
+        (call.classificationReason.includes('HTTP 404') ||
+         call.classificationReason.includes('recording not available')) &&
+        call.updatedAt && new Date(call.updatedAt) < fifteenMinAgo
+      );
+
+      // Other failed calls with recording/transcription issues - retry after 1 hour
+      // (e.g., after fixing audio format detection, rate limits cleared)
+      const failedOther = allCalls.filter((call: any) =>
         call.status === 'failed' &&
         call.recordingUrl && // Has a recording URL
         call.classificationReason && 
+        !(call.classificationReason.includes('HTTP 404') || call.classificationReason.includes('recording not available')) &&
         (call.classificationReason.includes('Invalid file format') || 
-         call.classificationReason.includes('HTTP 404') ||
          call.classificationReason.includes('Failed to download audio') ||
          call.classificationReason.includes('Transcription service request failed') ||
          call.classificationReason.includes('429 Too Many') ||
-         call.classificationReason.includes('Voice transcription failed')) &&
+         call.classificationReason.includes('Voice transcription failed') ||
+         call.classificationReason.includes('Invalid transcription response')) &&
         call.updatedAt && new Date(call.updatedAt) < oneHourAgo
       );
+
+      const failedRecording = [...failed404, ...failedOther];
 
       const stuckCalls = [...stuckProcessing, ...stuckPending, ...failedRecording];
 
@@ -1299,18 +1314,18 @@ export function startPolling(intervalMinutes: number = 5): void {
     }, 60 * 60 * 1000); // 1 hour
   }
 
-  // Start stuck call retry (every 30 minutes)
+  // Start stuck call retry (every 10 minutes - fast enough to catch 404 retries for recent recordings)
   if (!stuckCallRetryInterval) {
-    console.log("[StuckCallRetry] Starting automatic stuck call retry (every 30 minutes)");
+    console.log("[StuckCallRetry] Starting automatic stuck call retry (every 10 minutes)");
     // Run initial check after 2 minutes
     setTimeout(() => {
       retryStuckCalls().catch(err => console.error("[StuckCallRetry] Initial run error:", err));
     }, 2 * 60 * 1000);
 
-    // Then run every 30 minutes
+    // Then run every 10 minutes
     stuckCallRetryInterval = setInterval(() => {
       retryStuckCalls().catch(err => console.error("[StuckCallRetry] Scheduled run error:", err));
-    }, 30 * 60 * 1000); // 30 minutes
+    }, 10 * 60 * 1000); // 10 minutes
   }
 
   // Start opportunity detection every 2 hours (reduced from 1 hour to save API quota)
