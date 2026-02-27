@@ -3424,3 +3424,23 @@
 - [x] Fix S3 upload to use correct MIME type and file extension based on detected format
 - [x] Add auto-retry for failed calls with recording issues (Invalid file format, HTTP 404)
 - [x] Increase GHL conversation coverage: 2 TYPE_CALL pages + 3 ALL pages = up to 500 conversations per poll
+
+## Bug: Feb 27 calls still not appearing after fixes (post-publish)
+- [ ] James Prince (730s, 2:12 PM, Daniel Lozano) not showing in Gunner
+- [ ] Donald Cormier calls (12:33-12:34 PM) not showing
+- [ ] Jan Bailey calls (10:58 AM) not showing
+- [ ] Virgil Patterson calls (10:48-10:49 AM) not showing
+- [ ] Gerri Hayden (35s, 10:45 AM) not showing
+- [ ] Kyle Barks calls: Zaia Safi, JR Postma, Tara & Josh Balboa, Johnnie Crumley (1506s), Berry Hampton (118s), Briley Fisher (45s), Greg Sexton, Jeff Shelton not showing
+- [ ] Diagnose why polling is not picking up these calls or why they're not appearing in UI
+
+## Bug Fix: Feb 27 - GHL calls not syncing (James Prince, Kyle Barks' calls missing)
+- [x] Fix circuit breaker collision: OpportunityDetection trips shared circuit breaker, blocking call polling
+- [x] Fix lastPollTimestamp not preserved on circuit breaker interruption (creates permanent gaps)
+- [x] Increase conversation fetch pages for better coverage (3+3 pages = ~528 unique conversations)
+- [x] Show ungraded/pending calls in All Calls tab (grade filter was hiding them)
+- [x] Fix audio/x-wav MIME type not recognized by transcription service (Twilio returns audio/x-wav, Whisper rejects it)
+- [x] Add contact name resolution from GHL Contact API when conversation data has null names
+- [x] Expand stuck call retry to catch transcription failures (429 rate limit, 400 bad request)
+- [x] Resolve contact names during processCall retry for calls with null contactName
+- [x] Verify all fixes work end-to-end after next poll cycle (13 tests pass, contact names resolving, failed calls retrying)

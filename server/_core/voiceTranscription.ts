@@ -281,11 +281,21 @@ function getFileExtension(mimeType: string): string {
     'audio/mpeg': 'mp3',
     'audio/wav': 'wav',
     'audio/wave': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/x-wave': 'wav',
+    'audio/vnd.wave': 'wav',
     'audio/ogg': 'ogg',
+    'audio/x-ogg': 'ogg',
     'audio/m4a': 'm4a',
     'audio/mp4': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/aac': 'm4a',
+    'audio/flac': 'flac',
+    'audio/x-flac': 'flac',
   };
-  return mimeToExt[mimeType] || 'audio';
+  // Handle charset suffixes (e.g., 'audio/wav; charset=utf-8') and normalize
+  const cleanMime = mimeType.split(';')[0].trim().toLowerCase();
+  return mimeToExt[cleanMime] || 'mp3'; // Default to mp3 (widely supported) instead of 'audio'
 }
 
 function getLanguageName(langCode: string): string {

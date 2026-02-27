@@ -763,7 +763,7 @@ CRITICAL RULE: "callback_scheduled" should almost NEVER be used for calls where 
 
 import { transcribeAudio } from "./_core/voiceTranscription";
 
-export async function transcribeCallRecording(recordingUrl: string): Promise<string> {
+export async function transcribeCallRecording(recordingUrl: string): Promise<{ text: string; durationSeconds?: number }> {
   try {
     const result = await transcribeAudio({
       audioUrl: recordingUrl,
@@ -776,7 +776,16 @@ export async function transcribeCallRecording(recordingUrl: string): Promise<str
       throw new Error(result.error + (result.details ? `: ${result.details}` : ''));
     }
 
-    return result.text;
+    // Extract duration from Whisper segments if available
+    let durationSeconds: number | undefined;
+    if (result.segments && result.segments.length > 0) {
+      const lastSegment = result.segments[result.segments.length - 1];
+      if (lastSegment.end) {
+        durationSeconds = Math.round(lastSegment.end);
+      }
+    }
+
+    return { text: result.text, durationSeconds };
   } catch (error) {
     console.error("[Transcription] Error transcribing call:", error);
     throw error;
@@ -1056,6 +1065,22 @@ export async function processCall(callId: number): Promise<void> {
     return;
   }
 
+  // Resolve missing contact name from GHL if we have a contactId
+  if (!call.contactName && call.ghlContactId) {
+    try {
+      const { fetchGHLContactName } = await import('./ghlService');
+      const name = await fetchGHLContactName(call.ghlContactId);
+      if (name) {
+        await updateCall(callId, { contactName: name });
+        (call as any).contactName = name;
+        console.log(`[ProcessCall] Resolved missing contact name for call ${callId}: ${name}`);
+      }
+    } catch (e) {
+      // Non-critical, continue processing
+      console.warn(`[ProcessCall] Could not resolve contact name for call ${callId}:`, e);
+    }
+  }
+
   // Prevent duplicate grades
   const existingGrade = await getCallGradeByCallId(callId);
   if (existingGrade) {
@@ -1110,8 +1135,14 @@ export async function processCall(callId: number): Promise<void> {
       console.log(`[ProcessCall] Call ${callId} is short (${call.duration}s), transcribing for summary`);
       try {
         await updateCall(callId, { status: "transcribing" });
-        const shortTranscript = await transcribeCallRecording(call.recordingUrl);
-        await updateCall(callId, { transcript: shortTranscript });
+        const shortResult = await transcribeCallRecording(call.recordingUrl);
+        const shortTranscript = shortResult.text;
+        const shortUpdates: any = { transcript: shortTranscript };
+        if (!call.duration && shortResult.durationSeconds) {
+          shortUpdates.duration = shortResult.durationSeconds;
+          console.log(`[ProcessCall] Updated null duration for call ${callId} from transcription: ${shortResult.durationSeconds}s`);
+        }
+        await updateCall(callId, shortUpdates);
 
         // Generate a brief summary of what happened
         if (shortTranscript && shortTranscript.length > 20) {
@@ -1158,8 +1189,15 @@ export async function processCall(callId: number): Promise<void> {
 
     // Step 2: Transcribe
     await updateCall(callId, { status: "transcribing" });
-    const transcript = await transcribeCallRecording(call.recordingUrl);
-    await updateCall(callId, { transcript });
+    const transcriptionResult = await transcribeCallRecording(call.recordingUrl);
+    const transcript = transcriptionResult.text;
+    const transcriptUpdates: any = { transcript };
+    // Update duration from transcription if it was null (e.g., GHL didn't provide it)
+    if (!call.duration && transcriptionResult.durationSeconds) {
+      transcriptUpdates.duration = transcriptionResult.durationSeconds;
+      console.log(`[ProcessCall] Updated null duration for call ${callId} from transcription: ${transcriptionResult.durationSeconds}s`);
+    }
+    await updateCall(callId, transcriptUpdates);
 
     // Step 3: Classify the call
     await updateCall(callId, { status: "classifying" });

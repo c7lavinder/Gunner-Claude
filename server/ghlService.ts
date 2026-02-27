@@ -613,19 +613,21 @@ export async function fetchGHLCalls(params: {
 
   // Two-pass approach for comprehensive call coverage:
   // Pass 1 (TYPE_CALL): Conversations where the last message was a call.
-  //   2 pages (200 convos) — catches calls that weren't followed by SMS/email.
+  //   3 pages (300 convos) — catches calls that weren't followed by SMS/email.
   //   No startDate cutoff since the 100th conversation's lastMessageDate is often
   //   before startDate even though newer call conversations exist on later pages.
   // Pass 2 (ALL): Most recently active conversations regardless of message type.
   //   3 pages (300 convos) — catches calls followed by SMS/email activity,
   //   which is where GHL dialer calls often end up (call → auto-SMS follow-up).
   // Deduplicate by conversation ID to avoid processing the same conversation twice.
+  // Note: 3+3 pages yields ~500-600 unique conversations, which takes ~13 min to process.
+  // This fits within the 25-min tenant timeout with room to spare.
 
-  console.log(`[GHL] Pass 1: Fetching TYPE_CALL conversations (2 pages)...`);
+  console.log(`[GHL] Pass 1: Fetching TYPE_CALL conversations (3 pages)...`);
   const callConversations = await fetchGHLConversations({
     limit,
     lastMessageType: "TYPE_CALL",
-    maxPages: 2,
+    maxPages: 3,
     label: " [CALL]",
   });
 
@@ -682,6 +684,9 @@ export async function fetchGHLCalls(params: {
           allCalls.push(c);
         } else {
           dateFilteredOut++;
+          if (dateFilteredOut <= 2) {
+            console.log(`[GHL] Date filtered: call ${c.id} dateAdded=${c.dateAdded} (${new Date(c.dateAdded).toISOString()}) < startDate ${startDate.toISOString()}`);
+          }
         }
       }
     } else {
@@ -723,11 +728,11 @@ async function matchTeamMember(ghlUserId?: string, userName?: string, tenantId?:
  * Fetch a GHL contact's address by contactId.
  * Returns a formatted property address string, or null if not available.
  */
-async function fetchGHLContactAddress(contactId: string): Promise<string | null> {
+async function fetchGHLContactDetails(contactId: string): Promise<{ address: string | null; name: string | null }> {
   // Fail fast: skip if circuit breaker is open
   if (!ghlCircuitBreaker.canProceed("normal")) {
-    console.log(`[GHL] Circuit breaker open — skipping fetchGHLContactAddress for ${contactId}`);
-    return null;
+    console.log(`[GHL] Circuit breaker open — skipping fetchGHLContactDetails for ${contactId}`);
+    return { address: null, name: null };
   }
 
   try {
@@ -748,7 +753,7 @@ async function fetchGHLContactAddress(contactId: string): Promise<string | null>
     if (!response.ok) {
       if (response.status === 429) ghlCircuitBreaker.record429();
       console.warn(`[GHL] Failed to fetch contact ${contactId}: ${response.status}`);
-      return null;
+      return { address: null, name: null };
     }
     ghlCircuitBreaker.recordSuccess();
     const data = await response.json();
@@ -762,11 +767,26 @@ async function fetchGHLContactAddress(contactId: string): Promise<string | null>
       parts.push(stateZip);
     }
     const address = parts.join(", ").trim();
-    return address || null;
+    // Get contact name
+    const name = contact.contactName || contact.name || 
+      [contact.firstName, contact.lastName].filter(Boolean).join(' ') || null;
+    return { address: address || null, name };
   } catch (error) {
-    console.warn(`[GHL] Error fetching contact address for ${contactId}:`, error);
-    return null;
+    console.warn(`[GHL] Error fetching contact details for ${contactId}:`, error);
+    return { address: null, name: null };
   }
+}
+
+// Backward-compatible wrapper
+async function fetchGHLContactAddress(contactId: string): Promise<string | null> {
+  const { address } = await fetchGHLContactDetails(contactId);
+  return address;
+}
+
+// Exported wrapper for contact name resolution (used by grading.ts retry)
+export async function fetchGHLContactName(contactId: string): Promise<string | null> {
+  const { name } = await fetchGHLContactDetails(contactId);
+  return name;
 }
 
 /**
@@ -868,13 +888,19 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
       return { success: false, reason: "Failed to upload recording to S3" };
     }
 
-    // Fetch property address from GHL contact (like BatchDialer does)
+    // Fetch property address and contact name from GHL contact
     let propertyAddress: string | undefined;
+    let resolvedContactName = ghlCall.contactName;
     if (ghlCall.contactId) {
-      const address = await fetchGHLContactAddress(ghlCall.contactId);
-      if (address) {
-        propertyAddress = address;
-        console.log(`[GHL] Got property address for contact ${ghlCall.contactId}: ${address}`);
+      const contactDetails = await fetchGHLContactDetails(ghlCall.contactId);
+      if (contactDetails.address) {
+        propertyAddress = contactDetails.address;
+        console.log(`[GHL] Got property address for contact ${ghlCall.contactId}: ${contactDetails.address}`);
+      }
+      // Fill in contact name if missing from conversation data
+      if (!resolvedContactName && contactDetails.name) {
+        resolvedContactName = contactDetails.name;
+        console.log(`[GHL] Resolved contact name from API: ${resolvedContactName}`);
       }
     }
 
@@ -882,7 +908,7 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
     const call = await createCall({
       ghlCallId: ghlCall.id,
       ghlContactId: ghlCall.contactId,
-      contactName: ghlCall.contactName,
+      contactName: resolvedContactName,
       contactPhone: ghlCall.contactPhone,
       propertyAddress: propertyAddress,
       recordingUrl: recordingUrl,
@@ -987,7 +1013,7 @@ export async function pollForNewCalls(): Promise<{
         console.log(`[GHL] Polling tenant ${tenant.id} (${tenant.name}) from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
         // Per-tenant timeout: 5 minutes max per tenant to prevent blocking
-        const TENANT_TIMEOUT_MS = 12 * 60 * 1000; // 12 min to accommodate up to 500 conversations from 5-page TYPE_CALL pass
+        const TENANT_TIMEOUT_MS = 25 * 60 * 1000; // 25 min to accommodate up to 600 conversations from 3+3 page passes
         const tenantPoll = async () => {
           const ghlCalls = await fetchGHLCalls({ startDate, endDate });
           console.log(`[GHL] Tenant ${tenant.id}: Found ${ghlCalls.length} calls to process`);
@@ -1024,12 +1050,20 @@ export async function pollForNewCalls(): Promise<{
       }
     }
 
-    // Update last poll timestamp
-    lastPollTimestamp = new Date();
+    // Only update lastPollTimestamp if the poll actually completed successfully.
+    // If the circuit breaker tripped or a timeout occurred, we keep the old timestamp
+    // so the next poll will re-fetch the same window and catch any missed calls.
+    if (results.failed === 0 && results.errors.length === 0) {
+      lastPollTimestamp = new Date();
+      console.log(`[GHL] Poll successful — advancing lastPollTimestamp to ${lastPollTimestamp.toISOString()}`);
+    } else {
+      console.log(`[GHL] Poll had errors/failures — NOT advancing lastPollTimestamp (staying at ${lastPollTimestamp?.toISOString() || 'null'} to retry missed calls)`);
+    }
 
   } catch (error) {
     results.success = false;
     results.errors.push(error instanceof Error ? error.message : "Unknown error");
+    console.log(`[GHL] Poll threw error — NOT advancing lastPollTimestamp (staying at ${lastPollTimestamp?.toISOString() || 'null'})`);
   } finally {
     isPolling = false;
     activeCredentials = null; // Clear credentials after polling
@@ -1083,15 +1117,18 @@ async function retryStuckCalls(): Promise<void> {
         call.updatedAt && new Date(call.updatedAt) < oneHourAgo
       );
 
-      // Also catch failed calls with recording issues that might succeed now
-      // (e.g., after fixing audio format detection or if recording became available)
+      // Also catch failed calls with recording/transcription issues that might succeed now
+      // (e.g., after fixing audio format detection, rate limits cleared, or recording became available)
       const failedRecording = allCalls.filter((call: any) =>
         call.status === 'failed' &&
         call.recordingUrl && // Has a recording URL
         call.classificationReason && 
         (call.classificationReason.includes('Invalid file format') || 
          call.classificationReason.includes('HTTP 404') ||
-         call.classificationReason.includes('Failed to download audio')) &&
+         call.classificationReason.includes('Failed to download audio') ||
+         call.classificationReason.includes('Transcription service request failed') ||
+         call.classificationReason.includes('429 Too Many') ||
+         call.classificationReason.includes('Voice transcription failed')) &&
         call.updatedAt && new Date(call.updatedAt) < oneHourAgo
       );
 

@@ -1,0 +1,100 @@
+{
+  "query": "SELECT id, contactName, teamMemberName, duration, status, callTimestamp, createdAt FROM calls WHERE contactName LIKE '%Prince%' OR contactName LIKE '%Crumley%' OR contactName LIKE '%Hampton%' OR contactName LIKE '%Safi%' OR contactName LIKE '%Balboa%' ORDER BY createdAt DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, teamMemberName, duration, status, callTimestamp, createdAt FROM calls WHERE contactName LIKE '%Prince%' OR contactName LIKE '%Crumley%' OR contactName LIKE '%Hampton%' OR contactName LIKE '%Safi%' OR contactName LIKE '%Balboa%' ORDER BY createdAt DESC LIMIT 20;",
+  "rows": [
+    {
+      "id": "2640060",
+      "contactName": "Tara & Josh Balboa",
+      "teamMemberName": "NULL",
+      "duration": "1444",
+      "status": "skipped",
+      "callTimestamp": "2026-02-25 22:39:02",
+      "createdAt": "2026-02-26 17:41:23"
+    },
+    {
+      "id": "2640059",
+      "contactName": "Tara & Josh Balboa",
+      "teamMemberName": "NULL",
+      "duration": "10",
+      "status": "skipped",
+      "callTimestamp": "2026-02-26 15:05:11",
+      "createdAt": "2026-02-26 17:41:22"
+    },
+    {
+      "id": "2610164",
+      "contactName": "Josh Balboa",
+      "teamMemberName": "Kyle Barks",
+      "duration": "31",
+      "status": "skipped",
+      "callTimestamp": "2026-02-25 22:32:22",
+      "createdAt": "2026-02-25 22:33:51"
+    },
+    {
+      "id": "2610135",
+      "contactName": "Johnnie Crumley",
+      "teamMemberName": "Kyle Barks",
+      "duration": "11",
+      "status": "skipped",
+      "callTimestamp": "2026-02-25 21:16:14",
+      "createdAt": "2026-02-25 21:17:43"
+    },
+    {
+      "id": "2610059",
+      "contactName": "Tara & Josh Balboa",
+      "teamMemberName": "Daniel Lozano",
+      "duration": "422",
+      "status": "completed",
+      "callTimestamp": "2026-02-25 16:55:44",
+      "createdAt": "2026-02-25 17:21:06"
+    },
+    {
+      "id": "2610046",
+      "contactName": "Johnnie Crumley",
+      "teamMemberName": "Daniel Lozano",
+      "duration": "30",
+      "status": "skipped",
+      "callTimestamp": "2026-02-25 16:40:38",
+      "createdAt": "2026-02-25 16:43:13"
+    },
+    {
+      "id": "2610032",
+      "contactName": "Johnnie Crumley",
+      "teamMemberName": "Daniel Lozano",
+      "duration": "604",
+      "status": "completed",
+      "callTimestamp": "2026-02-25 16:09:36",
+      "createdAt": "2026-02-25 16:23:55"
+    },
+    {
+      "id": "1920032",
+      "contactName": "Zala Safi",
+      "teamMemberName": "Kyle Barks",
+      "duration": "115",
+      "status": "completed",
+      "callTimestamp": "2026-02-13 20:14:46",
+      "createdAt": "2026-02-13 20:22:39"
+    },
+    {
+      "id": "240021",
+      "contactName": "Berry Hampton",
+      "teamMemberName": "Kyle Barks",
+      "duration": "51",
+      "status": "skipped",
+      "callTimestamp": "2026-02-03 18:00:06",
+      "createdAt": "2026-02-03 18:04:48"
+    },
+    {
+      "id": "60003",
+      "contactName": "Berry Hampton",
+      "teamMemberName": "Daniel Lozano",
+      "duration": "376",
+      "status": "completed",
+      "callTimestamp": "2026-02-02 16:55:24",
+      "createdAt": "2026-02-02 17:28:58"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tteamMemberName\tduration\tstatus\tcallTimestamp\tcreatedAt\n2640060\tTara & Josh Balboa\tNULL\t1444\tskipped\t2026-02-25 22:39:02\t2026-02-26 17:41:23\n2640059\tTara & Josh Balboa\tNULL\t10\tskipped\t2026-02-26 15:05:11\t2026-02-26 17:41:22\n2610164\tJosh Balboa\tKyle Barks\t31\tskipped\t2026-02-25 22:32:22\t2026-02-25 22:33:51\n2610135\tJohnnie Crumley\tKyle Barks\t11\tskipped\t2026-02-25 21:16:14\t2026-02-25 21:17:43\n2610059\tTara & Josh Balboa\tDaniel Lozano\t422\tcompleted\t2026-02-25 16:55:44\t2026-02-25 17:21:06\n2610046\tJohnnie Crumley\tDaniel Lozano\t30\tskipped\t2026-02-25 16:40:38\t2026-02-25 16:43:13\n2610032\tJohnnie Crumley\tDaniel Lozano\t604\tcompleted\t2026-02-25 16:09:36\t2026-02-25 16:23:55\n1920032\tZala Safi\tKyle Barks\t115\tcompleted\t2026-02-13 20:14:46\t2026-02-13 20:22:39\n240021\tBerry Hampton\tKyle Barks\t51\tskipped\t2026-02-03 18:00:06\t2026-02-03 18:04:48\n60003\tBerry Hampton\tDaniel Lozano\t376\tcompleted\t2026-02-02 16:55:24\t2026-02-02 17:28:58\n",
+  "stderr": "",
+  "execution_time_ms": 477
+}

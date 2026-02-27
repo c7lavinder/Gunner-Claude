@@ -13,7 +13,7 @@ import { calls, callGrades, opportunities, teamMembers, coachMessages, users } f
 import { eq, and, desc, gte, isNull, inArray, sql, not, lt } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { getTenantsWithCrm, parseCrmConfig, type TenantCrmConfig } from "./tenant";
-import { ghlCircuitBreaker } from "./ghlRateLimiter";
+import { oppCircuitBreaker as ghlCircuitBreaker } from "./ghlRateLimiter";
 import { loadGHLCredentials } from "./ghlCredentialHelper";
 import { oauthAwareFetch } from "./ghlOAuthFetch";
 

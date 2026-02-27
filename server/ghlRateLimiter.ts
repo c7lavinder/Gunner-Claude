@@ -16,20 +16,18 @@
  * 3. **Contact Search Cache** — short-lived cache for GHL contact search results
  *    to avoid redundant API calls when performing multiple actions on the same contact.
  * 
+ * IMPORTANT: Call polling and OpportunityDetection use SEPARATE circuit breaker
+ * instances so that rate limit hits from one service don't block the other.
+ * They share the same sliding window rate limiter since they share the same API quota.
+ * 
  * Usage:
- *   import { ghlCircuitBreaker } from "./ghlRateLimiter";
+ *   import { ghlCircuitBreaker, oppCircuitBreaker } from "./ghlRateLimiter";
  *   
- *   // Before a background GHL call:
- *   if (!ghlCircuitBreaker.canProceed("normal")) {
- *     console.log("Circuit breaker open, skipping background request");
- *     return;
- *   }
+ *   // For call polling:
+ *   if (!ghlCircuitBreaker.canProceed("normal")) { ... }
  *   
- *   // After a 429 response:
- *   ghlCircuitBreaker.record429();
- *   
- *   // After a successful response:
- *   ghlCircuitBreaker.recordSuccess();
+ *   // For opportunity detection:
+ *   if (!oppCircuitBreaker.canProceed("normal")) { ... }
  */
 
 // ============ CIRCUIT BREAKER STATE ============
@@ -54,17 +52,10 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
   reservedHighPrioritySlots: 10, // Reserve 10 slots for user-initiated actions
 };
 
-let state: CircuitState = "closed";
-let consecutive429Count = 0;
-let lastTripTime: number = 0;
-let totalTrips = 0;
-let config = { ...DEFAULT_CONFIG };
+// ============ SHARED SLIDING WINDOW (all services share API quota) ============
 
-// Sliding window for rate limiting
 const requestTimestamps: number[] = [];
 const WINDOW_MS = 60_000;
-
-// ============ INTERNAL HELPERS ============
 
 function cleanOldTimestamps(): void {
   const cutoff = Date.now() - WINDOW_MS;
@@ -78,143 +69,156 @@ function getUsedSlots(): number {
   return requestTimestamps.length;
 }
 
-function getAvailableSlots(priority: "high" | "normal"): number {
+function getAvailableSlots(priority: "high" | "normal", cfg: CircuitBreakerConfig): number {
   const used = getUsedSlots();
-  const max = config.maxRequestsPerMinute;
+  const max = cfg.maxRequestsPerMinute;
   
   if (priority === "high") {
-    // High priority can use the full budget
     return Math.max(0, max - used);
   }
   
-  // Normal priority must leave reserved slots for high-priority
-  return Math.max(0, max - config.reservedHighPrioritySlots - used);
+  return Math.max(0, max - cfg.reservedHighPrioritySlots - used);
 }
 
-// ============ CIRCUIT BREAKER API ============
+// ============ CIRCUIT BREAKER FACTORY ============
 
-export const ghlCircuitBreaker = {
-  /**
-   * Check whether a request with the given priority is allowed to proceed.
-   * 
-   * - "high" (user-initiated): Allowed unless the sliding window is completely full.
-   *   High-priority requests bypass the circuit breaker open state.
-   * - "normal" (background): Blocked when the circuit is open or when available
-   *   slots (after reserving headroom for high-priority) are exhausted.
-   */
-  canProceed(priority: "high" | "normal" = "normal"): boolean {
-    // Check if circuit should transition from open → half-open
-    if (state === "open") {
-      const elapsed = Date.now() - lastTripTime;
-      if (elapsed >= config.cooldownMs) {
-        state = "half-open";
-        console.log(`[GHL CircuitBreaker] Transitioning to half-open after ${Math.round(elapsed / 1000)}s cooldown`);
+function createCircuitBreaker(name: string, overrides?: Partial<CircuitBreakerConfig>) {
+  let state: CircuitState = "closed";
+  let consecutive429Count = 0;
+  let lastTripTime: number = 0;
+  let totalTrips = 0;
+  let config = { ...DEFAULT_CONFIG, ...overrides };
+
+  return {
+    /**
+     * Check whether a request with the given priority is allowed to proceed.
+     */
+    canProceed(priority: "high" | "normal" = "normal"): boolean {
+      if (state === "open") {
+        const elapsed = Date.now() - lastTripTime;
+        if (elapsed >= config.cooldownMs) {
+          state = "half-open";
+          console.log(`[${name} CircuitBreaker] Transitioning to half-open after ${Math.round(elapsed / 1000)}s cooldown`);
+        }
       }
-    }
 
-    // High-priority requests bypass the circuit breaker (only respect rate limit)
-    if (priority === "high") {
-      return getAvailableSlots("high") > 0;
-    }
+      if (priority === "high") {
+        return getAvailableSlots("high", config) > 0;
+      }
 
-    // Normal-priority: blocked when circuit is open
-    if (state === "open") {
-      return false;
-    }
+      if (state === "open") {
+        return false;
+      }
 
-    // Half-open: allow a trickle of normal requests (1 at a time to test)
-    if (state === "half-open") {
-      return getAvailableSlots("normal") > 5; // Only proceed if plenty of headroom
-    }
+      if (state === "half-open") {
+        return getAvailableSlots("normal", config) > 5;
+      }
 
-    // Closed: normal rate limiting
-    return getAvailableSlots("normal") > 0;
-  },
+      return getAvailableSlots("normal", config) > 0;
+    },
 
-  /**
-   * Record that a request is being sent (consumes a rate limit slot).
-   */
-  recordRequest(): void {
-    requestTimestamps.push(Date.now());
-  },
+    /**
+     * Record that a request is being sent (consumes a shared rate limit slot).
+     */
+    recordRequest(): void {
+      requestTimestamps.push(Date.now());
+    },
 
-  /**
-   * Record a successful GHL API response. Resets the failure counter
-   * and transitions half-open → closed.
-   */
-  recordSuccess(): void {
-    consecutive429Count = 0;
-    if (state === "half-open") {
+    /**
+     * Record a successful GHL API response.
+     */
+    recordSuccess(): void {
+      consecutive429Count = 0;
+      if (state === "half-open") {
+        state = "closed";
+        console.log(`[${name} CircuitBreaker] Circuit closed — API recovered`);
+      }
+    },
+
+    /**
+     * Record a 429 (rate limit) response.
+     */
+    record429(): void {
+      consecutive429Count++;
+      console.log(`[${name} CircuitBreaker] 429 recorded (${consecutive429Count}/${config.failureThreshold})`);
+
+      if (consecutive429Count >= config.failureThreshold && state !== "open") {
+        state = "open";
+        lastTripTime = Date.now();
+        totalTrips++;
+        console.log(`[${name} CircuitBreaker] Circuit OPEN — pausing background requests for ${config.cooldownMs / 1000}s (trip #${totalTrips})`);
+      }
+    },
+
+    /**
+     * Get the current circuit breaker status for debugging / admin UI.
+     */
+    getStatus(): {
+      state: CircuitState;
+      consecutive429s: number;
+      totalTrips: number;
+      cooldownRemainingMs: number;
+      requestsInWindow: number;
+      availableHighPriority: number;
+      availableNormalPriority: number;
+    } {
+      const cooldownRemaining =
+        state === "open"
+          ? Math.max(0, config.cooldownMs - (Date.now() - lastTripTime))
+          : 0;
+
+      return {
+        state,
+        consecutive429s: consecutive429Count,
+        totalTrips,
+        cooldownRemainingMs: cooldownRemaining,
+        requestsInWindow: getUsedSlots(),
+        availableHighPriority: getAvailableSlots("high", config),
+        availableNormalPriority: getAvailableSlots("normal", config),
+      };
+    },
+
+    /**
+     * Force-reset the circuit breaker (for admin use).
+     */
+    reset(): void {
       state = "closed";
-      console.log("[GHL CircuitBreaker] Circuit closed — API recovered");
-    }
-  },
+      consecutive429Count = 0;
+      lastTripTime = 0;
+      // Note: don't clear requestTimestamps — they're shared across all breakers
+      console.log(`[${name} CircuitBreaker] Manually reset`);
+    },
 
-  /**
-   * Record a 429 (rate limit) response. Increments the failure counter
-   * and trips the circuit if the threshold is reached.
-   */
-  record429(): void {
-    consecutive429Count++;
-    console.log(`[GHL CircuitBreaker] 429 recorded (${consecutive429Count}/${config.failureThreshold})`);
+    /**
+     * Update configuration (for testing or runtime tuning).
+     */
+    configure(partial: Partial<CircuitBreakerConfig>): void {
+      config = { ...config, ...partial };
+    },
 
-    if (consecutive429Count >= config.failureThreshold && state !== "open") {
-      state = "open";
-      lastTripTime = Date.now();
-      totalTrips++;
-      console.log(`[GHL CircuitBreaker] Circuit OPEN — pausing background requests for ${config.cooldownMs / 1000}s (trip #${totalTrips})`);
-    }
-  },
+    /** Expose state for testing */
+    get currentState(): CircuitState { return state; },
+  };
+}
 
-  /**
-   * Get the current circuit breaker status for debugging / admin UI.
-   */
-  getStatus(): {
-    state: CircuitState;
-    consecutive429s: number;
-    totalTrips: number;
-    cooldownRemainingMs: number;
-    requestsInWindow: number;
-    availableHighPriority: number;
-    availableNormalPriority: number;
-  } {
-    const cooldownRemaining =
-      state === "open"
-        ? Math.max(0, config.cooldownMs - (Date.now() - lastTripTime))
-        : 0;
+// ============ CIRCUIT BREAKER INSTANCES ============
 
-    return {
-      state,
-      consecutive429s: consecutive429Count,
-      totalTrips,
-      cooldownRemainingMs: cooldownRemaining,
-      requestsInWindow: getUsedSlots(),
-      availableHighPriority: getAvailableSlots("high"),
-      availableNormalPriority: getAvailableSlots("normal"),
-    };
-  },
+/**
+ * Primary circuit breaker for call polling and user-initiated GHL requests.
+ * This is the main breaker used by ghlService.ts for conversation fetching,
+ * message fetching, and call syncing.
+ */
+export const ghlCircuitBreaker = createCircuitBreaker("GHL");
 
-  /**
-   * Force-reset the circuit breaker (for admin use).
-   */
-  reset(): void {
-    state = "closed";
-    consecutive429Count = 0;
-    lastTripTime = 0;
-    requestTimestamps.length = 0;
-    console.log("[GHL CircuitBreaker] Manually reset");
-  },
-
-  /**
-   * Update configuration (for testing or runtime tuning).
-   */
-  configure(partial: Partial<CircuitBreakerConfig>): void {
-    config = { ...config, ...partial };
-  },
-
-  /** Expose state for testing */
-  get currentState(): CircuitState { return state; },
-};
+/**
+ * Separate circuit breaker for OpportunityDetection.
+ * This prevents rate limit hits from opportunity scanning from blocking
+ * the critical call polling pipeline.
+ */
+export const oppCircuitBreaker = createCircuitBreaker("OppDetect", {
+  failureThreshold: 2, // Trip faster since opp detection is lower priority
+  cooldownMs: 5 * 60 * 1000, // 5 minute cooldown (longer since it's less critical)
+});
 
 // ============ CONTACT SEARCH CACHE ============
 
@@ -266,7 +270,6 @@ export function setCachedContactSearch(
       if (v.timestamp < cutoff) keysToDelete.push(k);
     });
     keysToDelete.forEach(k => contactSearchCache.delete(k));
-    // If still too large, remove oldest entries
     if (contactSearchCache.size > 500) {
       const entries = Array.from(contactSearchCache.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp);
       for (let i = 0; i < entries.length - 300; i++) {

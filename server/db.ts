@@ -481,14 +481,11 @@ export async function getCallsWithGrades(options: {
     })
   );
 
-  // When explicitly querying for skipped calls, return all results (they won't have grades)
-  // Otherwise, filter to only include calls with grades
-  const isQueryingSkipped = options.statuses && options.statuses.includes('skipped');
-  const filtered = isQueryingSkipped 
-    ? result 
-    : result.filter(item => item.grade !== null);
-
-  return { items: filtered, total: filtered.length };
+  // Return all calls regardless of grade status.
+  // Previously we filtered out ungraded calls, but this caused newly-synced calls
+  // to be invisible until grading completed. Now all calls are shown — the UI
+  // displays a "Processing" badge for calls that haven't been graded yet.
+  return { items: result, total };
 }
 
 // ============ LEADERBOARD FUNCTIONS ============

@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, contactName, teamMemberName, status, duration, callTimestamp FROM calls WHERE contactName LIKE '%Prince%' OR contactName LIKE '%Crumley%' OR contactName LIKE '%Hampton%' ORDER BY callTimestamp DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, teamMemberName, status, duration, callTimestamp FROM calls WHERE contactName LIKE '%Prince%' OR contactName LIKE '%Crumley%' OR contactName LIKE '%Hampton%' ORDER BY callTimestamp DESC LIMIT 10",
+  "rows": [
+    {
+      "id": "2610135",
+      "contactName": "Johnnie Crumley",
+      "teamMemberName": "Kyle Barks",
+      "status": "skipped",
+      "duration": "11",
+      "callTimestamp": "2026-02-25 21:16:14"
+    },
+    {
+      "id": "2610046",
+      "contactName": "Johnnie Crumley",
+      "teamMemberName": "Daniel Lozano",
+      "status": "skipped",
+      "duration": "30",
+      "callTimestamp": "2026-02-25 16:40:38"
+    },
+    {
+      "id": "2610032",
+      "contactName": "Johnnie Crumley",
+      "teamMemberName": "Daniel Lozano",
+      "status": "completed",
+      "duration": "604",
+      "callTimestamp": "2026-02-25 16:09:36"
+    },
+    {
+      "id": "240021",
+      "contactName": "Berry Hampton",
+      "teamMemberName": "Kyle Barks",
+      "status": "skipped",
+      "duration": "51",
+      "callTimestamp": "2026-02-03 18:00:06"
+    },
+    {
+      "id": "60003",
+      "contactName": "Berry Hampton",
+      "teamMemberName": "Daniel Lozano",
+      "status": "completed",
+      "duration": "376",
+      "callTimestamp": "2026-02-02 16:55:24"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tteamMemberName\tstatus\tduration\tcallTimestamp\n2610135\tJohnnie Crumley\tKyle Barks\tskipped\t11\t2026-02-25 21:16:14\n2610046\tJohnnie Crumley\tDaniel Lozano\tskipped\t30\t2026-02-25 16:40:38\n2610032\tJohnnie Crumley\tDaniel Lozano\tcompleted\t604\t2026-02-25 16:09:36\n240021\tBerry Hampton\tKyle Barks\tskipped\t51\t2026-02-03 18:00:06\n60003\tBerry Hampton\tDaniel Lozano\tcompleted\t376\t2026-02-02 16:55:24\n",
+  "stderr": "",
+  "execution_time_ms": 360
+}
