@@ -1,0 +1,66 @@
+{
+  "query": "SELECT id, contactName, callType, callTypeSource, duration, callTimestamp FROM calls WHERE contactName = 'Rita Adams' ORDER BY callTimestamp DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, callType, callTypeSource, duration, callTimestamp FROM calls WHERE contactName = 'Rita Adams' ORDER BY callTimestamp DESC LIMIT 10",
+  "rows": [
+    {
+      "id": "2640047",
+      "contactName": "Rita Adams",
+      "callType": "admin_callback",
+      "callTypeSource": "auto",
+      "duration": "524",
+      "callTimestamp": "2026-02-25 22:22:50"
+    },
+    {
+      "id": "2610147",
+      "contactName": "Rita Adams",
+      "callType": "admin_callback",
+      "callTypeSource": "auto",
+      "duration": "66",
+      "callTimestamp": "2026-02-25 22:06:29"
+    },
+    {
+      "id": "2610141",
+      "contactName": "Rita Adams",
+      "callType": "admin_callback",
+      "callTypeSource": "auto",
+      "duration": "66",
+      "callTimestamp": "2026-02-25 21:50:12"
+    },
+    {
+      "id": "2610153",
+      "contactName": "Rita Adams",
+      "callType": "offer",
+      "callTypeSource": "ai_suggested",
+      "duration": "873",
+      "callTimestamp": "2026-02-25 21:35:15"
+    },
+    {
+      "id": "2610033",
+      "contactName": "Rita Adams",
+      "callType": "offer",
+      "callTypeSource": "ai_suggested",
+      "duration": "413",
+      "callTimestamp": "2026-02-25 16:08:02"
+    },
+    {
+      "id": "2610029",
+      "contactName": "Rita Adams",
+      "callType": "offer",
+      "callTypeSource": "ai_suggested",
+      "duration": "119",
+      "callTimestamp": "2026-02-25 16:05:38"
+    },
+    {
+      "id": "2550056",
+      "contactName": "Rita Adams",
+      "callType": "offer",
+      "callTypeSource": "ai_suggested",
+      "duration": "654",
+      "callTimestamp": "2026-02-24 21:15:23"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tcallType\tcallTypeSource\tduration\tcallTimestamp\n2640047\tRita Adams\tadmin_callback\tauto\t524\t2026-02-25 22:22:50\n2610147\tRita Adams\tadmin_callback\tauto\t66\t2026-02-25 22:06:29\n2610141\tRita Adams\tadmin_callback\tauto\t66\t2026-02-25 21:50:12\n2610153\tRita Adams\toffer\tai_suggested\t873\t2026-02-25 21:35:15\n2610033\tRita Adams\toffer\tai_suggested\t413\t2026-02-25 16:08:02\n2610029\tRita Adams\toffer\tai_suggested\t119\t2026-02-25 16:05:38\n2550056\tRita Adams\toffer\tai_suggested\t654\t2026-02-24 21:15:23\n",
+  "stderr": "",
+  "execution_time_ms": 372
+}

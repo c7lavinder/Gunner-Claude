@@ -3444,3 +3444,13 @@
 - [x] Expand stuck call retry to catch transcription failures (429 rate limit, 400 bad request)
 - [x] Resolve contact names during processCall retry for calls with null contactName
 - [x] Verify all fixes work end-to-end after next poll cycle (13 tests pass, contact names resolving, failed calls retrying)
+
+## Bug Fix: Call Type Classification Wrong (Feb 27)
+- [x] Rita Adams 119s call wrongly classified as "Offer" — fixed: follow_up when referencing previously-stated offer amount
+- [x] Jack Keef (Kyle Barks, 17:04) wrongly classified as "Qualification" — fixed: AM referencing prior lead gen = offer
+- [x] Nina Beasley (Kyle Barks, 22:27) wrongly classified as "Qualification" — fixed: same AM pipeline logic
+- [x] Updated detectCallType prompt: offer vs qualification for AMs, offer vs follow_up for prior prices
+- [x] Added KEY DISTINCTION sections for offer vs qualification and offer vs follow_up
+- [x] Added AM role-based exceptions for follow_up and admin_callback
+- [x] 6 classification prompt tests pass
+- [ ] User should run Bulk Regrade from Tenant Settings to re-classify existing calls with updated prompt
