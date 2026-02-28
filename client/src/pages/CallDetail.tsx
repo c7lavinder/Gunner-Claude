@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing, Clock, User, RefreshCw, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, FileText, MessageSquare, ThumbsUp, ThumbsDown, MessageCircle, Quote } from "lucide-react";
+import { ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing, Clock, User, RefreshCw, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, FileText, MessageSquare, ThumbsUp, ThumbsDown, MessageCircle, Quote, MapPin, Play, Target } from "lucide-react";
 import { Link, useParams } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
@@ -29,7 +29,6 @@ import { useState, useEffect, useRef } from "react";
 import NextStepsTab from "@/components/NextStepsTab";
 import { Zap } from "lucide-react";
 import { useDemo } from "@/hooks/useDemo";
-// Badge confetti removed - badges are now awarded at grading time, not view time
 
 const FEEDBACK_TYPES = [
   { value: "score_too_high", label: "Score is too high" },
@@ -41,26 +40,111 @@ const FEEDBACK_TYPES = [
   { value: "praise", label: "AI did great!" },
 ];
 
-function GradeBadge({ grade, size = "default" }: { grade: string; size?: "default" | "large" }) {
-  const gradeClass = `grade-${grade.toLowerCase()}`;
-  const sizeClass = size === "large" ? "grade-badge-lg" : "";
-  return <span className={`grade-badge ${gradeClass} ${sizeClass}`}>{grade}</span>;
+/* ─── Grade display with animated glow ──────────────── */
+function GradeDisplay({ grade, score }: { grade: string; score: string | null }) {
+  const g = grade?.toLowerCase() || "?";
+  const gradeConfig: Record<string, { bg: string; glow: string; text: string }> = {
+    a: { bg: "var(--g-grade-a)", glow: "var(--g-grade-a-glow)", text: "#fff" },
+    b: { bg: "var(--g-grade-b)", glow: "var(--g-grade-b-glow)", text: "#fff" },
+    c: { bg: "var(--g-grade-c)", glow: "var(--g-grade-c-glow)", text: "#fff" },
+    d: { bg: "var(--g-grade-d)", glow: "var(--g-grade-d-glow)", text: "#fff" },
+    f: { bg: "var(--g-grade-f)", glow: "var(--g-grade-f-glow)", text: "#fff" },
+  };
+  const config = gradeConfig[g] || { bg: "var(--g-bg-inset)", glow: "transparent", text: "var(--g-text-primary)" };
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div
+        className="w-24 h-24 rounded-2xl flex items-center justify-center transition-transform duration-300 hover:scale-105"
+        style={{
+          background: config.bg,
+          boxShadow: `0 0 40px ${config.glow}, 0 0 80px ${config.glow}`,
+          color: config.text,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 48,
+          fontWeight: 800,
+        }}
+      >
+        {grade || "?"}
+      </div>
+      <p
+        className="text-3xl font-extrabold tracking-tight font-mono"
+        style={{ color: "var(--g-text-primary)" }}
+      >
+        {score ? `${Math.round(parseFloat(score))}%` : "N/A"}
+      </p>
+    </div>
+  );
 }
 
+/* ─── Criteria card with visual bar ─────────────────── */
 function CriteriaCard({ criteria }: { criteria: any }) {
   const percentage = (criteria.score / criteria.maxPoints) * 100;
-  
+  const getColor = () => {
+    if (percentage >= 80) return "var(--g-grade-a)";
+    if (percentage >= 60) return "var(--g-grade-b)";
+    if (percentage >= 40) return "var(--g-grade-c)";
+    return "var(--g-grade-f)";
+  };
+
   return (
-    <div className="p-4 border rounded-lg">
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="font-medium">{criteria.name}</h4>
-        <span className="text-sm font-bold">
+    <div
+      className="rounded-xl p-4 transition-all duration-300 hover:translate-y-[-2px]"
+      style={{
+        background: "var(--g-bg-card)",
+        border: "1px solid var(--g-border-subtle)",
+        boxShadow: "var(--g-shadow-card)",
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-semibold text-sm" style={{ color: "var(--g-text-primary)" }}>
+          {criteria.name}
+        </h4>
+        <span
+          className="font-mono text-sm font-bold"
+          style={{ color: getColor() }}
+        >
           {criteria.score}/{criteria.maxPoints}
         </span>
       </div>
-      <Progress value={percentage} className="h-2 mb-2" />
-      <p className="text-sm text-muted-foreground">{criteria.feedback}</p>
+      <div
+        className="h-2 rounded-full overflow-hidden mb-3"
+        style={{ background: "var(--g-bg-inset)" }}
+      >
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${percentage}%`, background: getColor() }}
+        />
+      </div>
+      <p className="text-xs leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>
+        {criteria.feedback}
+      </p>
     </div>
+  );
+}
+
+/* ─── Info pill for metadata ────────────────────────── */
+function InfoPill({ icon: Icon, label, variant }: { icon: any; label: string; variant?: string }) {
+  const variantStyles: Record<string, { bg: string; text: string; border: string }> = {
+    inbound: { bg: "rgba(37,99,235,0.08)", text: "rgb(59,130,246)", border: "rgba(37,99,235,0.2)" },
+    outbound: { bg: "rgba(22,163,74,0.08)", text: "rgb(34,197,94)", border: "rgba(22,163,74,0.2)" },
+    cold_call: { bg: "rgba(6,182,212,0.08)", text: "rgb(34,211,238)", border: "rgba(6,182,212,0.2)" },
+    qualification: { bg: "rgba(139,92,246,0.08)", text: "rgb(167,139,250)", border: "rgba(139,92,246,0.2)" },
+    follow_up: { bg: "rgba(245,158,11,0.08)", text: "rgb(251,191,36)", border: "rgba(245,158,11,0.2)" },
+    offer: { bg: "rgba(16,185,129,0.08)", text: "rgb(52,211,153)", border: "rgba(16,185,129,0.2)" },
+    admin: { bg: "rgba(148,163,184,0.08)", text: "rgb(148,163,184)", border: "rgba(148,163,184,0.2)" },
+    default: { bg: "var(--g-bg-inset)", text: "var(--g-text-secondary)", border: "var(--g-border-subtle)" },
+  };
+  const style = variantStyles[variant || "default"] || variantStyles.default;
+
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
+      style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}` }}
+    >
+      {Icon && <Icon className="h-3 w-3" />}
+      {label}
+    </span>
   );
 }
 
@@ -101,34 +185,22 @@ export default function CallDetail() {
   );
 
   const reprocessMutation = trpc.calls.reprocess.useMutation({
-    onSuccess: () => {
-      toast.success("Call queued for reprocessing");
-    },
-    onError: (error) => {
-      toast.error(`Failed to reprocess: ${error.message}`);
-    },
+    onSuccess: () => { toast.success("Call queued for reprocessing"); },
+    onError: (error) => { toast.error(`Failed to reprocess: ${error.message}`); },
   });
 
   const feedbackMutation = trpc.feedback.create.useMutation({
     onSuccess: () => {
       toast.success("Feedback submitted successfully");
       setFeedbackDialogOpen(false);
-      setFeedbackForm({
-        feedbackType: "general_correction",
-        criteriaName: "",
-        suggestedGrade: "",
-        explanation: "",
-        correctBehavior: "",
-      });
+      setFeedbackForm({ feedbackType: "general_correction", criteriaName: "", suggestedGrade: "", explanation: "", correctBehavior: "" });
     },
-    onError: (error) => {
-      toast.error(`Failed to submit feedback: ${error.message}`);
-    },
+    onError: (error) => { toast.error(`Failed to submit feedback: ${error.message}`); },
   });
 
   const utils = trpc.useUtils();
 
-  // XP processing for gamification (badges are awarded automatically at grading time)
+  // XP processing
   const processedRef = useRef(false);
   const processRewardsMutation = trpc.gamification.processCallView.useMutation({
     onSuccess: (data) => {
@@ -143,13 +215,13 @@ export default function CallDetail() {
     },
   });
 
-  // Process rewards when viewing a graded call for the first time
   useEffect(() => {
     if (grade && !processedRef.current && callId > 0) {
       processedRef.current = true;
       processRewardsMutation.mutate({ callId });
     }
   }, [grade, callId]);
+
   const reclassifyMutation = trpc.calls.reclassify.useMutation({
     onSuccess: (result) => {
       toast.success(`Call reclassified to ${result.classification.replace(/_/g, " ")}`);
@@ -158,18 +230,12 @@ export default function CallDetail() {
       utils.calls.getById.invalidate({ id: callId });
       utils.calls.withGrades.invalidate();
     },
-    onError: (error) => {
-      toast.error(`Failed to reclassify: ${error.message}`);
-    },
+    onError: (error) => { toast.error(`Failed to reclassify: ${error.message}`); },
   });
 
   const handleSubmitFeedback = () => {
     if (guardDemoAction("Submitting feedback")) return;
-    if (!feedbackForm.explanation.trim()) {
-      toast.error("Please provide an explanation");
-      return;
-    }
-
+    if (!feedbackForm.explanation.trim()) { toast.error("Please provide an explanation"); return; }
     feedbackMutation.mutate({
       callId,
       callGradeId: grade?.id,
@@ -187,10 +253,22 @@ export default function CallDetail() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
+        <div className="flex items-center gap-4">
+          <Skeleton className="w-10 h-10 rounded-xl" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
         <div className="grid gap-6 lg:grid-cols-3">
-          <Skeleton className="h-64 lg:col-span-2" />
-          <Skeleton className="h-64" />
+          <div className="space-y-4">
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-32 rounded-2xl" />
+          </div>
+          <div className="lg:col-span-2 space-y-4">
+            <Skeleton className="h-12 rounded-xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+          </div>
         </div>
       </div>
     );
@@ -198,12 +276,14 @@ export default function CallDetail() {
 
   if (!call) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <Phone className="h-16 w-16 text-muted-foreground/50 mb-4" />
-        <h3 className="text-lg font-semibold mb-2">Call not found</h3>
+      <div
+        className="flex flex-col items-center justify-center py-20 rounded-2xl"
+        style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}
+      >
+        <Phone className="h-16 w-16 mb-4" style={{ color: "var(--g-text-tertiary)", opacity: 0.4 }} />
+        <h3 className="text-lg font-semibold mb-3" style={{ color: "var(--g-text-primary)" }}>Call not found</h3>
         <Button variant="outline" onClick={() => window.history.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Inbox
+          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Inbox
         </Button>
       </div>
     );
@@ -220,90 +300,124 @@ export default function CallDetail() {
     suggestedResponses: string[];
   }> || [];
 
+  const callTypeLabel = (ct: string | null) => {
+    const map: Record<string, string> = {
+      cold_call: "Cold Call", qualification: "Qualification", follow_up: "Follow-Up",
+      offer: "Offer", seller_callback: "Admin", admin_callback: "Admin",
+    };
+    return map[ct || ""] || String(ct || "").replace(/_/g, " ") || "Unknown";
+  };
+
+  const callTypeVariant = (ct: string | null) => {
+    const map: Record<string, string> = {
+      cold_call: "cold_call", qualification: "qualification", follow_up: "follow_up",
+      offer: "offer", seller_callback: "admin", admin_callback: "admin",
+    };
+    return map[ct || ""] || "default";
+  };
+
+  const outcomeColors: Record<string, { label: string; color: string }> = {
+    appointment_set: { label: "Apt Set", color: "offer" },
+    offer_made: { label: "Offer Made", color: "inbound" },
+    offer_rejected: { label: "Offer Rejected", color: "default" },
+    offer_accepted: { label: "Offer Accepted", color: "offer" },
+    callback_scheduled: { label: "Callback", color: "follow_up" },
+    callback_requested: { label: "Callback", color: "follow_up" },
+    interested: { label: "Interested", color: "offer" },
+    not_interested: { label: "Not Interested", color: "default" },
+    left_vm: { label: "Left VM", color: "default" },
+    left_voicemail: { label: "Left VM", color: "default" },
+    no_answer: { label: "No Answer", color: "default" },
+    dead: { label: "Dead Lead", color: "default" },
+    wrong_number: { label: "Wrong Number", color: "follow_up" },
+    do_not_call: { label: "DNC", color: "default" },
+    follow_up: { label: "Follow Up", color: "inbound" },
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
+      {/* ═══ Header ═══ */}
+      <div className="flex items-start gap-4">
+        <button
+          onClick={() => window.history.back()}
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 hover:scale-105"
+          style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)", color: "var(--g-text-secondary)" }}
+        >
           <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter">
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter" style={{ color: "var(--g-text-primary)" }}>
             {call.contactName || call.contactPhone || "Unknown Contact"}
           </h1>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mt-0.5" style={{ color: 'var(--obs-text-tertiary)' }}>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             {call.teamMemberName && (
-              <span className="flex items-center gap-1">
-                <User className="h-3 w-3" />
-                {call.teamMemberName}
-              </span>
+              <InfoPill icon={User} label={call.teamMemberName} />
             )}
             {call.duration && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {Math.floor(call.duration / 60)}:{(call.duration % 60).toString().padStart(2, "0")}
-              </span>
+              <InfoPill icon={Clock} label={`${Math.floor(call.duration / 60)}:${(call.duration % 60).toString().padStart(2, "0")}`} />
             )}
-            {call.createdAt && (
-              <span>
-                {format(new Date(call.createdAt), "MMM d, yyyy 'at' h:mm a")}
-              </span>
+            {call.callDirection && (
+              <InfoPill
+                icon={call.callDirection === "inbound" ? PhoneIncoming : PhoneOutgoing}
+                label={call.callDirection === "inbound" ? "Inbound" : "Outbound"}
+                variant={call.callDirection}
+              />
+            )}
+            <InfoPill icon={null} label={callTypeLabel(call.callType)} variant={callTypeVariant(call.callType)} />
+            {(call as any).callOutcome && (call as any).callOutcome !== "pending" && (call as any).callOutcome !== "none" && (() => {
+              const outcome = (call as any).callOutcome as string;
+              const config = outcomeColors[outcome];
+              return <InfoPill icon={null} label={config?.label || outcome.replace(/_/g, " ")} variant={config?.color || "default"} />;
+            })()}
+            {(call as any).followUpScheduled === "true" && (
+              <InfoPill icon={Clock} label="Follow-Up Scheduled" variant="follow_up" />
+            )}
+            {call.propertyAddress && (
+              <InfoPill icon={MapPin} label={call.propertyAddress} variant="follow_up" />
             )}
           </div>
+          {call.createdAt && (
+            <p className="text-xs mt-2" style={{ color: "var(--g-text-tertiary)" }}>
+              {format(new Date(call.createdAt), "EEEE, MMM d, yyyy 'at' h:mm a")}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {call.status === "completed" && grade && (
             <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Give Feedback
+                <Button variant="outline" size="sm">
+                  <MessageSquare className="h-4 w-4 mr-1.5" /> Feedback
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Provide Feedback on AI Grading</DialogTitle>
-                  <DialogDescription>
-                    Help improve the AI by letting us know what it got right or wrong.
-                    Your feedback will be used to improve future grading.
-                  </DialogDescription>
+                  <DialogDescription>Help improve the AI by letting us know what it got right or wrong.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>Feedback Type</Label>
-                    <Select
-                      value={feedbackForm.feedbackType}
-                      onValueChange={(value) => setFeedbackForm({ ...feedbackForm, feedbackType: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Select value={feedbackForm.feedbackType} onValueChange={(value) => setFeedbackForm({ ...feedbackForm, feedbackType: value })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {FEEDBACK_TYPES.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Current Grade</Label>
                       <div className="p-2 border rounded-lg text-center">
-                        <GradeBadge grade={grade?.overallGrade || "?"} />
+                        <span className={`obs-grade-pill ${(grade?.overallGrade || "?").toLowerCase()}`}>{grade?.overallGrade || "?"}</span>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Suggested Grade (optional)</Label>
-                      <Select
-                        value={feedbackForm.suggestedGrade}
-                        onValueChange={(value) => setFeedbackForm({ ...feedbackForm, suggestedGrade: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select grade" />
-                        </SelectTrigger>
+                      <Label>Suggested Grade</Label>
+                      <Select value={feedbackForm.suggestedGrade} onValueChange={(value) => setFeedbackForm({ ...feedbackForm, suggestedGrade: value })}>
+                        <SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="A">A</SelectItem>
                           <SelectItem value="B">B</SelectItem>
@@ -314,54 +428,29 @@ export default function CallDetail() {
                       </Select>
                     </div>
                   </div>
-
                   <div className="space-y-2">
-                    <Label>Specific Criteria (optional)</Label>
-                    <Select
-                      value={feedbackForm.criteriaName}
-                      onValueChange={(value) => setFeedbackForm({ ...feedbackForm, criteriaName: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select criteria" />
-                      </SelectTrigger>
+                    <Label>Specific Criteria</Label>
+                    <Select value={feedbackForm.criteriaName} onValueChange={(value) => setFeedbackForm({ ...feedbackForm, criteriaName: value })}>
+                      <SelectTrigger><SelectValue placeholder="Select criteria" /></SelectTrigger>
                       <SelectContent>
-                        {criteriaScores.map((criteria) => (
-                          <SelectItem key={criteria.name} value={criteria.name}>
-                            {criteria.name}
-                          </SelectItem>
+                        {criteriaScores.map((c) => (
+                          <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-
                   <div className="space-y-2">
                     <Label>Explanation *</Label>
-                    <Textarea
-                      placeholder="Describe what the AI got wrong or right..."
-                      value={feedbackForm.explanation}
-                      onChange={(e) => setFeedbackForm({ ...feedbackForm, explanation: e.target.value })}
-                      className="min-h-[100px]"
-                    />
+                    <Textarea placeholder="Describe what the AI got wrong or right..." value={feedbackForm.explanation} onChange={(e) => setFeedbackForm({ ...feedbackForm, explanation: e.target.value })} className="min-h-[100px]" />
                   </div>
-
                   <div className="space-y-2">
-                    <Label>What Should the AI Have Done? (optional)</Label>
-                    <Textarea
-                      placeholder="Describe the correct behavior or scoring..."
-                      value={feedbackForm.correctBehavior}
-                      onChange={(e) => setFeedbackForm({ ...feedbackForm, correctBehavior: e.target.value })}
-                      className="min-h-[80px]"
-                    />
+                    <Label>What Should the AI Have Done?</Label>
+                    <Textarea placeholder="Describe the correct behavior..." value={feedbackForm.correctBehavior} onChange={(e) => setFeedbackForm({ ...feedbackForm, correctBehavior: e.target.value })} className="min-h-[80px]" />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setFeedbackDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handleSubmitFeedback}
-                    disabled={feedbackMutation.isPending}
-                  >
+                  <Button variant="outline" onClick={() => setFeedbackDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleSubmitFeedback} disabled={feedbackMutation.isPending}>
                     {feedbackMutation.isPending ? "Submitting..." : "Submit Feedback"}
                   </Button>
                 </DialogFooter>
@@ -369,390 +458,270 @@ export default function CallDetail() {
             </Dialog>
           )}
           {call.status === "failed" && (
-            <Button 
-              variant="outline"
-              onClick={() => { if (!guardDemoAction("Reprocessing")) reprocessMutation.mutate({ callId }); }}
-              disabled={reprocessMutation.isPending || isDemo}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${reprocessMutation.isPending ? "animate-spin" : ""}`} />
-              Retry
+            <Button variant="outline" size="sm" onClick={() => { if (!guardDemoAction("Reprocessing")) reprocessMutation.mutate({ callId }); }} disabled={reprocessMutation.isPending || isDemo}>
+              <RefreshCw className={`h-4 w-4 mr-1.5 ${reprocessMutation.isPending ? "animate-spin" : ""}`} /> Retry
             </Button>
           )}
-          {/* Reclassify Dialog - hidden in demo */}
           {!isDemo && (
-          <Dialog open={reclassifyDialogOpen} onOpenChange={setReclassifyDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                Reclassify
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Reclassify Call</DialogTitle>
-                <DialogDescription>
-                  Change the classification of this call. "Conversation" triggers full grading. "Admin Call" auto-grades with the admin rubric. Other options skip grading.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Current Classification</Label>
-                  <div className="p-2 border rounded-lg">
-                    <Badge variant="outline" className="capitalize">
-                      {call.classification?.replace(/_/g, " ") || "Unknown"}
-                    </Badge>
+            <Dialog open={reclassifyDialogOpen} onOpenChange={setReclassifyDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">Reclassify</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Reclassify Call</DialogTitle>
+                  <DialogDescription>Change the classification. "Conversation" triggers full grading. "Admin Call" auto-grades. Others skip grading.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Current</Label>
+                    <div className="p-2 border rounded-lg">
+                      <Badge variant="outline" className="capitalize">{call.classification?.replace(/_/g, " ") || "Unknown"}</Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>New Classification</Label>
+                    <Select value={selectedClassification} onValueChange={setSelectedClassification}>
+                      <SelectTrigger><SelectValue placeholder="Select classification" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="conversation">Conversation (graded)</SelectItem>
+                        <SelectItem value="admin_call">Admin Call (auto-graded)</SelectItem>
+                        <SelectItem value="voicemail">Voicemail (skipped)</SelectItem>
+                        <SelectItem value="no_answer">No Answer (skipped)</SelectItem>
+                        <SelectItem value="callback_request">Callback Request (skipped)</SelectItem>
+                        <SelectItem value="wrong_number">Wrong Number (skipped)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>New Classification</Label>
-                  <Select
-                    value={selectedClassification}
-                    onValueChange={setSelectedClassification}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select classification" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="conversation">Conversation (will be graded)</SelectItem>
-                      <SelectItem value="admin_call">Admin Call (auto-graded)</SelectItem>
-                      <SelectItem value="voicemail">Voicemail (skipped)</SelectItem>
-                      <SelectItem value="no_answer">No Answer (skipped)</SelectItem>
-                      <SelectItem value="callback_request">Callback Request (skipped)</SelectItem>
-                      <SelectItem value="wrong_number">Wrong Number (skipped)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setReclassifyDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={() => {
-                    if (!selectedClassification) {
-                      toast.error("Please select a classification");
-                      return;
-                    }
-                    reclassifyMutation.mutate({
-                      callId,
-                      classification: selectedClassification as any,
-                    });
-                  }}
-                  disabled={reclassifyMutation.isPending || !selectedClassification}
-                >
-                  {reclassifyMutation.isPending ? "Saving..." : "Save"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setReclassifyDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={() => {
+                    if (!selectedClassification) { toast.error("Please select a classification"); return; }
+                    reclassifyMutation.mutate({ callId, classification: selectedClassification as any });
+                  }} disabled={reclassifyMutation.isPending || !selectedClassification}>
+                    {reclassifyMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           )}
         </div>
       </div>
 
-      {/* Existing Feedback Notice */}
+      {/* ═══ Feedback notice ═══ */}
       {existingFeedback && existingFeedback.length > 0 && (
-        <div className="obs-panel bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-          <div className="flex items-center gap-4 py-4">
-            <MessageSquare className="h-5 w-5 text-blue-600" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                You've submitted {existingFeedback.length} feedback item(s) for this call
-              </p>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                {existingFeedback.filter(f => f.status === "incorporated").length} incorporated, 
-                {" "}{existingFeedback.filter(f => f.status === "pending").length} pending review
-              </p>
-            </div>
-            <Link href="/feedback">
-              <Button variant="outline" size="sm">
-                View All Feedback
-              </Button>
-            </Link>
+        <div
+          className="flex items-center gap-4 px-5 py-4 rounded-xl"
+          style={{ background: "rgba(37,99,235,0.06)", border: "1px solid rgba(37,99,235,0.15)" }}
+        >
+          <MessageSquare className="h-5 w-5 shrink-0" style={{ color: "rgb(59,130,246)" }} />
+          <div className="flex-1">
+            <p className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>
+              {existingFeedback.length} feedback item(s) submitted
+            </p>
+            <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+              {existingFeedback.filter(f => f.status === "incorporated").length} incorporated, {existingFeedback.filter(f => f.status === "pending").length} pending
+            </p>
           </div>
+          <Link href="/feedback">
+            <Button variant="outline" size="sm">View All</Button>
+          </Link>
         </div>
       )}
 
-      {/* Main Content */}
+      {/* ═══ Non-completed states ═══ */}
       {call.status !== "completed" ? (
-        <div className="obs-panel">
-          <div className="flex flex-col items-center justify-center py-16">
-            {call.status === "skipped" ? (
-              <>
-                <AlertTriangle className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Call Skipped</h3>
-                <p className="text-muted-foreground text-center max-w-md">
-                  This call was classified as non-gradable: <span className="font-medium capitalize">{call.classification?.replace(/_/g, " ")}</span>
-                </p>
-                {call.classificationReason && (
-                  <p className="text-sm text-muted-foreground mt-2 text-center max-w-md">
-                    {call.classificationReason}
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-12 w-12 text-muted-foreground/50 mb-4 animate-spin" />
-                <h3 className="text-lg font-semibold mb-2">Processing Call</h3>
-                <p className="text-muted-foreground text-center">
-                  Status: <span className="font-medium capitalize">{call.status}</span>
-                </p>
-                {call.status === "failed" && (
-                  <Button 
-                    className="mt-4"
-                    onClick={() => { if (!guardDemoAction("Reprocessing")) reprocessMutation.mutate({ callId }); }}
-                    disabled={reprocessMutation.isPending || isDemo}
-                  >
-                    Retry Processing
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
+        <div
+          className="flex flex-col items-center justify-center py-20 rounded-2xl"
+          style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}
+        >
+          {call.status === "skipped" ? (
+            <>
+              <AlertTriangle className="h-12 w-12 mb-4" style={{ color: "var(--g-text-tertiary)", opacity: 0.5 }} />
+              <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--g-text-primary)" }}>Call Skipped</h3>
+              <p className="text-sm text-center max-w-md" style={{ color: "var(--g-text-secondary)" }}>
+                Classified as: <span className="font-medium capitalize">{call.classification?.replace(/_/g, " ")}</span>
+              </p>
+              {call.classificationReason && (
+                <p className="text-xs mt-2 text-center max-w-md" style={{ color: "var(--g-text-tertiary)" }}>{call.classificationReason}</p>
+              )}
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-12 w-12 mb-4 animate-spin" style={{ color: "var(--g-accent)" }} />
+              <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--g-text-primary)" }}>Processing Call</h3>
+              <p className="text-sm capitalize" style={{ color: "var(--g-text-secondary)" }}>Status: {call.status}</p>
+              {call.status === "failed" && (
+                <Button className="mt-4" onClick={() => { if (!guardDemoAction("Reprocessing")) reprocessMutation.mutate({ callId }); }} disabled={reprocessMutation.isPending || isDemo}>
+                  Retry Processing
+                </Button>
+              )}
+            </>
+          )}
         </div>
       ) : (
+        /* ═══ Completed call — main content ═══ */
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left Column - Grade Overview */}
-          <div className="space-y-6">
-            <div className="obs-panel">
-              <h3 className="obs-section-title text-center mb-4">Overall Grade</h3>
-              <div className="flex flex-col items-center">
-                <GradeBadge grade={grade?.overallGrade || "?"} size="large" />
-                <p className="text-3xl font-extrabold mt-3 tracking-tight">
-                  {grade?.overallScore ? `${Math.round(parseFloat(grade.overallScore))}%` : "N/A"}
-                </p>
-                <div className="flex flex-wrap gap-2 mt-2 justify-center">
-                  {call.callDirection === "inbound" ? (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                      <PhoneIncoming className="h-3 w-3 mr-1" />
-                      Inbound
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
-                      <PhoneOutgoing className="h-3 w-3 mr-1" />
-                      Outbound
-                    </Badge>
-                  )}
-                  <Badge variant="secondary" className={`capitalize ${
-                    call.callType === 'cold_call' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200' :
-                    call.callType === 'qualification' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200' :
-                    call.callType === 'follow_up' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' :
-                    call.callType === 'offer' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' :
-                    call.callType === 'seller_callback' ? 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200' :
-                    call.callType === 'admin_callback' ? 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200' : ''
-                  }`}>
-                    {call.callType === 'cold_call' ? 'Cold Call' :
-                     call.callType === 'qualification' ? 'Qualification' :
-                     call.callType === 'follow_up' ? 'Follow-Up' :
-                     call.callType === 'offer' ? 'Offer' :
-                     call.callType === 'seller_callback' ? 'Admin' :
-                     call.callType === 'admin_callback' ? 'Admin' :
-                     String(call.callType || '').replace(/_/g, ' ') || 'Unknown'}
-                  </Badge>
-                  {(call as any).callOutcome && (call as any).callOutcome !== 'pending' && (call as any).callOutcome !== 'none' && (() => {
-                    const outcomeColors: Record<string, { label: string; color: string }> = {
-                      appointment_set: { label: 'Appointment Set', color: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
-                      offer_made: { label: 'Offer Made', color: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800' },
-                      offer_rejected: { label: 'Offer Rejected', color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-800' },
-                      offer_accepted: { label: 'Offer Accepted', color: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
-                      callback_scheduled: { label: 'Callback Scheduled', color: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-                      callback_requested: { label: 'Callback Requested', color: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-                      interested: { label: 'Interested', color: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-300 dark:border-green-800' },
-                      not_interested: { label: 'Not Interested', color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-800' },
-                      left_vm: { label: 'Left Voicemail', color: 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700' },
-                      left_voicemail: { label: 'Left Voicemail', color: 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700' },
-                      no_answer: { label: 'No Answer', color: 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700' },
-                      dead: { label: 'Dead Lead', color: 'bg-gray-200 text-gray-700 border-gray-400 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600' },
-                      wrong_number: { label: 'Wrong Number', color: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800' },
-                      do_not_call: { label: 'Do Not Call', color: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-800' },
-                      follow_up: { label: 'Follow Up', color: 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800' },
-                    };
-                    const outcome = (call as any).callOutcome as string;
-                    const config = outcomeColors[outcome];
-                    return (
-                      <Badge variant="outline" className={config?.color || 'bg-muted text-muted-foreground'}>
-                        {config?.label || outcome.replace(/_/g, ' ')}
-                      </Badge>
-                    );
-                  })()}
-                  {(call as any).followUpScheduled === 'true' && (
-                    <Badge variant="outline" className="bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" /></svg>
-                      Follow-Up Scheduled
-                    </Badge>
-                  )}
-                  {call.propertyAddress && (
-                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800">
-                      {call.propertyAddress}
-                    </Badge>
-                  )}
-                  {(call as any).callTypeSource === 'ai_detected' && (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">
-                      AI-detected type
-                    </Badge>
-                  )}
-                </div>
-              </div>
+          {/* Left Column — Grade + Strengths + Red Flags */}
+          <div className="space-y-5">
+            {/* Grade card */}
+            <div
+              className="rounded-2xl p-6 text-center"
+              style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)", boxShadow: "var(--g-shadow-card)" }}
+            >
+              <p className="text-[10px] uppercase tracking-widest font-semibold mb-4" style={{ color: "var(--g-text-tertiary)" }}>
+                Overall Grade
+              </p>
+              <GradeDisplay grade={grade?.overallGrade || "?"} score={grade?.overallScore || null} />
+              {(call as any).callTypeSource === "ai_detected" && (
+                <p className="text-[10px] mt-3" style={{ color: "var(--g-text-tertiary)" }}>AI-detected type</p>
+              )}
             </div>
 
             {/* Strengths */}
             {strengths.length > 0 && (
-              <div className="obs-panel">
-                <div className="pb-2" style={{marginBottom: 16}}>
-                  <h3 className="obs-section-title text-sm flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Strengths
-                  </h3>
-                </div>
-                <div>
-                  <ul className="space-y-2">
-                    {strengths.map((strength, i) => (
-                      <li key={i} className="text-sm flex items-start gap-2">
-                        <span className="text-green-500 mt-0.5">•</span>
-                        {strength}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <div
+                className="rounded-2xl p-5"
+                style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)", boxShadow: "var(--g-shadow-card)" }}
+              >
+                <h3 className="text-xs uppercase tracking-widest font-semibold flex items-center gap-2 mb-4" style={{ color: "var(--g-grade-a)" }}>
+                  <CheckCircle className="h-4 w-4" /> Strengths
+                </h3>
+                <ul className="space-y-2.5">
+                  {strengths.map((s, i) => (
+                    <li key={i} className="text-sm flex items-start gap-2.5 leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--g-grade-a)" }} />
+                      {s}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
             {/* Red Flags */}
             {redFlags.length > 0 && (
-              <div className="obs-panel border-red-200 dark:border-red-900">
-                <div className="pb-2" style={{marginBottom: 16}}>
-                  <h3 className="obs-section-title text-sm flex items-center gap-2 text-red-600 dark:text-red-400">
-                    <AlertTriangle className="h-4 w-4" />
-                    Red Flags
-                  </h3>
-                </div>
-                <div>
-                  <ul className="space-y-2">
-                    {redFlags.map((flag, i) => (
-                      <li key={i} className="text-sm flex items-start gap-2 text-red-600 dark:text-red-400">
-                        <span className="mt-0.5">•</span>
-                        {flag}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <div
+                className="rounded-2xl p-5"
+                style={{ background: "var(--g-bg-card)", border: "1px solid rgba(239,68,68,0.2)", boxShadow: "var(--g-shadow-card)" }}
+              >
+                <h3 className="text-xs uppercase tracking-widest font-semibold flex items-center gap-2 mb-4" style={{ color: "var(--g-grade-f)" }}>
+                  <AlertTriangle className="h-4 w-4" /> Red Flags
+                </h3>
+                <ul className="space-y-2.5">
+                  {redFlags.map((f, i) => (
+                    <li key={i} className="text-sm flex items-start gap-2.5 leading-relaxed" style={{ color: "rgba(239,68,68,0.85)" }}>
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--g-grade-f)" }} />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
 
-          {/* Right Column - Details */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="w-full">
-              <div className="obs-role-tabs">
-                <button className={`obs-role-tab ${detailTab === "coaching" ? "active" : ""}`} onClick={() => setDetailTab("coaching")}>Coaching</button>
-                <button className={`obs-role-tab ${detailTab === "criteria" ? "active" : ""}`} onClick={() => setDetailTab("criteria")}>Criteria</button>
-                <button className={`obs-role-tab ${detailTab === "transcript" ? "active" : ""}`} onClick={() => setDetailTab("transcript")}>Transcript</button>
-                <button className={`obs-role-tab ${detailTab === "next-steps" ? "active" : ""}`} onClick={() => setDetailTab("next-steps")}>
-                  Next Steps
-                  {(nextStepsCount?.count ?? 0) > 0 && (
-                    <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-purple-600 text-white text-[10px] font-bold">
-                      {nextStepsCount!.count}
-                    </span>
-                  )}
-                </button>
-              </div>
+          {/* Right Column — Tabs */}
+          <div className="lg:col-span-2 space-y-5">
+            <div className="obs-role-tabs">
+              <button className={`obs-role-tab ${detailTab === "coaching" ? "active" : ""}`} onClick={() => setDetailTab("coaching")}>
+                <Lightbulb className="h-4 w-4" /> Coaching
+              </button>
+              <button className={`obs-role-tab ${detailTab === "criteria" ? "active" : ""}`} onClick={() => setDetailTab("criteria")}>
+                <Target className="h-4 w-4" /> Criteria
+              </button>
+              <button className={`obs-role-tab ${detailTab === "transcript" ? "active" : ""}`} onClick={() => setDetailTab("transcript")}>
+                <FileText className="h-4 w-4" /> Transcript
+              </button>
+              <button className={`obs-role-tab ${detailTab === "next-steps" ? "active" : ""}`} onClick={() => setDetailTab("next-steps")}>
+                <Zap className="h-4 w-4" /> Next Steps
+                {(nextStepsCount?.count ?? 0) > 0 && (
+                  <span
+                    className="ml-1 inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-[10px] font-bold text-white"
+                    style={{ background: "var(--g-accent)" }}
+                  >
+                    {nextStepsCount!.count}
+                  </span>
+                )}
+              </button>
+            </div>
 
-              {detailTab === "coaching" && (<div key="coaching" className="space-y-4 mt-4 obs-fade-in">
-                {/* Summary */}
+            {/* ─── Coaching Tab ─── */}
+            {detailTab === "coaching" && (
+              <div key="coaching" className="space-y-5 obs-fade-in">
                 {grade?.summary && (
-                  <div className="obs-panel">
-                    <div className="pb-2" style={{marginBottom: 16}}>
-                      <h3 className="obs-section-title text-sm flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Summary
-                      </h3>
-                    </div>
-                    <div>
-                      <p className="text-sm">{grade.summary}</p>
-                    </div>
+                  <div className="rounded-2xl p-5" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)", boxShadow: "var(--g-shadow-card)" }}>
+                    <h3 className="text-xs uppercase tracking-widest font-semibold flex items-center gap-2 mb-3" style={{ color: "var(--g-text-tertiary)" }}>
+                      <FileText className="h-4 w-4" /> Summary
+                    </h3>
+                    <p className="text-sm leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>{grade.summary}</p>
                   </div>
                 )}
 
-                {/* Improvements */}
                 {improvements.length > 0 && (
-                  <div className="obs-panel">
-                    <div className="pb-2" style={{marginBottom: 16}}>
-                      <h3 className="obs-section-title text-sm flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-orange-500" />
-                        Areas for Improvement
-                      </h3>
-                    </div>
-                    <div>
-                      <ul className="space-y-2">
-                        {improvements.map((item, i) => (
-                          <li key={i} className="text-sm flex items-start gap-2">
-                            <span className="text-orange-500 mt-0.5">•</span>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                  <div className="rounded-2xl p-5" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)", boxShadow: "var(--g-shadow-card)" }}>
+                    <h3 className="text-xs uppercase tracking-widest font-semibold flex items-center gap-2 mb-4" style={{ color: "var(--g-grade-c)" }}>
+                      <TrendingUp className="h-4 w-4" /> Areas for Improvement
+                    </h3>
+                    <ul className="space-y-2.5">
+                      {improvements.map((item, i) => (
+                        <li key={i} className="text-sm flex items-start gap-2.5 leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>
+                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--g-grade-c)" }} />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
 
-                {/* Coaching Tips */}
                 {coachingTips.length > 0 && (
-                  <div className="obs-panel border-blue-200 dark:border-blue-900">
-                    <div className="pb-2" style={{marginBottom: 16}}>
-                      <h3 className="obs-section-title text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                        <Lightbulb className="h-4 w-4" />
-                        Coaching Tips
-                      </h3>
-                    </div>
-                    <div>
-                      <ul className="space-y-3">
-                        {coachingTips.map((tip, i) => (
-                          <li key={i} className="text-sm p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                            {tip}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                  <div className="rounded-2xl p-5" style={{ background: "var(--g-bg-card)", border: "1px solid rgba(37,99,235,0.15)", boxShadow: "var(--g-shadow-card)" }}>
+                    <h3 className="text-xs uppercase tracking-widest font-semibold flex items-center gap-2 mb-4" style={{ color: "rgb(59,130,246)" }}>
+                      <Lightbulb className="h-4 w-4" /> Coaching Tips
+                    </h3>
+                    <ul className="space-y-3">
+                      {coachingTips.map((tip, i) => (
+                        <li
+                          key={i}
+                          className="text-sm p-3.5 rounded-xl leading-relaxed"
+                          style={{ background: "rgba(37,99,235,0.06)", color: "var(--g-text-secondary)" }}
+                        >
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
 
-                {/* Objection Handling - Potential Replies */}
                 {objectionHandling.length > 0 && (
-                  <div className="obs-panel border-purple-200 dark:border-purple-900">
-                    <div className="pb-2" style={{marginBottom: 16}}>
-                      <h3 className="obs-section-title text-sm flex items-center gap-2 text-purple-600 dark:text-purple-400">
-                        <MessageCircle className="h-4 w-4" />
-                        Potential Replies to Objections
-                      </h3>
-                      <p className="text-xs" style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
-                        Objections identified in this call with suggested responses
-                      </p>
-                    </div>
+                  <div className="rounded-2xl p-5" style={{ background: "var(--g-bg-card)", border: "1px solid rgba(139,92,246,0.15)", boxShadow: "var(--g-shadow-card)" }}>
+                    <h3 className="text-xs uppercase tracking-widest font-semibold flex items-center gap-2 mb-1" style={{ color: "rgb(167,139,250)" }}>
+                      <MessageCircle className="h-4 w-4" /> Potential Replies to Objections
+                    </h3>
+                    <p className="text-xs mb-4" style={{ color: "var(--g-text-tertiary)" }}>
+                      Objections identified in this call with suggested responses
+                    </p>
                     <div className="space-y-4">
                       {objectionHandling.map((item, i) => (
-                        <div key={i} className="border rounded-lg overflow-hidden">
-                          {/* Objection Header */}
-                          <div className="bg-purple-50 dark:bg-purple-950 px-4 py-3 border-b">
-                            <div className="font-medium text-purple-700 dark:text-purple-300">
-                              {item.objection}
-                            </div>
+                        <div key={i} className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(139,92,246,0.15)" }}>
+                          <div className="px-4 py-3" style={{ background: "rgba(139,92,246,0.06)" }}>
+                            <p className="font-medium text-sm" style={{ color: "rgb(167,139,250)" }}>{item.objection}</p>
                           </div>
-                          
-                          {/* Context Quote */}
-                          <div className="px-4 py-3 bg-muted/30 border-b">
+                          <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--g-border-subtle)" }}>
                             <div className="flex gap-2">
-                              <Quote className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                              <p className="text-sm italic text-muted-foreground">
-                                {item.context}
-                              </p>
+                              <Quote className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "var(--g-text-tertiary)" }} />
+                              <p className="text-sm italic" style={{ color: "var(--g-text-tertiary)" }}>{item.context}</p>
                             </div>
                           </div>
-                          
-                          {/* Suggested Responses */}
                           <div className="px-4 py-3">
-                            <p className="text-xs font-medium text-muted-foreground mb-2">SUGGESTED RESPONSES:</p>
+                            <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--g-text-tertiary)" }}>Suggested Responses</p>
                             <ul className="space-y-2">
-                              {item.suggestedResponses.map((response, j) => (
-                                <li key={j} className="text-sm p-3 bg-purple-50 dark:bg-purple-950/50 rounded-lg border-l-2 border-purple-400">
-                                  "{response}"
+                              {item.suggestedResponses.map((r, j) => (
+                                <li
+                                  key={j}
+                                  className="text-sm p-3 rounded-lg"
+                                  style={{ background: "rgba(139,92,246,0.04)", borderLeft: "2px solid rgb(139,92,246)", color: "var(--g-text-secondary)" }}
+                                >
+                                  "{r}"
                                 </li>
                               ))}
                             </ul>
@@ -762,46 +731,53 @@ export default function CallDetail() {
                     </div>
                   </div>
                 )}
-              </div>)}
+              </div>
+            )}
 
-              {detailTab === "criteria" && (<div key="criteria" className="mt-4 obs-fade-in">
+            {/* ─── Criteria Tab ─── */}
+            {detailTab === "criteria" && (
+              <div key="criteria" className="mt-1 obs-fade-in">
                 <div className="grid gap-4 sm:grid-cols-2">
                   {criteriaScores.map((criteria, i) => (
                     <CriteriaCard key={i} criteria={criteria} />
                   ))}
                 </div>
-              </div>)}
+              </div>
+            )}
 
-              {detailTab === "transcript" && (<div key="transcript" className="mt-4 obs-fade-in">
-                <div className="obs-panel">
-                  <div style={{marginBottom: 16}}>
-                    <h3 className="obs-section-title text-sm">Call Transcript</h3>
-                    <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>
-                      Full transcription of the call
-                    </p>
-                  </div>
-                  <div>
-                    {call.transcript ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <p className="whitespace-pre-wrap">{call.transcript}</p>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-center py-8">
-                        No transcript available
-                      </p>
-                    )}
-                  </div>
+            {/* ─── Transcript Tab ─── */}
+            {detailTab === "transcript" && (
+              <div key="transcript" className="mt-1 obs-fade-in">
+                <div
+                  className="rounded-2xl p-5"
+                  style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)", boxShadow: "var(--g-shadow-card)" }}
+                >
+                  <h3 className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--g-text-tertiary)" }}>
+                    Call Transcript
+                  </h3>
+                  <p className="text-xs mb-4" style={{ color: "var(--g-text-tertiary)" }}>Full transcription of the call</p>
+                  {call.transcript ? (
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--g-text-secondary)" }}>
+                      {call.transcript}
+                    </div>
+                  ) : (
+                    <p className="text-center py-8" style={{ color: "var(--g-text-tertiary)" }}>No transcript available</p>
+                  )}
                 </div>
-              </div>)}
-              {detailTab === "next-steps" && (<div key="next-steps" className="mt-4 obs-fade-in">
+              </div>
+            )}
+
+            {/* ─── Next Steps Tab ─── */}
+            {detailTab === "next-steps" && (
+              <div key="next-steps" className="mt-1 obs-fade-in">
                 <NextStepsTab
                   callId={callId}
                   contactName={call.contactName || call.contactPhone || "Unknown"}
                   ghlContactId={(call as any).ghlContactId}
                   teamMemberName={call.teamMemberName}
                 />
-              </div>)}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,195 +1,134 @@
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Award, Trophy, Medal, TrendingUp, Phone, Flame, Zap, Target } from "lucide-react";
+import { Award, Trophy, Medal, TrendingUp, Phone, Flame, Zap, Target, Crown, ChevronUp, ChevronDown, Minus } from "lucide-react";
 import { BADGE_ICON_URLS } from "../../../shared/badgeIcons";
 
-function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1) {
-    return (
-      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg">
-        <Trophy className="h-6 w-6 text-white" />
-      </div>
-    );
-  }
-  if (rank === 2) {
-    return (
-      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center shadow-lg">
-        <Medal className="h-6 w-6 text-white" />
-      </div>
-    );
-  }
-  if (rank === 3) {
-    return (
-      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center shadow-lg">
-        <Medal className="h-6 w-6 text-white" />
-      </div>
-    );
-  }
-  return (
-    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-      <span className="text-lg font-bold text-muted-foreground">{rank}</span>
-    </div>
-  );
-}
+/* ─── Rank podium for top 3 ─────────────────────────── */
+function PodiumCard({ entry, rank, mode }: { entry: any; rank: number; mode: "xp" | "score" }) {
+  const isXP = mode === "xp";
+  const { teamMember } = entry;
+  const initials = (teamMember?.name || "?")
+    .split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
-// Tier badge colors
-const tierColors: Record<string, string> = {
-  bronze: "bg-amber-700 text-amber-100",
-  silver: "bg-gray-400 text-gray-900",
-  gold: "bg-yellow-500 text-yellow-900",
-};
+  const rankConfig = {
+    1: {
+      gradient: "from-yellow-400 via-amber-500 to-yellow-600",
+      glow: "rgba(234,179,8,0.3)",
+      border: "var(--g-rank-1)",
+      icon: <Crown className="h-5 w-5" />,
+      label: "1st",
+      size: "h-[280px]",
+      avatarSize: "w-20 h-20",
+      textSize: "text-2xl",
+    },
+    2: {
+      gradient: "from-slate-300 via-gray-400 to-slate-500",
+      glow: "rgba(148,163,184,0.25)",
+      border: "var(--g-rank-2)",
+      icon: <Medal className="h-4 w-4" />,
+      label: "2nd",
+      size: "h-[240px]",
+      avatarSize: "w-16 h-16",
+      textSize: "text-xl",
+    },
+    3: {
+      gradient: "from-amber-600 via-orange-700 to-amber-800",
+      glow: "rgba(217,119,6,0.25)",
+      border: "var(--g-rank-3)",
+      icon: <Medal className="h-4 w-4" />,
+      label: "3rd",
+      size: "h-[200px]",
+      avatarSize: "w-14 h-14",
+      textSize: "text-lg",
+    },
+  }[rank] || { gradient: "", glow: "transparent", border: "var(--g-border-medium)", icon: null, label: `${rank}th`, size: "h-[180px]", avatarSize: "w-12 h-12", textSize: "text-base" };
 
-function BadgeDisplay({ badges }: { badges: Array<{ code: string; name: string; icon: string; tier: string }> }) {
-  if (!badges || badges.length === 0) return null;
-  
   return (
-    <div className="flex flex-wrap gap-1">
-      {badges.slice(0, 6).map((badge, i) => (
-        <span 
-          key={i} 
-          className={`text-sm px-1.5 py-0.5 rounded ${tierColors[badge.tier] || "bg-gray-200"}`}
-          title={`${badge.name} (${badge.tier})`}
+    <div
+      className="relative flex flex-col items-center justify-end rounded-2xl overflow-hidden transition-all duration-500 hover:scale-[1.02]"
+      style={{
+        background: "var(--g-bg-card)",
+        border: `2px solid ${rankConfig.border}`,
+        boxShadow: `0 0 30px ${rankConfig.glow}, var(--g-shadow-lg)`,
+        minHeight: rank === 1 ? 280 : rank === 2 ? 240 : 200,
+      }}
+    >
+      {/* Gradient accent top */}
+      <div
+        className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${rankConfig.gradient}`}
+      />
+
+      <div className="flex flex-col items-center gap-3 p-6 pt-8 w-full">
+        {/* Rank icon */}
+        <div
+          className={`w-8 h-8 rounded-full bg-gradient-to-br ${rankConfig.gradient} flex items-center justify-center text-white shadow-lg`}
         >
-          {BADGE_ICON_URLS[badge.code] ? (
-            <img src={BADGE_ICON_URLS[badge.code]} alt={badge.name} style={{width: 20, height: 20, borderRadius: '50%', objectFit: 'cover', display: 'inline-block'}} />
-          ) : badge.icon}
-        </span>
-      ))}
-      {badges.length > 6 && (
-        <span className="text-xs text-muted-foreground">+{badges.length - 6}</span>
-      )}
-    </div>
-  );
-}
-
-function GamificationLeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
-  const { teamMember, xp, level, title, hotStreak, badges } = entry;
-
-  return (
-    <div className={`obs-panel ${rank <= 3 ? "border-2" : ""} ${
-      rank === 1 ? "border-yellow-400" : 
-      rank === 2 ? "border-gray-400" : 
-      rank === 3 ? "border-amber-600" : ""
-    }`}>
-      <div className="p-6">
-        <div className="flex items-center gap-6">
-          <RankBadge rank={rank} />
-          
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-xl font-bold">{teamMember.name}</h3>
-              {hotStreak > 0 && (
-                <span className="text-sm bg-red-100 text-red-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Flame className="h-3 w-3" /> {hotStreak}
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground capitalize">
-              {teamMember.teamRole?.replace("_", " ")}
-            </p>
-            <BadgeDisplay badges={badges} />
-          </div>
-
-          <div className="text-right">
-            <p className="text-3xl font-bold text-orange-600">
-              Lvl {level}
-            </p>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-xs text-orange-500">{xp.toLocaleString()} XP</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ScoreLeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
-  const { teamMember, totalCalls, averageScore, gradeDistribution } = entry;
-  const totalGrades = gradeDistribution.A + gradeDistribution.B + gradeDistribution.C + gradeDistribution.D + gradeDistribution.F;
-
-  return (
-    <div className={`obs-panel ${rank <= 3 ? "border-2" : ""} ${
-      rank === 1 ? "border-yellow-400" : 
-      rank === 2 ? "border-gray-400" : 
-      rank === 3 ? "border-amber-600" : ""
-    }`}>
-      <div className="p-6">
-        <div className="flex items-center gap-6">
-          <RankBadge rank={rank} />
-          
-          <div className="flex-1 min-w-0">
-            <h3 className="text-xl font-bold">{teamMember.name}</h3>
-            <p className="text-sm text-muted-foreground capitalize">
-              {teamMember.teamRole?.replace("_", " ")}
-            </p>
-          </div>
-
-          <div className="text-right">
-            <p className="text-3xl font-bold">
-              {averageScore ? `${Math.round(averageScore)}%` : "N/A"}
-            </p>
-            <p className="text-sm text-muted-foreground">Average Score</p>
-          </div>
+          {rankConfig.icon || <span className="text-xs font-bold">{rank}</span>}
         </div>
 
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <p className="text-2xl font-bold">{totalCalls}</p>
-            <p className="text-xs text-muted-foreground">Total Calls</p>
-          </div>
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <p className="text-2xl font-bold text-emerald-500">{gradeDistribution.A}</p>
-            <p className="text-xs text-muted-foreground">A Grades</p>
-          </div>
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <p className="text-2xl font-bold text-teal-500">{gradeDistribution.B}</p>
-            <p className="text-xs text-muted-foreground">B Grades</p>
-          </div>
-          <div className="text-center p-3 bg-muted/50 rounded-lg">
-            <p className="text-2xl font-bold text-yellow-500">{gradeDistribution.C + gradeDistribution.D + gradeDistribution.F}</p>
-            <p className="text-xs text-muted-foreground">C or Below</p>
-          </div>
+        {/* Avatar */}
+        <div
+          className={`${rankConfig.avatarSize} rounded-2xl flex items-center justify-center text-white font-bold overflow-hidden`}
+          style={{
+            background: "linear-gradient(135deg, #374151, #1f2937)",
+            border: `2px solid ${rankConfig.border}`,
+          }}
+        >
+          {teamMember?.profilePicture ? (
+            <img src={teamMember.profilePicture} alt={teamMember.name} className="w-full h-full object-cover" />
+          ) : (
+            <span className={rank === 1 ? "text-xl" : "text-base"}>{initials}</span>
+          )}
         </div>
 
-        {totalGrades > 0 && (
-          <div className="mt-4">
-            <div className="flex h-3 rounded-full overflow-hidden">
-              {gradeDistribution.A > 0 && (
-                <div 
-                  className="bg-emerald-500" 
-                  style={{ width: `${(gradeDistribution.A / totalGrades) * 100}%` }}
-                />
-              )}
-              {gradeDistribution.B > 0 && (
-                <div 
-                  className="bg-teal-500" 
-                  style={{ width: `${(gradeDistribution.B / totalGrades) * 100}%` }}
-                />
-              )}
-              {gradeDistribution.C > 0 && (
-                <div 
-                  className="bg-yellow-500" 
-                  style={{ width: `${(gradeDistribution.C / totalGrades) * 100}%` }}
-                />
-              )}
-              {gradeDistribution.D > 0 && (
-                <div 
-                  className="bg-orange-500" 
-                  style={{ width: `${(gradeDistribution.D / totalGrades) * 100}%` }}
-                />
-              )}
-              {gradeDistribution.F > 0 && (
-                <div 
-                  className="bg-red-500" 
-                  style={{ width: `${(gradeDistribution.F / totalGrades) * 100}%` }}
-                />
-              )}
-            </div>
-            <div className="flex justify-between mt-1 text-xs text-muted-foreground">
-              <span>Grade Distribution</span>
-              <span>{totalGrades} graded calls</span>
-            </div>
+        {/* Name */}
+        <div className="text-center">
+          <h3 className={`${rankConfig.textSize} font-bold tracking-tight`} style={{ color: "var(--g-text-primary)" }}>
+            {teamMember?.name || "Unknown"}
+          </h3>
+          <p className="text-xs mt-0.5 capitalize" style={{ color: "var(--g-text-tertiary)" }}>
+            {teamMember?.teamRole?.replace("_", " ") || "Team Member"}
+          </p>
+        </div>
+
+        {/* Stat */}
+        <div className="text-center">
+          {isXP ? (
+            <>
+              <p className="text-3xl font-extrabold font-mono" style={{ color: "var(--g-accent-text)" }}>
+                {entry.level}
+              </p>
+              <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--g-text-tertiary)" }}>
+                Level
+              </p>
+              <p className="text-xs mt-1 font-mono" style={{ color: "var(--g-accent-text)", opacity: 0.7 }}>
+                {entry.xp?.toLocaleString()} XP
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-3xl font-extrabold font-mono" style={{ color: "var(--g-accent-text)" }}>
+                {entry.averageScore ? `${Math.round(entry.averageScore)}%` : "N/A"}
+              </p>
+              <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--g-text-tertiary)" }}>
+                Avg Score
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--g-text-secondary)" }}>
+                {entry.totalCalls} calls
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Badges / Streak */}
+        {isXP && entry.hotStreak > 0 && (
+          <div className="obs-streak-badge">
+            <Flame className="h-3 w-3" /> {entry.hotStreak} day streak
           </div>
         )}
       </div>
@@ -197,90 +136,292 @@ function ScoreLeaderboardCard({ entry, rank }: { entry: any; rank: number }) {
   );
 }
 
-export default function Leaderboard() {
-  const [leaderTab, setLeaderTab] = useState("xp");
-  const { data: scoreLeaderboard, isLoading: scoreLoading } = trpc.leaderboard.get.useQuery();
-  const { data: gamificationLeaderboard, isLoading: gamificationLoading } = trpc.gamification.getLeaderboard.useQuery();
+/* ─── List row for rank 4+ ──────────────────────────── */
+function LeaderRow({ entry, rank, mode }: { entry: any; rank: number; mode: "xp" | "score" }) {
+  const isXP = mode === "xp";
+  const { teamMember } = entry;
+  const initials = (teamMember?.name || "?")
+    .split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tighter">Team Leaderboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Track team performance, rankings, and achievements
+    <div
+      className="flex items-center gap-4 px-5 py-4 rounded-xl transition-all duration-300 hover:translate-y-[-1px] group"
+      style={{
+        background: "var(--g-bg-card)",
+        border: "1px solid var(--g-border-subtle)",
+        boxShadow: "var(--g-shadow-card)",
+      }}
+    >
+      {/* Rank */}
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center font-mono text-sm font-bold shrink-0"
+        style={{ background: "var(--g-bg-inset)", color: "var(--g-text-tertiary)" }}
+      >
+        {rank}
+      </div>
+
+      {/* Avatar */}
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #374151, #1f2937)", border: "1px solid var(--g-border-medium)" }}
+      >
+        {teamMember?.profilePicture ? (
+          <img src={teamMember.profilePicture} alt={teamMember.name} className="w-full h-full object-cover" />
+        ) : (
+          initials
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-sm truncate" style={{ color: "var(--g-text-primary)" }}>
+          {teamMember?.name || "Unknown"}
+        </h4>
+        <p className="text-xs capitalize" style={{ color: "var(--g-text-tertiary)" }}>
+          {teamMember?.teamRole?.replace("_", " ")}
         </p>
       </div>
 
-      <div className="w-full">
-        <div className="obs-role-tabs">
-          <button className={`obs-role-tab ${leaderTab === "xp" ? "active" : ""}`} onClick={() => setLeaderTab("xp")}>
-            <Zap className="h-4 w-4" /> XP & Level
-          </button>
-          <button className={`obs-role-tab ${leaderTab === "score" ? "active" : ""}`} onClick={() => setLeaderTab("score")}>
-            <TrendingUp className="h-4 w-4" /> Avg Score
-          </button>
+      {/* Badges */}
+      {isXP && entry.badges && entry.badges.length > 0 && (
+        <div className="hidden sm:flex gap-1">
+          {entry.badges.slice(0, 4).map((badge: any, i: number) => (
+            <span key={i} className="text-sm" title={badge.name}>
+              {BADGE_ICON_URLS[badge.code] ? (
+                <img src={BADGE_ICON_URLS[badge.code]} alt={badge.name} style={{ width: 18, height: 18, borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                badge.icon
+              )}
+            </span>
+          ))}
         </div>
+      )}
 
-        {leaderTab === "xp" && (<div key="xp" className="mt-6 obs-fade-in">
-          {gamificationLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div className="obs-panel" key={i}>
-                  <div className="p-6">
-                    <Skeleton className="h-24 w-full" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : gamificationLeaderboard && gamificationLeaderboard.length > 0 ? (
-            <div className="space-y-4">
-              {gamificationLeaderboard.map((entry: any, index: number) => (
-                <GamificationLeaderboardCard key={entry.teamMember.id} entry={entry} rank={index + 1} />
-              ))}
-            </div>
-          ) : (
-            <div className="obs-panel">
-              <div className="flex flex-col items-center justify-center py-16">
-                <Zap className="h-16 w-16 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No XP earned yet</h3>
-                <p className="text-muted-foreground text-center max-w-md">
-                  XP rankings will appear here once team members view their graded calls.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>)}
+      {/* Streak */}
+      {isXP && entry.hotStreak > 0 && (
+        <div className="obs-streak-badge text-xs">
+          <Flame className="h-3 w-3" /> {entry.hotStreak}
+        </div>
+      )}
 
-        {leaderTab === "score" && (<div key="score" className="mt-6 obs-fade-in">
-          {scoreLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div className="obs-panel" key={i}>
-                  <div className="p-6">
-                    <Skeleton className="h-32 w-full" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : scoreLeaderboard && scoreLeaderboard.length > 0 ? (
-            <div className="space-y-4">
-              {scoreLeaderboard.map((entry, index) => (
-                <ScoreLeaderboardCard key={entry.teamMember.id} entry={entry} rank={index + 1} />
-              ))}
-            </div>
-          ) : (
-            <div className="obs-panel">
-              <div className="flex flex-col items-center justify-center py-16">
-                <Award className="h-16 w-16 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No rankings yet</h3>
-                <p className="text-muted-foreground text-center max-w-md">
-                  Rankings will appear here once team members have graded calls.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>)}
+      {/* Score / Level */}
+      <div className="text-right shrink-0">
+        {isXP ? (
+          <>
+            <p className="text-lg font-extrabold font-mono" style={{ color: "var(--g-accent-text)" }}>
+              {entry.level}
+            </p>
+            <p className="text-[10px] font-mono" style={{ color: "var(--g-text-tertiary)" }}>
+              {entry.xp?.toLocaleString()} XP
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-lg font-extrabold font-mono" style={{ color: "var(--g-accent-text)" }}>
+              {entry.averageScore ? `${Math.round(entry.averageScore)}%` : "—"}
+            </p>
+            <p className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>
+              {entry.totalCalls} calls
+            </p>
+          </>
+        )}
       </div>
+
+      {/* Grade distribution for score mode */}
+      {!isXP && entry.gradeDistribution && (
+        <div className="hidden md:flex w-32">
+          <GradeBar distribution={entry.gradeDistribution} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Mini grade distribution bar ───────────────────── */
+function GradeBar({ distribution }: { distribution: { A: number; B: number; C: number; D: number; F: number } }) {
+  const total = distribution.A + distribution.B + distribution.C + distribution.D + distribution.F;
+  if (total === 0) return null;
+
+  return (
+    <div className="w-full">
+      <div className="flex h-2 rounded-full overflow-hidden gap-[1px]">
+        {distribution.A > 0 && (
+          <div style={{ width: `${(distribution.A / total) * 100}%`, background: "var(--g-grade-a)" }} />
+        )}
+        {distribution.B > 0 && (
+          <div style={{ width: `${(distribution.B / total) * 100}%`, background: "var(--g-grade-b)" }} />
+        )}
+        {distribution.C > 0 && (
+          <div style={{ width: `${(distribution.C / total) * 100}%`, background: "var(--g-grade-c)" }} />
+        )}
+        {distribution.D > 0 && (
+          <div style={{ width: `${(distribution.D / total) * 100}%`, background: "var(--g-grade-d)" }} />
+        )}
+        {distribution.F > 0 && (
+          <div style={{ width: `${(distribution.F / total) * 100}%`, background: "var(--g-grade-f)" }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Skeleton loaders ──────────────────────────────── */
+function PodiumSkeleton() {
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      {[240, 280, 200].map((h, i) => (
+        <div
+          key={i}
+          className="rounded-2xl overflow-hidden"
+          style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)", minHeight: h }}
+        >
+          <div className="flex flex-col items-center gap-3 p-6 pt-10">
+            <Skeleton className="w-8 h-8 rounded-full" />
+            <Skeleton className="w-16 h-16 rounded-2xl" />
+            <Skeleton className="w-24 h-5" />
+            <Skeleton className="w-16 h-8" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RowSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="flex items-center gap-4 px-5 py-4 rounded-xl"
+          style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}
+        >
+          <Skeleton className="w-9 h-9 rounded-lg" />
+          <Skeleton className="w-10 h-10 rounded-xl" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+          <Skeleton className="h-6 w-12" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Main Leaderboard ──────────────────────────────── */
+export default function Leaderboard() {
+  const [leaderTab, setLeaderTab] = useState<"xp" | "score">("xp");
+  const { data: scoreLeaderboard, isLoading: scoreLoading } = trpc.leaderboard.get.useQuery();
+  const { data: gamificationLeaderboard, isLoading: gamificationLoading } = trpc.gamification.getLeaderboard.useQuery();
+
+  const activeData = leaderTab === "xp" ? gamificationLeaderboard : scoreLeaderboard;
+  const isLoading = leaderTab === "xp" ? gamificationLoading : scoreLoading;
+
+  // Split into podium (top 3) and rest
+  const podium = useMemo(() => (activeData || []).slice(0, 3), [activeData]);
+  const rest = useMemo(() => (activeData || []).slice(3), [activeData]);
+
+  // Reorder podium for visual display: [2nd, 1st, 3rd]
+  const podiumDisplay = useMemo(() => {
+    if (podium.length < 3) return podium.map((e: any, i: number) => ({ entry: e, rank: i + 1 }));
+    return [
+      { entry: podium[1], rank: 2 },
+      { entry: podium[0], rank: 1 },
+      { entry: podium[2], rank: 3 },
+    ];
+  }, [podium]);
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tighter" style={{ color: "var(--g-text-primary)" }}>
+            Leaderboard
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--g-text-secondary)" }}>
+            Track team performance, rankings, and achievements
+          </p>
+        </div>
+      </div>
+
+      {/* Tab switcher */}
+      <div className="obs-role-tabs" style={{ maxWidth: 320 }}>
+        <button
+          className={`obs-role-tab ${leaderTab === "xp" ? "active" : ""}`}
+          onClick={() => setLeaderTab("xp")}
+        >
+          <Zap className="h-4 w-4" /> XP & Level
+        </button>
+        <button
+          className={`obs-role-tab ${leaderTab === "score" ? "active" : ""}`}
+          onClick={() => setLeaderTab("score")}
+        >
+          <Target className="h-4 w-4" /> Avg Score
+        </button>
+      </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <div className="space-y-8">
+          <PodiumSkeleton />
+          <RowSkeleton />
+        </div>
+      ) : activeData && activeData.length > 0 ? (
+        <div className="space-y-8 obs-fade-in">
+          {/* Podium — top 3 */}
+          {podium.length >= 3 ? (
+            <div className="grid grid-cols-3 gap-4 items-end">
+              {podiumDisplay.map(({ entry, rank }) => (
+                <PodiumCard key={rank} entry={entry} rank={rank} mode={leaderTab} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {podium.map((entry: any, i: number) => (
+                <LeaderRow key={i} entry={entry} rank={i + 1} mode={leaderTab} />
+              ))}
+            </div>
+          )}
+
+          {/* Remaining rows */}
+          {rest.length > 0 && (
+            <div className="space-y-3">
+              {rest.map((entry: any, i: number) => (
+                <LeaderRow key={i} entry={entry} rank={i + 4} mode={leaderTab} />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div
+          className="flex flex-col items-center justify-center py-20 rounded-2xl"
+          style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}
+        >
+          {leaderTab === "xp" ? (
+            <>
+              <Zap className="h-16 w-16 mb-4" style={{ color: "var(--g-text-tertiary)", opacity: 0.4 }} />
+              <h3 className="text-lg font-semibold" style={{ color: "var(--g-text-primary)" }}>No XP earned yet</h3>
+              <p className="text-sm mt-1 max-w-md text-center" style={{ color: "var(--g-text-secondary)" }}>
+                XP rankings will appear here once team members view their graded calls.
+              </p>
+            </>
+          ) : (
+            <>
+              <Award className="h-16 w-16 mb-4" style={{ color: "var(--g-text-tertiary)", opacity: 0.4 }} />
+              <h3 className="text-lg font-semibold" style={{ color: "var(--g-text-primary)" }}>No rankings yet</h3>
+              <p className="text-sm mt-1 max-w-md text-center" style={{ color: "var(--g-text-secondary)" }}>
+                Rankings will appear here once team members have graded calls.
+              </p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

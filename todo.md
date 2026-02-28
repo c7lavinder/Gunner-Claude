@@ -3481,3 +3481,22 @@
 - [x] Run GHL address backfill for 866 missing addresses (849 recovered, 12 remaining have no address in GHL)
 - [x] Ensure address backfill runs automatically on a schedule (every 30 minutes, initial run after 5 min)
 - [x] Verify addresses populate after backfill (99% GHL coverage, 93% overall)
+
+## Revolutionary Landing Page Redesign (Feb 28, 2026)
+- [x] Rebuild Landing.tsx with premium dark theme (bg-[#08080c])
+- [x] Hero section: gradient text, dashboard mockup, floating badges, animated stats bar
+- [x] Problem section: 3 pain point cards with glass morphism
+- [x] How It Works: 3-step numbered flow with icons
+- [x] Features: tabbed interface (AI Call Scoring, Team Leaderboard, AI Coach) with auto-rotation
+- [x] ROI section: Before/After comparison cards (red vs green)
+- [x] Testimonials: 6 cards in 3x2 grid with star ratings
+- [x] Pricing: 3 tiers ($199/$499/$999) with monthly/yearly toggle
+- [x] Integrations: GoHighLevel (Native), BatchDialer, BatchLeads
+- [x] Our Story: Pablo founder section
+- [x] FAQ: Accordion-style with 7 questions
+- [x] Final CTA: gradient text push to free trial
+- [x] Sticky nav with glass morphism effect
+- [x] Update index.css with Obsidian design system + landing page custom CSS
+- [x] Fix @apply errors: replace Tailwind utility classes in @apply with plain CSS
+- [x] Fix missing @import "tailwindcss" at top of index.css (root cause of all styling failures)
+- [x] Verify all landing page sections render correctly in browser
