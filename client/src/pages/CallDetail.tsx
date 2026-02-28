@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CallDetailSkeleton } from "@/components/PageSkeletons";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,6 +28,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import NextStepsTab from "@/components/NextStepsTab";
+import WaveformPlayer from "@/components/WaveformPlayer";
 import { Zap } from "lucide-react";
 import { useDemo } from "@/hooks/useDemo";
 
@@ -251,27 +253,7 @@ export default function CallDetail() {
   const isLoading = callLoading || gradeLoading;
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="w-10 h-10 rounded-xl" />
-          <div className="space-y-2 flex-1">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-48" />
-          </div>
-        </div>
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="space-y-4">
-            <Skeleton className="h-48 rounded-2xl" />
-            <Skeleton className="h-32 rounded-2xl" />
-          </div>
-          <div className="lg:col-span-2 space-y-4">
-            <Skeleton className="h-12 rounded-xl" />
-            <Skeleton className="h-64 rounded-2xl" />
-          </div>
-        </div>
-      </div>
-    );
+    return <CallDetailSkeleton />;
   }
 
   if (!call) {
@@ -747,7 +729,17 @@ export default function CallDetail() {
 
             {/* ─── Transcript Tab ─── */}
             {detailTab === "transcript" && (
-              <div key="transcript" className="mt-1 obs-fade-in">
+              <div key="transcript" className="mt-1 obs-fade-in space-y-4">
+                {/* ─── Audio Waveform Player ─── */}
+                {call.recordingUrl && (
+                  <div>
+                    <h3 className="text-xs uppercase tracking-widest font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--g-text-tertiary)" }}>
+                      <Play className="h-3.5 w-3.5" /> Call Recording
+                    </h3>
+                    <WaveformPlayer url={call.recordingUrl} duration={call.duration || undefined} />
+                  </div>
+                )}
+
                 <div
                   className="rounded-2xl p-5"
                   style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)", boxShadow: "var(--g-shadow-card)" }}

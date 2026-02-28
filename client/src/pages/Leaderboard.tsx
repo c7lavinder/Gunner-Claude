@@ -1,7 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { useState, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Award, Trophy, Medal, TrendingUp, Phone, Flame, Zap, Target, Crown, ChevronUp, ChevronDown, Minus } from "lucide-react";
+import { Award, Trophy, Medal, TrendingUp, Phone, Flame, Zap, Target, Crown, ChevronUp, ChevronDown, Minus, ArrowUp, ArrowDown } from "lucide-react";
+import SparklineChart from "@/components/SparklineChart";
 import { BADGE_ICON_URLS } from "../../../shared/badgeIcons";
 
 /* ─── Rank podium for top 3 ─────────────────────────── */
@@ -136,6 +137,30 @@ function PodiumCard({ entry, rank, mode }: { entry: any; rank: number; mode: "xp
   );
 }
 
+/* ─── Rank Change Indicator ─────────────────────────── */
+function RankChange({ current, previous }: { current: number; previous?: number }) {
+  if (previous === undefined || previous === current) {
+    return (
+      <span className="flex items-center gap-0.5 text-[10px] font-bold" style={{ color: "var(--g-text-tertiary)" }}>
+        <Minus className="h-2.5 w-2.5" />
+      </span>
+    );
+  }
+  const diff = previous - current; // positive = moved up
+  if (diff > 0) {
+    return (
+      <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: "var(--g-up)", background: "var(--g-up-bg)" }}>
+        <ArrowUp className="h-2.5 w-2.5" /> {diff}
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: "var(--g-down)", background: "var(--g-down-bg)" }}>
+      <ArrowDown className="h-2.5 w-2.5" /> {Math.abs(diff)}
+    </span>
+  );
+}
+
 /* ─── List row for rank 4+ ──────────────────────────── */
 function LeaderRow({ entry, rank, mode }: { entry: any; rank: number; mode: "xp" | "score" }) {
   const isXP = mode === "xp";
@@ -147,6 +172,12 @@ function LeaderRow({ entry, rank, mode }: { entry: any; rank: number; mode: "xp"
     .toUpperCase()
     .slice(0, 2);
 
+  // Generate sparkline data from weekly scores if available
+  const sparkData = useMemo(() => {
+    if (!entry.weeklyScores || entry.weeklyScores.length < 2) return null;
+    return entry.weeklyScores.map((w: any) => w.averageScore || 0);
+  }, [entry.weeklyScores]);
+
   return (
     <div
       className="flex items-center gap-4 px-5 py-4 rounded-xl transition-all duration-300 hover:translate-y-[-1px] group"
@@ -156,12 +187,15 @@ function LeaderRow({ entry, rank, mode }: { entry: any; rank: number; mode: "xp"
         boxShadow: "var(--g-shadow-card)",
       }}
     >
-      {/* Rank */}
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center font-mono text-sm font-bold shrink-0"
-        style={{ background: "var(--g-bg-inset)", color: "var(--g-text-tertiary)" }}
-      >
-        {rank}
+      {/* Rank + change indicator */}
+      <div className="flex flex-col items-center gap-0.5 shrink-0">
+        <div
+          className="w-9 h-9 rounded-lg flex items-center justify-center font-mono text-sm font-bold"
+          style={{ background: "var(--g-bg-inset)", color: "var(--g-text-tertiary)" }}
+        >
+          {rank}
+        </div>
+        <RankChange current={rank} previous={entry.previousRank} />
       </div>
 
       {/* Avatar */}
@@ -185,6 +219,13 @@ function LeaderRow({ entry, rank, mode }: { entry: any; rank: number; mode: "xp"
           {teamMember?.teamRole?.replace("_", " ")}
         </p>
       </div>
+
+      {/* Sparkline trend */}
+      {!isXP && sparkData && (
+        <div className="hidden sm:block shrink-0">
+          <SparklineChart data={sparkData} width={80} height={28} color="var(--g-accent)" showDots />
+        </div>
+      )}
 
       {/* Badges */}
       {isXP && entry.badges && entry.badges.length > 0 && (

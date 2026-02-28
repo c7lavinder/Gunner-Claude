@@ -2331,9 +2331,29 @@ export default function CallInbox() {
               {isLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <div className="obs-panel" key={i}>
-                      <div className="p-4">
-                        <Skeleton className="h-20 w-full" />
+                    <div
+                      key={i}
+                      className="rounded-2xl p-5"
+                      style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-5 w-36 rounded" />
+                            <Skeleton className="h-5 w-20 rounded-full" />
+                            <Skeleton className="h-5 w-16 rounded-full" />
+                          </div>
+                          <div className="flex gap-4">
+                            <Skeleton className="h-3 w-20 rounded" />
+                            <Skeleton className="h-3 w-16 rounded" />
+                            <Skeleton className="h-3 w-24 rounded" />
+                          </div>
+                        </div>
+                        <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+                      </div>
+                      <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
+                        <Skeleton className="h-4 w-full rounded" />
+                        <Skeleton className="h-4 w-2/3 rounded mt-1" />
                       </div>
                     </div>
                   ))}

@@ -3500,3 +3500,33 @@
 - [x] Fix @apply errors: replace Tailwind utility classes in @apply with plain CSS
 - [x] Fix missing @import "tailwindcss" at top of index.css (root cause of all styling failures)
 - [x] Verify all landing page sections render correctly in browser
+
+## Full UI Overhaul - Remaining Items (Feb 28, 2026)
+
+### 1. Dashboard Card Redesign
+- [x] Color-coded grade borders on call cards (A=green, B=blue, C=yellow, D=orange, F=red)
+- [x] Better spacing and visual hierarchy on dashboard stats
+- [x] Property photos placeholder on call cards
+- [x] Cleaner typography throughout dashboard
+
+### 2. Inline Audio Waveform Player
+- [x] Replace basic audio player with visual waveform component (WaveSurfer.js)
+- [x] Show call duration and current position
+- [x] Scrubbing/seeking through waveform
+- [x] Responsive waveform that works on mobile
+
+### 3. Team Leaderboard Polish
+- [x] Animated rank changes (up/down arrows with motion)
+- [x] Sparkline trend charts for each team member
+- [x] Streak indicators (hot streak, improving, etc.)
+
+### 4. Skeleton Loading States
+- [x] Replace all spinner/loading indicators with skeleton loaders
+- [x] Dashboard page skeleton
+- [x] Call inbox skeleton
+- [x] Call detail page skeleton
+- [x] Team leaderboard skeleton
+- [x] Analytics skeleton
+
+### 5. Dark Mode Polish
+- [x] SKIPPED - User prefers light theme, keeping current light dashboard design

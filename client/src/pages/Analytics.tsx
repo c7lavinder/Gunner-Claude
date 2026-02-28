@@ -97,10 +97,17 @@ export default function Analytics() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 obs-stagger">
         {statsLoading
           ? Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="obs-stat-card">
-                <Skeleton className="h-4 w-16 mb-3" />
-                <Skeleton className="h-8 w-20 mb-2" />
-                <Skeleton className="h-3 w-24" />
+              <div
+                key={i}
+                className="rounded-2xl p-5"
+                style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <Skeleton className="h-9 w-9 rounded-xl" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                </div>
+                <Skeleton className="h-8 w-20 rounded-lg mb-1" />
+                <Skeleton className="h-4 w-28 rounded" />
               </div>
             ))
           : [
@@ -143,7 +150,11 @@ export default function Analytics() {
             Score Trends — {stats?.weeklyTrends?.length ?? 12} Weeks
           </h3>
           {statsLoading ? (
-            <Skeleton className="h-56 w-full" />
+            <div className="flex items-end gap-2" style={{ height: 220 }}>
+              {Array.from({ length: 12 }).map((_, i) => (
+                <Skeleton key={i} className="flex-1 rounded-lg" style={{ height: `${25 + Math.sin(i * 0.8) * 35 + 20}%` }} />
+              ))}
+            </div>
           ) : stats?.weeklyTrends && stats.weeklyTrends.length > 0 ? (
             <div>
               {/* SVG area chart */}
@@ -259,7 +270,15 @@ export default function Analytics() {
               Grade Distribution
             </h3>
             {statsLoading ? (
-              <Skeleton className="h-32 w-full" />
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <Skeleton className="h-5 w-5 rounded" />
+                    <Skeleton className="h-4 flex-1 rounded-full" />
+                    <Skeleton className="h-4 w-8 rounded" />
+                  </div>
+                ))}
+              </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {(["A", "B", "C", "D", "F"] as const).map((g) => {
@@ -333,7 +352,17 @@ export default function Analytics() {
               Quick Metrics
             </h3>
             {statsLoading ? (
-              <Skeleton className="h-20 w-full" />
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid var(--g-border-subtle)" }}>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-4 rounded" />
+                      <Skeleton className="h-4 w-24 rounded" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded" />
+                  </div>
+                ))}
+              </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
