@@ -3472,3 +3472,12 @@
 - [x] Fix Kyle Barks transcript DB update failure (transient error, reprocessed successfully)
 - [x] Fix Cathy Recker & Jan Bailey "Invalid transcription response" errors (1-2s silent recordings, now skip as too_short)
 - [x] Manually retry all three calls after fixes (all 3 reprocessed successfully)
+
+## Bug Fix: Property Addresses Not Showing on Call Cards (Feb 27)
+- [x] Investigate where property address is stored and why it stopped appearing (OAuth transition broke address fetch for GHL calls)
+- [x] Fix property address display on call cards in Call History (backfill recovered 849 addresses, auto-backfill scheduled)
+
+## Bug Fix: GHL Property Addresses Not Showing (Feb 27)
+- [x] Run GHL address backfill for 866 missing addresses (849 recovered, 12 remaining have no address in GHL)
+- [x] Ensure address backfill runs automatically on a schedule (every 30 minutes, initial run after 5 min)
+- [x] Verify addresses populate after backfill (99% GHL coverage, 93% overall)

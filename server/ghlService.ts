@@ -1091,6 +1091,9 @@ let lastOpportunityDetectionTime: Date | null = null;
 // Stuck call retry interval
 let stuckCallRetryInterval: ReturnType<typeof setInterval> | null = null;
 
+// GHL property address backfill interval (runs every 30 minutes)
+let addressBackfillInterval: ReturnType<typeof setInterval> | null = null;
+
 /**
  * Automatically retry calls stuck in intermediate processing states (transcribing, classifying, grading)
  * for more than 1 hour. Resets them to pending and re-triggers processing.
@@ -1351,6 +1354,28 @@ export function startPolling(intervalMinutes: number = 5): void {
         })
         .catch(err => console.error("[OpportunityDetection] Scheduled run error:", err));
     }, 2 * 60 * 60 * 1000); // 2 hours
+  }
+
+  // Start GHL property address backfill (every 30 minutes)
+  if (!addressBackfillInterval) {
+    console.log("[GHL Backfill] Starting automatic address backfill (every 30 minutes)");
+    // Run initial backfill after 5 minutes
+    setTimeout(() => {
+      backfillGHLPropertyAddresses()
+        .then(result => {
+          console.log(`[GHL Backfill] Initial run: ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors`);
+        })
+        .catch(err => console.error("[GHL Backfill] Initial run error:", err));
+    }, 5 * 60 * 1000);
+
+    // Then run every 30 minutes
+    addressBackfillInterval = setInterval(() => {
+      backfillGHLPropertyAddresses()
+        .then(result => {
+          console.log(`[GHL Backfill] Scheduled run: ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors`);
+        })
+        .catch(err => console.error("[GHL Backfill] Scheduled run error:", err));
+    }, 30 * 60 * 1000); // 30 minutes
   }
 
   // Start daily correction pattern monitor
