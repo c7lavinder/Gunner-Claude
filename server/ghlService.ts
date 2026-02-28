@@ -1141,7 +1141,8 @@ async function retryStuckCalls(): Promise<void> {
          call.classificationReason.includes('Transcription service request failed') ||
          call.classificationReason.includes('429 Too Many') ||
          call.classificationReason.includes('Voice transcription failed') ||
-         call.classificationReason.includes('Invalid transcription response')) &&
+         call.classificationReason.includes('Invalid transcription response') ||
+         call.classificationReason.includes('transient DB error')) &&
         call.updatedAt && new Date(call.updatedAt) < oneHourAgo
       );
 

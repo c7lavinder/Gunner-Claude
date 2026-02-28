@@ -1,0 +1,16 @@
+{
+  "query": "SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH FROM information_schema.COLUMNS WHERE TABLE_NAME = 'calls' AND COLUMN_NAME = 'transcript';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH FROM information_schema.COLUMNS WHERE TABLE_NAME = 'calls' AND COLUMN_NAME = 'transcript';",
+  "rows": [
+    {
+      "COLUMN_NAME": "transcript",
+      "DATA_TYPE": "text",
+      "CHARACTER_MAXIMUM_LENGTH": "65535",
+      "CHARACTER_OCTET_LENGTH": "262140"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\tDATA_TYPE\tCHARACTER_MAXIMUM_LENGTH\tCHARACTER_OCTET_LENGTH\ntranscript\ttext\t65535\t262140\n",
+  "stderr": "",
+  "execution_time_ms": 371
+}

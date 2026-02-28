@@ -134,11 +134,13 @@ async function transcribeBuffer(
 
   const whisperResponse = await response.json() as WhisperResponse;
   
-  if (!whisperResponse.text || typeof whisperResponse.text !== 'string') {
+  // Validate the response has the expected structure
+  // Note: Whisper returns { text: "", segments: [] } for silent/empty audio — that's valid
+  if (typeof whisperResponse.text !== 'string') {
     return {
       error: "Invalid transcription response",
       code: "SERVICE_ERROR",
-      details: "Transcription service returned an invalid response format"
+      details: `Transcription service returned an invalid response format (text type: ${typeof whisperResponse.text})`
     };
   }
 

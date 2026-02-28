@@ -1210,6 +1210,19 @@ export async function processCall(callId: number): Promise<void> {
     }
     await updateCall(callId, transcriptUpdates);
 
+    // Handle empty transcripts (silent recordings, dial tones, etc.)
+    if (!transcript || transcript.trim().length < 10) {
+      console.log(`[ProcessCall] Call ${callId} has empty/minimal transcript (${transcript?.length || 0} chars), skipping as too_short`);
+      await updateCall(callId, {
+        status: "skipped",
+        classification: "too_short",
+        classificationReason: transcript
+          ? `Recording contained minimal speech: "${transcript.trim().substring(0, 100)}"`
+          : "Recording contained no detectable speech (silent or empty audio)",
+      });
+      return;
+    }
+
     // Step 3: Classify the call
     await updateCall(callId, { status: "classifying" });
     const classificationResult = await classifyCall(transcript, call.duration, tenantIndustry);
@@ -1546,7 +1559,20 @@ export async function processCall(callId: number): Promise<void> {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[ProcessCall] Error processing call ${callId}:`, errorMsg);
-    await updateCall(callId, { status: "failed", classificationReason: errorMsg });
+    
+    // For transient DB errors (DrizzleQueryError / connection issues), truncate the error message
+    // to avoid storing the full transcript text in classificationReason
+    let storedError = errorMsg;
+    if (errorMsg.startsWith('Failed query:')) {
+      // DrizzleQueryError includes the full query + params in the message
+      // Just store the query part, not the params (which may contain the full transcript)
+      const paramsIdx = errorMsg.indexOf('\nparams:');
+      storedError = paramsIdx > 0 
+        ? errorMsg.substring(0, paramsIdx) + ' (transient DB error — will auto-retry)'
+        : errorMsg.substring(0, 200) + '... (truncated)';
+    }
+    
+    await updateCall(callId, { status: "failed", classificationReason: storedError });
   }
 }
 

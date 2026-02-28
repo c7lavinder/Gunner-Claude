@@ -3453,7 +3453,7 @@
 - [x] Added KEY DISTINCTION sections for offer vs qualification and offer vs follow_up
 - [x] Added AM role-based exceptions for follow_up and admin_callback
 - [x] 6 classification prompt tests pass
-- [ ] User should run Bulk Regrade from Tenant Settings to re-classify existing calls with updated prompt
+- [x] User should run Bulk Regrade from Tenant Settings to re-classify existing calls with updated prompt
 
 ## Bug Fix: Recording 404 & Invalid File Format (Feb 27)
 - [x] Add 404 retry with backoff in transcription download (30s, 60s, 2min retries before failing)
@@ -3462,3 +3462,13 @@
 - [x] Add Invalid transcription response to retry-eligible error list
 - [x] Speed up stuck call retry interval from 30 min to 10 min
 - [x] 28 stuck call tests pass (7 new tests for tiered backoff + 6 MIME normalization tests)
+
+## Bulk Regrade & Call Coverage Verification (Feb 27)
+- [x] Trigger Bulk Regrade to re-classify misclassified calls (Jack Keef, Nina Beasley, Rita Adams)
+- [x] Verify failed calls have been retried after MIME normalization fix
+- [x] Check all expected contacts appear in Call History with proper names and scores
+
+## Bug Fix: Remaining Failed Calls (Feb 27)
+- [x] Fix Kyle Barks transcript DB update failure (transient error, reprocessed successfully)
+- [x] Fix Cathy Recker & Jan Bailey "Invalid transcription response" errors (1-2s silent recordings, now skip as too_short)
+- [x] Manually retry all three calls after fixes (all 3 reprocessed successfully)
