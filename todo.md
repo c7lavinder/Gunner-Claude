@@ -3615,3 +3615,14 @@
 - [ ] Message Inbox view inside Gunner (surface unread CRM messages)
 - [ ] Pipeline Board view inside Gunner (Kanban view of deal stages)
 - [ ] Quick Dial integration inside Gunner
+
+## Playbook Seeding & Coach Wiring (Feb 28, 2026)
+- [x] Seed existing tenants with wholesaling playbook (roles, rubrics, call types, terminology)
+- [x] Wire AI Coach system prompt to use tenant playbook config (role names, terminology, industry context)
+  - [x] coachStream.ts: dynamic coachIntro, leadGenFocus, roleDescriptions, outcomeLabels, callTypeLabels, crmContext
+  - [x] routers.ts askQuestion: dynamic coachIntro, leadGenFocus, roleDescriptions, teamContext
+  - [x] routers.ts meeting mode (roleplay, facilitate, QA, example): dynamic industry label
+  - [x] routers.ts social media content generation (brand, creator, ideas): dynamic industry label
+  - [x] routers.ts CRM action parser (parseIntent): dynamic industry label
+  - [x] All 3 real tenants seeded: New Again Houses, NAH Kitty Hawk, Apex Property Solutions
+  - [x] 32 tests passing, zero TS errors

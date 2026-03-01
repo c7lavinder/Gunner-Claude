@@ -481,3 +481,175 @@ export async function getRubricForCallType(
 
   return rubric || null;
 }
+
+
+// ============ AI COACH INTEGRATION ============
+
+/**
+ * Build the dynamic industry context block for the AI Coach system prompt.
+ * This replaces all hardcoded "real estate wholesaling" references with
+ * tenant-specific terminology from the playbook system.
+ * 
+ * Returns an object with all the prompt fragments the coach needs.
+ */
+export async function buildCoachIndustryContext(tenantId: number): Promise<{
+  /** e.g., "real estate wholesaling/investing" */
+  industry: string;
+  /** The intro line for the coach (role-aware) */
+  coachIntro: string;
+  /** Lead generator-specific coaching focus (if applicable) */
+  leadGenFocus: string;
+  /** Dynamic role descriptions for the team context */
+  roleDescriptions: Record<string, string>;
+  /** Dynamic outcome labels for formatting */
+  outcomeLabels: Record<string, string>;
+  /** Dynamic call type labels */
+  callTypeLabels: Record<string, string>;
+  /** The contact label (e.g., "Seller", "Investor", "Prospect") */
+  contactLabel: string;
+  contactLabelPlural: string;
+  /** The deal/asset labels */
+  dealLabel: string;
+  assetLabel: string;
+  /** CRM action context (what CRM they use) */
+  crmContext: string;
+}> {
+  const db = await getDb();
+  if (!db) return getDefaultCoachContext();
+
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  if (!tenant) return getDefaultCoachContext();
+
+  const settings = parseTenantSettings(tenant.settings || null);
+  const terminology = getEffectiveTerminology(settings);
+
+  // Get the industry prompt from the playbook
+  let industry = "real estate wholesaling/investing";
+  if (settings.industryPlaybook) {
+    const playbook = getPlaybookByCode(settings.industryPlaybook);
+    if (playbook) {
+      industry = playbook.industryPrompt;
+    }
+  }
+
+  // Also check crmConfig.industry (tenant-level override)
+  try {
+    const { parseCrmConfig } = await import("./tenant");
+    const crmConfig = parseCrmConfig(tenant);
+    if (crmConfig.industry) {
+      industry = crmConfig.industry;
+    }
+  } catch { /* optional */ }
+
+  // Load tenant roles for descriptions
+  const roles = await db.select().from(tenantRoles)
+    .where(and(eq(tenantRoles.tenantId, tenantId), eq(tenantRoles.isActive, "true")));
+
+  const roleDescriptions: Record<string, string> = {};
+  for (const role of roles) {
+    roleDescriptions[role.code] = role.description || role.name;
+  }
+
+  // Build lead generator focus section dynamically
+  const lgRole = roles.find(r => r.code === "lead_generator");
+  const lmRole = roles.find(r => r.code === "lead_manager");
+  const amRole = roles.find(r => r.code === "acquisition_manager");
+
+  const lgName = terminology.roleLabels?.lead_generator || lgRole?.name || "Lead Generator";
+  const lmName = terminology.roleLabels?.lead_manager || lmRole?.name || "Lead Manager";
+  const amName = terminology.roleLabels?.acquisition_manager || amRole?.name || "Acquisition Manager";
+  const contactLower = terminology.contactLabel.toLowerCase();
+  const contactPluralLower = terminology.contactLabelPlural.toLowerCase();
+
+  const leadGenFocus = `You are a data-driven cold calling coach for a ${lgName} on a ${industry} team. Your focus is on LEAD GENERATION — helping this caller gauge ${contactLower} interest, gather key details, and let interested ${contactPluralLower} know their ${lmName} will follow up.
+
+Your coaching should focus on:
+- Opening lines and hooks for cold calls
+- Quickly identifying ${contactLower} motivation (distress, life events, timeline)
+- Handling initial objections ("not interested", "how did you get my number", "stop calling")
+- Recognizing when a ${contactLower} is interested and wrapping up the call professionally ("I'll pass your info along to my ${lmName.toLowerCase()} and they'll reach out")
+- Adding notes about ${contactLower} interest level and key details for the ${lmName.toLowerCase()}
+- Efficient call pacing and volume strategies
+- NOT on full qualification, offers, walkthroughs, or closing — that's the ${lmName} and ${amName}'s job
+
+The ${lgName}'s workflow is simple: call, gauge interest, tell the ${contactLower} their ${lmName.toLowerCase()} will follow up, then add notes so the ${lmName.toLowerCase()} has context. They do NOT do formal handoffs or transfers — they just let the ${contactLower} know someone will be in touch.`;
+
+  const coachIntro = `You are a data-driven sales coach for a ${industry} team.`;
+
+  // Determine CRM context
+  let crmContext = "the team's CRM";
+  try {
+    const { parseCrmConfig } = await import("./tenant");
+    const crmConfig = parseCrmConfig(tenant);
+    if (crmConfig.ghlApiKey || crmConfig.ghlLocationId) {
+      crmContext = "the team's GoHighLevel CRM";
+    }
+  } catch { /* optional */ }
+
+  return {
+    industry,
+    coachIntro,
+    leadGenFocus,
+    roleDescriptions,
+    outcomeLabels: terminology.outcomeLabels || {},
+    callTypeLabels: terminology.callTypeLabels || {},
+    contactLabel: terminology.contactLabel,
+    contactLabelPlural: terminology.contactLabelPlural,
+    dealLabel: terminology.dealLabel,
+    assetLabel: terminology.assetLabel,
+    crmContext,
+  };
+}
+
+/**
+ * Default coach context when no tenant playbook is available.
+ * Falls back to the hardcoded wholesaling defaults.
+ */
+function getDefaultCoachContext() {
+  return {
+    industry: "real estate wholesaling/investing",
+    coachIntro: "You are a data-driven sales coach for a real estate wholesaling team.",
+    leadGenFocus: `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.
+
+Your coaching should focus on:
+- Opening lines and hooks for cold calls
+- Quickly identifying seller motivation (distress, life events, timeline)
+- Handling initial objections ("not interested", "how did you get my number", "stop calling")
+- Recognizing when a seller is interested and wrapping up the call professionally ("I'll pass your info along to my manager and they'll reach out")
+- Adding notes about seller interest level and key details for the manager
+- Efficient call pacing and volume strategies
+- NOT on full qualification, offers, walkthroughs, or closing — that's the Lead Manager and Acquisition Manager's job
+
+The Lead Generator's workflow is simple: call, gauge interest, tell the seller their manager will follow up, then add notes so the manager has context. They do NOT do formal handoffs or transfers — they just let the seller know someone will be in touch.`,
+    roleDescriptions: {
+      lead_generator: "Makes cold calls to identify motivated sellers",
+      lead_manager: "Qualifies leads and sets appointments",
+      acquisition_manager: "Presents offers and closes deals",
+    },
+    outcomeLabels: {
+      appointment_set: "Appointment Set",
+      offer_made: "Offer Made",
+      offer_rejected: "Offer Rejected",
+      callback_scheduled: "Callback Scheduled",
+      interested: "Interested",
+      not_interested: "Not Interested",
+      left_vm: "Left Voicemail",
+      no_answer: "No Answer",
+      dead: "Dead Lead",
+      none: "No Outcome",
+    },
+    callTypeLabels: {
+      cold_call: "Cold Call",
+      qualification: "Qualification",
+      offer: "Offer",
+      follow_up: "Follow-Up",
+      seller_callback: "Callback (Inbound)",
+      admin_callback: "Admin",
+    },
+    contactLabel: "Seller",
+    contactLabelPlural: "Sellers",
+    dealLabel: "Deal",
+    assetLabel: "Property",
+    crmContext: "the team's GoHighLevel CRM",
+  };
+}

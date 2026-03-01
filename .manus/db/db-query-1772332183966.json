@@ -1,0 +1,80 @@
+{
+  "query": "SELECT t.id, t.name, (SELECT COUNT(*) FROM tenant_roles tr WHERE tr.tenantId = t.id) as role_count, (SELECT COUNT(*) FROM tenant_rubrics trb WHERE trb.tenantId = t.id) as rubric_count, (SELECT COUNT(*) FROM tenant_call_types tct WHERE tct.tenantId = t.id) as call_type_count FROM tenants t;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT t.id, t.name, (SELECT COUNT(*) FROM tenant_roles tr WHERE tr.tenantId = t.id) as role_count, (SELECT COUNT(*) FROM tenant_rubrics trb WHERE trb.tenantId = t.id) as rubric_count, (SELECT COUNT(*) FROM tenant_call_types tct WHERE tct.tenantId = t.id) as call_type_count FROM tenants t;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "role_count": "0",
+      "rubric_count": "6",
+      "call_type_count": "0"
+    },
+    {
+      "id": "450029",
+      "name": "NAH Kitty Hawk",
+      "role_count": "0",
+      "rubric_count": "6",
+      "call_type_count": "0"
+    },
+    {
+      "id": "540044",
+      "name": "Apex Property Solutions",
+      "role_count": "0",
+      "rubric_count": "0",
+      "call_type_count": "0"
+    },
+    {
+      "id": "840008",
+      "name": "Test Wholesalers LLC",
+      "role_count": "3",
+      "rubric_count": "6",
+      "call_type_count": "6"
+    },
+    {
+      "id": "840009",
+      "name": "No CRM Company",
+      "role_count": "3",
+      "rubric_count": "6",
+      "call_type_count": "6"
+    },
+    {
+      "id": "840010",
+      "name": "Bulk Test Company",
+      "role_count": "3",
+      "rubric_count": "6",
+      "call_type_count": "6"
+    },
+    {
+      "id": "840011",
+      "name": "Settings Test Co",
+      "role_count": "3",
+      "rubric_count": "6",
+      "call_type_count": "6"
+    },
+    {
+      "id": "840012",
+      "name": "CRM Config Test Co",
+      "role_count": "3",
+      "rubric_count": "6",
+      "call_type_count": "6"
+    },
+    {
+      "id": "840013",
+      "name": "Pipeline Test Co",
+      "role_count": "3",
+      "rubric_count": "6",
+      "call_type_count": "6"
+    },
+    {
+      "id": "840014",
+      "name": "Stage Mapping Test Co",
+      "role_count": "3",
+      "rubric_count": "6",
+      "call_type_count": "6"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\trole_count\trubric_count\tcall_type_count\n1\tNew Again Houses\t0\t6\t0\n450029\tNAH Kitty Hawk\t0\t6\t0\n540044\tApex Property Solutions\t0\t0\t0\n840008\tTest Wholesalers LLC\t3\t6\t6\n840009\tNo CRM Company\t3\t6\t6\n840010\tBulk Test Company\t3\t6\t6\n840011\tSettings Test Co\t3\t6\t6\n840012\tCRM Config Test Co\t3\t6\t6\n840013\tPipeline Test Co\t3\t6\t6\n840014\tStage Mapping Test Co\t3\t6\t6\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

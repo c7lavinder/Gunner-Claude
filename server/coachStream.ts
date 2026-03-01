@@ -13,6 +13,7 @@ import {
 } from "./db";
 import { SECURITY_RULES, PLATFORM_KNOWLEDGE, isSensitiveQuestion } from "./platformKnowledge";
 import { detectStatsIntent, computeStats } from "./coachStats";
+import { buildCoachIndustryContext } from "./playbooks";
 import type { User } from "../drizzle/schema";
 
 const coachStreamRouter = Router();
@@ -111,6 +112,9 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       } catch { /* best effort */ }
     }
 
+    // Load tenant playbook context for dynamic prompts
+    const industryCtx = tenantId ? await buildCoachIndustryContext(tenantId) : null;
+
     // Determine data window
     const isPerformanceQuestion = /how.*doing|performance|score|grade|average|stats|improv|progress|trend/i.test(question);
     const callLimit = mentionedMember ? 20 : isPerformanceQuestion ? 50 : 25;
@@ -122,14 +126,19 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       teamMembers: mentionedMember ? [String(mentionedMember.id)] : undefined,
     });
 
-    // Build team context
-    const teamContext = teamMembersList.map(m =>
-      `- ${m.name} (${m.teamRole || 'member'}) | ID: ${m.id}`
-    ).join('\n');
+    // Build team context with dynamic role labels
+    const teamContext = teamMembersList.map(m => {
+      const roleLabel = industryCtx?.roleDescriptions?.[m.teamRole || ''] 
+        ? `${m.teamRole}` 
+        : (m.teamRole || 'member');
+      return `- ${m.name} (${roleLabel}) | ID: ${m.id}`;
+    }).join('\n');
 
-    // Format call outcomes from snake_case to clean English
+    // Format call outcomes using tenant terminology (dynamic labels)
     const formatOutcome = (outcome: string): string => {
-      const outcomeLabels: Record<string, string> = {
+      // Use tenant-specific outcome labels if available, fall back to defaults
+      const dynamicLabels = industryCtx?.outcomeLabels || {};
+      const defaultLabels: Record<string, string> = {
         appointment_set: 'Appointment Set',
         offer_made: 'Offer Made',
         offer_rejected: 'Offer Rejected',
@@ -143,7 +152,7 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
         none: 'No Outcome',
         follow_up: 'Follow Up',
       };
-      return outcomeLabels[outcome] || outcome.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      return dynamicLabels[outcome] || defaultLabels[outcome] || outcome.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     };
 
     // Build recent calls summary
@@ -268,7 +277,7 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       }
     } catch { /* stats are optional */ }
 
-    const systemPrompt = `${isLeadGenerator ? `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.
+    const systemPrompt = `${isLeadGenerator ? (industryCtx?.leadGenFocus || `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.
 
 Your coaching should focus on:
 - Opening lines and hooks for cold calls
@@ -279,7 +288,7 @@ Your coaching should focus on:
 - Efficient call pacing and volume strategies
 - NOT on full qualification, offers, walkthroughs, or closing — that's the Lead Manager and Acquisition Manager's job
 
-The Lead Generator's workflow is simple: call, gauge interest, tell the seller their manager will follow up, then add notes so the manager has context. They do NOT do formal handoffs or transfers — they just let the seller know someone will be in touch.` : 'You are a data-driven sales coach for a real estate wholesaling team.'} You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
+The Lead Generator's workflow is simple: call, gauge interest, tell the seller their manager will follow up, then add notes so the manager has context. They do NOT do formal handoffs or transfers — they just let the seller know someone will be in touch.`) : (industryCtx?.coachIntro || 'You are a data-driven sales coach for a real estate wholesaling team.')} You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
 
 ${SECURITY_RULES}
 ${questionIsPlatform ? PLATFORM_KNOWLEDGE : ''}
@@ -299,7 +308,7 @@ ${trainingContext}
 ${coachingPrefs ? `\n${coachingPrefs}` : ""}
 ${userInstructionContext}
 CRM ACTION CAPABILITIES:
-You have FULL access to the team's GoHighLevel CRM. You CAN directly perform these actions:
+You have FULL access to ${industryCtx?.crmContext || "the team's GoHighLevel CRM"}. You CAN directly perform these actions:
 - Add notes to contacts
 - Change pipeline stages (move deals)
 - Send SMS messages to contacts

@@ -2070,6 +2070,10 @@ Based on ALL of the above context, suggest the most relevant next steps for this
         
         const tenantId = ctx.user?.tenantId || undefined;
 
+        // Load tenant playbook context for dynamic prompts
+        const { buildCoachIndustryContext } = await import("./playbooks");
+        const industryCtx = tenantId ? await buildCoachIndustryContext(tenantId) : null;
+
         // Get team members list (this is the source of truth for who's on the team)
         const teamMembersList = await getTeamMembers(tenantId);
         const teamMemberNames = teamMembersList.map(m => m.name);
@@ -2214,10 +2218,12 @@ Based on ALL of the above context, suggest the most relevant next steps for this
               return acc;
             }, {} as Record<string, number>);
             const outcomeStr = Object.entries(outcomes).map(([k, v]) => `${k}: ${v}`).join(', ');
-            return `- ${m.name} (${(m.teamRole || 'unknown').replace('_', ' ')}) — ${gradedCalls.length} graded calls${avgScore !== null ? `, avg score: ${avgScore}%` : ''}${outcomeStr ? `, outcomes: [${outcomeStr}]` : ''}`;
+            const roleLabel = industryCtx?.roleDescriptions?.[m.teamRole || ''] ? m.teamRole : (m.teamRole || 'unknown').replace('_', ' ');
+            return `- ${m.name} (${roleLabel}) — ${gradedCalls.length} graded calls${avgScore !== null ? `, avg score: ${avgScore}%` : ''}${outcomeStr ? `, outcomes: [${outcomeStr}]` : ''}`;
           } else {
             // Just name and role for non-visible members
-            return `- ${m.name} (${(m.teamRole || 'unknown').replace('_', ' ')})`;
+            const roleLabel = industryCtx?.roleDescriptions?.[m.teamRole || ''] ? m.teamRole : (m.teamRole || 'unknown').replace('_', ' ');
+            return `- ${m.name} (${roleLabel})`;
           }
         }).join('\n');
 
@@ -2381,7 +2387,7 @@ Based on ALL of the above context, suggest the most relevant next steps for this
           }
         } catch { /* memory is best-effort */ }
 
-        const systemPrompt = `${isLeadGenerator ? `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.
+        const systemPrompt = `${isLeadGenerator ? (industryCtx?.leadGenFocus || `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.
 
 Your coaching should focus on:
 - Opening lines and hooks for cold calls
@@ -2392,7 +2398,7 @@ Your coaching should focus on:
 - Efficient call pacing and volume strategies
 - NOT on full qualification, offers, walkthroughs, or closing — that's the Lead Manager and Acquisition Manager's job
 
-The Lead Generator's workflow is simple: call, gauge interest, tell the seller their manager will follow up, then add notes so the manager has context. They do NOT do formal handoffs or transfers — they just let the seller know someone will be in touch.` : 'You are a data-driven sales coach for a real estate wholesaling team.'} You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
+The Lead Generator's workflow is simple: call, gauge interest, tell the seller their manager will follow up, then add notes so the manager has context. They do NOT do formal handoffs or transfers — they just let the seller know someone will be in touch.`) : (industryCtx?.coachIntro || 'You are a data-driven sales coach for a real estate wholesaling team.')} You have access to REAL call data and team performance metrics below. Your job is to give answers grounded in this actual data.
 
 ${SECURITY_RULES}
 ${questionIsPlatform ? PLATFORM_KNOWLEDGE : ''}
@@ -2457,7 +2463,7 @@ ${(() => {
 ${coachingPrefs ? `\n${coachingPrefs}` : ""}
 
 CRM ACTION CAPABILITIES:
-You have FULL access to the team's GoHighLevel CRM. You CAN directly perform these actions:
+You have FULL access to ${industryCtx?.crmContext || "the team's GoHighLevel CRM"}. You CAN directly perform these actions:
 - Add notes to contacts
 - Change pipeline stages (move deals)
 - Send SMS messages to contacts
@@ -2611,6 +2617,11 @@ PRIOR CONTEXT AWARENESS:
         checkRateLimit(ctx.user?.tenantId, "ai");
         trackUsage(ctx.user?.tenantId, "ai_chat");
         
+        // Load tenant playbook context for dynamic prompts
+        const { buildCoachIndustryContext: buildMeetingCtx } = await import("./playbooks");
+        const meetingIndustryCtx = ctx.user?.tenantId ? await buildMeetingCtx(ctx.user.tenantId) : null;
+        const industryLabel = meetingIndustryCtx?.industry || "real estate wholesaling";
+
         // Get training materials (filtered by tenant)
         const trainingMaterials = await getTrainingMaterials({ tenantId: ctx.user?.tenantId || undefined });
         const trainingContext = trainingMaterials
@@ -2627,7 +2638,7 @@ PRIOR CONTEXT AWARENESS:
 
         if (input.mode === "roleplay") {
           // Role-play mode: AI plays the seller
-          systemPrompt = `You are playing the role of a SELLER in a real estate wholesaling role-play exercise.
+          systemPrompt = `You are playing the role of a SELLER in a ${industryLabel} role-play exercise.
 
 Your personality: ${input.roleplayContext?.sellerPersonality || "Skeptical homeowner who inherited a property and is unsure about selling"}
 Scenario: ${input.roleplayContext?.scenario || "First call - seller is exploring options"}
@@ -2661,7 +2672,7 @@ Improvements: ${(grade?.improvements as string[] || []).join(", ") || "N/A"}
 Transcript excerpt: "${c.transcript?.substring(0, 600) || "N/A"}..."`;
           }).join("\n\n");
 
-          systemPrompt = `You are a meeting facilitator helping a real estate wholesaling team learn from real call examples.
+          systemPrompt = `You are a meeting facilitator helping a ${industryLabel} team learn from real call examples.
 
 RECENT CALL EXAMPLES:
 ${callExamples}
@@ -2679,7 +2690,7 @@ Your role:
 Be encouraging but honest about areas for improvement.`;
         } else if (input.mode === "qa") {
           // Q&A mode: Answer coaching questions
-          systemPrompt = `You are a sales coach for a real estate wholesaling team, answering questions during a team meeting.
+          systemPrompt = `You are a sales coach for a ${industryLabel} team, answering questions during a team meeting.
 
 TRAINING MATERIALS:
 ${trainingContext.substring(0, 6000)}
@@ -2697,7 +2708,7 @@ RESPONSE RULES:
 Answer the team's question helpfully and concisely.`;
         } else {
           // Facilitate mode: Guide through agenda
-          systemPrompt = `You are an AI meeting facilitator guiding a real estate wholesaling team through their weekly training call.
+          systemPrompt = `You are an AI meeting facilitator guiding a ${industryLabel} team through their weekly training call.
 
 Current agenda item: "${input.currentAgendaItem?.title || "Meeting start"}"
 ${input.currentAgendaItem?.description ? `Details: ${input.currentAgendaItem.description}` : ""}
@@ -3237,6 +3248,11 @@ Keep it brief and actionable.`;
         checkRateLimit(ctx.user?.tenantId, "contentGeneration");
         trackUsage(ctx.user?.tenantId, "content_generation");
         
+        // Load tenant playbook context
+        const { buildCoachIndustryContext: buildContentCtx } = await import("./playbooks");
+        const contentIndustryCtx = ctx.user?.tenantId ? await buildContentCtx(ctx.user.tenantId) : null;
+        const contentIndustryLabel = contentIndustryCtx?.industry || "real estate wholesaling";
+
         // Get brand assets for context
         const assets = await getBrandAssets({ activeOnly: true });
         const brandContext = assets.map(a => `${a.name}: ${a.description || ""}`).join("\n");
@@ -3254,7 +3270,7 @@ Keep it brief and actionable.`;
           messages: [
             {
               role: "system",
-              content: `You are a social media content creator for a real estate wholesaling business. Create engaging content that resonates with property sellers and real estate investors.
+              content: `You are a social media content creator for a ${contentIndustryLabel} business. Create engaging content that resonates with the target audience.
 
 Brand Context:
 ${brandContext}
@@ -3373,20 +3389,17 @@ Provide the content in JSON format with fields: title (optional for non-blog), c
         // Rate limit content generation
         checkRateLimit(ctx.user?.tenantId, "contentGeneration");
         trackUsage(ctx.user?.tenantId, "content_generation");
+
+        // Load tenant playbook context
+        const { buildCoachIndustryContext: buildIdeasCtx } = await import("./playbooks");
+        const ideasIndustryCtx = ctx.user?.tenantId ? await buildIdeasCtx(ctx.user.tenantId) : null;
+        const ideasIndustryLabel = ideasIndustryCtx?.industry || "real estate wholesaling";
         
         const response = await invokeLLM({
           messages: [
             {
               role: "system",
-              content: `You are a content strategist for a real estate wholesaling business. Generate creative content ideas that will engage property sellers and real estate investors.
-
-Focus on topics like:
-- Selling distressed properties
-- Working with cash buyers
-- Real estate market insights
-- Success stories and testimonials
-- Tips for homeowners facing foreclosure, divorce, or inherited properties
-- Behind-the-scenes of real estate wholesaling
+              content: `You are a content strategist for a ${ideasIndustryLabel} business. Generate creative content ideas that will engage the target audience.
 
 Provide ${input.count} unique content ideas in JSON format.`,
             },
@@ -3562,6 +3575,12 @@ Provide ${input.count} unique content ideas in JSON format.`,
         trackUsage(ctx.user?.tenantId, "content_generation");
         
         const tenantId = ctx.user?.tenantId || undefined;
+
+        // Load tenant playbook context
+        const { buildCoachIndustryContext: buildBrandCtx } = await import("./playbooks");
+        const brandIndustryCtx = tenantId ? await buildBrandCtx(tenantId) : null;
+        const brandIndustryLabel = brandIndustryCtx?.industry || "real estate wholesaling";
+
         const [calls, kpis, brandProfileData] = await Promise.all([
           getCallsForContentGeneration(10, tenantId),
           getKPIsForContentGeneration(tenantId),
@@ -3579,7 +3598,7 @@ Provide ${input.count} unique content ideas in JSON format.`,
           messages: [
             {
               role: "system",
-              content: `You are a content creator for ${brandProfileData?.companyName || "a real estate wholesaling company"}.
+              content: `You are a content creator for ${brandProfileData?.companyName || `a ${brandIndustryLabel} company`}.
 
 Brand Voice: ${brandProfileData?.brandVoice || "Professional yet approachable"}
 Mission: ${brandProfileData?.missionStatement || "Help homeowners sell their properties quickly and hassle-free"}
@@ -3642,6 +3661,12 @@ Create content that:
         trackUsage(ctx.user?.tenantId, "content_generation");
         
         const tenantId = ctx.user?.tenantId || undefined;
+
+        // Load tenant playbook context
+        const { buildCoachIndustryContext: buildCreatorCtx } = await import("./playbooks");
+        const creatorIndustryCtx = tenantId ? await buildCreatorCtx(tenantId) : null;
+        const creatorIndustryLabel = creatorIndustryCtx?.industry || "real estate wholesaling";
+
         const [stories, brandProfileData] = await Promise.all([
           getInterestingCallStories(10, tenantId),
           getBrandProfile(tenantId),
@@ -3658,9 +3683,9 @@ Create content that:
           messages: [
             {
               role: "system",
-              content: `You are a content creator building a personal brand in real estate wholesaling.
+              content: `You are a content creator building a personal brand in ${creatorIndustryLabel}.
 
-Brand: ${brandProfileData?.companyName || "Real estate investor"}
+Brand: ${brandProfileData?.companyName || creatorIndustryLabel + " professional"}
 Voice: Authentic, engaging, sometimes edgy - designed to grab attention on X/Twitter
 
 Recent interesting call moments (use these for authentic stories):
@@ -3669,7 +3694,7 @@ ${JSON.stringify(storyContext, null, 2)}
 Create content that:
 1. Grabs attention in the first line
 2. Tells a real story from actual calls (anonymized)
-3. Shows the reality of real estate wholesaling
+3. Shows the reality of the business
 4. Encourages engagement and discussion`,
             },
             {
@@ -5507,6 +5532,11 @@ Create content that:
         const tenantId = ctx.user?.tenantId;
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
+        // Load tenant playbook context for dynamic prompts
+        const { buildCoachIndustryContext: buildParseCtx } = await import("./playbooks");
+        const parseIndustryCtx = await buildParseCtx(tenantId);
+        const parseIndustryLabel = parseIndustryCtx?.industry || "real estate wholesaling";
+
         // Check if this is a user instruction/preference being set
         try {
           const { detectInstruction, saveInstruction } = await import("./userInstructions");
@@ -5756,7 +5786,7 @@ Create content that:
             {
               role: "system",
               content: `You are an AI assistant that parses user requests into structured CRM actions.
-The user is a real estate wholesaling team member. Parse their natural language request into CRM actions.
+The user is a ${parseIndustryLabel} team member. Parse their natural language request into CRM actions.
 
 Available action types:
 1. add_note - Add a note to a contact (covers both contact notes and deal/opportunity notes)
@@ -6670,7 +6700,7 @@ selectedTimezone: { type: "string" },
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
         const { updateTenantTerminology } = await import("./playbooks");
-        const result = await updateTenantTerminology(ctx.user.tenantId, input);
+        const result = await updateTenantTerminology(ctx.user.tenantId, input as Partial<import("../shared/playbooks").PlaybookTerminology>);
         if (!result.success) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
         return result;
       }),
