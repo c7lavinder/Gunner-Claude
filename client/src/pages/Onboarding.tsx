@@ -1014,7 +1014,7 @@ export default function Onboarding() {
         {/* Logo */}
         <div className="text-center mb-8">
           <img
-            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo.png"
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/gunner-logo-transparent_1da41add.png"
             alt="Gunner"
             className="h-16 mx-auto"
           />

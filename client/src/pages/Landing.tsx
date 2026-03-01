@@ -33,7 +33,7 @@ const HERO_DASHBOARD = "https://files.manuscdn.com/user_upload_by_module/session
 const CALL_SCORING_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/JFwhthFRYPSiFrvr.png";
 const LEADERBOARD_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/vNQGmAQJzCbyfSPK.png";
 const AI_COACH_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/JFwhthFRYPSiFrvr.png";
-const GUNNER_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-small.png";
+const GUNNER_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/gunner-logo-small-transparent_1ea33474.png";
 
 // ─── Feature label mapping ───
 const featureLabels: Record<string, string> = {

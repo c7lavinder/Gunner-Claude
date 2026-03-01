@@ -253,7 +253,7 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
             onClick={() => setLocation('/dashboard')}
           >
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/branding/gunner-logo-small.png"
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/gunner-logo-small-transparent_1ea33474.png"
               alt="Gunner"
               className="h-8 transition-transform duration-300 group-hover:scale-105"
               style={{ objectFit: 'contain' }}
