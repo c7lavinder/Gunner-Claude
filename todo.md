@@ -3643,3 +3643,38 @@
 - [x] Home.tsx Dashboard stats already using t.kpi() — verified
 - [x] Analytics.tsx stats already using t.kpi() — verified
 - [x] Zero TypeScript errors, 31 playbook tests + auth test passing
+
+## Revenue Acceleration Sprint (Mar 1, 2026)
+
+### Critical Bug Fixes (Demo-Killers)
+- [x] Fix missing Feb 27 calls — disabled test tenants tripping circuit breaker, added per-tenant 401 tracking
+- [ ] Fix signal false positives — check GHL conversations/SMS before claiming "no follow-up"
+- [x] Fix price extraction accuracy — increased transcript excerpt to 8000 chars, refined LLM prompt
+- [ ] Auto-suppress signals when pipeline stage shows under contract/purchased
+
+### Onboarding Polish (New Customer Conversion)
+- [ ] Audit and fix full onboarding flow end-to-end for new wholesaler tenant
+- [ ] Ensure GHL OAuth "Connect with GoHighLevel" button works seamlessly
+- [ ] Verify playbook seeding works on new tenant creation
+- [ ] Test that first call sync happens immediately after GHL connection
+- [ ] Ensure demo account is working and impressive
+
+### Sales Acceleration Assets
+- [x] Write cold outreach email sequences (4 sequences: wholesalers, GHL agencies, coaches, LinkedIn DMs)
+- [x] Write partnership proposal template for wholesaling coaches/gurus
+- [x] Write GHL Marketplace app listing description
+- [x] Create ROI calculator content (included in pitch deck and outreach)
+- [x] Write case study template (included in white-label proposal and outreach sequences)
+- [x] Write YC application draft (problem, solution, traction, market size)
+
+### Channel Partner Program
+- [x] Design affiliate/referral program structure (3 tiers: referral 20%, reseller 40% off, white-label $149/mo)
+- [x] Write partner onboarding guide (included in channel partner program doc)
+- [x] Create co-branded pitch template for coaches to present to their students
+- [x] Write white-label proposal for coaching programs
+
+### GHL Marketplace Readiness
+- [x] Verify OAuth install flow works end-to-end (code verified, needs GHL Marketplace App registration)
+- [ ] Verify webhook auto-registration on OAuth connect
+- [x] Write GHL Marketplace app description and screenshots guide
+- [x] Prepare GHL Marketplace submission checklist

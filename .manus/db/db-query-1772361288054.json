@@ -1,0 +1,95 @@
+{
+  "query": "SELECT id, name, crmConnected FROM tenants ORDER BY id LIMIT 30;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, crmConnected FROM tenants ORDER BY id LIMIT 30;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "crmConnected": "true"
+    },
+    {
+      "id": "450029",
+      "name": "NAH Kitty Hawk",
+      "crmConnected": "true"
+    },
+    {
+      "id": "540044",
+      "name": "Apex Property Solutions",
+      "crmConnected": "true"
+    },
+    {
+      "id": "840008",
+      "name": "Test Wholesalers LLC",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840009",
+      "name": "No CRM Company",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840010",
+      "name": "Bulk Test Company",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840011",
+      "name": "Settings Test Co",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840012",
+      "name": "CRM Config Test Co",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840013",
+      "name": "Pipeline Test Co",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840014",
+      "name": "Stage Mapping Test Co",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840015",
+      "name": "Test Wholesalers LLC",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840016",
+      "name": "No CRM Company",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840017",
+      "name": "Bulk Test Company",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840018",
+      "name": "Settings Test Co",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840019",
+      "name": "CRM Config Test Co",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840020",
+      "name": "Pipeline Test Co",
+      "crmConnected": "false"
+    },
+    {
+      "id": "840021",
+      "name": "Stage Mapping Test Co",
+      "crmConnected": "false"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcrmConnected\n1\tNew Again Houses\ttrue\n450029\tNAH Kitty Hawk\ttrue\n540044\tApex Property Solutions\ttrue\n840008\tTest Wholesalers LLC\tfalse\n840009\tNo CRM Company\tfalse\n840010\tBulk Test Company\tfalse\n840011\tSettings Test Co\tfalse\n840012\tCRM Config Test Co\tfalse\n840013\tPipeline Test Co\tfalse\n840014\tStage Mapping Test Co\tfalse\n840015\tTest Wholesalers LLC\tfalse\n840016\tNo CRM Company\tfalse\n840017\tBulk Test Company\tfalse\n840018\tSettings Test Co\tfalse\n840019\tCRM Config Test Co\tfalse\n840020\tPipeline Test Co\tfalse\n840021\tStage Mapping Test Co\tfalse\n",
+  "stderr": "",
+  "execution_time_ms": 67
+}

@@ -139,21 +139,25 @@ async function extractPricesFromTranscriptLLM(transcript: string): Promise<{ our
   if (!transcript) return NO_PRICE_DATA;
   
   // Use a larger excerpt to catch prices mentioned later in the call
-  const excerpt = transcript.substring(0, 4000);
+  // Price discussions often happen in the second half of longer calls
+  const excerpt = transcript.substring(0, 8000);
   
   try {
     const response = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: `You extract price information from real estate call transcripts. Identify:
+          content: `You extract price information from real estate wholesaling call transcripts. Identify:
 1. "our_offer" — the price OUR TEAM (the buyer/wholesaler/investor) offered or would pay for the property
-2. "seller_ask" — the price the SELLER wants, is asking for, or would accept
+2. "seller_ask" — the price the SELLER wants, is asking for, or would accept for their property
 
 RULES:
-- Only extract prices that are clearly about the property purchase/sale price
-- Do NOT extract: taxes, repairs, rent, mortgage payments, ARV, renovation costs, closing costs, commissions
-- Numbers may be stated as "105 thousand", "one-oh-five", "105k", "$105,000", etc.
+- Only extract prices that are clearly about the PROPERTY PURCHASE/SALE price
+- Do NOT extract: taxes, repairs, rent, mortgage payments, ARV, renovation costs, closing costs, commissions, insurance, HOA fees, or any other non-purchase prices
+- Do NOT extract property tax assessed values or Zestimate values — only what the parties are willing to pay/accept
+- Numbers may be stated as "105 thousand", "one-oh-five", "105k", "$105,000", "a hundred and five", etc.
+- Pay attention to WHO is speaking — the agent/caller represents our team, the homeowner/seller is the other party
+- If multiple prices are discussed, use the MOST RECENT or FINAL price from each party
 - If a number is ambiguous or you're not sure which side it belongs to, return null for that field
 - It's better to return null than a wrong number
 - Return whole dollar amounts (no cents)`

@@ -1,0 +1,62 @@
+{
+  "query": "SELECT id, name FROM tenants WHERE crmConnected = 'true' ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name FROM tenants WHERE crmConnected = 'true' ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses"
+    },
+    {
+      "id": "450029",
+      "name": "NAH Kitty Hawk"
+    },
+    {
+      "id": "540044",
+      "name": "Apex Property Solutions"
+    },
+    {
+      "id": "840008",
+      "name": "Test Wholesalers LLC"
+    },
+    {
+      "id": "840011",
+      "name": "Settings Test Co"
+    },
+    {
+      "id": "840012",
+      "name": "CRM Config Test Co"
+    },
+    {
+      "id": "840013",
+      "name": "Pipeline Test Co"
+    },
+    {
+      "id": "840014",
+      "name": "Stage Mapping Test Co"
+    },
+    {
+      "id": "840015",
+      "name": "Test Wholesalers LLC"
+    },
+    {
+      "id": "840018",
+      "name": "Settings Test Co"
+    },
+    {
+      "id": "840019",
+      "name": "CRM Config Test Co"
+    },
+    {
+      "id": "840020",
+      "name": "Pipeline Test Co"
+    },
+    {
+      "id": "840021",
+      "name": "Stage Mapping Test Co"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\n1\tNew Again Houses\n450029\tNAH Kitty Hawk\n540044\tApex Property Solutions\n840008\tTest Wholesalers LLC\n840011\tSettings Test Co\n840012\tCRM Config Test Co\n840013\tPipeline Test Co\n840014\tStage Mapping Test Co\n840015\tTest Wholesalers LLC\n840018\tSettings Test Co\n840019\tCRM Config Test Co\n840020\tPipeline Test Co\n840021\tStage Mapping Test Co\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

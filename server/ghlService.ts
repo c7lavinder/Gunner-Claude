@@ -255,6 +255,10 @@ async function linkTeamMemberGhlUserId(teamMemberId: number, ghlUserId: string):
 // Store last poll timestamp in memory (could be persisted to DB for production)
 let lastPollTimestamp: Date | null = null;
 let isPolling = false;
+
+// Track consecutive 401 failures per tenant to auto-skip broken tenants
+const tenant401Failures = new Map<number, number>();
+const MAX_CONSECUTIVE_401 = 3; // Skip tenant after 3 consecutive 401s
 let pollInterval: NodeJS.Timeout | null = null;
 
 /**
@@ -1006,6 +1010,13 @@ export async function pollForNewCalls(): Promise<{
         await new Promise(resolve => setTimeout(resolve, 15000));
       }
 
+      // Skip tenants with too many consecutive 401 failures (broken API keys)
+      const consecutive401s = tenant401Failures.get(tenant.id) || 0;
+      if (consecutive401s >= MAX_CONSECUTIVE_401) {
+        console.log(`[GHL] Skipping tenant ${tenant.id} (${tenant.name}) — ${consecutive401s} consecutive 401 failures. Fix API key in Settings.`);
+        continue;
+      }
+
       try {
         const startDate = lastPollTimestamp || new Date(Date.now() - 72 * 60 * 60 * 1000);
         const endDate = new Date();
@@ -1044,15 +1055,27 @@ export async function pollForNewCalls(): Promise<{
         const { updateTenantSettings } = await import("./tenant");
         await updateTenantSettings(tenant.id, { lastGhlSync: new Date() });
         console.log(`[GHL] Tenant ${tenant.id}: Recorded sync timestamp`);
+        // Reset 401 counter on success
+        tenant401Failures.delete(tenant.id);
       } catch (tenantError) {
+        const errMsg = tenantError instanceof Error ? tenantError.message : "Unknown error";
         console.error(`[GHL] Error polling tenant ${tenant.id} (${tenant.name}):`, tenantError);
-        results.errors.push(`Tenant ${tenant.id}: ${tenantError instanceof Error ? tenantError.message : "Unknown error"}`);
+        
+        // Track 401 failures separately — don't let one bad tenant block others
+        if (errMsg.includes("401")) {
+          const count = (tenant401Failures.get(tenant.id) || 0) + 1;
+          tenant401Failures.set(tenant.id, count);
+          console.warn(`[GHL] Tenant ${tenant.id}: 401 failure #${count}/${MAX_CONSECUTIVE_401} — will auto-skip after ${MAX_CONSECUTIVE_401}`);
+          // Don't count 401s as poll errors that block lastPollTimestamp advancement
+          continue;
+        }
+        results.errors.push(`Tenant ${tenant.id}: ${errMsg}`);
       }
     }
 
-    // Only update lastPollTimestamp if the poll actually completed successfully.
-    // If the circuit breaker tripped or a timeout occurred, we keep the old timestamp
-    // so the next poll will re-fetch the same window and catch any missed calls.
+    // Only update lastPollTimestamp if the poll completed without critical errors.
+    // 401 errors from individual tenants are excluded (handled per-tenant above).
+    // Only real failures (timeouts, rate limits) should block timestamp advancement.
     if (results.failed === 0 && results.errors.length === 0) {
       lastPollTimestamp = new Date();
       console.log(`[GHL] Poll successful — advancing lastPollTimestamp to ${lastPollTimestamp.toISOString()}`);
