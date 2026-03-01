@@ -277,6 +277,13 @@ async function processCallEvent(event: CallEvent): Promise<void> {
     }
   }
 
+  // Skip calls that don't match any configured team member
+  // This prevents importing calls from disposition team, admin staff, etc.
+  if (!teamMemberId) {
+    console.log(`${logPrefix} No team member match for call ${event.sourceCallId} (crmUserId: ${event.crmUserId || 'none'}, name: ${event.teamMemberName || 'unknown'}), skipping — only calls from configured team members are imported`);
+    return;
+  }
+
   // Create the call record
   const call = await createCall({
     ghlCallId: event.sourceCallId,

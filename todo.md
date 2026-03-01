@@ -3540,3 +3540,9 @@
 
 ## Bug Fix: View As Exit (Feb 28, 2026)
 - [x] Fix inability to exit "View As" impersonation mode - banner z-index raised to z-[200], nav bar shifts down 44px when impersonating, content padding adjusted
+
+## Bug Fix: Filter Out Non-Team Calls (Feb 28, 2026)
+- [x] Calls from disposition team (and other non-configured teams) should not appear in the call inbox
+- [x] Only import/display calls from team members set up in the Gunner website
+- [x] Added team member check to webhook handler (skip calls with no team member match)
+- [x] Added teamMemberId IS NOT NULL filter to getCalls, getCallsWithGrades, and getCallsWithPermissions

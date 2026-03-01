@@ -328,6 +328,9 @@ export async function getCalls(options: {
     conditions.push(eq(calls.isArchived, "false"));
   }
   
+  // Exclude calls without a configured team member (disposition team, admin staff, etc.)
+  conditions.push(sql`${calls.teamMemberId} IS NOT NULL`);
+  
   // Filter by tenant if provided
   if (options.tenantId) {
     conditions.push(eq(calls.tenantId, options.tenantId));
@@ -424,7 +427,8 @@ export async function getCallsWithGrades(options: {
 
   const conditions = [];
   conditions.push(eq(calls.isArchived, "false"));
-
+  // Exclude calls without a configured team member (disposition team, admin staff, etc.)
+  conditions.push(sql`${calls.teamMemberId} IS NOT NULL`);
   if (options.tenantId) {
     conditions.push(eq(calls.tenantId, options.tenantId));
   }
@@ -2233,9 +2237,13 @@ export async function getCallsWithPermissions(
     conditions.push(lte(calls.callTimestamp, options.endDate));
   }
 
+  // Always exclude calls that don't belong to any configured team member
+  // (e.g., disposition team, admin staff calls that were imported before the webhook filter)
+  conditions.push(sql`${calls.teamMemberId} IS NOT NULL`);
+
   // Apply permission-based filtering (within tenant)
   if (permissionContext.teamRole === 'admin' || permissionContext.teamRole === 'super_admin' as any) {
-    // Admin/super_admin sees all calls within their tenant - no additional filter
+    // Admin/super_admin sees all team-member calls within their tenant - no additional filter
   } else if (permissionContext.teamRole === 'acquisition_manager' && permissionContext.teamMemberId) {
     // Acquisition Manager sees own calls + assigned Lead Manager calls
     const assignedLeadManagers = await getLeadManagersForAcquisitionManager(permissionContext.teamMemberId);
