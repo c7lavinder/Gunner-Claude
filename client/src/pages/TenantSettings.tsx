@@ -38,13 +38,15 @@ import {
   Home,
   TestTube,
   Webhook,
-  Copy
+  Copy,
+  BookOpen
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { formatRelativeTime } from "@/lib/timeUtils";
+import PlaybookSettings from "@/components/PlaybookSettings";
 
 export default function TenantSettings() {
   const { user } = useAuth();
@@ -596,9 +598,9 @@ export default function TenantSettings() {
               <Link2 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>CRM</span>
             </button>
-            <button className={`obs-role-tab ${activeTab === "rubrics" ? "active" : ""}`} onClick={() => setActiveTab("rubrics")}>
-              <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span>Rubrics</span>
+            <button className={`obs-role-tab ${activeTab === "playbook" ? "active" : ""}`} onClick={() => setActiveTab("playbook")}>
+              <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span>Playbook</span>
             </button>
             {(user?.role === 'admin' || user?.role === 'super_admin') && (
               <button className={`obs-role-tab ${activeTab === "impersonate" ? "active" : ""}`} onClick={() => setActiveTab("impersonate")}>
@@ -2138,21 +2140,10 @@ export default function TenantSettings() {
           </div>
         </div>)}
 
-        {/* Grading Rubrics */}
-        {activeTab === "rubrics" && (<div key="rubrics" className="space-y-6 obs-fade-in">
+        {/* Playbook Configuration */}
+        {activeTab === "playbook" && (<div key="playbook" className="space-y-6 obs-fade-in">
+          <PlaybookSettings />
           <div className="obs-panel">
-            <div style={{marginBottom: 16}}>
-              <h3 className="obs-section-title">Grading Rubrics</h3>
-              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Customize how calls are evaluated</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-4">
-                Grading rubrics are managed in the Training section. Visit the Training page to create and edit rubrics.
-              </p>
-              <Button variant="outline" onClick={() => window.location.href = "/training"}>
-                Go to Training
-              </Button>
-            </div>
             <BulkRegradeWidget />
           </div>
         </div>)}

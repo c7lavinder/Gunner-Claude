@@ -3546,3 +3546,72 @@
 - [x] Only import/display calls from team members set up in the Gunner website
 - [x] Added team member check to webhook handler (skip calls with no team member match)
 - [x] Added teamMemberId IS NOT NULL filter to getCalls, getCallsWithGrades, and getCallsWithPermissions
+
+## 3-Tier Playbook System (Feb 28, 2026)
+### Phase 1: Database Schema Changes
+- [x] Leveraged existing tenant_roles, tenant_rubrics, tenant_call_types tables (already in schema)
+- [x] Store industry playbook reference in tenants.settings JSON (industryPlaybook field)
+- [x] Store terminology config in tenants.settings JSON (terminology field)
+- [x] Configurable outcomes/KPIs via terminology system (outcomeLabels, kpiLabels)
+- [ ] Replace hardcoded teamRole MySQL enum with dynamic tenant_roles table (deferred - backward compat)
+- [ ] Migrate existing tenant data to use new dynamic roles (deferred - needs enum migration)
+
+### Phase 2: Software Playbook (Layer 1) + Wholesaling Industry Playbook (Layer 2)
+- [x] Create Software Playbook (Layer 1) with universal criteria in shared/playbooks.ts
+- [x] Create Real Estate Wholesaling Industry Playbook (Layer 2) with roles, rubrics, call types, outcomes, KPIs, terminology
+- [x] Build playbook loader service (server/playbooks.ts) with seedPlaybookForTenant()
+- [x] Auto-seed wholesaling playbook in setupTenant() for new tenants
+
+### Phase 3: Grading Engine Refactor
+- [x] getRubricForCallType() in server/playbooks.ts resolves tenant rubrics by call type
+- [x] Grading engine already uses tenant_rubrics as override path (context.tenantRubrics)
+- [x] Playbook seeding populates tenant_rubrics from industry playbook
+- [ ] Make tenant_rubrics the SOLE rubric source (remove hardcoded fallback) - deferred for safety
+- [ ] Update call type detection to use tenant-configured call types via LLM
+
+### Phase 4: Server-Side Dynamic Roles/Types/Outcomes
+- [x] Playbook CRUD procedures added to tRPC router (getPlaybook, updateRole, updateRubric, etc.)
+- [x] Add/deactivate role, rubric, call type procedures in routers.ts
+- [x] Terminology update procedure in routers.ts
+- [ ] Update team member creation/assignment to use dynamic roles (still uses enum)
+- [ ] Update coach system prompt to use tenant-configured role names
+- [ ] Update webhook handler to use dynamic call type matching
+- [ ] Update analytics/leaderboard queries to use dynamic outcomes
+
+### Phase 5: Tenant Playbook Settings UI
+- [x] Build PlaybookSettings.tsx component with tabs for Roles, Rubrics, Call Types, Terminology
+- [x] Add Playbook tab to TenantSettings.tsx
+- [x] Role management UI: edit name/description, view linked rubric
+- [x] Call type management UI: edit name/description, view linked rubric
+- [x] Rubric viewer UI: view criteria and red flags per rubric
+- [x] Terminology editor UI: edit contact/deal/asset labels
+- [ ] Add/remove roles from UI (backend ready, UI needs add/delete buttons)
+- [ ] Full rubric criteria weight editor (edit individual criterion points)
+
+### Phase 6: Frontend Terminology Engine
+- [x] Create useTenantConfig hook with t.role(), t.callType(), t.outcome(), t.kpi() helpers
+- [x] Replace hardcoded role labels in TeamMembers.tsx
+- [x] Replace hardcoded role labels in TeamManagement.tsx
+- [x] Replace hardcoded role labels in CallInbox.tsx
+- [x] Replace hardcoded call type labels in CallInbox.tsx
+- [x] Replace hardcoded call type labels in CallDetail.tsx
+- [x] Replace hardcoded role labels in Leaderboard.tsx
+- [x] Replace hardcoded role labels in Home.tsx
+- [x] Replace hardcoded role labels in GradingRules.tsx
+- [x] Replace hardcoded role labels in SuperAdmin.tsx
+- [x] Replace hardcoded role labels in Onboarding.tsx
+- [ ] Replace hardcoded KPI labels in Dashboard stats cards
+- [ ] Replace hardcoded outcome labels in Analytics charts
+
+### Phase 7: Onboarding Flow Update
+- [x] Auto-seed wholesaling playbook on tenant creation (setupTenant calls seedPlaybookForTenant)
+- [x] Onboarding.tsx uses dynamic role templates from useTenantConfig
+- [ ] Add industry template selection step to onboarding UI
+- [ ] Allow customization of pre-filled values during onboarding
+- [ ] Test full onboarding flow for new wholesaler tenant
+
+### Future: CRM-Agnostic Views (saved for later)
+- [ ] Task Dashboard view inside Gunner (surface CRM tasks without opening CRM)
+- [ ] Message Inbox view inside Gunner (surface unread CRM messages)
+- [ ] Pipeline Board view inside Gunner (Kanban view of deal stages)
+- [ ] Quick Dial integration inside Gunner

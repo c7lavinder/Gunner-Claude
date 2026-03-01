@@ -43,22 +43,23 @@ import {
   AlertCircle,
   CheckCircle
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
-
-const APPLICABLE_TO = [
-  { value: "all", label: "All Team Members" },
-  { value: "lead_manager", label: "Lead Managers" },
-  { value: "acquisition_manager", label: "Acquisition Managers" },
-  { value: "lead_generator", label: "Lead Generators" },
-];
-
-function getApplicableLabel(applicableTo: string) {
-  const app = APPLICABLE_TO.find(a => a.value === applicableTo);
-  return app?.label || applicableTo;
-}
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 export default function GradingRules() {
+  const { t, roles } = useTenantConfig();
+  
+  const APPLICABLE_TO = useMemo(() => [
+    { value: "all", label: "All Team Members" },
+    ...roles.map(r => ({ value: r.code, label: r.name + "s" })),
+  ], [roles]);
+
+  function getApplicableLabel(applicableTo: string) {
+    const app = APPLICABLE_TO.find(a => a.value === applicableTo);
+    return app?.label || t.role(applicableTo) + "s";
+  }
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<any>(null);
   const [formData, setFormData] = useState({

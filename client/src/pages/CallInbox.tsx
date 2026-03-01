@@ -63,6 +63,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useDemo } from "@/hooks/useDemo";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { Streamdown } from "streamdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -1514,6 +1515,7 @@ function AICoachQA() {
 
 // Manual Upload Dialog Component
 function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
+  const { callTypes: tenantCallTypes } = useTenantConfig();
   const [open, setOpen] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
 
@@ -1686,11 +1688,9 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
               onChange={(e) => setSelectedCallType(e.target.value)}
             >
               <option value="">Auto-detect from transcript</option>
-              <option value="cold_call">Cold Call</option>
-              <option value="qualification">Qualification</option>
-              <option value="follow_up">Follow-Up</option>
-              <option value="offer">Offer</option>
-              <option value="admin_callback">Admin</option>
+              {tenantCallTypes.map(ct => (
+                <option key={ct.code} value={ct.code}>{ct.name}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -1887,6 +1887,7 @@ const PAGE_SIZE = 25;
 
 export default function CallInbox() {
   const { user } = useAuth();
+  const { t, roles, callTypes: tenantCallTypes } = useTenantConfig();
   const { isDemo, guardAction: guardDemoAction } = useDemo();
   const searchString = useSearch();
   const [, setLocation] = useLocation();
@@ -2078,12 +2079,9 @@ export default function CallInbox() {
   const teamMemberGroups = useMemo(() => {
     if (!allTeamMembers || allTeamMembers.length === 0) return undefined;
     const roleOrder: Record<string, number> = { acquisition_manager: 0, lead_manager: 1, lead_generator: 2 };
-    const roleLabels: Record<string, string> = {
-      acquisition_manager: 'Acquisition Managers',
-      lead_manager: 'Lead Managers',
-      lead_generator: 'Lead Generators',
-      admin: 'Admin',
-    };
+    const roleLabelsMap: Record<string, string> = {};
+    roles.forEach(r => { roleLabelsMap[r.code] = r.name + 's'; });
+    roleLabelsMap['admin'] = 'Admin';
     const grouped: Record<string, { value: string; label: string }[]> = {};
     allTeamMembers.forEach((m: any) => {
       const role = m.teamRole || 'other';
@@ -2096,19 +2094,13 @@ export default function CallInbox() {
     return Object.entries(grouped)
       .sort(([a], [b]) => (roleOrder[a] ?? 99) - (roleOrder[b] ?? 99))
       .map(([role, options]) => ({
-        label: roleLabels[role] || role,
+        label: roleLabelsMap[role] || t.role(role) + 's',
         options,
       }));
-  }, [allTeamMembers]);
+  }, [allTeamMembers, roles, t]);
 
-  // Call type options - all 6 types
-  const callTypeOptions = [
-    { value: "cold_call", label: "Cold Call" },
-    { value: "qualification", label: "Qualification" },
-    { value: "follow_up", label: "Follow-Up" },
-    { value: "offer", label: "Offer" },
-    { value: "admin", label: "Admin" },
-  ];
+  // Call type options - from tenant config
+  const callTypeOptions = tenantCallTypes.map(ct => ({ value: ct.code, label: ct.name }));
 
   // Outcome options
   const outcomeOptions = [

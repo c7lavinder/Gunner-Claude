@@ -14,13 +14,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Redirect } from "wouter";
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: "Admin",
-  acquisition_manager: "Acquisition Manager",
-  lead_manager: "Lead Manager",
-  lead_generator: "Lead Generator",
-};
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-purple-100 text-purple-700",
@@ -31,6 +25,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function TeamManagement() {
   const { user } = useAuth();
+  const { t, roles } = useTenantConfig();
   const utils = trpc.useUtils();
   
   // Only admin can access this page
@@ -239,14 +234,14 @@ export default function TeamManagement() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
-                          <SelectItem value="lead_manager">Lead Manager</SelectItem>
-                          <SelectItem value="lead_generator">Lead Generator</SelectItem>
+                          {roles.map(r => (
+                            <SelectItem key={r.code} value={r.code}>{r.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       
-                      <Badge className={ROLE_COLORS[u.teamRole || 'lead_manager']}>
-                        {ROLE_LABELS[u.teamRole || 'lead_manager']}
+                      <Badge className={ROLE_COLORS[u.teamRole || 'lead_manager'] || 'bg-gray-100 text-gray-700'}>
+                        {t.role(u.teamRole)}
                       </Badge>
                     </div>
                   </div>
@@ -271,7 +266,7 @@ export default function TeamManagement() {
             </div>
             <div>
               <h3 className="obs-section-title text-lg">Team Assignments</h3>
-              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Assign Lead Managers to Acquisition Managers</p>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Assign {t.role('lead_manager')}s to {t.role('acquisition_manager')}s</p>
             </div>
           </div>
         </div>
@@ -279,8 +274,8 @@ export default function TeamManagement() {
           {acquisitionManagers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
-              <p>No Acquisition Managers assigned yet</p>
-              <p className="text-sm">Assign the Acquisition Manager role to a user first</p>
+              <p>No {t.role('acquisition_manager')}s assigned yet</p>
+              <p className="text-sm">Assign the {t.role('acquisition_manager')} role to a user first</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -291,12 +286,12 @@ export default function TeamManagement() {
                 return (
                   <div key={am.id} className="p-4 rounded-lg border bg-card">
                     <div className="flex items-center gap-2 mb-4">
-                      <Badge className="bg-blue-100 text-blue-700">Acquisition Manager</Badge>
+                      <Badge className="bg-blue-100 text-blue-700">{t.role('acquisition_manager')}</Badge>
                       <span className="font-medium">{amTeamMember?.name || am.name || am.email}</span>
                     </div>
                     
                     <div className="ml-4 space-y-2">
-                      <div className="text-sm text-muted-foreground mb-2">Lead Managers:</div>
+                      <div className="text-sm text-muted-foreground mb-2">{t.role('lead_manager')}s:</div>
                       
                       {/* Current assignments */}
                       {assignedLeadManagers.map((assignment) => {
@@ -330,8 +325,8 @@ export default function TeamManagement() {
                           return (
                             <div className="text-sm text-muted-foreground py-2 px-3 border rounded-md border-dashed">
                               {leadManagers.length === 0 
-                                ? "No Lead Managers available - assign the Lead Manager role to users first"
-                                : "All Lead Managers have been assigned"}
+                                ? `No ${t.role('lead_manager')}s available - assign the ${t.role('lead_manager')} role to users first`
+                                : `All ${t.role('lead_manager')}s have been assigned`}
                             </div>
                           );
                         }
@@ -350,7 +345,7 @@ export default function TeamManagement() {
                             }}
                           >
                             <SelectTrigger className="w-full">
-                              <SelectValue placeholder="+ Add Lead Manager" />
+                              <SelectValue placeholder={`+ Add ${t.role('lead_manager')}`} />
                             </SelectTrigger>
                             <SelectContent>
                               {availableLeadManagers.map((tm) => (
@@ -401,7 +396,7 @@ export default function TeamManagement() {
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{tm.name}</div>
                       <Badge variant="outline" className="text-xs">
-                        {linkedUser ? ROLE_LABELS[linkedUser.teamRole || 'lead_manager'] : ROLE_LABELS[tm.teamRole] || tm.teamRole}
+                        {t.role(linkedUser?.teamRole || tm.teamRole)}
                       </Badge>
                     </div>
                   </div>

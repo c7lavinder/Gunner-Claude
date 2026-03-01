@@ -4,9 +4,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Award, Trophy, Medal, TrendingUp, Phone, Flame, Zap, Target, Crown, ChevronUp, ChevronDown, Minus, ArrowUp, ArrowDown } from "lucide-react";
 import SparklineChart from "@/components/SparklineChart";
 import { BADGE_ICON_URLS } from "../../../shared/badgeIcons";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 /* ─── Rank podium for top 3 ─────────────────────────── */
 function PodiumCard({ entry, rank, mode }: { entry: any; rank: number; mode: "xp" | "score" }) {
+  const { t } = useTenantConfig();
   const isXP = mode === "xp";
   const { teamMember } = entry;
   const initials = (teamMember?.name || "?")
@@ -93,7 +95,7 @@ function PodiumCard({ entry, rank, mode }: { entry: any; rank: number; mode: "xp
             {teamMember?.name || "Unknown"}
           </h3>
           <p className="text-xs mt-0.5 capitalize" style={{ color: "var(--g-text-tertiary)" }}>
-            {teamMember?.teamRole?.replace("_", " ") || "Team Member"}
+            {t.role(teamMember?.teamRole) || "Team Member"}
           </p>
         </div>
 
@@ -163,6 +165,7 @@ function RankChange({ current, previous }: { current: number; previous?: number 
 
 /* ─── List row for rank 4+ ──────────────────────────── */
 function LeaderRow({ entry, rank, mode }: { entry: any; rank: number; mode: "xp" | "score" }) {
+  const { t } = useTenantConfig();
   const isXP = mode === "xp";
   const { teamMember } = entry;
   const initials = (teamMember?.name || "?")
@@ -216,7 +219,7 @@ function LeaderRow({ entry, rank, mode }: { entry: any; rank: number; mode: "xp"
           {teamMember?.name || "Unknown"}
         </h4>
         <p className="text-xs capitalize" style={{ color: "var(--g-text-tertiary)" }}>
-          {teamMember?.teamRole?.replace("_", " ")}
+          {t.role(teamMember?.teamRole)}
         </p>
       </div>
 

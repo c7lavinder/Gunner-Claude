@@ -502,6 +502,7 @@ export async function setupTenant(data: {
   subscriptionTier?: string;
   crmType?: 'ghl' | 'none';
   crmConfig?: TenantCrmConfig;
+  industryPlaybook?: string;
   teamMembers?: Array<{
     name: string;
     teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
@@ -608,6 +609,20 @@ export async function setupTenant(data: {
         }
       }
     }
+  }
+
+  // Auto-seed the industry playbook for the new tenant
+  try {
+    const { seedPlaybookForTenant } = await import("./playbooks");
+    const playbookCode = data.industryPlaybook || "real_estate_wholesaling";
+    const seedResult = await seedPlaybookForTenant(tenantId, playbookCode);
+    if (seedResult.success) {
+      console.log(`[Tenant] Seeded playbook "${playbookCode}" for tenant ${data.name}: ${JSON.stringify(seedResult.seeded)}`);
+    } else {
+      console.warn(`[Tenant] Failed to seed playbook for tenant ${data.name}: ${seedResult.error}`);
+    }
+  } catch (e) {
+    console.warn(`[Tenant] Playbook seeding error for tenant ${data.name}:`, e);
   }
 
   // Notify platform owner

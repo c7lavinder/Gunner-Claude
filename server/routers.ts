@@ -6476,6 +6476,205 @@ selectedTimezone: { type: "string" },
           }));
       }),
   }),
+
+  // ============ PLAYBOOK SYSTEM ============
+  playbook: router({
+    // Get the full playbook config for the current tenant
+    get: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+      const { getTenantPlaybook } = await import("./playbooks");
+      return await getTenantPlaybook(ctx.user.tenantId);
+    }),
+
+    // Get terminology only (lightweight)
+    terminology: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+      const { getTenantTerminology } = await import("./playbooks");
+      return await getTenantTerminology(ctx.user.tenantId);
+    }),
+
+    // Get available industry playbook templates
+    availablePlaybooks: publicProcedure.query(async () => {
+      const { getAvailablePlaybooks } = await import("../shared/playbooks");
+      return getAvailablePlaybooks();
+    }),
+
+    // Seed a playbook for the current tenant (admin only)
+    seed: protectedProcedure
+      .input(z.object({ playbookCode: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { seedPlaybookForTenant } = await import("./playbooks");
+        const result = await seedPlaybookForTenant(ctx.user.tenantId, input.playbookCode);
+        if (!result.success) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+        return result;
+      }),
+
+    // Update a role
+    updateRole: protectedProcedure
+      .input(z.object({
+        roleId: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        rubricId: z.number().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { updateTenantRole } = await import("./playbooks");
+        const result = await updateTenantRole(ctx.user.tenantId, input.roleId, {
+          name: input.name,
+          description: input.description,
+          rubricId: input.rubricId,
+        });
+        if (!result.success) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+        return result;
+      }),
+
+    // Add a new role
+    addRole: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        code: z.string(),
+        description: z.string().optional(),
+        rubricId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { addTenantRole } = await import("./playbooks");
+        return await addTenantRole(ctx.user.tenantId, input);
+      }),
+
+    // Delete (deactivate) a role
+    deleteRole: protectedProcedure
+      .input(z.object({ roleId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { deactivateTenantRole } = await import("./playbooks");
+        return await deactivateTenantRole(ctx.user.tenantId, input.roleId);
+      }),
+
+    // Update a rubric
+    updateRubric: protectedProcedure
+      .input(z.object({
+        rubricId: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        criteria: z.string().optional(),
+        redFlags: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { updateTenantRubric } = await import("./playbooks");
+        const result = await updateTenantRubric(ctx.user.tenantId, input.rubricId, {
+          name: input.name,
+          description: input.description,
+          criteria: input.criteria,
+          redFlags: input.redFlags,
+        });
+        if (!result.success) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+        return result;
+      }),
+
+    // Add a new rubric
+    addRubric: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        callType: z.string().optional(),
+        criteria: z.string(),
+        redFlags: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { addTenantRubric } = await import("./playbooks");
+        return await addTenantRubric(ctx.user.tenantId, input);
+      }),
+
+    // Delete (deactivate) a rubric
+    deleteRubric: protectedProcedure
+      .input(z.object({ rubricId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { deactivateTenantRubric } = await import("./playbooks");
+        return await deactivateTenantRubric(ctx.user.tenantId, input.rubricId);
+      }),
+
+    // Update a call type
+    updateCallType: protectedProcedure
+      .input(z.object({
+        callTypeId: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        rubricId: z.number().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { updateTenantCallType } = await import("./playbooks");
+        const result = await updateTenantCallType(ctx.user.tenantId, input.callTypeId, {
+          name: input.name,
+          description: input.description,
+          rubricId: input.rubricId,
+        });
+        if (!result.success) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+        return result;
+      }),
+
+    // Add a new call type
+    addCallType: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        code: z.string(),
+        description: z.string().optional(),
+        rubricId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { addTenantCallType } = await import("./playbooks");
+        return await addTenantCallType(ctx.user.tenantId, input);
+      }),
+
+    // Delete (deactivate) a call type
+    deleteCallType: protectedProcedure
+      .input(z.object({ callTypeId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { deactivateTenantCallType } = await import("./playbooks");
+        return await deactivateTenantCallType(ctx.user.tenantId, input.callTypeId);
+      }),
+
+    // Update terminology
+    updateTerminology: protectedProcedure
+      .input(z.object({
+        contactLabel: z.string().optional(),
+        contactLabelPlural: z.string().optional(),
+        dealLabel: z.string().optional(),
+        dealLabelPlural: z.string().optional(),
+        assetLabel: z.string().optional(),
+        assetLabelPlural: z.string().optional(),
+        roleLabels: z.record(z.string(), z.string()).optional(),
+        callTypeLabels: z.record(z.string(), z.string()).optional(),
+        outcomeLabels: z.record(z.string(), z.string()).optional(),
+        kpiLabels: z.record(z.string(), z.string()).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        const { updateTenantTerminology } = await import("./playbooks");
+        const result = await updateTenantTerminology(ctx.user.tenantId, input);
+        if (!result.success) throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+        return result;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

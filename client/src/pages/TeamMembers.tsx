@@ -12,15 +12,8 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useDemo } from "@/hooks/useDemo";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { BADGE_ICON_URLS } from "../../../shared/badgeIcons";
-
-// ─── ROLE CONFIG ────────────────────────────────────────
-const roleLabels: Record<string, string> = {
-  admin: "Admin",
-  lead_manager: "Lead Manager",
-  acquisition_manager: "Acquisition Manager",
-  lead_generator: "Lead Generator",
-};
 
 // Map team roles to lookbook CSS class suffixes
 const roleClassMap: Record<string, string> = {
@@ -83,6 +76,7 @@ function CharacterCard({
   onUploadPicture?: (base64: string, mimeType: string) => void;
   isSelected: boolean; onSelect: () => void;
 }) {
+  const { t } = useTenantConfig();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   
   const xp = gamificationData?.xp || 0;
@@ -175,7 +169,7 @@ function CharacterCard({
             <div className="obs-roster-info">
               <div className="obs-roster-name">{member.name}</div>
               <div className={`obs-roster-role-badge ${roleClass}`}>
-                {roleLabels[member.teamRole] || member.teamRole}
+                {t.role(member.teamRole)}
               </div>
               {badges.length > 0 && (
                 <div className="obs-badges-row">
@@ -265,6 +259,7 @@ function CharacterCard({
 function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
   member: any; gamificationData?: any; scoreData?: any; rank: number;
 }) {
+  const { t } = useTenantConfig();
   const xp = gamificationData?.xp || 0;
   const level = gamificationData?.level || 1;
   const title = gamificationData?.title || "Rookie";
@@ -298,7 +293,7 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
             <div className="flex-1 min-w-0">
               <div className="obs-roster-name" style={{fontSize: 18}}>{member.name}</div>
               <div className={`obs-roster-role-badge ${roleClass}`}>
-                {roleLabels[member.teamRole] || member.teamRole}
+                {t.role(member.teamRole)}
               </div>
               
               <div className="flex items-center gap-4 mt-3">
@@ -640,6 +635,7 @@ function MyProfileContent() {
 // ─── TEAM MEMBERS CONTENT ───────────────────────────────
 function TeamMembersContent() {
   const { user } = useAuth();
+  const { t, roles } = useTenantConfig();
   const { isDemo, guardAction: guardDemoAction } = useDemo();
   const utils = trpc.useUtils();
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
@@ -779,11 +775,10 @@ function TeamMembersContent() {
           </h3>
         </div>
         <div style={{padding: 16}} className="grid gap-3 sm:grid-cols-3">
-          {[
-            { role: "lead_manager", label: "Lead Manager", desc: "Qualifies leads, extracts motivation, discusses price, and sets appointments for walkthroughs.", roleClass: "lead" },
-            { role: "acquisition_manager", label: "Acquisition Manager", desc: "Handles offer calls and closings. Graded on motivation restatement, offer setup, and price delivery.", roleClass: "acq" },
-            { role: "lead_generator", label: "Lead Generator", desc: "Makes cold calls to generate interest. Sets up warm handoffs to Lead Managers.", roleClass: "gen" },
-          ].map(r => (
+          {roles.map((r, i) => {
+            const roleClass = i === 0 ? "lead" : i === 1 ? "acq" : "gen";
+            return { role: r.code, label: r.name, desc: r.description || r.name, roleClass };
+          }).map(r => (
             <div key={r.role} style={{borderRadius: 10, overflow: 'hidden'}}>
               <div className={`obs-roster-card-header ${r.roleClass}`} style={{padding: 1}}>
                 <div style={{background: 'var(--obs-bg-card)', padding: 12, borderRadius: 9}}>
@@ -805,6 +800,7 @@ function TeamMembersContent() {
 export default function TeamMembers() {
   const [activeTab, setActiveTab] = useState<"team" | "profile">("team");
   const { user } = useAuth();
+  const { t } = useTenantConfig();
   const isLeadGenerator = user?.teamRole === 'lead_generator';
   
   return (

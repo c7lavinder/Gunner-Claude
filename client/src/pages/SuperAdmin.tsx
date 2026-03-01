@@ -1715,7 +1715,7 @@ function TenantDetailPanel({
                     <tr key={i}>
                       <td>{m.name}</td>
                       <td>
-                        <Badge variant="outline">{m.teamRole.replace(/_/g, ' ')}</Badge>
+                        <Badge variant="outline">{m.teamRole?.replace(/_/g, ' ')}</Badge>
                       </td>
                     </tr>
                   ))}

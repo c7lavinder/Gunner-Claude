@@ -11,6 +11,7 @@ import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 const STEPS = [
   { id: 1, title: "Company Info", icon: Building2, description: "Tell us about your business" },
@@ -41,7 +42,8 @@ const CRM_OPTIONS = [
   { id: "none", name: "Skip for now", description: "Connect later", available: true },
 ];
 
-const ROLE_TEMPLATES = [
+// Default role templates - will be overridden by tenant config when available
+const DEFAULT_ROLE_TEMPLATES = [
   { id: "admin", name: "Admin", description: "Full access to all features and settings" },
   { id: "lead_manager", name: "Lead Manager", description: "Qualifies leads, sets appointments for walkthroughs, manages Lead Generators" },
   { id: "acquisition_manager", name: "Acquisition Manager", description: "Handles offer/closing calls" },
@@ -49,6 +51,10 @@ const ROLE_TEMPLATES = [
 ];
 
 export default function Onboarding() {
+  const { roles: tenantRoles } = useTenantConfig();
+  const ROLE_TEMPLATES = tenantRoles.length > 0 
+    ? [{ id: "admin", name: "Admin", description: "Full access to all features and settings" }, ...tenantRoles.map(r => ({ id: r.code, name: r.name, description: r.description || r.name }))]
+    : DEFAULT_ROLE_TEMPLATES;
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);

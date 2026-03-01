@@ -31,6 +31,7 @@ import NextStepsTab from "@/components/NextStepsTab";
 import WaveformPlayer from "@/components/WaveformPlayer";
 import { Zap } from "lucide-react";
 import { useDemo } from "@/hooks/useDemo";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 const FEEDBACK_TYPES = [
   { value: "score_too_high", label: "Score is too high" },
@@ -156,6 +157,7 @@ export default function CallDetail() {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [reclassifyDialogOpen, setReclassifyDialogOpen] = useState(false);
   const { isDemo, guardAction: guardDemoAction } = useDemo();
+  const { t } = useTenantConfig();
   const [selectedClassification, setSelectedClassification] = useState("");
   const [feedbackForm, setFeedbackForm] = useState({
     feedbackType: "general_correction",
@@ -282,13 +284,7 @@ export default function CallDetail() {
     suggestedResponses: string[];
   }> || [];
 
-  const callTypeLabel = (ct: string | null) => {
-    const map: Record<string, string> = {
-      cold_call: "Cold Call", qualification: "Qualification", follow_up: "Follow-Up",
-      offer: "Offer", seller_callback: "Admin", admin_callback: "Admin",
-    };
-    return map[ct || ""] || String(ct || "").replace(/_/g, " ") || "Unknown";
-  };
+  const callTypeLabel = (ct: string | null) => t.callType(ct);
 
   const callTypeVariant = (ct: string | null) => {
     const map: Record<string, string> = {

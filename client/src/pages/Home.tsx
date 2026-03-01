@@ -15,6 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 type DateRange = "today" | "week" | "month" | "ytd" | "all";
 type CallFilter = "completed" | "needs_review";
@@ -284,6 +285,7 @@ function ScoreTrendsChart({ stats, loading }: { stats: any; loading: boolean }) 
    LEADERBOARD PANEL — Ranked list with medals and glow
    ═══════════════════════════════════════════════════════ */
 function LeaderboardPanel({ leaderboard, loading }: { leaderboard: any[] | undefined; loading: boolean }) {
+  const { t } = useTenantConfig();
   if (loading) {
     return (
       <div className="bg-[var(--g-bg-surface)] border border-[var(--g-border-subtle)] rounded-2xl p-6" style={{ minHeight: 360 }}>
@@ -372,7 +374,7 @@ function LeaderboardPanel({ leaderboard, loading }: { leaderboard: any[] | undef
                     {entry.teamMember.name}
                   </p>
                   <p className="text-[11px] capitalize" style={{ color: "var(--g-text-tertiary)" }}>
-                    {entry.teamMember.teamRole?.replace("_", " ") || "Team Member"}
+                    {t.role(entry.teamMember.teamRole) || "Team Member"}
                   </p>
                 </div>
 
