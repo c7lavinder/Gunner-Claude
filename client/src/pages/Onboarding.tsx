@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch, Copy, Webhook, AlertTriangle, Zap, ExternalLink } from "lucide-react";
+import { Check, Building2, Link2, FileText, Users, Rocket, ArrowRight, ArrowLeft, UserPlus, Clock, Loader2, Wifi, WifiOff, GitBranch, Copy, Webhook, AlertTriangle, Zap, ExternalLink, BookOpen, Edit, Save, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -17,9 +17,10 @@ const STEPS = [
   { id: 1, title: "Company Info", icon: Building2, description: "Tell us about your business" },
   { id: 2, title: "Connect CRM", icon: Link2, description: "Integrate your CRM" },
   { id: 3, title: "Define Roles", icon: UserPlus, description: "Set up team roles" },
-  { id: 4, title: "Training", icon: FileText, description: "Upload training materials" },
-  { id: 5, title: "Invite Team", icon: Users, description: "Add team members" },
-  { id: 6, title: "Launch", icon: Rocket, description: "You're ready to go!" },
+  { id: 4, title: "Review Playbook", icon: BookOpen, description: "Review your grading playbook" },
+  { id: 5, title: "Training", icon: FileText, description: "Upload training materials" },
+  { id: 6, title: "Invite Team", icon: Users, description: "Add team members" },
+  { id: 7, title: "Launch", icon: Rocket, description: "You're ready to go!" },
 ];
 
 const TIMEZONES = [
@@ -49,6 +50,196 @@ const DEFAULT_ROLE_TEMPLATES = [
   { id: "acquisition_manager", name: "Acquisition Manager", description: "Handles offer/closing calls" },
   { id: "lead_generator", name: "Lead Generator", description: "Cold calls homeowners to generate interest in selling — does NOT set appointments" },
 ];
+
+// ============ PLAYBOOK REVIEW STEP (Step 4) ============
+function PlaybookReviewStep() {
+  const { data: playbook, isLoading } = trpc.playbook.get.useQuery();
+  const updateRubricMut = trpc.playbook.updateRubric.useMutation();
+  const utils = trpc.useUtils();
+  const [expandedRubric, setExpandedRubric] = useState<number | null>(null);
+  const [editingCriterion, setEditingCriterion] = useState<{ rubricId: number; index: number } | null>(null);
+  const [editPoints, setEditPoints] = useState("");
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!playbook) {
+    return (
+      <div className="text-center py-8 space-y-3">
+        <BookOpen className="h-12 w-12 text-muted-foreground mx-auto" />
+        <p className="text-muted-foreground">Your grading playbook is being set up...</p>
+        <p className="text-xs text-muted-foreground">You can customize it later in Settings → Playbook</p>
+      </div>
+    );
+  }
+
+  const handleSavePoints = async (rubricId: number, criterionIndex: number, criteria: any[]) => {
+    const newPoints = parseInt(editPoints);
+    if (isNaN(newPoints) || newPoints < 0 || newPoints > 100) {
+      toast.error("Points must be between 0 and 100");
+      return;
+    }
+    const updatedCriteria = criteria.map((c: any, i: number) =>
+      i === criterionIndex ? { ...c, maxPoints: newPoints } : c
+    );
+    try {
+      await updateRubricMut.mutateAsync({ rubricId, criteria: JSON.stringify(updatedCriteria) });
+      await utils.playbook.get.invalidate();
+      toast.success("Rubric updated");
+      setEditingCriterion(null);
+    } catch {
+      toast.error("Failed to update rubric");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center space-y-2">
+        <p className="text-muted-foreground">
+          Here's your pre-configured grading playbook. Review the rubrics below and adjust point values if your team weights things differently.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          You can always fine-tune these later in Settings → Playbook
+        </p>
+      </div>
+
+      {/* Roles Summary */}
+      <div className="space-y-2">
+        <h4 className="font-medium text-sm flex items-center gap-2">
+          <Users className="h-4 w-4" />
+          Team Roles ({playbook.roles?.length || 0})
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {playbook.roles?.map((role: any) => (
+            <Badge key={role.id} variant="secondary" className="py-1 px-3">
+              {role.name}
+            </Badge>
+          ))}
+        </div>
+      </div>
+
+      {/* Call Types Summary */}
+      <div className="space-y-2">
+        <h4 className="font-medium text-sm flex items-center gap-2">
+          <FileText className="h-4 w-4" />
+          Call Types ({playbook.callTypes?.length || 0})
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {playbook.callTypes?.map((ct: any) => (
+            <Badge key={ct.id} variant="outline" className="py-1 px-3">
+              {ct.name}
+            </Badge>
+          ))}
+        </div>
+      </div>
+
+      {/* Rubrics — Expandable */}
+      <div className="space-y-2">
+        <h4 className="font-medium text-sm flex items-center gap-2">
+          <BookOpen className="h-4 w-4" />
+          Grading Rubrics ({playbook.rubrics?.length || 0})
+        </h4>
+        <p className="text-xs text-muted-foreground">Click a rubric to expand and adjust point values</p>
+        <div className="space-y-2">
+          {playbook.rubrics?.map((rubric: any) => {
+            const isExpanded = expandedRubric === rubric.id;
+            const criteria = rubric.criteria || [];
+            const totalPoints = criteria.reduce((sum: number, c: any) => sum + (c.maxPoints || 0), 0);
+            return (
+              <div key={rubric.id} className="border rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors text-left"
+                  onClick={() => setExpandedRubric(isExpanded ? null : rubric.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium text-sm">{rubric.name}</span>
+                    <Badge variant="secondary" className="text-xs">{totalPoints} pts</Badge>
+                  </div>
+                  {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {isExpanded && (
+                  <div className="border-t px-3 pb-3 pt-2 space-y-2 bg-muted/20">
+                    <p className="text-xs text-muted-foreground mb-2">{rubric.description}</p>
+                    <div className="space-y-1.5">
+                      {criteria.map((criterion: any, idx: number) => {
+                        const isEditing = editingCriterion?.rubricId === rubric.id && editingCriterion?.index === idx;
+                        return (
+                          <div key={idx} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-muted/50">
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium">{criterion.name}</span>
+                              <p className="text-xs text-muted-foreground truncate">{criterion.description}</p>
+                            </div>
+                            {isEditing ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="number"
+                                  value={editPoints}
+                                  onChange={(e) => setEditPoints(e.target.value)}
+                                  className="w-16 h-7 text-xs text-center"
+                                  min={0}
+                                  max={100}
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSavePoints(rubric.id, idx, criteria);
+                                    if (e.key === 'Escape') setEditingCriterion(null);
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0"
+                                  onClick={() => handleSavePoints(rubric.id, idx, criteria)}
+                                  disabled={updateRubricMut.isPending}
+                                >
+                                  {updateRubricMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                                </Button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="flex items-center gap-1.5 text-xs font-mono bg-muted px-2 py-1 rounded hover:bg-accent transition-colors cursor-pointer"
+                                onClick={() => {
+                                  setEditingCriterion({ rubricId: rubric.id, index: idx });
+                                  setEditPoints(String(criterion.maxPoints));
+                                }}
+                                title="Click to edit points"
+                              >
+                                {criterion.maxPoints} pts
+                                <Edit className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {rubric.redFlags && rubric.redFlags.length > 0 && (
+                      <div className="mt-3 pt-2 border-t">
+                        <p className="text-xs font-medium text-red-500 mb-1">Red Flags:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {rubric.redFlags.map((flag: string, i: number) => (
+                            <Badge key={i} variant="outline" className="text-xs text-red-500 border-red-200">
+                              {flag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Onboarding() {
   const { roles: tenantRoles } = useTenantConfig();
@@ -249,7 +440,14 @@ export default function Onboarding() {
         });
       }
 
-      if (currentStep === 4 && formData.trainingMaterials.trim()) {
+      // Step 4: Review Playbook — just advance (edits are saved inline)
+      if (currentStep === 4) {
+        await updateTenantMutation.mutateAsync({
+          onboardingStep: 5,
+        });
+      }
+
+      if (currentStep === 5 && formData.trainingMaterials.trim()) {
         await createTrainingMutation.mutateAsync({
           title: "Initial Training Materials",
           content: formData.trainingMaterials,
@@ -258,9 +456,9 @@ export default function Onboarding() {
         });
       }
       
-      if (currentStep === 5) {
+      if (currentStep === 6) {
         // Send invitations
-        const validInvites = formData.teamInvites.filter(i => i.email.trim());
+        const validInvites = formData.teamInvites.filter(i => i.email.trim());  
         for (const invite of validInvites) {
           try {
             await inviteUserMutation.mutateAsync({
@@ -894,6 +1092,9 @@ export default function Onboarding() {
         );
 
       case 4:
+        return <PlaybookReviewStep />;
+
+      case 5:
         return (
           <div className="space-y-6">
             <p className="text-muted-foreground text-center">
@@ -918,7 +1119,7 @@ export default function Onboarding() {
           </div>
         );
 
-      case 5:
+      case 6:
         return (
           <div className="space-y-6">
             <p className="text-muted-foreground text-center">
@@ -973,7 +1174,7 @@ export default function Onboarding() {
           </div>
         );
 
-      case 6:
+      case 7:
         return (
           <div className="text-center space-y-6">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
@@ -1091,7 +1292,7 @@ export default function Onboarding() {
         
         {/* Time estimate */}
         <p className="text-center text-xs text-muted-foreground mt-4">
-          Setup takes about 5 minutes • You can skip steps and complete later
+          Setup takes about 10 minutes • You can skip steps and complete later
         </p>
       </div>
     </div>

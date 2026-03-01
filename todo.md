@@ -3607,7 +3607,7 @@
 - [x] Auto-seed wholesaling playbook on tenant creation (setupTenant calls seedPlaybookForTenant)
 - [x] Onboarding.tsx uses dynamic role templates from useTenantConfig
 - [ ] Add industry template selection step to onboarding UI
-- [ ] Allow customization of pre-filled values during onboarding
+- [x] Allow customization of pre-filled values during onboarding (Review Playbook step with inline rubric editing)
 - [ ] Test full onboarding flow for new wholesaler tenant
 
 ### Future: CRM-Agnostic Views (saved for later)
@@ -3626,3 +3626,11 @@
   - [x] routers.ts CRM action parser (parseIntent): dynamic industry label
   - [x] All 3 real tenants seeded: New Again Houses, NAH Kitty Hawk, Apex Property Solutions
   - [x] 32 tests passing, zero TS errors
+
+## Onboarding 95% Confidence (Feb 28, 2026)
+- [x] Build rubric criteria weight editor in Playbook Settings (edit individual criterion points per rubric) — already built
+- [x] Add add/delete buttons for roles, call types in Playbook Settings UI — already built
+- [x] Add "Review Your Playbook" step to onboarding wizard (show pre-filled roles, rubrics, call types with edit ability)
+- [x] Add per-tenant BatchDialer API key support (store in tenant settings, use in sync) — already built
+- [x] Update BatchDialer sync to use tenant-specific API key when available — already built
+- [ ] Test full onboarding flow end-to-end for a new wholesaler
