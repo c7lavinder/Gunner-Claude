@@ -201,11 +201,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </a>
         </div>
       )}
-      <div className={isImpersonating ? "pt-12" : isDemo ? "pt-10" : ""}>
+      <div className={isDemo ? "pt-10" : ""}>
         <TopNavBar user={user} isDemo={isDemo} />
         <main
           className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6"
-          style={{ paddingTop: "calc(var(--g-topnav-height, 64px) + 24px)" }}
+          style={{ paddingTop: isImpersonating ? "calc(var(--g-topnav-height, 64px) + 44px + 24px)" : "calc(var(--g-topnav-height, 64px) + 24px)" }}
         >
           {children}
         </main>
@@ -222,6 +222,7 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isImpersonating: isTenantImpersonating, impersonationType: impType } = useImpersonation();
+  const bannerOffset = isTenantImpersonating ? 44 : 0; // height of impersonation banner
 
   const effectiveRole = (isTenantImpersonating && impType === 'super_admin') ? 'admin' : user?.role;
   const effectiveTeamRole = (isTenantImpersonating && impType === 'super_admin') ? 'admin' : user?.teamRole;
@@ -235,8 +236,9 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
   return (
     <>
       <nav
-        className="fixed top-0 left-0 right-0 z-[100]"
+        className="fixed left-0 right-0 z-[100]"
         style={{
+          top: bannerOffset,
           height: "var(--g-topnav-height, 64px)",
           background: "var(--g-glass-bg)",
           backdropFilter: "blur(20px) saturate(180%)",

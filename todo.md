@@ -3537,3 +3537,6 @@
 
 ## Auto-redirect Authenticated Users (Feb 28, 2026)
 - [x] Redirect logged-in users from landing page (/) to /dashboard automatically
+
+## Bug Fix: View As Exit (Feb 28, 2026)
+- [x] Fix inability to exit "View As" impersonation mode - banner z-index raised to z-[200], nav bar shifts down 44px when impersonating, content padding adjusted

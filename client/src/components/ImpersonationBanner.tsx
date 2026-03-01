@@ -80,7 +80,7 @@ export function ImpersonationBanner() {
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-500 text-amber-950 shadow-lg">
+    <div className="fixed top-0 left-0 right-0 z-[200] bg-amber-500 text-amber-950 shadow-lg">
       <div className="container flex items-center justify-between py-2 px-4">
         <div className="flex items-center gap-3">
           {impersonationType === 'super_admin' ? (
