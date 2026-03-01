@@ -97,34 +97,37 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-const CALL_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  cold_call: { label: "Cold Call", color: "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800" },
-  qualification: { label: "Qualification", color: "bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800" },
-  follow_up: { label: "Follow-Up", color: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800" },
-  offer: { label: "Offer", color: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800" },
-  seller_callback: { label: "Admin", color: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800" },
-  admin_callback: { label: "Admin", color: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800" },
+// Colors only — labels come from useTenantConfig().t.callType()
+const CALL_TYPE_COLORS: Record<string, string> = {
+  cold_call: "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800",
+  qualification: "bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800",
+  follow_up: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
+  offer: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800",
+  seller_callback: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800",
+  admin_callback: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800",
 };
 
-const OUTCOME_LABELS: Record<string, { label: string; color: string }> = {
-  interested: { label: "Interested", color: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300" },
-  not_interested: { label: "Not Interested", color: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
-  appointment_set: { label: "Apt Set", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
-  callback_scheduled: { label: "Callback", color: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
-  offer_made: { label: "Offer Made", color: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-  offer_accepted: { label: "Offer Accepted", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
-  offer_rejected: { label: "Offer Rejected", color: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
-  left_voicemail: { label: "Voicemail", color: "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300" },
-  no_answer: { label: "No Answer", color: "bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400" },
-  wrong_number: { label: "Wrong #", color: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300" },
-  do_not_call: { label: "DNC", color: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
-  other: { label: "Other", color: "bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400" },
+const OUTCOME_COLORS: Record<string, string> = {
+  interested: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+  not_interested: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  appointment_set: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  callback_scheduled: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  offer_made: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  offer_accepted: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  offer_rejected: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  left_voicemail: "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300",
+  no_answer: "bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400",
+  wrong_number: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+  do_not_call: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+  other: "bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-400",
 };
 
 function CallCard({ call, grade }: { call: any; grade: any }) {
+  const { t } = useTenantConfig();
   const timeAgo = call.createdAt ? formatDistanceToNow(new Date(call.createdAt), { addSuffix: true }) : "Unknown";
-  const callTypeInfo = CALL_TYPE_LABELS[call.callType] || CALL_TYPE_LABELS.qualification;
-  const outcomeInfo = call.callOutcome ? OUTCOME_LABELS[call.callOutcome] : null;
+  const callTypeLabel = t.callType(call.callType);
+  const callTypeColor = CALL_TYPE_COLORS[call.callType] || CALL_TYPE_COLORS.qualification;
+  const outcomeInfo = call.callOutcome ? { label: t.outcome(call.callOutcome), color: OUTCOME_COLORS[call.callOutcome] || OUTCOME_COLORS.other } : null;
   const gradeVal = grade?.overallGrade?.toUpperCase() || "";
   const scoreVal = grade?.overallScore ? Math.round(parseFloat(grade.overallScore)) : null;
   
@@ -176,7 +179,7 @@ function CallCard({ call, grade }: { call: any; grade: any }) {
               )}
               {/* Call type pill */}
               <span className={`call-pill ${pillClassMap[call.callType] || "call-pill-other"}`}>
-                {callTypeInfo.label}
+                {callTypeLabel}
               </span>
               {/* Outcome pill */}
               {outcomeInfo && (
@@ -2102,18 +2105,11 @@ export default function CallInbox() {
   // Call type options - from tenant config
   const callTypeOptions = tenantCallTypes.map(ct => ({ value: ct.code, label: ct.name }));
 
-  // Outcome options
+  // Outcome options — labels from tenant terminology
   const outcomeOptions = [
-    { value: "interested", label: "Interested" },
-    { value: "not_interested", label: "Not Interested" },
-    { value: "appointment_set", label: "Appointment Set" },
-    { value: "callback_scheduled", label: "Callback Scheduled" },
-    { value: "offer_made", label: "Offer Made" },
-    { value: "offer_accepted", label: "Offer Accepted" },
-    { value: "offer_rejected", label: "Offer Rejected" },
-    { value: "left_voicemail", label: "Left Voicemail" },
-    { value: "no_answer", label: "No Answer" },
-  ];
+    "interested", "not_interested", "appointment_set", "callback_scheduled",
+    "offer_made", "offer_accepted", "offer_rejected", "left_voicemail", "no_answer",
+  ].map(code => ({ value: code, label: t.outcome(code) }));
 
   // Score range options
   const scoreRangeOptions = [

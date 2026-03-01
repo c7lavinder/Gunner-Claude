@@ -3600,8 +3600,8 @@
 - [x] Replace hardcoded role labels in GradingRules.tsx
 - [x] Replace hardcoded role labels in SuperAdmin.tsx
 - [x] Replace hardcoded role labels in Onboarding.tsx
-- [ ] Replace hardcoded KPI labels in Dashboard stats cards
-- [ ] Replace hardcoded outcome labels in Analytics charts
+- [x] Replace hardcoded KPI labels in Dashboard stats cards
+- [x] Replace hardcoded outcome labels in Analytics charts
 
 ### Phase 7: Onboarding Flow Update
 - [x] Auto-seed wholesaling playbook on tenant creation (setupTenant calls seedPlaybookForTenant)
@@ -3634,3 +3634,12 @@
 - [x] Add per-tenant BatchDialer API key support (store in tenant settings, use in sync) — already built
 - [x] Update BatchDialer sync to use tenant-specific API key when available — already built
 - [ ] Test full onboarding flow end-to-end for a new wholesaler
+
+## Terminology Engine Completion (Feb 28, 2026)
+- [x] Replace hardcoded CALL_TYPE_LABELS in CallInbox.tsx with CALL_TYPE_COLORS + t.callType()
+- [x] Replace hardcoded role labels in TenantSettings.tsx (2 locations) with t.role()
+- [x] Replace hardcoded call type labels in Training.tsx MethodologyTab with t.callType()
+- [x] CallDetail.tsx already using t.outcome() and t.callType() — verified
+- [x] Home.tsx Dashboard stats already using t.kpi() — verified
+- [x] Analytics.tsx stats already using t.kpi() — verified
+- [x] Zero TypeScript errors, 31 playbook tests + auth test passing

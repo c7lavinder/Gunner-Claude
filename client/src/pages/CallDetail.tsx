@@ -294,23 +294,16 @@ export default function CallDetail() {
     return map[ct || ""] || "default";
   };
 
-  const outcomeColors: Record<string, { label: string; color: string }> = {
-    appointment_set: { label: "Apt Set", color: "offer" },
-    offer_made: { label: "Offer Made", color: "inbound" },
-    offer_rejected: { label: "Offer Rejected", color: "default" },
-    offer_accepted: { label: "Offer Accepted", color: "offer" },
-    callback_scheduled: { label: "Callback", color: "follow_up" },
-    callback_requested: { label: "Callback", color: "follow_up" },
-    interested: { label: "Interested", color: "offer" },
-    not_interested: { label: "Not Interested", color: "default" },
-    left_vm: { label: "Left VM", color: "default" },
-    left_voicemail: { label: "Left VM", color: "default" },
-    no_answer: { label: "No Answer", color: "default" },
-    dead: { label: "Dead Lead", color: "default" },
-    wrong_number: { label: "Wrong Number", color: "follow_up" },
-    do_not_call: { label: "DNC", color: "default" },
-    follow_up: { label: "Follow Up", color: "inbound" },
+  const outcomeColorMap: Record<string, string> = {
+    appointment_set: "offer", offer_made: "inbound", offer_rejected: "default",
+    offer_accepted: "offer", callback_scheduled: "follow_up", callback_requested: "follow_up",
+    interested: "offer", not_interested: "default", left_vm: "default",
+    left_voicemail: "default", no_answer: "default", dead: "default",
+    wrong_number: "follow_up", do_not_call: "default", follow_up: "inbound",
   };
+  const outcomeColors = Object.fromEntries(
+    Object.entries(outcomeColorMap).map(([code, color]) => [code, { label: t.outcome(code), color }])
+  ) as Record<string, { label: string; color: string }>;
 
   return (
     <div className="space-y-6">

@@ -732,6 +732,7 @@ function CallHistoryTable({ dateRange }: { dateRange: DateRange }) {
 export default function Home() {
   const [dateRange, setDateRange] = useState<DateRange>("week");
   const { user } = useAuth();
+  const { t } = useTenantConfig();
   const searchString = useSearch();
 
   useEffect(() => {
@@ -765,11 +766,11 @@ export default function Home() {
   };
 
   const statCards = [
-    { title: "Calls Made", value: stats?.totalCalls ?? 0, icon: Phone, prior: stats?.priorPeriod?.totalCalls, color: "#c41e3a" },
+    { title: t.kpi("calls_made"), value: stats?.totalCalls ?? 0, icon: Phone, prior: stats?.priorPeriod?.totalCalls, color: "#c41e3a" },
     { title: "Conversations", value: stats?.gradedCalls ?? 0, icon: MessageSquare, prior: stats?.priorPeriod?.gradedCalls, color: "#3b82f6" },
     { title: "Leads Generated", value: stats?.leadsGenerated ?? 0, icon: Target, prior: stats?.priorPeriod?.leadsGenerated, color: "#22c55e" },
-    { title: "Appointments", value: stats?.appointmentsSet ?? 0, icon: Calendar, prior: stats?.priorPeriod?.appointmentsSet, color: "#eab308" },
-    { title: "Offer Calls", value: stats?.offerCallsCompleted ?? 0, icon: CheckCircle2, prior: stats?.priorPeriod?.offerCallsCompleted, color: "#f97316" },
+    { title: t.kpi("appointments_set"), value: stats?.appointmentsSet ?? 0, icon: Calendar, prior: stats?.priorPeriod?.appointmentsSet, color: "#eab308" },
+    { title: t.kpi("offers_made"), value: stats?.offerCallsCompleted ?? 0, icon: CheckCircle2, prior: stats?.priorPeriod?.offerCallsCompleted, color: "#f97316" },
     { title: "Avg Score", value: stats?.averageScore ? `${Math.round(stats.averageScore)}%` : "N/A", icon: TrendingUp, prior: stats?.priorPeriod?.averageScore, isPercentage: true, color: "#a855f7" },
   ];
 

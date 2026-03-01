@@ -73,6 +73,7 @@ import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useDemo } from "@/hooks/useDemo";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 const CATEGORIES = [
   { value: "script", label: "Script", icon: FileText },
@@ -1403,6 +1404,7 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
 }) {
   const { user } = useAuth();
   const { isDemo } = useDemo();
+  const { t } = useTenantConfig();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const utils = trpc.useUtils();
 
@@ -1640,7 +1642,7 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
             return (
               <button key={config.tabValue} className={`obs-role-tab flex items-center gap-2 ${methodTab === config.tabValue ? "active" : ""}`} onClick={() => setMethodTab(config.tabValue)}>
                 <IconComponent className="h-4 w-4" />
-                {config.label}
+                {t.callType(config.callType)}
               </button>
             );
           })}
@@ -1663,7 +1665,7 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                         <div>
                           <h3 className="obs-section-title flex items-center gap-2">
                             <PenLine className="h-5 w-5 text-blue-500" />
-                            Editing: {config.label} Rubric
+                            Editing: {t.callType(config.callType)} Rubric
                           </h3>
                           <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Modify criteria, point values, descriptions, and red flags</p>
                         </div>
@@ -1872,7 +1874,7 @@ function MethodologyTab({ rubrics, rubricsLoading, qualificationContext, offerCo
                                       <AlertDialogHeader>
                                         <AlertDialogTitle>Reset to Default Rubric?</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                          This will remove your custom {config.label} rubric and revert to the built-in default. Future calls will be graded using the default criteria. This cannot be undone.
+                                          This will remove your custom {t.callType(config.callType)} rubric and revert to the built-in default. Future calls will be graded using the default criteria. This cannot be undone.
                                         </AlertDialogDescription>
                                       </AlertDialogHeader>
                                       <AlertDialogFooter>

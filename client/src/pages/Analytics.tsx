@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Phone,
@@ -49,6 +50,7 @@ type DateRange = "today" | "week" | "month" | "ytd" | "all";
    ANALYTICS PAGE — $100M SaaS Grade
    ═══════════════════════════════════════════════════════ */
 export default function Analytics() {
+  const { t } = useTenantConfig();
   const [dateRange, setDateRange] = useState<DateRange>("week");
 
   const { data: stats, isLoading: statsLoading } = trpc.analytics.stats.useQuery({ dateRange });
@@ -111,11 +113,11 @@ export default function Analytics() {
               </div>
             ))
           : [
-              { label: "Calls Made", value: stats?.totalCalls ?? 0, prev: prior?.totalCalls, icon: Phone },
+              { label: t.kpi("calls_made"), value: stats?.totalCalls ?? 0, prev: prior?.totalCalls, icon: Phone },
               { label: "Conversations", value: stats?.gradedCalls ?? 0, prev: prior?.gradedCalls, icon: MessageSquare },
               { label: "Leads Generated", value: stats?.leadsGenerated ?? 0, prev: prior?.leadsGenerated, icon: Target },
-              { label: "Appointments", value: stats?.appointmentsSet ?? 0, prev: prior?.appointmentsSet, icon: Calendar },
-              { label: "Offer Calls", value: stats?.offerCallsCompleted ?? 0, prev: prior?.offerCallsCompleted, icon: CheckCircle },
+              { label: t.kpi("appointments_set"), value: stats?.appointmentsSet ?? 0, prev: prior?.appointmentsSet, icon: Calendar },
+              { label: t.kpi("offers_made"), value: stats?.offerCallsCompleted ?? 0, prev: prior?.offerCallsCompleted, icon: CheckCircle },
               { label: "Avg Score", value: Math.round(stats?.averageScore ?? 0), prev: prior?.averageScore ? Math.round(prior.averageScore) : undefined, icon: TrendingUp, suffix: "%", isPercentage: true },
             ].map((kpi, i) => {
               const d = kpi.prev != null ? (kpi as any).isPercentage ? Math.round(kpi.value - kpi.prev) : delta(kpi.value, kpi.prev) : null;

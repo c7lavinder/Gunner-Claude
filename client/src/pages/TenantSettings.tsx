@@ -47,9 +47,11 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { formatRelativeTime } from "@/lib/timeUtils";
 import PlaybookSettings from "@/components/PlaybookSettings";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 export default function TenantSettings() {
   const { user } = useAuth();
+  const { t } = useTenantConfig();
   const [activeTab, setActiveTab] = useState("general");
   const [companyName, setCompanyName] = useState("");
   const [customDomain, setCustomDomain] = useState("");
@@ -1001,12 +1003,7 @@ export default function TenantSettings() {
                             lead_manager: "bg-green-100 text-green-700",
                             lead_generator: "bg-orange-100 text-orange-700",
                           }[u.teamRole || 'lead_manager']}>
-                            {{
-                              admin: "Admin",
-                              acquisition_manager: "Acquisition Manager",
-                              lead_manager: "Lead Manager",
-                              lead_generator: "Lead Generator",
-                            }[u.teamRole || 'lead_manager']}
+                            {t.role(u.teamRole || 'lead_manager')}
                           </Badge>
                         </div>
                       </div>
@@ -1258,12 +1255,7 @@ export default function TenantSettings() {
                           <div className="font-medium truncate">{tm.name}</div>
                           {linkedUser ? (
                             <Badge variant="outline" className="text-xs">
-                              {{
-                                admin: "Admin",
-                                acquisition_manager: "Acquisition Manager",
-                                lead_manager: "Lead Manager",
-                                lead_generator: "Lead Generator",
-                              }[linkedUser.teamRole || 'lead_manager']}
+                              {t.role(linkedUser.teamRole || 'lead_manager')}
                             </Badge>
                           ) : (
                             <span className="text-xs text-muted-foreground">Not linked</span>
