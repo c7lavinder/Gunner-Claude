@@ -35,6 +35,7 @@ import LeadGenDashboard from "./pages/LeadGenDashboard";
 import Opportunities from "./pages/Opportunities";
 import CoachActivityLog from "./pages/CoachActivityLog";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
+import { trpc } from "@/lib/trpc";
 
 // Public routes that don't need DashboardLayout
 // Root (/) is now the landing page for unauthenticated users
@@ -111,9 +112,27 @@ function ProtectedRouter() {
 function AppContent() {
   const [location] = useLocation();
   
+  // Check auth status for smart redirects
+  const { data: user, isLoading: authLoading } = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  
   // Check if current route is a public route (exact match for root, prefix for others)
   const isPublicRoute = location === '/' || 
     PUBLIC_ROUTES.slice(1).some(route => location.startsWith(route));
+  
+  // Redirect authenticated users away from landing/login/signup to dashboard
+  const AUTH_REDIRECT_ROUTES = ['/', '/landing', '/login', '/signup'];
+  const shouldRedirect = !authLoading && user && AUTH_REDIRECT_ROUTES.includes(location);
+  
+  if (shouldRedirect) {
+    // Use useEffect-safe redirect via window.location for immediate navigation
+    if (typeof window !== 'undefined') {
+      window.location.replace('/dashboard');
+    }
+    return null;
+  }
   
   if (isPublicRoute) {
     return <PublicRouter />;

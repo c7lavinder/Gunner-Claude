@@ -3530,3 +3530,10 @@
 
 ### 5. Dark Mode Polish
 - [x] SKIPPED - User prefers light theme, keeping current light dashboard design
+
+## Session Persistence (Feb 28, 2026)
+- [x] Session cookies already persist 30 days (self-serve) / 1 year (Manus OAuth) - no change needed
+- [x] Real issue: authenticated users were seeing landing page instead of dashboard - fixed with auto-redirect
+
+## Auto-redirect Authenticated Users (Feb 28, 2026)
+- [x] Redirect logged-in users from landing page (/) to /dashboard automatically
