@@ -2020,6 +2020,20 @@ export default function CallInbox() {
     },
   });
 
+  const resyncRecordingMutation = trpc.ghlSync.resyncRecording.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Recording found! Call is now being processed.");
+      } else {
+        toast.error(result.message || "Recording still not available from GHL");
+      }
+      handleRefresh();
+    },
+    onError: (error) => {
+      toast.error(`Failed to re-fetch recording: ${error.message}`);
+    },
+  });
+
   const handleRefresh = () => {
     refetch();
     refetchReview();
@@ -2607,23 +2621,47 @@ export default function CallInbox() {
                         {syncSkippedCalls.length} call(s) were found in CRM but couldn't be processed (unmatched team member or missing recording).
                       </span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-amber-700 dark:text-amber-300 hover:text-destructive shrink-0"
-                      onClick={() => {
-                        syncSkippedCalls.forEach((item: any) => {
-                          reclassifyMutation.mutate({ 
-                            callId: item.id, 
-                            classification: "dismissed" as any,
-                            reason: "Dismissed by admin (bulk)"
+                    <div className="flex gap-2 shrink-0">
+                      {syncSkippedCalls.some((c: any) => !c.recordingUrl && c.classificationReason?.includes('No recording available')) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700"
+                          onClick={() => {
+                            syncSkippedCalls
+                              .filter((item: any) => !item.recordingUrl && item.classificationReason?.includes('No recording available'))
+                              .forEach((item: any) => {
+                                resyncRecordingMutation.mutate({ callId: item.id });
+                              });
+                          }}
+                          disabled={resyncRecordingMutation.isPending}
+                        >
+                          {resyncRecordingMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4 mr-1" />
+                          )}
+                          Retry All Recordings
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-amber-700 dark:text-amber-300 hover:text-destructive"
+                        onClick={() => {
+                          syncSkippedCalls.forEach((item: any) => {
+                            reclassifyMutation.mutate({ 
+                              callId: item.id, 
+                              classification: "dismissed" as any,
+                              reason: "Dismissed by admin (bulk)"
+                            });
                           });
-                        });
-                      }}
-                      disabled={reclassifyMutation.isPending}
-                    >
-                      Dismiss All
-                    </Button>
+                        }}
+                        disabled={reclassifyMutation.isPending}
+                      >
+                        Dismiss All
+                      </Button>
+                    </div>
                   </div>
                   {syncSkippedCalls.map((item: any) => (
                     <div key={item.id} className="obs-panel border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/20">
@@ -2663,26 +2701,45 @@ export default function CallInbox() {
                             )}
                           </div>
                           <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                reclassifyMutation.mutate({ 
-                                  callId: item.id, 
-                                  classification: "conversation",
-                                  reason: "Manually reclassified for grading"
-                                });
-                              }}
-                              disabled={reclassifyMutation.isPending || !item.recordingUrl}
-                              title={!item.recordingUrl ? 'No recording available to grade' : 'Grade this call'}
-                            >
-                              {reclassifyMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <CheckCircle className="h-4 w-4" />
-                              )}
-                              <span className="ml-1">Grade This Call</span>
-                            </Button>
+                            {!item.recordingUrl && item.classificationReason?.includes('No recording available') ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  resyncRecordingMutation.mutate({ callId: item.id });
+                                }}
+                                disabled={resyncRecordingMutation.isPending}
+                                title="Re-fetch recording from GHL"
+                              >
+                                {resyncRecordingMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-4 w-4" />
+                                )}
+                                <span className="ml-1">Retry Recording</span>
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  reclassifyMutation.mutate({ 
+                                    callId: item.id, 
+                                    classification: "conversation",
+                                    reason: "Manually reclassified for grading"
+                                  });
+                                }}
+                                disabled={reclassifyMutation.isPending || !item.recordingUrl}
+                                title={!item.recordingUrl ? 'No recording available to grade' : 'Grade this call'}
+                              >
+                                {reclassifyMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle className="h-4 w-4" />
+                                )}
+                                <span className="ml-1">Grade This Call</span>
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"

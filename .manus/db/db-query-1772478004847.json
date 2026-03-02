@@ -1,0 +1,22 @@
+{
+  "query": "SELECT id, ghlCallId, contactName, duration, status, classification, classificationReason, SUBSTRING(recordingUrl, 1, 100) as recordingUrlPrefix, teamMemberName, callTimestamp FROM calls WHERE contactName LIKE '%Brent%' ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, ghlCallId, contactName, duration, status, classification, classificationReason, SUBSTRING(recordingUrl, 1, 100) as recordingUrlPrefix, teamMemberName, callTimestamp FROM calls WHERE contactName LIKE '%Brent%' ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "2820145",
+      "ghlCallId": "XKJvNVktbjqXHHv2L0bx",
+      "contactName": "Brent Walker",
+      "duration": "139",
+      "status": "skipped",
+      "classification": "pending",
+      "classificationReason": "No recording available from GHL (call 139s with Brent Walker)",
+      "recordingUrlPrefix": "NULL",
+      "teamMemberName": "Daniel Lozano",
+      "callTimestamp": "2026-03-02 17:50:23"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tghlCallId\tcontactName\tduration\tstatus\tclassification\tclassificationReason\trecordingUrlPrefix\tteamMemberName\tcallTimestamp\n2820145\tXKJvNVktbjqXHHv2L0bx\tBrent Walker\t139\tskipped\tpending\tNo recording available from GHL (call 139s with Brent Walker)\tNULL\tDaniel Lozano\t2026-03-02 17:50:23\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

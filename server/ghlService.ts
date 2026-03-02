@@ -1174,6 +1174,20 @@ async function retryStuckCalls(): Promise<void> {
 
       const failedRecording = [...failed404, ...failedOther];
 
+      // Skipped calls with no recording but meaningful duration (>30s) — GHL may not have had
+      // the recording ready at sync time. Retry after 15 min, up to 6 hours after creation.
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+      const skippedNoRecording = allCalls.filter((call: any) =>
+        call.status === 'skipped' &&
+        !call.recordingUrl &&
+        call.ghlCallId && // Must be a GHL call to re-fetch
+        call.duration && call.duration > 30 && // Only retry calls with meaningful duration
+        call.classificationReason &&
+        call.classificationReason.includes('No recording available') &&
+        call.updatedAt && new Date(call.updatedAt) < fifteenMinAgo &&
+        call.createdAt && new Date(call.createdAt) > sixHoursAgo // Only retry recent calls (within 6 hours)
+      );
+
       const stuckCalls = [...stuckProcessing, ...stuckPending, ...failedRecording];
 
       for (const call of stuckCalls) {
@@ -1192,6 +1206,26 @@ async function retryStuckCalls(): Promise<void> {
           console.error(`[StuckCallRetry] Error reprocessing call ${call.id}:`, err);
         });
         totalReset++;
+      }
+
+      // Auto-retry skipped no-recording calls by re-fetching from GHL
+      for (const call of skippedNoRecording) {
+        console.log(`[StuckCallRetry] Re-fetching recording for skipped call ${call.id} (${call.contactName}, ${call.duration}s, created: ${call.createdAt})`);
+        try {
+          const result = await resyncCallRecording(call.id);
+          if (result.success) {
+            console.log(`[StuckCallRetry] Successfully re-synced recording for call ${call.id}: ${result.message}`);
+            totalReset++;
+          } else {
+            // Update the updatedAt timestamp so we don't retry too aggressively
+            await updateCall(call.id, {
+              classificationReason: `No recording available from GHL (call ${call.duration}s with ${call.contactName || 'unknown'}) — auto-retry failed: ${result.message}`,
+            });
+            console.log(`[StuckCallRetry] Re-sync failed for call ${call.id}: ${result.message}`);
+          }
+        } catch (err) {
+          console.error(`[StuckCallRetry] Error re-syncing call ${call.id}:`, err);
+        }
       }
     }
 
