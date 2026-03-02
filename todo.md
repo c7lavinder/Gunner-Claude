@@ -3718,3 +3718,7 @@
 - [x] Signals cleanup: Per-tier daily cap (4 per box) instead of flat 5 total
 - [x] Signals cleanup: Cross-tier dedup — same lead only appears in highest-priority box
 - [x] Signals cleanup: Clean up existing noisy data from DB (bad_call_performance, webhook_created, etc.)
+- [x] Remove colored icons from dashboard stat cards (too much color)
+- [x] Hide Analytics page from navigation
+- [x] Bring Team page back into top nav header
+- [x] Enlarge logo in top left of screen

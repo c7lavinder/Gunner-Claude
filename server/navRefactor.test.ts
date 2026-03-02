@@ -4,17 +4,15 @@ import { describe, it, expect } from 'vitest';
  * Navigation Refactor Tests
  * 
  * Verifies that:
- * 1. Team, Settings, and Admin are NOT in the top nav bar (getMenuItems)
- * 2. They ARE in the profile dropdown menu
- * 3. Icons are removed from top nav tabs (text-only)
- * 
- * Since getMenuItems is defined inline in DashboardLayout.tsx (a React component),
- * we replicate its logic here to test the menu structure independently.
+ * 1. Analytics is hidden from top nav
+ * 2. Team is in top nav (not in profile dropdown)
+ * 3. Settings and Admin are in the profile dropdown
+ * 4. Icons are removed from top nav tabs (text-only)
  */
 
 type MenuItem = { label: string; path: string };
 
-// Replicate getMenuItems logic from DashboardLayout.tsx (no icons in output)
+// Replicate getMenuItems logic from DashboardLayout.tsx
 function getMenuItems(
   teamRole: string | null | undefined,
   openId?: string,
@@ -36,7 +34,7 @@ function getMenuItems(
   const items: MenuItem[] = [
     { label: "Dashboard", path: "/dashboard" },
     { label: "Calls", path: "/calls" },
-    { label: "Analytics", path: "/analytics" },
+    // Analytics hidden per user request
   ];
 
   if (isAdmin) {
@@ -44,6 +42,7 @@ function getMenuItems(
   }
 
   items.push({ label: "Training", path: "/training" });
+  items.push({ label: "Team", path: "/team" });
 
   return items;
 }
@@ -56,7 +55,6 @@ function getProfileDropdownItems(
   isDemo: boolean
 ): MenuItem[] {
   const items: MenuItem[] = [
-    { label: "Team", path: "/team" },
     { label: "Account Settings", path: "/profile" },
   ];
 
@@ -71,11 +69,17 @@ function getProfileDropdownItems(
   return items;
 }
 
-describe('Navigation Refactor - Top Nav Menu Items', () => {
-  it('should NOT include Team in top nav for admin users', () => {
+describe('Navigation - Top Nav Menu Items', () => {
+  it('should NOT include Analytics in top nav', () => {
     const items = getMenuItems('admin', 'user1', 'admin', 'true', false);
     const labels = items.map(i => i.label);
-    expect(labels).not.toContain('Team');
+    expect(labels).not.toContain('Analytics');
+  });
+
+  it('should include Team in top nav', () => {
+    const items = getMenuItems('admin', 'user1', 'admin', 'true', false);
+    const labels = items.map(i => i.label);
+    expect(labels).toContain('Team');
   });
 
   it('should NOT include Settings in top nav for admin users', () => {
@@ -90,16 +94,16 @@ describe('Navigation Refactor - Top Nav Menu Items', () => {
     expect(labels).not.toContain('Admin');
   });
 
-  it('should include Dashboard, Calls, Analytics, Signals, Training for admin users', () => {
+  it('should include Dashboard, Calls, Signals, Training, Team for admin users', () => {
     const items = getMenuItems('admin', 'user1', 'admin', 'true', false);
     const labels = items.map(i => i.label);
-    expect(labels).toEqual(['Dashboard', 'Calls', 'Analytics', 'Signals', 'Training']);
+    expect(labels).toEqual(['Dashboard', 'Calls', 'Signals', 'Training', 'Team']);
   });
 
-  it('should include Dashboard, Calls, Analytics, Training for non-admin users', () => {
+  it('should include Dashboard, Calls, Training, Team for non-admin users', () => {
     const items = getMenuItems('lead_manager', 'user1', 'user', null, false);
     const labels = items.map(i => i.label);
-    expect(labels).toEqual(['Dashboard', 'Calls', 'Analytics', 'Training']);
+    expect(labels).toEqual(['Dashboard', 'Calls', 'Training', 'Team']);
   });
 
   it('should show limited nav for lead_generator role', () => {
@@ -116,10 +120,10 @@ describe('Navigation Refactor - Top Nav Menu Items', () => {
   });
 });
 
-describe('Navigation Refactor - Profile Dropdown Items', () => {
-  it('should include Team for all users', () => {
+describe('Navigation - Profile Dropdown Items', () => {
+  it('should NOT include Team in profile dropdown (moved to top nav)', () => {
     const items = getProfileDropdownItems('user', 'lead_manager', null, false);
-    expect(items.map(i => i.label)).toContain('Team');
+    expect(items.map(i => i.label)).not.toContain('Team');
   });
 
   it('should include Account Settings for all users', () => {
@@ -155,9 +159,9 @@ describe('Navigation Refactor - Profile Dropdown Items', () => {
   });
 });
 
-describe('Navigation Refactor - Route Paths', () => {
-  it('Team should route to /team', () => {
-    const items = getProfileDropdownItems('user', 'lead_manager', null, false);
+describe('Navigation - Route Paths', () => {
+  it('Team should route to /team in top nav', () => {
+    const items = getMenuItems('admin', 'user1', 'admin', 'true', false);
     expect(items.find(i => i.label === 'Team')?.path).toBe('/team');
   });
 

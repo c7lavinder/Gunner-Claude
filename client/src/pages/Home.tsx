@@ -57,15 +57,9 @@ function StatCard({
       />
       <div className="relative">
         <div className="flex items-center justify-between mb-3">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300"
-            style={{
-              background: `${accent}12`,
-              border: `1px solid ${accent}20`,
-            }}
-          >
-            <Icon className="h-4 w-4" style={{ color: accent }} />
-          </div>
+          <p className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>
+            {title}
+          </p>
           {change && (
             <span
               className="flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full"
@@ -89,9 +83,7 @@ function StatCard({
             {value}
           </div>
         )}
-        <p className="text-xs font-medium mt-1" style={{ color: "var(--g-text-tertiary)" }}>
-          {title}
-        </p>
+
       </div>
     </div>
   );

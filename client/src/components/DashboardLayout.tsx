@@ -45,7 +45,7 @@ const getMenuItems = (
   const items = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Phone, label: "Calls", path: "/calls" },
-    { icon: BarChart3, label: "Analytics", path: "/analytics" },
+    // Analytics hidden per user request
   ];
 
   if (isAdmin) {
@@ -53,6 +53,7 @@ const getMenuItems = (
   }
 
   items.push({ icon: BookOpen, label: "Training", path: "/training" });
+  items.push({ icon: Users, label: "Team", path: "/team" });
 
   return items;
 };
@@ -246,7 +247,7 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
             <img
               src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/gunner-logo-small-transparent_1ea33474.png"
               alt="Gunner"
-              className="h-8 transition-transform duration-300 group-hover:scale-105"
+              className="h-12 transition-transform duration-300 group-hover:scale-105"
               style={{ objectFit: 'contain' }}
             />
           </div>
@@ -357,13 +358,6 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
                     {user?.email || '-'}
                   </p>
                 </div>
-                <DropdownMenuItem
-                  onClick={() => setLocation('/team')}
-                  className="cursor-pointer gap-2 py-2.5"
-                >
-                  <Users className="h-4 w-4" />
-                  Team
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setLocation('/profile')}
                   className="cursor-pointer gap-2 py-2.5"
