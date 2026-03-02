@@ -4776,9 +4776,10 @@ async function scanTenant(
           lowerStage.includes("purchased") ||
           lowerStage.includes("closed won") ||
           lowerStage.includes("closed lost") ||
-          lowerStage.includes("agreement not closed")
+          lowerStage.includes("agreement not closed") ||
+          lowerStage.includes("dispo")
         ) {
-          continue; // Terminal stage — no opportunity signals needed
+          continue; // Terminal/dispo stage — no opportunity signals needed
         }
 
         // DQ SUPPRESSION: If the lead is in a follow-up stage AND the last call was a proper DQ,
@@ -4903,9 +4904,10 @@ async function scanTenant(
           convStageLower.includes("purchased") ||
           convStageLower.includes("closed won") ||
           convStageLower.includes("closed lost") ||
-          convStageLower.includes("agreement not closed")
+          convStageLower.includes("agreement not closed") ||
+          convStageLower.includes("dispo")
         ) {
-          continue; // Terminal stage — no opportunity signals needed
+          continue; // Terminal/dispo stage — no opportunity signals needed
         }
       }
 
@@ -4961,7 +4963,7 @@ async function scanTenant(
   const terminalStageContactIds = new Set<string>();
   for (const [contactId, { stageName: sn }] of Array.from(contactOppMap.entries())) {
     const sl = sn.toLowerCase();
-    if (sl.includes("under contract") || sl.includes("purchased") || sl.includes("closed won") || sl.includes("closed lost") || sl.includes("agreement not closed")) {
+    if (sl.includes("under contract") || sl.includes("purchased") || sl.includes("closed won") || sl.includes("closed lost") || sl.includes("agreement not closed") || sl.includes("dispo")) {
       terminalStageContactIds.add(contactId);
     }
   }
@@ -5030,12 +5032,9 @@ async function scanTenant(
       console.log(`[OpportunityDetection] Rule 22: Found ${filteredDealLostOnCall.length} deals lost on call`);
     }
 
-    // Rule 23: Bad call performance — D/F grade or score below 40
-    const badCallDetections = await detectBadCallPerformance(db, tenantId);
-    detections.push(...badCallDetections);
-    if (badCallDetections.length > 0) {
-      console.log(`[OpportunityDetection] Rule 23: Found ${badCallDetections.length} bad call performances`);
-    }
+    // Rule 23: Bad call performance — REMOVED (signals should be about deals, not grades)
+    // const badCallDetections = await detectBadCallPerformance(db, tenantId);
+    // detections.push(...badCallDetections);
 
     // Rule 24: Extreme motivation — foreclosure, divorce, death, tax sale, etc.
     const extremeMotivationDetections = await detectExtremeMotivation(db, tenantId);
@@ -5075,12 +5074,9 @@ async function scanTenant(
       console.log(`[OpportunityDetection] Rule 28: Found ${filteredOutOfAgreement.length} sellers out of agreement`);
     }
 
-    // Rule 29: Bad temperament — unprofessional tone detected on call
-    const badTemperamentDetections = await detectBadTemperament(db, tenantId);
-    detections.push(...badTemperamentDetections);
-    if (badTemperamentDetections.length > 0) {
-      console.log(`[OpportunityDetection] Rule 29: Found ${badTemperamentDetections.length} bad temperament signals`);
-    }
+    // Rule 29: Bad temperament — REMOVED (signals should be about deals, not coaching)
+    // const badTemperamentDetections = await detectBadTemperament(db, tenantId);
+    // detections.push(...badTemperamentDetections);
   } catch (transcriptError) {
     console.error(`[OpportunityDetection] Transcript scan error:`, transcriptError);
     result.errors++;
@@ -5088,19 +5084,13 @@ async function scanTenant(
 
   // ========== PHASE 3.5B: TEAM-LEVEL DETECTION (not contact-specific) ==========
   try {
-    // Rule 30: AI coach inactive — team member hasn't used coach in 7+ days
-    const coachInactiveDetections = await detectAICoachInactive(db, tenantId);
-    detections.push(...coachInactiveDetections);
-    if (coachInactiveDetections.length > 0) {
-      console.log(`[OpportunityDetection] Rule 30: Found ${coachInactiveDetections.length} inactive AI coach users`);
-    }
+    // Rule 30: AI coach inactive — REMOVED (signals should be about deals, not training)
+    // const coachInactiveDetections = await detectAICoachInactive(db, tenantId);
+    // detections.push(...coachInactiveDetections);
 
-    // Rule 31: Consistent call weakness — same category low across 5+ calls
-    const weaknessDetections = await detectConsistentCallWeakness(db, tenantId);
-    detections.push(...weaknessDetections);
-    if (weaknessDetections.length > 0) {
-      console.log(`[OpportunityDetection] Rule 31: Found ${weaknessDetections.length} consistent call weaknesses`);
-    }
+    // Rule 31: Consistent call weakness — REMOVED (signals should be about deals, not trends)
+    // const weaknessDetections = await detectConsistentCallWeakness(db, tenantId);
+    // detections.push(...weaknessDetections);
   } catch (teamError) {
     console.error(`[OpportunityDetection] Team-level detection error:`, teamError);
     result.errors++;
@@ -5136,25 +5126,31 @@ async function scanTenant(
   // ========== PHASE 4: DEDUPLICATE & SAVE ==========
   console.log(`[OpportunityDetection] Phase 4: Saving ${detections.length} potential detections for tenant ${tenantId}`);
 
-  // DAILY CAP: Only allow ~5 new signals per tenant per day
-  // Check how many were already created today
-  const DAILY_SIGNAL_CAP = 5;
+  // PER-TIER DAILY CAP: Only allow ~4 new signals per tier per day
+  // This keeps each box (Missed, At Risk, Worth a Look) to 2-4 items max
+  const PER_TIER_CAP = 4;
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const [todayCountResult] = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(opportunities)
-    .where(
-      and(
-        eq(opportunities.tenantId, tenantId),
-        gte(opportunities.createdAt, todayStart)
-      )
-    );
-  const alreadyCreatedToday = Number(todayCountResult?.count || 0);
-  const remainingSlots = Math.max(0, DAILY_SIGNAL_CAP - alreadyCreatedToday);
 
-  if (remainingSlots === 0) {
-    console.log(`[OpportunityDetection] Daily cap reached (${DAILY_SIGNAL_CAP}) for tenant ${tenantId}. Skipping new signals.`);
+  // Count existing signals per tier created today
+  const todayTierCounts: Record<string, number> = { missed: 0, warning: 0, possible: 0 };
+  for (const tier of ["missed", "warning", "possible"] as const) {
+    const [countResult] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(opportunities)
+      .where(
+        and(
+          eq(opportunities.tenantId, tenantId),
+          eq(opportunities.tier, tier),
+          gte(opportunities.createdAt, todayStart)
+        )
+      );
+    todayTierCounts[tier] = Number(countResult?.count || 0);
+  }
+
+  const allTiersFull = Object.values(todayTierCounts).every(c => c >= PER_TIER_CAP);
+  if (allTiersFull) {
+    console.log(`[OpportunityDetection] All tier caps reached (${PER_TIER_CAP}/tier) for tenant ${tenantId}. Skipping new signals.`);
     return;
   }
 
@@ -5167,15 +5163,33 @@ async function scanTenant(
     return bScore - aScore;
   });
 
+  // CROSS-TIER DEDUP: Same contact should only appear in the highest-priority tier
+  // Since detections are sorted by priority (missed > warning > possible),
+  // the first occurrence of a contact is the highest-tier one.
+  const contactTierAssigned = new Map<string, string>(); // contactKey -> tier
+  const dedupedDetections = detections.filter(d => {
+    const contactKey = d.ghlContactId || d.contactPhone || d.contactName;
+    if (!contactKey) return true; // No contact info, can't dedup
+    const existingTier = contactTierAssigned.get(contactKey);
+    if (!existingTier) {
+      contactTierAssigned.set(contactKey, d.tier);
+      return true;
+    }
+    // Same contact already assigned to a tier — only keep if same tier
+    return existingTier === d.tier;
+  });
+
+  console.log(`[OpportunityDetection] Cross-tier dedup: ${detections.length} -> ${dedupedDetections.length} detections`);
+
   // In-memory dedup: prevent same contact+rule from being saved multiple times in one scan
   const seenInThisScan = new Set<string>();
-  let savedThisScan = 0;
+  const savedPerTier: Record<string, number> = { missed: 0, warning: 0, possible: 0 };
 
-  for (const detection of detections) {
-    // Enforce daily cap
-    if (savedThisScan >= remainingSlots) {
-      console.log(`[OpportunityDetection] Reached remaining daily slots (${remainingSlots}) for tenant ${tenantId}. Stopping.`);
-      break;
+  for (const detection of dedupedDetections) {
+    // Enforce per-tier daily cap
+    const tierSavedToday = (todayTierCounts[detection.tier] || 0) + (savedPerTier[detection.tier] || 0);
+    if (tierSavedToday >= PER_TIER_CAP) {
+      continue; // This tier is full for today, skip to next detection
     }
 
     try {
@@ -5345,7 +5359,7 @@ async function scanTenant(
       });
 
       result.detected++;
-      savedThisScan++;
+      savedPerTier[detection.tier] = (savedPerTier[detection.tier] || 0) + 1;
     } catch (saveError) {
       console.error(`[OpportunityDetection] Error saving detection:`, saveError);
       result.errors++;

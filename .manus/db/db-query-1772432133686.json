@@ -1,0 +1,34 @@
+{
+  "query": "SELECT DISTINCT name, code FROM tenant_call_types ORDER BY name;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT DISTINCT name, code FROM tenant_call_types ORDER BY name;",
+  "rows": [
+    {
+      "name": "Admin Callback",
+      "code": "admin_callback"
+    },
+    {
+      "name": "Cold Call",
+      "code": "cold_call"
+    },
+    {
+      "name": "Follow-Up Call",
+      "code": "follow_up"
+    },
+    {
+      "name": "Offer Call",
+      "code": "offer"
+    },
+    {
+      "name": "Qualification Call",
+      "code": "qualification"
+    },
+    {
+      "name": "Seller Callback",
+      "code": "seller_callback"
+    }
+  ],
+  "messages": [],
+  "stdout": "name\tcode\nAdmin Callback\tadmin_callback\nCold Call\tcold_call\nFollow-Up Call\tfollow_up\nOffer Call\toffer\nQualification Call\tqualification\nSeller Callback\tseller_callback\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

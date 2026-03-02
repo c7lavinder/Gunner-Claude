@@ -63,7 +63,7 @@ const tierConfig = {
     bgColor: "bg-amber-500/10",
     borderColor: "border-amber-500/30",
     badgeVariant: "secondary" as const,
-    description: "Red flags in process — SOP failures, missed appointments, bad calls",
+    description: "Red flags in process — SOP failures, missed appointments, stalled deals",
   },
   possible: {
     label: "Worth a Look",
@@ -72,7 +72,7 @@ const tierConfig = {
     bgColor: "bg-blue-500/10",
     borderColor: "border-blue-500/30",
     badgeVariant: "outline" as const,
-    description: "Subtle opportunities, team insights, and possible deals worth investigating",
+    description: "Subtle opportunities and possible deals worth investigating",
   },
 };
 
@@ -198,11 +198,7 @@ const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string 
     icon: XCircle,
     shortLabel: "Deal Lost (Call)",
   },
-  bad_call_performance: {
-    label: "Very Bad Call — Grade D/F",
-    icon: TrendingDown,
-    shortLabel: "Bad Call",
-  },
+  // bad_call_performance removed — signals should be about deals, not grades
   missed_appointment: {
     label: "Appointment Missed — No Activity",
     icon: CalendarX,
@@ -233,21 +229,7 @@ const ruleConfig: Record<string, { label: string; icon: any; shortLabel: string 
     icon: Ban,
     shortLabel: "Out of Agreement",
   },
-  ai_coach_inactive: {
-    label: "Team Member Not Using AI Coach",
-    icon: User,
-    shortLabel: "Coach Inactive",
-  },
-  consistent_call_weakness: {
-    label: "Consistent Weakness Across Calls",
-    icon: TrendingDown,
-    shortLabel: "Weak Pattern",
-  },
-  bad_temperament: {
-    label: "Unprofessional Tone on Call",
-    icon: AlertCircle,
-    shortLabel: "Bad Tone",
-  },
+  // ai_coach_inactive, consistent_call_weakness, bad_temperament removed — signals should be about deals, not coaching/training
 };
 
 const sourceConfig: Record<string, { label: string; icon: any; color: string }> = {
@@ -255,7 +237,7 @@ const sourceConfig: Record<string, { label: string; icon: any; color: string }> 
   conversation: { label: "Conversation", icon: MessageSquare, color: "text-blue-500" },
   transcript: { label: "Transcript", icon: FileText, color: "text-green-500" },
   hybrid: { label: "Pipeline + Transcript", icon: Layers, color: "text-orange-500" },
-  call_grade: { label: "Call Grade", icon: TrendingDown, color: "text-red-500" },
+  // call_grade source removed — signals should be about deals, not grades
   system: { label: "System", icon: AlertCircle, color: "text-gray-500" },
 };
 

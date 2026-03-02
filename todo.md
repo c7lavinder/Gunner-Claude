@@ -3713,3 +3713,8 @@
 - [x] Remove "No Recording" unprocessed call cards from Call Inbox — added Dismiss button + Dismiss All + 'dismissed' status
 - [x] Move Team/Settings/Admin tabs from top nav into profile dropdown menu
 - [x] Remove icons/emblems from top nav tabs — text-only labels (Dashboard, Calls, Analytics, Signals, Training)
+- [x] Signals cleanup: Remove ALL non-deal rules (bad_call_performance, bad_temperament, ai_coach_inactive, consistent_call_weakness) — signals should only be about specific deals
+- [x] Signals cleanup: Filter out dispo pipeline contacts from signal detection
+- [x] Signals cleanup: Per-tier daily cap (4 per box) instead of flat 5 total
+- [x] Signals cleanup: Cross-tier dedup — same lead only appears in highest-priority box
+- [x] Signals cleanup: Clean up existing noisy data from DB (bad_call_performance, webhook_created, etc.)
