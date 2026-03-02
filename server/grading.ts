@@ -1223,6 +1223,33 @@ export async function processCall(callId: number): Promise<void> {
       return;
     }
 
+    // Step 2.5: If contact name is still missing, extract from transcript via LLM
+    if (!call.contactName) {
+      try {
+        const nameResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `Extract the contact/lead/seller's name from this phone call transcript. The caller (sales rep) is ${call.teamMemberName || 'the rep'}. Return ONLY the other person's name (first name, or first and last if mentioned). If you cannot determine the name, return "Unknown".`
+            },
+            {
+              role: "user",
+              content: transcript.substring(0, 2000)
+            }
+          ],
+        });
+        const rawContent = nameResponse.choices[0]?.message?.content;
+        const extractedName = typeof rawContent === 'string' ? rawContent.trim() : undefined;
+        if (extractedName && extractedName !== "Unknown" && extractedName.length < 60) {
+          await updateCall(callId, { contactName: extractedName });
+          (call as any).contactName = extractedName;
+          console.log(`[ProcessCall] Extracted contact name from transcript for call ${callId}: ${extractedName}`);
+        }
+      } catch (e) {
+        console.warn(`[ProcessCall] Could not extract contact name from transcript for call ${callId}:`, e);
+      }
+    }
+
     // Step 3: Classify the call
     await updateCall(callId, { status: "classifying" });
     const classificationResult = await classifyCall(transcript, call.duration, tenantIndustry);
