@@ -3722,3 +3722,4 @@
 - [x] Hide Analytics page from navigation
 - [x] Bring Team page back into top nav header
 - [x] Enlarge logo in top left of screen
+- [x] Restore stat card icons but make them all uniform muted grey/light red (not eye-catching)
