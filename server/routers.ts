@@ -6020,7 +6020,7 @@ selectedTimezone: { type: "string" },
         console.log(`[parseIntent] Call context available: ${callContext.length > 0 ? 'yes (' + callContext.length + ' chars)' : 'no'}`);
         if (content && typeof content === "string") {
           const parsed = JSON.parse(content);
-          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment"];
+          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment"];
           // Return the actions array, or wrap legacy single-action format for backwards compatibility
           if (parsed.actions && Array.isArray(parsed.actions)) {
             // Filter out any actions with missing, empty, or invalid actionType
@@ -6071,7 +6071,7 @@ selectedTimezone: { type: "string" },
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
         // Validate actionType server-side with a friendly error
-        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment"];
+        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment"];
         if (!input.actionType || !VALID_ACTION_TYPES.includes(input.actionType)) {
           throw new TRPCError({
             code: "BAD_REQUEST",

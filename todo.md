@@ -3730,3 +3730,4 @@
 - [x] AI Coach: Clean up sloppy/typo-filled user input before processing actions (e.g. "adn ehy denan" -> "and hey Deanna")
 - [x] AI Coach: Match actions to the correct contact mentioned in the current message, not previous conversation context (e.g. Kyle asked about Deanna Jonker but got Barbara Thompson task)
 - [x] Bug: 2:19 call (Brent Walker / Daniel Lozano, 139s) showing "No Recording" — should not happen for calls over 1 minute; fix GHL recording fetch logic
+- [x] Bug: "Check Off Task" action from AI next steps fails with "I couldn't determine the action type" (Received: check_off_task) — need to add check_off_task as a recognized action type
