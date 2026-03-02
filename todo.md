@@ -3712,3 +3712,4 @@
 - [x] Draft 5 LinkedIn posts for Corey to review and post manually
 - [x] Remove "No Recording" unprocessed call cards from Call Inbox — added Dismiss button + Dismiss All + 'dismissed' status
 - [x] Move Team/Settings/Admin tabs from top nav into profile dropdown menu
+- [x] Remove icons/emblems from top nav tabs — text-only labels (Dashboard, Calls, Analytics, Signals, Training)

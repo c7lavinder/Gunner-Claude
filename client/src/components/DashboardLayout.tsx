@@ -255,14 +255,13 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
           {!isMobile && (
             <div className="flex items-center gap-1">
               {menuItems.map((item) => {
-                const Icon = item.icon;
                 const isActive = location === item.path ||
                   (item.path !== '/dashboard' && location.startsWith(item.path));
                 return (
                   <button
                     key={item.path}
                     onClick={() => setLocation(item.path)}
-                    className="relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2"
+                    className="relative px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200"
                     style={{
                       color: isActive ? "var(--g-accent)" : "var(--g-text-secondary)",
                       background: isActive ? "var(--g-accent-surface)" : "transparent",
@@ -280,7 +279,6 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
                       }
                     }}
                   >
-                    <Icon className="h-4 w-4" />
                     {item.label}
                     {isActive && (
                       <span
@@ -433,7 +431,6 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
           }}
         >
           {menuItems.map((item) => {
-            const Icon = item.icon;
             const isActive = location === item.path ||
               (item.path !== '/dashboard' && location.startsWith(item.path));
             return (
@@ -449,7 +446,6 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
                   background: isActive ? "var(--g-accent-surface)" : "transparent",
                 }}
               >
-                <Icon className="h-4 w-4" />
                 {item.label}
               </button>
             );

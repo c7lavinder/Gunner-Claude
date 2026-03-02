@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "9460bb95-a4c9-400a-a7e8-9fd425098b66",
+  "id": "5aa7e881-13bf-4468-83dd-9de841d9cd91",
   "prevId": "5a1a77fc-c6a4-4e46-81c8-6fd05ec26f0e",
   "tables": {
     "ai_coach_preferences": {
