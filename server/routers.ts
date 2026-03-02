@@ -927,7 +927,7 @@ export const appRouter = router({
     reclassify: protectedProcedure
       .input(z.object({
         callId: z.number(),
-        classification: z.enum(["conversation", "admin_call", "voicemail", "no_answer", "callback_request", "wrong_number"]),
+        classification: z.enum(["conversation", "admin_call", "voicemail", "no_answer", "callback_request", "wrong_number", "dismissed"]),
         reason: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -942,7 +942,7 @@ export const appRouter = router({
 
         // Determine new status based on classification
         const shouldGrade = input.classification === "conversation" || input.classification === "admin_call";
-        const newStatus = shouldGrade ? "completed" : "skipped";
+        const newStatus = input.classification === "dismissed" ? "dismissed" : (shouldGrade ? "completed" : "skipped");
 
         let classificationReason = input.reason || `Manually reclassified to ${input.classification.replace(/_/g, " ")}`;
         
@@ -972,7 +972,7 @@ export const appRouter = router({
         }
 
         await updateCall(input.callId, {
-          classification: input.classification,
+          ...(input.classification !== "dismissed" ? { classification: input.classification } : {}),
           classificationReason,
           status: newStatus,
         });

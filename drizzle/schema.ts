@@ -251,7 +251,7 @@ export const calls = mysqlTable("calls", {
   classification: mysqlEnum("classification", ["pending", "conversation", "voicemail", "no_answer", "callback_request", "wrong_number", "too_short", "admin_call", "limit_reached"]).default("pending"),
   classificationReason: text("classificationReason"), // AI explanation for classification
   // Processing status
-  status: mysqlEnum("status", ["pending", "transcribing", "classifying", "grading", "completed", "skipped", "failed"]).default("pending"),
+  status: mysqlEnum("status", ["pending", "transcribing", "classifying", "grading", "completed", "skipped", "failed", "dismissed"]).default("pending"),
   // Transcript
   transcript: text("transcript"),
   transcriptUrl: text("transcriptUrl"), // S3 URL for archived transcripts

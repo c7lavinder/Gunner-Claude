@@ -1,0 +1,1 @@
+ALTER TABLE `calls` MODIFY COLUMN `status` enum('pending','transcribing','classifying','grading','completed','skipped','failed','dismissed') DEFAULT 'pending';
