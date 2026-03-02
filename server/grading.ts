@@ -1234,30 +1234,81 @@ export async function processCall(callId: number): Promise<void> {
       return;
     }
 
-    // Step 2.5: If contact name is still missing, extract from transcript via LLM
-    if (!call.contactName) {
-      try {
-        const nameResponse = await invokeLLM({
-          messages: [
-            {
-              role: "system",
-              content: `Extract the contact/lead/seller's name from this phone call transcript. The caller (sales rep) is ${call.teamMemberName || 'the rep'}. Return ONLY the other person's name (first name, or first and last if mentioned). If you cannot determine the name, return "Unknown".`
-            },
-            {
-              role: "user",
-              content: transcript.substring(0, 2000)
-            }
-          ],
-        });
-        const rawContent = nameResponse.choices[0]?.message?.content;
-        const extractedName = typeof rawContent === 'string' ? rawContent.trim() : undefined;
-        if (extractedName && extractedName !== "Unknown" && extractedName.length < 60) {
-          await updateCall(callId, { contactName: extractedName });
-          (call as any).contactName = extractedName;
-          console.log(`[ProcessCall] Extracted contact name from transcript for call ${callId}: ${extractedName}`);
+    // Step 2.5: Resolve contact name — check cache, then GHL API, then LLM transcript extraction
+    const nameIsMissing = !call.contactName || !call.contactName.includes(' ');
+    if (nameIsMissing) {
+      const currentName = call.contactName || '';
+      let resolvedName: string | null = null;
+
+      // Try 1: Check contact_cache for full name
+      if (call.ghlContactId) {
+        try {
+          const { getDb } = await import('./db');
+          const { contactCache } = await import('../drizzle/schema');
+          const { eq } = await import('drizzle-orm');
+          const dbConn = await getDb();
+          if (!dbConn) throw new Error('No DB connection');
+          const [cached] = await dbConn.select().from(contactCache).where(eq(contactCache.ghlContactId, call.ghlContactId)).limit(1);
+          if (cached?.name && cached.name.includes(' ')) {
+            resolvedName = cached.name;
+            console.log(`[ProcessCall] Resolved full name from contact cache for call ${callId}: ${resolvedName}`);
+          } else if (cached?.firstName && cached?.lastName) {
+            resolvedName = `${cached.firstName} ${cached.lastName}`;
+            console.log(`[ProcessCall] Resolved full name from cache first+last for call ${callId}: ${resolvedName}`);
+          }
+        } catch (e) {
+          console.warn(`[ProcessCall] Contact cache lookup failed for call ${callId}:`, e);
         }
-      } catch (e) {
-        console.warn(`[ProcessCall] Could not extract contact name from transcript for call ${callId}:`, e);
+      }
+
+      // Try 2: Fetch from GHL Contact API
+      if (!resolvedName && call.ghlContactId) {
+        try {
+          const { fetchGHLContactName } = await import('./ghlService');
+          const ghlName = await fetchGHLContactName(call.ghlContactId);
+          if (ghlName && ghlName.includes(' ')) {
+            resolvedName = ghlName;
+            console.log(`[ProcessCall] Resolved full name from GHL API for call ${callId}: ${resolvedName}`);
+          }
+        } catch (e) {
+          console.warn(`[ProcessCall] GHL contact name lookup failed for call ${callId}:`, e);
+        }
+      }
+
+      // Try 3: Extract from transcript via LLM
+      if (!resolvedName) {
+        try {
+          const nameResponse = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: `Extract the contact/lead/seller's FULL NAME (first AND last name) from this phone call transcript. The caller (sales rep) is ${call.teamMemberName || 'the rep'}. Return ONLY the other person's full name. You MUST include both first and last name if they are mentioned anywhere in the conversation. If only a first name is used, still try to find the last name from context. If you truly cannot determine the last name, return just the first name. If you cannot determine any name, return "Unknown".`
+              },
+              {
+                role: "user",
+                content: transcript.substring(0, 3000)
+              }
+            ],
+          });
+          const rawContent = nameResponse.choices[0]?.message?.content;
+          const extractedName = typeof rawContent === 'string' ? rawContent.trim() : undefined;
+          if (extractedName && extractedName !== "Unknown" && extractedName.length < 60) {
+            // Only use LLM name if it's better than what we have
+            if (!currentName || extractedName.includes(' ') || !currentName.includes(' ')) {
+              resolvedName = extractedName;
+              console.log(`[ProcessCall] Extracted contact name from transcript for call ${callId}: ${resolvedName}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`[ProcessCall] Could not extract contact name from transcript for call ${callId}:`, e);
+        }
+      }
+
+      // Apply the resolved name if we found something better
+      if (resolvedName && resolvedName !== currentName) {
+        await updateCall(callId, { contactName: resolvedName });
+        (call as any).contactName = resolvedName;
+        console.log(`[ProcessCall] Updated contact name for call ${callId}: "${currentName}" -> "${resolvedName}"`);
       }
     }
 
