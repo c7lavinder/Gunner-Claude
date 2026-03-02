@@ -182,6 +182,19 @@ export function createGHLOAuthRouter(): Router {
   });
 
   /**
+   * GET /setup/oauth/callback
+   * 
+   * Alias for /api/crm/oauth/callback to match the existing GHL Marketplace redirect URL
+   * (configured when the app was on Railway). This avoids needing to update the
+   * locked redirect URL in the live GHL Marketplace app settings.
+   */
+  router.get("/setup/oauth/callback", async (req: Request, res: Response) => {
+    // Redirect to the canonical callback path, preserving all query params
+    const qs = req.originalUrl.split("?")[1];
+    return res.redirect(`/api/crm/oauth/callback${qs ? `?${qs}` : ""}`);
+  });
+
+  /**
    * GET /api/crm/oauth/status
    * 
    * Returns the OAuth connection status for the current user's tenant.

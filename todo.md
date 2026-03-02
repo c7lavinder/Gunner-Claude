@@ -3678,3 +3678,35 @@
 - [ ] Verify webhook auto-registration on OAuth connect
 - [x] Write GHL Marketplace app description and screenshots guide
 - [x] Prepare GHL Marketplace submission checklist
+
+## Full Execution Sprint (Mar 1, 2026)
+
+### Gmail Outreach
+- [ ] Discover Gmail MCP tools available
+- [ ] Draft personalized cold emails to wholesaling company owners
+- [ ] Send first batch of outreach emails via Gmail
+- [ ] Draft follow-up emails for non-responders
+
+### GHL Marketplace Setup
+- [ ] Navigate to GHL Marketplace developer portal
+- [ ] Create Gunner AI app listing
+- [ ] Configure OAuth redirect URI and webhook URL
+- [ ] Update GHL_CLIENT_ID and GHL_CLIENT_SECRET in Gunner settings
+
+### Social Media / LinkedIn
+- [ ] Create LinkedIn posts about Gunner AI
+- [ ] Post value-first content in wholesaling communities
+
+### Sales Automation
+- [ ] Set up recurring outreach task for follow-up emails
+
+## Product + Growth Sprint (Mar 1 — build-focused, no emails)
+- [x] Fix signal false positives — check GHL conversations/SMS before claiming "no follow-up"
+- [x] Auto-suppress signals when contact is under contract/purchased
+- [x] AI Coach system prompt using tenant-configured role names instead of hardcoded
+- [x] Call type detection via tenant-configured types in grading engine
+- [ ] Analytics/leaderboard queries using dynamic outcome names
+- [x] Configure GHL Marketplace redirect URL for Manus-hosted domain
+- [x] Verify GHL OAuth install flow end-to-end
+- [x] Improve getgunner.ai landing page conversion (social proof, demo video embed, clearer CTA)
+- [x] Draft 5 LinkedIn posts for Corey to review and post manually

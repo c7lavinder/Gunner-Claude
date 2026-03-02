@@ -48,6 +48,10 @@ export async function getDb() {
  */
 export function resetDbConnection() {
   console.warn("[Database] Resetting connection pool due to connection error");
+  if (_pool) {
+    try { _pool.end(() => {}); } catch (_) { /* ignore */ }
+    _pool = null;
+  }
   _db = null;
 }
 

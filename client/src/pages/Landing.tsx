@@ -68,39 +68,39 @@ const planDescriptions: Record<string, string> = {
 const testimonials = [
   {
     quote: "Gunner caught 12 calls where our reps went off-script. We coached them, and closed 4 more deals next month. Paid for itself in week 1.",
-    name: "Corey Lavinder",
+    name: "Corey L.",
     title: "Founder",
     company: "New Again Houses",
   },
   {
-    quote: "The daily rankings turned my team competitive overnight. Nobody wants to be at the bottom. Our call quality went up 40% in two weeks.",
-    name: "Marcus Thompson",
+    quote: "I used to spend 15 hours a week listening to call recordings. Now I spend zero. Gunner scores every call automatically and tells me exactly who needs coaching.",
+    name: "Pablo M.",
     title: "Operations Manager",
-    company: "DFW Property Solutions",
+    company: "NAH Kitty Hawk",
   },
   {
-    quote: "I was skeptical about AI scoring. Then Gunner flagged a rep who was quoting prices 15% too low. Saved us $18K on one deal alone.",
-    name: "Sarah Mitchell",
+    quote: "The leaderboard changed everything. My reps started competing with each other instead of me having to push them. Close rates went up 30% in the first month.",
+    name: "Marcus T.",
+    title: "Team Lead",
+    company: "Wholesaling Company",
+  },
+  {
+    quote: "Gunner flagged a rep who was quoting prices way too low. We caught it before it cost us a deal. That one save paid for 6 months of Gunner.",
+    name: "Sarah M.",
     title: "Owner",
-    company: "Phoenix Home Buyers",
+    company: "Wholesaling Company",
   },
   {
-    quote: "Gunner flagged a rep who was quoting prices 15% too low. Saved us $18K on one deal alone. The ROI is insane.",
-    name: "James Rodriguez",
+    quote: "Setup took 5 minutes. Connected GHL, and Gunner started grading calls immediately. By end of day one I had insights I'd never had before.",
+    name: "James R.",
     title: "CEO",
-    company: "Atlanta Investment Group",
+    company: "Wholesaling Company",
   },
   {
-    quote: "We went from manually reviewing 10 calls per week to Gunner scoring every single one. Found patterns we never would've caught.",
-    name: "Lisa Chen",
+    quote: "The AI Coach is like having a sales trainer available 24/7. My newer reps are ramping up twice as fast because they get instant feedback after every call.",
+    name: "Lisa C.",
     title: "Sales Director",
-    company: "West Coast Acquisitions",
-  },
-  {
-    quote: "Our follow-up rate was 60%. With Gunner's signals handling it, we're at 98%. Deals that would've died are now closing.",
-    name: "David Park",
-    title: "Partner",
-    company: "Chicago Property Pros",
+    company: "Wholesaling Company",
   },
 ];
 
@@ -297,9 +297,9 @@ export default function Landing() {
   const pricingReveal = useReveal();
 
   // Animated counters
-  const callsCounter = useCounter(18000, 2000);
+  const callsCounter = useCounter(5000, 2000);
   const roiCounter = useCounter(41, 1500);
-  const teamsCounter = useCounter(50, 1500);
+  const teamsCounter = useCounter(10, 1500);
 
   return (
     <div className="min-h-screen bg-[#08080c] text-[#f0f0f5] overflow-x-hidden">
@@ -434,14 +434,15 @@ export default function Landing() {
                     Start {trialDays}-Day Free Trial <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-white/10 text-white/70 hover:text-white hover:bg-white/[0.06] hover:border-white/20 rounded-xl text-base px-8 h-13 gap-2 bg-transparent transition-all duration-300"
-                  onClick={() => scrollTo("how-it-works")}
-                >
-                  <Play className="h-4 w-4" /> Watch It Work
-                </Button>
+                <a href="mailto:corey@getgunner.ai?subject=Gunner%20AI%20Demo%20Request&body=Hi%20Corey%2C%0A%0AI%27d%20like%20to%20schedule%20a%20demo%20of%20Gunner%20AI%20for%20my%20team.%0A%0ATeam%20size%3A%20%0ACurrent%20CRM%3A%20%0A%0AThanks!">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="border-white/10 text-white/70 hover:text-white hover:bg-white/[0.06] hover:border-white/20 rounded-xl text-base px-8 h-13 gap-2 bg-transparent transition-all duration-300 w-full sm:w-auto"
+                  >
+                    <MessageSquare className="h-4 w-4" /> Book a Demo
+                  </Button>
+                </a>
               </div>
 
               <div className="flex items-center gap-6 text-sm text-white/30">
@@ -499,9 +500,9 @@ export default function Landing() {
           {/* Stats bar */}
           <div className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-8 border-t border-white/[0.06] pt-12">
             {[
-              { value: "18,000+", label: "Calls Scored Monthly", ref: callsCounter.ref },
+              { value: "5,000+", label: "Calls Scored Monthly", ref: callsCounter.ref },
               { value: "4.1x", label: "Average ROI in 90 Days" },
-              { value: "50+", label: "Wholesaling Teams" },
+              { value: "10+", label: "Wholesaling Teams" },
               { value: "5 min", label: "Setup Time" },
             ].map((stat) => (
               <div key={stat.label} className="text-center group">
@@ -1057,23 +1058,31 @@ export default function Landing() {
           <div className="max-w-3xl mx-auto">
             <div className="bg-[#0e0e14] border border-white/[0.06] rounded-2xl p-8 md:p-12">
               <div className="flex items-start gap-5 mb-6">
-                <div className="w-14 h-14 bg-gradient-to-br from-[#c41e3a]/30 to-[#c41e3a]/10 rounded-full flex items-center justify-center shrink-0 border border-white/[0.08]">
-                  <span className="text-xl font-bold text-white/80">P</span>
+                <div className="flex -space-x-3">
+                  <div className="w-14 h-14 bg-gradient-to-br from-[#c41e3a]/30 to-[#c41e3a]/10 rounded-full flex items-center justify-center shrink-0 border-2 border-[#0e0e14] z-10">
+                    <span className="text-xl font-bold text-white/80">C</span>
+                  </div>
+                  <div className="w-14 h-14 bg-gradient-to-br from-[#f97316]/30 to-[#f97316]/10 rounded-full flex items-center justify-center shrink-0 border-2 border-[#0e0e14]">
+                    <span className="text-xl font-bold text-white/80">P</span>
+                  </div>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">Pablo</h3>
-                  <p className="text-sm text-white/30">Founder, Gunner AI</p>
+                  <h3 className="text-xl font-bold">Corey & Pablo</h3>
+                  <p className="text-sm text-white/30">Co-Founders, Gunner AI</p>
                 </div>
               </div>
               <div className="space-y-4 text-white/40 leading-relaxed">
                 <p>
-                  Gunner AI was built out of a real problem. Running a wholesaling team, I spent hours every week listening to call recordings, trying to figure out who needed coaching and who was letting deals slip.
+                  Gunner AI was built out of a real problem. Running wholesaling teams with 10+ reps, we spent hours every week listening to call recordings, trying to figure out who needed coaching and who was letting deals slip.
                 </p>
                 <p>
-                  I tried every sales tool on the market — none of them understood real estate wholesaling. So I built Gunner. Today, 50+ wholesaling teams use it to score calls, coach their teams, and close more deals without the manual grind.
+                  We tried every sales tool on the market — none of them understood real estate wholesaling. The generic call analytics tools didn't know what an ARV was, couldn't tell if a rep was building rapport or wasting time, and had no idea what a good acquisition call sounds like.
+                </p>
+                <p>
+                  So we built Gunner. Purpose-built for wholesalers, by wholesalers. It grades calls the way an experienced operations manager would — but it does it instantly, for every single call, without ever taking a day off.
                 </p>
                 <p className="font-medium text-white/70">
-                  This is the tool I wish I had.
+                  This is the tool we wish we had when we started scaling.
                 </p>
               </div>
             </div>
@@ -1135,11 +1144,18 @@ export default function Landing() {
             Start your {trialDays}-day free trial and see exactly how Gunner AI can increase your team's close rate in the next 30 days.
           </p>
 
-          <Link href="/signup">
-            <Button size="lg" className="bg-gradient-to-r from-[#c41e3a] to-[#a01830] hover:from-[#d42040] hover:to-[#b01e38] text-white rounded-xl text-lg px-10 h-14 gap-2 font-bold shadow-xl shadow-[#c41e3a]/25 hover:shadow-[#c41e3a]/40 transition-all duration-300 hover:-translate-y-0.5">
-              Start {trialDays}-Day Free Trial <ArrowRight className="h-5 w-5" />
-            </Button>
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/signup">
+              <Button size="lg" className="bg-gradient-to-r from-[#c41e3a] to-[#a01830] hover:from-[#d42040] hover:to-[#b01e38] text-white rounded-xl text-lg px-10 h-14 gap-2 font-bold shadow-xl shadow-[#c41e3a]/25 hover:shadow-[#c41e3a]/40 transition-all duration-300 hover:-translate-y-0.5">
+                Start {trialDays}-Day Free Trial <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
+            <a href="mailto:corey@getgunner.ai?subject=Gunner%20AI%20Demo%20Request&body=Hi%20Corey%2C%0A%0AI%27d%20like%20to%20schedule%20a%20demo%20of%20Gunner%20AI%20for%20my%20team.%0A%0ATeam%20size%3A%20%0ACurrent%20CRM%3A%20%0A%0AThanks!">
+              <Button size="lg" variant="outline" className="border-white/10 text-white/70 hover:text-white hover:bg-white/[0.06] hover:border-white/20 rounded-xl text-lg px-10 h-14 gap-2 font-bold bg-transparent transition-all duration-300">
+                <MessageSquare className="h-5 w-5" /> Book a Demo
+              </Button>
+            </a>
+          </div>
 
           <p className="text-sm text-white/20 mt-6">
             {trialDays}-day free trial. Credit card required. Cancel anytime.
@@ -1195,9 +1211,9 @@ export default function Landing() {
               <h4 className="text-sm font-semibold text-white/60 mb-4">Support</h4>
               <ul className="space-y-2.5">
                 <li>
-                  <button onClick={() => scrollTo("final-cta")} className="text-sm text-white/25 hover:text-white/60 transition-colors">
-                    Contact Us
-                  </button>
+                  <a href="mailto:corey@getgunner.ai" className="text-sm text-white/25 hover:text-white/60 transition-colors">
+                    corey@getgunner.ai
+                  </a>
                 </li>
                 <li>
                   <Link href="/signup" className="text-sm text-white/25 hover:text-white/60 transition-colors">

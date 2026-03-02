@@ -8,7 +8,7 @@
  * This engine thinks like an Acquisition Manager reviewing the pipeline,
  * NOT a call coach reviewing technique.
  */
-import { getDb, getGhlUserIdMap } from "./db";
+import { getDb, getGhlUserIdMap, resetDbConnection } from "./db";
 import { calls, callGrades, opportunities, teamMembers, coachMessages, users } from "../drizzle/schema";
 import { eq, and, desc, gte, isNull, inArray, sql, not, lt } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
@@ -4509,7 +4509,7 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
     return result;
   }
 
-  const db = await getDb();
+  let db = await getDb();
   if (!db) return result;
 
   try {
@@ -4539,9 +4539,28 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
         if (refreshed > 0) {
           console.log(`[OpportunityDetection] Refreshed ${refreshed} active opportunity summaries for tenant ${tenant.id}`);
         }
-      } catch (tenantError) {
-        console.error(`[OpportunityDetection] Error scanning tenant ${tenant.id}:`, tenantError);
-        result.errors++;
+      } catch (tenantError: any) {
+        const isTransient = tenantError?.cause?.code === 'ECONNRESET'
+          || tenantError?.message?.includes('ECONNRESET')
+          || tenantError?.message?.includes('Connection lost');
+        if (isTransient) {
+          console.warn(`[OpportunityDetection] Transient DB error for tenant ${tenant.id}, resetting connection and retrying...`);
+          resetDbConnection();
+          db = await getDb();
+          if (db) {
+            try {
+              await scanTenant(db, tenant.id, result);
+            } catch (retryErr) {
+              console.error(`[OpportunityDetection] Retry also failed for tenant ${tenant.id}:`, retryErr);
+              result.errors++;
+            }
+          } else {
+            result.errors++;
+          }
+        } else {
+          console.error(`[OpportunityDetection] Error scanning tenant ${tenant.id}:`, tenantError);
+          result.errors++;
+        }
       }
     }
   } catch (error) {
