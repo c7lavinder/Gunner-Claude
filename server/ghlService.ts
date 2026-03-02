@@ -1126,6 +1126,8 @@ async function retryStuckCalls(): Promise<void> {
     const allTenants = await getAllTenants();
     let totalReset = 0;
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // Shorter backoff for pending calls that were never picked up - no reason to wait long
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
     // Shorter backoff for 404 errors - recordings may become available within minutes
     const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
 
@@ -1138,11 +1140,12 @@ async function retryStuckCalls(): Promise<void> {
         call.updatedAt && new Date(call.updatedAt) < oneHourAgo
       );
 
-      // Also catch calls stuck at 'pending' for >1 hour — these were never picked up
+      // Also catch calls stuck at 'pending' for >10 min — these were never picked up
+      // (reduced from 1 hour: pending calls should process immediately, so 10 min is plenty)
       const stuckPending = allCalls.filter((call: any) =>
         call.status === 'pending' &&
         call.recordingUrl && // Must have a recording to process
-        call.updatedAt && new Date(call.updatedAt) < oneHourAgo
+        call.updatedAt && new Date(call.updatedAt) < tenMinAgo
       );
 
       // Failed calls with 404 errors (recording not yet available) - retry after 15 min

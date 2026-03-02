@@ -1,0 +1,21 @@
+{
+  "query": "SELECT id, contactName, teamMemberName, status, duration, classification, classificationReason, createdAt, updatedAt FROM calls WHERE id = 2850051;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, teamMemberName, status, duration, classification, classificationReason, createdAt, updatedAt FROM calls WHERE id = 2850051;",
+  "rows": [
+    {
+      "id": "2850051",
+      "contactName": "Vada Oberlin",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "classificationReason": "Homeowner answered, confirmed ownership, and immediately stated they were not interested in selling, asking to be removed from the list.",
+      "createdAt": "2026-03-02 20:04:01",
+      "updatedAt": "2026-03-02 20:04:05"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tteamMemberName\tstatus\tduration\tclassification\tclassificationReason\tcreatedAt\tupdatedAt\n2850051\tVada Oberlin\tMirna Razo\tskipped\t30\ttoo_short\tHomeowner answered, confirmed ownership, and immediately stated they were not interested in selling, asking to be removed from the list.\t2026-03-02 20:04:01\t2026-03-02 20:04:05\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}

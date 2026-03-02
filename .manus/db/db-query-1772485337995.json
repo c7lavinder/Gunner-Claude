@@ -1,0 +1,120 @@
+{
+  "query": "SELECT id, contactName, teamMemberName, status, duration, classification, recordingUrl, createdAt, updatedAt FROM calls WHERE contactName LIKE '%Michael Woody%' OR (teamMemberName LIKE '%Mirna Razo%' AND duration BETWEEN 25 AND 35 AND createdAt > DATE_SUB(NOW(), INTERVAL 1 DAY)) ORDER BY createdAt DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, teamMemberName, status, duration, classification, recordingUrl, createdAt, updatedAt FROM calls WHERE contactName LIKE '%Michael Woody%' OR (teamMemberName LIKE '%Mirna Razo%' AND duration BETWEEN 25 AND 35 AND createdAt > DATE_SUB(NOW(), INTERVAL 1 DAY)) ORDER BY createdAt DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "2850070",
+      "contactName": "Michael Woody",
+      "teamMemberName": "Mirna Razo",
+      "status": "pending",
+      "duration": "30",
+      "classification": "pending",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162077348-1772484488413-0o7oz.mp3",
+      "createdAt": "2026-03-02 20:48:17",
+      "updatedAt": "2026-03-02 20:48:17"
+    },
+    {
+      "id": "2850066",
+      "contactName": "Kenneth Hutchison",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162068969-1772483876131-5phgyg.mp3",
+      "createdAt": "2026-03-02 20:38:04",
+      "updatedAt": "2026-03-02 20:38:28"
+    },
+    {
+      "id": "2850051",
+      "contactName": "Vada Oberlin",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162046632-1772481840720-j7b7s.mp3",
+      "createdAt": "2026-03-02 20:04:01",
+      "updatedAt": "2026-03-02 20:04:05"
+    },
+    {
+      "id": "2850045",
+      "contactName": "Regan Candelario",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162033446-1772480743962-m0jf0i.mp3",
+      "createdAt": "2026-03-02 19:45:48",
+      "updatedAt": "2026-03-02 19:46:04"
+    },
+    {
+      "id": "2850040",
+      "contactName": "Nichole Kirtley",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162029809-1772480392018-8yh6lw.mp3",
+      "createdAt": "2026-03-02 19:39:52",
+      "updatedAt": "2026-03-02 19:40:03"
+    },
+    {
+      "id": "2850034",
+      "contactName": "Dora Harper",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162024041-1772479918722-c4s3pb.mp3",
+      "createdAt": "2026-03-02 19:32:36",
+      "updatedAt": "2026-03-02 20:33:20"
+    },
+    {
+      "id": "2850024",
+      "contactName": "Richard Hall",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162007111-1772478513552-4jfkvl.mp3",
+      "createdAt": "2026-03-02 19:08:35",
+      "updatedAt": "2026-03-02 19:08:53"
+    },
+    {
+      "id": "2850014",
+      "contactName": "Michael Lynn",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162002469-1772478107876-7nytry.mp3",
+      "createdAt": "2026-03-02 19:01:48",
+      "updatedAt": "2026-03-02 19:01:52"
+    },
+    {
+      "id": "2820124",
+      "contactName": "Paul Hloska",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1161931594-1772471952541-6gg1b.mp3",
+      "createdAt": "2026-03-02 17:19:23",
+      "updatedAt": "2026-03-02 17:20:06"
+    },
+    {
+      "id": "2820078",
+      "contactName": "J Brad J Stephenson",
+      "teamMemberName": "Mirna Razo",
+      "status": "skipped",
+      "duration": "30",
+      "classification": "too_short",
+      "recordingUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1161895373-1772468333723-rm5l2c.mp3",
+      "createdAt": "2026-03-02 16:18:57",
+      "updatedAt": "2026-03-02 16:19:05"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontactName\tteamMemberName\tstatus\tduration\tclassification\trecordingUrl\tcreatedAt\tupdatedAt\n2850070\tMichael Woody\tMirna Razo\tpending\t30\tpending\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162077348-1772484488413-0o7oz.mp3\t2026-03-02 20:48:17\t2026-03-02 20:48:17\n2850066\tKenneth Hutchison\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162068969-1772483876131-5phgyg.mp3\t2026-03-02 20:38:04\t2026-03-02 20:38:28\n2850051\tVada Oberlin\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162046632-1772481840720-j7b7s.mp3\t2026-03-02 20:04:01\t2026-03-02 20:04:05\n2850045\tRegan Candelario\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162033446-1772480743962-m0jf0i.mp3\t2026-03-02 19:45:48\t2026-03-02 19:46:04\n2850040\tNichole Kirtley\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162029809-1772480392018-8yh6lw.mp3\t2026-03-02 19:39:52\t2026-03-02 19:40:03\n2850034\tDora Harper\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162024041-1772479918722-c4s3pb.mp3\t2026-03-02 19:32:36\t2026-03-02 20:33:20\n2850024\tRichard Hall\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162007111-1772478513552-4jfkvl.mp3\t2026-03-02 19:08:35\t2026-03-02 19:08:53\n2850014\tMichael Lynn\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1162002469-1772478107876-7nytry.mp3\t2026-03-02 19:01:48\t2026-03-02 19:01:52\n2820124\tPaul Hloska\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1161931594-1772471952541-6gg1b.mp3\t2026-03-02 17:19:23\t2026-03-02 17:20:06\n2820078\tJ Brad J Stephenson\tMirna Razo\tskipped\t30\ttoo_short\thttps://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/calls/batchdialer-1161895373-1772468333723-rm5l2c.mp3\t2026-03-02 16:18:57\t2026-03-02 16:19:05\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

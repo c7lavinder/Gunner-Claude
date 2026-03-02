@@ -3737,3 +3737,4 @@
 - [x] Auto Next Steps: Create new follow-up task when needed
 - [x] Auto Next Steps: Suggest appointment on the right calendar when something is scheduled in the call
 - [x] Show completed/pushed action history on Next Steps tab so any team member can see what was done for a call
+- [x] Bug: Michael Woody call (Mirna Razo, 0:30) stuck in "Queued" status for 13+ minutes — reduced pending retry threshold from 1 hour to 10 minutes
