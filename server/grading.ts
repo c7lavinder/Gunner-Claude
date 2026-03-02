@@ -527,13 +527,24 @@ ${rubric.description}
 GRADING PHILOSOPHY:
 Reps have different communication styles. Some follow scripts closely; others achieve the same goals conversationally. Both approaches are valid. When evaluating criteria, focus on WHETHER the rep accomplished the goal of each criterion, not just whether they used specific scripted phrases. A rep who naturally sets expectations through conversational framing (e.g., "Do you have a couple minutes? Just want to see if we're a good fit to work together") should receive credit for Setting Expectations, even if they didn't use the exact scripted approach. Award full points when the goal is clearly achieved regardless of style. Award partial points when the goal is partially achieved. Only give zero when the behavior is completely absent.
 
-EARLY DISQUALIFICATION AWARENESS:
-Some calls are quick disqualifications where the rep correctly identifies that the lead is not viable. Common DQ reasons include: property not in buybox (manufactured home, commercial, land-only, fully remodeled), seller has no motivation (just curious, not interested, going to list with agent), property not in service area, wrong number, or seller is hostile/uncooperative. When a call is a legitimate early DQ:
-- DO NOT penalize for skipping deep qualification (Property Condition, Motivation Extraction, Price Discussion) on a clearly dead lead. A 2-4 minute DQ call should NOT be graded the same as a 15-minute qualification call.
-- DO grade on: (1) Did the rep ask at least 1-2 probing questions to CONFIRM the DQ is real before giving up? (e.g., "Are you set on listing?" / "Is there any flexibility?" / "What if we could close quickly?") (2) Did they correctly identify the DQ reason? (3) Did they exit professionally? (4) Did they leave the door open? ("If anything changes, feel free to reach out")
-- A rep who quickly identifies a dead lead and moves on efficiently is doing their job WELL — don't punish speed on bad leads.
-- HOWEVER, if the transcript shows the rep gave up too easily without any probing (e.g., seller says "I'm thinking about listing" and rep immediately says "OK, good luck" without asking why or exploring alternatives), that IS a legitimate area for improvement.
-- For DQ calls, score the criteria that were actually relevant. For criteria that were skipped because the call was a DQ, give a neutral score (50-70% of max points) with feedback like "Not applicable — call was correctly identified as a disqualification" rather than 0.
+EARLY DISQUALIFICATION AWARENESS — THIS IS CRITICAL:
+Efficient disqualification is one of the MOST IMPORTANT skills in sales. A rep who quickly identifies a dead lead and moves on to the next call is MORE valuable than one who wastes 15 minutes qualifying a deal that was never going to work. Grade DQ calls accordingly — a clean, fast, correct DQ is an A/B-level performance, NOT a failure.
+
+Common legitimate DQ reasons: property not in buybox (manufactured home, commercial, land-only, fully remodeled, too expensive), seller has zero motivation (just curious, going to list with agent, not interested at all), property not in service area, seller's price expectations are wildly above what works for an investor, wrong number, or seller is hostile/uncooperative.
+
+When a call is a legitimate early DQ:
+- DO NOT penalize for skipping deep qualification steps. If the deal is clearly dead, there is NO reason to run the full script. Skipping Property Condition, Motivation Extraction, Price Discussion, etc. on a dead lead is the CORRECT behavior.
+- For criteria that were intentionally skipped because the call was a DQ, give 75-90% of max points with feedback like "Not applicable — call was correctly disqualified. Skipping this step was the right call." Do NOT give 0 or 50% for correctly skipping irrelevant steps.
+- A 2-4 minute DQ call that correctly identifies a dead lead should score 70-90% overall (B to A range), not 30-50%.
+- Grade DQ calls on THESE factors instead: (1) Did the rep correctly identify WHY the lead doesn't work? (2) Was the exit professional and respectful? (3) Did they leave the door open where appropriate? (4) Was the call efficient — did they avoid wasting time once the DQ was clear?
+- Probing questions before DQ are nice-to-have, NOT required. If the seller says "I'm going to list with my realtor friend, the house is fully renovated" — the rep does NOT need to ask "are you sure?" or "what if we could close quickly?" The DQ reason is already obvious. Only penalize for lack of probing when the DQ reason is genuinely ambiguous.
+- HOWEVER, if the transcript shows the rep gave up on a lead that actually HAD potential (e.g., seller expressed some motivation but rep didn't explore it), that IS a legitimate area for improvement. The key question is: Was the DQ CORRECT? If yes, reward it.
+
+Examples of GOOD DQ behavior (should score B+ or higher):
+- Seller says property is fully remodeled and they want $400K → rep recognizes it's not in buybox → ends call politely. Score: 80-90%.
+- Seller has no motivation, just got a mailer and was curious → rep confirms no interest → moves on. Score: 75-85%.
+- Property is out of service area or wrong property type → rep identifies quickly → exits professionally. Score: 80-90%.
+- Seller's price expectation is 2x what works for investor, no flexibility → rep recognizes the gap → disengages respectfully. Score: 75-90%.
 
 PRIOR CONTEXT AWARENESS:
 Reps often have information from previous conversations, text messages, CRM notes, or prior calls with the same lead. When the transcript shows evidence of prior context:

@@ -3725,3 +3725,4 @@
 - [x] Restore stat card icons but make them all uniform muted grey/light red (not eye-catching)
 - [x] Bug: Calls under 1 minute (e.g. 0:08) are showing up in call list — fixed by excluding status='skipped' from both getCallsWithPermissions and getCallsWithGrades
 - [x] Bug: Contact names not showing on calls — fixed: backfilled 4 existing null names from transcripts, added LLM-based name extraction fallback in processCall for future calls
+- [x] Grading: Adjust rubrics so effective disqualification calls are rewarded, not penalized with low grades (Daniel's feedback)
