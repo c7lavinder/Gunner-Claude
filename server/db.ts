@@ -461,6 +461,11 @@ export async function getCallsWithGrades(options: {
     conditions.push(inArray(calls.teamMemberName, options.teamMembers as any));
   }
 
+  // Exclude skipped calls (too_short, voicemail, no_answer, etc.) unless explicitly filtering for them
+  if (!options.statuses || !options.statuses.includes('skipped')) {
+    conditions.push(sql`${calls.status} != 'skipped'`);
+  }
+
   // Apply permission-based scoping: restrict to allowed team member IDs
   if (options.allowedTeamMemberIds && options.allowedTeamMemberIds !== 'all') {
     if (options.allowedTeamMemberIds.length === 0) {
@@ -2244,6 +2249,11 @@ export async function getCallsWithPermissions(
   // Always exclude calls that don't belong to any configured team member
   // (e.g., disposition team, admin staff calls that were imported before the webhook filter)
   conditions.push(sql`${calls.teamMemberId} IS NOT NULL`);
+
+  // Exclude skipped calls (too_short, voicemail, no_answer, etc.) unless explicitly requested
+  if (!options.status || options.status !== 'skipped') {
+    conditions.push(sql`${calls.status} != 'skipped'`);
+  }
 
   // Apply permission-based filtering (within tenant)
   if (permissionContext.teamRole === 'admin' || permissionContext.teamRole === 'super_admin' as any) {

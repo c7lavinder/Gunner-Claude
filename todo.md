@@ -3723,3 +3723,4 @@
 - [x] Bring Team page back into top nav header
 - [x] Enlarge logo in top left of screen
 - [x] Restore stat card icons but make them all uniform muted grey/light red (not eye-catching)
+- [x] Bug: Calls under 1 minute (e.g. 0:08) are showing up in call list — fixed by excluding status='skipped' from both getCallsWithPermissions and getCallsWithGrades
