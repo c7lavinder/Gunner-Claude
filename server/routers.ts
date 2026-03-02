@@ -5780,13 +5780,22 @@ Create content that:
           console.error("[AI Coach] Failed to fetch call context:", e);
         }
 
-        // Use LLM to parse the intent
+        // Step 1: Clean up sloppy/typo-filled user input before parsing
+        const { hasSignificantTypos, cleanupMessage } = await import("./messageCleanup");
+        let cleanedMessage = input.message;
+        if (hasSignificantTypos(input.message)) {
+          cleanedMessage = await cleanupMessage(input.message);
+        }
+
+        // Step 2: Use LLM to parse the intent
         const response = await invokeLLM({
           messages: [
             {
               role: "system",
               content: `You are an AI assistant that parses user requests into structured CRM actions.
 The user is a ${parseIndustryLabel} team member. Parse their natural language request into CRM actions.
+
+CRITICAL - CURRENT MESSAGE TAKES PRIORITY: The contact name mentioned in the CURRENT user message ALWAYS takes priority over any contact from conversation history. If the current message says "text Deanna Jonker", the action MUST target Deanna Jonker - NOT a contact from a previous conversation turn. Only use history contacts when the current message has NO contact name (e.g., "do it again", "try again").
 
 Available action types:
 1. add_note - Add a note to a contact (covers both contact notes and deal/opportunity notes)
@@ -5942,7 +5951,7 @@ ${instructionContext}`
                 ? `[Previous response: ${msg.content.substring(0, 500)}]` 
                 : `[ALREADY PROCESSED - context only, do NOT parse as new action] ${msg.content}`
             })) : []),
-            { role: "user", content: input.message }
+            { role: "user", content: cleanedMessage }
           ],
           response_format: {
             type: "json_schema",

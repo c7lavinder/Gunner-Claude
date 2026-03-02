@@ -3727,3 +3727,5 @@
 - [x] Bug: Contact names not showing on calls — fixed: backfilled 4 existing null names from transcripts, added LLM-based name extraction fallback in processCall for future calls
 - [x] Grading: Adjust rubrics so effective disqualification calls are rewarded, not penalized with low grades (Daniel's feedback)
 - [x] Bug: Last names not showing on some calls — fixed: 3-tier name resolution (contact_cache -> GHL API -> LLM transcript), backfilled 3 calls, 2 remaining (Esteban/Barbara) have no last name in any source
+- [x] AI Coach: Clean up sloppy/typo-filled user input before processing actions (e.g. "adn ehy denan" -> "and hey Deanna")
+- [x] AI Coach: Match actions to the correct contact mentioned in the current message, not previous conversation context (e.g. Kyle asked about Deanna Jonker but got Barbara Thompson task)
