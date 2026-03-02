@@ -3731,3 +3731,8 @@
 - [x] AI Coach: Match actions to the correct contact mentioned in the current message, not previous conversation context (e.g. Kyle asked about Deanna Jonker but got Barbara Thompson task)
 - [x] Bug: 2:19 call (Brent Walker / Daniel Lozano, 139s) showing "No Recording" — should not happen for calls over 1 minute; fix GHL recording fetch logic
 - [x] Bug: "Check Off Task" action from AI next steps fails with "I couldn't determine the action type" (Received: check_off_task) — need to add check_off_task as a recognized action type
+- [x] Auto-generate Next Steps after every graded call — analyze transcript and pre-populate action cards automatically
+- [x] Auto Next Steps: Detailed first-person contact note (motivation, timeline, condition, decision makers, price expectations)
+- [x] Auto Next Steps: Check off current task that triggered the call
+- [x] Auto Next Steps: Create new follow-up task when needed
+- [x] Auto Next Steps: Suggest appointment on the right calendar when something is scheduled in the call

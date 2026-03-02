@@ -1856,40 +1856,91 @@ async function generateAndStoreNextSteps(callId: number): Promise<void> {
     } catch (e) {
       console.warn("[NextSteps-Auto] Workflow fetch error (non-blocking):", e);
     }
+    try {
+      const { getCalendarsForTenant } = await import("./ghlActions");
+      const calendars = await getCalendarsForTenant(tenantId).catch((e: any) => {
+        console.warn("[NextSteps-Auto] Calendar fetch failed (non-blocking):", e?.message || e);
+        return [] as any[];
+      });
+      if (calendars.length > 0) {
+        availableOptions += "\nAVAILABLE CALENDARS:\n";
+        for (const c of calendars) {
+          availableOptions += `- "${c.name}"${c.description ? ` (${c.description})` : ""}\n`;
+        }
+      }
+    } catch (e) {
+      console.warn("[NextSteps-Auto] Calendar fetch error (non-blocking):", e);
+    }
   }
 
-  const systemPrompt = `You are an AI assistant for a real estate flipping/wholesaling business. Analyze the call transcript and all context to suggest specific, actionable next steps.
+  // 7. Fetch user style preferences
+  let styleContext = "";
+  if (tenantId) {
+    try {
+      const { getDb: getDbStyle } = await import("./db");
+      const dbStyle = await getDbStyle();
+      if (dbStyle && call.teamMemberId) {
+        const { buildPreferenceContext } = await import("./coachPreferences");
+        styleContext = await buildPreferenceContext(tenantId, call.teamMemberId);
+        if (styleContext) {
+          styleContext = "\n\nUSER STYLE PREFERENCES (match this style when drafting content):\n" + styleContext;
+        }
+      }
+    } catch (e) {
+      console.warn("[NextSteps-Auto] Style preferences fetch error (non-blocking):", e);
+    }
+  }
 
-RULES:
-- Only suggest actions clearly warranted by the call content and communication history
-- Learn from recent action patterns — match what the team typically does
-- Use EXACT pipeline stage names and workflow names from available options
-- For tasks, suggest realistic due dates based on what was discussed
-- For SMS, draft messages referencing specific call details (property, price, concerns)
-- Do NOT suggest redundant actions (check existing tasks first)
-- Do NOT suggest actions contradicting the call outcome
-- Each action needs a clear reason WHY based on the call context
-- Keep note content comprehensive but concise — include call summary, key details, and motivation type
+  const systemPrompt = `You are an AI assistant for a real estate flipping/wholesaling business. After every graded call, you generate a set of ready-to-push CRM actions. Your job is to analyze the full transcript, prior communication, existing tasks, and pipeline position to produce the EXACT actions the rep needs.
+
+CORE ACTIONS — generate these in order of priority:
+
+1. ADD NOTE (ALWAYS generate this for every meaningful call)
+   Write a well-rounded, first-person paragraph from the rep's perspective. NOT a template with labels.
+   The note must read naturally, as if the rep wrote it themselves. Cover these details when discussed:
+   - Exact motivation (divorce, inherited property, behind on payments, relocating, tired landlord, etc.)
+   - Timeline ("wants to close by end of April", "no rush, exploring options", "needs to move by summer")
+   - Property condition ("roof needs replacing", "kitchen gutted", "move-in ready", "foundation issues")
+   - Decision makers ("wife needs to agree", "waiting on brother who's co-owner", "has power of attorney")
+   - Price expectations or offers discussed ("expecting $180k", "I offered $145k and they said they'd think about it")
+   - Occupancy and tenant situation if mentioned
+   - Any liens, back taxes, or title issues mentioned
+   - Next steps discussed on the call ("agreed to a walkthrough Tuesday", "will call back after talking to spouse")
+   Example good note: "I spoke with Maria about her property on 4th Street. She inherited the house from her mother last year and doesn't want to deal with the upkeep since she lives out of state in Texas. The roof has some damage and the HVAC is about 15 years old, but the foundation is solid. She mentioned she'd like to get around $160k but is open to negotiation since she wants to close quickly, ideally within 30 days. Her brother is co-owner and she said he's on board with selling. I'm going to schedule a walkthrough for this Thursday to get a better look at the property and put together an offer."
+   Do NOT write generic notes like "Motivated seller, follow up needed." Be specific.
+
+2. CHECK OFF TASK (when a pending task exists that this call fulfilled)
+   Look at the EXISTING TASKS list. If there's a pending task like "Follow up with [contact]" or "Call [contact]" that this call satisfies, suggest checking it off using the task title as the keyword.
+
+3. CREATE TASK (when follow-up is needed)
+   If the call discussed a follow-up action that isn't calendar-worthy ("call back in a week", "send comps", "follow up after they talk to spouse"), create a task with a specific title and realistic due date.
+   Task titles should be specific: "Follow up with Maria on 4th St offer" not "Follow up".
+
+4. CREATE APPOINTMENT (when a meeting/call was specifically scheduled)
+   Only suggest this when the call explicitly discussed scheduling something — a walkthrough, an offer call, a meeting.
+   CALENDAR SELECTION: Use "Offer Call" calendar for phone-based offer presentations. Use "Walkthrough" calendar for in-person property visits. Match the calendar name to what's available in the AVAILABLE CALENDARS list.
+   Include the contact name and property address in the appointment title.
+
+ADDITIONAL ACTIONS (suggest only when clearly warranted):
+- change_pipeline_stage: Only if the call outcome clearly warrants moving forward or backward
+- send_sms: Only if a follow-up text was discussed or is clearly appropriate
+- add_to_workflow / remove_from_workflow: Only if the contact should enter/exit an automation
 
 PIPELINE STAGE CHANGE RULES (CRITICAL):
 - ALWAYS check the CURRENT PIPELINE POSITION before suggesting any stage change
-- NEVER suggest moving to the stage the contact is ALREADY in — that's pointless
-- NEVER suggest moving BACKWARD in the pipeline unless the deal fell apart completely
-- Only suggest moving FORWARD (to a later stage) based on what happened on the call
-- If the contact is already at or past "Made Offer", do NOT suggest "Made Offer" again
-- If an offer was REJECTED: move to a follow-up stage (e.g., "Follow Up", "Nurture", "Long Term Follow Up") — NOT back to "Made Offer"
-- If an offer was ACCEPTED: move forward past "Made Offer" to the next stage (e.g., "Under Contract", "Closing", "Pending")
-- If the seller needs time to think: keep them at current stage or move to follow-up, do NOT re-suggest the same stage
-- If the call was just a follow-up check-in with no new developments: do NOT suggest any stage change
-- Think about it: what stage should this contact ACTUALLY be in based on where they are NOW and what happened on THIS call?
+- NEVER suggest moving to the stage the contact is ALREADY in
+- NEVER suggest moving BACKWARD unless the deal fell apart completely
+- Only suggest moving FORWARD based on what happened on the call
+- If an offer was REJECTED: move to a follow-up stage, NOT back to "Made Offer"
+- If an offer was ACCEPTED: move forward to the next stage (e.g., "Under Contract")
+- If the call was just a check-in with no new developments: do NOT suggest any stage change
 
 Return JSON with "actions" array. Each action:
 - actionType: "check_off_task" | "update_task" | "create_task" | "add_note" | "create_appointment" | "change_pipeline_stage" | "send_sms" | "schedule_sms" | "add_to_workflow" | "remove_from_workflow"
 - reason: 1-2 sentence explanation
-- suggested: boolean
+- suggested: boolean (true for recommended actions)
 - payload: object with ALL of these fields (set unused ones to empty string ""):
-  noteBody, title, description, dueDate, taskKeyword, message, scheduledDate, scheduledTime, pipelineName, stageName, workflowName, startTime, endTime, calendarName
-  For add_note: fill noteBody with the actual note content. For create_task: fill title, description, dueDate. For change_pipeline_stage: fill pipelineName and stageName. For send_sms: fill message. Etc.`;
+  noteBody, title, description, dueDate, taskKeyword, message, scheduledDate, scheduledTime, pipelineName, stageName, workflowName, startTime, endTime, calendarName`;
 
   const userPrompt = `CALL DETAILS:
 - Contact: ${call.contactName || 'Unknown'}
@@ -1905,9 +1956,9 @@ GRADE: ${grade?.summary || 'No grade available'}
 
 TRANSCRIPT:
 ${(call.transcript || 'No transcript').substring(0, 8000)}
-${priorCallsSummary}${smsHistory}${existingTasks}${recentActionPatterns}${currentStageInfo}${availableOptions}
+${priorCallsSummary}${smsHistory}${existingTasks}${recentActionPatterns}${currentStageInfo}${availableOptions}${styleContext}
 
-Suggest the most relevant next steps for this lead. Remember: check the CURRENT PIPELINE POSITION before suggesting any stage changes — never suggest the stage they're already in.`;
+Generate the core next steps for this call. ALWAYS include a detailed first-person note covering motivation, timeline, condition, decision makers, and price expectations discussed. Check off any existing task this call fulfilled. Create a new follow-up task if needed. Suggest an appointment on the right calendar (Offer Call or Walkthrough) if something was scheduled. Check the CURRENT PIPELINE POSITION before suggesting any stage changes.`;
 
   const response = await invokeLLM({
     messages: [
