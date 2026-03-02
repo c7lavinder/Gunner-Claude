@@ -36,6 +36,7 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDemo } from "@/hooks/useDemo";
@@ -49,6 +50,7 @@ interface NextStepAction {
   payload: Record<string, any>;
   status: "pending" | "editing" | "pushing" | "pushed" | "failed" | "skipped";
   result?: string;
+  completedAt?: number;
 }
 
 const ACTION_TYPE_CONFIG: Record<string, {
@@ -678,10 +680,7 @@ function ActionCard({
 
   return (
     <div className={`border rounded-lg overflow-hidden transition-all border-l-4 ${config.borderColor} ${
-      action.status === "pushed" ? "opacity-70" :
-      action.status === "skipped" ? "opacity-50" :
-      action.status === "failed" ? "border-l-red-500" :
-      ""
+      action.status === "failed" ? "border-l-red-500" : ""
     }`}>
       {/* Header — action type + badges */}
       <div className={`flex items-center gap-2 px-4 py-2.5 ${config.bgColor}`}>
@@ -848,6 +847,20 @@ function ActionCard({
         )}
       </div>
 
+      {/* Completed timestamp footer */}
+      {isDone && action.completedAt && (
+        <div className="flex items-center gap-2 px-4 py-1.5 border-t bg-muted/20">
+          <History className="h-3 w-3 text-muted-foreground" />
+          <span className="text-[11px] text-muted-foreground">
+            {action.status === "pushed" ? "Pushed" : action.status === "skipped" ? "Skipped" : "Failed"}
+            {" "}
+            {new Date(action.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            {" at "}
+            {new Date(action.completedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+          </span>
+        </div>
+      )}
+
       {/* Action Buttons */}
       {!isDone && !isEditing && (
         <div className="flex items-center gap-2 px-4 py-2 border-t bg-muted/30">
@@ -950,6 +963,7 @@ export default function NextStepsTab({
             ? a.status
             : "pending" as const,
           result: a.result,
+          completedAt: a.updatedAt,
         }));
         setActions(mapped);
       }
@@ -1017,7 +1031,7 @@ export default function NextStepsTab({
       const resultMsg = result.success ? "Action completed successfully!" : (result.error || "Action failed");
 
       setActions(prev => prev.map(a =>
-        a.id === action.id ? { ...a, status: newStatus, result: resultMsg } : a
+        a.id === action.id ? { ...a, status: newStatus, result: resultMsg, completedAt: Date.now() } : a
       ));
 
       if (action.dbId) {
@@ -1040,7 +1054,7 @@ export default function NextStepsTab({
         ? "CRM is temporarily busy. Please wait a moment and try again."
         : errMsg;
       setActions(prev => prev.map(a =>
-        a.id === action.id ? { ...a, status: "failed" as const, result: friendlyMsg } : a
+        a.id === action.id ? { ...a, status: "failed" as const, result: friendlyMsg, completedAt: Date.now() } : a
       ));
       if (action.dbId) {
         updateStatusMutation.mutate({
@@ -1101,7 +1115,7 @@ export default function NextStepsTab({
 
   const handleSkip = (action: NextStepAction) => {
     setActions(prev => prev.map(a =>
-      a.id === action.id ? { ...a, status: "skipped" as const } : a
+      a.id === action.id ? { ...a, status: "skipped" as const, completedAt: Date.now() } : a
     ));
     if (action.dbId) {
       updateStatusMutation.mutate({
@@ -1219,7 +1233,11 @@ export default function NextStepsTab({
                   : "All steps processed"}
               </h3>
               <p className="text-xs text-muted-foreground">
-                Review, edit, and push each action to GHL
+                {pendingActions.length > 0
+                  ? "Review, edit, and push each action to GHL"
+                  : completedActions.length > 0
+                    ? "See what actions were taken for this call below"
+                    : "Review, edit, and push each action to GHL"}
               </p>
             </div>
             <div className="flex gap-2">
@@ -1328,12 +1346,15 @@ export default function NextStepsTab({
             </div>
           )}
 
-          {/* Completed Actions */}
+          {/* Action History — shows what was done for this call */}
           {completedActions.length > 0 && (
             <div className="space-y-3">
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Completed
-              </h4>
+              <div className="flex items-center gap-2 pt-2">
+                <History className="h-4 w-4 text-muted-foreground" />
+                <h4 className="text-sm font-semibold">
+                  Actions Taken ({completedActions.filter(a => a.status === "pushed").length} pushed{completedActions.filter(a => a.status === "skipped").length > 0 ? `, ${completedActions.filter(a => a.status === "skipped").length} skipped` : ""}{completedActions.filter(a => a.status === "failed").length > 0 ? `, ${completedActions.filter(a => a.status === "failed").length} failed` : ""})
+                </h4>
+              </div>
               {completedActions.map(action => (
                 <ActionCard
                   key={action.id}

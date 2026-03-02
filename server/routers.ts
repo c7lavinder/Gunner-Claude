@@ -1501,6 +1501,7 @@ Generate the core next steps for this call. ALWAYS include a detailed first-pers
           payload: r.payload || {},
           status: r.status || "pending",
           result: r.result || undefined,
+          updatedAt: r.updatedAt ? r.updatedAt.getTime() : undefined,
         }));
 
         return {

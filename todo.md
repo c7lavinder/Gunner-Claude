@@ -3736,3 +3736,4 @@
 - [x] Auto Next Steps: Check off current task that triggered the call
 - [x] Auto Next Steps: Create new follow-up task when needed
 - [x] Auto Next Steps: Suggest appointment on the right calendar when something is scheduled in the call
+- [x] Show completed/pushed action history on Next Steps tab so any team member can see what was done for a call
