@@ -3711,3 +3711,4 @@
 - [x] Improve getgunner.ai landing page conversion (social proof, demo video embed, clearer CTA)
 - [x] Draft 5 LinkedIn posts for Corey to review and post manually
 - [x] Remove "No Recording" unprocessed call cards from Call Inbox — added Dismiss button + Dismiss All + 'dismissed' status
+- [x] Move Team/Settings/Admin tabs from top nav into profile dropdown menu

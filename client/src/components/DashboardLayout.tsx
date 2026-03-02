@@ -39,7 +39,6 @@ const getMenuItems = (
       { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
       { icon: Phone, label: "Calls", path: "/calls" },
       { icon: BookOpen, label: "Training", path: "/training" },
-      { icon: Users, label: "Profile", path: "/team" },
     ];
   }
 
@@ -54,16 +53,6 @@ const getMenuItems = (
   }
 
   items.push({ icon: BookOpen, label: "Training", path: "/training" });
-  items.push({ icon: Users, label: "Team", path: "/team" });
-
-  if (isAdmin && !isDemo) {
-    items.push({ icon: Building2, label: "Settings", path: "/settings" });
-  }
-
-  const isPlatformOwner = false;
-  if ((isSuperAdmin || isPlatformOwner) && !isDemo) {
-    items.push({ icon: Shield, label: "Admin", path: "/admin" });
-  }
 
   return items;
 };
@@ -371,12 +360,37 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
                   </p>
                 </div>
                 <DropdownMenuItem
+                  onClick={() => setLocation('/team')}
+                  className="cursor-pointer gap-2 py-2.5"
+                >
+                  <Users className="h-4 w-4" />
+                  Team
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={() => setLocation('/profile')}
                   className="cursor-pointer gap-2 py-2.5"
                 >
                   <Settings className="h-4 w-4" />
                   Account Settings
                 </DropdownMenuItem>
+                {(effectiveRole === 'admin' || effectiveTeamRole === 'admin' || effectiveIsTenantAdmin === 'true') && !isDemo && (
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/settings')}
+                    className="cursor-pointer gap-2 py-2.5"
+                  >
+                    <Building2 className="h-4 w-4" />
+                    Organization Settings
+                  </DropdownMenuItem>
+                )}
+                {(effectiveRole === 'super_admin') && !isDemo && (
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/admin')}
+                    className="cursor-pointer gap-2 py-2.5"
+                  >
+                    <Shield className="h-4 w-4" />
+                    Admin
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={logout}
