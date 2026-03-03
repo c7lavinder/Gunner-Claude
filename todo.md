@@ -3772,3 +3772,6 @@
 - [x] Add "Actions" column/area with edit and delete icons
 - [x] Add delete task backend endpoint (deleteTask in ghlActions + router)
 - [x] Add edit task backend endpoint (editTask in router, uses existing updateTask)
+
+## Task Center Bug Fixes (Round 3)
+- [x] Bug: Task body shows raw HTML tags instead of clean text — fixed by adding stripHtml() helper that uses DOM parser to extract clean text

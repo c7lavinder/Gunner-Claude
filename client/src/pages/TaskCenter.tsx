@@ -50,6 +50,17 @@ import {
   Trash2,
 } from "lucide-react";
 
+// ─── HELPERS ────────────────────────────────────────────
+
+/** Strip HTML tags and decode common entities to get clean plain text */
+function stripHtml(html: string): string {
+  if (!html) return "";
+  // Use a temporary DOM element to parse HTML and extract text
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return (tmp.textContent || tmp.innerText || "").trim();
+}
+
 // ─── TYPES ──────────────────────────────────────────────
 
 interface Task {
@@ -364,8 +375,8 @@ function TaskExpandedSection({ task }: { task: Task }) {
     >
       {/* Task description */}
       {task.body && (
-        <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
-          {task.body}
+        <p className="text-sm leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>
+          {stripHtml(task.body)}
         </p>
       )}
 
