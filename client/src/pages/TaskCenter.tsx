@@ -368,6 +368,16 @@ function TaskExpandedSection({ task }: { task: Task }) {
   const [showAptDialog, setShowAptDialog] = useState(false);
   const [smsMessage, setSmsMessage] = useState("");
   const [noteBody, setNoteBody] = useState("");
+
+  // SMS/Call from/to state
+  const [smsFromGhlUserId, setSmsFromGhlUserId] = useState<string>(""); // defaults to current user
+  const [smsFromOpen, setSmsFromOpen] = useState(false);
+  const [callFromGhlUserId, setCallFromGhlUserId] = useState<string>("");
+  const [callFromOpen, setCallFromOpen] = useState(false);
+  // SMS scheduling
+  const [smsScheduleMode, setSmsScheduleMode] = useState<"now" | "later">("now");
+  const [smsScheduleDate, setSmsScheduleDate] = useState("");
+  const [smsScheduleTime, setSmsScheduleTime] = useState("");
   const [selectedWorkflow, setSelectedWorkflow] = useState("");
   const [workflowAction, setWorkflowAction] = useState<"add" | "remove">("add");
   const [workflowSearchOpen, setWorkflowSearchOpen] = useState(false);
@@ -380,12 +390,30 @@ function TaskExpandedSection({ task }: { task: Task }) {
   const [aptCalendar, setAptCalendar] = useState("");
   const [aptNotes, setAptNotes] = useState("");
 
+  // Helper: get sender info for a given GHL user ID (or current user if empty)
+  const getSenderInfo = (ghlUserId: string) => {
+    if (!ghlUserId || !userPhoneInfo?.teamMembers) {
+      return { name: userPhoneInfo?.userName || "You", phone: userPhoneInfo?.userPhone || null };
+    }
+    const member = userPhoneInfo.teamMembers.find(m => m.ghlUserId === ghlUserId);
+    if (member) return { name: member.name, phone: member.lcPhone };
+    return { name: userPhoneInfo?.userName || "You", phone: userPhoneInfo?.userPhone || null };
+  };
+
   // Mutations
   const sendSmsMutation = trpc.taskCenter.sendSms.useMutation({
-    onSuccess: () => {
-      toast.success(`SMS sent to ${task.contactName || "contact"}`);
+    onSuccess: (data: any) => {
+      if (data?.scheduled) {
+        toast.success(`SMS scheduled for ${new Date(data.scheduledAt).toLocaleString()}`);
+      } else {
+        toast.success(`SMS sent to ${task.contactName || "contact"}`);
+      }
       setShowSmsDialog(false);
       setSmsMessage("");
+      setSmsFromGhlUserId("");
+      setSmsScheduleMode("now");
+      setSmsScheduleDate("");
+      setSmsScheduleTime("");
     },
     onError: (err) => toast.error("Failed to send SMS", { description: err.message }),
   });
@@ -627,34 +655,79 @@ function TaskExpandedSection({ task }: { task: Task }) {
       ) : null}
 
       {/* Call Confirmation Dialog */}
-      <Dialog open={showCallDialog} onOpenChange={setShowCallDialog}>
+      <Dialog open={showCallDialog} onOpenChange={(open) => {
+        setShowCallDialog(open);
+        if (!open) { setCallFromGhlUserId(""); setCallFromOpen(false); }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Call {task.contactName || "Contact"}</DialogTitle>
             <DialogDescription>Confirm call details before dialing.</DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg p-4 space-y-3" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm">
-                <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>From</div>
-                <div className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{userPhoneInfo?.userName || "You"}</div>
-                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{userPhoneInfo?.userPhone ? formatPhone(userPhoneInfo.userPhone) : "Default line"}</div>
-              </div>
-              <ArrowRight className="h-5 w-5 mx-3 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
-              <div className="text-sm text-right">
-                <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>To</div>
-                <div className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
-                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{task.contactPhone ? formatPhone(task.contactPhone) : "No number"}</div>
-              </div>
+          <div className="space-y-3">
+            {/* From selector */}
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>From</Label>
+              <Popover open={callFromOpen} onOpenChange={setCallFromOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-auto py-2">
+                    <div className="text-left">
+                      <div className="font-semibold text-sm">{getSenderInfo(callFromGhlUserId).name}</div>
+                      <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>
+                        {getSenderInfo(callFromGhlUserId).phone ? formatPhone(getSenderInfo(callFromGhlUserId).phone!) : "No phone on file"}
+                      </div>
+                    </div>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search team members..." />
+                    <CommandList className="max-h-[200px]">
+                      <CommandEmpty>No team members found.</CommandEmpty>
+                      <CommandGroup>
+                        {(userPhoneInfo?.teamMembers || []).map(m => (
+                          <CommandItem
+                            key={m.ghlUserId}
+                            value={m.name}
+                            onSelect={() => { setCallFromGhlUserId(m.ghlUserId); setCallFromOpen(false); }}
+                          >
+                            <Check className={`mr-2 h-4 w-4 ${callFromGhlUserId === m.ghlUserId ? "opacity-100" : "opacity-0"}`} />
+                            <div>
+                              <div className="text-sm">{m.name}</div>
+                              <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{m.lcPhone ? formatPhone(m.lcPhone) : "No phone"}</div>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            {/* Arrow */}
+            <div className="flex justify-center">
+              <ArrowRight className="h-5 w-5 rotate-90" style={{ color: "var(--g-text-tertiary)" }} />
+            </div>
+            {/* To (contact - read only) */}
+            <div className="rounded-lg p-3" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+              <Label className="text-xs font-medium mb-1 block" style={{ color: "var(--g-text-tertiary)" }}>To</Label>
+              <div className="font-semibold text-sm" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
+              <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{task.contactPhone ? formatPhone(task.contactPhone) : "No phone on file"}</div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCallDialog(false)}>Cancel</Button>
             <Button
               onClick={() => {
-                window.open(`tel:${task.contactPhone}`, "_self");
+                const sender = getSenderInfo(callFromGhlUserId);
+                const dialNumber = sender.phone || task.contactPhone;
+                if (task.contactPhone) {
+                  window.open(`tel:${task.contactPhone}`, "_self");
+                }
                 setShowCallDialog(false);
               }}
+              disabled={!task.contactPhone}
             >
               <Phone className="h-4 w-4 mr-1.5" />
               Call Now
@@ -664,47 +737,143 @@ function TaskExpandedSection({ task }: { task: Task }) {
       </Dialog>
 
       {/* SMS Dialog */}
-      <Dialog open={showSmsDialog} onOpenChange={setShowSmsDialog}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={showSmsDialog} onOpenChange={(open) => {
+        setShowSmsDialog(open);
+        if (!open) {
+          setSmsFromGhlUserId(""); setSmsFromOpen(false);
+          setSmsScheduleMode("now"); setSmsScheduleDate(""); setSmsScheduleTime("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Send SMS to {task.contactName || "Contact"}</DialogTitle>
-            <DialogDescription>Text message details.</DialogDescription>
+            <DialogDescription>Choose sender, recipient, and when to send.</DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg p-4 mb-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm">
-                <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>From</div>
-                <div className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{userPhoneInfo?.userName || "You"}</div>
-                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{userPhoneInfo?.userPhone ? formatPhone(userPhoneInfo.userPhone) : "Default line"}</div>
+          <div className="space-y-4">
+            {/* From / To row */}
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
+              {/* From selector */}
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>From</Label>
+                <Popover open={smsFromOpen} onOpenChange={setSmsFromOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-auto py-2 text-left">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm truncate">{getSenderInfo(smsFromGhlUserId).name}</div>
+                        <div className="text-xs truncate" style={{ color: "var(--g-text-secondary)" }}>
+                          {getSenderInfo(smsFromGhlUserId).phone ? formatPhone(getSenderInfo(smsFromGhlUserId).phone!) : "No phone on file"}
+                        </div>
+                      </div>
+                      <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search team members..." />
+                      <CommandList className="max-h-[200px]">
+                        <CommandEmpty>No team members found.</CommandEmpty>
+                        <CommandGroup>
+                          {(userPhoneInfo?.teamMembers || []).map(m => (
+                            <CommandItem
+                              key={m.ghlUserId}
+                              value={m.name}
+                              onSelect={() => { setSmsFromGhlUserId(m.ghlUserId); setSmsFromOpen(false); }}
+                            >
+                              <Check className={`mr-2 h-4 w-4 ${smsFromGhlUserId === m.ghlUserId ? "opacity-100" : "opacity-0"}`} />
+                              <div>
+                                <div className="text-sm">{m.name}</div>
+                                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{m.lcPhone ? formatPhone(m.lcPhone) : "No phone"}</div>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
-              <ArrowRight className="h-5 w-5 mx-3 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
-              <div className="text-sm text-right">
-                <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>To</div>
-                <div className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
-                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{task.contactPhone ? formatPhone(task.contactPhone) : "No number"}</div>
+              {/* Arrow */}
+              <div className="flex items-center pt-6">
+                <ArrowRight className="h-5 w-5" style={{ color: "var(--g-text-tertiary)" }} />
+              </div>
+              {/* To (contact - read only) */}
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>To</Label>
+                <div className="rounded-lg p-2 h-auto" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                  <div className="font-semibold text-sm truncate" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
+                  <div className="text-xs truncate" style={{ color: "var(--g-text-secondary)" }}>{task.contactPhone ? formatPhone(task.contactPhone) : "No phone on file"}</div>
+                </div>
               </div>
             </div>
+
+            {/* Message */}
+            <Textarea
+              placeholder="Type your message..."
+              value={smsMessage}
+              onChange={(e) => setSmsMessage(e.target.value)}
+              rows={3}
+            />
+
+            {/* Send Now / Schedule toggle */}
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <Button
+                  variant={smsScheduleMode === "now" ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setSmsScheduleMode("now")}
+                >
+                  Send Now
+                </Button>
+                <Button
+                  variant={smsScheduleMode === "later" ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setSmsScheduleMode("later")}
+                >
+                  <Clock className="h-3.5 w-3.5 mr-1.5" />
+                  Schedule for Later
+                </Button>
+              </div>
+              {smsScheduleMode === "later" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs mb-1 block">Date</Label>
+                    <Input type="date" value={smsScheduleDate} onChange={(e) => setSmsScheduleDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">Time</Label>
+                    <Input type="time" value={smsScheduleTime} onChange={(e) => setSmsScheduleTime(e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <Textarea
-            placeholder="Type your message..."
-            value={smsMessage}
-            onChange={(e) => setSmsMessage(e.target.value)}
-            rows={3}
-          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSmsDialog(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() =>
-                sendSmsMutation.mutate({
+              onClick={() => {
+                const mutationInput: any = {
                   contactId: task.contactId,
                   message: smsMessage,
-                })
-              }
-              disabled={!smsMessage.trim() || sendSmsMutation.isPending}
+                };
+                if (smsFromGhlUserId) {
+                  mutationInput.fromGhlUserId = smsFromGhlUserId;
+                }
+                if (smsScheduleMode === "later" && smsScheduleDate && smsScheduleTime) {
+                  mutationInput.scheduledAt = new Date(`${smsScheduleDate}T${smsScheduleTime}`).toISOString();
+                }
+                sendSmsMutation.mutate(mutationInput);
+              }}
+              disabled={!smsMessage.trim() || sendSmsMutation.isPending || (smsScheduleMode === "later" && (!smsScheduleDate || !smsScheduleTime))}
             >
-              {sendSmsMutation.isPending ? "Sending..." : "Send"}
+              {sendSmsMutation.isPending
+                ? "Sending..."
+                : smsScheduleMode === "later"
+                  ? "Schedule SMS"
+                  : "Send Now"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -6804,15 +6804,26 @@ selectedTimezone: { type: "string" },
         };
       }),
 
-    // Get current user's phone info for SMS/Call display
+    // Get current user's phone info + all team members with phones for SMS/Call display
     getUserPhoneInfo: protectedProcedure
       .query(async ({ ctx }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
-        const { getTeamMemberByUserId } = await import("./db");
+        const { getTeamMemberByUserId, getTeamMembers } = await import("./db");
         const member = await getTeamMemberByUserId(ctx.user.id);
+        const allMembers = await getTeamMembers(ctx.user.tenantId);
         return {
           userName: member?.name || ctx.user.name || "You",
           userPhone: member?.lcPhone || null,
+          userGhlUserId: member?.ghlUserId || null,
+          // All team members with GHL user IDs (for the From selector)
+          teamMembers: allMembers
+            .filter(m => m.ghlUserId)
+            .map(m => ({
+              id: m.id,
+              name: m.name,
+              ghlUserId: m.ghlUserId!,
+              lcPhone: m.lcPhone || null,
+            })),
         };
       }),
 
@@ -6843,18 +6854,51 @@ selectedTimezone: { type: "string" },
         return await updateTask(ctx.user.tenantId, input.contactId, input.taskId, { completed: true });
       }),
 
-    // Send SMS to a contact
+    // Send SMS to a contact (supports send now or schedule for later)
     sendSms: protectedProcedure
       .input(z.object({
         contactId: z.string(),
         message: z.string().min(1),
+        fromGhlUserId: z.string().optional(), // Override sender — defaults to current user
+        scheduledAt: z.string().optional(), // ISO date string for scheduled send
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         const { sendSms } = await import("./ghlActions");
         const { getTeamMemberByUserId } = await import("./db");
-        const member = await getTeamMemberByUserId(ctx.user.id);
-        return await sendSms(ctx.user.tenantId, input.contactId, input.message, member?.ghlUserId || undefined);
+        
+        // Determine sender: use override or fall back to current user
+        let senderGhlUserId: string | undefined;
+        if (input.fromGhlUserId) {
+          senderGhlUserId = input.fromGhlUserId;
+        } else {
+          const member = await getTeamMemberByUserId(ctx.user.id);
+          senderGhlUserId = member?.ghlUserId || undefined;
+        }
+        
+        // If scheduled, we need to use GHL's scheduling. For now, GHL conversations API
+        // doesn't natively support scheduling, so we'll store it and handle via a simple timeout.
+        if (input.scheduledAt) {
+          const scheduledTime = new Date(input.scheduledAt).getTime();
+          const now = Date.now();
+          const delay = scheduledTime - now;
+          if (delay <= 0) {
+            // Already past — send immediately
+            return await sendSms(ctx.user.tenantId, input.contactId, input.message, senderGhlUserId);
+          }
+          // Schedule with setTimeout (works for short delays up to ~24h in-process)
+          setTimeout(async () => {
+            try {
+              await sendSms(ctx.user.tenantId!, input.contactId, input.message, senderGhlUserId);
+              console.log(`[ScheduledSMS] Sent scheduled SMS to ${input.contactId} at ${input.scheduledAt}`);
+            } catch (e) {
+              console.error(`[ScheduledSMS] Failed to send scheduled SMS:`, e);
+            }
+          }, delay);
+          return { success: true, scheduled: true, scheduledAt: input.scheduledAt };
+        }
+        
+        return await sendSms(ctx.user.tenantId, input.contactId, input.message, senderGhlUserId);
       }),
 
     // Add a note to a contact

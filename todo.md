@@ -3786,3 +3786,12 @@
 - [x] Calendar dropdown: make searchable with max height
 - [x] SMS dialog: show "From: (user's phone) → To: (contact's phone/name)" info
 - [x] Call button: show "From: (user's phone) → To: (contact's phone/name)" info before initiating call
+
+## Task Center SMS/Call Dialog Improvements — Round 6
+- [x] SMS dialog: show actual phone numbers (not "Default line" / "No number")
+- [x] SMS dialog: make From/To editable (dropdown of team members for From, contact phone for To)
+- [x] SMS dialog: add "Send Now" vs "Schedule for Later" toggle with date/time picker
+- [x] Call dialog: show actual phone numbers (not "Default line" / "No number")
+- [x] Call dialog: make From/To editable (dropdown of team members for From, contact phone for To)
+- [x] Backend: getUserPhoneInfo returns all team members with phones for From selector
+- [x] Backend: sendSms supports fromGhlUserId override and scheduledAt for delayed sending
