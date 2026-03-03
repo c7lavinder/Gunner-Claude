@@ -31,6 +31,15 @@ export interface GHLTask {
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
+  contactAddress?: string;
+}
+
+/** Lightweight contact info extracted from GHL contacts/search response */
+interface ContactInfo {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
 }
 
 export interface TaskWithContext extends GHLTask {
@@ -114,19 +123,22 @@ export async function searchLocationTasks(
 
   try {
     // Step 1: Get recently updated contacts from GHL (broad pool)
-    const ghlContactIds = await getRecentGHLContactIds(creds, 500);
-    console.log(`[TaskCenter] Got ${ghlContactIds.size} contacts from GHL search (tenant ${tenantId})`);
+    // Returns a Map of contactId -> ContactInfo so we can enrich tasks
+    const ghlContactMap = await getRecentGHLContacts(creds, 500);
+    console.log(`[TaskCenter] Got ${ghlContactMap.size} contacts from GHL search (tenant ${tenantId})`);
 
     // Step 2: Also get contacts from our calls DB
     const dbContactIds = await getCallsDBContactIds(tenantId, 200);
     console.log(`[TaskCenter] Got ${dbContactIds.length} contacts from calls DB (tenant ${tenantId})`);
 
-    // Merge into a unique set
+    // Merge DB contacts into the set (they won't have info yet, but we'll still scan them)
     for (const id of dbContactIds) {
-      ghlContactIds.add(id);
+      if (!ghlContactMap.has(id)) {
+        ghlContactMap.set(id, { name: "", phone: "", email: "", address: "" });
+      }
     }
 
-    const allContactIds = Array.from(ghlContactIds);
+    const allContactIds = Array.from(ghlContactMap.keys());
     console.log(`[TaskCenter] Total unique contacts to scan: ${allContactIds.length}`);
 
     if (allContactIds.length === 0) {
@@ -143,6 +155,7 @@ export async function searchLocationTasks(
         batch.map(async (contactId) => {
           try {
             const tasks = await getTasksForContact(tenantId, contactId);
+            const info = ghlContactMap.get(contactId);
             return tasks.map((t: any) => ({
               id: t.id,
               title: t.title || "Untitled Task",
@@ -151,9 +164,10 @@ export async function searchLocationTasks(
               dueDate: t.dueDate || "",
               completed: !!t.completed,
               contactId,
-              contactName: "",
-              contactPhone: "",
-              contactEmail: "",
+              contactName: info?.name || "",
+              contactPhone: info?.phone || "",
+              contactEmail: info?.email || "",
+              contactAddress: info?.address || "",
             }));
           } catch (error: any) {
             // Silently skip contacts that fail (deleted, etc.)
@@ -206,14 +220,15 @@ function applyTaskFilters(
 }
 
 /**
- * Get recently updated contact IDs from GHL using POST /contacts/search.
+ * Get recently updated contacts from GHL using POST /contacts/search.
+ * Returns a Map of contactId -> ContactInfo with name, phone, email, address.
  * Paginates through up to `maxContacts` contacts sorted by most recently updated.
  */
-async function getRecentGHLContactIds(
+async function getRecentGHLContacts(
   creds: { apiKey: string; locationId: string },
   maxContacts: number
-): Promise<Set<string>> {
-  const contactIds = new Set<string>();
+): Promise<Map<string, ContactInfo>> {
+  const contactMap = new Map<string, ContactInfo>();
   const PAGE_SIZE = 100;
   const maxPages = Math.ceil(maxContacts / PAGE_SIZE);
 
@@ -234,7 +249,20 @@ async function getRecentGHLContactIds(
 
       const contacts = data.contacts || [];
       for (const c of contacts) {
-        if (c.id) contactIds.add(c.id);
+        if (c.id) {
+          const firstName = c.firstName || "";
+          const lastName = c.lastName || "";
+          const fullName = `${firstName} ${lastName}`.trim() || c.name || "";
+          // Build address from available fields
+          const addressParts = [c.address1, c.city, c.state, c.postalCode].filter(Boolean);
+          const address = addressParts.join(", ");
+          contactMap.set(c.id, {
+            name: fullName,
+            phone: c.phone || "",
+            email: c.email || "",
+            address,
+          });
+        }
       }
 
       // Stop if we got fewer than a full page (no more results)
@@ -245,7 +273,7 @@ async function getRecentGHLContactIds(
     }
   }
 
-  return contactIds;
+  return contactMap;
 }
 
 /**

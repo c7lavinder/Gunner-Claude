@@ -52,6 +52,7 @@ interface Task {
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
+  contactAddress?: string;
   overdueDays: number;
   group: "overdue" | "today" | "upcoming";
   assignedMemberName?: string;
@@ -154,7 +155,12 @@ function TaskRow({
           <div className="flex items-center gap-3 mt-0.5 text-xs" style={{ color: "var(--g-text-secondary)" }}>
             {task.contactId && (
               <span className="font-medium" style={{ color: "var(--g-text-primary)", opacity: 0.7 }}>
-                {task.contactName || `Contact`}
+                {task.contactName || "Contact"}
+              </span>
+            )}
+            {task.contactAddress && (
+              <span className="truncate max-w-[250px]" title={task.contactAddress}>
+                {task.contactAddress}
               </span>
             )}
             {task.assignedMemberName && (

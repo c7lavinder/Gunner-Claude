@@ -252,8 +252,8 @@ describe("TaskCenter Service — Module Structure", () => {
 
   it("searchLocationTasks uses contact-level task API via getTasksForContact", () => {
     expect(serviceSource).toContain("getTasksForContact");
-    // Uses the per-contact API since location-level search requires locations/tasks.readonly scope
-    expect(serviceSource).toContain("contactIds");
+    // Uses GHL contacts/search + calls DB contacts, then fetches tasks per-contact
+    expect(serviceSource).toContain("allContactIds");
   });
 
   it("searchLocationTasks handles errors gracefully by returning empty array", () => {
