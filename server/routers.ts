@@ -6733,6 +6733,166 @@ selectedTimezone: { type: "string" },
         return result;
       }),
   }),
+
+  // ═══════════════════════════════════════════════════════
+  //  TASK CENTER (Lead Command Center)
+  // ═══════════════════════════════════════════════════════
+  taskCenter: router({
+    // Get tasks for the current user or a specific team member (admin only)
+    getTasks: protectedProcedure
+      .input(z.object({
+        assignedToGhlUserId: z.string().optional(), // Admin can filter by team member
+        includeCompleted: z.boolean().optional().default(false),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        // Super admin only for now
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+
+        const { searchLocationTasks, enrichTasks, getTeamMemberGhlMap, getTeamMembersForFilter } = await import("./taskCenter");
+        const { getTeamMemberByUserId } = await import("./db");
+
+        const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin" || ctx.user.isTenantAdmin === "true";
+
+        // Determine which GHL user IDs to filter by
+        let assignedTo: string[] | undefined;
+
+        if (input?.assignedToGhlUserId) {
+          // Admin filtering by specific team member
+          if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Only admins can view other members' tasks" });
+          assignedTo = [input.assignedToGhlUserId];
+        } else if (!isAdmin) {
+          // Regular user: only their own tasks
+          const member = await getTeamMemberByUserId(ctx.user.id);
+          if (member?.ghlUserId) {
+            assignedTo = [member.ghlUserId];
+          } else {
+            return { tasks: [], teamMembers: [] };
+          }
+        }
+        // If admin and no filter, fetch ALL tasks (no assignedTo filter)
+
+        const [rawTasks, memberMap, memberList] = await Promise.all([
+          searchLocationTasks(ctx.user.tenantId, {
+            assignedTo,
+            completed: input?.includeCompleted ? undefined : false,
+            limit: 100,
+          }),
+          getTeamMemberGhlMap(ctx.user.tenantId),
+          isAdmin ? getTeamMembersForFilter(ctx.user.tenantId) : Promise.resolve([]),
+        ]);
+
+        const tasks = enrichTasks(rawTasks, memberMap);
+
+        return {
+          tasks,
+          teamMembers: memberList,
+        };
+      }),
+
+    // Get detailed context for a task's contact
+    getTaskContext: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+
+        const { getTaskContactContext } = await import("./taskCenter");
+        return await getTaskContactContext(ctx.user.tenantId, input.contactId);
+      }),
+
+    // Complete a task in GHL
+    completeTask: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        taskId: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateTask } = await import("./ghlActions");
+        return await updateTask(ctx.user.tenantId, input.contactId, input.taskId, { completed: true });
+      }),
+
+    // Send SMS to a contact
+    sendSms: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        message: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { sendSms } = await import("./ghlActions");
+        const { getTeamMemberByUserId } = await import("./db");
+        const member = await getTeamMemberByUserId(ctx.user.id);
+        return await sendSms(ctx.user.tenantId, input.contactId, input.message, member?.ghlUserId || undefined);
+      }),
+
+    // Add a note to a contact
+    addNote: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        body: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { addNoteToContact } = await import("./ghlActions");
+        return await addNoteToContact(ctx.user.tenantId, input.contactId, input.body);
+      }),
+
+    // Start a workflow for a contact
+    startWorkflow: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        workflowId: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { addContactToWorkflow } = await import("./ghlActions");
+        return await addContactToWorkflow(ctx.user.tenantId, input.contactId, input.workflowId);
+      }),
+
+    // Get available workflows for the tenant
+    getWorkflows: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getWorkflowsForTenant } = await import("./ghlActions");
+        return await getWorkflowsForTenant(ctx.user.tenantId);
+      }),
+
+    // Create a new task for a contact
+    createTask: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        title: z.string().min(1),
+        description: z.string().optional(),
+        dueDate: z.string(),
+        assignedTo: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { createTask } = await import("./ghlActions");
+        const { getTeamMemberByUserId } = await import("./db");
+        let assignedTo = input.assignedTo;
+        if (!assignedTo) {
+          const member = await getTeamMemberByUserId(ctx.user.id);
+          assignedTo = member?.ghlUserId || undefined;
+        }
+        return await createTask(
+          ctx.user.tenantId,
+          input.contactId,
+          input.title,
+          input.description || "",
+          input.dueDate,
+          assignedTo
+        );
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

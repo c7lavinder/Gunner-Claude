@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import {
   LayoutDashboard, LogOut, Users, Phone, BarChart3, BookOpen,
   Building2, Shield, AlertTriangle, Settings, Sun, Moon, Menu, X,
-  Zap,
+  Zap, ClipboardList,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, Redirect, useSearch } from "wouter";
@@ -47,6 +47,10 @@ const getMenuItems = (
     { icon: Phone, label: "Calls", path: "/calls" },
     // Analytics hidden per user request
   ];
+
+  if (isAdmin || isSuperAdmin) {
+    items.push({ icon: ClipboardList, label: "Tasks", path: "/tasks" });
+  }
 
   if (isAdmin) {
     items.push({ icon: AlertTriangle, label: "Signals", path: "/opportunities" });

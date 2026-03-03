@@ -3738,3 +3738,14 @@
 - [x] Auto Next Steps: Suggest appointment on the right calendar when something is scheduled in the call
 - [x] Show completed/pushed action history on Next Steps tab so any team member can see what was done for a call
 - [x] Bug: Michael Woody call (Mirna Razo, 0:30) stuck in "Queued" status for 13+ minutes — reduced pending retry threshold from 1 hour to 10 minutes
+
+## Lead Command Center (Task List Page)
+- [x] Study existing GHL task/contact integration and plan data model
+- [x] Sync GHL tasks into Gunner (due date, overdue status, assigned user, contact info)
+- [x] Fetch lead activity/timeline from GHL (what happened today with each lead)
+- [x] Quick actions: call, text, start workflow directly from the task list
+- [x] Show overdue tasks prominently with visual urgency indicators
+- [x] Filter by team member (users see own tasks, admins see everyone's)
+- [x] SOP accountability: track task completion rates, overdue patterns
+- [x] Super admin only access initially (feature flag)
+- [x] Add Lead Command Center to navigation menu

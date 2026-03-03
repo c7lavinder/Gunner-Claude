@@ -34,6 +34,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LeadGenDashboard from "./pages/LeadGenDashboard";
 import Opportunities from "./pages/Opportunities";
 import CoachActivityLog from "./pages/CoachActivityLog";
+import TaskCenter from "./pages/TaskCenter";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 import { trpc } from "@/lib/trpc";
 
@@ -71,6 +72,7 @@ function ProtectedRouter() {
       </Route>
       <Route path="/calls" component={CallInbox} />
       <Route path="/coach-log" component={CoachActivityLog} />
+      <Route path="/tasks" component={TaskCenter} />
       <Route path="/calls/:id" component={CallDetail} />
       <Route path="/team" component={TeamMembers} />
       <Route path="/analytics" component={Analytics} />
