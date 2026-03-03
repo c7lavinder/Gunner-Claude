@@ -679,7 +679,8 @@ export default function TaskCenter() {
       (t: Task) =>
         t.title.toLowerCase().includes(q) ||
         (t.contactName && t.contactName.toLowerCase().includes(q)) ||
-        (t.assignedMemberName && t.assignedMemberName.toLowerCase().includes(q))
+        (t.assignedMemberName && t.assignedMemberName.toLowerCase().includes(q)) ||
+        (t.contactAddress && t.contactAddress.toLowerCase().includes(q))
     );
   }, [data?.tasks, searchQuery]);
 

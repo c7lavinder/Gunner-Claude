@@ -3757,3 +3757,10 @@
 - [x] Show property address on task rows (from GHL contacts/search response)
 - [x] Bug: Refresh button doesn't fetch fresh data — fixed by adding refreshTasks mutation that clears server-side cache
 - [x] Bug: Contact name and address still showing as "Contact" — fixed: sort must be array (was causing 422), address field is 'address' not 'address1'
+- [x] Bug: Task Center missing tasks — GHL shows 6 overdue for Kyle Barks but Gunner only shows 1 overdue + 2 upcoming. Fixed by switching to GHL location-level task search API (POST /locations/:locationId/tasks/search) which returns ALL tasks.
+- [x] Bug: Task Center shows different tasks each page load — Fixed by switching from contact-based scanning to GHL location-level task search API. Now returns all 251+ tasks consistently in ~1.2 seconds.
+- [x] Migrated Task Center backend from contact-scanning approach to GHL location-level task search API (requires locations/tasks.readonly scope)
+- [x] Added address cache enrichment (30-min TTL) to add property addresses from GHL contacts/search
+- [x] Added cursor-based pagination (searchAfter) for fetching all tasks across multiple pages
+- [x] Frontend search now also matches against contact address
+- [x] 61 vitest tests passing for Task Center

@@ -250,10 +250,42 @@ describe("TaskCenter Service — Module Structure", () => {
     expect(serviceSource).toContain("export async function getTeamMembersForFilter");
   });
 
-  it("searchLocationTasks uses contact-level task API via getTasksForContact", () => {
-    expect(serviceSource).toContain("getTasksForContact");
-    // Uses GHL contacts/search + calls DB contacts, then fetches tasks per-contact
-    expect(serviceSource).toContain("allContactIds");
+  it("searchLocationTasks uses location-level task search API", () => {
+    // Uses POST /locations/:locationId/tasks/search endpoint
+    expect(serviceSource).toContain("/locations/");
+    expect(serviceSource).toContain("/tasks/search");
+    expect(serviceSource).toContain("searchAfter");
+  });
+
+  it("searchLocationTasks parses contactDetails from API response", () => {
+    // The API returns contactDetails.firstName and contactDetails.lastName inline
+    expect(serviceSource).toContain("contactDetails?.firstName");
+    expect(serviceSource).toContain("contactDetails?.lastName");
+  });
+
+  it("has address cache for enriching tasks with contact addresses", () => {
+    expect(serviceSource).toContain("addressCache");
+    expect(serviceSource).toContain("ensureAddressCache");
+    expect(serviceSource).toContain("ADDRESS_CACHE_TTL_MS");
+  });
+
+  it("uses cursor-based pagination with searchAfter", () => {
+    const funcBody = serviceSource.substring(
+      serviceSource.indexOf("export async function searchLocationTasks"),
+      serviceSource.indexOf("function applyTaskFilters")
+    );
+    expect(funcBody).toContain("searchAfter");
+    expect(funcBody).toContain("PAGE_SIZE");
+    expect(funcBody).toContain("MAX_PAGES");
+  });
+
+  it("caches all tasks before applying filters", () => {
+    const funcBody = serviceSource.substring(
+      serviceSource.indexOf("export async function searchLocationTasks"),
+      serviceSource.indexOf("function applyTaskFilters")
+    );
+    expect(funcBody).toContain("taskCache.set");
+    expect(funcBody).toContain("applyTaskFilters");
   });
 
   it("searchLocationTasks handles errors gracefully by returning empty array", () => {
@@ -332,6 +364,10 @@ describe("TaskCenter Frontend — Component Structure", () => {
   it("has search functionality", () => {
     expect(componentSource).toContain("searchQuery");
     expect(componentSource).toContain("Search tasks or contacts");
+  });
+
+  it("search filter includes contact address matching", () => {
+    expect(componentSource).toContain("t.contactAddress && t.contactAddress.toLowerCase().includes(q)");
   });
 
   it("displays three task groups: overdue, today, upcoming", () => {
