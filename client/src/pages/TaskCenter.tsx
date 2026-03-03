@@ -626,6 +626,26 @@ export default function TaskCenter() {
     }
   );
 
+  // Refresh tasks mutation (clears server-side cache)
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshTasksMutation = trpc.taskCenter.refreshTasks.useMutation({
+    onSuccess: () => {
+      utils.taskCenter.getTasks.invalidate();
+    },
+  });
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshTasksMutation.mutateAsync();
+      toast.success("Tasks refreshed");
+    } catch (err) {
+      toast.error("Failed to refresh tasks");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Complete task mutation
   const completeTaskMutation = trpc.taskCenter.completeTask.useMutation({
     onMutate: ({ taskId }) => {
@@ -786,10 +806,10 @@ export default function TaskCenter() {
           variant="outline"
           size="sm"
           className="h-9"
-          onClick={() => refetch()}
-          disabled={isLoading}
+          onClick={handleRefresh}
+          disabled={isLoading || isRefreshing}
         >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-4 w-4 ${isLoading || isRefreshing ? "animate-spin" : ""}`} />
         </Button>
       </div>
 
@@ -812,7 +832,7 @@ export default function TaskCenter() {
           <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
             Failed to load tasks. Make sure GHL is connected and try again.
           </p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => refetch()}>
+          <Button variant="outline" size="sm" className="mt-3" onClick={handleRefresh}>
             Retry
           </Button>
         </div>

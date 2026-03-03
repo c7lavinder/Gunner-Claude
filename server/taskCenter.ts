@@ -85,6 +85,23 @@ function getCachedTasks(key: string): GHLTask[] | null {
   return cached.tasks;
 }
 
+/**
+ * Clear the task cache for a tenant so the next fetch pulls fresh data from GHL.
+ */
+export function clearTaskCache(tenantId: number): void {
+  const keysToDelete: string[] = [];
+  const allKeys = Array.from(taskCache.keys());
+  for (const key of allKeys) {
+    if (key.startsWith(`tasks:${tenantId}`)) {
+      keysToDelete.push(key);
+    }
+  }
+  for (const key of keysToDelete) {
+    taskCache.delete(key);
+  }
+  console.log(`[TaskCenter] Cleared ${keysToDelete.length} cache entries for tenant ${tenantId}`);
+}
+
 // ─── TASK SEARCH ────────────────────────────────────────
 
 /**
@@ -243,7 +260,8 @@ async function getRecentGHLContacts(
           page,
           pageLimit: PAGE_SIZE,
           // Sort by most recently updated to get active contacts first
-          sort: { field: "dateUpdated", direction: "desc" },
+          // GHL requires sort to be an array
+          sort: [{ field: "dateUpdated", direction: "desc" }],
         }
       );
 
@@ -254,7 +272,8 @@ async function getRecentGHLContacts(
           const lastName = c.lastName || "";
           const fullName = `${firstName} ${lastName}`.trim() || c.name || "";
           // Build address from available fields
-          const addressParts = [c.address1, c.city, c.state, c.postalCode].filter(Boolean);
+          // GHL uses 'address' (not 'address1') in the contacts/search response
+          const addressParts = [c.address, c.city, c.state, c.postalCode].filter(Boolean);
           const address = addressParts.join(", ");
           contactMap.set(c.id, {
             name: fullName,

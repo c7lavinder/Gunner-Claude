@@ -3755,3 +3755,5 @@
 - [x] Bug: Task Center only shows 7 tasks — fixed by using GHL POST /contacts/search to scan 500 most recently updated contacts + 200 from calls DB
 - [x] Show contact name on task rows (from GHL contacts/search response)
 - [x] Show property address on task rows (from GHL contacts/search response)
+- [x] Bug: Refresh button doesn't fetch fresh data — fixed by adding refreshTasks mutation that clears server-side cache
+- [x] Bug: Contact name and address still showing as "Contact" — fixed: sort must be array (was causing 422), address field is 'address' not 'address1'

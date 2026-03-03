@@ -6738,6 +6738,18 @@ selectedTimezone: { type: "string" },
   //  TASK CENTER (Lead Command Center)
   // ═══════════════════════════════════════════════════════
   taskCenter: router({
+    // Force refresh tasks (clears server-side cache)
+    refreshTasks: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+        const { clearTaskCache } = await import("./taskCenter");
+        clearTaskCache(ctx.user.tenantId);
+        return { success: true };
+      }),
+
     // Get tasks for the current user or a specific team member (admin only)
     getTasks: protectedProcedure
       .input(z.object({
