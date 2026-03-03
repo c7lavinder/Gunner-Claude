@@ -94,22 +94,27 @@ export function clearTaskCache(tenantId: number): void {
 // The location task search API returns contactDetails with firstName/lastName
 // but NOT the address. We cache addresses from GHL contacts/search to enrich tasks.
 
-const addressCache = new Map<string, string>(); // contactId -> address
-let addressCacheFetchedAt = 0;
-const ADDRESS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+interface ContactCacheEntry {
+  address: string;
+  phone: string;
+  email: string;
+}
+const contactInfoCache = new Map<string, ContactCacheEntry>(); // contactId -> { address, phone, email }
+let contactInfoCacheFetchedAt = 0;
+const CONTACT_INFO_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Bulk-fetch contact addresses from GHL contacts/search and cache them.
  * Only re-fetches if the cache is stale.
  */
-async function ensureAddressCache(
+async function ensureContactInfoCache(
   creds: { apiKey: string; locationId: string }
 ): Promise<void> {
-  if (Date.now() - addressCacheFetchedAt < ADDRESS_CACHE_TTL_MS && addressCache.size > 0) {
+  if (Date.now() - contactInfoCacheFetchedAt < CONTACT_INFO_CACHE_TTL_MS && contactInfoCache.size > 0) {
     return; // Cache is still fresh
   }
 
-  console.log("[TaskCenter] Refreshing address cache from GHL contacts/search...");
+  console.log("[TaskCenter] Refreshing contact info cache from GHL contacts/search...");
   const PAGE_SIZE = 100;
   const MAX_PAGES = 20; // Up to 2000 contacts
 
@@ -131,22 +136,23 @@ async function ensureAddressCache(
       for (const c of contacts) {
         if (c.id) {
           const addressParts = [c.address, c.city, c.state, c.postalCode].filter(Boolean);
-          const address = addressParts.join(", ");
-          if (address) {
-            addressCache.set(c.id, address);
-          }
+          contactInfoCache.set(c.id, {
+            address: addressParts.join(", "),
+            phone: c.phone || "",
+            email: c.email || "",
+          });
         }
       }
 
       if (contacts.length < PAGE_SIZE) break;
     } catch (error: any) {
-      console.warn(`[TaskCenter] Address cache page ${page} failed:`, error?.message);
+      console.warn(`[TaskCenter] Contact info cache page ${page} failed:`, error?.message);
       break;
     }
   }
 
-  addressCacheFetchedAt = Date.now();
-  console.log(`[TaskCenter] Address cache refreshed: ${addressCache.size} contacts with addresses`);
+  contactInfoCacheFetchedAt = Date.now();
+  console.log(`[TaskCenter] Contact info cache refreshed: ${contactInfoCache.size} contacts`);
 }
 
 // ─── TASK SEARCH ────────────────────────────────────────
@@ -237,17 +243,19 @@ export async function searchLocationTasks(
 
     console.log(`[TaskCenter] Fetched ${allTasks.length} pending tasks from GHL location API (tenant ${tenantId})`);
 
-    // Enrich tasks with addresses from the address cache
-    // Do this in the background to not block the initial load
+    // Enrich tasks with contact info (address, phone, email) from cache
     try {
-      await ensureAddressCache(creds);
+      await ensureContactInfoCache(creds);
       for (const task of allTasks) {
-        if (task.contactId && addressCache.has(task.contactId)) {
-          task.contactAddress = addressCache.get(task.contactId) || "";
+        if (task.contactId && contactInfoCache.has(task.contactId)) {
+          const info = contactInfoCache.get(task.contactId)!;
+          task.contactAddress = info.address;
+          task.contactPhone = info.phone;
+          task.contactEmail = info.email;
         }
       }
     } catch (err: any) {
-      console.warn("[TaskCenter] Address enrichment failed (non-fatal):", err?.message);
+      console.warn("[TaskCenter] Contact info enrichment failed (non-fatal):", err?.message);
     }
 
     // Cache ALL tasks (before filtering)

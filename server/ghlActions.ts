@@ -2051,3 +2051,147 @@ export async function cancelAction(actionId: number): Promise<void> {
     .set({ status: "cancelled" })
     .where(eq(coachActionLog.id, actionId));
 }
+
+
+// ============ CONTACT CONVERSATION ACTIVITY ============
+
+/**
+ * Get today's activity for a contact: SMS sent, calls made, emails sent.
+ * Uses the GHL conversations API to search for the contact's conversation,
+ * then fetches messages filtered to today.
+ */
+export async function getContactTodayActivity(
+  tenantId: number,
+  contactId: string
+): Promise<{
+  smsSent: number;
+  callsMade: number;
+  emailsSent: number;
+  messages: Array<{
+    id: string;
+    type: string;
+    direction: string;
+    body: string;
+    dateAdded: string;
+    status?: string;
+  }>;
+}> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) return { smsSent: 0, callsMade: 0, emailsSent: 0, messages: [] };
+
+  try {
+    // Step 1: Find the conversation for this contact
+    const searchData = await ghlFetch(
+      creds,
+      `/conversations/search?locationId=${creds.locationId}&contactId=${contactId}`
+    );
+    const conversations = searchData.conversations || [];
+    if (conversations.length === 0) {
+      return { smsSent: 0, callsMade: 0, emailsSent: 0, messages: [] };
+    }
+
+    const conversationId = conversations[0].id;
+
+    // Step 2: Get recent messages (limit 100 to cover today's activity)
+    const msgData = await ghlFetch(
+      creds,
+      `/conversations/${conversationId}/messages?limit=100&type=TYPE_SMS,TYPE_CALL,TYPE_EMAIL`
+    );
+
+    const allMessages = msgData.messages?.messages || msgData.messages || [];
+
+    // Step 3: Filter to today's messages only
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
+
+    const todayMessages = allMessages.filter((m: any) => {
+      const msgDate = new Date(m.dateAdded || m.createdAt || 0);
+      return msgDate.getTime() >= todayMs;
+    });
+
+    let smsSent = 0;
+    let callsMade = 0;
+    let emailsSent = 0;
+    const formattedMessages: Array<{
+      id: string;
+      type: string;
+      direction: string;
+      body: string;
+      dateAdded: string;
+      status?: string;
+    }> = [];
+
+    for (const m of todayMessages) {
+      const msgType = (m.type || "").toUpperCase();
+      const direction = m.direction || "outbound";
+
+      if (msgType.includes("SMS")) smsSent++;
+      else if (msgType.includes("CALL")) callsMade++;
+      else if (msgType.includes("EMAIL")) emailsSent++;
+
+      formattedMessages.push({
+        id: m.id || m.messageId || "",
+        type: msgType.includes("SMS") ? "sms" : msgType.includes("CALL") ? "call" : msgType.includes("EMAIL") ? "email" : "other",
+        direction,
+        body: m.body || m.message || m.meta?.transcript || "",
+        dateAdded: m.dateAdded || m.createdAt || "",
+        status: m.status || undefined,
+      });
+    }
+
+    return { smsSent, callsMade, emailsSent, messages: formattedMessages };
+  } catch (error: any) {
+    console.error(`[GHLActions] getContactTodayActivity error for ${contactId}:`, error?.message);
+    return { smsSent: 0, callsMade: 0, emailsSent: 0, messages: [] };
+  }
+}
+
+// ============ GET CONTACT ENROLLED WORKFLOWS ============
+
+/**
+ * GHL doesn't have a direct API to list workflows a contact is enrolled in.
+ * However, we can check the contact's workflow enrollment by trying to fetch
+ * the contact and checking their workflow status.
+ * 
+ * Workaround: We'll track workflows added via Gunner in the local database,
+ * and also check the contact's tags/custom fields for workflow indicators.
+ * 
+ * For now, we return workflows that were added through Gunner's UI.
+ */
+export async function getContactWorkflowHistory(
+  tenantId: number,
+  contactId: string
+): Promise<Array<{ workflowId: string; workflowName: string; addedAt: string; action: string }>> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+
+    // Check the coach_action_log for workflow actions on this contact
+    const { and, eq, like, desc } = await import("drizzle-orm");
+    const results = await db.select()
+      .from(coachActionLog)
+      .where(
+        and(
+          eq(coachActionLog.tenantId, tenantId),
+          eq(coachActionLog.targetContactId, contactId),
+          like(coachActionLog.actionType, "%workflow%")
+        )
+      )
+      .orderBy(desc(coachActionLog.createdAt))
+      .limit(20);
+
+    return results.map(r => {
+      const params = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}) as any;
+      return {
+        workflowId: params.workflowId || "",
+        workflowName: params.workflowName || "Unknown Workflow",
+        addedAt: r.createdAt ? new Date(r.createdAt).toISOString() : "",
+        action: r.actionType?.includes("remove") ? "removed" : "added",
+      };
+    });
+  } catch (error: any) {
+    console.error(`[GHLActions] getContactWorkflowHistory error:`, error?.message);
+    return [];
+  }
+}

@@ -6842,6 +6842,36 @@ selectedTimezone: { type: "string" },
         return await getTaskContactContext(ctx.user.tenantId, input.contactId);
       }),
 
+    // Get today's activity for a contact (SMS, calls, emails)
+    getContactActivity: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+
+        const { getContactTodayActivity } = await import("./ghlActions");
+        return await getContactTodayActivity(ctx.user.tenantId, input.contactId);
+      }),
+
+    // Get workflow history for a contact (added/removed via Gunner)
+    getContactWorkflowHistory: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+
+        const { getContactWorkflowHistory } = await import("./ghlActions");
+        return await getContactWorkflowHistory(ctx.user.tenantId, input.contactId);
+      }),
+
     // Complete a task in GHL
     completeTask: protectedProcedure
       .input(z.object({

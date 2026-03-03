@@ -3795,3 +3795,10 @@
 - [x] Call dialog: make From/To editable (dropdown of team members for From, contact phone for To)
 - [x] Backend: getUserPhoneInfo returns all team members with phones for From selector
 - [x] Backend: sendSms supports fromGhlUserId override and scheduledAt for delayed sending
+
+## Task Center Improvements — Round 7
+- [x] Bug: Contact phone not showing — enriched from contactInfoCache (phone, email, address) via GHL contacts/search
+- [x] To field editable in SMS and Call dialogs — allow changing the contact/number
+- [x] Remove from Workflow only shows workflows the contact is currently enrolled in (tracked via coach_action_log)
+- [x] Today's Activity section — shows SMS sent, dials made, emails sent for this contact today (via GHL conversations API)
+- [x] Upcoming Automations — shows enrolled workflows from coach_action_log (GHL doesn't expose scheduled workflow steps)

@@ -263,10 +263,10 @@ describe("TaskCenter Service — Module Structure", () => {
     expect(serviceSource).toContain("contactDetails?.lastName");
   });
 
-  it("has address cache for enriching tasks with contact addresses", () => {
-    expect(serviceSource).toContain("addressCache");
-    expect(serviceSource).toContain("ensureAddressCache");
-    expect(serviceSource).toContain("ADDRESS_CACHE_TTL_MS");
+  it("has contact info cache for enriching tasks with contact addresses, phones, and emails", () => {
+    expect(serviceSource).toContain("contactInfoCache");
+    expect(serviceSource).toContain("ensureContactInfoCache");
+    expect(serviceSource).toContain("CONTACT_INFO_CACHE_TTL_MS");
   });
 
   it("uses cursor-based pagination with searchAfter", () => {

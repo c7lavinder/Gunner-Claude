@@ -360,6 +360,21 @@ function TaskExpandedSection({ task }: { task: Task }) {
   // Fetch user phone info for from/to display
   const { data: userPhoneInfo } = trpc.taskCenter.getUserPhoneInfo.useQuery();
 
+  // Fetch today's activity for this contact
+  const { data: todayActivity, isLoading: activityLoading } = trpc.taskCenter.getContactActivity.useQuery(
+    { contactId: task.contactId },
+    { enabled: !!task.contactId }
+  );
+
+  // Fetch workflow history for this contact (for Remove mode)
+  const { data: workflowHistory } = trpc.taskCenter.getContactWorkflowHistory.useQuery(
+    { contactId: task.contactId },
+    { enabled: !!task.contactId }
+  );
+
+  // Active tab: "actions" (default) | "activity" | "notes"
+  const [activeTab, setActiveTab] = useState<"actions" | "activity" | "notes">("actions");
+
   // Quick action states
   const [showCallDialog, setShowCallDialog] = useState(false);
   const [showSmsDialog, setShowSmsDialog] = useState(false);
@@ -370,10 +385,13 @@ function TaskExpandedSection({ task }: { task: Task }) {
   const [noteBody, setNoteBody] = useState("");
 
   // SMS/Call from/to state
-  const [smsFromGhlUserId, setSmsFromGhlUserId] = useState<string>(""); // defaults to current user
+  const [smsFromGhlUserId, setSmsFromGhlUserId] = useState<string>("");
   const [smsFromOpen, setSmsFromOpen] = useState(false);
   const [callFromGhlUserId, setCallFromGhlUserId] = useState<string>("");
   const [callFromOpen, setCallFromOpen] = useState(false);
+  // SMS To override (editable phone number)
+  const [smsToPhone, setSmsToPhone] = useState("");
+  const [callToPhone, setCallToPhone] = useState("");
   // SMS scheduling
   const [smsScheduleMode, setSmsScheduleMode] = useState<"now" | "later">("now");
   const [smsScheduleDate, setSmsScheduleDate] = useState("");
@@ -390,6 +408,9 @@ function TaskExpandedSection({ task }: { task: Task }) {
   const [aptCalendar, setAptCalendar] = useState("");
   const [aptNotes, setAptNotes] = useState("");
 
+  // Derive the contact phone (from task data or context)
+  const contactPhone = task.contactPhone || context?.contactPhone || "";
+
   // Helper: get sender info for a given GHL user ID (or current user if empty)
   const getSenderInfo = (ghlUserId: string) => {
     if (!ghlUserId || !userPhoneInfo?.teamMembers) {
@@ -399,6 +420,22 @@ function TaskExpandedSection({ task }: { task: Task }) {
     if (member) return { name: member.name, phone: member.lcPhone };
     return { name: userPhoneInfo?.userName || "You", phone: userPhoneInfo?.userPhone || null };
   };
+
+  // Derive enrolled workflows (most recent "added" that hasn't been "removed")
+  const enrolledWorkflows = useMemo(() => {
+    if (!workflowHistory || workflowHistory.length === 0) return [];
+    const workflowMap = new Map<string, { workflowId: string; workflowName: string; addedAt: string }>(); 
+    // Process in chronological order (oldest first)
+    const sorted = [...workflowHistory].reverse();
+    for (const entry of sorted) {
+      if (entry.action === "added") {
+        workflowMap.set(entry.workflowId, { workflowId: entry.workflowId, workflowName: entry.workflowName, addedAt: entry.addedAt });
+      } else if (entry.action === "removed") {
+        workflowMap.delete(entry.workflowId);
+      }
+    }
+    return Array.from(workflowMap.values());
+  }, [workflowHistory]);
 
   // Mutations
   const sendSmsMutation = trpc.taskCenter.sendSms.useMutation({
@@ -547,117 +584,172 @@ function TaskExpandedSection({ task }: { task: Task }) {
         </Button>
       </div>
 
-      {/* Contact Context */}
-      {contextLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
-          <Skeleton className="h-4 w-2/3" />
-        </div>
-      ) : context ? (
+      {/* Contact Info Line */}
+      <div className="flex items-center gap-4 text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+        {contactPhone && (
+          <span className="flex items-center gap-1">
+            <Phone className="h-3 w-3" />
+            {formatPhone(contactPhone)}
+          </span>
+        )}
+        {(task.contactEmail || context?.contactEmail) && (
+          <span>{task.contactEmail || context?.contactEmail}</span>
+        )}
+      </div>
+
+      {/* Tabs: Actions | Today's Activity | Notes */}
+      <div className="flex gap-1 rounded-lg p-0.5" style={{ background: "var(--g-bg-inset)" }}>
+        {(["actions", "activity", "notes"] as const).map((tab) => (
+          <button
+            key={tab}
+            className="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: activeTab === tab ? "var(--g-bg-card)" : "transparent",
+              color: activeTab === tab ? "var(--g-text-primary)" : "var(--g-text-tertiary)",
+              boxShadow: activeTab === tab ? "0 1px 2px rgba(0,0,0,0.15)" : "none",
+            }}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab === "actions" ? "Quick Actions" : tab === "activity" ? "Today's Activity" : "Notes & Calls"}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "activity" ? (
         <div className="space-y-3">
-          {/* Contact info */}
-          <div className="flex items-center gap-4 text-xs" style={{ color: "var(--g-text-tertiary)" }}>
-            {context.contactPhone && (
-              <span className="flex items-center gap-1">
-                <Phone className="h-3 w-3" />
-                {formatPhone(context.contactPhone)}
-              </span>
-            )}
-            {context.contactEmail && <span>{context.contactEmail}</span>}
-          </div>
-
-          {/* Last call summary from Gunner */}
-          {context.lastCallSummary && (
-            <div
-              className="rounded-md p-3"
-              style={{
-                background: "var(--g-bg-inset)",
-                border: "1px solid var(--g-border-subtle)",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-1.5">
-                <FileText className="h-3.5 w-3.5" style={{ color: "oklch(0.65 0.15 250)" }} />
-                <span className="text-xs font-semibold" style={{ color: "var(--g-text-primary)" }}>
-                  Last Call Summary
-                </span>
-                {context.lastCallGrade && (
-                  <Badge
-                    className="text-xs h-4"
-                    style={{
-                      background: "var(--g-bg-card)",
-                      color: "var(--g-text-secondary)",
-                      border: "1px solid var(--g-border-subtle)",
-                    }}
-                  >
-                    {context.lastCallGrade}
-                  </Badge>
-                )}
-                {context.lastCallDate && (
-                  <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
-                    {new Date(context.lastCallDate).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>
-                {context.lastCallSummary.length > 300
-                  ? context.lastCallSummary.slice(0, 300) + "..."
-                  : context.lastCallSummary}
-              </p>
-              {context.lastCallId && (
-                <a
-                  href={`/calls/${context.lastCallId}`}
-                  className="text-xs mt-1.5 inline-flex items-center gap-1 hover:underline"
-                  style={{ color: "oklch(0.65 0.15 250)" }}
-                >
-                  View full call <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
+          {activityLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
             </div>
+          ) : todayActivity ? (
+            <>
+              {/* Activity summary badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                  <MessageSquare className="h-3 w-3" style={{ color: "oklch(0.65 0.15 250)" }} />
+                  {todayActivity.smsSent} SMS
+                </div>
+                <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                  <Phone className="h-3 w-3" style={{ color: "oklch(0.7 0.15 150)" }} />
+                  {todayActivity.callsMade} Calls
+                </div>
+                <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                  <FileText className="h-3 w-3" style={{ color: "oklch(0.75 0.15 85)" }} />
+                  {todayActivity.emailsSent} Emails
+                </div>
+              </div>
+              {/* Activity timeline */}
+              {todayActivity.messages.length > 0 ? (
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                  {todayActivity.messages.map((msg: any) => (
+                    <div
+                      key={msg.id}
+                      className="rounded-md px-3 py-2 flex items-start gap-2"
+                      style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
+                    >
+                      <div className="shrink-0 mt-0.5">
+                        {msg.type === "sms" ? <MessageSquare className="h-3 w-3" style={{ color: "oklch(0.65 0.15 250)" }} /> :
+                         msg.type === "call" ? <Phone className="h-3 w-3" style={{ color: "oklch(0.7 0.15 150)" }} /> :
+                         <FileText className="h-3 w-3" style={{ color: "oklch(0.75 0.15 85)" }} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium" style={{ color: "var(--g-text-primary)" }}>
+                            {msg.type.toUpperCase()} {msg.direction === "inbound" ? "↓" : "↑"}
+                          </span>
+                          <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                            {new Date(msg.dateAdded).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        {msg.body && (
+                          <p className="text-xs mt-0.5 truncate" style={{ color: "var(--g-text-secondary)" }}>
+                            {msg.body.length > 120 ? msg.body.slice(0, 120) + "..." : msg.body}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-center py-4" style={{ color: "var(--g-text-tertiary)" }}>
+                  No activity recorded for this contact today.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-center py-4" style={{ color: "var(--g-text-tertiary)" }}>
+              Unable to load activity data.
+            </p>
           )}
-
-          {/* Recent Notes */}
-          {context.recentNotes && context.recentNotes.length > 0 && (
-            <div>
-              <span className="text-xs font-semibold" style={{ color: "var(--g-text-primary)" }}>
-                Recent Notes
-              </span>
-              <div className="mt-1.5 space-y-1.5">
-                {context.recentNotes.slice(0, 3).map((note: { id: string; body: string; dateAdded: string }) => (
-                  <div
-                    key={note.id}
-                    className="rounded-md px-3 py-2"
-                    style={{
-                      background: "var(--g-bg-inset)",
-                      border: "1px solid var(--g-border-subtle)",
-                    }}
-                  >
-                    <p className="text-xs" style={{ color: "var(--g-text-secondary)" }}>
-                      {note.body.length > 200 ? note.body.slice(0, 200) + "..." : note.body}
-                    </p>
-                    {note.dateAdded && (
-                      <span className="text-xs mt-1 block" style={{ color: "var(--g-text-tertiary)" }}>
-                        {new Date(note.dateAdded).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
+        </div>
+      ) : activeTab === "notes" ? (
+        <div className="space-y-3">
+          {contextLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          ) : context ? (
+            <>
+              {/* Last call summary */}
+              {context.lastCallSummary && (
+                <div className="rounded-md p-3" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <FileText className="h-3.5 w-3.5" style={{ color: "oklch(0.65 0.15 250)" }} />
+                    <span className="text-xs font-semibold" style={{ color: "var(--g-text-primary)" }}>Last Call Summary</span>
+                    {context.lastCallGrade && (
+                      <Badge className="text-xs h-4" style={{ background: "var(--g-bg-card)", color: "var(--g-text-secondary)", border: "1px solid var(--g-border-subtle)" }}>
+                        {context.lastCallGrade}
+                      </Badge>
+                    )}
+                    {context.lastCallDate && (
+                      <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                        {new Date(context.lastCallDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </span>
                     )}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>
+                    {context.lastCallSummary.length > 300 ? context.lastCallSummary.slice(0, 300) + "..." : context.lastCallSummary}
+                  </p>
+                  {context.lastCallId && (
+                    <a href={`/calls/${context.lastCallId}`} className="text-xs mt-1.5 inline-flex items-center gap-1 hover:underline" style={{ color: "oklch(0.65 0.15 250)" }}>
+                      View full call <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              )}
+              {/* Recent Notes */}
+              {context.recentNotes && context.recentNotes.length > 0 ? (
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                  {context.recentNotes.slice(0, 5).map((note: { id: string; body: string; dateAdded: string }) => (
+                    <div key={note.id} className="rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                      <p className="text-xs" style={{ color: "var(--g-text-secondary)" }}>
+                        {note.body.length > 200 ? note.body.slice(0, 200) + "..." : note.body}
+                      </p>
+                      {note.dateAdded && (
+                        <span className="text-xs mt-1 block" style={{ color: "var(--g-text-tertiary)" }}>
+                          {new Date(note.dateAdded).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-center py-4" style={{ color: "var(--g-text-tertiary)" }}>
+                  No recent notes for this contact.
+                </p>
+              )}
+            </>
+          ) : null}
         </div>
       ) : null}
 
       {/* Call Confirmation Dialog */}
       <Dialog open={showCallDialog} onOpenChange={(open) => {
         setShowCallDialog(open);
-        if (!open) { setCallFromGhlUserId(""); setCallFromOpen(false); }
+        if (!open) { setCallFromGhlUserId(""); setCallFromOpen(false); setCallToPhone(""); }
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -709,25 +801,33 @@ function TaskExpandedSection({ task }: { task: Task }) {
             <div className="flex justify-center">
               <ArrowRight className="h-5 w-5 rotate-90" style={{ color: "var(--g-text-tertiary)" }} />
             </div>
-            {/* To (contact - read only) */}
-            <div className="rounded-lg p-3" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-              <Label className="text-xs font-medium mb-1 block" style={{ color: "var(--g-text-tertiary)" }}>To</Label>
-              <div className="font-semibold text-sm" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
-              <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{task.contactPhone ? formatPhone(task.contactPhone) : "No phone on file"}</div>
+            {/* To (editable) */}
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>To</Label>
+              <div className="rounded-lg p-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                <div className="font-semibold text-sm" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
+                <Input
+                  className="mt-1 h-7 text-xs bg-transparent border-dashed"
+                  placeholder="Enter phone number..."
+                  value={callToPhone || (contactPhone ? formatPhone(contactPhone) : "")}
+                  onChange={(e) => setCallToPhone(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCallDialog(false)}>Cancel</Button>
             <Button
               onClick={() => {
-                const sender = getSenderInfo(callFromGhlUserId);
-                const dialNumber = sender.phone || task.contactPhone;
-                if (task.contactPhone) {
-                  window.open(`tel:${task.contactPhone}`, "_self");
+                const dialNumber = callToPhone || contactPhone;
+                if (dialNumber) {
+                  // Strip formatting to get raw number
+                  const rawNumber = dialNumber.replace(/[^\d+]/g, "");
+                  window.open(`tel:${rawNumber}`, "_self");
                 }
                 setShowCallDialog(false);
               }}
-              disabled={!task.contactPhone}
+              disabled={!callToPhone && !contactPhone}
             >
               <Phone className="h-4 w-4 mr-1.5" />
               Call Now
@@ -740,7 +840,7 @@ function TaskExpandedSection({ task }: { task: Task }) {
       <Dialog open={showSmsDialog} onOpenChange={(open) => {
         setShowSmsDialog(open);
         if (!open) {
-          setSmsFromGhlUserId(""); setSmsFromOpen(false);
+          setSmsFromGhlUserId(""); setSmsFromOpen(false); setSmsToPhone("");
           setSmsScheduleMode("now"); setSmsScheduleDate(""); setSmsScheduleTime("");
         }
       }}>
@@ -796,12 +896,17 @@ function TaskExpandedSection({ task }: { task: Task }) {
               <div className="flex items-center pt-6">
                 <ArrowRight className="h-5 w-5" style={{ color: "var(--g-text-tertiary)" }} />
               </div>
-              {/* To (contact - read only) */}
+              {/* To (editable) */}
               <div>
                 <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>To</Label>
                 <div className="rounded-lg p-2 h-auto" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                   <div className="font-semibold text-sm truncate" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
-                  <div className="text-xs truncate" style={{ color: "var(--g-text-secondary)" }}>{task.contactPhone ? formatPhone(task.contactPhone) : "No phone on file"}</div>
+                  <Input
+                    className="mt-1 h-7 text-xs bg-transparent border-dashed"
+                    placeholder="Enter phone number..."
+                    value={smsToPhone || (contactPhone ? formatPhone(contactPhone) : "")}
+                    onChange={(e) => setSmsToPhone(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
@@ -942,44 +1047,70 @@ function TaskExpandedSection({ task }: { task: Task }) {
               </Button>
             </div>
             {/* Searchable workflow selector */}
-            <Popover open={workflowSearchOpen} onOpenChange={setWorkflowSearchOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={workflowSearchOpen}
-                  className="w-full justify-between font-normal"
-                >
-                  {selectedWorkflow && workflows
-                    ? (workflows.find((w: { id: string; name: string }) => w.id === selectedWorkflow)?.name || "Select a workflow...")
-                    : "Select a workflow..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search workflows..." />
-                  <CommandList className="max-h-[200px]">
-                    <CommandEmpty>No workflows found.</CommandEmpty>
-                    <CommandGroup>
-                      {(workflows || []).map((w: { id: string; name: string }) => (
-                        <CommandItem
-                          key={w.id}
-                          value={w.name}
-                          onSelect={() => {
-                            setSelectedWorkflow(w.id);
-                            setWorkflowSearchOpen(false);
-                          }}
-                        >
-                          <Check className={`mr-2 h-4 w-4 ${selectedWorkflow === w.id ? "opacity-100" : "opacity-0"}`} />
-                          {w.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            {workflowAction === "remove" && enrolledWorkflows.length === 0 ? (
+              <div className="rounded-md p-4 text-center" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+                  No workflows found for this contact. Only workflows added through Gunner are tracked.
+                </p>
+              </div>
+            ) : (
+              <Popover open={workflowSearchOpen} onOpenChange={setWorkflowSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={workflowSearchOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedWorkflow
+                      ? (workflowAction === "remove"
+                          ? (enrolledWorkflows.find(w => w.workflowId === selectedWorkflow)?.workflowName || "Select a workflow...")
+                          : (workflows?.find((w: { id: string; name: string }) => w.id === selectedWorkflow)?.name || "Select a workflow..."))
+                      : "Select a workflow..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search workflows..." />
+                    <CommandList className="max-h-[200px]">
+                      <CommandEmpty>No workflows found.</CommandEmpty>
+                      <CommandGroup>
+                        {workflowAction === "remove" ? (
+                          enrolledWorkflows.map(w => (
+                            <CommandItem
+                              key={w.workflowId}
+                              value={w.workflowName}
+                              onSelect={() => {
+                                setSelectedWorkflow(w.workflowId);
+                                setWorkflowSearchOpen(false);
+                              }}
+                            >
+                              <Check className={`mr-2 h-4 w-4 ${selectedWorkflow === w.workflowId ? "opacity-100" : "opacity-0"}`} />
+                              {w.workflowName}
+                            </CommandItem>
+                          ))
+                        ) : (
+                          (workflows || []).map((w: { id: string; name: string }) => (
+                            <CommandItem
+                              key={w.id}
+                              value={w.name}
+                              onSelect={() => {
+                                setSelectedWorkflow(w.id);
+                                setWorkflowSearchOpen(false);
+                              }}
+                            >
+                              <Check className={`mr-2 h-4 w-4 ${selectedWorkflow === w.id ? "opacity-100" : "opacity-0"}`} />
+                              {w.name}
+                            </CommandItem>
+                          ))
+                        )}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowWorkflowDialog(false)}>
