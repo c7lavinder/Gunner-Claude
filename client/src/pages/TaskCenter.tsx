@@ -48,6 +48,9 @@ import {
   ExternalLink,
   Pencil,
   Trash2,
+  CalendarPlus,
+  Plus,
+  Minus,
 } from "lucide-react";
 
 // ─── HELPERS ────────────────────────────────────────────
@@ -55,10 +58,22 @@ import {
 /** Strip HTML tags and decode common entities to get clean plain text */
 function stripHtml(html: string): string {
   if (!html) return "";
-  // Use a temporary DOM element to parse HTML and extract text
   const tmp = document.createElement("div");
   tmp.innerHTML = html;
   return (tmp.textContent || tmp.innerText || "").trim();
+}
+
+/** Format phone number from +1XXXXXXXXXX to (XXX) XXX-XXXX */
+function formatPhone(phone: string): string {
+  if (!phone) return "";
+  // Strip all non-digits
+  const digits = phone.replace(/\D/g, "");
+  // Handle US numbers: 1XXXXXXXXXX or XXXXXXXXXX
+  const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (local.length === 10) {
+    return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
+  }
+  return phone; // Return original if not a standard US number
 }
 
 // ─── TYPES ──────────────────────────────────────────────
@@ -330,9 +345,18 @@ function TaskExpandedSection({ task }: { task: Task }) {
   const [showSmsDialog, setShowSmsDialog] = useState(false);
   const [showNoteDialog, setShowNoteDialog] = useState(false);
   const [showWorkflowDialog, setShowWorkflowDialog] = useState(false);
+  const [showAptDialog, setShowAptDialog] = useState(false);
   const [smsMessage, setSmsMessage] = useState("");
   const [noteBody, setNoteBody] = useState("");
   const [selectedWorkflow, setSelectedWorkflow] = useState("");
+  const [workflowAction, setWorkflowAction] = useState<"add" | "remove">("add");
+
+  // Appointment form state
+  const [aptTitle, setAptTitle] = useState("");
+  const [aptDate, setAptDate] = useState("");
+  const [aptTime, setAptTime] = useState("");
+  const [aptCalendar, setAptCalendar] = useState("");
+  const [aptNotes, setAptNotes] = useState("");
 
   // Mutations
   const sendSmsMutation = trpc.taskCenter.sendSms.useMutation({
@@ -363,9 +387,36 @@ function TaskExpandedSection({ task }: { task: Task }) {
     onError: (err) => toast.error("Failed to start workflow", { description: err.message }),
   });
 
+  const removeWorkflowMutation = trpc.taskCenter.removeFromWorkflow.useMutation({
+    onSuccess: () => {
+      toast.success(`Removed from workflow`);
+      setShowWorkflowDialog(false);
+      setSelectedWorkflow("");
+    },
+    onError: (err) => toast.error("Failed to remove from workflow", { description: err.message }),
+  });
+
+  const createAptMutation = trpc.taskCenter.createAppointment.useMutation({
+    onSuccess: () => {
+      toast.success(`Appointment created for ${task.contactName || "contact"}`);
+      setShowAptDialog(false);
+      setAptTitle("");
+      setAptDate("");
+      setAptTime("");
+      setAptCalendar("");
+      setAptNotes("");
+    },
+    onError: (err) => toast.error("Failed to create appointment", { description: err.message }),
+  });
+
   // Workflows (lazy load when dialog opens)
   const { data: workflows } = trpc.taskCenter.getWorkflows.useQuery(undefined, {
     enabled: showWorkflowDialog,
+  });
+
+  // Calendars (lazy load when dialog opens)
+  const { data: calendars } = trpc.taskCenter.getCalendars.useQuery(undefined, {
+    enabled: showAptDialog,
   });
 
   return (
@@ -410,10 +461,30 @@ function TaskExpandedSection({ task }: { task: Task }) {
           variant="outline"
           size="sm"
           className="h-8 text-xs"
-          onClick={() => setShowWorkflowDialog(true)}
+          onClick={() => {
+            setWorkflowAction("add");
+            setSelectedWorkflow("");
+            setShowWorkflowDialog(true);
+          }}
         >
           <Zap className="h-3.5 w-3.5 mr-1.5" />
-          Workflow
+          Update Workflow
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() => {
+            setAptTitle(`Appointment with ${task.contactName || "Contact"}`);
+            setAptDate("");
+            setAptTime("");
+            setAptCalendar("");
+            setAptNotes("");
+            setShowAptDialog(true);
+          }}
+        >
+          <CalendarPlus className="h-3.5 w-3.5 mr-1.5" />
+          Create Apt
         </Button>
         <Button
           variant="outline"
@@ -440,7 +511,7 @@ function TaskExpandedSection({ task }: { task: Task }) {
             {context.contactPhone && (
               <span className="flex items-center gap-1">
                 <Phone className="h-3 w-3" />
-                {context.contactPhone}
+                {formatPhone(context.contactPhone)}
               </span>
             )}
             {context.contactEmail && <span>{context.contactEmail}</span>}
@@ -599,40 +670,176 @@ function TaskExpandedSection({ task }: { task: Task }) {
       <Dialog open={showWorkflowDialog} onOpenChange={setShowWorkflowDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Start Workflow for {task.contactName || "Contact"}</DialogTitle>
+            <DialogTitle>Update Workflow for {task.contactName || "Contact"}</DialogTitle>
+            <DialogDescription>
+              Add this contact to a workflow or remove them from one.
+            </DialogDescription>
           </DialogHeader>
-          {workflows && workflows.length > 0 ? (
-            <Select value={selectedWorkflow} onValueChange={setSelectedWorkflow}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a workflow..." />
-              </SelectTrigger>
-              <SelectContent>
-                {workflows.map((w: { id: string; name: string }) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
-              Loading workflows...
-            </p>
-          )}
+          <div className="space-y-4">
+            {/* Add / Remove toggle */}
+            <div className="flex gap-2">
+              <Button
+                variant={workflowAction === "add" ? "default" : "outline"}
+                size="sm"
+                className="flex-1"
+                onClick={() => { setWorkflowAction("add"); setSelectedWorkflow(""); }}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                Add to Workflow
+              </Button>
+              <Button
+                variant={workflowAction === "remove" ? "default" : "outline"}
+                size="sm"
+                className="flex-1"
+                onClick={() => { setWorkflowAction("remove"); setSelectedWorkflow(""); }}
+              >
+                <Minus className="h-3.5 w-3.5 mr-1.5" />
+                Remove from Workflow
+              </Button>
+            </div>
+            {workflows && workflows.length > 0 ? (
+              <Select value={selectedWorkflow} onValueChange={setSelectedWorkflow}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a workflow..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {workflows.map((w: { id: string; name: string }) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+                Loading workflows...
+              </p>
+            )}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowWorkflowDialog(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() =>
-                startWorkflowMutation.mutate({
-                  contactId: task.contactId,
-                  workflowId: selectedWorkflow,
-                })
-              }
-              disabled={!selectedWorkflow || startWorkflowMutation.isPending}
+              onClick={() => {
+                if (workflowAction === "add") {
+                  startWorkflowMutation.mutate({
+                    contactId: task.contactId,
+                    workflowId: selectedWorkflow,
+                  });
+                } else {
+                  removeWorkflowMutation.mutate({
+                    contactId: task.contactId,
+                    workflowId: selectedWorkflow,
+                  });
+                }
+              }}
+              disabled={!selectedWorkflow || startWorkflowMutation.isPending || removeWorkflowMutation.isPending}
+              variant={workflowAction === "remove" ? "destructive" : "default"}
             >
-              {startWorkflowMutation.isPending ? "Starting..." : "Start Workflow"}
+              {(startWorkflowMutation.isPending || removeWorkflowMutation.isPending)
+                ? (workflowAction === "add" ? "Adding..." : "Removing...")
+                : (workflowAction === "add" ? "Add to Workflow" : "Remove from Workflow")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Appointment Dialog */}
+      <Dialog open={showAptDialog} onOpenChange={setShowAptDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Appointment</DialogTitle>
+            <DialogDescription>
+              Schedule a calendar appointment for {task.contactName || "this contact"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="apt-title">Title</Label>
+              <Input
+                id="apt-title"
+                value={aptTitle}
+                onChange={(e) => setAptTitle(e.target.value)}
+                placeholder="Appointment title..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="apt-date">Date</Label>
+                <Input
+                  id="apt-date"
+                  type="date"
+                  value={aptDate}
+                  onChange={(e) => setAptDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apt-time">Time</Label>
+                <Input
+                  id="apt-time"
+                  type="time"
+                  value={aptTime}
+                  onChange={(e) => setAptTime(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="apt-calendar">Calendar</Label>
+              {calendars && calendars.length > 0 ? (
+                <Select value={aptCalendar} onValueChange={setAptCalendar}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a calendar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {calendars.map((c: { id: string; name: string }) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+                  Loading calendars...
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="apt-notes">Notes (optional)</Label>
+              <Textarea
+                id="apt-notes"
+                value={aptNotes}
+                onChange={(e) => setAptNotes(e.target.value)}
+                placeholder="Additional notes..."
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAptDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!aptDate || !aptTime) {
+                  toast.error("Please select a date and time");
+                  return;
+                }
+                const startTime = new Date(`${aptDate}T${aptTime}:00`).toISOString();
+                const endTime = new Date(new Date(`${aptDate}T${aptTime}:00`).getTime() + 60 * 60 * 1000).toISOString();
+                createAptMutation.mutate({
+                  contactId: task.contactId,
+                  calendarId: aptCalendar,
+                  title: aptTitle,
+                  startTime,
+                  endTime,
+                  notes: aptNotes || undefined,
+                });
+              }}
+              disabled={!aptTitle.trim() || !aptDate || !aptTime || !aptCalendar || createAptMutation.isPending}
+            >
+              {createAptMutation.isPending ? "Creating..." : "Create Appointment"}
             </Button>
           </DialogFooter>
         </DialogContent>

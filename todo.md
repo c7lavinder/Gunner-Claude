@@ -3775,3 +3775,8 @@
 
 ## Task Center Bug Fixes (Round 3)
 - [x] Bug: Task body shows raw HTML tags instead of clean text — fixed by adding stripHtml() helper that uses DOM parser to extract clean text
+
+## Task Center UI Improvements — Round 4
+- [x] Add "Create Apt" button to create a calendar appointment for the contact (GHL API)
+- [x] Update "Workflow" button to "Update Workflow" — allow adding to or removing from a workflow
+- [x] Format phone numbers as (XXX) XXX-XXXX instead of raw +1XXXXXXXXXX

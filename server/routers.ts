@@ -6908,6 +6908,54 @@ selectedTimezone: { type: "string" },
         return await updateTask(ctx.user.tenantId, input.contactId, input.taskId, updates);
       }),
 
+    // Remove contact from a workflow
+    removeFromWorkflow: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        workflowId: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { removeContactFromWorkflow } = await import("./ghlActions");
+        return await removeContactFromWorkflow(ctx.user.tenantId, input.contactId, input.workflowId);
+      }),
+
+    // Get available calendars for the tenant
+    getCalendars: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getCalendarsForTenant } = await import("./ghlActions");
+        return await getCalendarsForTenant(ctx.user.tenantId);
+      }),
+
+    // Create a calendar appointment for a contact
+    createAppointment: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        calendarId: z.string(),
+        title: z.string().min(1),
+        startTime: z.string(),
+        endTime: z.string(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { createAppointment } = await import("./ghlActions");
+        const { getTeamMemberByUserId } = await import("./db");
+        const member = await getTeamMemberByUserId(ctx.user.id);
+        return await createAppointment(
+          ctx.user.tenantId,
+          input.calendarId,
+          input.contactId,
+          input.startTime,
+          input.endTime,
+          input.title,
+          input.notes,
+          member?.ghlUserId ?? undefined,
+          "America/New_York"
+        );
+      }),
+
     // Create a new task for a contact
     createTask: protectedProcedure
       .input(z.object({
