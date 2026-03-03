@@ -3802,3 +3802,6 @@
 - [x] Remove from Workflow only shows workflows the contact is currently enrolled in (tracked via coach_action_log)
 - [x] Today's Activity section — shows SMS sent, dials made, emails sent for this contact today (via GHL conversations API)
 - [x] Upcoming Automations — shows enrolled workflows from coach_action_log (GHL doesn't expose scheduled workflow steps)
+
+## Task Center Bug Fix — Round 8
+- [x] Bug: Calendar appointment creation fails with "user id not part of calendar team" — fixed by not passing assignedUserId to GHL, letting calendar handle assignment

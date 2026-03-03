@@ -1365,7 +1365,8 @@ export async function createAppointment(
   };
 
   if (notes) body.notes = notes;
-  if (assignedUserId) body.assignedUserId = assignedUserId;
+  // Don't pass assignedUserId — GHL returns 422 "user id not part of calendar team"
+  // if the user isn't assigned to that specific calendar. Let GHL handle assignment.
   if (selectedTimezone) body.selectedTimezone = selectedTimezone;
 
   console.log(`[createAppointment] Creating appointment on calendar ${calendarId} for contact ${contactId}: "${title}" at ${startTime}`);
