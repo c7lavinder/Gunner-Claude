@@ -14,6 +14,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -51,6 +64,9 @@ import {
   CalendarPlus,
   Plus,
   Minus,
+  ArrowRight,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 
 // ─── HELPERS ────────────────────────────────────────────
@@ -341,7 +357,11 @@ function TaskExpandedSection({ task }: { task: Task }) {
     { enabled: !!task.contactId }
   );
 
+  // Fetch user phone info for from/to display
+  const { data: userPhoneInfo } = trpc.taskCenter.getUserPhoneInfo.useQuery();
+
   // Quick action states
+  const [showCallDialog, setShowCallDialog] = useState(false);
   const [showSmsDialog, setShowSmsDialog] = useState(false);
   const [showNoteDialog, setShowNoteDialog] = useState(false);
   const [showWorkflowDialog, setShowWorkflowDialog] = useState(false);
@@ -350,6 +370,8 @@ function TaskExpandedSection({ task }: { task: Task }) {
   const [noteBody, setNoteBody] = useState("");
   const [selectedWorkflow, setSelectedWorkflow] = useState("");
   const [workflowAction, setWorkflowAction] = useState<"add" | "remove">("add");
+  const [workflowSearchOpen, setWorkflowSearchOpen] = useState(false);
+  const [calendarSearchOpen, setCalendarSearchOpen] = useState(false);
 
   // Appointment form state
   const [aptTitle, setAptTitle] = useState("");
@@ -439,7 +461,7 @@ function TaskExpandedSection({ task }: { task: Task }) {
           className="h-8 text-xs"
           onClick={() => {
             if (task.contactPhone) {
-              window.open(`tel:${task.contactPhone}`, "_self");
+              setShowCallDialog(true);
             } else {
               toast.error("No phone number on file for this contact");
             }
@@ -604,12 +626,65 @@ function TaskExpandedSection({ task }: { task: Task }) {
         </div>
       ) : null}
 
+      {/* Call Confirmation Dialog */}
+      <Dialog open={showCallDialog} onOpenChange={setShowCallDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Call {task.contactName || "Contact"}</DialogTitle>
+            <DialogDescription>Confirm call details before dialing.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg p-4 space-y-3" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>From</div>
+                <div className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{userPhoneInfo?.userName || "You"}</div>
+                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{userPhoneInfo?.userPhone ? formatPhone(userPhoneInfo.userPhone) : "Default line"}</div>
+              </div>
+              <ArrowRight className="h-5 w-5 mx-3 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
+              <div className="text-sm text-right">
+                <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>To</div>
+                <div className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
+                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{task.contactPhone ? formatPhone(task.contactPhone) : "No number"}</div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCallDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                window.open(`tel:${task.contactPhone}`, "_self");
+                setShowCallDialog(false);
+              }}
+            >
+              <Phone className="h-4 w-4 mr-1.5" />
+              Call Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* SMS Dialog */}
       <Dialog open={showSmsDialog} onOpenChange={setShowSmsDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Send SMS to {task.contactName || "Contact"}</DialogTitle>
+            <DialogDescription>Text message details.</DialogDescription>
           </DialogHeader>
+          <div className="rounded-lg p-4 mb-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>From</div>
+                <div className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{userPhoneInfo?.userName || "You"}</div>
+                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{userPhoneInfo?.userPhone ? formatPhone(userPhoneInfo.userPhone) : "Default line"}</div>
+              </div>
+              <ArrowRight className="h-5 w-5 mx-3 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
+              <div className="text-sm text-right">
+                <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>To</div>
+                <div className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
+                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{task.contactPhone ? formatPhone(task.contactPhone) : "No number"}</div>
+              </div>
+            </div>
+          </div>
           <Textarea
             placeholder="Type your message..."
             value={smsMessage}
@@ -668,7 +743,7 @@ function TaskExpandedSection({ task }: { task: Task }) {
 
       {/* Workflow Dialog */}
       <Dialog open={showWorkflowDialog} onOpenChange={setShowWorkflowDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Update Workflow for {task.contactName || "Contact"}</DialogTitle>
             <DialogDescription>
@@ -697,24 +772,45 @@ function TaskExpandedSection({ task }: { task: Task }) {
                 Remove from Workflow
               </Button>
             </div>
-            {workflows && workflows.length > 0 ? (
-              <Select value={selectedWorkflow} onValueChange={setSelectedWorkflow}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a workflow..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {workflows.map((w: { id: string; name: string }) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
-                Loading workflows...
-              </p>
-            )}
+            {/* Searchable workflow selector */}
+            <Popover open={workflowSearchOpen} onOpenChange={setWorkflowSearchOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={workflowSearchOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {selectedWorkflow && workflows
+                    ? (workflows.find((w: { id: string; name: string }) => w.id === selectedWorkflow)?.name || "Select a workflow...")
+                    : "Select a workflow..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search workflows..." />
+                  <CommandList className="max-h-[200px]">
+                    <CommandEmpty>No workflows found.</CommandEmpty>
+                    <CommandGroup>
+                      {(workflows || []).map((w: { id: string; name: string }) => (
+                        <CommandItem
+                          key={w.id}
+                          value={w.name}
+                          onSelect={() => {
+                            setSelectedWorkflow(w.id);
+                            setWorkflowSearchOpen(false);
+                          }}
+                        >
+                          <Check className={`mr-2 h-4 w-4 ${selectedWorkflow === w.id ? "opacity-100" : "opacity-0"}`} />
+                          {w.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowWorkflowDialog(false)}>
@@ -785,25 +881,45 @@ function TaskExpandedSection({ task }: { task: Task }) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="apt-calendar">Calendar</Label>
-              {calendars && calendars.length > 0 ? (
-                <Select value={aptCalendar} onValueChange={setAptCalendar}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a calendar..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {calendars.map((c: { id: string; name: string }) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
-                  Loading calendars...
-                </p>
-              )}
+              <Label>Calendar</Label>
+              <Popover open={calendarSearchOpen} onOpenChange={setCalendarSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={calendarSearchOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {aptCalendar && calendars
+                      ? (calendars.find((c: { id: string; name: string }) => c.id === aptCalendar)?.name || "Select a calendar...")
+                      : "Select a calendar..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search calendars..." />
+                    <CommandList className="max-h-[200px]">
+                      <CommandEmpty>No calendars found.</CommandEmpty>
+                      <CommandGroup>
+                        {(calendars || []).map((c: { id: string; name: string }) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => {
+                              setAptCalendar(c.id);
+                              setCalendarSearchOpen(false);
+                            }}
+                          >
+                            <Check className={`mr-2 h-4 w-4 ${aptCalendar === c.id ? "opacity-100" : "opacity-0"}`} />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label htmlFor="apt-notes">Notes (optional)</Label>

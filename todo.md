@@ -3780,3 +3780,9 @@
 - [x] Add "Create Apt" button to create a calendar appointment for the contact (GHL API)
 - [x] Update "Workflow" button to "Update Workflow" — allow adding to or removing from a workflow
 - [x] Format phone numbers as (XXX) XXX-XXXX instead of raw +1XXXXXXXXXX
+
+## Task Center UI Fixes — Round 5
+- [x] Workflow dropdown: make searchable with max height so it doesn't overflow the screen
+- [x] Calendar dropdown: make searchable with max height
+- [x] SMS dialog: show "From: (user's phone) → To: (contact's phone/name)" info
+- [x] Call button: show "From: (user's phone) → To: (contact's phone/name)" info before initiating call

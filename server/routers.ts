@@ -6804,6 +6804,18 @@ selectedTimezone: { type: "string" },
         };
       }),
 
+    // Get current user's phone info for SMS/Call display
+    getUserPhoneInfo: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getTeamMemberByUserId } = await import("./db");
+        const member = await getTeamMemberByUserId(ctx.user.id);
+        return {
+          userName: member?.name || ctx.user.name || "You",
+          userPhone: member?.lcPhone || null,
+        };
+      }),
+
     // Get detailed context for a task's contact
     getTaskContext: protectedProcedure
       .input(z.object({
