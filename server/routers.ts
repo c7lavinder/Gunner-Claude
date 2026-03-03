@@ -5799,6 +5799,45 @@ Create content that:
           console.error("[AI Coach] Failed to fetch call context:", e);
         }
 
+        // Step 0: Look up recent pending actions for this user (for correction detection)
+        let pendingActionContext = "";
+        try {
+          const { getDb: getDbPending } = await import("./db");
+          const db = await getDbPending();
+          if (db) {
+            const { coachActionLog } = await import("../drizzle/schema");
+            const { eq, and, desc } = await import("drizzle-orm");
+            const recentPending = await db.select()
+              .from(coachActionLog)
+              .where(and(
+                eq(coachActionLog.requestedBy, ctx.user!.id),
+                eq(coachActionLog.status, "pending")
+              ))
+              .orderBy(desc(coachActionLog.createdAt))
+              .limit(3);
+            if (recentPending.length > 0) {
+              const pendingDescriptions = recentPending.map((a: any) => {
+                const p = a.payload as any;
+                let line = `- ${a.actionType} for ${a.targetContactName || 'unknown'}`;
+                if (a.actionType === 'create_appointment' || a.actionType === 'update_appointment') {
+                  line += ` | Title: ${p?.title || 'N/A'} | Time: ${p?.startTime || 'N/A'}`;
+                  if (p?.selectedTimezone) line += ` (${p.selectedTimezone})`;
+                }
+                if (a.actionType === 'create_task' || a.actionType === 'update_task') {
+                  line += ` | Title: ${p?.title || 'N/A'} | Due: ${p?.dueDate || 'N/A'}`;
+                }
+                if (a.actionType === 'send_sms' || a.actionType === 'schedule_sms') {
+                  line += ` | Message preview: ${(p?.message || '').substring(0, 50)}`;
+                }
+                return line;
+              }).join('\n');
+              pendingActionContext = `\n\nRECENT PENDING ACTIONS (not yet confirmed by user):\n${pendingDescriptions}\n\nIMPORTANT: If the user's message is a CORRECTION or MODIFICATION to one of these pending actions (e.g., "Need that to be 4 PM", "Change the time to 3 PM", "Make it tomorrow instead", "Actually use a different title"), you MUST return the appropriate update action (update_appointment, update_task, etc.) with the corrected values. The word "that" or "it" refers to the most recent pending action. Do NOT return an empty array for corrections — they are action requests.`;
+            }
+          }
+        } catch (e) {
+          console.error("[parseIntent] Failed to fetch pending actions:", e);
+        }
+
         // Step 1: Clean up sloppy/typo-filled user input before parsing
         const { hasSignificantTypos, cleanupMessage } = await import("./messageCleanup");
         let cleanedMessage = input.message;
@@ -5939,6 +5978,8 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
 - For create_task: Write a clear task title in params.title AND a detailed description in params.description. The description MUST reference specific details from the call data below (property address, what was discussed, outcome, next steps). Never write vague descriptions like "call them about their property" — instead write something like "Follow up on 123 Main St. Last call on 2/10 discussed ARV of $180k, seller wants $150k. Need to present offer."
   IMPORTANT for dueDate: Convert the user's requested date to ISO 8601 format: YYYY-MM-DDTHH:mm:ssZ (e.g., "2026-02-24T10:00:00Z"). Today is ${new Date().toISOString().split('T')[0]}. If the user says "next Monday", calculate the actual date. If the user says "3 months from now", calculate 3 months ahead. If no date is specified, use tomorrow's date. Always include the time (default 10:00:00) and Z timezone suffix. NEVER return relative strings like "next monday" or "3 months" — always return the calculated ISO date.
 - For update_task: Set params.title to a keyword describing which task to update (e.g. "pending", "follow up", "call back"). Set params.dueDate to the new due date in ISO 8601 format if the user wants to change the due date. Set params.description to the new description if the user wants to change it. The system will search the contact's existing tasks and find the best match.
+  ASSIGNEE FILTERING: If the user says "my task", "my assigned task", "the task assigned to me", or similar possessive language indicating THEIR OWN task, set params.filterByRequestingUser to true. This tells the system to only look at tasks assigned to the requesting user, not all tasks for that contact. If the user just says "move the task" or "update the task" without possessive language, set params.filterByRequestingUser to false.
+  CRITICAL DISTINCTION: "Move my task for Jeff Shelton" means move the task that is assigned to ME (the current user) on Jeff Shelton's contact record. "Move Jeff Shelton's task" means move any task on Jeff Shelton's contact record. The word "my" refers to the REQUESTING USER, not the contact.
   TASK COMPLETION: If the user says ANY of these phrases, set params.taskStatus to "completed": "check off", "check of" (typo for check off), "mark as completed", "mark as done", "complete the task", "finish the task", "done with the task", "close out the task". When "for today" is mentioned alongside a completion phrase, it means complete the task that is due today — still set taskStatus to "completed" and use "today" or "due today" as the title keyword to match the right task.
   IMPORTANT: "check of" is a common typo for "check off" — ALWAYS treat it as a task completion request.
 - For add_to_workflow: Set params.workflowName to the workflow name the user mentioned (e.g. "follow-up", "drip campaign", "nurture sequence"). The system will fuzzy-match to the actual GHL workflow.
@@ -5949,6 +5990,7 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
 
 CRITICAL: You have REAL call data below. You MUST use it to write specific, accurate content. Reference actual property addresses, discussion topics, outcomes, and details from the transcripts. NEVER generate vague or placeholder text like "regarding his property" or "Please provide the summary" or "Insert details here".
 ${callContext}
+${pendingActionContext}
 
 Return JSON with an "actions" array. Each action object has:
 - actionType: one of the types above
@@ -6013,8 +6055,9 @@ ${instructionContext}`
                             notes: { type: "string" },
 selectedTimezone: { type: "string" },
                              appointmentTitle: { type: "string" },
+                             filterByRequestingUser: { type: "boolean" },
                            },
-                           required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone", "appointmentTitle"],
+                           required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone", "appointmentTitle", "filterByRequestingUser"],
                           additionalProperties: false
                         },
                         assigneeName: { type: "string" },
@@ -6853,8 +6896,15 @@ selectedTimezone: { type: "string" },
           throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
         }
 
-        const { getContactTodayActivity } = await import("./ghlActions");
-        return await getContactTodayActivity(ctx.user.tenantId, input.contactId);
+        const { getContactTodayActivity, getContact } = await import("./ghlActions");
+        const [activity, contactInfo] = await Promise.all([
+          getContactTodayActivity(ctx.user.tenantId, input.contactId),
+          getContact(ctx.user.tenantId, input.contactId),
+        ]);
+        return {
+          ...activity,
+          contactTimezone: contactInfo?.timezone || null,
+        };
       }),
 
     // Get workflow history for a contact (added/removed via Gunner)

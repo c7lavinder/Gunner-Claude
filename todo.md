@@ -3811,3 +3811,8 @@
 - [x] Remove "Quick Actions" tab — action buttons are already above the tabs
 - [x] Add "Upcoming" tab — shows active workflows, scheduled SMS, pending tasks from coach_action_log + upcoming tasks
 - [x] Restructure tabs: Today's Activity | Upcoming | Notes & Calls
+
+## Task Center Bug Fix — Round 10
+- [x] Show contact timezone in the task center expanded view (shows current local time + TZ abbreviation next to phone/email)
+- [x] Bug: AI coach moves the wrong person's task — added filterByRequestingUser to parseIntent + findTaskByKeyword assignedTo filter
+- [x] Bug: AI coach doesn't update appointment time when user corrects it — added pending action context to parseIntent + updated detectInstruction to exclude corrections

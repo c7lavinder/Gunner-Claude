@@ -249,7 +249,7 @@ async function searchLocalContactCache(
 export async function getContact(
   tenantId: number,
   contactId: string
-): Promise<{ id: string; name: string; phone: string; email: string; assignedTo?: string } | null> {
+): Promise<{ id: string; name: string; phone: string; email: string; assignedTo?: string; timezone?: string } | null> {
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) return null;
 
@@ -262,6 +262,7 @@ export async function getContact(
       phone: c.phone || "",
       email: c.email || "",
       assignedTo: c.assignedTo || undefined,
+      timezone: c.timezone || c.timeZone || undefined,
     };
   } catch (error) {
     console.error(`[GHLActions] getContact error for ${contactId}:`, error);
@@ -1114,13 +1115,26 @@ export async function deleteTask(
 export async function findTaskByKeyword(
   tenantId: number,
   contactId: string,
-  keyword?: string
+  keyword?: string,
+  filterByAssignedTo?: string
 ): Promise<{ id: string; title: string; dueDate: string } | null> {
   const tasks = await getTasksForContact(tenantId, contactId);
   if (tasks.length === 0) return null;
 
   // Filter to incomplete tasks only
-  const incomplete = tasks.filter(t => !t.completed);
+  let incomplete = tasks.filter(t => !t.completed);
+  
+  // If filterByAssignedTo is provided, filter tasks assigned to that user
+  if (filterByAssignedTo) {
+    const assigneeFiltered = incomplete.filter(t => t.assignedTo === filterByAssignedTo);
+    if (assigneeFiltered.length > 0) {
+      incomplete = assigneeFiltered;
+      console.log(`[GHLActions] findTaskByKeyword: Filtered to ${assigneeFiltered.length} tasks assigned to ${filterByAssignedTo}`);
+    } else {
+      console.log(`[GHLActions] findTaskByKeyword: No tasks assigned to ${filterByAssignedTo}, falling back to all incomplete tasks`);
+    }
+  }
+  
   const searchPool = incomplete.length > 0 ? incomplete : tasks;
 
   if (!keyword || keyword.trim() === "") {
@@ -1836,8 +1850,13 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         // Find the task to update
         let taskId = payload.taskId;
         if (!taskId) {
-          // Auto-resolve task by keyword/title
-          const matched = await findTaskByKeyword(action.tenantId, contactId, payload.taskKeyword || payload.title);
+          // If the user said "my task", filter by the requesting user's GHL ID
+          const assigneeFilter = payload.filterByRequestingUser ? requestingUserGhlId : undefined;
+          if (payload.filterByRequestingUser) {
+            console.log(`[GHLActions] update_task: User said 'my task' — filtering by assignee GHL ID: ${requestingUserGhlId || 'unknown'}`);
+          }
+          // Auto-resolve task by keyword/title, optionally filtered by assignee
+          const matched = await findTaskByKeyword(action.tenantId, contactId, payload.taskKeyword || payload.title, assigneeFilter);
           if (!matched) throw new Error("No tasks found for this contact.");
           taskId = matched.id;
           console.log(`[GHLActions] Resolved task: "${matched.title}" (${taskId})`);

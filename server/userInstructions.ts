@@ -63,6 +63,13 @@ NOT preference-setting (these are questions or actions):
 - "What's my team's average score?" → data question
 - "Add a note to John" → CRM action
 - "Ah, it moved it to buyer pipeline?" → complaint/observation (NOT a preference)
+- "Need that to be 4 PM EST" → correction to a pending action (NOT a preference)
+- "Change the time to 3 PM" → correction to a pending action (NOT a preference)
+- "Make it tomorrow instead" → correction to a pending action (NOT a preference)
+- "Actually, use the other pipeline" → correction to a pending action (NOT a preference)
+- "Change the title to..." → correction to a pending action (NOT a preference)
+
+CRITICAL: If the message is a SHORT correction or modification request (changing a time, date, name, or detail), it is NOT a preference — it's a correction to a recent action. Only classify as a preference if the user is setting a PERMANENT rule for future behavior (uses words like "always", "from now on", "never", "default to").
 
 Return JSON:
 {

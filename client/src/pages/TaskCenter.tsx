@@ -637,7 +637,7 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       </div>
 
       {/* Contact Info Line */}
-      <div className="flex items-center gap-4 text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+      <div className="flex items-center gap-4 text-xs flex-wrap" style={{ color: "var(--g-text-tertiary)" }}>
         {contactPhone && (
           <span className="flex items-center gap-1">
             <Phone className="h-3 w-3" />
@@ -646,6 +646,30 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
         )}
         {(task.contactEmail || context?.contactEmail) && (
           <span>{task.contactEmail || context?.contactEmail}</span>
+        )}
+        {todayActivity?.contactTimezone && (
+          <span className="flex items-center gap-1" title={`Contact timezone: ${todayActivity.contactTimezone}`}>
+            <Clock className="h-3 w-3" />
+            {(() => {
+              try {
+                const now = new Date();
+                const localTime = now.toLocaleTimeString("en-US", { 
+                  timeZone: todayActivity.contactTimezone, 
+                  hour: "numeric", 
+                  minute: "2-digit",
+                  hour12: true 
+                });
+                // Get short timezone abbreviation
+                const tzAbbr = now.toLocaleTimeString("en-US", { 
+                  timeZone: todayActivity.contactTimezone, 
+                  timeZoneName: "short" 
+                }).split(" ").pop();
+                return `${localTime} ${tzAbbr}`;
+              } catch {
+                return todayActivity.contactTimezone;
+              }
+            })()}
+          </span>
         )}
       </div>
 
