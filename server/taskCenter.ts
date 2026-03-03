@@ -79,16 +79,17 @@ function getCachedTasks(key: string): GHLTask[] | null {
 // ─── TASK SEARCH ────────────────────────────────────────
 
 /**
- * Fetch tasks across all known contacts for a tenant.
- * Uses the per-contact GET /contacts/:contactId/tasks API (contacts.readonly scope)
- * since the location-level search requires locations/tasks.readonly which may not
- * be authorized.
+ * Fetch tasks across all contacts for a tenant.
  * 
  * Strategy:
- * 1. Get distinct ghlContactIds from our calls database (most recent first)
- * 2. Fetch tasks for each contact in parallel (batches of 10)
- * 3. Filter and aggregate results
+ * 1. Use GHL POST /contacts/search to get recently updated contacts (broad pool)
+ * 2. Also include contacts from our calls DB (ensures we cover active leads)
+ * 3. Fetch tasks for each unique contact in parallel (batches of 10)
  * 4. Cache for 5 minutes to avoid excessive API calls
+ * 
+ * The GHL location has ~14k contacts. We scan the 500 most recently updated
+ * ones plus any contacts with call history in Gunner. This gives broad
+ * coverage without hitting API rate limits.
  */
 export async function searchLocationTasks(
   tenantId: number,
@@ -103,72 +104,45 @@ export async function searchLocationTasks(
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured");
 
-  // Check cache first
-  const cacheKey = getCacheKey(tenantId, options.assignedTo);
+  // Check cache first (use a single cache key per tenant for the full set)
+  const cacheKey = `tasks:${tenantId}`;
   const cached = getCachedTasks(cacheKey);
   if (cached) {
     console.log(`[TaskCenter] Returning ${cached.length} cached tasks for tenant ${tenantId}`);
-    let filtered = cached;
-    if (options.completed === false) {
-      filtered = filtered.filter(t => !t.completed);
-    } else if (options.completed === true) {
-      filtered = filtered.filter(t => t.completed);
-    }
-    if (options.query) {
-      const q = options.query.toLowerCase();
-      filtered = filtered.filter(t =>
-        t.title.toLowerCase().includes(q) ||
-        (t.contactName && t.contactName.toLowerCase().includes(q))
-      );
-    }
-    return filtered;
+    return applyTaskFilters(cached, options);
   }
 
-  // Get distinct contacts from our calls database
-  const db = await getDb();
-  if (!db) return [];
-
   try {
-    // Get contacts with recent activity (ordered by most recent call)
-    // MySQL doesn't support selectDistinctOn, use raw SQL
-    const contactRows = await db
-      .select({
-        ghlContactId: calls.ghlContactId,
-        lastCallDate: sql<Date>`MAX(${calls.createdAt})`.as('lastCallDate'),
-      })
-      .from(calls)
-      .where(
-        and(
-          eq(calls.tenantId, tenantId),
-          isNotNull(calls.ghlContactId)
-        )
-      )
-      .groupBy(calls.ghlContactId)
-      .orderBy(desc(sql`MAX(${calls.createdAt})`))
-      .limit(100); // Limit to 100 most recent contacts
+    // Step 1: Get recently updated contacts from GHL (broad pool)
+    const ghlContactIds = await getRecentGHLContactIds(creds, 500);
+    console.log(`[TaskCenter] Got ${ghlContactIds.size} contacts from GHL search (tenant ${tenantId})`);
 
-    const contactIds = contactRows
-      .map(r => r.ghlContactId)
-      .filter((id): id is string => !!id);
+    // Step 2: Also get contacts from our calls DB
+    const dbContactIds = await getCallsDBContactIds(tenantId, 200);
+    console.log(`[TaskCenter] Got ${dbContactIds.length} contacts from calls DB (tenant ${tenantId})`);
 
-    console.log(`[TaskCenter] Fetching tasks for ${contactIds.length} contacts (tenant ${tenantId})`);
+    // Merge into a unique set
+    for (const id of dbContactIds) {
+      ghlContactIds.add(id);
+    }
 
-    if (contactIds.length === 0) {
+    const allContactIds = Array.from(ghlContactIds);
+    console.log(`[TaskCenter] Total unique contacts to scan: ${allContactIds.length}`);
+
+    if (allContactIds.length === 0) {
       return [];
     }
 
-    // Fetch tasks for all contacts in parallel batches of 10
+    // Step 3: Fetch tasks for all contacts in parallel batches
     const allTasks: GHLTask[] = [];
-    const BATCH_SIZE = 10;
+    const BATCH_SIZE = 15;
 
-    for (let i = 0; i < contactIds.length; i += BATCH_SIZE) {
-      const batch = contactIds.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < allContactIds.length; i += BATCH_SIZE) {
+      const batch = allContactIds.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
         batch.map(async (contactId) => {
           try {
             const tasks = await getTasksForContact(tenantId, contactId);
-            // Skip individual contact lookups during bulk fetch to keep it fast.
-            // Contact details are fetched on-demand when a task is expanded.
             return tasks.map((t: any) => ({
               id: t.id,
               title: t.title || "Untitled Task",
@@ -182,7 +156,7 @@ export async function searchLocationTasks(
               contactEmail: "",
             }));
           } catch (error: any) {
-            console.warn(`[TaskCenter] Failed to fetch tasks for contact ${contactId}:`, error?.message);
+            // Silently skip contacts that fail (deleted, etc.)
             return [];
           }
         })
@@ -193,32 +167,118 @@ export async function searchLocationTasks(
       }
     }
 
-    console.log(`[TaskCenter] Fetched ${allTasks.length} total tasks from ${contactIds.length} contacts`);
+    console.log(`[TaskCenter] Fetched ${allTasks.length} total tasks from ${allContactIds.length} contacts`);
 
     // Cache ALL tasks (before filtering)
     taskCache.set(cacheKey, { tasks: allTasks, fetchedAt: Date.now() });
 
-    // Apply filters
-    let filtered = allTasks;
-    if (options.assignedTo && options.assignedTo.length > 0) {
-      filtered = filtered.filter(t => options.assignedTo!.includes(t.assignedTo));
-    }
-    if (options.completed === false) {
-      filtered = filtered.filter(t => !t.completed);
-    } else if (options.completed === true) {
-      filtered = filtered.filter(t => t.completed);
-    }
-    if (options.query) {
-      const q = options.query.toLowerCase();
-      filtered = filtered.filter(t =>
-        t.title.toLowerCase().includes(q) ||
-        (t.contactName && t.contactName.toLowerCase().includes(q))
-      );
-    }
-
-    return filtered;
+    return applyTaskFilters(allTasks, options);
   } catch (error: any) {
     console.error("[TaskCenter] searchLocationTasks error:", error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Apply filters (assignedTo, completed, query) to a task list.
+ */
+function applyTaskFilters(
+  tasks: GHLTask[],
+  options: { assignedTo?: string[]; completed?: boolean; query?: string }
+): GHLTask[] {
+  let filtered = tasks;
+  if (options.assignedTo && options.assignedTo.length > 0) {
+    filtered = filtered.filter(t => options.assignedTo!.includes(t.assignedTo));
+  }
+  if (options.completed === false) {
+    filtered = filtered.filter(t => !t.completed);
+  } else if (options.completed === true) {
+    filtered = filtered.filter(t => t.completed);
+  }
+  if (options.query) {
+    const q = options.query.toLowerCase();
+    filtered = filtered.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      (t.contactName && t.contactName.toLowerCase().includes(q))
+    );
+  }
+  return filtered;
+}
+
+/**
+ * Get recently updated contact IDs from GHL using POST /contacts/search.
+ * Paginates through up to `maxContacts` contacts sorted by most recently updated.
+ */
+async function getRecentGHLContactIds(
+  creds: { apiKey: string; locationId: string },
+  maxContacts: number
+): Promise<Set<string>> {
+  const contactIds = new Set<string>();
+  const PAGE_SIZE = 100;
+  const maxPages = Math.ceil(maxContacts / PAGE_SIZE);
+
+  for (let page = 1; page <= maxPages; page++) {
+    try {
+      const data = await ghlFetch(
+        creds as any,
+        `/contacts/search`,
+        "POST",
+        {
+          locationId: creds.locationId,
+          page,
+          pageLimit: PAGE_SIZE,
+          // Sort by most recently updated to get active contacts first
+          sort: { field: "dateUpdated", direction: "desc" },
+        }
+      );
+
+      const contacts = data.contacts || [];
+      for (const c of contacts) {
+        if (c.id) contactIds.add(c.id);
+      }
+
+      // Stop if we got fewer than a full page (no more results)
+      if (contacts.length < PAGE_SIZE) break;
+    } catch (error: any) {
+      console.warn(`[TaskCenter] GHL contacts/search page ${page} failed:`, error?.message);
+      break;
+    }
+  }
+
+  return contactIds;
+}
+
+/**
+ * Get contact IDs from our calls database (contacts with call history).
+ */
+async function getCallsDBContactIds(
+  tenantId: number,
+  limit: number
+): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const contactRows = await db
+      .select({
+        ghlContactId: calls.ghlContactId,
+      })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          isNotNull(calls.ghlContactId)
+        )
+      )
+      .groupBy(calls.ghlContactId)
+      .orderBy(desc(sql`MAX(${calls.createdAt})`))
+      .limit(limit);
+
+    return contactRows
+      .map(r => r.ghlContactId)
+      .filter((id): id is string => !!id);
+  } catch (error) {
+    console.error("[TaskCenter] getCallsDBContactIds error:", error);
     return [];
   }
 }

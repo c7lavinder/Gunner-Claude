@@ -3752,3 +3752,4 @@
 
 ## Task Center Bug Fixes
 - [x] Bug: Task Center shows 0 tasks — fixed by switching from location-level search (requires locations/tasks.readonly scope) to contact-level API (contacts.readonly scope)
+- [x] Bug: Task Center only shows 7 tasks — fixed by using GHL POST /contacts/search to scan 500 most recently updated contacts + 200 from calls DB
