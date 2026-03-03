@@ -3805,3 +3805,9 @@
 
 ## Task Center Bug Fix — Round 8
 - [x] Bug: Calendar appointment creation fails with "user id not part of calendar team" — fixed by not passing assignedUserId to GHL, letting calendar handle assignment
+
+## Task Center Bug Fix — Round 9
+- [x] Bug: Today's Activity shows 0 SMS, 0 Calls, 0 Emails — conversations API works, cleaned up debug logging
+- [x] Remove "Quick Actions" tab — action buttons are already above the tabs
+- [x] Add "Upcoming" tab — shows active workflows, scheduled SMS, pending tasks from coach_action_log + upcoming tasks
+- [x] Restructure tabs: Today's Activity | Upcoming | Notes & Calls

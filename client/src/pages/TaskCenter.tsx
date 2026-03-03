@@ -67,6 +67,9 @@ import {
   ArrowRight,
   ChevronsUpDown,
   Check,
+  GitBranch,
+  Mail,
+  Timer,
 } from "lucide-react";
 
 // ─── HELPERS ────────────────────────────────────────────
@@ -127,6 +130,7 @@ function TaskRow({
   onExpand,
   isExpanded,
   isCompleting,
+  allTasks,
 }: {
   task: Task;
   onComplete: () => void;
@@ -135,6 +139,7 @@ function TaskRow({
   onExpand: () => void;
   isExpanded: boolean;
   isCompleting: boolean;
+  allTasks: Task[];
 }) {
   const dueDate = task.dueDate ? new Date(task.dueDate) : null;
   const dueDateStr = dueDate
@@ -341,14 +346,14 @@ function TaskRow({
       </div>
 
       {/* Expanded section */}
-      {isExpanded && <TaskExpandedSection task={task} />}
+      {isExpanded && <TaskExpandedSection task={task} allTasks={allTasks} />}
     </div>
   );
 }
 
 // ─── EXPANDED SECTION ───────────────────────────────────
 
-function TaskExpandedSection({ task }: { task: Task }) {
+function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] }) {
   const utils = trpc.useUtils();
 
   // Fetch contact context when expanded
@@ -372,8 +377,55 @@ function TaskExpandedSection({ task }: { task: Task }) {
     { enabled: !!task.contactId }
   );
 
-  // Active tab: "actions" (default) | "activity" | "notes"
-  const [activeTab, setActiveTab] = useState<"actions" | "activity" | "notes">("actions");
+  // Fetch upcoming actions for this contact (active workflows, scheduled SMS, pending tasks)
+  const { data: upcomingActions, isLoading: upcomingLoading } = trpc.taskCenter.getContactUpcomingActions.useQuery(
+    { contactId: task.contactId },
+    { enabled: !!task.contactId }
+  );
+
+  // Active tab: "activity" (default) | "upcoming" | "notes"
+  const [activeTab, setActiveTab] = useState<"activity" | "upcoming" | "notes">("activity");
+
+  // Get upcoming tasks for this contact (next 3 future tasks, excluding the current task)
+  const contactUpcomingTasks = useMemo(() => {
+    if (!task.contactId || !allTasks) return [];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return allTasks
+      .filter(t => 
+        t.contactId === task.contactId && 
+        t.id !== task.id && 
+        t.dueDate && 
+        new Date(t.dueDate) >= now
+      )
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .slice(0, 3);
+  }, [task.contactId, task.id, allTasks]);
+
+  // Combine upcoming actions from backend + upcoming tasks from frontend
+  const allUpcomingItems = useMemo(() => {
+    const items: Array<{ id: string; type: string; label: string; detail: string; icon: string }> = [];
+    // Add backend upcoming actions (active workflows, scheduled SMS, etc.)
+    if (upcomingActions) {
+      for (const action of upcomingActions) {
+        items.push(action);
+      }
+    }
+    // Add upcoming tasks from the task list
+    for (const upTask of contactUpcomingTasks) {
+      const dueDate = upTask.dueDate ? new Date(upTask.dueDate) : null;
+      items.push({
+        id: `task-${upTask.id}`,
+        type: "task",
+        label: upTask.title,
+        detail: dueDate
+          ? `Due ${dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}${upTask.assignedMemberName ? ` · ${upTask.assignedMemberName}` : ""}`
+          : upTask.assignedMemberName || "No date",
+        icon: "task",
+      });
+    }
+    return items;
+  }, [upcomingActions, contactUpcomingTasks]);
 
   // Quick action states
   const [showCallDialog, setShowCallDialog] = useState(false);
@@ -597,9 +649,9 @@ function TaskExpandedSection({ task }: { task: Task }) {
         )}
       </div>
 
-      {/* Tabs: Actions | Today's Activity | Notes */}
+      {/* Tabs: Today's Activity | Upcoming | Notes & Calls */}
       <div className="flex gap-1 rounded-lg p-0.5" style={{ background: "var(--g-bg-inset)" }}>
-        {(["actions", "activity", "notes"] as const).map((tab) => (
+        {(["activity", "upcoming", "notes"] as const).map((tab) => (
           <button
             key={tab}
             className="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all"
@@ -610,7 +662,7 @@ function TaskExpandedSection({ task }: { task: Task }) {
             }}
             onClick={() => setActiveTab(tab)}
           >
-            {tab === "actions" ? "Quick Actions" : tab === "activity" ? "Today's Activity" : "Notes & Calls"}
+            {tab === "activity" ? "Today's Activity" : tab === "upcoming" ? `Upcoming${allUpcomingItems.length > 0 ? ` (${allUpcomingItems.length})` : ""}` : "Notes & Calls"}
           </button>
         ))}
       </div>
@@ -743,6 +795,73 @@ function TaskExpandedSection({ task }: { task: Task }) {
               )}
             </>
           ) : null}
+        </div>
+      ) : activeTab === "upcoming" ? (
+        <div className="space-y-3">
+          {upcomingLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : allUpcomingItems.length > 0 ? (
+            <div className="space-y-1.5">
+              {allUpcomingItems.map((item) => {
+                const iconColor = item.icon === "workflow" ? "oklch(0.7 0.18 300)"
+                  : item.icon === "sms" ? "oklch(0.65 0.15 250)"
+                  : item.icon === "email" ? "oklch(0.75 0.15 85)"
+                  : "oklch(0.7 0.15 150)";
+                const IconComponent = item.icon === "workflow" ? GitBranch
+                  : item.icon === "sms" ? MessageSquare
+                  : item.icon === "email" ? Mail
+                  : CalendarDays;
+                const typeBadge = item.type === "workflow" ? "Workflow"
+                  : item.type === "scheduled_sms" ? "SMS"
+                  : item.type === "scheduled_email" ? "Email"
+                  : item.type === "task" ? "Task"
+                  : "Action";
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-md px-3 py-2.5 flex items-start gap-3"
+                    style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
+                  >
+                    <div
+                      className="shrink-0 mt-0.5 rounded-full p-1.5"
+                      style={{ background: `color-mix(in oklch, ${iconColor} 15%, transparent)` }}
+                    >
+                      <IconComponent className="h-3.5 w-3.5" style={{ color: iconColor }} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                          style={{ background: `color-mix(in oklch, ${iconColor} 12%, transparent)`, color: iconColor }}
+                        >
+                          {typeBadge}
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium mt-1" style={{ color: "var(--g-text-primary)" }}>
+                        {item.label}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
+                        {item.detail}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <Timer className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)", opacity: 0.5 }} />
+              <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                No upcoming actions queued for this contact.
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--g-text-tertiary)", opacity: 0.7 }}>
+                Active workflows, scheduled SMS, and upcoming tasks will appear here.
+              </p>
+            </div>
+          )}
         </div>
       ) : null}
 
@@ -1277,6 +1396,7 @@ function TaskGroupSection({
   onComplete,
   onEdit,
   onDelete,
+  allTasks,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -1288,6 +1408,7 @@ function TaskGroupSection({
   onComplete: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
+  allTasks: Task[];
 }) {
   if (tasks.length === 0) return null;
 
@@ -1322,6 +1443,7 @@ function TaskGroupSection({
             }
             isExpanded={expandedTaskId === task.id}
             isCompleting={completingTaskIds.has(task.id)}
+            allTasks={allTasks}
           />
         ))}
       </div>
@@ -1670,6 +1792,7 @@ export default function TaskCenter() {
             onComplete={handleComplete}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            allTasks={filteredTasks}
           />
 
           {/* Due Today */}
@@ -1684,6 +1807,7 @@ export default function TaskCenter() {
             onComplete={handleComplete}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            allTasks={filteredTasks}
           />
 
           {/* Upcoming */}
@@ -1698,6 +1822,7 @@ export default function TaskCenter() {
             onComplete={handleComplete}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            allTasks={filteredTasks}
           />
         </div>
       )}

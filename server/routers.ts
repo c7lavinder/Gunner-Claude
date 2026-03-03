@@ -6872,6 +6872,21 @@ selectedTimezone: { type: "string" },
         return await getContactWorkflowHistory(ctx.user.tenantId, input.contactId);
       }),
 
+    // Get upcoming actions for a contact (active workflows, scheduled SMS, pending tasks)
+    getContactUpcomingActions: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+
+        const { getContactUpcomingActions } = await import("./ghlActions");
+        return await getContactUpcomingActions(ctx.user.tenantId, input.contactId);
+      }),
+
     // Complete a task in GHL
     completeTask: protectedProcedure
       .input(z.object({

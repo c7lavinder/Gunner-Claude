@@ -2078,7 +2078,10 @@ export async function getContactTodayActivity(
   }>;
 }> {
   const creds = await getCredentialsForTenant(tenantId);
-  if (!creds) return { smsSent: 0, callsMade: 0, emailsSent: 0, messages: [] };
+  if (!creds) {
+    console.log(`[GHLActions] getContactTodayActivity: no creds for tenant ${tenantId}`);
+    return { smsSent: 0, callsMade: 0, emailsSent: 0, messages: [] };
+  }
 
   try {
     // Step 1: Find the conversation for this contact
@@ -2093,13 +2096,24 @@ export async function getContactTodayActivity(
 
     const conversationId = conversations[0].id;
 
-    // Step 2: Get recent messages (limit 100 to cover today's activity)
+    // Step 2: Get recent messages — fetch all types separately for reliability
+    // GHL messages API: GET /conversations/:id/messages?limit=100&type=TYPE_SMS,TYPE_CALL,TYPE_EMAIL
     const msgData = await ghlFetch(
       creds,
       `/conversations/${conversationId}/messages?limit=100&type=TYPE_SMS,TYPE_CALL,TYPE_EMAIL`
     );
 
-    const allMessages = msgData.messages?.messages || msgData.messages || [];
+    // GHL returns { messages: { messages: [...], nextPage: ... } } or { messages: [...] }
+    let allMessages: any[] = [];
+    if (Array.isArray(msgData?.messages?.messages)) {
+      allMessages = msgData.messages.messages;
+    } else if (Array.isArray(msgData?.messages)) {
+      allMessages = msgData.messages;
+    } else if (msgData?.messages && typeof msgData.messages === 'object') {
+      // Try to extract from nested structure
+      const inner = Object.values(msgData.messages).find(v => Array.isArray(v));
+      if (inner) allMessages = inner as any[];
+    }
 
     // Step 3: Filter to today's messages only
     const todayStart = new Date();
@@ -2193,6 +2207,161 @@ export async function getContactWorkflowHistory(
     });
   } catch (error: any) {
     console.error(`[GHLActions] getContactWorkflowHistory error:`, error?.message);
+    return [];
+  }
+}
+
+// ============ GET CONTACT UPCOMING ACTIONS ============
+
+export interface UpcomingAction {
+  id: string;
+  type: "workflow" | "scheduled_sms" | "scheduled_task" | "scheduled_email";
+  label: string;        // e.g. "New Lead Nurture" or "Follow-up SMS"
+  detail: string;       // e.g. "Enrolled Mar 2" or "Scheduled for Mar 5 at 2:00 PM"
+  date: string;         // ISO date for sorting
+  icon: "workflow" | "sms" | "task" | "email";
+}
+
+/**
+ * Get upcoming/queued actions for a contact.
+ * Combines:
+ *  1. Active workflow enrollments (add_to_workflow without subsequent remove)
+ *  2. Pending/scheduled SMS or email from coach_action_log
+ *  3. (Tasks are handled on the frontend from allTasks)
+ */
+export async function getContactUpcomingActions(
+  tenantId: number,
+  contactId: string
+): Promise<UpcomingAction[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+
+    const { and, eq, like, desc, inArray } = await import("drizzle-orm");
+    const actions: UpcomingAction[] = [];
+
+    // 1. Active workflow enrollments
+    // Get all workflow actions for this contact, then determine which are still active
+    const workflowActions = await db.select()
+      .from(coachActionLog)
+      .where(
+        and(
+          eq(coachActionLog.tenantId, tenantId),
+          eq(coachActionLog.targetContactId, contactId),
+          like(coachActionLog.actionType, "%workflow%"),
+          eq(coachActionLog.status, "executed")
+        )
+      )
+      .orderBy(desc(coachActionLog.createdAt))
+      .limit(50);
+
+    // Build a map: workflowId -> latest action (add or remove)
+    const workflowMap = new Map<string, { action: string; name: string; date: string; id: number }>();
+    for (const row of workflowActions) {
+      const params = typeof row.payload === "string" ? JSON.parse(row.payload) : (row.payload || {}) as any;
+      const wfId = params.workflowId || "";
+      if (!wfId) continue;
+      
+      // Only keep the most recent action per workflow
+      if (!workflowMap.has(wfId)) {
+        workflowMap.set(wfId, {
+          action: row.actionType?.includes("remove") ? "removed" : "added",
+          name: params.workflowName || "Unknown Workflow",
+          date: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+          id: row.id,
+        });
+      }
+    }
+
+    // Only include workflows where the latest action is "added" (still active)
+    Array.from(workflowMap.entries()).forEach(([wfId, wf]) => {
+      if (wf.action === "added") {
+        const enrollDate = new Date(wf.date);
+        actions.push({
+          id: `wf-${wf.id}`,
+          type: "workflow",
+          label: wf.name,
+          detail: `Enrolled ${enrollDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+          date: wf.date,
+          icon: "workflow",
+        });
+      }
+    });
+
+    // 2. Pending/scheduled actions from coach_action_log
+    // Look for SMS, email, or task actions that are pending or confirmed but not yet executed
+    const pendingActions = await db.select()
+      .from(coachActionLog)
+      .where(
+        and(
+          eq(coachActionLog.tenantId, tenantId),
+          eq(coachActionLog.targetContactId, contactId),
+          inArray(coachActionLog.status, ["pending", "confirmed"]),
+          inArray(coachActionLog.actionType, ["send_sms", "create_task", "create_appointment"])
+        )
+      )
+      .orderBy(desc(coachActionLog.createdAt))
+      .limit(10);
+
+    for (const row of pendingActions) {
+      const params = typeof row.payload === "string" ? JSON.parse(row.payload) : (row.payload || {}) as any;
+      
+      let actionType: UpcomingAction["type"] = "scheduled_sms";
+      let icon: UpcomingAction["icon"] = "sms";
+      let label = "";
+      let detail = "";
+      
+      if (row.actionType === "send_sms") {
+        actionType = "scheduled_sms";
+        icon = "sms";
+        const msgPreview = (params.message || "").substring(0, 60);
+        label = msgPreview ? `SMS: "${msgPreview}${(params.message || "").length > 60 ? "..." : ""}"` : "Scheduled SMS";
+        
+        if (params.scheduledDate && params.scheduledTime) {
+          const schedDate = new Date(`${params.scheduledDate}T${params.scheduledTime}:00`);
+          detail = `Scheduled for ${schedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${schedDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+        } else {
+          detail = `Pending — ${row.status}`;
+        }
+      } else if (row.actionType === "create_task") {
+        actionType = "scheduled_task";
+        icon = "task";
+        label = params.title || "New Task";
+        detail = params.dueDate 
+          ? `Due ${new Date(params.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+          : `Pending — ${row.status}`;
+      } else if (row.actionType === "create_appointment") {
+        actionType = "scheduled_task"; // reuse task icon
+        icon = "task";
+        label = params.title || "Appointment";
+        if (params.startTime) {
+          const aptDate = new Date(params.startTime);
+          detail = `${aptDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${aptDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+        } else {
+          detail = `Pending — ${row.status}`;
+        }
+      }
+      
+      actions.push({
+        id: `action-${row.id}`,
+        type: actionType,
+        label,
+        detail,
+        date: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+        icon,
+      });
+    }
+
+    // Sort: active workflows first, then by date descending
+    actions.sort((a, b) => {
+      if (a.type === "workflow" && b.type !== "workflow") return -1;
+      if (a.type !== "workflow" && b.type === "workflow") return 1;
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+    return actions;
+  } catch (error: any) {
+    console.error(`[GHLActions] getContactUpcomingActions error:`, error?.message);
     return [];
   }
 }
