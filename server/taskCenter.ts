@@ -1,17 +1,22 @@
 /**
  * Task Center Service
  * 
- * Provides location-level task search from GHL, contact context enrichment,
- * and quick action execution for the Lead Command Center page.
+ * Fetches tasks per-contact from GHL (using the contacts.readonly scope),
+ * enriches them with grouping and team member names, and provides
+ * contact context for the Lead Command Center page.
+ * 
+ * Uses an in-memory cache with 5-minute TTL to avoid hammering the GHL API
+ * on every page load / auto-refresh.
  */
 
 import {
   getCredentialsForTenant,
   ghlFetch,
+  getTasksForContact,
 } from "./ghlActions";
 import { getDb } from "./db";
 import { calls, callGrades, teamMembers } from "../drizzle/schema";
-import { eq, and, desc, isNotNull } from "drizzle-orm";
+import { eq, and, desc, isNotNull, sql } from "drizzle-orm";
 
 // ─── TYPES ──────────────────────────────────────────────
 
@@ -46,11 +51,44 @@ export interface TaskContactContext {
   lastCallId: number | null;
 }
 
+// ─── TASK CACHE ────────────────────────────────────────
+
+interface CachedTaskResult {
+  tasks: GHLTask[];
+  fetchedAt: number;
+}
+
+const taskCache = new Map<string, CachedTaskResult>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCacheKey(tenantId: number, assignedTo?: string[]): string {
+  const assignedKey = assignedTo ? assignedTo.sort().join(",") : "all";
+  return `${tenantId}:${assignedKey}`;
+}
+
+function getCachedTasks(key: string): GHLTask[] | null {
+  const cached = taskCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.fetchedAt > CACHE_TTL_MS) {
+    taskCache.delete(key);
+    return null;
+  }
+  return cached.tasks;
+}
+
 // ─── TASK SEARCH ────────────────────────────────────────
 
 /**
- * Search tasks at the location level from GHL.
- * Supports filtering by assignedTo (GHL user IDs) and completion status.
+ * Fetch tasks across all known contacts for a tenant.
+ * Uses the per-contact GET /contacts/:contactId/tasks API (contacts.readonly scope)
+ * since the location-level search requires locations/tasks.readonly which may not
+ * be authorized.
+ * 
+ * Strategy:
+ * 1. Get distinct ghlContactIds from our calls database (most recent first)
+ * 2. Fetch tasks for each contact in parallel (batches of 10)
+ * 3. Filter and aggregate results
+ * 4. Cache for 5 minutes to avoid excessive API calls
  */
 export async function searchLocationTasks(
   tenantId: number,
@@ -65,47 +103,122 @@ export async function searchLocationTasks(
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) throw new Error("No GHL credentials configured");
 
-  const body: any = {
-    limit: options.limit || 100,
-    skip: options.skip || 0,
-  };
+  // Check cache first
+  const cacheKey = getCacheKey(tenantId, options.assignedTo);
+  const cached = getCachedTasks(cacheKey);
+  if (cached) {
+    console.log(`[TaskCenter] Returning ${cached.length} cached tasks for tenant ${tenantId}`);
+    let filtered = cached;
+    if (options.completed === false) {
+      filtered = filtered.filter(t => !t.completed);
+    } else if (options.completed === true) {
+      filtered = filtered.filter(t => t.completed);
+    }
+    if (options.query) {
+      const q = options.query.toLowerCase();
+      filtered = filtered.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        (t.contactName && t.contactName.toLowerCase().includes(q))
+      );
+    }
+    return filtered;
+  }
 
-  if (options.assignedTo && options.assignedTo.length > 0) {
-    body.assignedTo = options.assignedTo;
-  }
-  if (options.completed !== undefined) {
-    body.completed = options.completed;
-  }
-  if (options.query) {
-    body.query = options.query;
-  }
+  // Get distinct contacts from our calls database
+  const db = await getDb();
+  if (!db) return [];
 
   try {
-    const data = await ghlFetch(
-      creds,
-      `/locations/${creds.locationId}/tasks/search`,
-      "POST",
-      body
-    );
+    // Get contacts with recent activity (ordered by most recent call)
+    // MySQL doesn't support selectDistinctOn, use raw SQL
+    const contactRows = await db
+      .select({
+        ghlContactId: calls.ghlContactId,
+        lastCallDate: sql<Date>`MAX(${calls.createdAt})`.as('lastCallDate'),
+      })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          isNotNull(calls.ghlContactId)
+        )
+      )
+      .groupBy(calls.ghlContactId)
+      .orderBy(desc(sql`MAX(${calls.createdAt})`))
+      .limit(100); // Limit to 100 most recent contacts
 
-    const tasks = data.tasks || [];
-    return tasks.map((t: any) => ({
-      id: t.id,
-      title: t.title || t.name || "Untitled Task",
-      body: t.body || t.description || "",
-      assignedTo: t.assignedTo || "",
-      dueDate: t.dueDate || "",
-      completed: t.completed || false,
-      contactId: t.contactId || "",
-      contactName: t.contact
-        ? `${t.contact.firstName || ""} ${t.contact.lastName || ""}`.trim() || t.contact.name || ""
-        : "",
-      contactPhone: t.contact?.phone || "",
-      contactEmail: t.contact?.email || "",
-    }));
+    const contactIds = contactRows
+      .map(r => r.ghlContactId)
+      .filter((id): id is string => !!id);
+
+    console.log(`[TaskCenter] Fetching tasks for ${contactIds.length} contacts (tenant ${tenantId})`);
+
+    if (contactIds.length === 0) {
+      return [];
+    }
+
+    // Fetch tasks for all contacts in parallel batches of 10
+    const allTasks: GHLTask[] = [];
+    const BATCH_SIZE = 10;
+
+    for (let i = 0; i < contactIds.length; i += BATCH_SIZE) {
+      const batch = contactIds.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (contactId) => {
+          try {
+            const tasks = await getTasksForContact(tenantId, contactId);
+            // Skip individual contact lookups during bulk fetch to keep it fast.
+            // Contact details are fetched on-demand when a task is expanded.
+            return tasks.map((t: any) => ({
+              id: t.id,
+              title: t.title || "Untitled Task",
+              body: t.body || "",
+              assignedTo: t.assignedTo || "",
+              dueDate: t.dueDate || "",
+              completed: !!t.completed,
+              contactId,
+              contactName: "",
+              contactPhone: "",
+              contactEmail: "",
+            }));
+          } catch (error: any) {
+            console.warn(`[TaskCenter] Failed to fetch tasks for contact ${contactId}:`, error?.message);
+            return [];
+          }
+        })
+      );
+
+      for (const tasks of batchResults) {
+        allTasks.push(...tasks);
+      }
+    }
+
+    console.log(`[TaskCenter] Fetched ${allTasks.length} total tasks from ${contactIds.length} contacts`);
+
+    // Cache ALL tasks (before filtering)
+    taskCache.set(cacheKey, { tasks: allTasks, fetchedAt: Date.now() });
+
+    // Apply filters
+    let filtered = allTasks;
+    if (options.assignedTo && options.assignedTo.length > 0) {
+      filtered = filtered.filter(t => options.assignedTo!.includes(t.assignedTo));
+    }
+    if (options.completed === false) {
+      filtered = filtered.filter(t => !t.completed);
+    } else if (options.completed === true) {
+      filtered = filtered.filter(t => t.completed);
+    }
+    if (options.query) {
+      const q = options.query.toLowerCase();
+      filtered = filtered.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        (t.contactName && t.contactName.toLowerCase().includes(q))
+      );
+    }
+
+    return filtered;
   } catch (error: any) {
     console.error("[TaskCenter] searchLocationTasks error:", error?.message || error);
-    // If the location-level search fails, return empty
     return [];
   }
 }

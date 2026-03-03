@@ -152,9 +152,9 @@ function TaskRow({
             </span>
           </div>
           <div className="flex items-center gap-3 mt-0.5 text-xs" style={{ color: "var(--g-text-secondary)" }}>
-            {task.contactName && (
+            {task.contactId && (
               <span className="font-medium" style={{ color: "var(--g-text-primary)", opacity: 0.7 }}>
-                {task.contactName}
+                {task.contactName || `Contact`}
               </span>
             )}
             {task.assignedMemberName && (

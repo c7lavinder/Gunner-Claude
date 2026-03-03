@@ -3749,3 +3749,6 @@
 - [x] SOP accountability: track task completion rates, overdue patterns
 - [x] Super admin only access initially (feature flag)
 - [x] Add Lead Command Center to navigation menu
+
+## Task Center Bug Fixes
+- [x] Bug: Task Center shows 0 tasks — fixed by switching from location-level search (requires locations/tasks.readonly scope) to contact-level API (contacts.readonly scope)
