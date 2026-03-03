@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -18,11 +19,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   CheckCircle2,
+  Circle,
   Phone,
   MessageSquare,
   Zap,
@@ -37,6 +46,8 @@ import {
   Search,
   FileText,
   ExternalLink,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 // ─── TYPES ──────────────────────────────────────────────
@@ -69,12 +80,16 @@ interface TeamMember {
 function TaskRow({
   task,
   onComplete,
+  onEdit,
+  onDelete,
   onExpand,
   isExpanded,
   isCompleting,
 }: {
   task: Task;
   onComplete: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
   onExpand: () => void;
   isExpanded: boolean;
   isCompleting: boolean;
@@ -108,7 +123,7 @@ function TaskRow({
       }}
     >
       <div
-        className="flex items-center gap-3 p-3 cursor-pointer transition-colors"
+        className="flex items-center gap-3 p-3 cursor-pointer transition-colors group"
         onClick={onExpand}
         style={{ borderRadius: "0.5rem" }}
         onMouseEnter={(e) => {
@@ -123,24 +138,47 @@ function TaskRow({
           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
 
-        {/* Complete button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          style={{ color: "var(--g-text-tertiary)" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onComplete();
-          }}
-          disabled={isCompleting}
-        >
-          {isCompleting ? (
-            <RefreshCw className="h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4" />
-          )}
-        </Button>
+        {/* Checkbox — Mark as complete */}
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="shrink-0 h-6 w-6 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                style={{
+                  border: isCompleting ? "none" : "2px solid var(--g-text-tertiary)",
+                  background: isCompleting ? "oklch(0.7 0.15 150)" : "transparent",
+                  cursor: isCompleting ? "wait" : "pointer",
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isCompleting) onComplete();
+                }}
+                disabled={isCompleting}
+                onMouseEnter={(e) => {
+                  if (!isCompleting) {
+                    e.currentTarget.style.borderColor = "oklch(0.7 0.15 150)";
+                    e.currentTarget.style.background = "oklch(0.7 0.15 150 / 0.15)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isCompleting) {
+                    e.currentTarget.style.borderColor = "var(--g-text-tertiary)";
+                    e.currentTarget.style.background = "transparent";
+                  }
+                }}
+              >
+                {isCompleting ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-white" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: "oklch(0.7 0.15 150)" }} />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p>Mark as complete</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         {/* Task info */}
         <div className="flex-1 min-w-0">
@@ -198,6 +236,65 @@ function TaskRow({
           >
             {dueDateStr}
           </span>
+        </div>
+
+        {/* Actions: Edit & Delete */}
+        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                  style={{ color: "var(--g-text-tertiary)" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--g-bg-card)";
+                    e.currentTarget.style.color = "var(--g-text-primary)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--g-text-tertiary)";
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>Edit task</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                  style={{ color: "var(--g-text-tertiary)" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "oklch(0.25 0.03 25 / 0.5)";
+                    e.currentTarget.style.color = "var(--g-accent)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--g-text-tertiary)";
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>Delete task</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -338,25 +435,28 @@ function TaskExpandedSection({ task }: { task: Task }) {
             {context.contactEmail && <span>{context.contactEmail}</span>}
           </div>
 
-          {/* Last Call Summary from Gunner */}
+          {/* Last call summary from Gunner */}
           {context.lastCallSummary && (
             <div
               className="rounded-md p-3"
-              style={{ background: "var(--g-bg-inset)" }}
+              style={{
+                background: "var(--g-bg-inset)",
+                border: "1px solid var(--g-border-subtle)",
+              }}
             >
-              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <FileText className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
-                <span
-                  className="text-xs font-medium"
-                  style={{ color: "var(--g-text-primary)" }}
-                >
+              <div className="flex items-center gap-2 mb-1.5">
+                <FileText className="h-3.5 w-3.5" style={{ color: "oklch(0.65 0.15 250)" }} />
+                <span className="text-xs font-semibold" style={{ color: "var(--g-text-primary)" }}>
                   Last Call Summary
                 </span>
                 {context.lastCallGrade && (
                   <Badge
-                    variant="outline"
-                    className="text-xs h-5"
-                    style={{ borderColor: "var(--g-accent)", color: "var(--g-accent)" }}
+                    className="text-xs h-4"
+                    style={{
+                      background: "var(--g-bg-card)",
+                      color: "var(--g-text-secondary)",
+                      border: "1px solid var(--g-border-subtle)",
+                    }}
                   >
                     {context.lastCallGrade}
                   </Badge>
@@ -369,48 +469,45 @@ function TaskExpandedSection({ task }: { task: Task }) {
                     })}
                   </span>
                 )}
-                {context.lastCallId && (
-                  <a
-                    href={`/calls/${context.lastCallId}`}
-                    className="text-xs flex items-center gap-0.5 hover:underline"
-                    style={{ color: "var(--g-accent)" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    View <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
               </div>
-              <p
-                className="text-xs leading-relaxed line-clamp-3"
-                style={{ color: "var(--g-text-secondary)" }}
-              >
-                {context.lastCallSummary}
+              <p className="text-xs leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>
+                {context.lastCallSummary.length > 300
+                  ? context.lastCallSummary.slice(0, 300) + "..."
+                  : context.lastCallSummary}
               </p>
+              {context.lastCallId && (
+                <a
+                  href={`/calls/${context.lastCallId}`}
+                  className="text-xs mt-1.5 inline-flex items-center gap-1 hover:underline"
+                  style={{ color: "oklch(0.65 0.15 250)" }}
+                >
+                  View full call <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
             </div>
           )}
 
           {/* Recent Notes */}
-          {context.recentNotes.length > 0 && (
+          {context.recentNotes && context.recentNotes.length > 0 && (
             <div>
-              <span
-                className="text-xs font-medium mb-1 block"
-                style={{ color: "var(--g-text-tertiary)" }}
-              >
-                Recent Notes ({context.recentNotes.length})
+              <span className="text-xs font-semibold" style={{ color: "var(--g-text-primary)" }}>
+                Recent Notes
               </span>
-              <div className="space-y-1.5">
+              <div className="mt-1.5 space-y-1.5">
                 {context.recentNotes.slice(0, 3).map((note: { id: string; body: string; dateAdded: string }) => (
                   <div
                     key={note.id}
-                    className="text-xs rounded px-2.5 py-1.5"
+                    className="rounded-md px-3 py-2"
                     style={{
-                      color: "var(--g-text-secondary)",
                       background: "var(--g-bg-inset)",
+                      border: "1px solid var(--g-border-subtle)",
                     }}
                   >
-                    <span className="line-clamp-2">{note.body}</span>
+                    <p className="text-xs" style={{ color: "var(--g-text-secondary)" }}>
+                      {note.body.length > 200 ? note.body.slice(0, 200) + "..." : note.body}
+                    </p>
                     {note.dateAdded && (
-                      <span className="text-[10px] opacity-60 ml-2">
+                      <span className="text-xs mt-1 block" style={{ color: "var(--g-text-tertiary)" }}>
                         {new Date(note.dateAdded).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
@@ -422,21 +519,14 @@ function TaskExpandedSection({ task }: { task: Task }) {
               </div>
             </div>
           )}
-
-          {/* No context available */}
-          {!context.lastCallSummary && context.recentNotes.length === 0 && (
-            <p className="text-xs italic" style={{ color: "var(--g-text-tertiary)" }}>
-              No call history or notes found for this contact.
-            </p>
-          )}
         </div>
       ) : null}
 
       {/* SMS Dialog */}
       <Dialog open={showSmsDialog} onOpenChange={setShowSmsDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send Text to {task.contactName || "Contact"}</DialogTitle>
+            <DialogTitle>Send SMS to {task.contactName || "Contact"}</DialogTitle>
           </DialogHeader>
           <Textarea
             placeholder="Type your message..."
@@ -465,12 +555,12 @@ function TaskExpandedSection({ task }: { task: Task }) {
 
       {/* Note Dialog */}
       <Dialog open={showNoteDialog} onOpenChange={setShowNoteDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Note to {task.contactName || "Contact"}</DialogTitle>
           </DialogHeader>
           <Textarea
-            placeholder="Write your note..."
+            placeholder="Write a note..."
             value={noteBody}
             onChange={(e) => setNoteBody(e.target.value)}
             rows={4}
@@ -496,7 +586,7 @@ function TaskExpandedSection({ task }: { task: Task }) {
 
       {/* Workflow Dialog */}
       <Dialog open={showWorkflowDialog} onOpenChange={setShowWorkflowDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Start Workflow for {task.contactName || "Contact"}</DialogTitle>
           </DialogHeader>
@@ -551,6 +641,8 @@ function TaskGroupSection({
   setExpandedTaskId,
   completingTaskIds,
   onComplete,
+  onEdit,
+  onDelete,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -560,6 +652,8 @@ function TaskGroupSection({
   setExpandedTaskId: (id: string | null) => void;
   completingTaskIds: Set<string>;
   onComplete: (task: Task) => void;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
 }) {
   if (tasks.length === 0) return null;
 
@@ -587,6 +681,8 @@ function TaskGroupSection({
             key={task.id}
             task={task}
             onComplete={() => onComplete(task)}
+            onEdit={() => onEdit(task)}
+            onDelete={() => onDelete(task)}
             onExpand={() =>
               setExpandedTaskId(expandedTaskId === task.id ? null : task.id)
             }
@@ -610,6 +706,15 @@ export default function TaskCenter() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
+
+  // Edit dialog state
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+
+  // Delete confirmation dialog state
+  const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 
   const isAdmin =
     user?.role === "super_admin" ||
@@ -670,6 +775,26 @@ export default function TaskCenter() {
     },
   });
 
+  // Edit task mutation
+  const editTaskMutation = trpc.taskCenter.editTask.useMutation({
+    onSuccess: () => {
+      toast.success("Task updated");
+      setEditingTask(null);
+      utils.taskCenter.getTasks.invalidate();
+    },
+    onError: (err) => toast.error("Failed to update task", { description: err.message }),
+  });
+
+  // Delete task mutation
+  const deleteTaskMutation = trpc.taskCenter.deleteTask.useMutation({
+    onSuccess: () => {
+      toast.success("Task deleted");
+      setDeletingTask(null);
+      utils.taskCenter.getTasks.invalidate();
+    },
+    onError: (err) => toast.error("Failed to delete task", { description: err.message }),
+  });
+
   // Filter tasks by search query
   const filteredTasks = useMemo(() => {
     if (!data?.tasks) return [];
@@ -706,6 +831,42 @@ export default function TaskCenter() {
     completeTaskMutation.mutate({
       contactId: task.contactId,
       taskId: task.id,
+    });
+  };
+
+  const handleEdit = (task: Task) => {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditBody(task.body || "");
+    // Format date for input[type="date"]
+    if (task.dueDate) {
+      const d = new Date(task.dueDate);
+      setEditDueDate(d.toISOString().split("T")[0]);
+    } else {
+      setEditDueDate("");
+    }
+  };
+
+  const handleDelete = (task: Task) => {
+    setDeletingTask(task);
+  };
+
+  const submitEdit = () => {
+    if (!editingTask) return;
+    editTaskMutation.mutate({
+      contactId: editingTask.contactId,
+      taskId: editingTask.id,
+      title: editTitle,
+      body: editBody,
+      dueDate: editDueDate ? new Date(editDueDate + "T12:00:00").toISOString() : undefined,
+    });
+  };
+
+  const confirmDelete = () => {
+    if (!deletingTask) return;
+    deleteTaskMutation.mutate({
+      contactId: deletingTask.contactId,
+      taskId: deletingTask.id,
     });
   };
 
@@ -873,6 +1034,8 @@ export default function TaskCenter() {
             setExpandedTaskId={setExpandedTaskId}
             completingTaskIds={completingTaskIds}
             onComplete={handleComplete}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
           />
 
           {/* Due Today */}
@@ -885,6 +1048,8 @@ export default function TaskCenter() {
             setExpandedTaskId={setExpandedTaskId}
             completingTaskIds={completingTaskIds}
             onComplete={handleComplete}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
           />
 
           {/* Upcoming */}
@@ -897,9 +1062,107 @@ export default function TaskCenter() {
             setExpandedTaskId={setExpandedTaskId}
             completingTaskIds={completingTaskIds}
             onComplete={handleComplete}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
           />
         </div>
       )}
+
+      {/* Edit Task Dialog */}
+      <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+            <DialogDescription>
+              Update the task details below. Changes will sync to GHL.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-title">Title</Label>
+              <Input
+                id="edit-title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Task title..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-body">Description</Label>
+              <Textarea
+                id="edit-body"
+                value={editBody}
+                onChange={(e) => setEditBody(e.target.value)}
+                placeholder="Task description (optional)..."
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-due-date">Due Date</Label>
+              <Input
+                id="edit-due-date"
+                type="date"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingTask(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={submitEdit}
+              disabled={!editTitle.trim() || editTaskMutation.isPending}
+            >
+              {editTaskMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deletingTask} onOpenChange={(open) => !open && setDeletingTask(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Task</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this task? This action cannot be undone and will also remove it from GHL.
+            </DialogDescription>
+          </DialogHeader>
+          {deletingTask && (
+            <div
+              className="rounded-md p-3"
+              style={{
+                background: "var(--g-bg-inset)",
+                border: "1px solid var(--g-border-subtle)",
+              }}
+            >
+              <p className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>
+                {deletingTask.title}
+              </p>
+              {deletingTask.contactName && (
+                <p className="text-xs mt-1" style={{ color: "var(--g-text-secondary)" }}>
+                  {deletingTask.contactName}
+                  {deletingTask.contactAddress ? ` — ${deletingTask.contactAddress}` : ""}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingTask(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteTaskMutation.isPending}
+            >
+              {deleteTaskMutation.isPending ? "Deleting..." : "Delete Task"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

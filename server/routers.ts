@@ -6877,6 +6877,37 @@ selectedTimezone: { type: "string" },
         return await getWorkflowsForTenant(ctx.user.tenantId);
       }),
 
+    // Delete a task
+    deleteTask: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        taskId: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { deleteTask } = await import("./ghlActions");
+        return await deleteTask(ctx.user.tenantId, input.contactId, input.taskId);
+      }),
+
+    // Edit/update a task (title, body, dueDate)
+    editTask: protectedProcedure
+      .input(z.object({
+        contactId: z.string(),
+        taskId: z.string(),
+        title: z.string().optional(),
+        body: z.string().optional(),
+        dueDate: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateTask } = await import("./ghlActions");
+        const updates: any = {};
+        if (input.title !== undefined) updates.title = input.title;
+        if (input.body !== undefined) updates.body = input.body;
+        if (input.dueDate !== undefined) updates.dueDate = input.dueDate;
+        return await updateTask(ctx.user.tenantId, input.contactId, input.taskId, updates);
+      }),
+
     // Create a new task for a contact
     createTask: protectedProcedure
       .input(z.object({

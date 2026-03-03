@@ -1087,6 +1087,26 @@ export async function updateTask(
   return { success: true };
 }
 
+// ============ ACTION 11: DELETE TASK ============
+
+export async function deleteTask(
+  tenantId: number,
+  contactId: string,
+  taskId: string
+): Promise<{ success: boolean }> {
+  const creds = await getCredentialsForTenant(tenantId);
+  if (!creds) throw new Error("No GHL credentials configured");
+
+  console.log(`[GHL] deleteTask: contactId=${contactId}, taskId=${taskId}`);
+  await ghlFetch(
+    creds,
+    `/contacts/${contactId}/tasks/${taskId}`,
+    "DELETE"
+  );
+
+  return { success: true };
+}
+
 /**
  * Find the best matching task for a contact given a keyword/title hint.
  * Returns the task ID and details, or null if no match.

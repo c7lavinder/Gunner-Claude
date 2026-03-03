@@ -458,3 +458,132 @@ describe("TaskCenter Navigation", () => {
     expect(beforeTasks).toMatch(/isAdmin|isSuperAdmin/);
   });
 });
+
+// ─── Task Row Actions tests (edit, delete, checkbox) ─────────
+
+describe("TaskCenter — Task Row Actions (Edit, Delete, Checkbox)", () => {
+  const componentSource = readFileSync(
+    join(CLIENT_DIR, "pages", "TaskCenter.tsx"),
+    "utf-8"
+  );
+
+  it("has edit task mutation wired to trpc.taskCenter.editTask", () => {
+    expect(componentSource).toContain("trpc.taskCenter.editTask.useMutation");
+  });
+
+  it("has delete task mutation wired to trpc.taskCenter.deleteTask", () => {
+    expect(componentSource).toContain("trpc.taskCenter.deleteTask.useMutation");
+  });
+
+  it("renders Pencil (edit) icon on each task row", () => {
+    expect(componentSource).toContain("Pencil");
+    expect(componentSource).toContain("Edit task");
+  });
+
+  it("renders Trash2 (delete) icon on each task row", () => {
+    expect(componentSource).toContain("Trash2");
+    expect(componentSource).toContain("Delete task");
+  });
+
+  it("has a prominent checkbox for marking tasks complete", () => {
+    expect(componentSource).toContain("Mark as complete");
+    // The checkbox is a round button with border
+    expect(componentSource).toContain("rounded-full");
+  });
+
+  it("has edit dialog with title, description, and due date fields", () => {
+    expect(componentSource).toContain("Edit Task");
+    expect(componentSource).toContain("edit-title");
+    expect(componentSource).toContain("edit-body");
+    expect(componentSource).toContain("edit-due-date");
+    expect(componentSource).toContain("Save Changes");
+  });
+
+  it("has delete confirmation dialog with destructive button", () => {
+    expect(componentSource).toContain("Delete Task");
+    expect(componentSource).toContain("Are you sure you want to delete this task");
+    expect(componentSource).toContain('variant="destructive"');
+    expect(componentSource).toContain("Delete Task");
+  });
+
+  it("edit and delete buttons appear on hover (opacity transition)", () => {
+    expect(componentSource).toContain("opacity-0 group-hover:opacity-100");
+  });
+
+  it("checkbox shows green check icon on hover", () => {
+    expect(componentSource).toContain("oklch(0.7 0.15 150)");
+    expect(componentSource).toContain("CheckCircle2");
+  });
+
+  it("passes onEdit and onDelete callbacks to TaskRow", () => {
+    expect(componentSource).toContain("onEdit={() => onEdit(task)");
+    expect(componentSource).toContain("onDelete={() => onDelete(task)");
+  });
+
+  it("invalidates task list after editing a task", () => {
+    // The editTaskMutation onSuccess should invalidate
+    const editMutationBlock = componentSource.substring(
+      componentSource.indexOf("editTaskMutation"),
+      componentSource.indexOf("deleteTaskMutation")
+    );
+    expect(editMutationBlock).toContain("utils.taskCenter.getTasks.invalidate");
+  });
+
+  it("invalidates task list after deleting a task", () => {
+    const deleteMutationBlock = componentSource.substring(
+      componentSource.indexOf("deleteTaskMutation"),
+      componentSource.indexOf("// Filter tasks by search query")
+    );
+    expect(deleteMutationBlock).toContain("utils.taskCenter.getTasks.invalidate");
+  });
+
+  it("shows toast on successful edit", () => {
+    expect(componentSource).toContain('"Task updated"');
+  });
+
+  it("shows toast on successful delete", () => {
+    expect(componentSource).toContain('"Task deleted"');
+  });
+});
+
+// ─── Backend endpoints for edit and delete ─────────────────
+
+describe("TaskCenter Backend — Edit & Delete Endpoints", () => {
+  const routerSource = readFileSync(
+    join(SERVER_DIR, "routers.ts"),
+    "utf-8"
+  );
+
+  it("has deleteTask endpoint in taskCenter router", () => {
+    expect(routerSource).toContain("deleteTask: protectedProcedure");
+  });
+
+  it("has editTask endpoint in taskCenter router", () => {
+    expect(routerSource).toContain("editTask: protectedProcedure");
+  });
+
+  it("deleteTask imports deleteTask from ghlActions", () => {
+    // Find the deleteTask procedure block
+    const deleteBlock = routerSource.substring(
+      routerSource.indexOf("deleteTask: protectedProcedure"),
+      routerSource.indexOf("editTask: protectedProcedure")
+    );
+    expect(deleteBlock).toContain('import("./ghlActions")');
+    expect(deleteBlock).toContain("deleteTask");
+  });
+
+  it("editTask imports updateTask from ghlActions", () => {
+    const editBlock = routerSource.substring(
+      routerSource.indexOf("editTask: protectedProcedure"),
+      routerSource.indexOf("createTask: protectedProcedure")
+    );
+    expect(editBlock).toContain('import("./ghlActions")');
+    expect(editBlock).toContain("updateTask");
+  });
+
+  it("deleteTask function exists in ghlActions", () => {
+    const ghlSource = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+    expect(ghlSource).toContain("export async function deleteTask");
+    expect(ghlSource).toContain("DELETE");
+  });
+});

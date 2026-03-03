@@ -3764,3 +3764,11 @@
 - [x] Added cursor-based pagination (searchAfter) for fetching all tasks across multiple pages
 - [x] Frontend search now also matches against contact address
 - [x] 61 vitest tests passing for Task Center
+
+## Task Center UI Improvements — Task Row Actions
+- [x] Add prominent checkbox to mark task as complete on each row (GHL-style)
+- [x] Add edit button on each task row (pencil icon) to edit task title/due date
+- [x] Add delete button on each task row (trash icon) to remove tasks
+- [x] Add "Actions" column/area with edit and delete icons
+- [x] Add delete task backend endpoint (deleteTask in ghlActions + router)
+- [x] Add edit task backend endpoint (editTask in router, uses existing updateTask)
