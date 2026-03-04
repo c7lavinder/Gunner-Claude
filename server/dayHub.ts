@@ -277,13 +277,14 @@ export interface UnreadConversation {
   contactId: string;
   contactName: string;
   contactPhone: string;
-  contactAddress: string; // Property address from contact cache
+  contactAddress: string; // Property address from contact record
   lastMessage: string;
   lastMessageAt: string;
   type: "sms" | "call" | "email" | "other";
   isMissedCall: boolean;
   assignedTo: string;
   teamPhone: string; // The LC phone number the lead contacted (from last inbound message)
+  activitySummary: string; // Brief context: tags, pipeline stage, recent activity
 }
 
 /**
@@ -331,6 +332,7 @@ export async function getUnreadConversations(
         isMissedCall,
         assignedTo: conv.assignedTo || conv.userId || "",
         teamPhone: "",
+        activitySummary: "",
       } as UnreadConversation;
     });
 
@@ -393,6 +395,29 @@ export async function getUnreadConversations(
                 const name = `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name;
                 if (name) convo.contactName = toTitleCase(name);
               }
+              // Build activity summary from contact data
+              const summaryParts: string[] = [];
+              // Tags (e.g., "Hot Lead", "Motivated Seller")
+              if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) {
+                summaryParts.push(c.tags.slice(0, 3).join(", "));
+              }
+              // Pipeline stage
+              const pipelineName = c.pipelineStage || c.opportunities?.[0]?.pipelineStageId || "";
+              const stageName = c.pipelineStageName || c.opportunities?.[0]?.stageName || c.opportunities?.[0]?.status || "";
+              if (stageName) summaryParts.push(`Stage: ${stageName}`);
+              // DND status
+              if (c.dnd) summaryParts.push("DND");
+              // Date added
+              if (c.dateAdded) {
+                const addedDate = new Date(c.dateAdded);
+                const daysDiff = Math.floor((Date.now() - addedDate.getTime()) / (1000 * 60 * 60 * 24));
+                if (daysDiff === 0) summaryParts.push("Added today");
+                else if (daysDiff === 1) summaryParts.push("Added yesterday");
+                else if (daysDiff < 30) summaryParts.push(`Added ${daysDiff}d ago`);
+              }
+              // Source
+              if (c.source) summaryParts.push(`Source: ${c.source}`);
+              convo.activitySummary = summaryParts.join(" · ");
             })
           );
           // If most are failing, stop enrichment early to save API quota
@@ -435,6 +460,7 @@ export interface TodayAppointment {
   calendarId: string;
   calendarName: string;
   assignedUserId?: string;
+  activitySummary: string; // Brief context: tags, pipeline stage, recent activity
 }
 
 /**
@@ -490,6 +516,7 @@ export async function getTodayAppointments(
             calendarId: evt.calendarId || cal.id,
             calendarName: cal.name || "Calendar",
             assignedUserId: evt.assignedUserId || evt.userId || "",
+            activitySummary: "",
           });
         }
       } catch (err) {
@@ -499,9 +526,8 @@ export async function getTodayAppointments(
 
     // Enrich appointments with contact info from GHL API (best-effort, never blocks appointments)
     try {
-      const aptsToEnrich = appointments.filter(
-        apt => apt.contactId && (apt.contactName === "Unknown" || !apt.address || !apt.contactPhone)
-      );
+      // Always enrich all appointments with contact property address
+      const aptsToEnrich = appointments.filter(apt => apt.contactId);
       if (aptsToEnrich.length > 0) {
         const enrichBatchSize = 5;
         for (let i = 0; i < aptsToEnrich.length; i += enrichBatchSize) {
@@ -517,12 +543,30 @@ export async function getTodayAppointments(
                 c.postalCode || c.zip || "",
               ].filter(Boolean);
               const fullAddress = addressParts.join(", ");
-              if (!apt.address && fullAddress) apt.address = fullAddress;
+              // Always use contact's property address (not event location)
+              if (fullAddress) apt.address = fullAddress;
               if (apt.contactName === "Unknown") {
                 const name = `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name;
                 if (name) apt.contactName = toTitleCase(name);
               }
               if (!apt.contactPhone && c.phone) apt.contactPhone = c.phone;
+              // Build activity summary from contact data
+              const summaryParts: string[] = [];
+              if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) {
+                summaryParts.push(c.tags.slice(0, 3).join(", "));
+              }
+              const stageName = c.pipelineStageName || c.opportunities?.[0]?.stageName || c.opportunities?.[0]?.status || "";
+              if (stageName) summaryParts.push(`Stage: ${stageName}`);
+              if (c.dnd) summaryParts.push("DND");
+              if (c.dateAdded) {
+                const addedDate = new Date(c.dateAdded);
+                const daysDiff = Math.floor((Date.now() - addedDate.getTime()) / (1000 * 60 * 60 * 24));
+                if (daysDiff === 0) summaryParts.push("Added today");
+                else if (daysDiff === 1) summaryParts.push("Added yesterday");
+                else if (daysDiff < 30) summaryParts.push(`Added ${daysDiff}d ago`);
+              }
+              if (c.source) summaryParts.push(`Source: ${c.source}`);
+              apt.activitySummary = summaryParts.join(" \u00b7 ");
             })
           );
           const failures = enrichResults.filter(r => r.status === "rejected").length;

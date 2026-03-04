@@ -4052,7 +4052,7 @@
 ## Day Hub — Fix Missing Property Addresses + Activity Context
 - [x] Investigate why contact cache has no address data for inbox contacts
 - [x] Enrich inbox conversations with address from GHL contact API when cache is empty
-- [ ] Add activity context (recent calls/texts summary) to inbox items
+- [x] Add activity context (recent calls/texts summary) to inbox items
 - [x] Verify appointment UI redesign is actually rendering on production
 - [x] Past appointments from earlier today should stay visible (not overly dimmed)
 
@@ -4064,3 +4064,11 @@
 - [x] Ensure property addresses show where available without breaking anything
 - [x] Ensure past appointments stay visible
 - [x] Ensure AI assistant and all action buttons use the same invokeLLM helper consistently (confirmed: all use gemini-2.5-flash via Forge API)
+
+## Day Hub — Appointment Address + Activity Summary
+- [x] Fix appointment address: always show CONTACT property address from GHL contact record, not event location
+- [x] Add activity summary to inbox items (tags, pipeline stage, source, date added)
+- [x] Add activity summary to appointment cards
+- [x] Ensure team can see full context without going into GHL
+- [x] Fix AI Coach send button not working on Day Hub page (inverted guardDemoAction logic)
+- [x] KPIs showing 0 — confirmed working as designed (manual counters, increment on click)

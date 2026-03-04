@@ -727,6 +727,11 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
                   {conv.contactAddress}
                 </span>
               )}
+              {conv.activitySummary && (
+                <span className="text-[9px] mt-0.5 truncate block" style={{ color: "oklch(0.65 0.15 250)" }}>
+                  {conv.activitySummary}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0 ml-1">
               {memberName && (
@@ -831,6 +836,12 @@ function AppointmentItem({ apt }: { apt: any }) {
         <div className="flex items-center gap-1 mt-1" style={{ color: "var(--g-text-secondary)" }}>
           <MapPin className="h-2.5 w-2.5 shrink-0" />
           <span className="text-[10px] font-medium truncate">{apt.address}</span>
+        </div>
+      )}
+      {/* Activity summary */}
+      {apt.activitySummary && (
+        <div className="text-[9px] mt-1 truncate" style={{ color: "oklch(0.65 0.15 250)" }}>
+          {apt.activitySummary}
         </div>
       )}
       {/* Bottom row: phone + calendar */}
@@ -2241,7 +2252,7 @@ function DayHubCoach() {
 
   const handleAsk = async () => {
     if (!question.trim() || isAsking) return;
-    if (!guardDemoAction("CRM actions")) return;
+    if (guardDemoAction("CRM actions")) return;
     const userMessage = question.trim();
     setConversation(prev => [...prev, { role: "user", content: userMessage }]);
     setIsAsking(true);
