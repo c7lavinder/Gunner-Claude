@@ -744,3 +744,85 @@ describe("Appointment contact enrichment — backend", () => {
     expect(dayHubSource).toContain("Failed to enrich appointments from cache");
   });
 });
+
+
+// ─── Phone-based inbox filtering ──────────────────────────
+
+describe("Phone-based inbox filtering — backend", () => {
+  const dayHubSource = readFileSync(join(SERVER_DIR, "dayHub.ts"), "utf-8");
+
+  it("UnreadConversation interface includes teamPhone field", () => {
+    expect(dayHubSource).toContain("teamPhone: string");
+  });
+
+  it("fetches last inbound message per conversation to determine teamPhone", () => {
+    expect(dayHubSource).toContain("/conversations/");
+    expect(dayHubSource).toContain("/messages?limit=");
+  });
+
+  it("checks message direction to identify inbound messages", () => {
+    expect(dayHubSource).toContain('direction === "inbound"');
+    expect(dayHubSource).toContain("msg.to");
+  });
+
+  it("falls back to outbound message from field for teamPhone", () => {
+    expect(dayHubSource).toContain('direction === "outbound"');
+    expect(dayHubSource).toContain("msg.from");
+  });
+
+  it("batches message fetches to avoid rate limiting", () => {
+    expect(dayHubSource).toContain("batchSize");
+    expect(dayHubSource).toContain("Promise.all");
+  });
+
+  it("handles message fetch errors gracefully", () => {
+    expect(dayHubSource).toContain("Failed to fetch messages for");
+  });
+});
+
+describe("Phone-based inbox filtering — getTeamMembersForFilter", () => {
+  const serviceSource = readFileSync(join(SERVER_DIR, "taskCenter.ts"), "utf-8");
+
+  it("getTeamMembersForFilter returns lcPhones field", () => {
+    expect(serviceSource).toContain("lcPhones: teamMembers.lcPhones");
+  });
+
+  it("getTeamMembersForFilter includes lcPhones in return type", () => {
+    expect(serviceSource).toContain("lcPhones: string | null");
+  });
+});
+
+describe("Phone-based inbox filtering — frontend LeftPanel", () => {
+  const tcSource = readFileSync(join(CLIENT_DIR, "pages", "TaskCenter.tsx"), "utf-8");
+
+  it("LeftPanel accepts teamMembers prop", () => {
+    expect(tcSource).toContain("teamMembers: teamMembersList");
+  });
+
+  it("builds rolePhoneNumbers set from team members lcPhones", () => {
+    expect(tcSource).toContain("rolePhoneNumbers");
+    expect(tcSource).toContain("JSON.parse(m.lcPhones)");
+    expect(tcSource).toContain("phones.add(p)");
+  });
+
+  it("filters conversations by teamPhone matching rolePhoneNumbers", () => {
+    expect(tcSource).toContain("c.teamPhone && rolePhoneNumbers.has(c.teamPhone)");
+  });
+
+  it("falls back to assignedTo when teamPhone is not available", () => {
+    expect(tcSource).toContain("!c.teamPhone && c.assignedTo && roleFilteredGhlUserIds");
+  });
+
+  it("admin tab shows all conversations (rolePhoneNumbers is null)", () => {
+    expect(tcSource).toContain('roleTab === "admin"');
+    expect(tcSource).toContain("return null; // null = show all");
+  });
+
+  it("passes teamMembers to LeftPanel from main component", () => {
+    expect(tcSource).toContain("teamMembers={data?.teamMembers}");
+  });
+
+  it("TeamMember interface includes lcPhones field", () => {
+    expect(tcSource).toContain("lcPhones?: string | null");
+  });
+});

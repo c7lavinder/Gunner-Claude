@@ -152,6 +152,7 @@ interface TeamMember {
   name: string;
   ghlUserId: string | null;
   teamRole?: string;
+  lcPhones?: string | null; // JSON array of LC phone numbers
 }
 
 type RoleTab = "admin" | "lm" | "am";
@@ -326,7 +327,7 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
 
 // ─── LEFT PANEL: MISSED/UNREAD + APPOINTMENTS ───────────
 
-function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; roleFilteredGhlUserIds: string[] | null }) {
+function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersList }: { roleTab: RoleTab; roleFilteredGhlUserIds: string[] | null; teamMembers?: TeamMember[] }) {
   const [activeTab, setActiveTab] = useState<"unread" | "appointments">("unread");
 
   // ─── Inbox SMS Modal State ───
@@ -386,15 +387,38 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; role
     { refetchInterval: 120000 }
   );
 
-  // Filter by role tab — admin sees all, LM/AM sees only their assigned conversations
+  // Build a set of phone numbers for the selected role tab
+  const rolePhoneNumbers = useMemo(() => {
+    if (roleTab === "admin" || !teamMembersList) return null; // null = show all
+    const allowedRoles = ROLE_TAB_CONFIG[roleTab].teamRoles;
+    const phones = new Set<string>();
+    for (const m of teamMembersList) {
+      if (!m.teamRole || !allowedRoles.includes(m.teamRole)) continue;
+      // Parse lcPhones JSON array
+      if (m.lcPhones) {
+        try {
+          const parsed = JSON.parse(m.lcPhones) as string[];
+          parsed.forEach(p => phones.add(p));
+        } catch { /* skip */ }
+      }
+    }
+    return phones;
+  }, [roleTab, teamMembersList]);
+
+  // Filter by role tab — admin sees all, LM/AM sees only conversations matching their team phones
   const unreadConvos = useMemo(() => {
     if (!allUnreadConvos) return [];
-    if (!roleFilteredGhlUserIds) return allUnreadConvos; // admin = show all
+    if (!rolePhoneNumbers) return allUnreadConvos; // admin = show all
     return allUnreadConvos.filter(c => {
-      if (!c.assignedTo) return false; // hide unassigned from role tabs
-      return roleFilteredGhlUserIds.includes(c.assignedTo);
+      // Primary filter: match by teamPhone (the LC phone the lead contacted)
+      if (c.teamPhone && rolePhoneNumbers.has(c.teamPhone)) return true;
+      // Fallback: if no teamPhone data, use assignedTo
+      if (!c.teamPhone && c.assignedTo && roleFilteredGhlUserIds) {
+        return roleFilteredGhlUserIds.includes(c.assignedTo);
+      }
+      return false;
     });
-  }, [allUnreadConvos, roleFilteredGhlUserIds]);
+  }, [allUnreadConvos, rolePhoneNumbers, roleFilteredGhlUserIds]);
   const appointments = useMemo(() => {
     if (!allAppointments) return [];
     if (!roleFilteredGhlUserIds) return allAppointments; // admin = show all
@@ -2966,7 +2990,7 @@ export default function TaskCenter() {
 
       {/* Top half: Inbox + AI Coach side by side */}
       <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
-        <LeftPanel roleTab={roleTab} roleFilteredGhlUserIds={roleFilteredGhlUserIds} />
+        <LeftPanel roleTab={roleTab} roleFilteredGhlUserIds={roleFilteredGhlUserIds} teamMembers={data?.teamMembers} />
         <DayHubCoach />
       </div>
 

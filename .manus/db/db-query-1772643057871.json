@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE team_members SET lcPhones = '[\"+19312885429\", \"+12565215239\", \"+16155909651\"]' WHERE name = 'Chris Segura' AND tenantId = 1;\nUPDATE team_members SET lcPhones = '[\"+16152405127\"]' WHERE name = 'Daniel Lozano' AND tenantId = 1;\nUPDATE team_members SET lcPhones = '[\"+16157688784\"]' WHERE name = 'Kyle Barks' AND tenantId = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute UPDATE team_members SET lcPhones = '[\"+19312885429\", \"+12565215239\", \"+16155909651\"]' WHERE name = 'Chris Segura' AND tenantId = 1;\nUPDATE team_members SET lcPhones = '[\"+16152405127\"]' WHERE name = 'Daniel Lozano' AND tenantId = 1;\nUPDATE team_members SET lcPhones = '[\"+16157688784\"]' WHERE name = 'Kyle Barks' AND tenantId = 1;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 140
+}

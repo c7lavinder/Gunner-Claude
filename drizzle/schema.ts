@@ -121,6 +121,7 @@ export const teamMembers = mysqlTable("team_members", {
   userId: int("userId").references(() => users.id),
   ghlUserId: varchar("ghlUserId", { length: 255 }), // GoHighLevel user ID for matching
   lcPhone: varchar("lcPhone", { length: 20 }), // LC phone number from GHL (e.g. +16157688784)
+  lcPhones: text("lcPhones"), // JSON array of all LC phone numbers for this team member (e.g. ["+19312885429", "+12565215239"])
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

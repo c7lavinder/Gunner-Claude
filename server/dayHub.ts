@@ -282,6 +282,7 @@ export interface UnreadConversation {
   type: "sms" | "call" | "email" | "other";
   isMissedCall: boolean;
   assignedTo: string;
+  teamPhone: string; // The LC phone number the lead contacted (from last inbound message)
 }
 
 /**
@@ -303,8 +304,8 @@ export async function getUnreadConversations(
     const data = await ghlFetch(creds, path);
     const conversations = data?.conversations || [];
 
-    const results: UnreadConversation[] = [];
-    for (const conv of conversations) {
+    // First pass: build basic conversation data
+    const basicConvos = conversations.map((conv: any) => {
       const lastMsgType = String(conv.lastMessageType || conv.type || "").toUpperCase();
       const isMissedCall = lastMsgType.includes("CALL") &&
         (conv.lastMessageDirection === "inbound" || conv.direction === "inbound");
@@ -317,7 +318,7 @@ export async function getUnreadConversations(
       else if (isCall) type = "call";
       else if (isEmail) type = "email";
 
-      results.push({
+      return {
         conversationId: conv.id || "",
         contactId: conv.contactId || "",
         contactName: toTitleCase(conv.contactName || conv.fullName || "Unknown"),
@@ -327,10 +328,47 @@ export async function getUnreadConversations(
         type,
         isMissedCall,
         assignedTo: conv.assignedTo || conv.userId || "",
-      });
+        teamPhone: "",
+      } as UnreadConversation;
+    });
+
+    // Second pass: fetch last inbound message for each conversation to find team phone
+    // Batch in groups of 10 to avoid rate limiting
+    const batchSize = 10;
+    for (let i = 0; i < basicConvos.length; i += batchSize) {
+      const batch = basicConvos.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (convo: UnreadConversation) => {
+          try {
+            const msgData = await ghlFetch(
+              creds,
+              `/conversations/${convo.conversationId}/messages?limit=5&type=TYPE_SMS,TYPE_CALL`
+            );
+            const messages = msgData?.messages || msgData?.data?.messages || [];
+            // Find the last inbound message to get the "to" phone (our team phone)
+            for (const msg of messages) {
+              const direction = msg.direction || (msg.messageType === 1 ? "inbound" : "outbound");
+              if (direction === "inbound" && msg.to) {
+                convo.teamPhone = msg.to;
+                break;
+              }
+              // For outbound, the "from" is our team phone
+              if (direction === "outbound" && msg.from) {
+                convo.teamPhone = msg.from;
+                break;
+              }
+            }
+          } catch (err: any) {
+            // Silently skip — teamPhone stays empty
+            console.warn(`[DayHub] Failed to fetch messages for ${convo.conversationId}:`, err?.message);
+          }
+        })
+      );
     }
 
-    results.sort((a, b) => {
+    const results = basicConvos;
+
+    results.sort((a: UnreadConversation, b: UnreadConversation) => {
       const dateA = new Date(a.lastMessageAt).getTime() || 0;
       const dateB = new Date(b.lastMessageAt).getTime() || 0;
       return dateB - dateA;

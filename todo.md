@@ -3901,3 +3901,18 @@
 - [x] Fix lowercase contact names on appointments (title-case)
 - [x] Fix appointment time ordering (should be chronological)
 - [x] Filter inbox (unread/missed) by assignedTo for LM/AM tabs (only show convos assigned to that role's team members)
+
+## Day Hub Inbox Filtering Fix
+- [x] Debug GHL conversation assignedTo field to match team members correctly for LM/AM tabs
+
+## Inbox Phone-Based Filtering
+- [x] Add lcPhones (JSON array) column to team_members table
+- [x] Populate lcPhones: Chris (+19312885429, +12565215239, +16155909651), Daniel (+16152405127), Kyle (+16157688784)
+- [x] Update backend to fetch last message phone number for each unread conversation
+- [x] Return teamPhone field with each conversation
+- [x] Filter inbox by matching conversation teamPhone to team member lcPhones for LM/AM tabs
+- [x] Update getTeamMembersForFilter to return lcPhones
+- [x] Frontend LeftPanel builds phone-to-role mapping and filters by teamPhone
+- [x] Admin tab shows all conversations, LM/AM tabs show only their phone numbers
+- [x] Fallback to assignedTo when teamPhone is not available
+- [x] 107 tests passing including phone-based filtering tests
