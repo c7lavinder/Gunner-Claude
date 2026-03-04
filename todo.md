@@ -4009,3 +4009,10 @@
 - [x] Fix: AmPmIndicatorFromCache now uses ONLY server DB values (fallbackAm/fallbackPm)
 - [x] Removed tRPC cache subscription that was overriding correct DB values with incorrect GHL values
 - [x] All 46 dayHub tests passing
+
+## AM/PM Badges — Activity Shows Calls But Badge Stays Grey
+- [x] Jonathan Goodrich: activity section shows 2 Calls at 11:22 AM but AM badge is grey
+- [x] Fix: AmPmIndicatorFromCache now ORs DB fallback with activity cache
+- [x] DB provides initial values on load, expanding a task can only ADD green (never remove)
+- [x] getContactActivity already returns correct amCallMade/pmCallMade with DB fallback
+- [x] All 46 dayHub tests passing

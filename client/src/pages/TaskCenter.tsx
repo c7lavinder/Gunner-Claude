@@ -908,11 +908,18 @@ function AmPmIndicator({ amDone, pmDone }: { amDone: boolean; pmDone: boolean })
 // Falls back to server-provided values (from DB). No extra API calls.
 
 function AmPmIndicatorFromCache({ contactId, fallbackAm, fallbackPm }: { contactId: string; fallbackAm: boolean; fallbackPm: boolean }) {
-  // Use ONLY the server-provided DB values (fallbackAm/fallbackPm) from getPriorityTasks.
-  // These come from the local calls table which has ALL dial attempts.
-  // Do NOT read from the getContactActivity cache — the GHL API often misses short/missed calls,
-  // which would incorrectly override the correct DB values when a task is expanded.
-  return <AmPmIndicator amDone={fallbackAm} pmDone={fallbackPm} />;
+  // Subscribe to the activity cache (populated when task is expanded).
+  // enabled: false means we never fire a fetch — we only read from cache.
+  const { data: cached } = trpc.taskCenter.getContactActivity.useQuery(
+    { contactId },
+    { enabled: false }
+  );
+
+  // OR together: if EITHER the DB (fallback) or the activity cache says a call was made, light up.
+  // This way: DB provides initial values, and expanding a task can only ADD green, never remove it.
+  const amDone = fallbackAm || (cached?.amCallMade ?? false);
+  const pmDone = fallbackPm || (cached?.pmCallMade ?? false);
+  return <AmPmIndicator amDone={amDone} pmDone={pmDone} />;
 }
 
 // ─── PRIORITY TASK ROW ──────────────────────────────────
