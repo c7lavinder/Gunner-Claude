@@ -370,19 +370,17 @@ export async function getUnreadConversations(
 
     const results = basicConvos;
 
-    // Enrich conversations with contact address from GHL API
-    // Batch fetch contact details (address, name) in groups of 10
-    const convsToEnrich = results.filter((c: UnreadConversation) => c.contactId);
-    if (convsToEnrich.length > 0) {
-      const enrichBatchSize = 10;
-      for (let i = 0; i < convsToEnrich.length; i += enrichBatchSize) {
-        const batch = convsToEnrich.slice(i, i + enrichBatchSize);
-        await Promise.all(
-          batch.map(async (convo: UnreadConversation) => {
-            try {
+    // Enrich conversations with contact address from GHL API (best-effort, never blocks inbox)
+    try {
+      const convsToEnrich = results.filter((c: UnreadConversation) => c.contactId);
+      if (convsToEnrich.length > 0) {
+        const enrichBatchSize = 5;
+        for (let i = 0; i < convsToEnrich.length; i += enrichBatchSize) {
+          const batch = convsToEnrich.slice(i, i + enrichBatchSize);
+          const enrichResults = await Promise.allSettled(
+            batch.map(async (convo: UnreadConversation) => {
               const contactData = await ghlFetch(creds, `/contacts/${convo.contactId}`, "GET");
               const c = contactData.contact || contactData;
-              // Build address from GHL contact fields
               const addressParts = [
                 c.address1 || c.streetAddress || "",
                 c.city || "",
@@ -390,20 +388,23 @@ export async function getUnreadConversations(
                 c.postalCode || c.zip || "",
               ].filter(Boolean);
               const fullAddress = addressParts.join(", ");
-              if (fullAddress) {
-                convo.contactAddress = fullAddress;
-              }
-              // Fill in name if it was "Unknown"
+              if (fullAddress) convo.contactAddress = fullAddress;
               if (convo.contactName === "Unknown") {
                 const name = `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name;
                 if (name) convo.contactName = toTitleCase(name);
               }
-            } catch (err: any) {
-              // Silently skip — address stays empty
-            }
-          })
-        );
+            })
+          );
+          // If most are failing, stop enrichment early to save API quota
+          const failures = enrichResults.filter(r => r.status === "rejected").length;
+          if (failures >= Math.ceil(batch.length * 0.8)) {
+            console.warn("[DayHub] Most contact enrichment calls failing, stopping early");
+            break;
+          }
+        }
       }
+    } catch (enrichErr: any) {
+      console.warn("[DayHub] Contact enrichment failed (non-blocking):", enrichErr?.message);
     }
 
     results.sort((a: UnreadConversation, b: UnreadConversation) => {
@@ -496,20 +497,19 @@ export async function getTodayAppointments(
       }
     }
 
-    // Enrich appointments with contact info from GHL API when event data is incomplete
-    const aptsToEnrich = appointments.filter(
-      apt => apt.contactId && (apt.contactName === "Unknown" || !apt.address || !apt.contactPhone)
-    );
-    if (aptsToEnrich.length > 0) {
-      const enrichBatchSize = 10;
-      for (let i = 0; i < aptsToEnrich.length; i += enrichBatchSize) {
-        const batch = aptsToEnrich.slice(i, i + enrichBatchSize);
-        await Promise.all(
-          batch.map(async (apt) => {
-            try {
+    // Enrich appointments with contact info from GHL API (best-effort, never blocks appointments)
+    try {
+      const aptsToEnrich = appointments.filter(
+        apt => apt.contactId && (apt.contactName === "Unknown" || !apt.address || !apt.contactPhone)
+      );
+      if (aptsToEnrich.length > 0) {
+        const enrichBatchSize = 5;
+        for (let i = 0; i < aptsToEnrich.length; i += enrichBatchSize) {
+          const batch = aptsToEnrich.slice(i, i + enrichBatchSize);
+          const enrichResults = await Promise.allSettled(
+            batch.map(async (apt) => {
               const contactData = await ghlFetch(creds, `/contacts/${apt.contactId}`, "GET");
               const c = contactData.contact || contactData;
-              // Build address from GHL contact fields
               const addressParts = [
                 c.address1 || c.streetAddress || "",
                 c.city || "",
@@ -517,22 +517,23 @@ export async function getTodayAppointments(
                 c.postalCode || c.zip || "",
               ].filter(Boolean);
               const fullAddress = addressParts.join(", ");
-              if (!apt.address && fullAddress) {
-                apt.address = fullAddress;
-              }
+              if (!apt.address && fullAddress) apt.address = fullAddress;
               if (apt.contactName === "Unknown") {
                 const name = `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name;
                 if (name) apt.contactName = toTitleCase(name);
               }
-              if (!apt.contactPhone && c.phone) {
-                apt.contactPhone = c.phone;
-              }
-            } catch (err: any) {
-              // Silently skip
-            }
-          })
-        );
+              if (!apt.contactPhone && c.phone) apt.contactPhone = c.phone;
+            })
+          );
+          const failures = enrichResults.filter(r => r.status === "rejected").length;
+          if (failures >= Math.ceil(batch.length * 0.8)) {
+            console.warn("[DayHub] Most appointment enrichment calls failing, stopping early");
+            break;
+          }
+        }
       }
+    } catch (enrichErr: any) {
+      console.warn("[DayHub] Appointment enrichment failed (non-blocking):", enrichErr?.message);
     }
 
     // Sort by start time — parse robustly to handle various date formats

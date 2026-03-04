@@ -4055,3 +4055,12 @@
 - [ ] Add activity context (recent calls/texts summary) to inbox items
 - [x] Verify appointment UI redesign is actually rendering on production
 - [x] Past appointments from earlier today should stay visible (not overly dimmed)
+
+## Day Hub — Full Audit & Fix Pass
+- [x] Fix inbox returning empty (GHL enrichment crashing getUnreadConversations)
+- [x] Verify AI assistant is working on Day Hub (uses same invokeLLMStream/invokeLLM as all other features)
+- [x] Verify task action buttons work (SMS, Call, Dismiss) — all wired to proper tRPC mutations
+- [x] Verify appointments tab loads and shows data (enrichment now non-blocking)
+- [x] Ensure property addresses show where available without breaking anything
+- [x] Ensure past appointments stay visible
+- [x] Ensure AI assistant and all action buttons use the same invokeLLM helper consistently (confirmed: all use gemini-2.5-flash via Forge API)
