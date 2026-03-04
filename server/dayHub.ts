@@ -15,8 +15,8 @@ import {
 } from "./ghlActions";
 import { type TaskWithContext } from "./taskCenter";
 import { getDb } from "./db";
-import { dailyKpiEntries } from "../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { dailyKpiEntries, calls } from "../drizzle/schema";
+import { eq, and, sql, gte, lt, inArray } from "drizzle-orm";
 
 // ─── HELPERS ─────────────────────────────────────────────
 
@@ -673,7 +673,12 @@ export async function deleteDailyKpiEntry(
 
 /**
  * Get KPI summary counts for a user on a given date.
- * Combines auto-detected counts with manual entries.
+ * Auto-counts from real call data + supplements with manual entries.
+ * - calls: total calls in calls table for this tenant today
+ * - conversations: calls classified as "conversation" today
+ * - appointments: calls with callOutcome = "appointment_set" today
+ * - offers: calls with callOutcome = "offer_made" today
+ * - contracts: manual entries only (no auto-detection available)
  */
 export async function getKpiSummary(
   tenantId: number,
@@ -684,7 +689,69 @@ export async function getKpiSummary(
   if (!db) return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
 
   try {
-    const entries = await db
+    // Parse date string to get start/end of day in Central time
+    const [year, month, day] = date.split("-").map(Number);
+    // Create date range for the given date in CT (UTC-6)
+    const dayStartUTC = new Date(Date.UTC(year, month - 1, day, 6, 0, 0)); // midnight CT = 6am UTC
+    const dayEndUTC = new Date(Date.UTC(year, month - 1, day + 1, 6, 0, 0)); // next midnight CT
+
+    // Auto-count from calls table — all calls for this tenant today
+    const [autoCallsResult] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          gte(calls.callTimestamp, dayStartUTC),
+          lt(calls.callTimestamp, dayEndUTC)
+        )
+      );
+    const autoCalls = Number(autoCallsResult?.count || 0);
+
+    // Auto-count conversations (classification = 'conversation')
+    const [autoConvosResult] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          gte(calls.callTimestamp, dayStartUTC),
+          lt(calls.callTimestamp, dayEndUTC),
+          eq(calls.classification, "conversation")
+        )
+      );
+    const autoConvos = Number(autoConvosResult?.count || 0);
+
+    // Auto-count appointments set (callOutcome = 'appointment_set')
+    const [autoAptsResult] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          gte(calls.callTimestamp, dayStartUTC),
+          lt(calls.callTimestamp, dayEndUTC),
+          eq(calls.callOutcome, "appointment_set")
+        )
+      );
+    const autoApts = Number(autoAptsResult?.count || 0);
+
+    // Auto-count offers made (callOutcome = 'offer_made')
+    const [autoOffersResult] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          gte(calls.callTimestamp, dayStartUTC),
+          lt(calls.callTimestamp, dayEndUTC),
+          eq(calls.callOutcome, "offer_made")
+        )
+      );
+    const autoOffers = Number(autoOffersResult?.count || 0);
+
+    // Manual entries (supplements for things like contracts that can't be auto-detected)
+    const manualEntries = await db
       .select({
         kpiType: dailyKpiEntries.kpiType,
         count: sql<number>`COUNT(*)`,
@@ -699,17 +766,18 @@ export async function getKpiSummary(
       )
       .groupBy(dailyKpiEntries.kpiType);
 
-    const counts: Record<string, number> = {};
-    for (const row of entries) {
-      counts[row.kpiType] = Number(row.count);
+    const manual: Record<string, number> = {};
+    for (const row of manualEntries) {
+      manual[row.kpiType] = Number(row.count);
     }
 
+    // Use auto-counts as the primary source, add manual entries for contracts
     return {
-      calls: counts["call"] || 0,
-      conversations: counts["conversation"] || 0,
-      appointments: counts["appointment"] || 0,
-      offers: counts["offer"] || 0,
-      contracts: counts["contract"] || 0,
+      calls: autoCalls + (manual["call"] || 0),
+      conversations: autoConvos + (manual["conversation"] || 0),
+      appointments: autoApts + (manual["appointment"] || 0),
+      offers: autoOffers + (manual["offer"] || 0),
+      contracts: manual["contract"] || 0, // contracts are manual-only
     };
   } catch (error) {
     console.error("[DayHub] getKpiSummary error:", error);

@@ -4072,3 +4072,11 @@
 - [x] Ensure team can see full context without going into GHL
 - [x] Fix AI Coach send button not working on Day Hub page (inverted guardDemoAction logic)
 - [x] KPIs showing 0 — confirmed working as designed (manual counters, increment on click)
+
+## Day Hub — Auto-Populate KPIs from Real Activity
+- [x] Count today's calls from the calls table (synced from GHL)
+- [x] Count today's conversations (graded calls that are actual conversations)
+- [x] Count today's appointments set (from call outcomes = appointment_set)
+- [x] Count today's offers (from call outcomes = offer_made), contracts remain manual
+- [x] Update getKpiSummary to return auto-counted values from calls table
+- [x] Keep manual KPI click-to-increment as supplement (adds on top of auto-counts)
