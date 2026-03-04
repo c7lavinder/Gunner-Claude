@@ -3883,3 +3883,7 @@
 - [x] Task completion bug: optimistic removal — task disappears immediately with rollback on error
 - [x] Filter labels: removed "All" prefix from category and team member dropdowns
 - [x] Inbox click actions: click to expand with Call, Text, Dismiss quick action buttons
+
+## Day Hub — React Error #310 Fix
+- [x] Fix React error #310 in Day Hub — move useMemo before early returns in KpiBar (hooks-after-return violation)
+- [x] Add React Hooks Safety tests for KpiBar and TaskCenter components

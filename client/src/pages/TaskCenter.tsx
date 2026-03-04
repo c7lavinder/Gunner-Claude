@@ -193,19 +193,7 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex gap-3">
-        {[...Array(5)].map((_, i) => (
-          <Skeleton key={i} className="h-16 flex-1 rounded-lg" />
-        ))}
-      </div>
-    );
-  }
-
-  if (!kpi) return null;
-
-  // For admin, sum targets based on active team members per role
+  // IMPORTANT: useMemo must be called before any early returns to satisfy React's Rules of Hooks
   const targets = useMemo(() => {
     if (roleTab !== "admin" || !teamMembers || teamMembers.length === 0) {
       return ROLE_TAB_CONFIG[roleTab].kpiTargets;
@@ -220,6 +208,18 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
       contracts: amCount * AM_KPI_PER_PERSON.contracts,
     };
   }, [roleTab, teamMembers]);
+
+  if (isLoading) {
+    return (
+      <div className="flex gap-3">
+        {[...Array(5)].map((_, i) => (
+          <Skeleton key={i} className="h-16 flex-1 rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!kpi) return null;
 
   const kpiItems = [
     {

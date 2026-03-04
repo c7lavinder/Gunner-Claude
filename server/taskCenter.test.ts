@@ -587,3 +587,85 @@ describe("TaskCenter Backend — Edit & Delete Endpoints", () => {
     expect(ghlSource).toContain("DELETE");
   });
 });
+
+// ─── React Hooks Safety — no hooks after early returns ───────
+
+describe("TaskCenter Frontend — React Hooks Safety", () => {
+  const componentSource = readFileSync(
+    join(CLIENT_DIR, "pages", "TaskCenter.tsx"),
+    "utf-8"
+  );
+
+  it("KpiBar does not call useMemo after an early return", () => {
+    // Extract the KpiBar function body
+    const kpiBarStart = componentSource.indexOf("function KpiBar(");
+    expect(kpiBarStart).toBeGreaterThan(-1);
+
+    // Find the function body by counting braces
+    let braceCount = 0;
+    let bodyStart = componentSource.indexOf("{", kpiBarStart);
+    let i = bodyStart;
+    while (i < componentSource.length) {
+      if (componentSource[i] === "{") braceCount++;
+      if (componentSource[i] === "}") {
+        braceCount--;
+        if (braceCount === 0) break;
+      }
+      i++;
+    }
+    const kpiBarBody = componentSource.substring(bodyStart, i + 1);
+    const lines = kpiBarBody.split("\n");
+
+    // Find the first top-level return statement (not inside callbacks/arrow functions)
+    let firstReturnLine = -1;
+    let depth = 0;
+    for (let j = 0; j < lines.length; j++) {
+      const line = lines[j].trim();
+      // Track nested braces (skip hooks inside callbacks)
+      for (const ch of line) {
+        if (ch === "{") depth++;
+        if (ch === "}") depth--;
+      }
+      // Only check returns at function body level (depth 1, since we start inside the function)
+      if (depth <= 1 && (line.startsWith("return ") || line.startsWith("return(") || line === "return;") && !line.includes("=>")) {
+        firstReturnLine = j;
+        break;
+      }
+    }
+
+    // All useMemo calls should be BEFORE the first return
+    for (let j = 0; j < lines.length; j++) {
+      if (lines[j].includes("useMemo")) {
+        if (firstReturnLine !== -1) {
+          expect(j).toBeLessThan(firstReturnLine);
+        }
+      }
+    }
+  });
+
+  it("KpiBar has useMemo for KPI targets calculation", () => {
+    const kpiBarStart = componentSource.indexOf("function KpiBar(");
+    const kpiBarEnd = componentSource.indexOf("function LeftPanel(");
+    const kpiBarBody = componentSource.substring(kpiBarStart, kpiBarEnd);
+    expect(kpiBarBody).toContain("useMemo");
+    expect(kpiBarBody).toContain("targets");
+  });
+
+  it("main TaskCenter component calls all hooks before JSX return", () => {
+    // Verify that the main component has hooks in the right order
+    const mainStart = componentSource.indexOf("export default function TaskCenter()");
+    expect(mainStart).toBeGreaterThan(-1);
+    const mainBody = componentSource.substring(mainStart);
+
+    // All these hooks should exist and be called
+    expect(mainBody).toContain("useAuth()");
+    expect(mainBody).toContain("trpc.useUtils()");
+    expect(mainBody).toContain("useState");
+    expect(mainBody).toContain("useMemo");
+
+    // The JSX return should come after all hooks
+    const firstUseMemo = mainBody.indexOf("useMemo");
+    const jsxReturn = mainBody.indexOf("return (\n    <div");
+    expect(firstUseMemo).toBeLessThan(jsxReturn);
+  });
+});
