@@ -3896,3 +3896,8 @@
 - [x] Replace Text button sms: link with in-app SMS modal that sends through GHL API
 - [x] Modal shows From (sender/phone selector), To (contact name + phone), message textarea, Send Now button
 - [x] Add contact name and address to calendar appointment items in Day Hub
+
+## Day Hub Fixes — Names, Ordering, Inbox Filtering
+- [x] Fix lowercase contact names on appointments (title-case)
+- [x] Fix appointment time ordering (should be chronological)
+- [x] Filter inbox (unread/missed) by assignedTo for LM/AM tabs (only show convos assigned to that role's team members)

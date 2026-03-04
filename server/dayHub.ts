@@ -18,6 +18,16 @@ import { getDb } from "./db";
 import { dailyKpiEntries } from "../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 
+// ─── HELPERS ─────────────────────────────────────────────
+
+function toTitleCase(str: string): string {
+  if (!str) return str;
+  return str
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 // ─── PRIORITY SCORING ─────────────────────────────────────
 
 export type TaskCategory = "new_lead" | "reschedule" | "admin" | "follow_up";
@@ -271,6 +281,7 @@ export interface UnreadConversation {
   lastMessageAt: string;
   type: "sms" | "call" | "email" | "other";
   isMissedCall: boolean;
+  assignedTo: string;
 }
 
 /**
@@ -309,12 +320,13 @@ export async function getUnreadConversations(
       results.push({
         conversationId: conv.id || "",
         contactId: conv.contactId || "",
-        contactName: conv.contactName || conv.fullName || "Unknown",
+        contactName: toTitleCase(conv.contactName || conv.fullName || "Unknown"),
         contactPhone: conv.phone || "",
         lastMessage: conv.lastMessageBody || conv.lastMessage || "",
         lastMessageAt: conv.lastMessageDate || conv.dateUpdated || conv.dateAdded || "",
         type,
         isMissedCall,
+        assignedTo: conv.assignedTo || conv.userId || "",
       });
     }
 
@@ -394,7 +406,7 @@ export async function getTodayAppointments(
             startTime: evt.startTime,
             endTime: evt.endTime,
             contactId: evt.contactId || "",
-            contactName: evt.contact?.name || `${evt.contact?.firstName || ""} ${evt.contact?.lastName || ""}`.trim() || "Unknown",
+            contactName: toTitleCase(evt.contact?.name || `${evt.contact?.firstName || ""} ${evt.contact?.lastName || ""}`.trim() || "Unknown"),
             contactPhone: evt.contact?.phone || evt.contact?.primaryPhone || "",
             address: evt.address || evt.location || "",
             status: evt.appointmentStatus || "confirmed",
@@ -430,9 +442,9 @@ export async function getTodayAppointments(
             const cached = cacheMap.get(apt.contactId);
             if (!cached) continue;
             if (apt.contactName === "Unknown" && cached.name) {
-              apt.contactName = cached.name;
+              apt.contactName = toTitleCase(cached.name);
             } else if (apt.contactName === "Unknown" && cached.firstName) {
-              apt.contactName = `${cached.firstName} ${cached.lastName || ""}`.trim();
+              apt.contactName = toTitleCase(`${cached.firstName} ${cached.lastName || ""}`.trim());
             }
             if (!apt.address && cached.address) {
               apt.address = cached.address;
@@ -447,7 +459,16 @@ export async function getTodayAppointments(
       }
     }
 
-    appointments.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    // Sort by start time — parse robustly to handle various date formats
+    appointments.sort((a, b) => {
+      const timeA = new Date(a.startTime).getTime();
+      const timeB = new Date(b.startTime).getTime();
+      // If either is NaN, push it to the end
+      if (isNaN(timeA) && isNaN(timeB)) return 0;
+      if (isNaN(timeA)) return 1;
+      if (isNaN(timeB)) return -1;
+      return timeA - timeB;
+    });
     return appointments;
   } catch (error: any) {
     console.error("[DayHub] getTodayAppointments error:", error?.message);

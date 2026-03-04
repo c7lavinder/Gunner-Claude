@@ -386,10 +386,15 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; role
     { refetchInterval: 120000 }
   );
 
-  // Filter by role tab — admin sees all, LM/AM sees only their team members
-  // Note: GHL unread conversations don't have assignedTo in the response, so we rely on the API filter
-  // For appointments, we filter client-side using assignedUserId
-  const unreadConvos = allUnreadConvos;
+  // Filter by role tab — admin sees all, LM/AM sees only their assigned conversations
+  const unreadConvos = useMemo(() => {
+    if (!allUnreadConvos) return [];
+    if (!roleFilteredGhlUserIds) return allUnreadConvos; // admin = show all
+    return allUnreadConvos.filter(c => {
+      if (!c.assignedTo) return false; // hide unassigned from role tabs
+      return roleFilteredGhlUserIds.includes(c.assignedTo);
+    });
+  }, [allUnreadConvos, roleFilteredGhlUserIds]);
   const appointments = useMemo(() => {
     if (!allAppointments) return [];
     if (!roleFilteredGhlUserIds) return allAppointments; // admin = show all
