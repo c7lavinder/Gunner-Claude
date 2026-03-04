@@ -1,0 +1,25 @@
+{
+  "query": "SELECT COUNT(*) as total, callDirection, callSource FROM calls WHERE callTimestamp >= '2026-03-04' GROUP BY callDirection, callSource;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COUNT(*) as total, callDirection, callSource FROM calls WHERE callTimestamp >= '2026-03-04' GROUP BY callDirection, callSource;",
+  "rows": [
+    {
+      "total": "85",
+      "callDirection": "outbound",
+      "callSource": "ghl"
+    },
+    {
+      "total": "11",
+      "callDirection": "outbound",
+      "callSource": "batchdialer"
+    },
+    {
+      "total": "3",
+      "callDirection": "inbound",
+      "callSource": "ghl"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\tcallDirection\tcallSource\n85\toutbound\tghl\n11\toutbound\tbatchdialer\n3\tinbound\tghl\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

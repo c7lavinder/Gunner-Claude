@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
 import { 
@@ -2627,4 +2627,76 @@ export async function buildCoachMemoryContext(
 ${lines.join("\n")}
 
 When the user references something discussed before, use this memory to provide continuity. You can say things like "As we discussed earlier..." or "Building on what we talked about..."`;
+}
+
+
+/**
+ * Get AM/PM outbound call status for a list of contacts today.
+ * Uses the local calls table instead of GHL API for reliability and speed.
+ * Returns a map of contactId -> { amCallMade, pmCallMade }
+ */
+export async function getAmPmCallStatusForContacts(
+  tenantId: number,
+  contactIds: string[]
+): Promise<Map<string, { amCallMade: boolean; pmCallMade: boolean }>> {
+  const result = new Map<string, { amCallMade: boolean; pmCallMade: boolean }>();
+  if (contactIds.length === 0) return result;
+
+  const db = await getDb();
+  if (!db) return result;
+
+  try {
+    // Get today's start in Central time
+    const now = new Date();
+    const ctFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const ctDateStr = ctFormatter.format(now); // MM/DD/YYYY
+    const [month, day, year] = ctDateStr.split("/").map(Number);
+    // Midnight Central today (use -06:00 for CST; CDT would be -05:00, but this is close enough)
+    const todayStart = new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00-06:00`);
+    // Noon Central today
+    const noonCentral = new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T12:00:00-06:00`);
+
+    // Query all outbound calls for these contacts today
+    const todayCalls = await db
+      .select({
+        ghlContactId: calls.ghlContactId,
+        callTimestamp: calls.callTimestamp,
+      })
+      .from(calls)
+      .where(
+        and(
+          eq(calls.tenantId, tenantId),
+          eq(calls.callDirection, "outbound"),
+          isNotNull(calls.ghlContactId),
+          gte(calls.callTimestamp, todayStart),
+          inArray(calls.ghlContactId, contactIds)
+        )
+      );
+
+    // Build the AM/PM map
+    for (const call of todayCalls) {
+      if (!call.ghlContactId || !call.callTimestamp) continue;
+      
+      const existing = result.get(call.ghlContactId) || { amCallMade: false, pmCallMade: false };
+      
+      if (call.callTimestamp.getTime() < noonCentral.getTime()) {
+        existing.amCallMade = true;
+      } else {
+        existing.pmCallMade = true;
+      }
+      
+      result.set(call.ghlContactId, existing);
+    }
+
+    console.log(`[AM/PM DB] Queried ${contactIds.length} contacts, found ${todayCalls.length} outbound calls today. AM: ${Array.from(result.values()).filter(v => v.amCallMade).length}, PM: ${Array.from(result.values()).filter(v => v.pmCallMade).length}`);
+  } catch (error: any) {
+    console.error(`[AM/PM DB] Error querying calls:`, error?.message);
+  }
+
+  return result;
 }

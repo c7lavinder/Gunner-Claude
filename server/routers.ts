@@ -7206,8 +7206,8 @@ selectedTimezone: { type: "string" },
         }
 
         const { searchLocationTasks, enrichTasks, getTeamMemberGhlMap, getTeamMembersForFilter } = await import("./taskCenter");
-        const { prioritizeTasks, detectAmPmCalls } = await import("./dayHub");
-        const { getContactTodayActivity } = await import("./ghlActions");
+        const { prioritizeTasks } = await import("./dayHub");
+        const { getAmPmCallStatusForContacts } = await import("./db");
 
         const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin";
         let assignedTo: string[] | undefined;
@@ -7229,29 +7229,9 @@ selectedTimezone: { type: "string" },
           prioritized = prioritized.filter(t => t.category === input.categoryFilter);
         }
 
-        // Fetch AM/PM call data for unique contacts (batch to avoid excessive API calls)
+        // Fetch AM/PM call data from local DB (fast, reliable, no API rate limits)
         const uniqueContactIds = Array.from(new Set(prioritized.map(t => t.contactId).filter(Boolean)));
-        const contactActivityMap = new Map<string, { amCallMade: boolean; pmCallMade: boolean }>();
-
-        // Process in batches of 5 to avoid rate limiting
-        const amPmBatchSize = 5;
-        for (let i = 0; i < uniqueContactIds.length; i += amPmBatchSize) {
-          const batch = uniqueContactIds.slice(i, i + amPmBatchSize);
-          const results = await Promise.all(
-            batch.map(async (contactId) => {
-              try {
-                const activity = await getContactTodayActivity(ctx.user!.tenantId!, contactId);
-                const amPm = detectAmPmCalls(activity.messages);
-                return { contactId, ...amPm };
-              } catch {
-                return { contactId, amCallMade: false, pmCallMade: false };
-              }
-            })
-          );
-          for (const r of results) {
-            contactActivityMap.set(r.contactId, { amCallMade: r.amCallMade, pmCallMade: r.pmCallMade });
-          }
-        }
+        const contactActivityMap = await getAmPmCallStatusForContacts(ctx.user!.tenantId!, uniqueContactIds);
 
         // Apply AM/PM data to prioritized tasks
         for (const task of prioritized) {

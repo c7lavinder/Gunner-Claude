@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, tenantId, name, role FROM users WHERE name LIKE '%Corey%' OR name LIKE '%corey%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, tenantId, name, role FROM users WHERE name LIKE '%Corey%' OR name LIKE '%corey%';",
+  "rows": [
+    {
+      "id": "1",
+      "tenantId": "1",
+      "name": "Corey Lavinder",
+      "role": "super_admin"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttenantId\tname\trole\n1\t1\tCorey Lavinder\tsuper_admin\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

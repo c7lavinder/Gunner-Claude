@@ -3930,3 +3930,10 @@
 - [x] Update KPI color calculation timezone to Central
 - [x] Update appointments, AI coach, and getContactTodayActivity to Central timezone
 - [x] 146 tests passing (39 dayHub + 107 taskCenter)
+
+## AM/PM Call Detection — Still Not Working (Debug Round 2)
+- [x] Investigate why AM/PM indicators still show grey after wiring detectAmPmCalls
+- [x] Root cause: GHL API approach made 100+ API calls per page load, hit rate limits, errors silently swallowed
+- [x] Replaced GHL API-based detection with local DB query (calls table already has all data)
+- [x] New getAmPmCallStatusForContacts() in db.ts — single DB query, instant, reliable
+- [x] 146 tests passing, 0 TS errors
