@@ -7232,19 +7232,24 @@ selectedTimezone: { type: "string" },
         // Hybrid AM/PM detection:
         // 1. Query local DB first (fast, covers most synced calls)
         // 2. For contacts missing from DB, fall back to live GHL API
+        //    BUT only for the top 20 prioritized tasks to avoid exhausting GHL rate limit
+        //    (262 tasks * 2 API calls each = 524 calls, way over 100/min limit)
         const uniqueContactIds = Array.from(new Set(prioritized.map(t => t.contactId).filter(Boolean)));
         const contactActivityMap = await getAmPmCallStatusForContacts(ctx.user!.tenantId!, uniqueContactIds);
 
-        // Find contacts that DB didn't have data for (no AM or PM calls found)
-        const missingContactIds = uniqueContactIds.filter(id => !contactActivityMap.has(id));
+        // Only fetch GHL API data for top 20 tasks' contacts that DB doesn't have
+        const top20ContactIds = Array.from(new Set(
+          prioritized.slice(0, 20).map(t => t.contactId).filter(Boolean)
+        ));
+        const missingContactIds = top20ContactIds.filter(id => !contactActivityMap.has(id));
 
-        // For missing contacts, fetch from GHL API with limited concurrency
+        // For missing contacts in top 20, fetch from GHL API with limited concurrency
         if (missingContactIds.length > 0) {
           const { getContactTodayActivity } = await import("./ghlActions");
           const { detectAmPmCalls } = await import("./dayHub");
 
-          // Process in batches of 5 to avoid rate limits
-          const BATCH_SIZE = 5;
+          // Process in batches of 3 to stay well within rate limits
+          const BATCH_SIZE = 3;
           for (let i = 0; i < missingContactIds.length; i += BATCH_SIZE) {
             const batch = missingContactIds.slice(i, i + BATCH_SIZE);
             const results = await Promise.allSettled(
@@ -7268,7 +7273,7 @@ selectedTimezone: { type: "string" },
               }
             }
           }
-          console.log(`[AM/PM] Hybrid: DB had ${uniqueContactIds.length - missingContactIds.length}/${uniqueContactIds.length} contacts, fetched ${missingContactIds.length} from GHL API`);
+          console.log(`[AM/PM] Hybrid: DB had ${uniqueContactIds.length - missingContactIds.length}/${uniqueContactIds.length} contacts, fetched ${missingContactIds.length} from GHL for top 20 tasks`);
         }
 
         // Apply AM/PM data to prioritized tasks

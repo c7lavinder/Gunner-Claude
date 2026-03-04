@@ -3956,3 +3956,11 @@
 - [x] Fix: hybrid approach — DB query first (fast), then GHL API fallback for missing contacts
 - [x] Batches of 5 concurrent GHL requests to avoid rate limits
 - [x] 146 tests passing, 0 TS errors
+
+## Today's Activity Broken After AM/PM Hybrid Fix
+- [x] Today's Activity shows "0 SMS, 0 Calls, 0 Emails" for contacts that previously had activity
+- [x] AM/PM indicators ARE working (Nicole=AM green, Laurie=PM green) but activity data gone
+- [x] Root cause: hybrid AM/PM was fetching GHL API for ALL 262 tasks (524+ API calls), exhausting 100/min rate limit
+- [x] Fix: limited GHL API fallback to only top 20 prioritized tasks, batch size reduced to 3
+- [x] This uses max ~40 API calls for AM/PM, leaving plenty of headroom for task detail activity fetches
+- [x] 146 tests passing, 0 TS errors
