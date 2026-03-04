@@ -3874,3 +3874,12 @@
 - [x] Scope LeftPanel Appointments by role tab (client-side filter using assignedUserId)
 - [x] Pass roleTab prop from TaskCenter to LeftPanel for filtering
 - [x] Added assignedUserId to TodayAppointment for role-based filtering
+
+## Day Hub — Round 3 Fixes
+- [x] Admin KPI targets: sum based on active team members/roles (dynamic from team data)
+- [x] Inbox phone filtering: show missed/unread based on which phone number the lead called/messaged
+- [x] Calendar appointments: show more info (contact phone, calendar name, time range, address)
+- [x] AI Coach suggestions: cleaner pill-style UI with icons in horizontal layout
+- [x] Task completion bug: optimistic removal — task disappears immediately with rollback on error
+- [x] Filter labels: removed "All" prefix from category and team member dropdowns
+- [x] Inbox click actions: click to expand with Call, Text, Dismiss quick action buttons

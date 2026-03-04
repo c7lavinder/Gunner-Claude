@@ -156,30 +156,33 @@ interface TeamMember {
 
 type RoleTab = "admin" | "lm" | "am";
 
+const LM_KPI_PER_PERSON = { calls: 150, convos: 20, apts: 4, offers: 0, contracts: 0 };
+const AM_KPI_PER_PERSON = { calls: 40, convos: 0, apts: 0, offers: 2, contracts: 1 };
+
 const ROLE_TAB_CONFIG: Record<RoleTab, { label: string; description: string; kpiTargets: { calls: number; convos: number; apts: number; offers: number; contracts: number }; teamRoles: string[] }> = {
   admin: {
     label: "Admin",
     description: "Full team overview — all tasks, KPIs, and inbox",
-    kpiTargets: { calls: 150, convos: 20, apts: 4, offers: 2, contracts: 1 },
-    teamRoles: [], // empty = show all
+    kpiTargets: { calls: 150, convos: 20, apts: 4, offers: 2, contracts: 1 }, // default, overridden dynamically
+    teamRoles: [],
   },
   lm: {
     label: "LM",
     description: "Lead Manager view — qualification & appointment setting",
-    kpiTargets: { calls: 150, convos: 20, apts: 4, offers: 0, contracts: 0 },
+    kpiTargets: LM_KPI_PER_PERSON,
     teamRoles: ["lead_manager"],
   },
   am: {
     label: "AM",
     description: "Acquisition Manager view — offers & contracts",
-    kpiTargets: { calls: 40, convos: 0, apts: 0, offers: 2, contracts: 1 },
+    kpiTargets: AM_KPI_PER_PERSON,
     teamRoles: ["acquisition_manager"],
   },
 };
 
 // ─── KPI BAR ────────────────────────────────────────────
 
-function KpiBar({ roleTab }: { roleTab: RoleTab }) {
+function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: TeamMember[] }) {
   const { data: kpi, isLoading } = trpc.taskCenter.getKpiSummary.useQuery(undefined, {
     refetchInterval: 120000,
   });
@@ -202,7 +205,21 @@ function KpiBar({ roleTab }: { roleTab: RoleTab }) {
 
   if (!kpi) return null;
 
-  const targets = ROLE_TAB_CONFIG[roleTab].kpiTargets;
+  // For admin, sum targets based on active team members per role
+  const targets = useMemo(() => {
+    if (roleTab !== "admin" || !teamMembers || teamMembers.length === 0) {
+      return ROLE_TAB_CONFIG[roleTab].kpiTargets;
+    }
+    const lmCount = teamMembers.filter(m => m.teamRole === "lead_manager" && m.ghlUserId).length || 1;
+    const amCount = teamMembers.filter(m => m.teamRole === "acquisition_manager" && m.ghlUserId).length || 1;
+    return {
+      calls: (lmCount * LM_KPI_PER_PERSON.calls) + (amCount * AM_KPI_PER_PERSON.calls),
+      convos: lmCount * LM_KPI_PER_PERSON.convos,
+      apts: lmCount * LM_KPI_PER_PERSON.apts,
+      offers: amCount * AM_KPI_PER_PERSON.offers,
+      contracts: amCount * AM_KPI_PER_PERSON.contracts,
+    };
+  }, [roleTab, teamMembers]);
 
   const kpiItems = [
     {
@@ -460,12 +477,39 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; role
 }
 
 function UnreadConvoItem({ conv }: { conv: any }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const handleCall = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (conv.contactPhone) {
+      window.open(`tel:${conv.contactPhone}`, "_self");
+    } else {
+      toast.info("No phone number available");
+    }
+  };
+
+  const handleText = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (conv.contactPhone) {
+      window.open(`sms:${conv.contactPhone}`, "_self");
+    } else {
+      toast.info("No phone number available");
+    }
+  };
+
+  const handleDismiss = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpanded(false);
+    toast.success(`Dismissed ${conv.contactName || "conversation"}`);
+  };
+
   return (
     <div
       className="rounded-md px-2.5 py-2 transition-colors cursor-pointer"
-      style={{ background: "transparent" }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--g-bg-card-hover)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+      style={{ background: expanded ? "var(--g-bg-card-hover)" : "transparent" }}
+      onMouseEnter={(e) => { if (!expanded) e.currentTarget.style.background = "var(--g-bg-card-hover)"; }}
+      onMouseLeave={(e) => { if (!expanded) e.currentTarget.style.background = "transparent"; }}
+      onClick={() => setExpanded(!expanded)}
     >
       <div className="flex items-start gap-2">
         <div
@@ -502,13 +546,46 @@ function UnreadConvoItem({ conv }: { conv: any }) {
           )}
         </div>
       </div>
+      {/* Quick actions on click */}
+      {expanded && (
+        <div className="flex items-center gap-1.5 mt-2 ml-7">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2 gap-1"
+            style={{ borderColor: "#22c55e", color: "#22c55e" }}
+            onClick={handleCall}
+          >
+            <Phone className="h-2.5 w-2.5" /> Call
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2 gap-1"
+            style={{ borderColor: "oklch(0.65 0.15 250)", color: "oklch(0.65 0.15 250)" }}
+            onClick={handleText}
+          >
+            <MessageSquare className="h-2.5 w-2.5" /> Text
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2 gap-1"
+            onClick={handleDismiss}
+          >
+            <X className="h-2.5 w-2.5" /> Dismiss
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
 function AppointmentItem({ apt }: { apt: any }) {
   const startTime = new Date(apt.startTime);
+  const endTime = new Date(apt.endTime);
   const timeStr = startTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  const endTimeStr = endTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const isPast = startTime.getTime() < Date.now();
   const statusColor = apt.status === "confirmed" ? "#22c55e" : apt.status === "showed" ? "#3b82f6" : "#eab308";
 
@@ -521,9 +598,12 @@ function AppointmentItem({ apt }: { apt: any }) {
       }}
     >
       <div className="flex items-start gap-2.5">
-        <div className="shrink-0 text-center min-w-[42px]">
+        <div className="shrink-0 text-center min-w-[50px]">
           <div className="text-xs font-bold tabular-nums" style={{ color: "var(--g-text-primary)" }}>
             {timeStr}
+          </div>
+          <div className="text-[9px]" style={{ color: "var(--g-text-tertiary)" }}>
+            {endTimeStr}
           </div>
           <div
             className="text-[9px] font-semibold uppercase mt-0.5 rounded px-1 py-0.5"
@@ -536,10 +616,22 @@ function AppointmentItem({ apt }: { apt: any }) {
           <span className="text-xs font-semibold block truncate" style={{ color: "var(--g-text-primary)" }}>
             {apt.contactName || apt.title}
           </span>
+          {apt.contactPhone && (
+            <span className="text-[10px] flex items-center gap-1 mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
+              <Phone className="h-2 w-2 shrink-0" />
+              {apt.contactPhone}
+            </span>
+          )}
           {apt.address && (
-            <span className="text-[11px] flex items-center gap-1 mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
-              <MapPin className="h-2.5 w-2.5 shrink-0" />
+            <span className="text-[10px] flex items-center gap-1 mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
+              <MapPin className="h-2 w-2 shrink-0" />
               {apt.address}
+            </span>
+          )}
+          {apt.calendarName && (
+            <span className="text-[10px] flex items-center gap-1 mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
+              <CalendarDays className="h-2 w-2 shrink-0" />
+              {apt.calendarName}
             </span>
           )}
         </div>
@@ -2155,9 +2247,9 @@ function DayHubCoach() {
   };
 
   const suggestedPrompts = [
-    "What should I focus on today?",
-    "Send an SMS to [contact] saying...",
-    "Add a note for [contact]...",
+    { text: "What should I focus on?", icon: "\u{1F3AF}" },
+    { text: "Send an SMS to...", icon: "\u{1F4AC}" },
+    { text: "Add a note for...", icon: "\u{1F4DD}" },
   ];
 
   return (
@@ -2195,21 +2287,22 @@ function DayHubCoach() {
             <p className="text-xs text-center" style={{ color: "var(--g-text-tertiary)" }}>
               Ask questions or give commands — send SMS, add notes, create tasks, and more.
             </p>
-            <div className="flex flex-col gap-1.5 w-full">
+            <div className="flex flex-wrap gap-1.5 justify-center">
               {suggestedPrompts.map((prompt, i) => (
                 <button
                   key={i}
-                  onClick={() => setQuestion(prompt)}
-                  className="text-[11px] text-left px-2.5 py-1.5 rounded-md transition-colors"
+                  onClick={() => setQuestion(prompt.text)}
+                  className="text-[10px] inline-flex items-center gap-1 px-2.5 py-1 rounded-full transition-all"
                   style={{
                     border: "1px solid var(--g-border-subtle)",
                     color: "var(--g-text-secondary)",
-                    background: "transparent",
+                    background: "var(--g-bg-card)",
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--g-bg-inset)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--g-bg-inset)"; e.currentTarget.style.borderColor = "var(--g-accent)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--g-bg-card)"; e.currentTarget.style.borderColor = "var(--g-border-subtle)"; }}
                 >
-                  {prompt}
+                  <span>{prompt.icon}</span>
+                  {prompt.text}
                 </button>
               ))}
             </div>
@@ -2549,19 +2642,33 @@ export default function TaskCenter() {
     }
   };
 
-  // Complete task mutation
+  // Complete task mutation with optimistic removal
   const completeTaskMutation = trpc.taskCenter.completeTask.useMutation({
-    onMutate: ({ taskId }) => {
+    onMutate: async ({ taskId }) => {
       setCompletingTaskIds((prev) => new Set(prev).add(taskId));
+      // Cancel outgoing refetches so they don't overwrite optimistic update
+      await utils.taskCenter.getPriorityTasks.cancel();
+      // Snapshot previous value
+      const prev = utils.taskCenter.getPriorityTasks.getData();
+      // Optimistically remove the task from the list
+      utils.taskCenter.getPriorityTasks.setData(undefined, (old: any) => {
+        if (!old) return old;
+        return { ...old, tasks: old.tasks.filter((t: any) => t.id !== taskId) };
+      });
+      return { prev };
     },
     onSuccess: (_, { taskId }) => {
       toast.success("Task completed");
       setCompletingTaskIds((prev) => { const next = new Set(prev); next.delete(taskId); return next; });
       utils.taskCenter.getPriorityTasks.invalidate();
     },
-    onError: (err, { taskId }) => {
+    onError: (err, { taskId }, context: any) => {
       toast.error("Failed to complete task", { description: err.message });
       setCompletingTaskIds((prev) => { const next = new Set(prev); next.delete(taskId); return next; });
+      // Rollback optimistic update
+      if (context?.prev) {
+        utils.taskCenter.getPriorityTasks.setData(undefined, context.prev);
+      }
     },
   });
 
@@ -2712,7 +2819,7 @@ export default function TaskCenter() {
       </div>
 
       {/* KPI Bar */}
-      <KpiBar roleTab={roleTab} />
+      <KpiBar roleTab={roleTab} teamMembers={data?.teamMembers as TeamMember[] | undefined} />
 
       {/* Top half: Inbox + AI Coach side by side */}
       <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
@@ -2736,7 +2843,7 @@ export default function TaskCenter() {
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="all">Categories</SelectItem>
                 <SelectItem value="new_lead">New Leads</SelectItem>
                 <SelectItem value="reschedule">Reschedule</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
@@ -2753,7 +2860,7 @@ export default function TaskCenter() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">
-                    {roleTab === "admin" ? "All Team Members" : `All ${ROLE_TAB_CONFIG[roleTab].label}s`}
+                    {roleTab === "admin" ? "Team Members" : `${ROLE_TAB_CONFIG[roleTab].label}s`}
                   </SelectItem>
                   {data.teamMembers
                     .filter((m: TeamMember) => {

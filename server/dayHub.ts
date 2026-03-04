@@ -340,9 +340,11 @@ export interface TodayAppointment {
   endTime: string;
   contactId: string;
   contactName: string;
+  contactPhone: string;
   address: string;
   status: string;
   calendarId: string;
+  calendarName: string;
   assignedUserId?: string;
 }
 
@@ -393,9 +395,11 @@ export async function getTodayAppointments(
             endTime: evt.endTime,
             contactId: evt.contactId || "",
             contactName: evt.contact?.name || `${evt.contact?.firstName || ""} ${evt.contact?.lastName || ""}`.trim() || "Unknown",
+            contactPhone: evt.contact?.phone || evt.contact?.primaryPhone || "",
             address: evt.address || evt.location || "",
             status: evt.appointmentStatus || "confirmed",
             calendarId: evt.calendarId || cal.id,
+            calendarName: cal.name || "Calendar",
             assignedUserId: evt.assignedUserId || evt.userId || "",
           });
         }
