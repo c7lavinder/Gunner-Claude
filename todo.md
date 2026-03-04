@@ -3864,3 +3864,13 @@
 - [x] Layout restructure: top half = 50/50 Inbox (left) + AI Coach (right)
 - [x] Layout restructure: bottom half = full-width task list
 - [x] Integrate AI Coach chat panel into Day Hub right side
+
+## Day Hub — AI Coach Actions & Inbox Role Filtering
+- [x] Wire full action system into DayHubCoach (parseIntent, action cards, contact search, execute/cancel)
+- [x] Support SMS, notes, tasks, workflows, appointments from Day Hub coach
+- [x] Action card UI with pending/confirmed/executed/cancelled states
+- [x] Contact disambiguation when multiple matches found
+- [x] Scope LeftPanel Inbox (missed calls + unread messages) by role tab
+- [x] Scope LeftPanel Appointments by role tab (client-side filter using assignedUserId)
+- [x] Pass roleTab prop from TaskCenter to LeftPanel for filtering
+- [x] Added assignedUserId to TodayAppointment for role-based filtering

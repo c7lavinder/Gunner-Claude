@@ -86,6 +86,10 @@ import {
   Bot,
   Loader2,
   Sparkles,
+  XCircle,
+  CheckCircle,
+  Tag,
+  X,
 } from "lucide-react";
 import { useDemo } from "@/hooks/useDemo";
 
@@ -305,18 +309,32 @@ function KpiBar({ roleTab }: { roleTab: RoleTab }) {
 
 // ─── LEFT PANEL: MISSED/UNREAD + APPOINTMENTS ───────────
 
-function LeftPanel() {
+function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; roleFilteredGhlUserIds: string[] | null }) {
   const [activeTab, setActiveTab] = useState<"unread" | "appointments">("unread");
 
-  const { data: unreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
+  // Fetch all unread conversations (we filter client-side for multi-user role tabs)
+  const { data: allUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
     undefined,
     { refetchInterval: 60000 }
   );
 
-  const { data: appointments, isLoading: aptsLoading } = trpc.taskCenter.getTodayAppointments.useQuery(
+  const { data: allAppointments, isLoading: aptsLoading } = trpc.taskCenter.getTodayAppointments.useQuery(
     undefined,
     { refetchInterval: 120000 }
   );
+
+  // Filter by role tab — admin sees all, LM/AM sees only their team members
+  // Note: GHL unread conversations don't have assignedTo in the response, so we rely on the API filter
+  // For appointments, we filter client-side using assignedUserId
+  const unreadConvos = allUnreadConvos;
+  const appointments = useMemo(() => {
+    if (!allAppointments) return [];
+    if (!roleFilteredGhlUserIds) return allAppointments; // admin = show all
+    return allAppointments.filter(apt => {
+      if (!apt.assignedUserId) return true; // show unassigned to everyone
+      return roleFilteredGhlUserIds.includes(apt.assignedUserId);
+    });
+  }, [allAppointments, roleFilteredGhlUserIds]);
 
   const missedCalls = useMemo(() => (unreadConvos || []).filter(c => c.isMissedCall), [unreadConvos]);
   const unreadMessages = useMemo(() => (unreadConvos || []).filter(c => !c.isMissedCall), [unreadConvos]);
@@ -1582,20 +1600,190 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
 
 // ─── AI COACH PANEL ────────────────────────────────────
 
+type CoachConversationMessage = 
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string }
+  | { role: "action_card"; actionId: number; actionType: string; summary: string; contactName: string; status: "pending" | "confirmed" | "cancelled" | "executed" | "failed"; result?: string; payload?: any; batchIndex?: number; batchTotal?: number; resolvedStage?: { pipelineName: string; stageName: string }; smsDeliveryStatus?: string; smsFromNumber?: string };
+
+const ACTION_TYPE_LABELS: Record<string, string> = {
+  add_note: "Add Note", add_note_contact: "Add Note", add_note_opportunity: "Add Note",
+  change_pipeline_stage: "Change Pipeline Stage", send_sms: "Send SMS", create_task: "Create Task",
+  add_tag: "Add Tag", remove_tag: "Remove Tag", update_field: "Update Field", update_task: "Update Task",
+  add_to_workflow: "Add to Workflow", remove_from_workflow: "Remove from Workflow",
+  create_appointment: "Create Appointment", update_appointment: "Update Appointment", cancel_appointment: "Cancel Appointment",
+};
+
+const ACTION_ICONS: Record<string, string> = {
+  add_note: "\u{1F4DD}", add_note_contact: "\u{1F4DD}", add_note_opportunity: "\u{1F4DD}",
+  change_pipeline_stage: "\u{1F504}", send_sms: "\u{1F4AC}", create_task: "\u2705",
+  add_tag: "\u{1F3F7}\uFE0F", remove_tag: "\u{1F3F7}\uFE0F", update_field: "\u270F\uFE0F",
+  update_task: "\u{1F504}", add_to_workflow: "\u26A1", remove_from_workflow: "\u{1F6AB}",
+  create_appointment: "\u{1F4C5}", update_appointment: "\u{1F504}", cancel_appointment: "\u274C",
+};
+
 function DayHubCoach() {
-  const { user } = useAuth();
+  const { user: currentUser } = useAuth();
   const { guardAction: guardDemoAction } = useDemo();
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
-  const [conversation, setConversation] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [conversation, setConversation] = useState<CoachConversationMessage[]>([]);
+  const [contactSearchResults, setContactSearchResults] = useState<Array<{id: string; name: string; phone?: string; email?: string}>>([]);
+  const [pendingAction, setPendingAction] = useState<{intent: any; message: string; remainingActions?: any[]; batchIndex?: number; batchTotal?: number} | null>(null);
+  const [editingActionId, setEditingActionId] = useState<number | null>(null);
+  const [editedContent, setEditedContent] = useState("");
+  const [senderOverrides, setSenderOverrides] = useState<Record<number, { ghlUserId: string; name: string } | null>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastUserMessageRef = useRef<string>("");
+
   const saveExchangeMutation = trpc.coach.saveExchange.useMutation();
+  const { data: smsTeamSenders } = trpc.coachActions.smsTeamSenders.useQuery();
+  const parseIntentMutation = trpc.coachActions.parseIntent.useMutation();
+  const searchContactsMutation = trpc.coachActions.searchContacts.useMutation();
+  const createPendingMutation = trpc.coachActions.createPending.useMutation();
+  const confirmExecuteMutation = trpc.coachActions.confirmAndExecute.useMutation();
+  const cancelActionMutation = trpc.coachActions.cancel.useMutation();
+  const coachUtils = trpc.useUtils();
+
+  const askCoachMutation = trpc.coach.askQuestion.useMutation({
+    onSuccess: async (response) => {
+      if (response.answer.includes("[ACTION_REDIRECT]")) {
+        setConversation(prev => [...prev, { role: "assistant", content: "On it \u2014 creating that for you now..." }]);
+        try {
+          const historyForRedirect = conversation
+            .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+              msg.role === "user" || msg.role === "assistant"
+            )
+            .slice(-10)
+            .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+          const result = await parseIntentMutation.mutateAsync({ message: lastUserMessageRef.current, history: historyForRedirect });
+          if ((result as any).instructionSaved) {
+            setConversation(prev => [...prev, { role: "assistant", content: (result as any).instructionConfirmation || "Got it \u2014 I'll remember that preference!" }]);
+            setIsAsking(false);
+            return;
+          }
+          const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
+          if (actions.length > 0) {
+            await processActions(actions, lastUserMessageRef.current);
+          } else {
+            const cleanAnswer = response.answer.replace(/\[ACTION_REDIRECT\]/g, "").trim();
+            if (cleanAnswer) {
+              setConversation(prev => [...prev, { role: "assistant", content: cleanAnswer }]);
+            }
+          }
+        } catch (error: any) {
+          const errMsg = error.message || "Unknown error";
+          if (errMsg.includes("429") || errMsg.includes("Too Many Requests") || errMsg.includes("rate limit")) {
+            toast.error("CRM is temporarily rate-limited. Please wait a moment and try again.");
+          } else {
+            toast.error("Failed to process action: " + errMsg);
+          }
+        }
+        setIsAsking(false);
+        return;
+      }
+      setConversation(prev => [...prev, { role: "assistant", content: response.answer }]);
+      setIsAsking(false);
+    },
+    onError: (error) => {
+      toast.error("Failed to get answer: " + error.message);
+      setIsAsking(false);
+    },
+  });
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [conversation, isAsking]);
+
+  const processActions = async (actions: any[], userMessage: string) => {
+    if (actions.length > 1) {
+      setConversation(prev => [...prev, { role: "assistant", content: `I detected **${actions.length} actions** in your request. Creating each one for your review:` }]);
+    }
+    const resolvedContacts: Record<string, { id: string; name: string }> = {};
+    const batchTotal = actions.length;
+    for (let i = 0; i < actions.length; i++) {
+      const action = actions[i];
+      const batchIndex = i + 1;
+      const needsSearch = (action.needsContactSearch || (!action.contactId || !action.contactId.trim())) && action.contactName;
+      if (needsSearch) {
+        const cached = resolvedContacts[action.contactName.toLowerCase()];
+        if (cached) {
+          action.contactId = cached.id;
+          action.contactName = cached.name;
+          await createActionCard(action, userMessage, batchIndex, batchTotal);
+        } else {
+          const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
+          if (contacts.length === 0) {
+            setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find a contact named "${action.contactName}" in CRM. Skipping action: ${action.summary}` }]);
+            continue;
+          } else if (contacts.length === 1) {
+            action.contactId = contacts[0].id;
+            action.contactName = contacts[0].name || action.contactName;
+            resolvedContacts[action.contactName.toLowerCase()] = { id: contacts[0].id, name: contacts[0].name || action.contactName };
+            await createActionCard(action, userMessage, batchIndex, batchTotal);
+          } else {
+            setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
+            setPendingAction({ intent: action, message: userMessage, remainingActions: actions.slice(i + 1), batchIndex, batchTotal });
+            setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${action.contactName}". Please select the right one:` }]);
+            setIsAsking(false);
+            return;
+          }
+        }
+      } else {
+        await createActionCard(action, userMessage, batchIndex, batchTotal);
+      }
+    }
+  };
+
+  const createActionCard = async (intent: any, userMessage: string, batchIndex?: number, batchTotal?: number) => {
+    try {
+      if (!intent.actionType || typeof intent.actionType !== "string" || intent.actionType.trim() === "") {
+        setConversation(prev => [...prev, { role: "assistant", content: `I couldn't determine the action type for: ${intent.summary || "unknown action"}. Please try rephrasing your request.` }]);
+        return;
+      }
+      let resolvedStage: { pipelineName: string; stageName: string } | undefined;
+      if (intent.actionType === "change_pipeline_stage" && intent.params?.stageName) {
+        try {
+          const stageResult = await coachUtils.coachActions.resolveStage.fetch({
+            stageName: intent.params.stageName,
+            pipelineName: intent.params.pipelineName || undefined,
+            contactId: intent.contactId || undefined,
+          });
+          if (stageResult.resolved) {
+            resolvedStage = { pipelineName: stageResult.pipelineName!, stageName: stageResult.stageName! };
+          }
+        } catch (e) {
+          console.warn("Stage resolution failed:", e);
+        }
+      }
+      const result = await createPendingMutation.mutateAsync({
+        actionType: intent.actionType,
+        requestText: userMessage,
+        targetContactId: intent.contactId || undefined,
+        targetContactName: intent.contactName || undefined,
+        payload: { ...intent.params, assigneeName: intent.assigneeName || "" },
+      });
+      setConversation(prev => [...prev, {
+        role: "action_card",
+        actionId: result.actionId,
+        actionType: intent.actionType,
+        summary: intent.summary,
+        contactName: intent.contactName || "",
+        status: "pending",
+        payload: { ...intent.params, assigneeName: intent.assigneeName || "" },
+        ...(batchTotal && batchTotal > 1 ? { batchIndex, batchTotal } : {}),
+        ...(resolvedStage ? { resolvedStage } : {}),
+      }]);
+    } catch (error: any) {
+      const msg = error?.message || "Unknown error";
+      const isZodError = msg.includes("expected") && msg.includes("received");
+      const friendlyMsg = isZodError
+        ? "I couldn't process that action. Please try rephrasing your request."
+        : msg;
+      setConversation(prev => [...prev, { role: "assistant", content: friendlyMsg }]);
+    }
+  };
 
   const streamCoachQuestion = useCallback(async (userMessage: string, chatHistory: Array<{ role: "user" | "assistant"; content: string }>) => {
     setConversation(prev => [...prev, { role: "assistant", content: "" }]);
@@ -1611,6 +1799,7 @@ function DayHubCoach() {
       const decoder = new TextDecoder();
       let buffer = "";
       let fullResponse = "";
+      let actionRedirectDetected = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -1625,6 +1814,11 @@ function DayHubCoach() {
             const parsed = JSON.parse(data);
             if (parsed.type === "chunk" && parsed.content) {
               fullResponse += parsed.content;
+              if (fullResponse.includes("[ACTION_REDIRECT]")) {
+                actionRedirectDetected = true;
+                reader.cancel();
+                break;
+              }
               setConversation(prev => {
                 const updated = [...prev];
                 const lastMsg = updated[updated.length - 1];
@@ -1636,40 +1830,315 @@ function DayHubCoach() {
             }
           } catch { /* skip malformed */ }
         }
+        if (actionRedirectDetected) break;
       }
-      // Persist exchange
-      if (fullResponse) {
-        saveExchangeMutation.mutate({ question: userMessage, answer: fullResponse });
-      }
-    } catch {
-      setConversation(prev => {
-        const updated = [...prev];
-        const lastMsg = updated[updated.length - 1];
-        if (lastMsg && lastMsg.role === "assistant" && !lastMsg.content) {
-          updated[updated.length - 1] = { ...lastMsg, content: "Sorry, I couldn't connect. Please try again." };
+
+      if (actionRedirectDetected) {
+        setConversation(prev => {
+          const updated = [...prev];
+          const lastMsg = updated[updated.length - 1];
+          if (lastMsg && lastMsg.role === "assistant") {
+            updated[updated.length - 1] = { ...lastMsg, content: "On it \u2014 creating that for you now..." };
+          }
+          return updated;
+        });
+        try {
+          const historyForStreamRedirect = conversation
+            .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+              msg.role === "user" || msg.role === "assistant"
+            )
+            .slice(-10)
+            .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+          const result = await parseIntentMutation.mutateAsync({ message: userMessage, history: historyForStreamRedirect });
+          if ((result as any).instructionSaved) {
+            setConversation(prev => {
+              const updated = [...prev];
+              const lastMsg = updated[updated.length - 1];
+              if (lastMsg && lastMsg.role === "assistant") {
+                updated[updated.length - 1] = { ...lastMsg, content: (result as any).instructionConfirmation || "Got it \u2014 I'll remember that preference!" };
+              }
+              return updated;
+            });
+            setIsAsking(false);
+            return;
+          }
+          const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
+          if (actions.length > 0) {
+            await processActions(actions, userMessage);
+          } else {
+            const chatHistoryFallback = conversation
+              .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+                msg.role === "user" || msg.role === "assistant"
+              )
+              .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+            setConversation(prev => {
+              const updated = [...prev];
+              if (updated.length > 0 && updated[updated.length - 1].role === "assistant") {
+                updated.pop();
+              }
+              return updated;
+            });
+            await streamCoachQuestion(userMessage, chatHistoryFallback);
+            return;
+          }
+        } catch (error: any) {
+          const errMsg = error.message || "Unknown error";
+          if (errMsg.includes("429") || errMsg.includes("Too Many Requests") || errMsg.includes("rate limit")) {
+            toast.error("CRM is temporarily rate-limited. Please wait a moment and try again.");
+          } else {
+            toast.error("Failed to process action: " + errMsg);
+          }
         }
-        return updated;
+        setIsAsking(false);
+        return;
+      }
+
+      // Persist exchange
+      setConversation(prev => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg && lastMsg.role === "assistant" && lastMsg.content) {
+          saveExchangeMutation.mutate({ question: userMessage, answer: lastMsg.content });
+        }
+        return prev;
       });
+      setIsAsking(false);
+    } catch {
+      lastUserMessageRef.current = userMessage;
+      askCoachMutation.mutate({ question: userMessage, history: chatHistory });
     }
-  }, [saveExchangeMutation]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveExchangeMutation, conversation, parseIntentMutation]);
 
   const handleAsk = async () => {
     if (!question.trim() || isAsking) return;
-    if (!guardDemoAction()) return;
+    if (!guardDemoAction("CRM actions")) return;
     const userMessage = question.trim();
     setConversation(prev => [...prev, { role: "user", content: userMessage }]);
     setIsAsking(true);
     setQuestion("");
-    const chatHistory = conversation
-      .filter((msg): msg is { role: "user" | "assistant"; content: string } => msg.role === "user" || msg.role === "assistant")
-      .slice(-10)
-      .map(msg => ({ role: msg.role, content: msg.content }));
+
     try {
-      await streamCoachQuestion(userMessage, chatHistory);
-    } catch {
-      toast.error("Failed to get answer");
+      const historyForIntent = conversation
+        .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+          msg.role === "user" || msg.role === "assistant"
+        )
+        .slice(-10)
+        .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+      const result = await parseIntentMutation.mutateAsync({ message: userMessage, history: historyForIntent });
+      if ((result as any).instructionSaved) {
+        setConversation(prev => [...prev, { role: "assistant", content: (result as any).instructionConfirmation || "Got it \u2014 I'll remember that preference!" }]);
+        setIsAsking(false);
+        return;
+      }
+      const actions = (result.actions || []).filter((a: any) => a && typeof a.actionType === "string" && a.actionType.trim() !== "");
+      if (actions.length > 0) {
+        await processActions(actions, userMessage);
+      } else {
+        const chatHistory = conversation
+          .filter((msg): msg is { role: "user"; content: string } | { role: "assistant"; content: string } =>
+            msg.role === "user" || msg.role === "assistant"
+          )
+          .map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content }));
+        await streamCoachQuestion(userMessage, chatHistory);
+        return;
+      }
+    } catch (error: any) {
+      const errMsg = error.message || "Unknown error";
+      if (errMsg.includes("429") || errMsg.includes("Too Many Requests") || errMsg.includes("rate limit") || errMsg.includes("temporarily busy")) {
+        toast.error("CRM is temporarily busy. Please wait a moment and try again.");
+        setConversation(prev => [...prev, { role: "assistant", content: "The CRM is temporarily busy. Please wait about 30 seconds and try again." }]);
+      } else {
+        toast.error("Failed to process: " + errMsg);
+      }
     }
     setIsAsking(false);
+  };
+
+  const handleSelectContact = async (contactId: string, contactName: string) => {
+    if (!pendingAction) return;
+    setContactSearchResults([]);
+    setIsAsking(true);
+    const intent = { ...pendingAction.intent, contactId, contactName };
+    const currentBatchIndex = pendingAction.batchIndex;
+    const currentBatchTotal = pendingAction.batchTotal;
+    await createActionCard(intent, pendingAction.message, currentBatchIndex, currentBatchTotal);
+    const remaining = pendingAction.remainingActions || [];
+    const userMessage = pendingAction.message;
+    setPendingAction(null);
+    if (remaining.length > 0) {
+      const resolvedContacts: Record<string, { id: string; name: string }> = {
+        [contactName.toLowerCase()]: { id: contactId, name: contactName }
+      };
+      for (let i = 0; i < remaining.length; i++) {
+        const action = remaining[i];
+        const batchIdx = (currentBatchIndex || 0) + 1 + i;
+        const needsSearch = (action.needsContactSearch || (!action.contactId || !action.contactId.trim())) && action.contactName;
+        if (needsSearch) {
+          const cached = resolvedContacts[action.contactName.toLowerCase()];
+          if (cached) {
+            action.contactId = cached.id;
+            action.contactName = cached.name;
+            await createActionCard(action, userMessage, batchIdx, currentBatchTotal);
+          } else {
+            const contacts = await searchContactsMutation.mutateAsync({ query: action.contactName });
+            if (contacts.length === 0) {
+              setConversation(prev => [...prev, { role: "assistant", content: `I couldn't find "${action.contactName}". Skipping: ${action.summary}` }]);
+              continue;
+            } else if (contacts.length === 1) {
+              action.contactId = contacts[0].id;
+              action.contactName = contacts[0].name || action.contactName;
+              resolvedContacts[action.contactName.toLowerCase()] = { id: contacts[0].id, name: contacts[0].name || action.contactName };
+              await createActionCard(action, userMessage, batchIdx, currentBatchTotal);
+            } else {
+              setContactSearchResults(contacts.map(c => ({ id: c.id, name: c.name || "Unknown", phone: c.phone || undefined, email: c.email || undefined })));
+              setPendingAction({ intent: action, message: userMessage, remainingActions: remaining.slice(i + 1), batchIndex: batchIdx, batchTotal: currentBatchTotal });
+              setConversation(prev => [...prev, { role: "assistant", content: `I found ${contacts.length} contacts matching "${action.contactName}". Please select:` }]);
+              setIsAsking(false);
+              return;
+            }
+          }
+        } else {
+          await createActionCard(action, userMessage, batchIdx, currentBatchTotal);
+        }
+      }
+    }
+    setIsAsking(false);
+  };
+
+  const getEditableContent = (actionType: string, payload: any): string => {
+    if (!payload) return "";
+    switch (actionType) {
+      case "send_sms": return payload.message || "";
+      case "add_note":
+      case "add_note_contact":
+      case "add_note_opportunity": return payload.noteBody || "";
+      case "create_task": return payload.title || "";
+      default: return "";
+    }
+  };
+
+  const isEditableAction = (actionType: string): boolean => {
+    return ["send_sms", "add_note", "add_note_contact", "add_note_opportunity", "create_task"].includes(actionType);
+  };
+
+  const handleStartEdit = (actionId: number, actionType: string, payload: any) => {
+    setEditingActionId(actionId);
+    setEditedContent(getEditableContent(actionType, payload));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingActionId(null);
+    setEditedContent("");
+  };
+
+  const buildEditedPayload = (actionType: string, originalPayload: any, newContent: string): any => {
+    const edited = { ...originalPayload };
+    switch (actionType) {
+      case "send_sms": edited.message = newContent; break;
+      case "add_note":
+      case "add_note_contact":
+      case "add_note_opportunity": edited.noteBody = newContent; break;
+      case "create_task": edited.title = newContent; break;
+    }
+    return edited;
+  };
+
+  const handleConfirmAction = async (actionId: number) => {
+    if (guardDemoAction("CRM actions")) return;
+    const actionCard = conversation.find(
+      (msg): msg is Extract<CoachConversationMessage, { role: "action_card" }> =>
+        msg.role === "action_card" && msg.actionId === actionId
+    );
+    let editedPayload: any = undefined;
+    if (editingActionId === actionId && actionCard) {
+      const originalContent = getEditableContent(actionCard.actionType, actionCard.payload);
+      if (editedContent !== originalContent) {
+        editedPayload = buildEditedPayload(actionCard.actionType, actionCard.payload, editedContent);
+      }
+    }
+    if (actionCard?.actionType === "send_sms" && senderOverrides[actionId]) {
+      const override = senderOverrides[actionId];
+      editedPayload = {
+        ...(editedPayload || actionCard.payload || {}),
+        senderOverrideGhlId: override.ghlUserId,
+        senderOverrideName: override.name,
+      };
+    }
+    setEditingActionId(null);
+    setEditedContent("");
+    setConversation(prev => prev.map(msg => 
+      msg.role === "action_card" && msg.actionId === actionId 
+        ? { ...msg, status: "confirmed" as const, ...(editedPayload ? { payload: editedPayload, summary: `${msg.summary} (edited)` } : {}) }
+        : msg
+    ));
+    try {
+      const result = await confirmExecuteMutation.mutateAsync({ actionId, editedPayload });
+      setConversation(prev => prev.map(msg => 
+        msg.role === "action_card" && msg.actionId === actionId 
+          ? { ...msg, status: result.success ? "executed" as const : "failed" as const, result: result.success ? "Action completed successfully!" : (result.error || "Action failed"), ...(result.smsFromNumber ? { smsFromNumber: result.smsFromNumber } : {}) }
+          : msg
+      ));
+      if (result.success) {
+        toast.success("Action executed successfully!");
+        if (actionCard?.actionType === "send_sms") {
+          setConversation(prev => prev.map(msg =>
+            msg.role === "action_card" && msg.actionId === actionId
+              ? { ...msg, smsDeliveryStatus: "sent" }
+              : msg
+          ));
+          setTimeout(async () => {
+            try {
+              const statusResult = await coachUtils.coachActions.smsDeliveryStatus.fetch({ actionId });
+              if (statusResult.found && statusResult.status) {
+                setConversation(prev => prev.map(msg =>
+                  msg.role === "action_card" && msg.actionId === actionId
+                    ? { ...msg, smsDeliveryStatus: statusResult.status }
+                    : msg
+                ));
+              }
+            } catch { /* non-critical */ }
+          }, 3000);
+          setTimeout(async () => {
+            try {
+              const statusResult = await coachUtils.coachActions.smsDeliveryStatus.fetch({ actionId });
+              if (statusResult.found && statusResult.status) {
+                setConversation(prev => prev.map(msg =>
+                  msg.role === "action_card" && msg.actionId === actionId
+                    ? { ...msg, smsDeliveryStatus: statusResult.status }
+                    : msg
+                ));
+              }
+            } catch { /* non-critical */ }
+          }, 8000);
+        }
+      } else {
+        toast.error(result.error || "Action failed");
+      }
+    } catch (error: any) {
+      const errMsg = error.message || "Unknown error";
+      const isRateLimit = errMsg.includes("429") || errMsg.includes("rate limit") || errMsg.includes("Too Many") || errMsg.includes("temporarily busy");
+      const friendlyMsg = isRateLimit ? "CRM is temporarily busy. Please wait a moment and try again." : errMsg;
+      setConversation(prev => prev.map(msg => 
+        msg.role === "action_card" && msg.actionId === actionId 
+          ? { ...msg, status: "failed" as const, result: friendlyMsg }
+          : msg
+      ));
+      toast.error(isRateLimit ? friendlyMsg : "Failed to execute: " + errMsg);
+    }
+  };
+
+  const handleCancelAction = async (actionId: number) => {
+    if (guardDemoAction("CRM actions")) return;
+    try {
+      await cancelActionMutation.mutateAsync({ actionId });
+      setConversation(prev => prev.map(msg => 
+        msg.role === "action_card" && msg.actionId === actionId 
+          ? { ...msg, status: "cancelled" as const }
+          : msg
+      ));
+    } catch (error: any) {
+      toast.error("Failed to cancel: " + error.message);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1679,10 +2148,16 @@ function DayHubCoach() {
     }
   };
 
+  const clearConversation = () => {
+    setConversation([]);
+    setContactSearchResults([]);
+    setPendingAction(null);
+  };
+
   const suggestedPrompts = [
     "What should I focus on today?",
-    "How do I handle a seller who wants to back out?",
-    "Tips for setting more appointments",
+    "Send an SMS to [contact] saying...",
+    "Add a note for [contact]...",
   ];
 
   return (
@@ -1702,6 +2177,12 @@ function DayHubCoach() {
         </div>
         <span className="text-xs font-semibold" style={{ color: "var(--g-text-primary)" }}>AI Coach</span>
         <Sparkles className="h-3 w-3" style={{ color: "var(--g-accent)" }} />
+        <div className="flex-1" />
+        {conversation.length > 0 && (
+          <button onClick={clearConversation} className="text-[10px] px-1.5 py-0.5 rounded hover:bg-muted" style={{ color: "var(--g-text-tertiary)" }}>
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Messages */}
@@ -1712,7 +2193,7 @@ function DayHubCoach() {
               <Bot className="h-5 w-5" style={{ color: "var(--g-accent-text)" }} />
             </div>
             <p className="text-xs text-center" style={{ color: "var(--g-text-tertiary)" }}>
-              Ask me anything about your tasks, leads, or sales strategy.
+              Ask questions or give commands — send SMS, add notes, create tasks, and more.
             </p>
             <div className="flex flex-col gap-1.5 w-full">
               {suggestedPrompts.map((prompt, i) => (
@@ -1734,32 +2215,245 @@ function DayHubCoach() {
             </div>
           </div>
         ) : (
-          conversation.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              {msg.role === "assistant" && (
-                <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mr-1.5 mt-0.5" style={{ background: "var(--g-accent-soft)" }}>
-                  <Bot className="h-2.5 w-2.5" style={{ color: "var(--g-accent-text)" }} />
-                </div>
-              )}
-              <div
-                className={`rounded-lg px-2.5 py-1.5 ${msg.role === "user" ? "max-w-[80%]" : "flex-1"}`}
-                style={{
-                  background: msg.role === "user" ? "var(--g-accent)" : "var(--g-bg-inset)",
-                  color: msg.role === "user" ? "white" : "var(--g-text-primary)",
-                }}
-              >
-                {msg.role === "assistant" ? (
-                  <div className="text-xs leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                    <Streamdown>{msg.content}</Streamdown>
+          <>
+            {conversation.map((msg, i) => {
+              if (msg.role === "action_card") {
+                const statusColors = {
+                  pending: "border-amber-500/50 bg-amber-50",
+                  confirmed: "border-blue-500/50 bg-blue-50",
+                  executed: "border-green-500/50 bg-green-50",
+                  cancelled: "border-gray-400/50 bg-gray-50 opacity-60",
+                  failed: "border-red-500/50 bg-red-50",
+                };
+                const statusIcons = {
+                  pending: "\u23F3",
+                  confirmed: "\u{1F504}",
+                  executed: "\u2705",
+                  cancelled: "\u274C",
+                  failed: "\u26A0\uFE0F",
+                };
+                return (
+                  <div key={i} className={`rounded-lg border-2 p-2.5 ${statusColors[msg.status]}`}>
+                    <div className="flex items-start gap-2">
+                      <span className="text-sm">{ACTION_ICONS[msg.actionType] || "\u26A1"}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-semibold">
+                            {ACTION_TYPE_LABELS[msg.actionType] || msg.actionType}
+                          </span>
+                          {msg.batchTotal && msg.batchTotal > 1 && msg.batchIndex && (
+                            <span className="text-[9px] font-medium px-1 py-0.5 rounded-full bg-primary/10 text-primary">
+                              {msg.batchIndex}/{msg.batchTotal}
+                            </span>
+                          )}
+                          <span className="text-[9px] text-muted-foreground">
+                            {statusIcons[msg.status]} {msg.status}
+                          </span>
+                        </div>
+                        {msg.contactName && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Contact: {msg.contactName}</p>
+                        )}
+                        {/* SMS sender override */}
+                        {msg.actionType === "send_sms" && msg.status === "pending" && currentUser?.name && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-[9px] text-blue-600">{"\u{1F4E4}"} From:</span>
+                            {smsTeamSenders && smsTeamSenders.length > 1 ? (
+                              <Select
+                                value={senderOverrides[msg.actionId]?.ghlUserId || "default"}
+                                onValueChange={(val) => {
+                                  if (val === "default") {
+                                    setSenderOverrides(prev => ({ ...prev, [msg.actionId]: null }));
+                                  } else {
+                                    const sender = smsTeamSenders.find(s => s.ghlUserId === val);
+                                    if (sender) {
+                                      setSenderOverrides(prev => ({ ...prev, [msg.actionId]: { ghlUserId: sender.ghlUserId, name: sender.name } }));
+                                    }
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-4 text-[9px] w-auto min-w-[100px] max-w-[160px] px-1 py-0 border-blue-300 bg-blue-50">
+                                  <SelectValue placeholder={`${currentUser.name}'s line`} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="default">{currentUser.name}'s line</SelectItem>
+                                  {smsTeamSenders.filter(s => s.name !== currentUser.name).map(sender => (
+                                    <SelectItem key={sender.ghlUserId} value={sender.ghlUserId}>
+                                      {sender.name}'s line
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-[9px] font-medium text-blue-700">{currentUser.name}'s line</span>
+                            )}
+                          </div>
+                        )}
+                        {/* Executed SMS sender info */}
+                        {msg.actionType === "send_sms" && msg.status === "executed" && (
+                          <p className="text-[9px] text-green-600 mt-0.5">
+                            \u2705 Sent from: {msg.payload?.senderOverrideName || currentUser?.name || "You"}'s line
+                          </p>
+                        )}
+                        {/* SMS Delivery Status */}
+                        {msg.actionType === "send_sms" && msg.status === "executed" && msg.smsDeliveryStatus && (
+                          <div className={`flex items-center gap-1 mt-1 text-[9px] px-1.5 py-0.5 rounded-full w-fit ${
+                            msg.smsDeliveryStatus === "delivered" ? "bg-green-100 text-green-700" :
+                            msg.smsDeliveryStatus === "sent" ? "bg-blue-100 text-blue-700" :
+                            msg.smsDeliveryStatus === "pending" ? "bg-yellow-100 text-yellow-700" :
+                            msg.smsDeliveryStatus === "failed" || msg.smsDeliveryStatus === "undelivered" ? "bg-red-100 text-red-700" :
+                            "bg-gray-100 text-gray-600"
+                          }`}>
+                            {msg.smsDeliveryStatus === "delivered" && <CheckCircle className="h-2 w-2" />}
+                            {msg.smsDeliveryStatus === "sent" && <Send className="h-2 w-2" />}
+                            {msg.smsDeliveryStatus === "pending" && <Loader2 className="h-2 w-2 animate-spin" />}
+                            {(msg.smsDeliveryStatus === "failed" || msg.smsDeliveryStatus === "undelivered") && <XCircle className="h-2 w-2" />}
+                            <span className="font-medium capitalize">{msg.smsDeliveryStatus}</span>
+                          </div>
+                        )}
+                        {/* Workflow details */}
+                        {(msg.actionType === "add_to_workflow" || msg.actionType === "remove_from_workflow") && msg.payload?.workflowName && (
+                          <div className="mt-1 flex items-center gap-1 text-[10px] bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">
+                            <span className="text-purple-600">{msg.actionType === "add_to_workflow" ? "\u2192" : "\u2190"}</span>
+                            <span className="font-medium text-purple-700">{msg.payload.workflowName}</span>
+                          </div>
+                        )}
+                        {/* Pipeline stage */}
+                        {msg.actionType === "change_pipeline_stage" && msg.resolvedStage && (
+                          <div className="mt-1 flex items-center gap-1 text-[10px] bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">
+                            <span className="text-blue-600">{"\u2192"}</span>
+                            <span className="font-medium text-blue-700">{msg.resolvedStage.stageName}</span>
+                            <span className="text-blue-500">in</span>
+                            <span className="font-medium text-blue-700">{msg.resolvedStage.pipelineName}</span>
+                          </div>
+                        )}
+                        {/* Appointment details */}
+                        {msg.actionType === "create_appointment" && msg.payload && (
+                          <div className="mt-1 text-[10px] bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5 space-y-0.5">
+                            {msg.payload.title && <p><span className="text-teal-600">Title:</span> <span className="font-medium text-teal-700">{msg.payload.title}</span></p>}
+                            {msg.payload.startTime && <p><span className="text-teal-600">Date/Time:</span> <span className="font-medium text-teal-700">{new Date(msg.payload.startTime).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></p>}
+                            {msg.payload.calendarName && <p><span className="text-teal-600">Calendar:</span> <span className="font-medium text-teal-700">{msg.payload.calendarName}</span></p>}
+                          </div>
+                        )}
+                        {/* Editable content preview */}
+                        {msg.status === "pending" && isEditableAction(msg.actionType) && msg.payload ? (
+                          <div className="mt-1">
+                            <p className="text-[9px] font-medium text-muted-foreground mb-0.5">
+                              {msg.actionType === "send_sms" ? "SMS Draft:" : msg.actionType === "create_task" ? "Task:" : "Note Draft:"}
+                            </p>
+                            {editingActionId === msg.actionId ? (
+                              <>
+                                <Textarea
+                                  value={editedContent}
+                                  onChange={(e) => setEditedContent(e.target.value)}
+                                  className="text-[11px] min-h-[50px] resize-none bg-white border"
+                                  autoFocus
+                                />
+                                <p className="text-[8px] text-muted-foreground mt-0.5">Edit above, then confirm or cancel</p>
+                              </>
+                            ) : (
+                              <div className="text-[11px] bg-white/60 rounded p-1.5 border border-dashed border-gray-300 whitespace-pre-wrap">
+                                {getEditableContent(msg.actionType, msg.payload) || msg.summary}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] mt-1">{msg.summary}</p>
+                        )}
+                        {msg.result && (
+                          <p className={`text-[9px] mt-1 ${msg.status === "executed" ? "text-green-600" : "text-red-600"}`}>
+                            {msg.result}
+                          </p>
+                        )}
+                        {msg.status === "pending" && (
+                          <div className="flex gap-1.5 mt-1.5">
+                            <Button
+                              size="sm"
+                              className="h-6 text-[10px] px-2 bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => handleConfirmAction(msg.actionId)}
+                              disabled={confirmExecuteMutation.isPending}
+                            >
+                              {confirmExecuteMutation.isPending ? (
+                                <Loader2 className="h-2.5 w-2.5 animate-spin mr-0.5" />
+                              ) : (
+                                <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
+                              )}
+                              {editingActionId === msg.actionId ? "Confirm Edit" : "Confirm"}
+                            </Button>
+                            {editingActionId === msg.actionId ? (
+                              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={handleCancelEdit}>
+                                <XCircle className="h-2.5 w-2.5 mr-0.5" />
+                                Cancel Edit
+                              </Button>
+                            ) : (
+                              <>
+                                {isEditableAction(msg.actionType) && (
+                                  <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => handleStartEdit(msg.actionId, msg.actionType, msg.payload)}>
+                                    <Pencil className="h-2.5 w-2.5 mr-0.5" />
+                                    Edit
+                                  </Button>
+                                )}
+                                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => handleCancelAction(msg.actionId)} disabled={cancelActionMutation.isPending}>
+                                  <XCircle className="h-2.5 w-2.5 mr-0.5" />
+                                  Cancel
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-xs">{msg.content}</p>
-                )}
+                );
+              }
+
+              return (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "assistant" && (
+                    <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mr-1.5 mt-0.5" style={{ background: "var(--g-accent-soft)" }}>
+                      <Bot className="h-2.5 w-2.5" style={{ color: "var(--g-accent-text)" }} />
+                    </div>
+                  )}
+                  <div
+                    className={`rounded-lg px-2.5 py-1.5 ${msg.role === "user" ? "max-w-[80%]" : "flex-1"}`}
+                    style={{
+                      background: msg.role === "user" ? "var(--g-accent)" : "var(--g-bg-inset)",
+                      color: msg.role === "user" ? "white" : "var(--g-text-primary)",
+                    }}
+                  >
+                    {msg.role === "assistant" ? (
+                      <div className="text-xs leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                        <Streamdown>{msg.content}</Streamdown>
+                      </div>
+                    ) : (
+                      <p className="text-xs">{msg.content}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Contact search results */}
+            {contactSearchResults.length > 0 && (
+              <div className="space-y-1">
+                {contactSearchResults.slice(0, 5).map((contact) => (
+                  <button
+                    key={contact.id}
+                    onClick={() => handleSelectContact(contact.id, contact.name)}
+                    className="w-full text-left px-2.5 py-1.5 rounded-md border text-[11px] transition-colors hover:bg-muted"
+                    style={{ borderColor: "var(--g-border-subtle)" }}
+                  >
+                    <span className="font-medium">{contact.name}</span>
+                    {contact.phone && <span className="text-muted-foreground ml-2">{contact.phone}</span>}
+                  </button>
+                ))}
               </div>
-            </div>
-          ))
+            )}
+          </>
         )}
-        {isAsking && conversation.length > 0 && conversation[conversation.length - 1].role !== "assistant" && (
+        {isAsking && conversation.length > 0 && (() => {
+          const last = conversation[conversation.length - 1];
+          return last.role !== "assistant" || (last.role === "assistant" && !last.content);
+        })() && (
           <div className="flex justify-start">
             <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mr-1.5" style={{ background: "var(--g-accent-soft)" }}>
               <Bot className="h-2.5 w-2.5" style={{ color: "var(--g-accent-text)" }} />
@@ -1774,7 +2468,7 @@ function DayHubCoach() {
       {/* Input */}
       <div className="flex gap-1.5 px-3 py-2 border-t" style={{ borderColor: "var(--g-border-subtle)" }}>
         <Textarea
-          placeholder="Ask your AI coach..."
+          placeholder="Ask or give a command..."
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -2022,7 +2716,7 @@ export default function TaskCenter() {
 
       {/* Top half: Inbox + AI Coach side by side */}
       <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
-        <LeftPanel />
+        <LeftPanel roleTab={roleTab} roleFilteredGhlUserIds={roleFilteredGhlUserIds} />
         <DayHubCoach />
       </div>
 

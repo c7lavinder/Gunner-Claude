@@ -343,6 +343,7 @@ export interface TodayAppointment {
   address: string;
   status: string;
   calendarId: string;
+  assignedUserId?: string;
 }
 
 /**
@@ -395,6 +396,7 @@ export async function getTodayAppointments(
             address: evt.address || evt.location || "",
             status: evt.appointmentStatus || "confirmed",
             calendarId: evt.calendarId || cal.id,
+            assignedUserId: evt.assignedUserId || evt.userId || "",
           });
         }
       } catch (err) {
