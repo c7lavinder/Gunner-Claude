@@ -2963,6 +2963,73 @@ export default function TaskCenter() {
     { enabled: allContactIds.length > 0, staleTime: 60000 }
   );
 
+  // Progressive pre-fetcher: after batch DB query loads, fetch activity from GHL
+  // for contacts that don't have AM/PM data yet. This populates the tRPC cache
+  // that AmPmIndicatorFromCache reads from, so badges light up progressively.
+  const prefetchStartedRef = useRef(false);
+  useEffect(() => {
+    if (!batchAmPm || !allContactIds.length || prefetchStartedRef.current) return;
+    prefetchStartedRef.current = true;
+
+    // Find contacts that the DB batch query didn't find AM/PM data for
+    const contactsNeedingFetch = allContactIds.filter(id => {
+      const b = batchAmPm[id];
+      return !b || (!b.amCallMade && !b.pmCallMade);
+    });
+
+    if (contactsNeedingFetch.length === 0) {
+      console.log('[AM/PM Pre-fetch] All contacts already have AM/PM data from DB');
+      return;
+    }
+
+    console.log(`[AM/PM Pre-fetch] Starting: ${contactsNeedingFetch.length} contacts need GHL activity fetch (${allContactIds.length - contactsNeedingFetch.length} already have DB data)`);
+
+    // Process in small batches with delays to avoid rate limiting.
+    // Each contact requires 2 GHL API calls (search conversation + get messages).
+    // GHL circuit breaker allows 75 normal-priority requests/min.
+    // 2 contacts/batch × 2 calls = 4 calls/batch, with 3s delay = ~80 calls/min.
+    // Use 2 contacts/batch with 4s delay = ~30 calls/min (safe margin).
+    let cancelled = false;
+    const BATCH_SIZE = 2;
+    const DELAY_MS = 4000; // 4s between batches → ~30 API calls/min (well under 75 limit)
+
+    (async () => {
+      let fetched = 0;
+      let foundCalls = 0;
+      for (let i = 0; i < contactsNeedingFetch.length; i += BATCH_SIZE) {
+        if (cancelled) break;
+        const batch = contactsNeedingFetch.slice(i, i + BATCH_SIZE);
+        // Fetch all in this batch concurrently
+        const results = await Promise.allSettled(
+          batch.map(contactId =>
+            utils.taskCenter.getContactActivity.fetch({ contactId })
+              .then(result => {
+                if (result?.amCallMade || result?.pmCallMade) {
+                  foundCalls++;
+                  console.log(`[AM/PM Pre-fetch] Found calls for contact ${contactId}: AM=${result.amCallMade} PM=${result.pmCallMade}`);
+                }
+                return result;
+              })
+              .catch(() => null)
+          )
+        );
+        fetched += batch.length;
+        if (fetched % 15 === 0 || fetched === contactsNeedingFetch.length) {
+          console.log(`[AM/PM Pre-fetch] Progress: ${fetched}/${contactsNeedingFetch.length} contacts fetched, ${foundCalls} with calls found`);
+        }
+        // Wait before next batch
+        if (i + BATCH_SIZE < contactsNeedingFetch.length && !cancelled) {
+          await new Promise(r => setTimeout(r, DELAY_MS));
+        }
+      }
+      if (!cancelled) {
+        console.log(`[AM/PM Pre-fetch] Complete: ${fetched} contacts fetched, ${foundCalls} had calls`);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [batchAmPm, allContactIds, utils]);
+
   const handleComplete = (task: Task) => {
     completeTaskMutation.mutate({ contactId: task.contactId, taskId: task.id });
   };

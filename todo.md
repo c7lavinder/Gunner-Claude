@@ -4023,3 +4023,21 @@
 - [x] AmPmIndicatorFromCache ORs together: DB fallback + batch data + activity cache
 - [x] Badges light up immediately on page load without clicking
 - [x] All 46 dayHub tests passing, 0 TS errors
+
+## AM/PM Badges — DB Missing Calls, GHL API Also Missing Them
+- [ ] Nicole Morris: 2 outbound calls at 11:35 AM in GHL, but DB has 0 and GHL activity API returns 0
+- [ ] Same pattern as Mary Parker — short/missed calls never reach the DB
+- [ ] The batch AM/PM endpoint only queries DB, so it can't find calls that aren't stored
+- [ ] Need to investigate why GHL activity API (getContactTodayActivity) returns 0 for these contacts
+- [ ] Need a reliable solution that catches ALL outbound dial attempts
+
+## AM/PM Badges — Progressive Pre-Fetch for Missing Contacts
+- [x] Added progressive pre-fetcher in TaskCenter page component
+- [x] After batchAmPmStatus loads, identifies contacts without AM/PM data from DB
+- [x] Calls getContactActivity for each missing contact via tRPC utils.fetch()
+- [x] Processes 2 contacts per batch with 4s delays (~30 API calls/min, well under 75 limit)
+- [x] Populates tRPC cache that AmPmIndicatorFromCache reads from (enabled: false still observes cache)
+- [x] Badges light up progressively as each batch returns
+- [x] Added console.log progress tracking for debugging
+- [x] Cleanup function cancels pre-fetch on unmount
+- [x] All 46 dayHub tests passing, 0 TS errors
