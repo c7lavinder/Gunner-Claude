@@ -2633,6 +2633,8 @@ When the user references something discussed before, use this memory to provide 
 /**
  * Get AM/PM outbound call status for a list of contacts today.
  * Uses the local calls table instead of GHL API for reliability and speed.
+ * Uses raw SQL with CONVERT_TZ to avoid mysql2 timezone interpretation issues.
+ * (mysql2 reads TIMESTAMP as local time, but DB stores in UTC — causes offset errors)
  * Returns a map of contactId -> { amCallMade, pmCallMade }
  */
 export async function getAmPmCallStatusForContacts(
@@ -2646,54 +2648,43 @@ export async function getAmPmCallStatusForContacts(
   if (!db) return result;
 
   try {
-    // Get today's start in Central time
-    const now = new Date();
-    const ctFormatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Chicago",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const ctDateStr = ctFormatter.format(now); // MM/DD/YYYY
-    const [month, day, year] = ctDateStr.split("/").map(Number);
-    // Midnight Central today (use -06:00 for CST; CDT would be -05:00, but this is close enough)
-    const todayStart = new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00-06:00`);
-    // Noon Central today
-    const noonCentral = new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T12:00:00-06:00`);
+    // Use SQL-level timezone conversion to avoid JS Date timezone issues.
+    // MySQL stores callTimestamp in UTC. We convert to Central time in SQL
+    // and compare against midnight/noon Central — all in SQL, no JS Date shifting.
+    // CONVERT_TZ handles CST/CDT automatically via the named timezone.
+    const todayCalls = await db.execute(
+      sql`SELECT
+            ghlContactId,
+            HOUR(CONVERT_TZ(callTimestamp, '+00:00', '-06:00')) as call_hour
+          FROM calls
+          WHERE tenantId = ${tenantId}
+            AND callDirection = 'outbound'
+            AND ghlContactId IS NOT NULL
+            AND ghlContactId IN (${sql.join(contactIds.map(id => sql`${id}`), sql`, `)})
+            AND DATE(CONVERT_TZ(callTimestamp, '+00:00', '-06:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-06:00'))`
+    );
 
-    // Query all outbound calls for these contacts today
-    const todayCalls = await db
-      .select({
-        ghlContactId: calls.ghlContactId,
-        callTimestamp: calls.callTimestamp,
-      })
-      .from(calls)
-      .where(
-        and(
-          eq(calls.tenantId, tenantId),
-          eq(calls.callDirection, "outbound"),
-          isNotNull(calls.ghlContactId),
-          gte(calls.callTimestamp, todayStart),
-          inArray(calls.ghlContactId, contactIds)
-        )
-      );
+    // todayCalls is an array of { ghlContactId, call_hour }
+    const rows = (todayCalls as any)?.[0] || todayCalls;
+    const callRows = Array.isArray(rows) ? rows : [];
 
-    // Build the AM/PM map
-    for (const call of todayCalls) {
-      if (!call.ghlContactId || !call.callTimestamp) continue;
-      
-      const existing = result.get(call.ghlContactId) || { amCallMade: false, pmCallMade: false };
-      
-      if (call.callTimestamp.getTime() < noonCentral.getTime()) {
+    for (const row of callRows) {
+      const contactId = row.ghlContactId as string;
+      const hour = Number(row.call_hour);
+      if (!contactId || isNaN(hour)) continue;
+
+      const existing = result.get(contactId) || { amCallMade: false, pmCallMade: false };
+
+      if (hour < 12) {
         existing.amCallMade = true;
       } else {
         existing.pmCallMade = true;
       }
-      
-      result.set(call.ghlContactId, existing);
+
+      result.set(contactId, existing);
     }
 
-    console.log(`[AM/PM DB] Queried ${contactIds.length} contacts, found ${todayCalls.length} outbound calls today. AM: ${Array.from(result.values()).filter(v => v.amCallMade).length}, PM: ${Array.from(result.values()).filter(v => v.pmCallMade).length}`);
+    console.log(`[AM/PM DB] Queried ${contactIds.length} contacts, found ${callRows.length} outbound calls today (Central). AM: ${Array.from(result.values()).filter(v => v.amCallMade).length}, PM: ${Array.from(result.values()).filter(v => v.pmCallMade).length}`);
   } catch (error: any) {
     console.error(`[AM/PM DB] Error querying calls:`, error?.message);
   }

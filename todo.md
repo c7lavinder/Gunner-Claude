@@ -3937,3 +3937,13 @@
 - [x] Replaced GHL API-based detection with local DB query (calls table already has all data)
 - [x] New getAmPmCallStatusForContacts() in db.ts — single DB query, instant, reliable
 - [x] 146 tests passing, 0 TS errors
+
+## AM/PM Call Detection — Debug Round 3
+- [x] Investigate why Sherri Richter's outbound call at 10:53 AM doesn't highlight AM indicator
+- [x] 87 outbound GHL calls today, 38 unique contacts — data IS in DB
+- [x] Root cause: mysql2 driver interprets UTC TIMESTAMP values as local time (EST), adding 5h offset
+- [x] All calls appeared as PM (20:25 UTC) when actually AM (15:25 UTC = 9:25 AM CST)
+- [x] Fix: rewrote getAmPmCallStatusForContacts to use raw SQL with CONVERT_TZ('-06:00') for correct Central time comparison
+- [x] Verified: 87 calls today, 38 unique contacts, all correctly classified as AM
+- [x] Acquisition team works exclusively in GHL — confirmed GHL calls are in DB
+- [x] 146 tests passing (39 dayHub + 107 taskCenter)
