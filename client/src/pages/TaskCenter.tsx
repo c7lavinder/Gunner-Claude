@@ -907,7 +907,7 @@ function AmPmIndicator({ amDone, pmDone }: { amDone: boolean; pmDone: boolean })
 // Reads AM/PM data from the tRPC query cache (populated when the task is expanded).
 // Falls back to server-provided values (from DB). No extra API calls.
 
-function AmPmIndicatorFromCache({ contactId, fallbackAm, fallbackPm }: { contactId: string; fallbackAm: boolean; fallbackPm: boolean }) {
+function AmPmIndicatorFromCache({ contactId, fallbackAm, fallbackPm, batchData }: { contactId: string; fallbackAm: boolean; fallbackPm: boolean; batchData?: Record<string, { amCallMade: boolean; pmCallMade: boolean }> }) {
   // Subscribe to the activity cache (populated when task is expanded).
   // enabled: false means we never fire a fetch — we only read from cache.
   const { data: cached } = trpc.taskCenter.getContactActivity.useQuery(
@@ -915,10 +915,15 @@ function AmPmIndicatorFromCache({ contactId, fallbackAm, fallbackPm }: { contact
     { enabled: false }
   );
 
-  // OR together: if EITHER the DB (fallback) or the activity cache says a call was made, light up.
-  // This way: DB provides initial values, and expanding a task can only ADD green, never remove it.
-  const amDone = fallbackAm || (cached?.amCallMade ?? false);
-  const pmDone = fallbackPm || (cached?.pmCallMade ?? false);
+  // Check batch pre-fetched data (loaded on page load via single DB query)
+  const batch = batchData?.[contactId];
+
+  // OR together all sources: if ANY source says a call was made, light up.
+  // 1. fallbackAm/Pm = from getPriorityTasks server response (DB query at load time)
+  // 2. batch = from batchAmPmStatus (dedicated DB query on page load)
+  // 3. cached = from getContactActivity (when task is expanded)
+  const amDone = fallbackAm || (batch?.amCallMade ?? false) || (cached?.amCallMade ?? false);
+  const pmDone = fallbackPm || (batch?.pmCallMade ?? false) || (cached?.pmCallMade ?? false);
   return <AmPmIndicator amDone={amDone} pmDone={pmDone} />;
 }
 
@@ -934,6 +939,7 @@ function PriorityTaskRow({
   isCompleting,
   allTasks,
   rank,
+  batchAmPm,
 }: {
   task: Task;
   onComplete: () => void;
@@ -944,6 +950,7 @@ function PriorityTaskRow({
   isCompleting: boolean;
   allTasks: Task[];
   rank: number;
+  batchAmPm?: Record<string, { amCallMade: boolean; pmCallMade: boolean }>;
 }) {
   const dueDate = task.dueDate ? new Date(task.dueDate) : null;
   const dueLabel = (() => {
@@ -1065,7 +1072,7 @@ function PriorityTaskRow({
         </div>
 
         {/* AM/PM indicators — uses cached activity data from tRPC query cache */}
-        <AmPmIndicatorFromCache contactId={task.contactId} fallbackAm={task.amCallMade || false} fallbackPm={task.pmCallMade || false} />
+        <AmPmIndicatorFromCache contactId={task.contactId} fallbackAm={task.amCallMade || false} fallbackPm={task.pmCallMade || false} batchData={batchAmPm} />
 
         {/* Priority score */}
         <TooltipProvider delayDuration={200}>
@@ -2944,6 +2951,18 @@ export default function TaskCenter() {
   const totalTasks = filteredTasks.length;
   const overdueCount = useMemo(() => filteredTasks.filter((t: Task) => t.group === "overdue").length, [filteredTasks]);
 
+  // Batch pre-fetch AM/PM status for all contacts on page load — single DB query
+  const allContactIds = useMemo(() => {
+    if (!data?.tasks) return [];
+    const ids = (data.tasks as Task[]).map(t => t.contactId).filter(Boolean);
+    return Array.from(new Set(ids));
+  }, [data?.tasks]);
+
+  const { data: batchAmPm } = trpc.taskCenter.batchAmPmStatus.useQuery(
+    { contactIds: allContactIds },
+    { enabled: allContactIds.length > 0, staleTime: 60000 }
+  );
+
   const handleComplete = (task: Task) => {
     completeTaskMutation.mutate({ contactId: task.contactId, taskId: task.id });
   };
@@ -3141,6 +3160,7 @@ export default function TaskCenter() {
                 isExpanded={expandedTaskId === task.id}
                 isCompleting={completingTaskIds.has(task.id)}
                 allTasks={filteredTasks}
+                batchAmPm={batchAmPm}
               />
             ))}
           </div>

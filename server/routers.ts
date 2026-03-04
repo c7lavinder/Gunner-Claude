@@ -6992,6 +6992,26 @@ selectedTimezone: { type: "string" },
         };
       }),
 
+    // Batch AM/PM status for multiple contacts — single DB query, no GHL API calls
+    batchAmPmStatus: protectedProcedure
+      .input(z.object({
+        contactIds: z.array(z.string()).max(500),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+        const { getAmPmCallStatusForContacts } = await import("./db");
+        const statusMap = await getAmPmCallStatusForContacts(ctx.user.tenantId, input.contactIds);
+        // Convert Map to plain object for serialization
+        const result: Record<string, { amCallMade: boolean; pmCallMade: boolean }> = {};
+        statusMap.forEach((value, key) => {
+          result[key] = value;
+        });
+        return result;
+      }),
+
     // Get workflow history for a contact (added/removed via Gunner)
     getContactWorkflowHistory: protectedProcedure
       .input(z.object({

@@ -4016,3 +4016,10 @@
 - [x] DB provides initial values on load, expanding a task can only ADD green (never remove)
 - [x] getContactActivity already returns correct amCallMade/pmCallMade with DB fallback
 - [x] All 46 dayHub tests passing
+
+## AM/PM Badges — Background Pre-Fetch on Page Load
+- [x] Created batchAmPmStatus endpoint — single DB query for all contactIds, no GHL API calls
+- [x] Frontend calls batchAmPmStatus on page load with all unique contactIds
+- [x] AmPmIndicatorFromCache ORs together: DB fallback + batch data + activity cache
+- [x] Badges light up immediately on page load without clicking
+- [x] All 46 dayHub tests passing, 0 TS errors
