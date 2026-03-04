@@ -869,34 +869,34 @@ function AmPmIndicator({ amDone, pmDone }: { amDone: boolean; pmDone: boolean })
         <Tooltip>
           <TooltipTrigger asChild>
             <div
-              className="flex items-center gap-0.5 rounded px-1 py-0.5"
+              className="flex items-center gap-0.5 rounded px-1.5 py-0.5"
               style={{
-                background: amDone ? "rgba(34,197,94,0.12)" : "var(--g-bg-inset)",
-                border: `1px solid ${amDone ? "rgba(34,197,94,0.25)" : "var(--g-border-subtle)"}`,
+                background: amDone ? "#22c55e" : "var(--g-bg-inset)",
+                border: `1px solid ${amDone ? "#16a34a" : "var(--g-border-subtle)"}`,
               }}
             >
-              <Sun className="h-2.5 w-2.5" style={{ color: amDone ? "#22c55e" : "var(--g-text-tertiary)" }} />
-              <span className="text-[9px] font-bold" style={{ color: amDone ? "#22c55e" : "var(--g-text-tertiary)" }}>AM</span>
+              <Sun className="h-2.5 w-2.5" style={{ color: amDone ? "#fff" : "var(--g-text-tertiary)" }} />
+              <span className="text-[9px] font-bold" style={{ color: amDone ? "#fff" : "var(--g-text-tertiary)" }}>AM</span>
             </div>
           </TooltipTrigger>
-          <TooltipContent side="top"><p>{amDone ? "AM call made" : "No AM call yet"}</p></TooltipContent>
+          <TooltipContent side="top"><p>{amDone ? "AM call made \u2705" : "No AM call yet"}</p></TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
             <div
-              className="flex items-center gap-0.5 rounded px-1 py-0.5"
+              className="flex items-center gap-0.5 rounded px-1.5 py-0.5"
               style={{
-                background: pmDone ? "rgba(34,197,94,0.12)" : "var(--g-bg-inset)",
-                border: `1px solid ${pmDone ? "rgba(34,197,94,0.25)" : "var(--g-border-subtle)"}`,
+                background: pmDone ? "#22c55e" : "var(--g-bg-inset)",
+                border: `1px solid ${pmDone ? "#16a34a" : "var(--g-border-subtle)"}`,
               }}
             >
-              <Moon className="h-2.5 w-2.5" style={{ color: pmDone ? "#22c55e" : "var(--g-text-tertiary)" }} />
-              <span className="text-[9px] font-bold" style={{ color: pmDone ? "#22c55e" : "var(--g-text-tertiary)" }}>PM</span>
+              <Moon className="h-2.5 w-2.5" style={{ color: pmDone ? "#fff" : "var(--g-text-tertiary)" }} />
+              <span className="text-[9px] font-bold" style={{ color: pmDone ? "#fff" : "var(--g-text-tertiary)" }}>PM</span>
             </div>
           </TooltipTrigger>
-          <TooltipContent side="top"><p>{pmDone ? "PM call made" : "No PM call yet"}</p></TooltipContent>
+          <TooltipContent side="top"><p>{pmDone ? "PM call made \u2705" : "No PM call yet"}</p></TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>

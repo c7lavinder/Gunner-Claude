@@ -3978,3 +3978,10 @@
 - [x] Frontend AmPmIndicatorFromCache subscribes to tRPC cache via useQuery({ enabled: false })
 - [x] When task is expanded, getContactActivity overrides DB values with live GHL data
 - [x] Added 12 new vitest tests for AM/PM integration (46 total dayHub tests passing)
+
+## AM/PM Detection — Badges Not Auto-Populating on Load
+- [x] Investigated: Backend IS returning correct data (33 AM true, 8 PM true on production)
+- [x] Root cause: Badge styling was too subtle (12% opacity green background) — nearly invisible
+- [x] Fix: Changed to solid green background (#22c55e) with white text when active
+- [x] Removed debug console.log from AmPmIndicatorFromCache
+- [x] All 46 dayHub tests passing
