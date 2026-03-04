@@ -549,9 +549,11 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
               {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-md" />)}
             </div>
           ) : appointments && appointments.length > 0 ? (
-            appointments.map((apt) => (
-              <AppointmentItem key={apt.id} apt={apt} />
-            ))
+            <div className="space-y-1.5">
+              {appointments.map((apt) => (
+                <AppointmentItem key={apt.id} apt={apt} />
+              ))}
+            </div>
           ) : (
             <div className="text-center py-8">
               <CalendarDays className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)", opacity: 0.4 }} />
@@ -715,9 +717,17 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
-              {conv.contactName || "Unknown"}
-            </span>
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-semibold truncate block" style={{ color: "var(--g-text-primary)" }}>
+                {conv.contactName || "Unknown"}
+              </span>
+              {conv.contactAddress && (
+                <span className="text-[10px] flex items-center gap-1 mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
+                  <MapPin className="h-2 w-2 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
+                  {conv.contactAddress}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1.5 shrink-0 ml-1">
               {memberName && (
                 <span
@@ -784,54 +794,59 @@ function AppointmentItem({ apt }: { apt: any }) {
   const timeStr = startTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const endTimeStr = endTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const isPast = startTime.getTime() < Date.now();
-  const statusColor = apt.status === "confirmed" ? "#22c55e" : apt.status === "showed" ? "#3b82f6" : "#eab308";
+  const isUpcoming = !isPast && (startTime.getTime() - Date.now()) < 30 * 60 * 1000; // within 30 min
+  const statusColor = apt.status === "confirmed" ? "#22c55e" : apt.status === "showed" ? "#3b82f6" : apt.status === "noshow" ? "#ef4444" : "#eab308";
+  const statusLabel = apt.status === "noshow" ? "No Show" : apt.status;
 
   return (
     <div
-      className="rounded-md px-2.5 py-2.5 transition-colors"
+      className="rounded-lg px-3 py-2.5 transition-all"
       style={{
-        background: "transparent",
-        opacity: isPast ? 0.6 : 1,
+        background: isUpcoming ? "rgba(59,130,246,0.06)" : "var(--g-bg-card)",
+        border: isUpcoming ? "1px solid rgba(59,130,246,0.2)" : "1px solid var(--g-border-subtle)",
+        opacity: isPast ? 0.55 : 1,
       }}
     >
-      <div className="flex items-start gap-2.5">
-        <div className="shrink-0 text-center min-w-[50px]">
-          <div className="text-xs font-bold tabular-nums" style={{ color: "var(--g-text-primary)" }}>
+      {/* Top row: time range + status badge */}
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold tabular-nums" style={{ color: isUpcoming ? "#3b82f6" : "var(--g-text-primary)" }}>
             {timeStr}
-          </div>
-          <div className="text-[9px]" style={{ color: "var(--g-text-tertiary)" }}>
-            {endTimeStr}
-          </div>
-          <div
-            className="text-[9px] font-semibold uppercase mt-0.5 rounded px-1 py-0.5"
-            style={{ background: `${statusColor}20`, color: statusColor }}
-          >
-            {apt.status}
-          </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <span className="text-xs font-semibold block truncate" style={{ color: "var(--g-text-primary)" }}>
-            {apt.contactName || apt.title}
           </span>
-          {apt.contactPhone && (
-            <span className="text-[10px] flex items-center gap-1 mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
-              <Phone className="h-2 w-2 shrink-0" />
-              {apt.contactPhone}
-            </span>
-          )}
-          {apt.address && (
-            <span className="text-[10px] flex items-center gap-1 mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
-              <MapPin className="h-2 w-2 shrink-0" />
-              {apt.address}
-            </span>
-          )}
-          {apt.calendarName && (
-            <span className="text-[10px] flex items-center gap-1 mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
-              <CalendarDays className="h-2 w-2 shrink-0" />
-              {apt.calendarName}
-            </span>
-          )}
+          <span className="text-[9px]" style={{ color: "var(--g-text-tertiary)" }}>– {endTimeStr}</span>
         </div>
+        <span
+          className="text-[9px] font-semibold uppercase rounded-full px-2 py-0.5"
+          style={{ background: `${statusColor}15`, color: statusColor }}
+        >
+          {statusLabel}
+        </span>
+      </div>
+      {/* Contact name — prominent */}
+      <div className="text-xs font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
+        {apt.contactName || apt.title}
+      </div>
+      {/* Property address — prominent if available */}
+      {apt.address && (
+        <div className="flex items-center gap-1 mt-1" style={{ color: "var(--g-text-secondary)" }}>
+          <MapPin className="h-2.5 w-2.5 shrink-0" />
+          <span className="text-[10px] font-medium truncate">{apt.address}</span>
+        </div>
+      )}
+      {/* Bottom row: phone + calendar */}
+      <div className="flex items-center gap-3 mt-1">
+        {apt.contactPhone && (
+          <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--g-text-tertiary)" }}>
+            <Phone className="h-2 w-2 shrink-0" />
+            {apt.contactPhone}
+          </span>
+        )}
+        {apt.calendarName && (
+          <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--g-text-tertiary)" }}>
+            <CalendarDays className="h-2 w-2 shrink-0" />
+            {apt.calendarName}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -4041,3 +4041,10 @@
 - [x] Added console.log progress tracking for debugging
 - [x] Cleanup function cancels pre-fetch on unmount
 - [x] All 46 dayHub tests passing, 0 TS errors
+
+## Day Hub — Inbox & Appointments UI Improvements
+- [x] Show property address for each contact in the Inbox section (missed calls + unread messages)
+- [x] Add activity context to inbox items so user has full context at a glance
+- [x] Redesign appointments block with cleaner UI
+- [x] Show property address in appointment cards
+- [x] Ensure data flows properly from GHL contact records

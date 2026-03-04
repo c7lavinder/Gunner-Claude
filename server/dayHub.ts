@@ -277,6 +277,7 @@ export interface UnreadConversation {
   contactId: string;
   contactName: string;
   contactPhone: string;
+  contactAddress: string; // Property address from contact cache
   lastMessage: string;
   lastMessageAt: string;
   type: "sms" | "call" | "email" | "other";
@@ -323,6 +324,7 @@ export async function getUnreadConversations(
         contactId: conv.contactId || "",
         contactName: toTitleCase(conv.contactName || conv.fullName || "Unknown"),
         contactPhone: conv.phone || "",
+        contactAddress: "",
         lastMessage: conv.lastMessageBody || conv.lastMessage || "",
         lastMessageAt: conv.lastMessageDate || conv.dateUpdated || conv.dateAdded || "",
         type,
@@ -367,6 +369,43 @@ export async function getUnreadConversations(
     }
 
     const results = basicConvos;
+
+    // Enrich conversations with contact address from local cache
+    const contactIdsToEnrich = results
+      .filter((c: UnreadConversation) => c.contactId)
+      .map((c: UnreadConversation) => c.contactId);
+
+    if (contactIdsToEnrich.length > 0) {
+      try {
+        const db = await getDb();
+        if (db) {
+          const { contactCache } = await import("../drizzle/schema");
+          const { inArray } = await import("drizzle-orm");
+          const cachedContacts = await db.select().from(contactCache).where(
+            and(
+              eq(contactCache.tenantId, tenantId),
+              inArray(contactCache.ghlContactId, contactIdsToEnrich)
+            )
+          );
+          const cacheMap = new Map(cachedContacts.map(c => [c.ghlContactId, c]));
+          for (const convo of results) {
+            const cached = cacheMap.get(convo.contactId);
+            if (!cached) continue;
+            if (cached.address) {
+              convo.contactAddress = cached.address;
+            }
+            // Also fill in name if it was "Unknown"
+            if (convo.contactName === "Unknown" && cached.name) {
+              convo.contactName = toTitleCase(cached.name);
+            } else if (convo.contactName === "Unknown" && cached.firstName) {
+              convo.contactName = toTitleCase(`${cached.firstName} ${cached.lastName || ""}`.trim());
+            }
+          }
+        }
+      } catch (enrichErr: any) {
+        console.warn("[DayHub] Failed to enrich conversations from cache:", enrichErr?.message);
+      }
+    }
 
     results.sort((a: UnreadConversation, b: UnreadConversation) => {
       const dateA = new Date(a.lastMessageAt).getTime() || 0;
