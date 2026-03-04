@@ -3947,3 +3947,12 @@
 - [x] Verified: 87 calls today, 38 unique contacts, all correctly classified as AM
 - [x] Acquisition team works exclusively in GHL — confirmed GHL calls are in DB
 - [x] 146 tests passing (39 dayHub + 107 taskCenter)
+
+## AM/PM Call Detection — Debug Round 4
+- [x] Nicole Morris (762-251-1510) has 2 calls at 11:35 AM but AM indicator grey
+- [x] Jonathan Goodrich (205-722-3515) has 2 calls but AM indicator grey
+- [x] Root cause: these contacts' calls were NOT synced to the local calls table (0 records)
+- [x] Today's Activity fetches live from GHL API and works — DB sync is incomplete
+- [x] Fix: hybrid approach — DB query first (fast), then GHL API fallback for missing contacts
+- [x] Batches of 5 concurrent GHL requests to avoid rate limits
+- [x] 146 tests passing, 0 TS errors

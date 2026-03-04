@@ -7229,9 +7229,47 @@ selectedTimezone: { type: "string" },
           prioritized = prioritized.filter(t => t.category === input.categoryFilter);
         }
 
-        // Fetch AM/PM call data from local DB (fast, reliable, no API rate limits)
+        // Hybrid AM/PM detection:
+        // 1. Query local DB first (fast, covers most synced calls)
+        // 2. For contacts missing from DB, fall back to live GHL API
         const uniqueContactIds = Array.from(new Set(prioritized.map(t => t.contactId).filter(Boolean)));
         const contactActivityMap = await getAmPmCallStatusForContacts(ctx.user!.tenantId!, uniqueContactIds);
+
+        // Find contacts that DB didn't have data for (no AM or PM calls found)
+        const missingContactIds = uniqueContactIds.filter(id => !contactActivityMap.has(id));
+
+        // For missing contacts, fetch from GHL API with limited concurrency
+        if (missingContactIds.length > 0) {
+          const { getContactTodayActivity } = await import("./ghlActions");
+          const { detectAmPmCalls } = await import("./dayHub");
+
+          // Process in batches of 5 to avoid rate limits
+          const BATCH_SIZE = 5;
+          for (let i = 0; i < missingContactIds.length; i += BATCH_SIZE) {
+            const batch = missingContactIds.slice(i, i + BATCH_SIZE);
+            const results = await Promise.allSettled(
+              batch.map(async (contactId) => {
+                try {
+                  const activity = await getContactTodayActivity(ctx.user!.tenantId!, contactId);
+                  if (activity.messages.length > 0) {
+                    const amPm = detectAmPmCalls(activity.messages);
+                    return { contactId, amPm };
+                  }
+                  return { contactId, amPm: { amCallMade: false, pmCallMade: false } };
+                } catch {
+                  return { contactId, amPm: { amCallMade: false, pmCallMade: false } };
+                }
+              })
+            );
+
+            for (const result of results) {
+              if (result.status === "fulfilled" && result.value) {
+                contactActivityMap.set(result.value.contactId, result.value.amPm);
+              }
+            }
+          }
+          console.log(`[AM/PM] Hybrid: DB had ${uniqueContactIds.length - missingContactIds.length}/${uniqueContactIds.length} contacts, fetched ${missingContactIds.length} from GHL API`);
+        }
 
         // Apply AM/PM data to prioritized tasks
         for (const task of prioritized) {
