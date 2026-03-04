@@ -8,6 +8,8 @@ import { describe, it, expect } from 'vitest';
  * 2. Team is in top nav (not in profile dropdown)
  * 3. Settings and Admin are in the profile dropdown
  * 4. Icons are removed from top nav tabs (text-only)
+ * 5. Signals page is removed from navigation
+ * 6. Day Hub is visible to users with role=admin (e.g. Kyle Barks)
  */
 
 type MenuItem = { label: string; path: string };
@@ -20,7 +22,8 @@ function getMenuItems(
   isTenantAdmin?: string | null,
   isDemo?: boolean
 ): MenuItem[] {
-  const isAdmin = teamRole === 'admin' || isTenantAdmin === 'true';
+  const isAdmin = teamRole === 'admin' || isTenantAdmin === 'true' || userRole === 'admin';
+  const isSuperAdmin = userRole === 'super_admin';
   const isLeadGenerator = teamRole === 'lead_generator';
 
   if (isLeadGenerator) {
@@ -37,8 +40,8 @@ function getMenuItems(
     // Analytics hidden per user request
   ];
 
-  if (isAdmin) {
-    items.push({ label: "Signals", path: "/opportunities" });
+  if (isAdmin || isSuperAdmin) {
+    items.push({ label: "Day Hub", path: "/tasks" });
   }
 
   items.push({ label: "Training", path: "/training" });
@@ -94,10 +97,16 @@ describe('Navigation - Top Nav Menu Items', () => {
     expect(labels).not.toContain('Admin');
   });
 
-  it('should include Dashboard, Calls, Signals, Training, Team for admin users', () => {
+  it('should NOT include Signals in nav (removed)', () => {
     const items = getMenuItems('admin', 'user1', 'admin', 'true', false);
     const labels = items.map(i => i.label);
-    expect(labels).toEqual(['Dashboard', 'Calls', 'Signals', 'Training', 'Team']);
+    expect(labels).not.toContain('Signals');
+  });
+
+  it('should include Dashboard, Calls, Day Hub, Training, Team for admin users', () => {
+    const items = getMenuItems('admin', 'user1', 'admin', 'true', false);
+    const labels = items.map(i => i.label);
+    expect(labels).toEqual(['Dashboard', 'Calls', 'Day Hub', 'Training', 'Team']);
   });
 
   it('should include Dashboard, Calls, Training, Team for non-admin users', () => {
@@ -117,6 +126,19 @@ describe('Navigation - Top Nav Menu Items', () => {
     items.forEach(item => {
       expect(Object.keys(item)).toEqual(['label', 'path']);
     });
+  });
+
+  it('should show Day Hub for user with role=admin but teamRole=acquisition_manager (Kyle Barks case)', () => {
+    // Kyle has role=admin, teamRole=acquisition_manager, isTenantAdmin=false
+    const items = getMenuItems('acquisition_manager', 'kyle1', 'admin', 'false', false);
+    const labels = items.map(i => i.label);
+    expect(labels).toContain('Day Hub');
+  });
+
+  it('should NOT show Day Hub for regular user with teamRole=acquisition_manager', () => {
+    const items = getMenuItems('acquisition_manager', 'user1', 'user', 'false', false);
+    const labels = items.map(i => i.label);
+    expect(labels).not.toContain('Day Hub');
   });
 });
 

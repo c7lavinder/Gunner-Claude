@@ -32,7 +32,6 @@ import Paywall from "./pages/Paywall";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LeadGenDashboard from "./pages/LeadGenDashboard";
-import Opportunities from "./pages/Opportunities";
 import CoachActivityLog from "./pages/CoachActivityLog";
 import TaskCenter from "./pages/TaskCenter";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
@@ -76,7 +75,6 @@ function ProtectedRouter() {
       <Route path="/calls/:id" component={CallDetail} />
       <Route path="/team" component={TeamMembers} />
       <Route path="/analytics" component={Analytics} />
-      <Route path="/opportunities" component={Opportunities} />
       <Route path="/training" component={Training} />
       <Route path="/social" component={SocialMedia} />
       <Route path="/team-management" component={TeamManagement} />

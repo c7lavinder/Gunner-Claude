@@ -3887,3 +3887,7 @@
 ## Day Hub — React Error #310 Fix
 - [x] Fix React error #310 in Day Hub — move useMemo before early returns in KpiBar (hooks-after-return violation)
 - [x] Add React Hooks Safety tests for KpiBar and TaskCenter components
+
+## Admin Access & Navigation Cleanup
+- [x] Make Day Hub available for Kyle Barks (admin + AM role)
+- [x] Remove Signals page from navigation

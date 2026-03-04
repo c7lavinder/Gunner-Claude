@@ -30,7 +30,7 @@ const getMenuItems = (
   isTenantAdmin?: string | null,
   isDemo?: boolean
 ) => {
-  const isAdmin = teamRole === 'admin' || isTenantAdmin === 'true';
+  const isAdmin = teamRole === 'admin' || isTenantAdmin === 'true' || userRole === 'admin';
   const isSuperAdmin = userRole === 'super_admin';
   const isLeadGenerator = teamRole === 'lead_generator';
 
@@ -50,10 +50,6 @@ const getMenuItems = (
 
   if (isAdmin || isSuperAdmin) {
     items.push({ icon: ClipboardList, label: "Day Hub", path: "/tasks" });
-  }
-
-  if (isAdmin) {
-    items.push({ icon: AlertTriangle, label: "Signals", path: "/opportunities" });
   }
 
   items.push({ icon: BookOpen, label: "Training", path: "/training" });
