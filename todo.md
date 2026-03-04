@@ -3856,3 +3856,11 @@
 - [x] Tab selection filters the task list and team member dropdown accordingly
 - [x] Updated getTeamMembersForFilter to return teamRole for frontend filtering
 - [x] Updated tests to match Day Hub refactor (115 tests passing)
+
+## Day Hub — UI Fixes & AI Coach Layout
+- [x] AM KPI bar: show only Calls, Offers, Contracts (hide Convos and Apts)
+- [x] Task row: replace date with relative due label (Xd overdue / Due Today / Xd til due)
+- [x] Task row: clean up alignment so labels line up vertically across rows
+- [x] Layout restructure: top half = 50/50 Inbox (left) + AI Coach (right)
+- [x] Layout restructure: bottom half = full-width task list
+- [x] Integrate AI Coach chat panel into Day Hub right side

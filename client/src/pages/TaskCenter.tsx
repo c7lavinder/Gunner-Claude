@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -81,7 +83,11 @@ import {
   ArrowUpRight,
   Sun,
   Moon,
+  Bot,
+  Loader2,
+  Sparkles,
 } from "lucide-react";
+import { useDemo } from "@/hooks/useDemo";
 
 // ─── HELPERS ────────────────────────────────────────────
 
@@ -162,7 +168,7 @@ const ROLE_TAB_CONFIG: Record<RoleTab, { label: string; description: string; kpi
   am: {
     label: "AM",
     description: "Acquisition Manager view — offers & contracts",
-    kpiTargets: { calls: 40, convos: 4, apts: 1, offers: 2, contracts: 1 },
+    kpiTargets: { calls: 40, convos: 0, apts: 0, offers: 2, contracts: 1 },
     teamRoles: ["acquisition_manager"],
   },
 };
@@ -614,13 +620,22 @@ function PriorityTaskRow({
   rank: number;
 }) {
   const dueDate = task.dueDate ? new Date(task.dueDate) : null;
-  const dueDateStr = dueDate
-    ? dueDate.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: dueDate.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
-      })
-    : "No date";
+  const dueLabel = (() => {
+    if (!dueDate) return "No date";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`;
+    if (diffDays === 0) return "Due Today";
+    return `${diffDays}d til due`;
+  })();
+  const dueLabelColor = task.group === "overdue"
+    ? "var(--g-accent)"
+    : task.group === "today"
+    ? "oklch(0.75 0.15 85)"
+    : "var(--g-text-tertiary)";
 
   const scoreColor = (task.priorityScore || 0) >= 700
     ? "#ef4444"
@@ -741,27 +756,13 @@ function PriorityTaskRow({
           </Tooltip>
         </TooltipProvider>
 
-        {/* Due date */}
-        <div className="flex items-center gap-2 shrink-0">
-          {task.group === "overdue" && (
-            <Badge
-              className="text-xs"
-              style={{ background: "var(--g-accent)", color: "white", border: "none" }}
-            >
-              {task.overdueDays}d overdue
-            </Badge>
-          )}
+        {/* Due label */}
+        <div className="shrink-0 w-[90px] text-right">
           <span
-            className="text-xs font-medium"
-            style={{
-              color: task.group === "overdue"
-                ? "var(--g-accent)"
-                : task.group === "today"
-                ? "oklch(0.75 0.15 85)"
-                : "var(--g-text-tertiary)",
-            }}
+            className="text-xs font-semibold"
+            style={{ color: dueLabelColor }}
           >
-            {dueDateStr}
+            {dueLabel}
           </span>
         </div>
 
@@ -1579,6 +1580,221 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
   );
 }
 
+// ─── AI COACH PANEL ────────────────────────────────────
+
+function DayHubCoach() {
+  const { user } = useAuth();
+  const { guardAction: guardDemoAction } = useDemo();
+  const [question, setQuestion] = useState("");
+  const [isAsking, setIsAsking] = useState(false);
+  const [conversation, setConversation] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const saveExchangeMutation = trpc.coach.saveExchange.useMutation();
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [conversation, isAsking]);
+
+  const streamCoachQuestion = useCallback(async (userMessage: string, chatHistory: Array<{ role: "user" | "assistant"; content: string }>) => {
+    setConversation(prev => [...prev, { role: "assistant", content: "" }]);
+    try {
+      const response = await fetch("/api/coach/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: userMessage, history: chatHistory }),
+      });
+      if (!response.ok) throw new Error("Stream request failed");
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullResponse = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const data = trimmed.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === "chunk" && parsed.content) {
+              fullResponse += parsed.content;
+              setConversation(prev => {
+                const updated = [...prev];
+                const lastMsg = updated[updated.length - 1];
+                if (lastMsg && lastMsg.role === "assistant") {
+                  updated[updated.length - 1] = { ...lastMsg, content: lastMsg.content + parsed.content };
+                }
+                return updated;
+              });
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+      // Persist exchange
+      if (fullResponse) {
+        saveExchangeMutation.mutate({ question: userMessage, answer: fullResponse });
+      }
+    } catch {
+      setConversation(prev => {
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg && lastMsg.role === "assistant" && !lastMsg.content) {
+          updated[updated.length - 1] = { ...lastMsg, content: "Sorry, I couldn't connect. Please try again." };
+        }
+        return updated;
+      });
+    }
+  }, [saveExchangeMutation]);
+
+  const handleAsk = async () => {
+    if (!question.trim() || isAsking) return;
+    if (!guardDemoAction()) return;
+    const userMessage = question.trim();
+    setConversation(prev => [...prev, { role: "user", content: userMessage }]);
+    setIsAsking(true);
+    setQuestion("");
+    const chatHistory = conversation
+      .filter((msg): msg is { role: "user" | "assistant"; content: string } => msg.role === "user" || msg.role === "assistant")
+      .slice(-10)
+      .map(msg => ({ role: msg.role, content: msg.content }));
+    try {
+      await streamCoachQuestion(userMessage, chatHistory);
+    } catch {
+      toast.error("Failed to get answer");
+    }
+    setIsAsking(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleAsk();
+    }
+  };
+
+  const suggestedPrompts = [
+    "What should I focus on today?",
+    "How do I handle a seller who wants to back out?",
+    "Tips for setting more appointments",
+  ];
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden flex flex-col"
+      style={{
+        background: "var(--g-bg-card)",
+        border: "1px solid var(--g-border-subtle)",
+        boxShadow: "var(--g-shadow-card)",
+        height: "100%",
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
+        <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "var(--g-accent-soft)" }}>
+          <Bot className="h-3.5 w-3.5" style={{ color: "var(--g-accent-text)" }} />
+        </div>
+        <span className="text-xs font-semibold" style={{ color: "var(--g-text-primary)" }}>AI Coach</span>
+        <Sparkles className="h-3 w-3" style={{ color: "var(--g-accent)" }} />
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2" style={{ minHeight: 0 }}>
+        {conversation.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 py-6">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--g-accent-soft)" }}>
+              <Bot className="h-5 w-5" style={{ color: "var(--g-accent-text)" }} />
+            </div>
+            <p className="text-xs text-center" style={{ color: "var(--g-text-tertiary)" }}>
+              Ask me anything about your tasks, leads, or sales strategy.
+            </p>
+            <div className="flex flex-col gap-1.5 w-full">
+              {suggestedPrompts.map((prompt, i) => (
+                <button
+                  key={i}
+                  onClick={() => setQuestion(prompt)}
+                  className="text-[11px] text-left px-2.5 py-1.5 rounded-md transition-colors"
+                  style={{
+                    border: "1px solid var(--g-border-subtle)",
+                    color: "var(--g-text-secondary)",
+                    background: "transparent",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--g-bg-inset)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          conversation.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" && (
+                <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mr-1.5 mt-0.5" style={{ background: "var(--g-accent-soft)" }}>
+                  <Bot className="h-2.5 w-2.5" style={{ color: "var(--g-accent-text)" }} />
+                </div>
+              )}
+              <div
+                className={`rounded-lg px-2.5 py-1.5 ${msg.role === "user" ? "max-w-[80%]" : "flex-1"}`}
+                style={{
+                  background: msg.role === "user" ? "var(--g-accent)" : "var(--g-bg-inset)",
+                  color: msg.role === "user" ? "white" : "var(--g-text-primary)",
+                }}
+              >
+                {msg.role === "assistant" ? (
+                  <div className="text-xs leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                    <Streamdown>{msg.content}</Streamdown>
+                  </div>
+                ) : (
+                  <p className="text-xs">{msg.content}</p>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+        {isAsking && conversation.length > 0 && conversation[conversation.length - 1].role !== "assistant" && (
+          <div className="flex justify-start">
+            <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mr-1.5" style={{ background: "var(--g-accent-soft)" }}>
+              <Bot className="h-2.5 w-2.5" style={{ color: "var(--g-accent-text)" }} />
+            </div>
+            <div className="rounded-lg px-2.5 py-1.5" style={{ background: "var(--g-bg-inset)" }}>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "var(--g-text-tertiary)" }} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="flex gap-1.5 px-3 py-2 border-t" style={{ borderColor: "var(--g-border-subtle)" }}>
+        <Textarea
+          placeholder="Ask your AI coach..."
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="min-h-[36px] max-h-[60px] resize-none text-xs flex-1"
+          disabled={isAsking}
+        />
+        <Button
+          onClick={handleAsk}
+          disabled={!question.trim() || isAsking}
+          size="sm"
+          className="self-end h-[36px] w-[36px] p-0 flex-shrink-0"
+          style={{ background: "var(--g-accent)", color: "white" }}
+        >
+          <Send className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN PAGE ──────────────────────────────────────────
 
 export default function TaskCenter() {
@@ -1804,15 +2020,16 @@ export default function TaskCenter() {
       {/* KPI Bar */}
       <KpiBar roleTab={roleTab} />
 
-      {/* Main content: Left panel + Task list */}
-      <div className="grid grid-cols-[280px_1fr] gap-4" style={{ minHeight: "calc(100vh - 280px)" }}>
-        {/* Left Panel */}
+      {/* Top half: Inbox + AI Coach side by side */}
+      <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
         <LeftPanel />
+        <DayHubCoach />
+      </div>
 
-        {/* Right: Task List */}
-        <div className="space-y-3">
-          {/* Filters */}
-          <div className="flex items-center gap-3 flex-wrap">
+      {/* Bottom: Full-width Task List */}
+      <div className="space-y-3">
+        {/* Filters */}
+        <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--g-text-tertiary)" }} />
               <Input placeholder="Search tasks or contacts..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9" />
@@ -1872,46 +2089,45 @@ export default function TaskCenter() {
             )}
           </div>
 
-          {/* Task List */}
-          {isLoading ? (
-            <div className="space-y-2">
-              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
-            </div>
-          ) : isError ? (
-            <div className="rounded-lg py-8 text-center" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}>
-              <AlertTriangle className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-accent)" }} />
-              <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
-                Failed to load tasks. Make sure GHL is connected and try again.
-              </p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={handleRefresh}>Retry</Button>
-            </div>
-          ) : totalTasks === 0 ? (
-            <div className="rounded-lg py-12 text-center" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}>
-              <CheckCircle2 className="h-10 w-10 mx-auto mb-3" style={{ color: "oklch(0.7 0.15 150)" }} />
-              <h3 className="font-semibold text-lg" style={{ color: "var(--g-text-primary)" }}>All Clear</h3>
-              <p className="text-sm mt-1" style={{ color: "var(--g-text-secondary)" }}>
-                {selectedMember !== "all" ? "No pending tasks for this team member." : "No pending tasks. Great work!"}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {filteredTasks.map((task: Task, index: number) => (
-                <PriorityTaskRow
-                  key={task.id}
-                  task={task}
-                  rank={index + 1}
-                  onComplete={() => handleComplete(task)}
-                  onEdit={() => handleEdit(task)}
-                  onDelete={() => handleDelete(task)}
-                  onExpand={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
-                  isExpanded={expandedTaskId === task.id}
-                  isCompleting={completingTaskIds.has(task.id)}
-                  allTasks={filteredTasks}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Task List */}
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+          </div>
+        ) : isError ? (
+          <div className="rounded-lg py-8 text-center" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}>
+            <AlertTriangle className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-accent)" }} />
+            <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+              Failed to load tasks. Make sure GHL is connected and try again.
+            </p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={handleRefresh}>Retry</Button>
+          </div>
+        ) : totalTasks === 0 ? (
+          <div className="rounded-lg py-12 text-center" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}>
+            <CheckCircle2 className="h-10 w-10 mx-auto mb-3" style={{ color: "oklch(0.7 0.15 150)" }} />
+            <h3 className="font-semibold text-lg" style={{ color: "var(--g-text-primary)" }}>All Clear</h3>
+            <p className="text-sm mt-1" style={{ color: "var(--g-text-secondary)" }}>
+              {selectedMember !== "all" ? "No pending tasks for this team member." : "No pending tasks. Great work!"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {filteredTasks.map((task: Task, index: number) => (
+              <PriorityTaskRow
+                key={task.id}
+                task={task}
+                rank={index + 1}
+                onComplete={() => handleComplete(task)}
+                onEdit={() => handleEdit(task)}
+                onDelete={() => handleDelete(task)}
+                onExpand={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+                isExpanded={expandedTaskId === task.id}
+                isCompleting={completingTaskIds.has(task.id)}
+                allTasks={filteredTasks}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Edit Task Dialog */}
