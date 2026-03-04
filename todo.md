@@ -3916,3 +3916,17 @@
 - [x] Admin tab shows all conversations, LM/AM tabs show only their phone numbers
 - [x] Fallback to assignedTo when teamPhone is not available
 - [x] 107 tests passing including phone-based filtering tests
+
+## Inbox — Team Member Name Labels
+- [x] Build phone-to-member-name mapping from teamMembers lcPhones data
+- [x] Pass mapping to UnreadConvoItem component
+- [x] Display team member name label (e.g., "Chris's line") on each inbox conversation
+- [x] Update tests for team member name labels
+
+## AM/PM Call Detection — Timezone & Detection Fix
+- [x] Change AM/PM call detection timezone from Eastern to Central (America/Chicago)
+- [x] Audit why AM/PM call indicators are all showing unchecked/grey
+- [x] Fix AM/PM call detection logic — wired detectAmPmCalls into getPriorityTasks endpoint (was never called before)
+- [x] Update KPI color calculation timezone to Central
+- [x] Update appointments, AI coach, and getContactTodayActivity to Central timezone
+- [x] 146 tests passing (39 dayHub + 107 taskCenter)

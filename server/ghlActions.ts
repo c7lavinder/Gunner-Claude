@@ -1967,7 +1967,7 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
           appointmentTitle,
           payload.notes || payload.description,
           requestingUserGhlId,
-          payload.selectedTimezone || "America/New_York"
+          payload.selectedTimezone || "America/Chicago"
         );
         break;
       }
@@ -2135,20 +2135,20 @@ export async function getContactTodayActivity(
     }
 
     // Step 3: Filter to today's messages only
-    // Use US Eastern timezone for "today" since the business operates in EST/EDT
+    // Use Central timezone for "today" since the business operates in CST/CDT
     // This ensures activity counts match what the user sees in their local time
     const now = new Date();
-    const estFormatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
+    const ctFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     });
-    const estDateStr = estFormatter.format(now); // MM/DD/YYYY
-    const [month, day, year] = estDateStr.split("/").map(Number);
-    // Create a Date object for midnight EST today in UTC
-    const todayEstMidnight = new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00-05:00`);
-    const todayMs = todayEstMidnight.getTime();
+    const ctDateStr = ctFormatter.format(now); // MM/DD/YYYY
+    const [month, day, year] = ctDateStr.split("/").map(Number);
+    // Create a Date object for midnight Central today in UTC
+    const todayCtMidnight = new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00-06:00`);
+    const todayMs = todayCtMidnight.getTime();
 
     const todayMessages = allMessages.filter((m: any) => {
       const msgDate = new Date(m.dateAdded || m.createdAt || 0);

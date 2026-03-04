@@ -431,6 +431,21 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
   const missedCalls = useMemo(() => (unreadConvos || []).filter(c => c.isMissedCall), [unreadConvos]);
   const unreadMessages = useMemo(() => (unreadConvos || []).filter(c => !c.isMissedCall), [unreadConvos]);
 
+  // Build phone → member first name mapping for inbox labels
+  const phoneToMemberName = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!teamMembersList) return map;
+    for (const m of teamMembersList) {
+      if (!m.lcPhones) continue;
+      try {
+        const parsed = JSON.parse(m.lcPhones) as string[];
+        const firstName = m.name.split(" ")[0];
+        parsed.forEach(p => map.set(p, firstName));
+      } catch { /* skip */ }
+    }
+    return map;
+  }, [teamMembersList]);
+
   return (
     <div
       className="rounded-xl overflow-hidden flex flex-col"
@@ -500,7 +515,7 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
                     </span>
                   </div>
                   {missedCalls.map((conv) => (
-                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} />
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} />
                   ))}
                 </div>
               )}
@@ -514,7 +529,7 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
                     </span>
                   </div>
                   {unreadMessages.map((conv) => (
-                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} />
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} />
                   ))}
                 </div>
               )}
@@ -643,7 +658,8 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
   );
 }
 
-function UnreadConvoItem({ conv, onTextContact }: { conv: any; onTextContact: (contactId: string, contactName: string, contactPhone: string) => void }) {
+function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any; onTextContact: (contactId: string, contactName: string, contactPhone: string) => void; phoneToMemberName?: Map<string, string> }) {
+  const memberName = phoneToMemberName && conv.teamPhone ? phoneToMemberName.get(conv.teamPhone) : undefined;
   const [expanded, setExpanded] = useState(false);
 
   const handleCall = (e: React.MouseEvent) => {
@@ -702,9 +718,23 @@ function UnreadConvoItem({ conv, onTextContact }: { conv: any; onTextContact: (c
             <span className="text-xs font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
               {conv.contactName || "Unknown"}
             </span>
-            <span className="text-[10px] shrink-0 ml-1" style={{ color: "var(--g-text-tertiary)" }}>
-              {timeAgo(conv.lastMessageAt)}
-            </span>
+            <div className="flex items-center gap-1.5 shrink-0 ml-1">
+              {memberName && (
+                <span
+                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: "rgba(139, 92, 246, 0.12)",
+                    color: "oklch(0.7 0.15 290)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {memberName}'s line
+                </span>
+              )}
+              <span className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>
+                {timeAgo(conv.lastMessageAt)}
+              </span>
+            </div>
           </div>
           {conv.lastMessage && (
             <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--g-text-secondary)" }}>

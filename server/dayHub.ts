@@ -170,7 +170,7 @@ export function prioritizeTasks(tasks: TaskWithContext[]): PrioritizedTask[] {
 
 /**
  * Check if outgoing calls were made to a contact in AM (before noon) and PM (noon+).
- * Uses Eastern timezone for business hours.
+ * Uses Central timezone (America/Chicago) for business hours.
  */
 export function detectAmPmCalls(
   messages: Array<{ type?: string; messageType?: string; direction?: string; dateAdded?: string }>
@@ -179,14 +179,14 @@ export function detectAmPmCalls(
   let pmCallMade = false;
 
   const now = new Date();
-  // Get today in EST
-  const estFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
+  // Get today in Central time
+  const ctFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  const todayEstStr = estFormatter.format(now);
+  const todayCtStr = ctFormatter.format(now);
 
   for (const msg of messages) {
     // Check if it's a call (GHL uses both string and number types)
@@ -200,20 +200,20 @@ export function detectAmPmCalls(
     const msgDate = new Date(msg.dateAdded || "");
     if (isNaN(msgDate.getTime())) continue;
 
-    // Check if this call is from today
-    const msgEstStr = estFormatter.format(msgDate);
-    if (msgEstStr !== todayEstStr) continue;
+    // Check if this call is from today in Central time
+    const msgCtStr = ctFormatter.format(msgDate);
+    if (msgCtStr !== todayCtStr) continue;
 
-    // Get the hour in Eastern time
-    const estHour = parseInt(
+    // Get the hour in Central time
+    const ctHour = parseInt(
       new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York",
+        timeZone: "America/Chicago",
         hour: "numeric",
         hour12: false,
       }).format(msgDate)
     );
 
-    if (estHour < 12) {
+    if (ctHour < 12) {
       amCallMade = true;
     } else {
       pmCallMade = true;
@@ -239,9 +239,9 @@ export const AM_TARGETS: KpiTarget = { calls: 40, conversations: 4, appointments
  */
 export function getKpiColor(current: number, target: number): "green" | "yellow" | "red" {
   const now = new Date();
-  const estHour = parseInt(
+  const ctHour = parseInt(
     new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
+      timeZone: "America/Chicago",
       hour: "numeric",
       hour12: false,
     }).format(now)
@@ -251,12 +251,12 @@ export function getKpiColor(current: number, target: number): "green" | "yellow"
   const workdayEnd = 18;
 
   let elapsedFraction: number;
-  if (estHour < workdayStart) {
+  if (ctHour < workdayStart) {
     elapsedFraction = 0;
-  } else if (estHour >= workdayEnd) {
+  } else if (ctHour >= workdayEnd) {
     elapsedFraction = 1;
   } else {
-    elapsedFraction = (estHour - workdayStart) / (workdayEnd - workdayStart);
+    elapsedFraction = (ctHour - workdayStart) / (workdayEnd - workdayStart);
   }
 
   if (current >= target) return "green";
@@ -412,19 +412,19 @@ export async function getTodayAppointments(
     const calendars = await getCalendarsForTenant(tenantId);
     if (calendars.length === 0) return [];
 
-    // Get today's date range in Eastern time
+    // Get today's date range in Central time (America/Chicago)
     const now = new Date();
-    const estFormatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
+    const ctFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     });
-    const estDateStr = estFormatter.format(now);
-    const [month, day, year] = estDateStr.split("/").map(Number);
+    const ctDateStr = ctFormatter.format(now);
+    const [month, day, year] = ctDateStr.split("/").map(Number);
     const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const todayStart = new Date(`${dateStr}T00:00:00-05:00`);
-    const todayEnd = new Date(`${dateStr}T23:59:59-05:00`);
+    const todayStart = new Date(`${dateStr}T00:00:00-06:00`);
+    const todayEnd = new Date(`${dateStr}T23:59:59-06:00`);
 
     const appointments: TodayAppointment[] = [];
 

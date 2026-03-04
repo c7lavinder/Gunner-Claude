@@ -5984,7 +5984,7 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
   IMPORTANT: "check of" is a common typo for "check off" — ALWAYS treat it as a task completion request.
 - For add_to_workflow: Set params.workflowName to the workflow name the user mentioned (e.g. "follow-up", "drip campaign", "nurture sequence"). The system will fuzzy-match to the actual GHL workflow.
 - For remove_from_workflow: Set params.workflowName to the workflow name to remove from. The system will fuzzy-match to the actual GHL workflow.
-- For create_appointment: Set params.title to a descriptive appointment title (e.g. "Property Walkthrough - 123 Main St" or "Follow-up Meeting with John"). Set params.startTime to the appointment date/time in ISO 8601 format (YYYY-MM-DDTHH:mm:ssZ). Today is ${new Date().toISOString().split('T')[0]}. If the user says "next Tuesday at 2pm", calculate the actual date. If no time is specified, default to 10:00 AM. Set params.endTime to the end time (default 1 hour after start). Set params.calendarName to the calendar name if the user specifies one (e.g. "appointments calendar", "walkthrough calendar"). If no calendar is specified, leave it empty and the system will use the default calendar. Set params.notes to any additional details about the appointment. Set params.selectedTimezone to the user's timezone if mentioned (default: America/New_York).
+- For create_appointment: Set params.title to a descriptive appointment title (e.g. "Property Walkthrough - 123 Main St" or "Follow-up Meeting with John"). Set params.startTime to the appointment date/time in ISO 8601 format (YYYY-MM-DDTHH:mm:ssZ). Today is ${new Date().toISOString().split('T')[0]}. If the user says "next Tuesday at 2pm", calculate the actual date. If no time is specified, default to 10:00 AM. Set params.endTime to the end time (default 1 hour after start). Set params.calendarName to the calendar name if the user specifies one (e.g. "appointments calendar", "walkthrough calendar"). If no calendar is specified, leave it empty and the system will use the default calendar. Set params.notes to any additional details about the appointment. Set params.selectedTimezone to the user's timezone if mentioned (default: America/Chicago).
 - For update_appointment: Set params.title to the appointment title or keyword to find the right appointment (e.g. "walkthrough", "meeting"). If the user doesn't specify which appointment, leave title empty and the system will find the next upcoming one. Set params.startTime to the NEW date/time in ISO 8601 format if rescheduling. Today is ${new Date().toISOString().split('T')[0]}. If the user says "move to Friday at 2pm", calculate the actual date. Set params.endTime if the duration changes. Set params.notes if updating notes. Set params.appointmentTitle if renaming the appointment (different from params.title which is used for matching).
 - For cancel_appointment: Set params.title to the appointment title or keyword to find the right appointment (e.g. "walkthrough", "meeting", "follow-up"). If the user doesn't specify which appointment, leave title empty and the system will find the next upcoming one. The system will set the appointment status to "cancelled" in GHL.
 
@@ -7159,7 +7159,7 @@ selectedTimezone: { type: "string" },
           input.title,
           input.notes,
           member?.ghlUserId ?? undefined,
-          "America/New_York"
+          "America/Chicago"
         );
       }),
 
@@ -7206,7 +7206,8 @@ selectedTimezone: { type: "string" },
         }
 
         const { searchLocationTasks, enrichTasks, getTeamMemberGhlMap, getTeamMembersForFilter } = await import("./taskCenter");
-        const { prioritizeTasks } = await import("./dayHub");
+        const { prioritizeTasks, detectAmPmCalls } = await import("./dayHub");
+        const { getContactTodayActivity } = await import("./ghlActions");
 
         const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin";
         let assignedTo: string[] | undefined;
@@ -7226,6 +7227,39 @@ selectedTimezone: { type: "string" },
         // Apply category filter
         if (input?.categoryFilter && input.categoryFilter !== "all") {
           prioritized = prioritized.filter(t => t.category === input.categoryFilter);
+        }
+
+        // Fetch AM/PM call data for unique contacts (batch to avoid excessive API calls)
+        const uniqueContactIds = Array.from(new Set(prioritized.map(t => t.contactId).filter(Boolean)));
+        const contactActivityMap = new Map<string, { amCallMade: boolean; pmCallMade: boolean }>();
+
+        // Process in batches of 5 to avoid rate limiting
+        const amPmBatchSize = 5;
+        for (let i = 0; i < uniqueContactIds.length; i += amPmBatchSize) {
+          const batch = uniqueContactIds.slice(i, i + amPmBatchSize);
+          const results = await Promise.all(
+            batch.map(async (contactId) => {
+              try {
+                const activity = await getContactTodayActivity(ctx.user!.tenantId!, contactId);
+                const amPm = detectAmPmCalls(activity.messages);
+                return { contactId, ...amPm };
+              } catch {
+                return { contactId, amCallMade: false, pmCallMade: false };
+              }
+            })
+          );
+          for (const r of results) {
+            contactActivityMap.set(r.contactId, { amCallMade: r.amCallMade, pmCallMade: r.pmCallMade });
+          }
+        }
+
+        // Apply AM/PM data to prioritized tasks
+        for (const task of prioritized) {
+          if (task.contactId && contactActivityMap.has(task.contactId)) {
+            const amPm = contactActivityMap.get(task.contactId)!;
+            task.amCallMade = amPm.amCallMade;
+            task.pmCallMade = amPm.pmCallMade;
+          }
         }
 
         return { tasks: prioritized, teamMembers: memberList };
@@ -7268,16 +7302,16 @@ selectedTimezone: { type: "string" },
 
         const { getKpiSummary, getKpiColor, LM_TARGETS, AM_TARGETS } = await import("./dayHub");
 
-        // Default to today in EST
+        // Default to today in Central time
         const now = new Date();
-        const estFormatter = new Intl.DateTimeFormat("en-US", {
-          timeZone: "America/New_York",
+        const ctFormatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/Chicago",
           year: "numeric",
           month: "2-digit",
           day: "2-digit",
         });
-        const estDateStr = estFormatter.format(now);
-        const [month, day, year] = estDateStr.split("/").map(Number);
+        const ctDateStr = ctFormatter.format(now);
+        const [month, day, year] = ctDateStr.split("/").map(Number);
         const date = input?.date || `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
         const summary = await getKpiSummary(ctx.user.tenantId, ctx.user.id, date);

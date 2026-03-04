@@ -288,3 +288,84 @@ describe("getKpiColor — KPI color logic", () => {
     expect(getKpiColor(5, 0)).toBe("green");
   });
 });
+
+
+// ─── Central Timezone Tests ─────────────────────────────
+
+describe("detectAmPmCalls — Central timezone (America/Chicago)", () => {
+  it("detects AM outbound call in Central time", () => {
+    // Create a date that is 9 AM Central today
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    // 9 AM Central = 15:00 UTC (CST) or 14:00 UTC (CDT)
+    const amCentral = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T09:00:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { type: "CALL", direction: "outbound", dateAdded: amCentral.toISOString() },
+    ]);
+    expect(result.amCallMade).toBe(true);
+    expect(result.pmCallMade).toBe(false);
+  });
+
+  it("detects PM outbound call in Central time", () => {
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    // 2 PM Central
+    const pmCentral = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T14:00:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { type: "CALL", direction: "outbound", dateAdded: pmCentral.toISOString() },
+    ]);
+    expect(result.amCallMade).toBe(false);
+    expect(result.pmCallMade).toBe(true);
+  });
+
+  it("detects both AM and PM calls on same day", () => {
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    const amCall = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T10:30:00-06:00`);
+    const pmCall = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T15:00:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { type: "CALL", direction: "outbound", dateAdded: amCall.toISOString() },
+      { type: "CALL", direction: "outbound", dateAdded: pmCall.toISOString() },
+    ]);
+    expect(result.amCallMade).toBe(true);
+    expect(result.pmCallMade).toBe(true);
+  });
+
+  it("handles GHL numeric type 1 for calls", () => {
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    const amCall = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T08:00:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { type: "1", direction: "outbound", dateAdded: amCall.toISOString() },
+    ]);
+    expect(result.amCallMade).toBe(true);
+  });
+});
