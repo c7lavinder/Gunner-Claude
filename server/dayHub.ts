@@ -370,40 +370,39 @@ export async function getUnreadConversations(
 
     const results = basicConvos;
 
-    // Enrich conversations with contact address from local cache
-    const contactIdsToEnrich = results
-      .filter((c: UnreadConversation) => c.contactId)
-      .map((c: UnreadConversation) => c.contactId);
-
-    if (contactIdsToEnrich.length > 0) {
-      try {
-        const db = await getDb();
-        if (db) {
-          const { contactCache } = await import("../drizzle/schema");
-          const { inArray } = await import("drizzle-orm");
-          const cachedContacts = await db.select().from(contactCache).where(
-            and(
-              eq(contactCache.tenantId, tenantId),
-              inArray(contactCache.ghlContactId, contactIdsToEnrich)
-            )
-          );
-          const cacheMap = new Map(cachedContacts.map(c => [c.ghlContactId, c]));
-          for (const convo of results) {
-            const cached = cacheMap.get(convo.contactId);
-            if (!cached) continue;
-            if (cached.address) {
-              convo.contactAddress = cached.address;
+    // Enrich conversations with contact address from GHL API
+    // Batch fetch contact details (address, name) in groups of 10
+    const convsToEnrich = results.filter((c: UnreadConversation) => c.contactId);
+    if (convsToEnrich.length > 0) {
+      const enrichBatchSize = 10;
+      for (let i = 0; i < convsToEnrich.length; i += enrichBatchSize) {
+        const batch = convsToEnrich.slice(i, i + enrichBatchSize);
+        await Promise.all(
+          batch.map(async (convo: UnreadConversation) => {
+            try {
+              const contactData = await ghlFetch(creds, `/contacts/${convo.contactId}`, "GET");
+              const c = contactData.contact || contactData;
+              // Build address from GHL contact fields
+              const addressParts = [
+                c.address1 || c.streetAddress || "",
+                c.city || "",
+                c.state || "",
+                c.postalCode || c.zip || "",
+              ].filter(Boolean);
+              const fullAddress = addressParts.join(", ");
+              if (fullAddress) {
+                convo.contactAddress = fullAddress;
+              }
+              // Fill in name if it was "Unknown"
+              if (convo.contactName === "Unknown") {
+                const name = `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name;
+                if (name) convo.contactName = toTitleCase(name);
+              }
+            } catch (err: any) {
+              // Silently skip — address stays empty
             }
-            // Also fill in name if it was "Unknown"
-            if (convo.contactName === "Unknown" && cached.name) {
-              convo.contactName = toTitleCase(cached.name);
-            } else if (convo.contactName === "Unknown" && cached.firstName) {
-              convo.contactName = toTitleCase(`${cached.firstName} ${cached.lastName || ""}`.trim());
-            }
-          }
-        }
-      } catch (enrichErr: any) {
-        console.warn("[DayHub] Failed to enrich conversations from cache:", enrichErr?.message);
+          })
+        );
       }
     }
 
@@ -497,42 +496,42 @@ export async function getTodayAppointments(
       }
     }
 
-    // Enrich appointments with contact info from local cache when GHL doesn't provide it
-    const contactIdsToEnrich = appointments
-      .filter(apt => apt.contactId && (apt.contactName === "Unknown" || !apt.address))
-      .map(apt => apt.contactId);
-
-    if (contactIdsToEnrich.length > 0) {
-      try {
-        const db = await getDb();
-        if (db) {
-          const { contactCache } = await import("../drizzle/schema");
-          const { inArray } = await import("drizzle-orm");
-          const cachedContacts = await db.select().from(contactCache).where(
-            and(
-              eq(contactCache.tenantId, tenantId),
-              inArray(contactCache.ghlContactId, contactIdsToEnrich)
-            )
-          );
-          const cacheMap = new Map(cachedContacts.map(c => [c.ghlContactId, c]));
-          for (const apt of appointments) {
-            const cached = cacheMap.get(apt.contactId);
-            if (!cached) continue;
-            if (apt.contactName === "Unknown" && cached.name) {
-              apt.contactName = toTitleCase(cached.name);
-            } else if (apt.contactName === "Unknown" && cached.firstName) {
-              apt.contactName = toTitleCase(`${cached.firstName} ${cached.lastName || ""}`.trim());
+    // Enrich appointments with contact info from GHL API when event data is incomplete
+    const aptsToEnrich = appointments.filter(
+      apt => apt.contactId && (apt.contactName === "Unknown" || !apt.address || !apt.contactPhone)
+    );
+    if (aptsToEnrich.length > 0) {
+      const enrichBatchSize = 10;
+      for (let i = 0; i < aptsToEnrich.length; i += enrichBatchSize) {
+        const batch = aptsToEnrich.slice(i, i + enrichBatchSize);
+        await Promise.all(
+          batch.map(async (apt) => {
+            try {
+              const contactData = await ghlFetch(creds, `/contacts/${apt.contactId}`, "GET");
+              const c = contactData.contact || contactData;
+              // Build address from GHL contact fields
+              const addressParts = [
+                c.address1 || c.streetAddress || "",
+                c.city || "",
+                c.state || "",
+                c.postalCode || c.zip || "",
+              ].filter(Boolean);
+              const fullAddress = addressParts.join(", ");
+              if (!apt.address && fullAddress) {
+                apt.address = fullAddress;
+              }
+              if (apt.contactName === "Unknown") {
+                const name = `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name;
+                if (name) apt.contactName = toTitleCase(name);
+              }
+              if (!apt.contactPhone && c.phone) {
+                apt.contactPhone = c.phone;
+              }
+            } catch (err: any) {
+              // Silently skip
             }
-            if (!apt.address && cached.address) {
-              apt.address = cached.address;
-            }
-            if (!apt.contactPhone && cached.phone) {
-              apt.contactPhone = cached.phone;
-            }
-          }
-        }
-      } catch (enrichErr: any) {
-        console.warn("[DayHub] Failed to enrich appointments from cache:", enrichErr?.message);
+          })
+        );
       }
     }
 

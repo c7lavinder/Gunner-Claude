@@ -804,7 +804,7 @@ function AppointmentItem({ apt }: { apt: any }) {
       style={{
         background: isUpcoming ? "rgba(59,130,246,0.06)" : "var(--g-bg-card)",
         border: isUpcoming ? "1px solid rgba(59,130,246,0.2)" : "1px solid var(--g-border-subtle)",
-        opacity: isPast ? 0.55 : 1,
+        opacity: 1, // Keep past appointments fully visible
       }}
     >
       {/* Top row: time range + status badge */}

@@ -4048,3 +4048,10 @@
 - [x] Redesign appointments block with cleaner UI
 - [x] Show property address in appointment cards
 - [x] Ensure data flows properly from GHL contact records
+
+## Day Hub — Fix Missing Property Addresses + Activity Context
+- [x] Investigate why contact cache has no address data for inbox contacts
+- [x] Enrich inbox conversations with address from GHL contact API when cache is empty
+- [ ] Add activity context (recent calls/texts summary) to inbox items
+- [x] Verify appointment UI redesign is actually rendering on production
+- [x] Past appointments from earlier today should stay visible (not overly dimmed)

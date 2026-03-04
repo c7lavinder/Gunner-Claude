@@ -249,18 +249,27 @@ async function searchLocalContactCache(
 export async function getContact(
   tenantId: number,
   contactId: string
-): Promise<{ id: string; name: string; phone: string; email: string; assignedTo?: string; timezone?: string } | null> {
+): Promise<{ id: string; name: string; phone: string; email: string; address?: string; assignedTo?: string; timezone?: string } | null> {
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) return null;
 
   try {
     const data = await ghlFetch(creds, `/contacts/${contactId}`, "GET");
     const c = data.contact || data;
+    // Build address from GHL contact fields
+    const addressParts = [
+      c.address1 || c.streetAddress || "",
+      c.city || "",
+      c.state || "",
+      c.postalCode || c.zip || "",
+    ].filter(Boolean);
+    const fullAddress = addressParts.join(", ");
     return {
       id: c.id,
       name: `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name || "Unknown",
       phone: c.phone || "",
       email: c.email || "",
+      address: fullAddress || undefined,
       assignedTo: c.assignedTo || undefined,
       timezone: c.timezone || c.timeZone || undefined,
     };
