@@ -6897,13 +6897,18 @@ selectedTimezone: { type: "string" },
         }
 
         const { getContactTodayActivity, getContact } = await import("./ghlActions");
+        const { detectAmPmCalls } = await import("./dayHub");
         const [activity, contactInfo] = await Promise.all([
           getContactTodayActivity(ctx.user.tenantId, input.contactId),
           getContact(ctx.user.tenantId, input.contactId),
         ]);
+        // Detect AM/PM calls from the activity messages
+        const amPm = activity.messages.length > 0 ? detectAmPmCalls(activity.messages) : { amCallMade: false, pmCallMade: false };
         return {
           ...activity,
           contactTimezone: contactInfo?.timezone || null,
+          amCallMade: amPm.amCallMade,
+          pmCallMade: amPm.pmCallMade,
         };
       }),
 
@@ -7207,7 +7212,6 @@ selectedTimezone: { type: "string" },
 
         const { searchLocationTasks, enrichTasks, getTeamMemberGhlMap, getTeamMembersForFilter } = await import("./taskCenter");
         const { prioritizeTasks } = await import("./dayHub");
-        const { getAmPmCallStatusForContacts } = await import("./db");
 
         const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin";
         let assignedTo: string[] | undefined;
@@ -7229,60 +7233,26 @@ selectedTimezone: { type: "string" },
           prioritized = prioritized.filter(t => t.category === input.categoryFilter);
         }
 
-        // Hybrid AM/PM detection:
-        // 1. Query local DB first (fast, covers most synced calls)
-        // 2. For contacts missing from DB, fall back to live GHL API
-        //    BUT only for the top 20 prioritized tasks to avoid exhausting GHL rate limit
-        //    (262 tasks * 2 API calls each = 524 calls, way over 100/min limit)
-        const uniqueContactIds = Array.from(new Set(prioritized.map(t => t.contactId).filter(Boolean)));
-        const contactActivityMap = await getAmPmCallStatusForContacts(ctx.user!.tenantId!, uniqueContactIds);
-
-        // Only fetch GHL API data for top 20 tasks' contacts that DB doesn't have
-        const top20ContactIds = Array.from(new Set(
-          prioritized.slice(0, 20).map(t => t.contactId).filter(Boolean)
-        ));
-        const missingContactIds = top20ContactIds.filter(id => !contactActivityMap.has(id));
-
-        // For missing contacts in top 20, fetch from GHL API with limited concurrency
-        if (missingContactIds.length > 0) {
-          const { getContactTodayActivity } = await import("./ghlActions");
-          const { detectAmPmCalls } = await import("./dayHub");
-
-          // Process in batches of 3 to stay well within rate limits
-          const BATCH_SIZE = 3;
-          for (let i = 0; i < missingContactIds.length; i += BATCH_SIZE) {
-            const batch = missingContactIds.slice(i, i + BATCH_SIZE);
-            const results = await Promise.allSettled(
-              batch.map(async (contactId) => {
-                try {
-                  const activity = await getContactTodayActivity(ctx.user!.tenantId!, contactId);
-                  if (activity.messages.length > 0) {
-                    const amPm = detectAmPmCalls(activity.messages);
-                    return { contactId, amPm };
-                  }
-                  return { contactId, amPm: { amCallMade: false, pmCallMade: false } };
-                } catch {
-                  return { contactId, amPm: { amCallMade: false, pmCallMade: false } };
-                }
-              })
-            );
-
-            for (const result of results) {
-              if (result.status === "fulfilled" && result.value) {
-                contactActivityMap.set(result.value.contactId, result.value.amPm);
+        // AM/PM detection: use DB query for instant results (no GHL API calls).
+        // The calls table has ALL outbound calls including short ones.
+        // When a task is expanded, getContactActivity will override with live GHL data.
+        try {
+          const { getAmPmCallStatusForContacts } = await import("./db");
+          const contactIds = prioritized
+            .map(t => t.contactId)
+            .filter((id): id is string => !!id);
+          if (contactIds.length > 0) {
+            const amPmMap = await getAmPmCallStatusForContacts(ctx.user.tenantId, contactIds);
+            for (const task of prioritized) {
+              const status = amPmMap.get(task.contactId);
+              if (status) {
+                task.amCallMade = status.amCallMade;
+                task.pmCallMade = status.pmCallMade;
               }
             }
           }
-          console.log(`[AM/PM] Hybrid: DB had ${uniqueContactIds.length - missingContactIds.length}/${uniqueContactIds.length} contacts, fetched ${missingContactIds.length} from GHL for top 20 tasks`);
-        }
-
-        // Apply AM/PM data to prioritized tasks
-        for (const task of prioritized) {
-          if (task.contactId && contactActivityMap.has(task.contactId)) {
-            const amPm = contactActivityMap.get(task.contactId)!;
-            task.amCallMade = amPm.amCallMade;
-            task.pmCallMade = amPm.pmCallMade;
-          }
+        } catch (amPmErr: any) {
+          console.warn("[DayHub] AM/PM DB query failed (non-fatal):", amPmErr?.message);
         }
 
         return { tasks: prioritized, teamMembers: memberList };

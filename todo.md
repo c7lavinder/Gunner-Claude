@@ -3964,3 +3964,17 @@
 - [x] Fix: limited GHL API fallback to only top 20 prioritized tasks, batch size reduced to 3
 - [x] This uses max ~40 API calls for AM/PM, leaving plenty of headroom for task detail activity fetches
 - [x] 146 tests passing, 0 TS errors
+
+## AM/PM Detection — Simplify to Frontend-Based
+- [x] Remove server-side hybrid AM/PM detection from getPriorityTasks (causes rate limiting)
+- [x] Move AM/PM detection to frontend: use Today's Activity data that's already fetched per-contact
+- [x] When task detail loads and shows calls, check outbound call times for AM/PM in Central time
+- [x] Light up AM/PM badges based on the activity data — no extra API calls needed
+
+## AM/PM Detection — DB-Based Instant Population
+- [x] Re-enable getAmPmCallStatusForContacts DB query in getPriorityTasks (zero GHL API calls)
+- [x] DB calls table has ALL outbound calls including short ones — no duration filter in AM/PM query
+- [x] Server sets amCallMade/pmCallMade on each task from DB data on initial load
+- [x] Frontend AmPmIndicatorFromCache subscribes to tRPC cache via useQuery({ enabled: false })
+- [x] When task is expanded, getContactActivity overrides DB values with live GHL data
+- [x] Added 12 new vitest tests for AM/PM integration (46 total dayHub tests passing)

@@ -903,6 +903,23 @@ function AmPmIndicator({ amDone, pmDone }: { amDone: boolean; pmDone: boolean })
   );
 }
 
+// ─── AM/PM INDICATOR FROM CACHE ─────────────────────────
+// Reads AM/PM data from the tRPC query cache (populated when the task is expanded).
+// Falls back to server-provided values (from DB). No extra API calls.
+
+function AmPmIndicatorFromCache({ contactId, fallbackAm, fallbackPm }: { contactId: string; fallbackAm: boolean; fallbackPm: boolean }) {
+  // Subscribe to the tRPC query cache so we re-render when activity data arrives.
+  // `enabled: false` means we never fire a fetch — we only read from cache.
+  // The cache gets populated when the task is expanded (TaskExpandedSection).
+  const { data: cached } = trpc.taskCenter.getContactActivity.useQuery(
+    { contactId },
+    { enabled: false }
+  );
+  const amDone = cached?.amCallMade ?? fallbackAm;
+  const pmDone = cached?.pmCallMade ?? fallbackPm;
+  return <AmPmIndicator amDone={amDone} pmDone={pmDone} />;
+}
+
 // ─── PRIORITY TASK ROW ──────────────────────────────────
 
 function PriorityTaskRow({
@@ -1045,8 +1062,8 @@ function PriorityTaskRow({
           </div>
         </div>
 
-        {/* AM/PM indicators */}
-        <AmPmIndicator amDone={task.amCallMade || false} pmDone={task.pmCallMade || false} />
+        {/* AM/PM indicators — uses cached activity data from tRPC query cache */}
+        <AmPmIndicatorFromCache contactId={task.contactId} fallbackAm={task.amCallMade || false} fallbackPm={task.pmCallMade || false} />
 
         {/* Priority score */}
         <TooltipProvider delayDuration={200}>

@@ -1,0 +1,14 @@
+{
+  "query": "\nSELECT \n  COUNT(*) as total_outbound_today,\n  COUNT(DISTINCT ghlContactId) as unique_contacts\nFROM calls \nWHERE callDirection = 'outbound' \n  AND ghlContactId IS NOT NULL\n  AND DATE(CONVERT_TZ(callTimestamp, '+00:00', '-06:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-06:00'))\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute \nSELECT \n  COUNT(*) as total_outbound_today,\n  COUNT(DISTINCT ghlContactId) as unique_contacts\nFROM calls \nWHERE callDirection = 'outbound' \n  AND ghlContactId IS NOT NULL\n  AND DATE(CONVERT_TZ(callTimestamp, '+00:00', '-06:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-06:00'))\n",
+  "rows": [
+    {
+      "total_outbound_today": "102",
+      "unique_contacts": "48"
+    }
+  ],
+  "messages": [],
+  "stdout": "total_outbound_today\tunique_contacts\n102\t48\n",
+  "stderr": "",
+  "execution_time_ms": 117
+}

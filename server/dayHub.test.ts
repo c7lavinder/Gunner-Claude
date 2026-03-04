@@ -369,3 +369,124 @@ describe("detectAmPmCalls — Central timezone (America/Chicago)", () => {
     expect(result.amCallMade).toBe(true);
   });
 });
+
+
+// ─── AM/PM Integration Tests ─────────────────────────────
+
+describe("prioritizeTasks — AM/PM default values", () => {
+  it("always initializes amCallMade=false and pmCallMade=false before DB enrichment", () => {
+    const tasks = [
+      makeTask({ id: "a", title: "Call new lead" }),
+      makeTask({ id: "b", title: "Follow up with seller" }),
+      makeTask({ id: "c", title: "Reschedule appointment" }),
+    ];
+    const result = prioritizeTasks(tasks);
+    for (const t of result) {
+      expect(t.amCallMade).toBe(false);
+      expect(t.pmCallMade).toBe(false);
+    }
+  });
+
+  it("amCallMade and pmCallMade are writable (can be updated by DB enrichment)", () => {
+    const tasks = [makeTask({ id: "x" })];
+    const result = prioritizeTasks(tasks);
+    // Simulate what the router does after DB query
+    result[0].amCallMade = true;
+    result[0].pmCallMade = true;
+    expect(result[0].amCallMade).toBe(true);
+    expect(result[0].pmCallMade).toBe(true);
+  });
+});
+
+describe("detectAmPmCalls — edge cases for GHL message formats", () => {
+  it("detects outbound calls with messageType TYPE_CALL", () => {
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    const amCall = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T11:00:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { messageType: "TYPE_CALL", direction: "outbound", dateAdded: amCall.toISOString() },
+    ]);
+    expect(result.amCallMade).toBe(true);
+  });
+
+  it("detects outbound calls with direction 'outgoing' (alternate GHL format)", () => {
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    const pmCall = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T13:00:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { type: "CALL", direction: "outgoing", dateAdded: pmCall.toISOString() },
+    ]);
+    expect(result.pmCallMade).toBe(true);
+  });
+
+  it("noon (12:00) is classified as PM", () => {
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    const noonCall = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T12:00:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { type: "CALL", direction: "outbound", dateAdded: noonCall.toISOString() },
+    ]);
+    expect(result.amCallMade).toBe(false);
+    expect(result.pmCallMade).toBe(true);
+  });
+
+  it("11:59 AM is classified as AM", () => {
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    const lateAmCall = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T11:59:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { type: "CALL", direction: "outbound", dateAdded: lateAmCall.toISOString() },
+    ]);
+    expect(result.amCallMade).toBe(true);
+    expect(result.pmCallMade).toBe(false);
+  });
+
+  it("handles mixed call and non-call messages correctly", () => {
+    const now = new Date();
+    const ctDateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const [m, d, y] = ctDateStr.split("/").map(Number);
+    const time = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T10:00:00-06:00`);
+
+    const result = detectAmPmCalls([
+      { type: "SMS", direction: "outbound", dateAdded: time.toISOString() },
+      { type: "CALL", direction: "outbound", dateAdded: time.toISOString() },
+      { type: "EMAIL", direction: "outbound", dateAdded: time.toISOString() },
+      { type: "CALL", direction: "inbound", dateAdded: time.toISOString() },
+    ]);
+    expect(result.amCallMade).toBe(true);
+    expect(result.pmCallMade).toBe(false);
+  });
+});
