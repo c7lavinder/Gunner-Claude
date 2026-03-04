@@ -140,12 +140,10 @@ function normalizeGHLCallEvent(payload: Record<string, any>, direction: "inbound
   const messageType = payload.messageType || payload.message_type;
   if (messageType !== "CALL") return null;
 
-  // Skip voicemails and missed calls (no recording to process)
+  // Allow all call statuses through — even missed/no-answer calls count as
+  // dial attempts for AM/PM tracking and activity visibility.
+  // The grading pipeline handles calls without recordings gracefully.
   const status = payload.callStatus || payload.status || "completed";
-  if (status === "voicemail" || status === "missed" || status === "no-answer") {
-    console.log(`[Webhook] Skipping ${status} call: ${payload.messageId}`);
-    return null;
-  }
 
   // Extract recording URL from attachments array or direct field
   let recordingUrl: string | undefined;
@@ -244,12 +242,6 @@ async function processCallEvent(event: CallEvent): Promise<void> {
     return;
   }
 
-  // Skip calls without recording
-  if (!event.recordingUrl) {
-    console.log(`${logPrefix} No recording URL for call ${event.sourceCallId}, skipping`);
-    return;
-  }
-
   // Resolve team member
   let teamMemberId: number | undefined;
   let teamMemberName: string | undefined;
@@ -284,7 +276,40 @@ async function processCallEvent(event: CallEvent): Promise<void> {
     return;
   }
 
-  // Create the call record
+  // For calls without a recording (missed, no-answer, very short), create a
+  // "skipped" record so the dial attempt is tracked for AM/PM and activity.
+  if (!event.recordingUrl) {
+    console.log(`${logPrefix} No recording URL for call ${event.sourceCallId} — creating dial-attempt record`);
+    try {
+      await createCall({
+        ghlCallId: event.sourceCallId,
+        ghlContactId: event.contactId,
+        ghlLocationId: event.sourceLocationId,
+        contactName: event.contactName,
+        contactPhone: event.contactPhone,
+        duration: event.duration || 0,
+        callDirection: event.direction,
+        teamMemberId,
+        teamMemberName,
+        callType,
+        status: "skipped",
+        classification: "pending",
+        classificationReason: `Dial attempt — no recording (status: ${event.status || 'unknown'})`,
+        callTimestamp: event.callTimestamp,
+        tenantId: event.tenantId!,
+        callSource: "ghl",
+      });
+      console.log(`${logPrefix} Created dial-attempt record for ${event.sourceCallId}`);
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (!errMsg.includes('Duplicate')) {
+        console.warn(`${logPrefix} Failed to create dial-attempt record for ${event.sourceCallId}:`, e);
+      }
+    }
+    return;
+  }
+
+  // Create the call record (has recording — will be graded)
   const call = await createCall({
     ghlCallId: event.sourceCallId,
     ghlContactId: event.contactId,
@@ -300,7 +325,7 @@ async function processCallEvent(event: CallEvent): Promise<void> {
     callType,
     status: "pending",
     callTimestamp: event.callTimestamp,
-    tenantId: event.tenantId,
+    tenantId: event.tenantId!,
     callSource: event.source === "ghl" ? "ghl" : "ghl", // extend when adding other CRMs
   });
 

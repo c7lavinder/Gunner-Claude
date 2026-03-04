@@ -6898,14 +6898,94 @@ selectedTimezone: { type: "string" },
 
         const { getContactTodayActivity, getContact } = await import("./ghlActions");
         const { detectAmPmCalls } = await import("./dayHub");
+        const { getAmPmCallStatusForContacts } = await import("./db");
         const [activity, contactInfo] = await Promise.all([
           getContactTodayActivity(ctx.user.tenantId, input.contactId),
           getContact(ctx.user.tenantId, input.contactId),
         ]);
-        // Detect AM/PM calls from the activity messages
-        const amPm = activity.messages.length > 0 ? detectAmPmCalls(activity.messages) : { amCallMade: false, pmCallMade: false };
+        // Detect AM/PM calls from the GHL activity messages
+        let amPm = activity.messages.length > 0 ? detectAmPmCalls(activity.messages) : { amCallMade: false, pmCallMade: false };
+
+        // DB fallback: if GHL didn't return AM/PM data (circuit breaker, rate limit, etc.),
+        // check the local calls table which has ALL dial attempts including short/missed calls.
+        if (!amPm.amCallMade && !amPm.pmCallMade) {
+          try {
+            const dbAmPm = await getAmPmCallStatusForContacts(ctx.user.tenantId, [input.contactId]);
+            const dbResult = dbAmPm.get(input.contactId);
+            if (dbResult) {
+              amPm = { amCallMade: dbResult.amCallMade, pmCallMade: dbResult.pmCallMade };
+            }
+          } catch (e) {
+            // Non-fatal — GHL data is primary, DB is fallback
+          }
+        }
+
+        // Supplement GHL data with DB call records when GHL misses calls
+        let callsMade = activity.callsMade;
+        let messages = [...activity.messages];
+        let smsSent = activity.smsSent;
+
+        // Check DB for calls that GHL API may have missed (short calls, missed calls, etc.)
+        try {
+          const { sql } = await import("drizzle-orm");
+          const { getDb: getDatabase } = await import("./db");
+          const database = await getDatabase();
+          if (database) {
+            // Get all outbound calls from DB for this contact today
+            const dbCalls = await database.execute(
+              sql`SELECT id, callDirection, duration, callTimestamp, teamMemberName, status, contactPhone
+                  FROM calls
+                  WHERE tenantId = ${ctx.user.tenantId}
+                    AND ghlContactId = ${input.contactId}
+                    AND DATE(CONVERT_TZ(callTimestamp, '+00:00', '-06:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-06:00'))
+                  ORDER BY callTimestamp ASC`
+            );
+            const callRows = Array.isArray((dbCalls as any)?.[0]) ? (dbCalls as any)[0] : Array.isArray(dbCalls) ? dbCalls : [];
+
+            if (callRows.length > 0) {
+              // Count outbound calls from DB
+              const outboundDbCalls = callRows.filter((r: any) => r.callDirection === 'outbound');
+              if (outboundDbCalls.length > callsMade) {
+                callsMade = outboundDbCalls.length;
+              }
+
+              // If GHL returned no call messages, inject DB calls into the messages array
+              const ghlCallMessages = messages.filter((m: any) => m.type === 'call');
+              if (ghlCallMessages.length === 0 && callRows.length > 0) {
+                for (const row of callRows) {
+                  const ts = row.callTimestamp ? new Date(row.callTimestamp) : new Date();
+                  const dur = Number(row.duration || 0);
+                  const dir = row.callDirection || 'outbound';
+                  const caller = row.teamMemberName || 'Team';
+                  const bodyParts: string[] = [];
+                  bodyParts.push(`${dir === 'outbound' ? 'Outbound' : 'Inbound'} call`);
+                  if (dur > 0) bodyParts.push(`(${dur}s)`);
+                  else bodyParts.push('(no answer)');
+                  bodyParts.push(`by ${caller}`);
+
+                  messages.push({
+                    id: `db-call-${row.id}`,
+                    type: 'call',
+                    direction: dir,
+                    body: bodyParts.join(' '),
+                    dateAdded: ts.toISOString(),
+                    status: row.status || undefined,
+                  });
+                }
+                // Sort all messages by date
+                messages.sort((a: any, b: any) => new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime());
+              }
+            }
+          }
+        } catch (e) {
+          // Non-fatal — GHL data is primary, DB supplements
+        }
+
         return {
           ...activity,
+          callsMade,
+          smsSent,
+          messages,
           contactTimezone: contactInfo?.timezone || null,
           amCallMade: amPm.amCallMade,
           pmCallMade: amPm.pmCallMade,

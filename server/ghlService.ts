@@ -580,11 +580,9 @@ function extractCallsFromMessages(
       
       console.log(`[GHL] Found call message: id=${msg.id}, type=${msg.type}, messageType=${msg.messageType}, duration=${duration}`);
       
-      // Only include calls with meaningful duration (more than 10 seconds)
-      if (duration < 10) {
-        console.log(`[GHL] Skipping call ${msg.id} - duration too short (${duration}s)`);
-        continue;
-      }
+      // Include ALL calls regardless of duration — short calls and missed calls
+      // still count as dial attempts for AM/PM tracking and activity visibility.
+      // The grading pipeline handles short calls gracefully (creates "skipped" records).
 
       calls.push({
         id: msg.id,
@@ -698,7 +696,7 @@ export async function fetchGHLCalls(params: {
     }
   }
 
-  console.log(`[GHL] Found ${allCalls.length} calls with duration > 10 seconds${dateFilteredOut > 0 ? ` (${dateFilteredOut} filtered out by date)` : ''}`);
+  console.log(`[GHL] Found ${allCalls.length} calls (all durations)${dateFilteredOut > 0 ? ` (${dateFilteredOut} filtered out by date)` : ''}`);
   return allCalls;
 }
 

@@ -3985,3 +3985,27 @@
 - [x] Fix: Changed to solid green background (#22c55e) with white text when active
 - [x] Removed debug console.log from AmPmIndicatorFromCache
 - [x] All 46 dayHub tests passing
+
+## AM/PM Detection — Short Calls Missing from DB and GHL Activity
+- [x] Mary Parker has 2 outbound calls (3s and 7s) at 11:25 AM in GHL but Gunner shows 0 Calls
+- [x] Root cause 1: GHL polling sync skips calls with duration < 10s (ghlService.ts extractCallsFromMessages)
+- [x] Root cause 2: Webhook skips voicemail/missed/no-answer calls AND calls without recording
+- [x] Fix: Removed duration < 10 filter in extractCallsFromMessages — ALL calls now synced
+- [x] Fix: Webhook now allows all call statuses through (no more skipping missed/no-answer)
+- [x] Fix: Webhook creates "skipped" dial-attempt records for calls without recordings
+- [x] Fix: getContactActivity endpoint now has DB fallback for AM/PM and call counts
+- [x] All 46 dayHub tests passing, no TS errors
+
+## AM/PM + Activity Section — Show All Dial Attempts
+- [x] Today's Activity section shows "0 Calls" even when GHL has calls (Mary Parker example)
+- [x] getContactActivity now supplements GHL data with DB call records
+- [x] When GHL returns 0 call messages, DB calls are injected into the messages array with details
+- [x] Call count uses the higher of GHL vs DB counts
+- [x] DB call messages show caller name, duration, and direction
+- [x] All 46 dayHub tests passing, no TS errors
+
+## AM/PM Badges — Should Not Change When Task Is Clicked
+- [x] Expanding a task should NOT change AM/PM badge colors
+- [x] Fix: AmPmIndicatorFromCache now uses ONLY server DB values (fallbackAm/fallbackPm)
+- [x] Removed tRPC cache subscription that was overriding correct DB values with incorrect GHL values
+- [x] All 46 dayHub tests passing
