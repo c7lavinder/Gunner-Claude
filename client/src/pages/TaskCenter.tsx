@@ -329,6 +329,52 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
 function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; roleFilteredGhlUserIds: string[] | null }) {
   const [activeTab, setActiveTab] = useState<"unread" | "appointments">("unread");
 
+  // ─── Inbox SMS Modal State ───
+  const [inboxSmsOpen, setInboxSmsOpen] = useState(false);
+  const [inboxSmsContact, setInboxSmsContact] = useState<{ contactId: string; contactName: string; contactPhone: string } | null>(null);
+  const [inboxSmsMessage, setInboxSmsMessage] = useState("");
+  const [inboxSmsFromGhlUserId, setInboxSmsFromGhlUserId] = useState("");
+  const [inboxSmsFromOpen, setInboxSmsFromOpen] = useState(false);
+  const [inboxSmsScheduleMode, setInboxSmsScheduleMode] = useState<"now" | "later">("now");
+  const [inboxSmsScheduleDate, setInboxSmsScheduleDate] = useState("");
+  const [inboxSmsScheduleTime, setInboxSmsScheduleTime] = useState("");
+
+  const { data: userPhoneInfo } = trpc.taskCenter.getUserPhoneInfo.useQuery();
+
+  const sendSmsMutation = trpc.taskCenter.sendSms.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.scheduled) {
+        toast.success(`SMS scheduled for ${new Date(data.scheduledAt).toLocaleString()}`);
+      } else {
+        toast.success(`SMS sent to ${inboxSmsContact?.contactName || "contact"}`);
+      }
+      setInboxSmsOpen(false);
+      setInboxSmsMessage("");
+      setInboxSmsFromGhlUserId("");
+      setInboxSmsScheduleMode("now");
+      setInboxSmsScheduleDate("");
+      setInboxSmsScheduleTime("");
+    },
+    onError: (err) => toast.error("Failed to send SMS", { description: err.message }),
+  });
+
+  const getSenderInfo = (ghlUserId: string) => {
+    if (!ghlUserId || !userPhoneInfo?.teamMembers) {
+      return { name: userPhoneInfo?.userName || "You", phone: userPhoneInfo?.userPhone || null };
+    }
+    const member = userPhoneInfo.teamMembers.find((m: any) => m.ghlUserId === ghlUserId);
+    if (member) return { name: member.name, phone: member.lcPhone };
+    return { name: userPhoneInfo?.userName || "You", phone: userPhoneInfo?.userPhone || null };
+  };
+
+  const handleTextContact = (contactId: string, contactName: string, contactPhone: string) => {
+    setInboxSmsContact({ contactId, contactName, contactPhone });
+    setInboxSmsMessage("");
+    setInboxSmsFromGhlUserId("");
+    setInboxSmsScheduleMode("now");
+    setInboxSmsOpen(true);
+  };
+
   // Fetch all unread conversations (we filter client-side for multi-user role tabs)
   const { data: allUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
     undefined,
@@ -425,7 +471,7 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; role
                     </span>
                   </div>
                   {missedCalls.map((conv) => (
-                    <UnreadConvoItem key={conv.conversationId} conv={conv} />
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} />
                   ))}
                 </div>
               )}
@@ -439,7 +485,7 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; role
                     </span>
                   </div>
                   {unreadMessages.map((conv) => (
-                    <UnreadConvoItem key={conv.conversationId} conv={conv} />
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} />
                   ))}
                 </div>
               )}
@@ -472,11 +518,103 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds }: { roleTab: RoleTab; role
           )
         )}
       </div>
+      {/* Inbox SMS Dialog */}
+      <Dialog open={inboxSmsOpen} onOpenChange={(open) => {
+        setInboxSmsOpen(open);
+        if (!open) { setInboxSmsFromGhlUserId(""); setInboxSmsFromOpen(false); setInboxSmsScheduleMode("now"); setInboxSmsScheduleDate(""); setInboxSmsScheduleTime(""); }
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Send SMS to {inboxSmsContact?.contactName || "Contact"}</DialogTitle>
+            <DialogDescription>Choose sender, recipient, and when to send.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>From</Label>
+                <Popover open={inboxSmsFromOpen} onOpenChange={setInboxSmsFromOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-auto py-2 text-left">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm truncate">{getSenderInfo(inboxSmsFromGhlUserId).name}</div>
+                        <div className="text-xs truncate" style={{ color: "var(--g-text-secondary)" }}>
+                          {getSenderInfo(inboxSmsFromGhlUserId).phone ? formatPhone(getSenderInfo(inboxSmsFromGhlUserId).phone!) : "No phone on file"}
+                        </div>
+                      </div>
+                      <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search team members..." />
+                      <CommandList className="max-h-[200px]">
+                        <CommandEmpty>No team members found.</CommandEmpty>
+                        <CommandGroup>
+                          {(userPhoneInfo?.teamMembers || []).map((m: any) => (
+                            <CommandItem key={m.ghlUserId} value={m.name} onSelect={() => { setInboxSmsFromGhlUserId(m.ghlUserId); setInboxSmsFromOpen(false); }}>
+                              <Check className={`mr-2 h-4 w-4 ${inboxSmsFromGhlUserId === m.ghlUserId ? "opacity-100" : "opacity-0"}`} />
+                              <div>
+                                <div className="text-sm">{m.name}</div>
+                                <div className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{m.lcPhone ? formatPhone(m.lcPhone) : "No phone"}</div>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex items-center pt-6">
+                <ArrowRight className="h-5 w-5" style={{ color: "var(--g-text-tertiary)" }} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>To</Label>
+                <div className="rounded-lg p-2 h-auto" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                  <div className="font-semibold text-sm truncate" style={{ color: "var(--g-text-primary)" }}>{inboxSmsContact?.contactName || "Contact"}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
+                    {inboxSmsContact?.contactPhone ? formatPhone(inboxSmsContact.contactPhone) : "No phone on file"}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <Textarea placeholder="Type your message..." value={inboxSmsMessage} onChange={(e) => setInboxSmsMessage(e.target.value)} rows={3} />
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <Button variant={inboxSmsScheduleMode === "now" ? "default" : "outline"} size="sm" className="flex-1" onClick={() => setInboxSmsScheduleMode("now")}>Send Now</Button>
+                <Button variant={inboxSmsScheduleMode === "later" ? "default" : "outline"} size="sm" className="flex-1" onClick={() => setInboxSmsScheduleMode("later")}>
+                  <Clock className="h-3.5 w-3.5 mr-1.5" /> Schedule for Later
+                </Button>
+              </div>
+              {inboxSmsScheduleMode === "later" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label className="text-xs mb-1 block">Date</Label><Input type="date" value={inboxSmsScheduleDate} onChange={(e) => setInboxSmsScheduleDate(e.target.value)} /></div>
+                  <div><Label className="text-xs mb-1 block">Time</Label><Input type="time" value={inboxSmsScheduleTime} onChange={(e) => setInboxSmsScheduleTime(e.target.value)} /></div>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInboxSmsOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if (!inboxSmsContact) return;
+              const mutationInput: any = { contactId: inboxSmsContact.contactId, message: inboxSmsMessage };
+              if (inboxSmsFromGhlUserId) mutationInput.fromGhlUserId = inboxSmsFromGhlUserId;
+              if (inboxSmsScheduleMode === "later" && inboxSmsScheduleDate && inboxSmsScheduleTime) {
+                mutationInput.scheduledAt = new Date(`${inboxSmsScheduleDate}T${inboxSmsScheduleTime}`).toISOString();
+              }
+              sendSmsMutation.mutate(mutationInput);
+            }} disabled={!inboxSmsMessage.trim() || sendSmsMutation.isPending || (inboxSmsScheduleMode === "later" && (!inboxSmsScheduleDate || !inboxSmsScheduleTime))}>
+              {sendSmsMutation.isPending ? "Sending..." : inboxSmsScheduleMode === "later" ? "Schedule SMS" : "Send Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function UnreadConvoItem({ conv }: { conv: any }) {
+function UnreadConvoItem({ conv, onTextContact }: { conv: any; onTextContact: (contactId: string, contactName: string, contactPhone: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   const handleCall = (e: React.MouseEvent) => {
@@ -490,10 +628,10 @@ function UnreadConvoItem({ conv }: { conv: any }) {
 
   const handleText = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (conv.contactPhone) {
-      window.open(`sms:${conv.contactPhone}`, "_self");
+    if (conv.contactId) {
+      onTextContact(conv.contactId, conv.contactName || "Unknown", conv.contactPhone || "");
     } else {
-      toast.info("No phone number available");
+      toast.info("No contact ID available");
     }
   };
 

@@ -669,3 +669,78 @@ describe("TaskCenter Frontend — React Hooks Safety", () => {
     expect(firstUseMemo).toBeLessThan(jsxReturn);
   });
 });
+
+// ─── Inbox SMS Modal Tests ────────────────────────────────
+
+describe("Inbox SMS Modal — frontend wiring", () => {
+  const componentSource = readFileSync(join(CLIENT_DIR, "pages", "TaskCenter.tsx"), "utf-8");
+
+  it("LeftPanel has SMS modal state variables", () => {
+    expect(componentSource).toContain("inboxSmsOpen");
+    expect(componentSource).toContain("inboxSmsContact");
+    expect(componentSource).toContain("inboxSmsMessage");
+    expect(componentSource).toContain("inboxSmsFromGhlUserId");
+  });
+
+  it("LeftPanel has sendSms mutation wired", () => {
+    // Find LeftPanel function body
+    const leftPanelStart = componentSource.indexOf("function LeftPanel(");
+    expect(leftPanelStart).toBeGreaterThan(-1);
+    const leftPanelBody = componentSource.substring(leftPanelStart, leftPanelStart + 5000);
+    expect(leftPanelBody).toContain("trpc.taskCenter.sendSms.useMutation");
+  });
+
+  it("LeftPanel renders SMS Dialog with From/To fields", () => {
+    const leftPanelStart = componentSource.indexOf("function LeftPanel(");
+    const nextFunctionStart = componentSource.indexOf("\nfunction ", leftPanelStart + 1);
+    const leftPanelBody = componentSource.substring(leftPanelStart, nextFunctionStart);
+    expect(leftPanelBody).toContain("Send SMS to");
+    expect(leftPanelBody).toContain("From");
+    expect(leftPanelBody).toContain("To");
+    expect(leftPanelBody).toContain("Type your message");
+    expect(leftPanelBody).toContain("Schedule for Later");
+  });
+
+  it("UnreadConvoItem accepts onTextContact prop instead of using sms: link", () => {
+    // The UnreadConvoItem should accept onTextContact
+    expect(componentSource).toContain("onTextContact: (contactId: string, contactName: string, contactPhone: string) => void");
+    // Should NOT use window.open('sms:...')
+    expect(componentSource).not.toContain("window.open(`sms:");
+    // Should call onTextContact instead
+    const unreadStart = componentSource.indexOf("function UnreadConvoItem(");
+    const unreadEnd = componentSource.indexOf("\nfunction ", unreadStart + 1);
+    const unreadBody = componentSource.substring(unreadStart, unreadEnd > -1 ? unreadEnd : unreadStart + 3000);
+    expect(unreadBody).toContain("onTextContact(conv.contactId");
+  });
+
+  it("LeftPanel passes handleTextContact to UnreadConvoItem", () => {
+    expect(componentSource).toContain("onTextContact={handleTextContact}");
+  });
+});
+
+// ─── Appointment Contact Enrichment Tests ────────────────
+
+describe("Appointment contact enrichment — backend", () => {
+  const dayHubSource = readFileSync(join(SERVER_DIR, "dayHub.ts"), "utf-8");
+
+  it("getTodayAppointments enriches contacts from local cache", () => {
+    expect(dayHubSource).toContain("contactIdsToEnrich");
+    expect(dayHubSource).toContain("contactCache");
+    expect(dayHubSource).toContain("cacheMap");
+  });
+
+  it("enrichment fills in contactName when it is Unknown", () => {
+    expect(dayHubSource).toContain('apt.contactName === "Unknown"');
+    expect(dayHubSource).toContain("cached.name");
+    expect(dayHubSource).toContain("cached.firstName");
+  });
+
+  it("enrichment fills in address and phone from cache", () => {
+    expect(dayHubSource).toContain("!apt.address && cached.address");
+    expect(dayHubSource).toContain("!apt.contactPhone && cached.phone");
+  });
+
+  it("enrichment handles errors gracefully", () => {
+    expect(dayHubSource).toContain("Failed to enrich appointments from cache");
+  });
+});

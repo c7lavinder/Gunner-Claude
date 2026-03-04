@@ -408,6 +408,45 @@ export async function getTodayAppointments(
       }
     }
 
+    // Enrich appointments with contact info from local cache when GHL doesn't provide it
+    const contactIdsToEnrich = appointments
+      .filter(apt => apt.contactId && (apt.contactName === "Unknown" || !apt.address))
+      .map(apt => apt.contactId);
+
+    if (contactIdsToEnrich.length > 0) {
+      try {
+        const db = await getDb();
+        if (db) {
+          const { contactCache } = await import("../drizzle/schema");
+          const { inArray } = await import("drizzle-orm");
+          const cachedContacts = await db.select().from(contactCache).where(
+            and(
+              eq(contactCache.tenantId, tenantId),
+              inArray(contactCache.ghlContactId, contactIdsToEnrich)
+            )
+          );
+          const cacheMap = new Map(cachedContacts.map(c => [c.ghlContactId, c]));
+          for (const apt of appointments) {
+            const cached = cacheMap.get(apt.contactId);
+            if (!cached) continue;
+            if (apt.contactName === "Unknown" && cached.name) {
+              apt.contactName = cached.name;
+            } else if (apt.contactName === "Unknown" && cached.firstName) {
+              apt.contactName = `${cached.firstName} ${cached.lastName || ""}`.trim();
+            }
+            if (!apt.address && cached.address) {
+              apt.address = cached.address;
+            }
+            if (!apt.contactPhone && cached.phone) {
+              apt.contactPhone = cached.phone;
+            }
+          }
+        }
+      } catch (enrichErr: any) {
+        console.warn("[DayHub] Failed to enrich appointments from cache:", enrichErr?.message);
+      }
+    }
+
     appointments.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     return appointments;
   } catch (error: any) {

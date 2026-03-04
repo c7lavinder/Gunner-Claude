@@ -3891,3 +3891,8 @@
 ## Admin Access & Navigation Cleanup
 - [x] Make Day Hub available for Kyle Barks (admin + AM role)
 - [x] Remove Signals page from navigation
+
+## In-App SMS Modal
+- [x] Replace Text button sms: link with in-app SMS modal that sends through GHL API
+- [x] Modal shows From (sender/phone selector), To (contact name + phone), message textarea, Send Now button
+- [x] Add contact name and address to calendar appointment items in Day Hub
