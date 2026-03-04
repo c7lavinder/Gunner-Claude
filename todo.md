@@ -3820,3 +3820,10 @@
 ## Task Center Bug Fix — Round 11
 - [x] Bug: Today's Activity shows 0 counts — fixed: GHL returns type as number (1/2/3) not string; code was calling .toUpperCase() on a number. Also fixed EST timezone for "today" filter.
 - [x] Bug: Upcoming tab empty — confirmed: GHL has no API to list enrolled workflows; only shows workflows added through Gunner's AI coach (no workflow actions in DB yet)
+
+## Task Center Bug Fix — Round 12
+- [x] Track workflow enrollments in DB when user adds/removes workflows via Task Center UI (not just AI coach)
+- [x] Frontend: pass workflow name to startWorkflow/removeFromWorkflow mutations
+- [x] Frontend: invalidate upcoming actions query after workflow add/remove
+- [x] Fix pluralization: "1 Emails" should be "1 Email"
+- [x] Improve empty state messaging in Upcoming tab

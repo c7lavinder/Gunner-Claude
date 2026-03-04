@@ -522,6 +522,9 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       toast.success(`Workflow started for ${task.contactName || "contact"}`);
       setShowWorkflowDialog(false);
       setSelectedWorkflow("");
+      // Refresh upcoming actions and workflow history so the Upcoming tab updates
+      utils.taskCenter.getContactUpcomingActions.invalidate({ contactId: task.contactId });
+      utils.taskCenter.getContactWorkflowHistory.invalidate({ contactId: task.contactId });
     },
     onError: (err) => toast.error("Failed to start workflow", { description: err.message }),
   });
@@ -531,6 +534,9 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       toast.success(`Removed from workflow`);
       setShowWorkflowDialog(false);
       setSelectedWorkflow("");
+      // Refresh upcoming actions and workflow history so the Upcoming tab updates
+      utils.taskCenter.getContactUpcomingActions.invalidate({ contactId: task.contactId });
+      utils.taskCenter.getContactWorkflowHistory.invalidate({ contactId: task.contactId });
     },
     onError: (err) => toast.error("Failed to remove from workflow", { description: err.message }),
   });
@@ -709,11 +715,11 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                 </div>
                 <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                   <Phone className="h-3 w-3" style={{ color: "oklch(0.7 0.15 150)" }} />
-                  {todayActivity.callsMade} Calls
+                  {todayActivity.callsMade} {todayActivity.callsMade === 1 ? "Call" : "Calls"}
                 </div>
                 <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                   <FileText className="h-3 w-3" style={{ color: "oklch(0.75 0.15 85)" }} />
-                  {todayActivity.emailsSent} Emails
+                  {todayActivity.emailsSent} {todayActivity.emailsSent === 1 ? "Email" : "Emails"}
                 </div>
               </div>
               {/* Activity timeline */}
@@ -878,11 +884,11 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
           ) : (
             <div className="text-center py-6">
               <Timer className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)", opacity: 0.5 }} />
-              <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
-                No upcoming actions queued for this contact.
+              <p className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>
+                No upcoming actions for this contact
               </p>
-              <p className="text-xs mt-1" style={{ color: "var(--g-text-tertiary)", opacity: 0.7 }}>
-                Active workflows, scheduled SMS, and upcoming tasks will appear here.
+              <p className="text-xs mt-1.5 max-w-[260px] mx-auto leading-relaxed" style={{ color: "var(--g-text-tertiary)", opacity: 0.7 }}>
+                Use the "Update Workflow" button above to enroll this contact in a workflow. Workflows, scheduled SMS, and future tasks will appear here.
               </p>
             </div>
           )}
@@ -1262,14 +1268,20 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
             <Button
               onClick={() => {
                 if (workflowAction === "add") {
+                  const wfName = workflows?.find((w: { id: string; name: string }) => w.id === selectedWorkflow)?.name;
                   startWorkflowMutation.mutate({
                     contactId: task.contactId,
                     workflowId: selectedWorkflow,
+                    workflowName: wfName || undefined,
+                    contactName: task.contactName || undefined,
                   });
                 } else {
+                  const wfName = enrolledWorkflows.find(w => w.workflowId === selectedWorkflow)?.workflowName;
                   removeWorkflowMutation.mutate({
                     contactId: task.contactId,
                     workflowId: selectedWorkflow,
+                    workflowName: wfName || undefined,
+                    contactName: task.contactName || undefined,
                   });
                 }
               }}

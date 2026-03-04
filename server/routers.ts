@@ -7013,11 +7013,39 @@ selectedTimezone: { type: "string" },
       .input(z.object({
         contactId: z.string(),
         workflowId: z.string(),
+        workflowName: z.string().optional(),
+        contactName: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         const { addContactToWorkflow } = await import("./ghlActions");
-        return await addContactToWorkflow(ctx.user.tenantId, input.contactId, input.workflowId);
+        const result = await addContactToWorkflow(ctx.user.tenantId, input.contactId, input.workflowId);
+
+        // Log the workflow enrollment to coach_action_log so the Upcoming tab can track it
+        try {
+          const { getDb } = await import("./db");
+          const db = await getDb();
+          if (db) {
+            const { coachActionLog } = await import("../drizzle/schema");
+            await db.insert(coachActionLog).values({
+              tenantId: ctx.user.tenantId,
+              requestedBy: ctx.user.id,
+              requestedByName: ctx.user.name || "Unknown",
+              actionType: "add_to_workflow",
+              requestText: `Added to workflow: ${input.workflowName || "Unknown"} (via Task Center UI)`,
+              targetContactId: input.contactId,
+              targetContactName: input.contactName || undefined,
+              payload: { workflowId: input.workflowId, workflowName: input.workflowName || "Unknown" },
+              status: "executed",
+              executedAt: new Date(),
+            });
+          }
+        } catch (logErr) {
+          console.error("[TaskCenter] Failed to log workflow enrollment:", logErr);
+          // Don't fail the mutation — the GHL action succeeded
+        }
+
+        return result;
       }),
 
     // Get available workflows for the tenant
@@ -7064,11 +7092,39 @@ selectedTimezone: { type: "string" },
       .input(z.object({
         contactId: z.string(),
         workflowId: z.string(),
+        workflowName: z.string().optional(),
+        contactName: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         const { removeContactFromWorkflow } = await import("./ghlActions");
-        return await removeContactFromWorkflow(ctx.user.tenantId, input.contactId, input.workflowId);
+        const result = await removeContactFromWorkflow(ctx.user.tenantId, input.contactId, input.workflowId);
+
+        // Log the workflow removal to coach_action_log so the Upcoming tab updates
+        try {
+          const { getDb } = await import("./db");
+          const db = await getDb();
+          if (db) {
+            const { coachActionLog } = await import("../drizzle/schema");
+            await db.insert(coachActionLog).values({
+              tenantId: ctx.user.tenantId,
+              requestedBy: ctx.user.id,
+              requestedByName: ctx.user.name || "Unknown",
+              actionType: "remove_from_workflow",
+              requestText: `Removed from workflow: ${input.workflowName || "Unknown"} (via Task Center UI)`,
+              targetContactId: input.contactId,
+              targetContactName: input.contactName || undefined,
+              payload: { workflowId: input.workflowId, workflowName: input.workflowName || "Unknown" },
+              status: "executed",
+              executedAt: new Date(),
+            });
+          }
+        } catch (logErr) {
+          console.error("[TaskCenter] Failed to log workflow removal:", logErr);
+          // Don't fail the mutation — the GHL action succeeded
+        }
+
+        return result;
       }),
 
     // Get available calendars for the tenant
