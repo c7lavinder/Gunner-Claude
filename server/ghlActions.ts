@@ -2135,9 +2135,20 @@ export async function getContactTodayActivity(
     }
 
     // Step 3: Filter to today's messages only
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayMs = todayStart.getTime();
+    // Use US Eastern timezone for "today" since the business operates in EST/EDT
+    // This ensures activity counts match what the user sees in their local time
+    const now = new Date();
+    const estFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const estDateStr = estFormatter.format(now); // MM/DD/YYYY
+    const [month, day, year] = estDateStr.split("/").map(Number);
+    // Create a Date object for midnight EST today in UTC
+    const todayEstMidnight = new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00-05:00`);
+    const todayMs = todayEstMidnight.getTime();
 
     const todayMessages = allMessages.filter((m: any) => {
       const msgDate = new Date(m.dateAdded || m.createdAt || 0);
@@ -2157,16 +2168,22 @@ export async function getContactTodayActivity(
     }> = [];
 
     for (const m of todayMessages) {
-      const msgType = (m.type || "").toUpperCase();
+      // GHL returns type as number (1=call, 2=sms, 3=email) and messageType as string ("TYPE_CALL", "TYPE_SMS", "TYPE_EMAIL")
+      const msgTypeStr = (m.messageType || "").toUpperCase();
+      const msgTypeNum = typeof m.type === "number" ? m.type : 0;
       const direction = m.direction || "outbound";
 
-      if (msgType.includes("SMS")) smsSent++;
-      else if (msgType.includes("CALL")) callsMade++;
-      else if (msgType.includes("EMAIL")) emailsSent++;
+      const isSms = msgTypeStr.includes("SMS") || msgTypeNum === 2;
+      const isCall = msgTypeStr.includes("CALL") || msgTypeNum === 1;
+      const isEmail = msgTypeStr.includes("EMAIL") || msgTypeNum === 3;
+
+      if (isSms) smsSent++;
+      else if (isCall) callsMade++;
+      else if (isEmail) emailsSent++;
 
       formattedMessages.push({
         id: m.id || m.messageId || "",
-        type: msgType.includes("SMS") ? "sms" : msgType.includes("CALL") ? "call" : msgType.includes("EMAIL") ? "email" : "other",
+        type: isSms ? "sms" : isCall ? "call" : isEmail ? "email" : "other",
         direction,
         body: m.body || m.message || m.meta?.transcript || "",
         dateAdded: m.dateAdded || m.createdAt || "",

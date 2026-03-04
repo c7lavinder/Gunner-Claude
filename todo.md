@@ -3816,3 +3816,7 @@
 - [x] Show contact timezone in the task center expanded view (shows current local time + TZ abbreviation next to phone/email)
 - [x] Bug: AI coach moves the wrong person's task — added filterByRequestingUser to parseIntent + findTaskByKeyword assignedTo filter
 - [x] Bug: AI coach doesn't update appointment time when user corrects it — added pending action context to parseIntent + updated detectInstruction to exclude corrections
+
+## Task Center Bug Fix — Round 11
+- [x] Bug: Today's Activity shows 0 counts — fixed: GHL returns type as number (1/2/3) not string; code was calling .toUpperCase() on a number. Also fixed EST timezone for "today" filter.
+- [x] Bug: Upcoming tab empty — confirmed: GHL has no API to list enrolled workflows; only shows workflows added through Gunner's AI coach (no workflow actions in DB yet)

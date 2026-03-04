@@ -1,0 +1,9 @@
+{
+  "query": "SELECT id, actionType, status, targetContactId, targetContactName, payload, createdAt \nFROM coach_action_log \nWHERE tenantId = 1 AND actionType LIKE '%workflow%'\nORDER BY createdAt DESC \nLIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, actionType, status, targetContactId, targetContactName, payload, createdAt \nFROM coach_action_log \nWHERE tenantId = 1 AND actionType LIKE '%workflow%'\nORDER BY createdAt DESC \nLIMIT 10;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 58
+}

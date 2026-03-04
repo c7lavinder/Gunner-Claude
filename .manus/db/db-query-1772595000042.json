@@ -1,0 +1,50 @@
+{
+  "query": "SELECT COUNT(*) as total, actionType FROM coach_action_log WHERE tenantId = 1 GROUP BY actionType ORDER BY total DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COUNT(*) as total, actionType FROM coach_action_log WHERE tenantId = 1 GROUP BY actionType ORDER BY total DESC LIMIT 10;",
+  "rows": [
+    {
+      "total": "78",
+      "actionType": "send_sms"
+    },
+    {
+      "total": "72",
+      "actionType": "update_task"
+    },
+    {
+      "total": "66",
+      "actionType": "change_pipeline_stage"
+    },
+    {
+      "total": "51",
+      "actionType": "create_task"
+    },
+    {
+      "total": "40",
+      "actionType": "add_note"
+    },
+    {
+      "total": "6",
+      "actionType": "add_note_contact"
+    },
+    {
+      "total": "4",
+      "actionType": "add_note_opportunity"
+    },
+    {
+      "total": "3",
+      "actionType": "create_appointment"
+    },
+    {
+      "total": "3",
+      "actionType": "update_field"
+    },
+    {
+      "total": "1",
+      "actionType": "add_tag"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\tactionType\n78\tsend_sms\n72\tupdate_task\n66\tchange_pipeline_stage\n51\tcreate_task\n40\tadd_note\n6\tadd_note_contact\n4\tadd_note_opportunity\n3\tcreate_appointment\n3\tupdate_field\n1\tadd_tag\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}
