@@ -3847,3 +3847,12 @@
 - [x] Update sidebar navigation label from "Tasks" to "Day Hub"
 - [x] Add category filter (All, New Leads, Reschedule, Admin, Follow-Up)
 - [x] Write 35 vitest tests for dayHub.ts (classification, scoring, AM/PM detection, KPI colors)
+
+## Day Hub — Role Tabs (Admin / LM / AM)
+- [x] Add 3 role tabs at top of Day Hub: Admin, LM, AM
+- [x] Admin tab shows all tasks across team with full KPI targets
+- [x] LM tab filters to Lead Manager tasks with LM KPI targets (150 calls, 20 convos, 4 apts)
+- [x] AM tab filters to Acquisition Manager tasks with AM KPI targets (40 calls, 4 convos, 1 apt)
+- [x] Tab selection filters the task list and team member dropdown accordingly
+- [x] Updated getTeamMembersForFilter to return teamRole for frontend filtering
+- [x] Updated tests to match Day Hub refactor (115 tests passing)

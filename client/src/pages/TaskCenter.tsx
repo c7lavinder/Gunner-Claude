@@ -141,11 +141,35 @@ interface TeamMember {
   id: number;
   name: string;
   ghlUserId: string | null;
+  teamRole?: string;
 }
+
+type RoleTab = "admin" | "lm" | "am";
+
+const ROLE_TAB_CONFIG: Record<RoleTab, { label: string; description: string; kpiTargets: { calls: number; convos: number; apts: number; offers: number; contracts: number }; teamRoles: string[] }> = {
+  admin: {
+    label: "Admin",
+    description: "Full team overview — all tasks, KPIs, and inbox",
+    kpiTargets: { calls: 150, convos: 20, apts: 4, offers: 2, contracts: 1 },
+    teamRoles: [], // empty = show all
+  },
+  lm: {
+    label: "LM",
+    description: "Lead Manager view — qualification & appointment setting",
+    kpiTargets: { calls: 150, convos: 20, apts: 4, offers: 0, contracts: 0 },
+    teamRoles: ["lead_manager"],
+  },
+  am: {
+    label: "AM",
+    description: "Acquisition Manager view — offers & contracts",
+    kpiTargets: { calls: 40, convos: 4, apts: 1, offers: 2, contracts: 1 },
+    teamRoles: ["acquisition_manager"],
+  },
+};
 
 // ─── KPI BAR ────────────────────────────────────────────
 
-function KpiBar() {
+function KpiBar({ roleTab }: { roleTab: RoleTab }) {
   const { data: kpi, isLoading } = trpc.taskCenter.getKpiSummary.useQuery(undefined, {
     refetchInterval: 120000,
   });
@@ -153,7 +177,6 @@ function KpiBar() {
   const addKpiMutation = trpc.taskCenter.addKpiEntry.useMutation({
     onSuccess: () => {
       toast.success("KPI entry added");
-      // Invalidate to refresh
     },
   });
 
@@ -169,48 +192,45 @@ function KpiBar() {
 
   if (!kpi) return null;
 
+  const targets = ROLE_TAB_CONFIG[roleTab].kpiTargets;
+
   const kpiItems = [
     {
       label: "Calls",
       value: kpi.calls,
-      target: kpi.targets.lm.calls,
-      color: kpi.colors.calls_lm,
+      target: targets.calls,
       icon: Phone,
       type: "call" as const,
     },
     {
       label: "Convos",
       value: kpi.conversations,
-      target: kpi.targets.lm.conversations,
-      color: kpi.colors.conversations_lm,
+      target: targets.convos,
       icon: MessageCircle,
       type: "conversation" as const,
     },
     {
       label: "Apts",
       value: kpi.appointments,
-      target: kpi.targets.lm.appointments,
-      color: kpi.colors.appointments_lm,
+      target: targets.apts,
       icon: CalendarDays,
       type: "appointment" as const,
     },
     {
       label: "Offers",
       value: kpi.offers,
-      target: 2,
-      color: kpi.colors.offers_am,
+      target: targets.offers,
       icon: Target,
       type: "offer" as const,
     },
     {
       label: "Contracts",
       value: kpi.contracts,
-      target: 1,
-      color: kpi.colors.contracts_am,
+      target: targets.contracts,
       icon: FileText,
       type: "contract" as const,
     },
-  ];
+  ].filter(item => item.target > 0 || roleTab === "admin");
 
   const colorMap = {
     green: { bg: "rgba(22,163,74,0.12)", text: "#22c55e", border: "rgba(22,163,74,0.25)" },
@@ -218,10 +238,18 @@ function KpiBar() {
     red: { bg: "rgba(239,68,68,0.12)", text: "#ef4444", border: "rgba(239,68,68,0.25)" },
   };
 
+  function getColor(current: number, target: number): "green" | "yellow" | "red" {
+    if (target === 0) return current > 0 ? "green" : "yellow";
+    if (current >= target) return "green";
+    const ratio = current / target;
+    if (ratio >= 0.5) return "yellow";
+    return "red";
+  }
+
   return (
     <div className="flex gap-2 overflow-x-auto pb-1">
       {kpiItems.map((item) => {
-        const c = colorMap[item.color];
+        const c = colorMap[getColor(item.value, item.target)];
         const Icon = item.icon;
         const pct = item.target > 0 ? Math.min(100, Math.round((item.value / item.target) * 100)) : 0;
         return (
@@ -1558,6 +1586,7 @@ export default function TaskCenter() {
   const utils = trpc.useUtils();
 
   // State
+  const [roleTab, setRoleTab] = useState<RoleTab>("admin");
   const [selectedMember, setSelectedMember] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -1646,19 +1675,38 @@ export default function TaskCenter() {
     onError: (err) => toast.error("Failed to delete task", { description: err.message }),
   });
 
-  // Filter tasks by search query
+  // Get GHL user IDs for the selected role tab
+  const roleFilteredGhlUserIds = useMemo(() => {
+    if (roleTab === "admin" || !data?.teamMembers) return null; // null = show all
+    const allowedRoles = ROLE_TAB_CONFIG[roleTab].teamRoles;
+    return data.teamMembers
+      .filter((m: TeamMember) => m.teamRole && allowedRoles.includes(m.teamRole) && m.ghlUserId)
+      .map((m: TeamMember) => m.ghlUserId!);
+  }, [roleTab, data?.teamMembers]);
+
+  // Filter tasks by role tab, search query, and selected member
   const filteredTasks = useMemo(() => {
     if (!data?.tasks) return [];
-    if (!searchQuery.trim()) return data.tasks;
-    const q = searchQuery.toLowerCase();
-    return data.tasks.filter(
-      (t: Task) =>
-        t.title.toLowerCase().includes(q) ||
-        (t.contactName && t.contactName.toLowerCase().includes(q)) ||
-        (t.assignedMemberName && t.assignedMemberName.toLowerCase().includes(q)) ||
-        (t.contactAddress && t.contactAddress.toLowerCase().includes(q))
-    );
-  }, [data?.tasks, searchQuery]);
+    let tasks = data.tasks as Task[];
+
+    // Apply role-based filtering
+    if (roleFilteredGhlUserIds !== null) {
+      tasks = tasks.filter((t: Task) => roleFilteredGhlUserIds.includes(t.assignedTo));
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      tasks = tasks.filter(
+        (t: Task) =>
+          t.title.toLowerCase().includes(q) ||
+          (t.contactName && t.contactName.toLowerCase().includes(q)) ||
+          (t.assignedMemberName && t.assignedMemberName.toLowerCase().includes(q)) ||
+          (t.contactAddress && t.contactAddress.toLowerCase().includes(q))
+      );
+    }
+    return tasks;
+  }, [data?.tasks, searchQuery, roleFilteredGhlUserIds]);
 
   const totalTasks = filteredTasks.length;
   const overdueCount = useMemo(() => filteredTasks.filter((t: Task) => t.group === "overdue").length, [filteredTasks]);
@@ -1701,15 +1749,45 @@ export default function TaskCenter() {
 
   return (
     <div className="px-4 py-4 space-y-4" style={{ maxWidth: "100%" }}>
-      {/* Header */}
+      {/* Header with Role Tabs */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
-            <Flame className="h-6 w-6" style={{ color: "var(--g-accent)" }} />
-            Day Hub
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
-            Your daily command center — prioritized tasks, KPIs, and inbox.
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
+              <Flame className="h-6 w-6" style={{ color: "var(--g-accent)" }} />
+              Day Hub
+            </h1>
+          </div>
+          {/* Role Tabs */}
+          <div
+            className="flex items-center rounded-lg p-0.5"
+            style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
+          >
+            {(["admin", "lm", "am"] as RoleTab[]).map((tab) => {
+              const config = ROLE_TAB_CONFIG[tab];
+              const isActive = roleTab === tab;
+              return (
+                <button
+                  key={tab}
+                  className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all"
+                  style={{
+                    background: isActive ? "var(--g-accent)" : "transparent",
+                    color: isActive ? "white" : "var(--g-text-tertiary)",
+                    boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+                  }}
+                  onClick={() => {
+                    setRoleTab(tab);
+                    setSelectedMember("all");
+                  }}
+                  title={config.description}
+                >
+                  {config.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs hidden md:block" style={{ color: "var(--g-text-tertiary)" }}>
+            {ROLE_TAB_CONFIG[roleTab].description}
           </p>
         </div>
         <Button
@@ -1724,7 +1802,7 @@ export default function TaskCenter() {
       </div>
 
       {/* KPI Bar */}
-      <KpiBar />
+      <KpiBar roleTab={roleTab} />
 
       {/* Main content: Left panel + Task list */}
       <div className="grid grid-cols-[280px_1fr] gap-4" style={{ minHeight: "calc(100vh - 280px)" }}>
@@ -1755,7 +1833,7 @@ export default function TaskCenter() {
               </SelectContent>
             </Select>
 
-            {/* Team member filter */}
+            {/* Team member filter — scoped to role tab */}
             {isAdmin && data?.teamMembers && data.teamMembers.length > 0 && (
               <Select value={selectedMember} onValueChange={setSelectedMember}>
                 <SelectTrigger className="w-[180px] h-9">
@@ -1763,9 +1841,16 @@ export default function TaskCenter() {
                   <SelectValue placeholder="All Team Members" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Team Members</SelectItem>
+                  <SelectItem value="all">
+                    {roleTab === "admin" ? "All Team Members" : `All ${ROLE_TAB_CONFIG[roleTab].label}s`}
+                  </SelectItem>
                   {data.teamMembers
-                    .filter((m: TeamMember) => m.ghlUserId)
+                    .filter((m: TeamMember) => {
+                      if (!m.ghlUserId) return false;
+                      if (roleTab === "admin") return true;
+                      const allowedRoles = ROLE_TAB_CONFIG[roleTab].teamRoles;
+                      return m.teamRole && allowedRoles.includes(m.teamRole);
+                    })
                     .map((m: TeamMember) => (
                       <SelectItem key={m.id} value={m.ghlUserId!}>{m.name}</SelectItem>
                     ))}

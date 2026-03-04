@@ -332,8 +332,8 @@ describe("TaskCenter Frontend — Component Structure", () => {
     expect(componentSource).toContain("useAuth");
   });
 
-  it("uses trpc.taskCenter.getTasks.useQuery", () => {
-    expect(componentSource).toContain("trpc.taskCenter.getTasks.useQuery");
+  it("uses trpc.taskCenter.getPriorityTasks.useQuery", () => {
+    expect(componentSource).toContain("trpc.taskCenter.getPriorityTasks.useQuery");
   });
 
   it("uses trpc.taskCenter.getTaskContext.useQuery for expanded tasks", () => {
@@ -370,13 +370,12 @@ describe("TaskCenter Frontend — Component Structure", () => {
     expect(componentSource).toContain("t.contactAddress && t.contactAddress.toLowerCase().includes(q)");
   });
 
-  it("displays three task groups: overdue, today, upcoming", () => {
+  it("uses priority-based task categories", () => {
     expect(componentSource).toContain('"overdue"');
     expect(componentSource).toContain('"today"');
     expect(componentSource).toContain('"upcoming"');
-    expect(componentSource).toContain("Overdue");
-    expect(componentSource).toContain("Due Today");
-    expect(componentSource).toContain("Upcoming");
+    expect(componentSource).toContain("priorityScore");
+    expect(componentSource).toContain("category");
   });
 
   it("shows overdue badge with days count", () => {
@@ -397,8 +396,8 @@ describe("TaskCenter Frontend — Component Structure", () => {
     expect(componentSource).toContain("lastCallSummary");
   });
 
-  it("shows recent notes from GHL", () => {
-    expect(componentSource).toContain("Recent Notes");
+  it("shows notes tab in expanded section", () => {
+    expect(componentSource).toContain("Notes");
     expect(componentSource).toContain("recentNotes");
   });
 
@@ -417,7 +416,7 @@ describe("TaskCenter Frontend — Component Structure", () => {
   });
 
   it("invalidates task list after completing a task", () => {
-    expect(componentSource).toContain("utils.taskCenter.getTasks.invalidate");
+    expect(componentSource).toContain("utils.taskCenter.getPriorityTasks.invalidate");
   });
 });
 
@@ -430,12 +429,12 @@ describe("TaskCenter Navigation", () => {
     expect(appSource).toContain("TaskCenter");
   });
 
-  it("has Tasks nav item in DashboardLayout for admins", () => {
+  it("has Day Hub nav item in DashboardLayout for admins", () => {
     const layoutSource = readFileSync(
       join(CLIENT_DIR, "components", "DashboardLayout.tsx"),
       "utf-8"
     );
-    expect(layoutSource).toContain('"Tasks"');
+    expect(layoutSource).toContain('"Day Hub"');
     expect(layoutSource).toContain('"/tasks"');
   });
 
@@ -447,13 +446,13 @@ describe("TaskCenter Navigation", () => {
     expect(layoutSource).toContain("ClipboardList");
   });
 
-  it("Tasks nav item is only shown to admins and super_admins", () => {
+  it("Day Hub nav item is only shown to admins and super_admins", () => {
     const layoutSource = readFileSync(
       join(CLIENT_DIR, "components", "DashboardLayout.tsx"),
       "utf-8"
     );
-    // The Tasks item should be inside an admin/super_admin conditional
-    const tasksIndex = layoutSource.indexOf('"Tasks"');
+    // The Day Hub item should be inside an admin/super_admin conditional
+    const tasksIndex = layoutSource.indexOf('"Day Hub"');
     const beforeTasks = layoutSource.substring(Math.max(0, tasksIndex - 200), tasksIndex);
     expect(beforeTasks).toMatch(/isAdmin|isSuperAdmin/);
   });
@@ -515,26 +514,27 @@ describe("TaskCenter — Task Row Actions (Edit, Delete, Checkbox)", () => {
     expect(componentSource).toContain("CheckCircle2");
   });
 
-  it("passes onEdit and onDelete callbacks to TaskRow", () => {
-    expect(componentSource).toContain("onEdit={() => onEdit(task)");
-    expect(componentSource).toContain("onDelete={() => onDelete(task)");
+  it("passes onEdit and onDelete callbacks to task rows", () => {
+    expect(componentSource).toContain("onEdit");
+    expect(componentSource).toContain("onDelete");
+    expect(componentSource).toContain("handleEdit");
+    expect(componentSource).toContain("handleDelete");
   });
 
   it("invalidates task list after editing a task", () => {
-    // The editTaskMutation onSuccess should invalidate
     const editMutationBlock = componentSource.substring(
       componentSource.indexOf("editTaskMutation"),
       componentSource.indexOf("deleteTaskMutation")
     );
-    expect(editMutationBlock).toContain("utils.taskCenter.getTasks.invalidate");
+    expect(editMutationBlock).toContain("utils.taskCenter.getPriorityTasks.invalidate");
   });
 
   it("invalidates task list after deleting a task", () => {
     const deleteMutationBlock = componentSource.substring(
       componentSource.indexOf("deleteTaskMutation"),
-      componentSource.indexOf("// Filter tasks by search query")
+      componentSource.indexOf("// Get GHL user IDs")
     );
-    expect(deleteMutationBlock).toContain("utils.taskCenter.getTasks.invalidate");
+    expect(deleteMutationBlock).toContain("utils.taskCenter.getPriorityTasks.invalidate");
   });
 
   it("shows toast on successful edit", () => {
