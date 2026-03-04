@@ -49,7 +49,7 @@ const getMenuItems = (
   ];
 
   if (isAdmin || isSuperAdmin) {
-    items.push({ icon: ClipboardList, label: "Tasks", path: "/tasks" });
+    items.push({ icon: ClipboardList, label: "Day Hub", path: "/tasks" });
   }
 
   if (isAdmin) {

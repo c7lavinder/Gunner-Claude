@@ -3827,3 +3827,23 @@
 - [x] Frontend: invalidate upcoming actions query after workflow add/remove
 - [x] Fix pluralization: "1 Emails" should be "1 Email"
 - [x] Improve empty state messaging in Upcoming tab
+
+## Day Hub — Task Center Rebuild
+- [x] Create dayHub.ts backend service with priority scoring engine (New Lead > Reschedule > Admin > Follow-Up)
+- [x] Implement task classification based on title/body keyword matching
+- [x] Implement priority score calculation with time-decay curves per category
+- [x] Implement AM/PM call detection (Eastern timezone, outbound calls only)
+- [x] Implement KPI summary with manual entry tracking (calls, convos, apts, offers, contracts)
+- [x] Implement time-aware KPI color coding (green/yellow/red based on workday progress)
+- [x] Implement unread conversation fetching with missed call detection
+- [x] Implement today's appointments fetching across all calendars
+- [x] Add Day Hub router endpoints: getPriorityTasks, getKpiSummary, addKpiEntry, getUnreadConversations, getTodayAppointments
+- [x] Rewrite TaskCenter.tsx frontend as Day Hub with 3-panel layout
+- [x] Build KPI bar with progress indicators and click-to-increment
+- [x] Build left panel with Inbox tab (missed calls + unread messages) and Today tab (appointments)
+- [x] Build priority-scored task list with rank numbers, category badges, AM/PM indicators
+- [x] Preserve all existing task actions (Call, SMS, Workflow, Note, Create Apt, Edit, Delete, Complete)
+- [x] Preserve expanded section with Activity, Upcoming, Notes tabs
+- [x] Update sidebar navigation label from "Tasks" to "Day Hub"
+- [x] Add category filter (All, New Leads, Reschedule, Admin, Follow-Up)
+- [x] Write 35 vitest tests for dayHub.ts (classification, scoring, AM/PM detection, KPI colors)

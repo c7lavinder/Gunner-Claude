@@ -1463,3 +1463,22 @@ export const ghlOAuthTokens = mysqlTable("ghl_oauth_tokens", {
 });
 export type GhlOAuthToken = typeof ghlOAuthTokens.$inferSelect;
 export type InsertGhlOAuthToken = typeof ghlOAuthTokens.$inferInsert;
+
+
+// ============ DAILY KPI ENTRIES (Manual tracking for Day Hub) ============
+
+export const dailyKpiEntries = mysqlTable("daily_kpi_entries", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  userId: int("userId").notNull(),
+  date: varchar("date", { length: 10 }).notNull(), // YYYY-MM-DD
+  kpiType: mysqlEnum("kpiType", ["call", "conversation", "appointment", "offer", "contract"]).notNull(),
+  contactId: varchar("contactId", { length: 255 }),
+  contactName: varchar("contactName", { length: 255 }),
+  propertyAddress: varchar("propertyAddress", { length: 500 }),
+  notes: text("notes"),
+  source: mysqlEnum("source", ["auto", "manual"]).default("manual").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type DailyKpiEntry = typeof dailyKpiEntries.$inferSelect;
+export type InsertDailyKpiEntry = typeof dailyKpiEntries.$inferInsert;

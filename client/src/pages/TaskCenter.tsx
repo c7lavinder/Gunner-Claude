@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -44,13 +44,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   CheckCircle2,
-  Circle,
   Phone,
   MessageSquare,
   Zap,
   StickyNote,
-  ChevronDown,
-  ChevronRight,
   Clock,
   AlertTriangle,
   CalendarDays,
@@ -70,11 +67,24 @@ import {
   GitBranch,
   Mail,
   Timer,
+  PhoneIncoming,
+  PhoneMissed,
+  MessageCircle,
+  ChevronDown,
+  ChevronUp,
+  Target,
+  TrendingUp,
+  Send,
+  MapPin,
+  Star,
+  Flame,
+  ArrowUpRight,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 // ─── HELPERS ────────────────────────────────────────────
 
-/** Strip HTML tags and decode common entities to get clean plain text */
 function stripHtml(html: string): string {
   if (!html) return "";
   const tmp = document.createElement("div");
@@ -82,17 +92,25 @@ function stripHtml(html: string): string {
   return (tmp.textContent || tmp.innerText || "").trim();
 }
 
-/** Format phone number from +1XXXXXXXXXX to (XXX) XXX-XXXX */
 function formatPhone(phone: string): string {
   if (!phone) return "";
-  // Strip all non-digits
   const digits = phone.replace(/\D/g, "");
-  // Handle US numbers: 1XXXXXXXXXX or XXXXXXXXXX
   const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
   if (local.length === 10) {
     return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
   }
-  return phone; // Return original if not a standard US number
+  return phone;
+}
+
+function timeAgo(dateStr: string): string {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 // ─── TYPES ──────────────────────────────────────────────
@@ -112,6 +130,11 @@ interface Task {
   overdueDays: number;
   group: "overdue" | "today" | "upcoming";
   assignedMemberName?: string;
+  // Day Hub priority fields
+  priorityScore?: number;
+  category?: "new_lead" | "reschedule" | "admin" | "follow_up";
+  amCallMade?: boolean;
+  pmCallMade?: boolean;
 }
 
 interface TeamMember {
@@ -120,9 +143,428 @@ interface TeamMember {
   ghlUserId: string | null;
 }
 
-// ─── TASK ROW COMPONENT ─────────────────────────────────
+// ─── KPI BAR ────────────────────────────────────────────
 
-function TaskRow({
+function KpiBar() {
+  const { data: kpi, isLoading } = trpc.taskCenter.getKpiSummary.useQuery(undefined, {
+    refetchInterval: 120000,
+  });
+
+  const addKpiMutation = trpc.taskCenter.addKpiEntry.useMutation({
+    onSuccess: () => {
+      toast.success("KPI entry added");
+      // Invalidate to refresh
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex gap-3">
+        {[...Array(5)].map((_, i) => (
+          <Skeleton key={i} className="h-16 flex-1 rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!kpi) return null;
+
+  const kpiItems = [
+    {
+      label: "Calls",
+      value: kpi.calls,
+      target: kpi.targets.lm.calls,
+      color: kpi.colors.calls_lm,
+      icon: Phone,
+      type: "call" as const,
+    },
+    {
+      label: "Convos",
+      value: kpi.conversations,
+      target: kpi.targets.lm.conversations,
+      color: kpi.colors.conversations_lm,
+      icon: MessageCircle,
+      type: "conversation" as const,
+    },
+    {
+      label: "Apts",
+      value: kpi.appointments,
+      target: kpi.targets.lm.appointments,
+      color: kpi.colors.appointments_lm,
+      icon: CalendarDays,
+      type: "appointment" as const,
+    },
+    {
+      label: "Offers",
+      value: kpi.offers,
+      target: 2,
+      color: kpi.colors.offers_am,
+      icon: Target,
+      type: "offer" as const,
+    },
+    {
+      label: "Contracts",
+      value: kpi.contracts,
+      target: 1,
+      color: kpi.colors.contracts_am,
+      icon: FileText,
+      type: "contract" as const,
+    },
+  ];
+
+  const colorMap = {
+    green: { bg: "rgba(22,163,74,0.12)", text: "#22c55e", border: "rgba(22,163,74,0.25)" },
+    yellow: { bg: "rgba(234,179,8,0.12)", text: "#eab308", border: "rgba(234,179,8,0.25)" },
+    red: { bg: "rgba(239,68,68,0.12)", text: "#ef4444", border: "rgba(239,68,68,0.25)" },
+  };
+
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {kpiItems.map((item) => {
+        const c = colorMap[item.color];
+        const Icon = item.icon;
+        const pct = item.target > 0 ? Math.min(100, Math.round((item.value / item.target) * 100)) : 0;
+        return (
+          <div
+            key={item.label}
+            className="flex-1 min-w-[100px] rounded-lg px-3 py-2.5 relative overflow-hidden group cursor-pointer"
+            style={{
+              background: "var(--g-bg-card)",
+              border: `1px solid ${c.border}`,
+            }}
+            onClick={() => {
+              if (!kpi.date) return;
+              addKpiMutation.mutate({
+                date: kpi.date,
+                kpiType: item.type,
+              });
+            }}
+          >
+            {/* Progress bar background */}
+            <div
+              className="absolute bottom-0 left-0 h-1 transition-all duration-500"
+              style={{ width: `${pct}%`, background: c.text, opacity: 0.6 }}
+            />
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <Icon className="h-3.5 w-3.5" style={{ color: c.text }} />
+                <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>
+                  {item.label}
+                </span>
+              </div>
+              <Plus className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: "var(--g-text-tertiary)" }} />
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-bold tabular-nums" style={{ color: c.text }}>
+                {item.value}
+              </span>
+              <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                / {item.target}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── LEFT PANEL: MISSED/UNREAD + APPOINTMENTS ───────────
+
+function LeftPanel() {
+  const [activeTab, setActiveTab] = useState<"unread" | "appointments">("unread");
+
+  const { data: unreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
+    undefined,
+    { refetchInterval: 60000 }
+  );
+
+  const { data: appointments, isLoading: aptsLoading } = trpc.taskCenter.getTodayAppointments.useQuery(
+    undefined,
+    { refetchInterval: 120000 }
+  );
+
+  const missedCalls = useMemo(() => (unreadConvos || []).filter(c => c.isMissedCall), [unreadConvos]);
+  const unreadMessages = useMemo(() => (unreadConvos || []).filter(c => !c.isMissedCall), [unreadConvos]);
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden flex flex-col"
+      style={{
+        background: "var(--g-bg-card)",
+        border: "1px solid var(--g-border-subtle)",
+        boxShadow: "var(--g-shadow-card)",
+        height: "100%",
+      }}
+    >
+      {/* Tab header */}
+      <div className="flex border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
+        <button
+          className="flex-1 px-3 py-2.5 text-xs font-semibold transition-all relative"
+          style={{
+            color: activeTab === "unread" ? "var(--g-accent-text)" : "var(--g-text-tertiary)",
+            background: activeTab === "unread" ? "var(--g-accent-soft)" : "transparent",
+          }}
+          onClick={() => setActiveTab("unread")}
+        >
+          <div className="flex items-center justify-center gap-1.5">
+            <PhoneIncoming className="h-3.5 w-3.5" />
+            Inbox
+            {(unreadConvos?.length || 0) > 0 && (
+              <Badge className="h-4 px-1 text-[10px] font-bold" style={{ background: "var(--g-accent)", color: "white", border: "none" }}>
+                {unreadConvos?.length}
+              </Badge>
+            )}
+          </div>
+        </button>
+        <button
+          className="flex-1 px-3 py-2.5 text-xs font-semibold transition-all"
+          style={{
+            color: activeTab === "appointments" ? "var(--g-accent-text)" : "var(--g-text-tertiary)",
+            background: activeTab === "appointments" ? "var(--g-accent-soft)" : "transparent",
+          }}
+          onClick={() => setActiveTab("appointments")}
+        >
+          <div className="flex items-center justify-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Today
+            {(appointments?.length || 0) > 0 && (
+              <Badge className="h-4 px-1 text-[10px] font-bold" style={{ background: "oklch(0.65 0.15 250)", color: "white", border: "none" }}>
+                {appointments?.length}
+              </Badge>
+            )}
+          </div>
+        </button>
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-1" style={{ maxHeight: "calc(100vh - 280px)" }}>
+        {activeTab === "unread" ? (
+          unreadLoading ? (
+            <div className="space-y-2 p-2">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-md" />)}
+            </div>
+          ) : (
+            <>
+              {/* Missed calls section */}
+              {missedCalls.length > 0 && (
+                <div className="mb-2">
+                  <div className="flex items-center gap-1.5 px-2 py-1.5">
+                    <PhoneMissed className="h-3 w-3" style={{ color: "var(--g-accent)" }} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--g-accent)" }}>
+                      Missed Calls ({missedCalls.length})
+                    </span>
+                  </div>
+                  {missedCalls.map((conv) => (
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} />
+                  ))}
+                </div>
+              )}
+              {/* Unread messages */}
+              {unreadMessages.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 px-2 py-1.5">
+                    <MessageSquare className="h-3 w-3" style={{ color: "oklch(0.65 0.15 250)" }} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "oklch(0.65 0.15 250)" }}>
+                      Unread ({unreadMessages.length})
+                    </span>
+                  </div>
+                  {unreadMessages.map((conv) => (
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} />
+                  ))}
+                </div>
+              )}
+              {missedCalls.length === 0 && unreadMessages.length === 0 && (
+                <div className="text-center py-8">
+                  <CheckCircle2 className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-grade-a)", opacity: 0.5 }} />
+                  <p className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>
+                    All caught up
+                  </p>
+                </div>
+              )}
+            </>
+          )
+        ) : (
+          aptsLoading ? (
+            <div className="space-y-2 p-2">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-md" />)}
+            </div>
+          ) : appointments && appointments.length > 0 ? (
+            appointments.map((apt) => (
+              <AppointmentItem key={apt.id} apt={apt} />
+            ))
+          ) : (
+            <div className="text-center py-8">
+              <CalendarDays className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)", opacity: 0.4 }} />
+              <p className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>
+                No appointments today
+              </p>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UnreadConvoItem({ conv }: { conv: any }) {
+  return (
+    <div
+      className="rounded-md px-2.5 py-2 transition-colors cursor-pointer"
+      style={{ background: "transparent" }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--g-bg-card-hover)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+    >
+      <div className="flex items-start gap-2">
+        <div
+          className="shrink-0 mt-0.5 rounded-full p-1"
+          style={{
+            background: conv.isMissedCall
+              ? "rgba(239,68,68,0.15)"
+              : conv.type === "sms"
+              ? "rgba(59,130,246,0.12)"
+              : "rgba(34,197,94,0.12)",
+          }}
+        >
+          {conv.isMissedCall ? (
+            <PhoneMissed className="h-3 w-3" style={{ color: "#ef4444" }} />
+          ) : conv.type === "sms" ? (
+            <MessageSquare className="h-3 w-3" style={{ color: "oklch(0.65 0.15 250)" }} />
+          ) : (
+            <Phone className="h-3 w-3" style={{ color: "#22c55e" }} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
+              {conv.contactName || "Unknown"}
+            </span>
+            <span className="text-[10px] shrink-0 ml-1" style={{ color: "var(--g-text-tertiary)" }}>
+              {timeAgo(conv.lastMessageAt)}
+            </span>
+          </div>
+          {conv.lastMessage && (
+            <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--g-text-secondary)" }}>
+              {conv.lastMessage.length > 60 ? conv.lastMessage.slice(0, 60) + "..." : conv.lastMessage}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AppointmentItem({ apt }: { apt: any }) {
+  const startTime = new Date(apt.startTime);
+  const timeStr = startTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  const isPast = startTime.getTime() < Date.now();
+  const statusColor = apt.status === "confirmed" ? "#22c55e" : apt.status === "showed" ? "#3b82f6" : "#eab308";
+
+  return (
+    <div
+      className="rounded-md px-2.5 py-2.5 transition-colors"
+      style={{
+        background: "transparent",
+        opacity: isPast ? 0.6 : 1,
+      }}
+    >
+      <div className="flex items-start gap-2.5">
+        <div className="shrink-0 text-center min-w-[42px]">
+          <div className="text-xs font-bold tabular-nums" style={{ color: "var(--g-text-primary)" }}>
+            {timeStr}
+          </div>
+          <div
+            className="text-[9px] font-semibold uppercase mt-0.5 rounded px-1 py-0.5"
+            style={{ background: `${statusColor}20`, color: statusColor }}
+          >
+            {apt.status}
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="text-xs font-semibold block truncate" style={{ color: "var(--g-text-primary)" }}>
+            {apt.contactName || apt.title}
+          </span>
+          {apt.address && (
+            <span className="text-[11px] flex items-center gap-1 mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
+              <MapPin className="h-2.5 w-2.5 shrink-0" />
+              {apt.address}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CATEGORY BADGE ─────────────────────────────────────
+
+const CATEGORY_CONFIG = {
+  new_lead: { label: "New Lead", color: "#22c55e", bg: "rgba(34,197,94,0.12)", icon: Star },
+  reschedule: { label: "Reschedule", color: "#f97316", bg: "rgba(249,115,22,0.12)", icon: RefreshCw },
+  admin: { label: "Admin", color: "#8b5cf6", bg: "rgba(139,92,246,0.12)", icon: FileText },
+  follow_up: { label: "Follow-Up", color: "#3b82f6", bg: "rgba(59,130,246,0.12)", icon: ArrowUpRight },
+};
+
+function CategoryBadge({ category }: { category: string }) {
+  const config = CATEGORY_CONFIG[category as keyof typeof CATEGORY_CONFIG] || CATEGORY_CONFIG.follow_up;
+  const Icon = config.icon;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider"
+      style={{ background: config.bg, color: config.color }}
+    >
+      <Icon className="h-2.5 w-2.5" />
+      {config.label}
+    </span>
+  );
+}
+
+// ─── AM/PM CALL INDICATORS ──────────────────────────────
+
+function AmPmIndicator({ amDone, pmDone }: { amDone: boolean; pmDone: boolean }) {
+  return (
+    <div className="flex items-center gap-1">
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="flex items-center gap-0.5 rounded px-1 py-0.5"
+              style={{
+                background: amDone ? "rgba(34,197,94,0.12)" : "var(--g-bg-inset)",
+                border: `1px solid ${amDone ? "rgba(34,197,94,0.25)" : "var(--g-border-subtle)"}`,
+              }}
+            >
+              <Sun className="h-2.5 w-2.5" style={{ color: amDone ? "#22c55e" : "var(--g-text-tertiary)" }} />
+              <span className="text-[9px] font-bold" style={{ color: amDone ? "#22c55e" : "var(--g-text-tertiary)" }}>AM</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top"><p>{amDone ? "AM call made" : "No AM call yet"}</p></TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="flex items-center gap-0.5 rounded px-1 py-0.5"
+              style={{
+                background: pmDone ? "rgba(34,197,94,0.12)" : "var(--g-bg-inset)",
+                border: `1px solid ${pmDone ? "rgba(34,197,94,0.25)" : "var(--g-border-subtle)"}`,
+              }}
+            >
+              <Moon className="h-2.5 w-2.5" style={{ color: pmDone ? "#22c55e" : "var(--g-text-tertiary)" }} />
+              <span className="text-[9px] font-bold" style={{ color: pmDone ? "#22c55e" : "var(--g-text-tertiary)" }}>PM</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top"><p>{pmDone ? "PM call made" : "No PM call yet"}</p></TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
+// ─── PRIORITY TASK ROW ──────────────────────────────────
+
+function PriorityTaskRow({
   task,
   onComplete,
   onEdit,
@@ -131,6 +573,7 @@ function TaskRow({
   isExpanded,
   isCompleting,
   allTasks,
+  rank,
 }: {
   task: Task;
   onComplete: () => void;
@@ -140,6 +583,7 @@ function TaskRow({
   isExpanded: boolean;
   isCompleting: boolean;
   allTasks: Task[];
+  rank: number;
 }) {
   const dueDate = task.dueDate ? new Date(task.dueDate) : null;
   const dueDateStr = dueDate
@@ -150,51 +594,49 @@ function TaskRow({
       })
     : "No date";
 
-  const groupBorderColor =
-    task.group === "overdue"
-      ? "var(--g-accent)"
-      : task.group === "today"
-      ? "oklch(0.75 0.15 85)"
-      : "var(--g-border-subtle)";
+  const scoreColor = (task.priorityScore || 0) >= 700
+    ? "#ef4444"
+    : (task.priorityScore || 0) >= 400
+    ? "#f97316"
+    : (task.priorityScore || 0) >= 200
+    ? "#eab308"
+    : "var(--g-text-tertiary)";
 
   return (
     <div
       className="rounded-lg transition-all duration-200"
       style={{
-        border: `1px solid ${groupBorderColor}`,
+        border: `1px solid ${task.group === "overdue" ? "var(--g-accent)" : "var(--g-border-subtle)"}`,
         background: task.group === "overdue"
-          ? "oklch(0.25 0.03 25 / 0.3)"
-          : task.group === "today"
-          ? "oklch(0.25 0.03 85 / 0.2)"
+          ? "oklch(0.25 0.03 25 / 0.15)"
           : "var(--g-bg-card)",
       }}
     >
       <div
-        className="flex items-center gap-3 p-3 cursor-pointer transition-colors group"
+        className="flex items-center gap-3 px-3 py-2.5 cursor-pointer group"
         onClick={onExpand}
-        style={{ borderRadius: "0.5rem" }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "var(--g-bg-inset)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "transparent";
-        }}
       >
-        {/* Expand chevron */}
-        <div style={{ color: "var(--g-text-tertiary)" }}>
-          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        {/* Rank number */}
+        <div
+          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+          style={{
+            background: rank <= 3 ? "var(--g-accent-soft)" : "var(--g-bg-inset)",
+            color: rank <= 3 ? "var(--g-accent-text)" : "var(--g-text-tertiary)",
+            border: rank <= 3 ? "1px solid var(--g-accent-medium)" : "1px solid var(--g-border-subtle)",
+          }}
+        >
+          {rank}
         </div>
 
-        {/* Checkbox — Mark as complete */}
+        {/* Complete button */}
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                className="shrink-0 h-6 w-6 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+                className="shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all group/check"
                 style={{
-                  border: isCompleting ? "none" : "2px solid var(--g-text-tertiary)",
-                  background: isCompleting ? "oklch(0.7 0.15 150)" : "transparent",
-                  cursor: isCompleting ? "wait" : "pointer",
+                  borderColor: isCompleting ? "oklch(0.7 0.15 150)" : "var(--g-text-tertiary)",
+                  background: isCompleting ? "oklch(0.7 0.15 150 / 0.15)" : "transparent",
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -215,25 +657,21 @@ function TaskRow({
                 }}
               >
                 {isCompleting ? (
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-white" />
+                  <RefreshCw className="h-3 w-3 animate-spin text-white" />
                 ) : (
-                  <CheckCircle2 className="h-3.5 w-3.5 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: "oklch(0.7 0.15 150)" }} />
+                  <CheckCircle2 className="h-3 w-3 opacity-0 group-hover/check:opacity-60 transition-opacity" style={{ color: "oklch(0.7 0.15 150)" }} />
                 )}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top">
-              <p>Mark as complete</p>
-            </TooltipContent>
+            <TooltipContent side="top"><p>Mark as complete</p></TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
         {/* Task info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span
-              className="font-medium text-sm truncate"
-              style={{ color: "var(--g-text-primary)" }}
-            >
+            {task.category && <CategoryBadge category={task.category} />}
+            <span className="font-medium text-sm truncate" style={{ color: "var(--g-text-primary)" }}>
               {task.title}
             </span>
           </div>
@@ -244,7 +682,7 @@ function TaskRow({
               </span>
             )}
             {task.contactAddress && (
-              <span className="truncate max-w-[250px]" title={task.contactAddress}>
+              <span className="truncate max-w-[200px]" title={task.contactAddress}>
                 {task.contactAddress}
               </span>
             )}
@@ -257,16 +695,30 @@ function TaskRow({
           </div>
         </div>
 
+        {/* AM/PM indicators */}
+        <AmPmIndicator amDone={task.amCallMade || false} pmDone={task.pmCallMade || false} />
+
+        {/* Priority score */}
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className="shrink-0 text-xs font-bold tabular-nums px-1.5 py-0.5 rounded"
+                style={{ color: scoreColor, background: `${scoreColor}15` }}
+              >
+                {task.priorityScore || 0}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top"><p>Priority score — higher = work first</p></TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
         {/* Due date */}
         <div className="flex items-center gap-2 shrink-0">
           {task.group === "overdue" && (
             <Badge
               className="text-xs"
-              style={{
-                background: "var(--g-accent)",
-                color: "white",
-                border: "none",
-              }}
+              style={{ background: "var(--g-accent)", color: "white", border: "none" }}
             >
               {task.overdueDays}d overdue
             </Badge>
@@ -285,7 +737,7 @@ function TaskRow({
           </span>
         </div>
 
-        {/* Actions: Edit & Delete */}
+        {/* Actions */}
         <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <TooltipProvider delayDuration={300}>
             <Tooltip>
@@ -293,53 +745,30 @@ function TaskRow({
                 <button
                   className="h-7 w-7 rounded-md flex items-center justify-center transition-colors"
                   style={{ color: "var(--g-text-tertiary)" }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit();
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--g-bg-card)";
-                    e.currentTarget.style.color = "var(--g-text-primary)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "var(--g-text-tertiary)";
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--g-bg-card)"; e.currentTarget.style.color = "var(--g-text-primary)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--g-text-tertiary)"; }}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top">
-                <p>Edit task</p>
-              </TooltipContent>
+              <TooltipContent side="top"><p>Edit task</p></TooltipContent>
             </Tooltip>
           </TooltipProvider>
-
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   className="h-7 w-7 rounded-md flex items-center justify-center transition-colors"
                   style={{ color: "var(--g-text-tertiary)" }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "oklch(0.25 0.03 25 / 0.5)";
-                    e.currentTarget.style.color = "var(--g-accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "var(--g-text-tertiary)";
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "oklch(0.25 0.03 25 / 0.5)"; e.currentTarget.style.color = "var(--g-accent)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--g-text-tertiary)"; }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top">
-                <p>Delete task</p>
-              </TooltipContent>
+              <TooltipContent side="top"><p>Delete task</p></TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
@@ -356,62 +785,52 @@ function TaskRow({
 function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] }) {
   const utils = trpc.useUtils();
 
-  // Fetch contact context when expanded
   const { data: context, isLoading: contextLoading } = trpc.taskCenter.getTaskContext.useQuery(
     { contactId: task.contactId },
     { enabled: !!task.contactId }
   );
 
-  // Fetch user phone info for from/to display
   const { data: userPhoneInfo } = trpc.taskCenter.getUserPhoneInfo.useQuery();
 
-  // Fetch today's activity for this contact
   const { data: todayActivity, isLoading: activityLoading } = trpc.taskCenter.getContactActivity.useQuery(
     { contactId: task.contactId },
     { enabled: !!task.contactId }
   );
 
-  // Fetch workflow history for this contact (for Remove mode)
   const { data: workflowHistory } = trpc.taskCenter.getContactWorkflowHistory.useQuery(
     { contactId: task.contactId },
     { enabled: !!task.contactId }
   );
 
-  // Fetch upcoming actions for this contact (active workflows, scheduled SMS, pending tasks)
   const { data: upcomingActions, isLoading: upcomingLoading } = trpc.taskCenter.getContactUpcomingActions.useQuery(
     { contactId: task.contactId },
     { enabled: !!task.contactId }
   );
 
-  // Active tab: "activity" (default) | "upcoming" | "notes"
   const [activeTab, setActiveTab] = useState<"activity" | "upcoming" | "notes">("activity");
 
-  // Get upcoming tasks for this contact (next 3 future tasks, excluding the current task)
   const contactUpcomingTasks = useMemo(() => {
     if (!task.contactId || !allTasks) return [];
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     return allTasks
-      .filter(t => 
-        t.contactId === task.contactId && 
-        t.id !== task.id && 
-        t.dueDate && 
+      .filter(t =>
+        t.contactId === task.contactId &&
+        t.id !== task.id &&
+        t.dueDate &&
         new Date(t.dueDate) >= now
       )
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
       .slice(0, 3);
   }, [task.contactId, task.id, allTasks]);
 
-  // Combine upcoming actions from backend + upcoming tasks from frontend
   const allUpcomingItems = useMemo(() => {
     const items: Array<{ id: string; type: string; label: string; detail: string; icon: string }> = [];
-    // Add backend upcoming actions (active workflows, scheduled SMS, etc.)
     if (upcomingActions) {
       for (const action of upcomingActions) {
         items.push(action);
       }
     }
-    // Add upcoming tasks from the task list
     for (const upTask of contactUpcomingTasks) {
       const dueDate = upTask.dueDate ? new Date(upTask.dueDate) : null;
       items.push({
@@ -436,15 +855,12 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
   const [smsMessage, setSmsMessage] = useState("");
   const [noteBody, setNoteBody] = useState("");
 
-  // SMS/Call from/to state
   const [smsFromGhlUserId, setSmsFromGhlUserId] = useState<string>("");
   const [smsFromOpen, setSmsFromOpen] = useState(false);
   const [callFromGhlUserId, setCallFromGhlUserId] = useState<string>("");
   const [callFromOpen, setCallFromOpen] = useState(false);
-  // SMS To override (editable phone number)
   const [smsToPhone, setSmsToPhone] = useState("");
   const [callToPhone, setCallToPhone] = useState("");
-  // SMS scheduling
   const [smsScheduleMode, setSmsScheduleMode] = useState<"now" | "later">("now");
   const [smsScheduleDate, setSmsScheduleDate] = useState("");
   const [smsScheduleTime, setSmsScheduleTime] = useState("");
@@ -453,31 +869,26 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
   const [workflowSearchOpen, setWorkflowSearchOpen] = useState(false);
   const [calendarSearchOpen, setCalendarSearchOpen] = useState(false);
 
-  // Appointment form state
   const [aptTitle, setAptTitle] = useState("");
   const [aptDate, setAptDate] = useState("");
   const [aptTime, setAptTime] = useState("");
   const [aptCalendar, setAptCalendar] = useState("");
   const [aptNotes, setAptNotes] = useState("");
 
-  // Derive the contact phone (from task data or context)
   const contactPhone = task.contactPhone || context?.contactPhone || "";
 
-  // Helper: get sender info for a given GHL user ID (or current user if empty)
   const getSenderInfo = (ghlUserId: string) => {
     if (!ghlUserId || !userPhoneInfo?.teamMembers) {
       return { name: userPhoneInfo?.userName || "You", phone: userPhoneInfo?.userPhone || null };
     }
-    const member = userPhoneInfo.teamMembers.find(m => m.ghlUserId === ghlUserId);
+    const member = userPhoneInfo.teamMembers.find((m: any) => m.ghlUserId === ghlUserId);
     if (member) return { name: member.name, phone: member.lcPhone };
     return { name: userPhoneInfo?.userName || "You", phone: userPhoneInfo?.userPhone || null };
   };
 
-  // Derive enrolled workflows (most recent "added" that hasn't been "removed")
   const enrolledWorkflows = useMemo(() => {
     if (!workflowHistory || workflowHistory.length === 0) return [];
-    const workflowMap = new Map<string, { workflowId: string; workflowName: string; addedAt: string }>(); 
-    // Process in chronological order (oldest first)
+    const workflowMap = new Map<string, { workflowId: string; workflowName: string; addedAt: string }>();
     const sorted = [...workflowHistory].reverse();
     for (const entry of sorted) {
       if (entry.action === "added") {
@@ -522,7 +933,6 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       toast.success(`Workflow started for ${task.contactName || "contact"}`);
       setShowWorkflowDialog(false);
       setSelectedWorkflow("");
-      // Refresh upcoming actions and workflow history so the Upcoming tab updates
       utils.taskCenter.getContactUpcomingActions.invalidate({ contactId: task.contactId });
       utils.taskCenter.getContactWorkflowHistory.invalidate({ contactId: task.contactId });
     },
@@ -534,7 +944,6 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       toast.success(`Removed from workflow`);
       setShowWorkflowDialog(false);
       setSelectedWorkflow("");
-      // Refresh upcoming actions and workflow history so the Upcoming tab updates
       utils.taskCenter.getContactUpcomingActions.invalidate({ contactId: task.contactId });
       utils.taskCenter.getContactWorkflowHistory.invalidate({ contactId: task.contactId });
     },
@@ -554,21 +963,16 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
     onError: (err) => toast.error("Failed to create appointment", { description: err.message }),
   });
 
-  // Workflows (lazy load when dialog opens)
   const { data: workflows } = trpc.taskCenter.getWorkflows.useQuery(undefined, {
     enabled: showWorkflowDialog,
   });
 
-  // Calendars (lazy load when dialog opens)
   const { data: calendars } = trpc.taskCenter.getCalendars.useQuery(undefined, {
     enabled: showAptDialog,
   });
 
   return (
-    <div
-      className="px-4 py-3 space-y-3"
-      style={{ borderTop: "1px solid var(--g-border-subtle)" }}
-    >
+    <div className="px-4 py-3 space-y-3" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
       {/* Task description */}
       {task.body && (
         <p className="text-sm leading-relaxed" style={{ color: "var(--g-text-secondary)" }}>
@@ -578,67 +982,27 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
 
       {/* Quick Actions Bar */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => {
-            if (task.contactPhone) {
-              setShowCallDialog(true);
-            } else {
-              toast.error("No phone number on file for this contact");
-            }
-          }}
-        >
-          <Phone className="h-3.5 w-3.5 mr-1.5" />
-          Call
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
+          if (task.contactPhone) { setShowCallDialog(true); } else { toast.error("No phone number on file for this contact"); }
+        }}>
+          <Phone className="h-3.5 w-3.5 mr-1.5" /> Call
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => setShowSmsDialog(true)}
-        >
-          <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-          Text
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowSmsDialog(true)}>
+          <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Text
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => {
-            setWorkflowAction("add");
-            setSelectedWorkflow("");
-            setShowWorkflowDialog(true);
-          }}
-        >
-          <Zap className="h-3.5 w-3.5 mr-1.5" />
-          Update Workflow
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
+          setWorkflowAction("add"); setSelectedWorkflow(""); setShowWorkflowDialog(true);
+        }}>
+          <Zap className="h-3.5 w-3.5 mr-1.5" /> Update Workflow
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => {
-            setAptTitle(`Appointment with ${task.contactName || "Contact"}`);
-            setAptDate("");
-            setAptTime("");
-            setAptCalendar("");
-            setAptNotes("");
-            setShowAptDialog(true);
-          }}
-        >
-          <CalendarPlus className="h-3.5 w-3.5 mr-1.5" />
-          Create Apt
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
+          setAptTitle(`Appointment with ${task.contactName || "Contact"}`);
+          setAptDate(""); setAptTime(""); setAptCalendar(""); setAptNotes(""); setShowAptDialog(true);
+        }}>
+          <CalendarPlus className="h-3.5 w-3.5 mr-1.5" /> Create Apt
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => setShowNoteDialog(true)}
-        >
-          <StickyNote className="h-3.5 w-3.5 mr-1.5" />
-          Add Note
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowNoteDialog(true)}>
+          <StickyNote className="h-3.5 w-3.5 mr-1.5" /> Add Note
         </Button>
       </div>
 
@@ -659,16 +1023,15 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
             {(() => {
               try {
                 const now = new Date();
-                const localTime = now.toLocaleTimeString("en-US", { 
-                  timeZone: todayActivity.contactTimezone, 
-                  hour: "numeric", 
+                const localTime = now.toLocaleTimeString("en-US", {
+                  timeZone: todayActivity.contactTimezone,
+                  hour: "numeric",
                   minute: "2-digit",
-                  hour12: true 
+                  hour12: true
                 });
-                // Get short timezone abbreviation
-                const tzAbbr = now.toLocaleTimeString("en-US", { 
-                  timeZone: todayActivity.contactTimezone, 
-                  timeZoneName: "short" 
+                const tzAbbr = now.toLocaleTimeString("en-US", {
+                  timeZone: todayActivity.contactTimezone,
+                  timeZoneName: "short"
                 }).split(" ").pop();
                 return `${localTime} ${tzAbbr}`;
               } catch {
@@ -679,7 +1042,7 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
         )}
       </div>
 
-      {/* Tabs: Today's Activity | Upcoming | Notes & Calls */}
+      {/* Tabs */}
       <div className="flex gap-1 rounded-lg p-0.5" style={{ background: "var(--g-bg-inset)" }}>
         {(["activity", "upcoming", "notes"] as const).map((tab) => (
           <button
@@ -701,13 +1064,9 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       {activeTab === "activity" ? (
         <div className="space-y-3">
           {activityLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-            </div>
+            <div className="space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /></div>
           ) : todayActivity ? (
             <>
-              {/* Activity summary badges */}
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                   <MessageSquare className="h-3 w-3" style={{ color: "oklch(0.65 0.15 250)" }} />
@@ -722,15 +1081,10 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                   {todayActivity.emailsSent} {todayActivity.emailsSent === 1 ? "Email" : "Emails"}
                 </div>
               </div>
-              {/* Activity timeline */}
               {todayActivity.messages.length > 0 ? (
                 <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                   {todayActivity.messages.map((msg: any) => (
-                    <div
-                      key={msg.id}
-                      className="rounded-md px-3 py-2 flex items-start gap-2"
-                      style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
-                    >
+                    <div key={msg.id} className="rounded-md px-3 py-2 flex items-start gap-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                       <div className="shrink-0 mt-0.5">
                         {msg.type === "sms" ? <MessageSquare className="h-3 w-3" style={{ color: "oklch(0.65 0.15 250)" }} /> :
                          msg.type === "call" ? <Phone className="h-3 w-3" style={{ color: "oklch(0.7 0.15 150)" }} /> :
@@ -769,13 +1123,9 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       ) : activeTab === "notes" ? (
         <div className="space-y-3">
           {contextLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-            </div>
+            <div className="space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /></div>
           ) : context ? (
             <>
-              {/* Last call summary */}
               {context.lastCallSummary && (
                 <div className="rounded-md p-3" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                   <div className="flex items-center gap-2 mb-1.5">
@@ -802,7 +1152,6 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                   )}
                 </div>
               )}
-              {/* Recent Notes */}
               {context.recentNotes && context.recentNotes.length > 0 ? (
                 <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                   {context.recentNotes.slice(0, 5).map((note: { id: string; body: string; dateAdded: string }) => (
@@ -829,10 +1178,7 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       ) : activeTab === "upcoming" ? (
         <div className="space-y-3">
           {upcomingLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+            <div className="space-y-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
           ) : allUpcomingItems.length > 0 ? (
             <div className="space-y-1.5">
               {allUpcomingItems.map((item) => {
@@ -846,36 +1192,19 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                   : CalendarDays;
                 const typeBadge = item.type === "workflow" ? "Workflow"
                   : item.type === "scheduled_sms" ? "SMS"
-                  : item.type === "scheduled_email" ? "Email"
                   : item.type === "task" ? "Task"
                   : "Action";
                 return (
-                  <div
-                    key={item.id}
-                    className="rounded-md px-3 py-2.5 flex items-start gap-3"
-                    style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
-                  >
-                    <div
-                      className="shrink-0 mt-0.5 rounded-full p-1.5"
-                      style={{ background: `color-mix(in oklch, ${iconColor} 15%, transparent)` }}
-                    >
+                  <div key={item.id} className="rounded-md px-3 py-2.5 flex items-start gap-3" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                    <div className="shrink-0 mt-0.5 rounded-full p-1.5" style={{ background: `color-mix(in oklch, ${iconColor} 15%, transparent)` }}>
                       <IconComponent className="h-3.5 w-3.5" style={{ color: iconColor }} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                          style={{ background: `color-mix(in oklch, ${iconColor} 12%, transparent)`, color: iconColor }}
-                        >
-                          {typeBadge}
-                        </span>
-                      </div>
-                      <p className="text-xs font-medium mt-1" style={{ color: "var(--g-text-primary)" }}>
-                        {item.label}
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
-                        {item.detail}
-                      </p>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `color-mix(in oklch, ${iconColor} 12%, transparent)`, color: iconColor }}>
+                        {typeBadge}
+                      </span>
+                      <p className="text-xs font-medium mt-1" style={{ color: "var(--g-text-primary)" }}>{item.label}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>{item.detail}</p>
                     </div>
                   </div>
                 );
@@ -884,12 +1213,7 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
           ) : (
             <div className="text-center py-6">
               <Timer className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)", opacity: 0.5 }} />
-              <p className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>
-                No upcoming actions for this contact
-              </p>
-              <p className="text-xs mt-1.5 max-w-[260px] mx-auto leading-relaxed" style={{ color: "var(--g-text-tertiary)", opacity: 0.7 }}>
-                Use the "Update Workflow" button above to enroll this contact in a workflow. Workflows, scheduled SMS, and future tasks will appear here.
-              </p>
+              <p className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>No upcoming actions for this contact</p>
             </div>
           )}
         </div>
@@ -906,7 +1230,6 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
             <DialogDescription>Confirm call details before dialing.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {/* From selector */}
             <div>
               <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>From</Label>
               <Popover open={callFromOpen} onOpenChange={setCallFromOpen}>
@@ -927,12 +1250,8 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                     <CommandList className="max-h-[200px]">
                       <CommandEmpty>No team members found.</CommandEmpty>
                       <CommandGroup>
-                        {(userPhoneInfo?.teamMembers || []).map(m => (
-                          <CommandItem
-                            key={m.ghlUserId}
-                            value={m.name}
-                            onSelect={() => { setCallFromGhlUserId(m.ghlUserId); setCallFromOpen(false); }}
-                          >
+                        {(userPhoneInfo?.teamMembers || []).map((m: any) => (
+                          <CommandItem key={m.ghlUserId} value={m.name} onSelect={() => { setCallFromGhlUserId(m.ghlUserId); setCallFromOpen(false); }}>
                             <Check className={`mr-2 h-4 w-4 ${callFromGhlUserId === m.ghlUserId ? "opacity-100" : "opacity-0"}`} />
                             <div>
                               <div className="text-sm">{m.name}</div>
@@ -946,40 +1265,27 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                 </PopoverContent>
               </Popover>
             </div>
-            {/* Arrow */}
             <div className="flex justify-center">
               <ArrowRight className="h-5 w-5 rotate-90" style={{ color: "var(--g-text-tertiary)" }} />
             </div>
-            {/* To (editable) */}
             <div>
               <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>To</Label>
               <div className="rounded-lg p-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                 <div className="font-semibold text-sm" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
-                <Input
-                  className="mt-1 h-7 text-xs bg-transparent border-dashed"
-                  placeholder="Enter phone number..."
+                <Input className="mt-1 h-7 text-xs bg-transparent border-dashed" placeholder="Enter phone number..."
                   value={callToPhone || (contactPhone ? formatPhone(contactPhone) : "")}
-                  onChange={(e) => setCallToPhone(e.target.value)}
-                />
+                  onChange={(e) => setCallToPhone(e.target.value)} />
               </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCallDialog(false)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                const dialNumber = callToPhone || contactPhone;
-                if (dialNumber) {
-                  // Strip formatting to get raw number
-                  const rawNumber = dialNumber.replace(/[^\d+]/g, "");
-                  window.open(`tel:${rawNumber}`, "_self");
-                }
-                setShowCallDialog(false);
-              }}
-              disabled={!callToPhone && !contactPhone}
-            >
-              <Phone className="h-4 w-4 mr-1.5" />
-              Call Now
+            <Button onClick={() => {
+              const dialNumber = callToPhone || contactPhone;
+              if (dialNumber) { window.open(`tel:${dialNumber.replace(/[^\d+]/g, "")}`, "_self"); }
+              setShowCallDialog(false);
+            }} disabled={!callToPhone && !contactPhone}>
+              <Phone className="h-4 w-4 mr-1.5" /> Call Now
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -988,10 +1294,7 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       {/* SMS Dialog */}
       <Dialog open={showSmsDialog} onOpenChange={(open) => {
         setShowSmsDialog(open);
-        if (!open) {
-          setSmsFromGhlUserId(""); setSmsFromOpen(false); setSmsToPhone("");
-          setSmsScheduleMode("now"); setSmsScheduleDate(""); setSmsScheduleTime("");
-        }
+        if (!open) { setSmsFromGhlUserId(""); setSmsFromOpen(false); setSmsToPhone(""); setSmsScheduleMode("now"); setSmsScheduleDate(""); setSmsScheduleTime(""); }
       }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -999,9 +1302,7 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
             <DialogDescription>Choose sender, recipient, and when to send.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* From / To row */}
             <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
-              {/* From selector */}
               <div>
                 <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>From</Label>
                 <Popover open={smsFromOpen} onOpenChange={setSmsFromOpen}>
@@ -1022,12 +1323,8 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                       <CommandList className="max-h-[200px]">
                         <CommandEmpty>No team members found.</CommandEmpty>
                         <CommandGroup>
-                          {(userPhoneInfo?.teamMembers || []).map(m => (
-                            <CommandItem
-                              key={m.ghlUserId}
-                              value={m.name}
-                              onSelect={() => { setSmsFromGhlUserId(m.ghlUserId); setSmsFromOpen(false); }}
-                            >
+                          {(userPhoneInfo?.teamMembers || []).map((m: any) => (
+                            <CommandItem key={m.ghlUserId} value={m.name} onSelect={() => { setSmsFromGhlUserId(m.ghlUserId); setSmsFromOpen(false); }}>
                               <Check className={`mr-2 h-4 w-4 ${smsFromGhlUserId === m.ghlUserId ? "opacity-100" : "opacity-0"}`} />
                               <div>
                                 <div className="text-sm">{m.name}</div>
@@ -1041,93 +1338,46 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                   </PopoverContent>
                 </Popover>
               </div>
-              {/* Arrow */}
               <div className="flex items-center pt-6">
                 <ArrowRight className="h-5 w-5" style={{ color: "var(--g-text-tertiary)" }} />
               </div>
-              {/* To (editable) */}
               <div>
                 <Label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--g-text-tertiary)" }}>To</Label>
                 <div className="rounded-lg p-2 h-auto" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                   <div className="font-semibold text-sm truncate" style={{ color: "var(--g-text-primary)" }}>{task.contactName || "Contact"}</div>
-                  <Input
-                    className="mt-1 h-7 text-xs bg-transparent border-dashed"
-                    placeholder="Enter phone number..."
+                  <Input className="mt-1 h-7 text-xs bg-transparent border-dashed" placeholder="Enter phone number..."
                     value={smsToPhone || (contactPhone ? formatPhone(contactPhone) : "")}
-                    onChange={(e) => setSmsToPhone(e.target.value)}
-                  />
+                    onChange={(e) => setSmsToPhone(e.target.value)} />
                 </div>
               </div>
             </div>
-
-            {/* Message */}
-            <Textarea
-              placeholder="Type your message..."
-              value={smsMessage}
-              onChange={(e) => setSmsMessage(e.target.value)}
-              rows={3}
-            />
-
-            {/* Send Now / Schedule toggle */}
+            <Textarea placeholder="Type your message..." value={smsMessage} onChange={(e) => setSmsMessage(e.target.value)} rows={3} />
             <div className="space-y-3">
               <div className="flex gap-2">
-                <Button
-                  variant={smsScheduleMode === "now" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setSmsScheduleMode("now")}
-                >
-                  Send Now
-                </Button>
-                <Button
-                  variant={smsScheduleMode === "later" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setSmsScheduleMode("later")}
-                >
-                  <Clock className="h-3.5 w-3.5 mr-1.5" />
-                  Schedule for Later
+                <Button variant={smsScheduleMode === "now" ? "default" : "outline"} size="sm" className="flex-1" onClick={() => setSmsScheduleMode("now")}>Send Now</Button>
+                <Button variant={smsScheduleMode === "later" ? "default" : "outline"} size="sm" className="flex-1" onClick={() => setSmsScheduleMode("later")}>
+                  <Clock className="h-3.5 w-3.5 mr-1.5" /> Schedule for Later
                 </Button>
               </div>
               {smsScheduleMode === "later" && (
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs mb-1 block">Date</Label>
-                    <Input type="date" value={smsScheduleDate} onChange={(e) => setSmsScheduleDate(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1 block">Time</Label>
-                    <Input type="time" value={smsScheduleTime} onChange={(e) => setSmsScheduleTime(e.target.value)} />
-                  </div>
+                  <div><Label className="text-xs mb-1 block">Date</Label><Input type="date" value={smsScheduleDate} onChange={(e) => setSmsScheduleDate(e.target.value)} /></div>
+                  <div><Label className="text-xs mb-1 block">Time</Label><Input type="time" value={smsScheduleTime} onChange={(e) => setSmsScheduleTime(e.target.value)} /></div>
                 </div>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSmsDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                const mutationInput: any = {
-                  contactId: task.contactId,
-                  message: smsMessage,
-                };
-                if (smsFromGhlUserId) {
-                  mutationInput.fromGhlUserId = smsFromGhlUserId;
-                }
-                if (smsScheduleMode === "later" && smsScheduleDate && smsScheduleTime) {
-                  mutationInput.scheduledAt = new Date(`${smsScheduleDate}T${smsScheduleTime}`).toISOString();
-                }
-                sendSmsMutation.mutate(mutationInput);
-              }}
-              disabled={!smsMessage.trim() || sendSmsMutation.isPending || (smsScheduleMode === "later" && (!smsScheduleDate || !smsScheduleTime))}
-            >
-              {sendSmsMutation.isPending
-                ? "Sending..."
-                : smsScheduleMode === "later"
-                  ? "Schedule SMS"
-                  : "Send Now"}
+            <Button variant="outline" onClick={() => setShowSmsDialog(false)}>Cancel</Button>
+            <Button onClick={() => {
+              const mutationInput: any = { contactId: task.contactId, message: smsMessage };
+              if (smsFromGhlUserId) mutationInput.fromGhlUserId = smsFromGhlUserId;
+              if (smsScheduleMode === "later" && smsScheduleDate && smsScheduleTime) {
+                mutationInput.scheduledAt = new Date(`${smsScheduleDate}T${smsScheduleTime}`).toISOString();
+              }
+              sendSmsMutation.mutate(mutationInput);
+            }} disabled={!smsMessage.trim() || sendSmsMutation.isPending || (smsScheduleMode === "later" && (!smsScheduleDate || !smsScheduleTime))}>
+              {sendSmsMutation.isPending ? "Sending..." : smsScheduleMode === "later" ? "Schedule SMS" : "Send Now"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1136,28 +1386,12 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
       {/* Note Dialog */}
       <Dialog open={showNoteDialog} onOpenChange={setShowNoteDialog}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Note to {task.contactName || "Contact"}</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            placeholder="Write a note..."
-            value={noteBody}
-            onChange={(e) => setNoteBody(e.target.value)}
-            rows={4}
-          />
+          <DialogHeader><DialogTitle>Add Note to {task.contactName || "Contact"}</DialogTitle></DialogHeader>
+          <Textarea placeholder="Write a note..." value={noteBody} onChange={(e) => setNoteBody(e.target.value)} rows={4} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNoteDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() =>
-                addNoteMutation.mutate({
-                  contactId: task.contactId,
-                  body: noteBody,
-                })
-              }
-              disabled={!noteBody.trim() || addNoteMutation.isPending}
-            >
+            <Button variant="outline" onClick={() => setShowNoteDialog(false)}>Cancel</Button>
+            <Button onClick={() => addNoteMutation.mutate({ contactId: task.contactId, body: noteBody })}
+              disabled={!noteBody.trim() || addNoteMutation.isPending}>
               {addNoteMutation.isPending ? "Adding..." : "Add Note"}
             </Button>
           </DialogFooter>
@@ -1169,48 +1403,25 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Update Workflow for {task.contactName || "Contact"}</DialogTitle>
-            <DialogDescription>
-              Add this contact to a workflow or remove them from one.
-            </DialogDescription>
+            <DialogDescription>Add this contact to a workflow or remove them from one.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Add / Remove toggle */}
             <div className="flex gap-2">
-              <Button
-                variant={workflowAction === "add" ? "default" : "outline"}
-                size="sm"
-                className="flex-1"
-                onClick={() => { setWorkflowAction("add"); setSelectedWorkflow(""); }}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Add to Workflow
+              <Button variant={workflowAction === "add" ? "default" : "outline"} size="sm" className="flex-1" onClick={() => { setWorkflowAction("add"); setSelectedWorkflow(""); }}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" /> Add to Workflow
               </Button>
-              <Button
-                variant={workflowAction === "remove" ? "default" : "outline"}
-                size="sm"
-                className="flex-1"
-                onClick={() => { setWorkflowAction("remove"); setSelectedWorkflow(""); }}
-              >
-                <Minus className="h-3.5 w-3.5 mr-1.5" />
-                Remove from Workflow
+              <Button variant={workflowAction === "remove" ? "default" : "outline"} size="sm" className="flex-1" onClick={() => { setWorkflowAction("remove"); setSelectedWorkflow(""); }}>
+                <Minus className="h-3.5 w-3.5 mr-1.5" /> Remove from Workflow
               </Button>
             </div>
-            {/* Searchable workflow selector */}
             {workflowAction === "remove" && enrolledWorkflows.length === 0 ? (
               <div className="rounded-md p-4 text-center" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
-                  No workflows found for this contact. Only workflows added through Gunner are tracked.
-                </p>
+                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>No workflows found for this contact.</p>
               </div>
             ) : (
               <Popover open={workflowSearchOpen} onOpenChange={setWorkflowSearchOpen}>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={workflowSearchOpen}
-                    className="w-full justify-between font-normal"
-                  >
+                  <Button variant="outline" role="combobox" aria-expanded={workflowSearchOpen} className="w-full justify-between font-normal">
                     {selectedWorkflow
                       ? (workflowAction === "remove"
                           ? (enrolledWorkflows.find(w => w.workflowId === selectedWorkflow)?.workflowName || "Select a workflow...")
@@ -1227,28 +1438,14 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                       <CommandGroup>
                         {workflowAction === "remove" ? (
                           enrolledWorkflows.map(w => (
-                            <CommandItem
-                              key={w.workflowId}
-                              value={w.workflowName}
-                              onSelect={() => {
-                                setSelectedWorkflow(w.workflowId);
-                                setWorkflowSearchOpen(false);
-                              }}
-                            >
+                            <CommandItem key={w.workflowId} value={w.workflowName} onSelect={() => { setSelectedWorkflow(w.workflowId); setWorkflowSearchOpen(false); }}>
                               <Check className={`mr-2 h-4 w-4 ${selectedWorkflow === w.workflowId ? "opacity-100" : "opacity-0"}`} />
                               {w.workflowName}
                             </CommandItem>
                           ))
                         ) : (
                           (workflows || []).map((w: { id: string; name: string }) => (
-                            <CommandItem
-                              key={w.id}
-                              value={w.name}
-                              onSelect={() => {
-                                setSelectedWorkflow(w.id);
-                                setWorkflowSearchOpen(false);
-                              }}
-                            >
+                            <CommandItem key={w.id} value={w.name} onSelect={() => { setSelectedWorkflow(w.id); setWorkflowSearchOpen(false); }}>
                               <Check className={`mr-2 h-4 w-4 ${selectedWorkflow === w.id ? "opacity-100" : "opacity-0"}`} />
                               {w.name}
                             </CommandItem>
@@ -1262,32 +1459,17 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowWorkflowDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (workflowAction === "add") {
-                  const wfName = workflows?.find((w: { id: string; name: string }) => w.id === selectedWorkflow)?.name;
-                  startWorkflowMutation.mutate({
-                    contactId: task.contactId,
-                    workflowId: selectedWorkflow,
-                    workflowName: wfName || undefined,
-                    contactName: task.contactName || undefined,
-                  });
-                } else {
-                  const wfName = enrolledWorkflows.find(w => w.workflowId === selectedWorkflow)?.workflowName;
-                  removeWorkflowMutation.mutate({
-                    contactId: task.contactId,
-                    workflowId: selectedWorkflow,
-                    workflowName: wfName || undefined,
-                    contactName: task.contactName || undefined,
-                  });
-                }
-              }}
-              disabled={!selectedWorkflow || startWorkflowMutation.isPending || removeWorkflowMutation.isPending}
-              variant={workflowAction === "remove" ? "destructive" : "default"}
-            >
+            <Button variant="outline" onClick={() => setShowWorkflowDialog(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if (workflowAction === "add") {
+                const wfName = workflows?.find((w: { id: string; name: string }) => w.id === selectedWorkflow)?.name;
+                startWorkflowMutation.mutate({ contactId: task.contactId, workflowId: selectedWorkflow, workflowName: wfName || undefined, contactName: task.contactName || undefined });
+              } else {
+                const wfName = enrolledWorkflows.find(w => w.workflowId === selectedWorkflow)?.workflowName;
+                removeWorkflowMutation.mutate({ contactId: task.contactId, workflowId: selectedWorkflow, workflowName: wfName || undefined, contactName: task.contactName || undefined });
+              }
+            }} disabled={!selectedWorkflow || startWorkflowMutation.isPending || removeWorkflowMutation.isPending}
+              variant={workflowAction === "remove" ? "destructive" : "default"}>
               {(startWorkflowMutation.isPending || removeWorkflowMutation.isPending)
                 ? (workflowAction === "add" ? "Adding..." : "Removing...")
                 : (workflowAction === "add" ? "Add to Workflow" : "Remove from Workflow")}
@@ -1301,50 +1483,28 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Appointment</DialogTitle>
-            <DialogDescription>
-              Schedule a calendar appointment for {task.contactName || "this contact"}.
-            </DialogDescription>
+            <DialogDescription>Schedule a calendar appointment for {task.contactName || "this contact"}.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="apt-title">Title</Label>
-              <Input
-                id="apt-title"
-                value={aptTitle}
-                onChange={(e) => setAptTitle(e.target.value)}
-                placeholder="Appointment title..."
-              />
+              <Input id="apt-title" value={aptTitle} onChange={(e) => setAptTitle(e.target.value)} placeholder="Appointment title..." />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="apt-date">Date</Label>
-                <Input
-                  id="apt-date"
-                  type="date"
-                  value={aptDate}
-                  onChange={(e) => setAptDate(e.target.value)}
-                />
+                <Input id="apt-date" type="date" value={aptDate} onChange={(e) => setAptDate(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="apt-time">Time</Label>
-                <Input
-                  id="apt-time"
-                  type="time"
-                  value={aptTime}
-                  onChange={(e) => setAptTime(e.target.value)}
-                />
+                <Input id="apt-time" type="time" value={aptTime} onChange={(e) => setAptTime(e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">
               <Label>Calendar</Label>
               <Popover open={calendarSearchOpen} onOpenChange={setCalendarSearchOpen}>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={calendarSearchOpen}
-                    className="w-full justify-between font-normal"
-                  >
+                  <Button variant="outline" role="combobox" aria-expanded={calendarSearchOpen} className="w-full justify-between font-normal">
                     {aptCalendar && calendars
                       ? (calendars.find((c: { id: string; name: string }) => c.id === aptCalendar)?.name || "Select a calendar...")
                       : "Select a calendar..."}
@@ -1358,14 +1518,7 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
                       <CommandEmpty>No calendars found.</CommandEmpty>
                       <CommandGroup>
                         {(calendars || []).map((c: { id: string; name: string }) => (
-                          <CommandItem
-                            key={c.id}
-                            value={c.name}
-                            onSelect={() => {
-                              setAptCalendar(c.id);
-                              setCalendarSearchOpen(false);
-                            }}
-                          >
+                          <CommandItem key={c.id} value={c.name} onSelect={() => { setAptCalendar(c.id); setCalendarSearchOpen(false); }}>
                             <Check className={`mr-2 h-4 w-4 ${aptCalendar === c.id ? "opacity-100" : "opacity-0"}`} />
                             {c.name}
                           </CommandItem>
@@ -1378,111 +1531,22 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
             </div>
             <div className="space-y-2">
               <Label htmlFor="apt-notes">Notes (optional)</Label>
-              <Textarea
-                id="apt-notes"
-                value={aptNotes}
-                onChange={(e) => setAptNotes(e.target.value)}
-                placeholder="Additional notes..."
-                rows={2}
-              />
+              <Textarea id="apt-notes" value={aptNotes} onChange={(e) => setAptNotes(e.target.value)} placeholder="Additional notes..." rows={2} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAptDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (!aptDate || !aptTime) {
-                  toast.error("Please select a date and time");
-                  return;
-                }
-                const startTime = new Date(`${aptDate}T${aptTime}:00`).toISOString();
-                const endTime = new Date(new Date(`${aptDate}T${aptTime}:00`).getTime() + 60 * 60 * 1000).toISOString();
-                createAptMutation.mutate({
-                  contactId: task.contactId,
-                  calendarId: aptCalendar,
-                  title: aptTitle,
-                  startTime,
-                  endTime,
-                  notes: aptNotes || undefined,
-                });
-              }}
-              disabled={!aptTitle.trim() || !aptDate || !aptTime || !aptCalendar || createAptMutation.isPending}
-            >
+            <Button variant="outline" onClick={() => setShowAptDialog(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if (!aptDate || !aptTime) { toast.error("Please select a date and time"); return; }
+              const startTime = new Date(`${aptDate}T${aptTime}:00`).toISOString();
+              const endTime = new Date(new Date(`${aptDate}T${aptTime}:00`).getTime() + 60 * 60 * 1000).toISOString();
+              createAptMutation.mutate({ contactId: task.contactId, calendarId: aptCalendar, title: aptTitle, startTime, endTime, notes: aptNotes || undefined });
+            }} disabled={!aptTitle.trim() || !aptDate || !aptTime || !aptCalendar || createAptMutation.isPending}>
               {createAptMutation.isPending ? "Creating..." : "Create Appointment"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-// ─── TASK GROUP SECTION ─────────────────────────────────
-
-function TaskGroupSection({
-  title,
-  icon,
-  tasks,
-  color,
-  expandedTaskId,
-  setExpandedTaskId,
-  completingTaskIds,
-  onComplete,
-  onEdit,
-  onDelete,
-  allTasks,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  tasks: Task[];
-  color: string;
-  expandedTaskId: string | null;
-  setExpandedTaskId: (id: string | null) => void;
-  completingTaskIds: Set<string>;
-  onComplete: (task: Task) => void;
-  onEdit: (task: Task) => void;
-  onDelete: (task: Task) => void;
-  allTasks: Task[];
-}) {
-  if (tasks.length === 0) return null;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 mb-2">
-        {icon}
-        <h3 className="text-sm font-semibold" style={{ color }}>
-          {title}
-        </h3>
-        <Badge
-          variant="secondary"
-          className="text-xs h-5"
-          style={{
-            background: "var(--g-bg-inset)",
-            color: "var(--g-text-secondary)",
-          }}
-        >
-          {tasks.length}
-        </Badge>
-      </div>
-      <div className="space-y-1.5">
-        {tasks.map((task) => (
-          <TaskRow
-            key={task.id}
-            task={task}
-            onComplete={() => onComplete(task)}
-            onEdit={() => onEdit(task)}
-            onDelete={() => onDelete(task)}
-            onExpand={() =>
-              setExpandedTaskId(expandedTaskId === task.id ? null : task.id)
-            }
-            isExpanded={expandedTaskId === task.id}
-            isCompleting={completingTaskIds.has(task.id)}
-            allTasks={allTasks}
-          />
-        ))}
-      </div>
     </div>
   );
 }
@@ -1498,6 +1562,7 @@ export default function TaskCenter() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   // Edit dialog state
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -1513,21 +1578,23 @@ export default function TaskCenter() {
     user?.role === "admin" ||
     (user as any)?.isTenantAdmin === "true";
 
-  // Fetch tasks
-  const { data, isLoading, isError, refetch } = trpc.taskCenter.getTasks.useQuery(
+  // Fetch priority tasks
+  const { data, isLoading, isError } = trpc.taskCenter.getPriorityTasks.useQuery(
     {
       assignedToGhlUserId: selectedMember !== "all" ? selectedMember : undefined,
+      categoryFilter: categoryFilter !== "all" ? categoryFilter as any : undefined,
     },
-    {
-      refetchInterval: 60000, // Refresh every minute
-    }
+    { refetchInterval: 60000 }
   );
 
-  // Refresh tasks mutation (clears server-side cache)
+  // Refresh tasks mutation
   const [isRefreshing, setIsRefreshing] = useState(false);
   const refreshTasksMutation = trpc.taskCenter.refreshTasks.useMutation({
     onSuccess: () => {
-      utils.taskCenter.getTasks.invalidate();
+      utils.taskCenter.getPriorityTasks.invalidate();
+      utils.taskCenter.getUnreadConversations.invalidate();
+      utils.taskCenter.getTodayAppointments.invalidate();
+      utils.taskCenter.getKpiSummary.invalidate();
     },
   });
 
@@ -1535,9 +1602,9 @@ export default function TaskCenter() {
     setIsRefreshing(true);
     try {
       await refreshTasksMutation.mutateAsync();
-      toast.success("Tasks refreshed");
-    } catch (err) {
-      toast.error("Failed to refresh tasks");
+      toast.success("Day Hub refreshed");
+    } catch {
+      toast.error("Failed to refresh");
     } finally {
       setIsRefreshing(false);
     }
@@ -1550,20 +1617,12 @@ export default function TaskCenter() {
     },
     onSuccess: (_, { taskId }) => {
       toast.success("Task completed");
-      setCompletingTaskIds((prev) => {
-        const next = new Set(prev);
-        next.delete(taskId);
-        return next;
-      });
-      utils.taskCenter.getTasks.invalidate();
+      setCompletingTaskIds((prev) => { const next = new Set(prev); next.delete(taskId); return next; });
+      utils.taskCenter.getPriorityTasks.invalidate();
     },
     onError: (err, { taskId }) => {
       toast.error("Failed to complete task", { description: err.message });
-      setCompletingTaskIds((prev) => {
-        const next = new Set(prev);
-        next.delete(taskId);
-        return next;
-      });
+      setCompletingTaskIds((prev) => { const next = new Set(prev); next.delete(taskId); return next; });
     },
   });
 
@@ -1572,7 +1631,7 @@ export default function TaskCenter() {
     onSuccess: () => {
       toast.success("Task updated");
       setEditingTask(null);
-      utils.taskCenter.getTasks.invalidate();
+      utils.taskCenter.getPriorityTasks.invalidate();
     },
     onError: (err) => toast.error("Failed to update task", { description: err.message }),
   });
@@ -1582,7 +1641,7 @@ export default function TaskCenter() {
     onSuccess: () => {
       toast.success("Task deleted");
       setDeletingTask(null);
-      utils.taskCenter.getTasks.invalidate();
+      utils.taskCenter.getPriorityTasks.invalidate();
     },
     onError: (err) => toast.error("Failed to delete task", { description: err.message }),
   });
@@ -1601,36 +1660,17 @@ export default function TaskCenter() {
     );
   }, [data?.tasks, searchQuery]);
 
-  // Group tasks
-  const overdueTasks = useMemo(
-    () => filteredTasks.filter((t: Task) => t.group === "overdue"),
-    [filteredTasks]
-  );
-  const todayTasks = useMemo(
-    () => filteredTasks.filter((t: Task) => t.group === "today"),
-    [filteredTasks]
-  );
-  const upcomingTasks = useMemo(
-    () => filteredTasks.filter((t: Task) => t.group === "upcoming"),
-    [filteredTasks]
-  );
-
-  // Stats
   const totalTasks = filteredTasks.length;
-  const overdueCount = overdueTasks.length;
+  const overdueCount = useMemo(() => filteredTasks.filter((t: Task) => t.group === "overdue").length, [filteredTasks]);
 
   const handleComplete = (task: Task) => {
-    completeTaskMutation.mutate({
-      contactId: task.contactId,
-      taskId: task.id,
-    });
+    completeTaskMutation.mutate({ contactId: task.contactId, taskId: task.id });
   };
 
   const handleEdit = (task: Task) => {
     setEditingTask(task);
     setEditTitle(task.title);
     setEditBody(task.body || "");
-    // Format date for input[type="date"]
     if (task.dueDate) {
       const d = new Date(task.dueDate);
       setEditDueDate(d.toISOString().split("T")[0]);
@@ -1656,106 +1696,22 @@ export default function TaskCenter() {
 
   const confirmDelete = () => {
     if (!deletingTask) return;
-    deleteTaskMutation.mutate({
-      contactId: deletingTask.contactId,
-      taskId: deletingTask.id,
-    });
+    deleteTaskMutation.mutate({ contactId: deletingTask.contactId, taskId: deletingTask.id });
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="px-4 py-4 space-y-4" style={{ maxWidth: "100%" }}>
       {/* Header */}
-      <div>
-        <h1
-          className="text-2xl font-bold tracking-tight"
-          style={{ color: "var(--g-text-primary)" }}
-        >
-          Task Center
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--g-text-secondary)" }}>
-          Manage tasks, take quick actions, and keep leads moving forward.
-        </p>
-      </div>
-
-      {/* Stats Bar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div
-          className="flex items-center gap-2 rounded-lg px-3 py-2"
-          style={{
-            background: "var(--g-bg-card)",
-            border: "1px solid var(--g-border-subtle)",
-          }}
-        >
-          <CalendarDays className="h-4 w-4" style={{ color: "var(--g-text-tertiary)" }} />
-          <span className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>
-            {totalTasks} tasks
-          </span>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
+            <Flame className="h-6 w-6" style={{ color: "var(--g-accent)" }} />
+            Day Hub
+          </h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
+            Your daily command center — prioritized tasks, KPIs, and inbox.
+          </p>
         </div>
-        {overdueCount > 0 && (
-          <div
-            className="flex items-center gap-2 rounded-lg px-3 py-2"
-            style={{
-              background: "oklch(0.25 0.03 25 / 0.4)",
-              border: "1px solid var(--g-accent)",
-            }}
-          >
-            <AlertTriangle className="h-4 w-4" style={{ color: "var(--g-accent)" }} />
-            <span className="text-sm font-medium" style={{ color: "var(--g-accent)" }}>
-              {overdueCount} overdue
-            </span>
-          </div>
-        )}
-        <div
-          className="flex items-center gap-2 rounded-lg px-3 py-2"
-          style={{
-            background: "var(--g-bg-card)",
-            border: "1px solid var(--g-border-subtle)",
-          }}
-        >
-          <Clock className="h-4 w-4" style={{ color: "oklch(0.75 0.15 85)" }} />
-          <span className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>
-            {todayTasks.length} due today
-          </span>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
-            style={{ color: "var(--g-text-tertiary)" }}
-          />
-          <Input
-            placeholder="Search tasks or contacts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9"
-          />
-        </div>
-
-        {/* Team member filter (admin only) */}
-        {isAdmin && data?.teamMembers && data.teamMembers.length > 0 && (
-          <Select value={selectedMember} onValueChange={setSelectedMember}>
-            <SelectTrigger className="w-[200px] h-9">
-              <Users className="h-4 w-4 mr-2" style={{ color: "var(--g-text-tertiary)" }} />
-              <SelectValue placeholder="All Team Members" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Team Members</SelectItem>
-              {data.teamMembers
-                .filter((m: TeamMember) => m.ghlUserId)
-                .map((m: TeamMember) => (
-                  <SelectItem key={m.id} value={m.ghlUserId!}>
-                    {m.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        {/* Refresh */}
         <Button
           variant="outline"
           size="sm"
@@ -1767,149 +1723,136 @@ export default function TaskCenter() {
         </Button>
       </div>
 
-      {/* Task List */}
-      {isLoading ? (
+      {/* KPI Bar */}
+      <KpiBar />
+
+      {/* Main content: Left panel + Task list */}
+      <div className="grid grid-cols-[280px_1fr] gap-4" style={{ minHeight: "calc(100vh - 280px)" }}>
+        {/* Left Panel */}
+        <LeftPanel />
+
+        {/* Right: Task List */}
         <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
-          ))}
-        </div>
-      ) : isError ? (
-        <div
-          className="rounded-lg py-8 text-center"
-          style={{
-            background: "var(--g-bg-card)",
-            border: "1px solid var(--g-border-subtle)",
-          }}
-        >
-          <AlertTriangle className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-accent)" }} />
-          <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
-            Failed to load tasks. Make sure GHL is connected and try again.
-          </p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={handleRefresh}>
-            Retry
-          </Button>
-        </div>
-      ) : totalTasks === 0 ? (
-        <div
-          className="rounded-lg py-12 text-center"
-          style={{
-            background: "var(--g-bg-card)",
-            border: "1px solid var(--g-border-subtle)",
-          }}
-        >
-          <CheckCircle2
-            className="h-10 w-10 mx-auto mb-3"
-            style={{ color: "oklch(0.7 0.15 150)" }}
-          />
-          <h3
-            className="font-semibold text-lg"
-            style={{ color: "var(--g-text-primary)" }}
-          >
-            All Clear
-          </h3>
-          <p className="text-sm mt-1" style={{ color: "var(--g-text-secondary)" }}>
-            {selectedMember !== "all"
-              ? "No pending tasks for this team member."
-              : "No pending tasks. Great work!"}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Overdue */}
-          <TaskGroupSection
-            title="Overdue"
-            icon={<AlertTriangle className="h-4 w-4" style={{ color: "var(--g-accent)" }} />}
-            tasks={overdueTasks}
-            color="var(--g-accent)"
-            expandedTaskId={expandedTaskId}
-            setExpandedTaskId={setExpandedTaskId}
-            completingTaskIds={completingTaskIds}
-            onComplete={handleComplete}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            allTasks={filteredTasks}
-          />
+          {/* Filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--g-text-tertiary)" }} />
+              <Input placeholder="Search tasks or contacts..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9" />
+            </div>
 
-          {/* Due Today */}
-          <TaskGroupSection
-            title="Due Today"
-            icon={<Clock className="h-4 w-4" style={{ color: "oklch(0.75 0.15 85)" }} />}
-            tasks={todayTasks}
-            color="oklch(0.75 0.15 85)"
-            expandedTaskId={expandedTaskId}
-            setExpandedTaskId={setExpandedTaskId}
-            completingTaskIds={completingTaskIds}
-            onComplete={handleComplete}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            allTasks={filteredTasks}
-          />
+            {/* Category filter */}
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[160px] h-9">
+                <Target className="h-4 w-4 mr-2" style={{ color: "var(--g-text-tertiary)" }} />
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="new_lead">New Leads</SelectItem>
+                <SelectItem value="reschedule">Reschedule</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="follow_up">Follow-Up</SelectItem>
+              </SelectContent>
+            </Select>
 
-          {/* Upcoming */}
-          <TaskGroupSection
-            title="Upcoming"
-            icon={<CalendarDays className="h-4 w-4" style={{ color: "oklch(0.65 0.15 250)" }} />}
-            tasks={upcomingTasks}
-            color="oklch(0.65 0.15 250)"
-            expandedTaskId={expandedTaskId}
-            setExpandedTaskId={setExpandedTaskId}
-            completingTaskIds={completingTaskIds}
-            onComplete={handleComplete}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            allTasks={filteredTasks}
-          />
+            {/* Team member filter */}
+            {isAdmin && data?.teamMembers && data.teamMembers.length > 0 && (
+              <Select value={selectedMember} onValueChange={setSelectedMember}>
+                <SelectTrigger className="w-[180px] h-9">
+                  <Users className="h-4 w-4 mr-2" style={{ color: "var(--g-text-tertiary)" }} />
+                  <SelectValue placeholder="All Team Members" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Team Members</SelectItem>
+                  {data.teamMembers
+                    .filter((m: TeamMember) => m.ghlUserId)
+                    .map((m: TeamMember) => (
+                      <SelectItem key={m.id} value={m.ghlUserId!}>{m.name}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Stats summary */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 rounded-lg px-3 py-1.5" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}>
+              <span className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>{totalTasks} tasks</span>
+            </div>
+            {overdueCount > 0 && (
+              <div className="flex items-center gap-2 rounded-lg px-3 py-1.5" style={{ background: "oklch(0.25 0.03 25 / 0.4)", border: "1px solid var(--g-accent)" }}>
+                <AlertTriangle className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
+                <span className="text-sm font-medium" style={{ color: "var(--g-accent)" }}>{overdueCount} overdue</span>
+              </div>
+            )}
+          </div>
+
+          {/* Task List */}
+          {isLoading ? (
+            <div className="space-y-2">
+              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+            </div>
+          ) : isError ? (
+            <div className="rounded-lg py-8 text-center" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}>
+              <AlertTriangle className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-accent)" }} />
+              <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+                Failed to load tasks. Make sure GHL is connected and try again.
+              </p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={handleRefresh}>Retry</Button>
+            </div>
+          ) : totalTasks === 0 ? (
+            <div className="rounded-lg py-12 text-center" style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}>
+              <CheckCircle2 className="h-10 w-10 mx-auto mb-3" style={{ color: "oklch(0.7 0.15 150)" }} />
+              <h3 className="font-semibold text-lg" style={{ color: "var(--g-text-primary)" }}>All Clear</h3>
+              <p className="text-sm mt-1" style={{ color: "var(--g-text-secondary)" }}>
+                {selectedMember !== "all" ? "No pending tasks for this team member." : "No pending tasks. Great work!"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {filteredTasks.map((task: Task, index: number) => (
+                <PriorityTaskRow
+                  key={task.id}
+                  task={task}
+                  rank={index + 1}
+                  onComplete={() => handleComplete(task)}
+                  onEdit={() => handleEdit(task)}
+                  onDelete={() => handleDelete(task)}
+                  onExpand={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+                  isExpanded={expandedTaskId === task.id}
+                  isCompleting={completingTaskIds.has(task.id)}
+                  allTasks={filteredTasks}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Edit Task Dialog */}
       <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Task</DialogTitle>
-            <DialogDescription>
-              Update the task details below. Changes will sync to GHL.
-            </DialogDescription>
+            <DialogDescription>Update the task details below. Changes will sync to GHL.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-title">Title</Label>
-              <Input
-                id="edit-title"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Task title..."
-              />
+              <Input id="edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Task title..." />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-body">Description</Label>
-              <Textarea
-                id="edit-body"
-                value={editBody}
-                onChange={(e) => setEditBody(e.target.value)}
-                placeholder="Task description (optional)..."
-                rows={3}
-              />
+              <Textarea id="edit-body" value={editBody} onChange={(e) => setEditBody(e.target.value)} placeholder="Task description (optional)..." rows={3} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-due-date">Due Date</Label>
-              <Input
-                id="edit-due-date"
-                type="date"
-                value={editDueDate}
-                onChange={(e) => setEditDueDate(e.target.value)}
-              />
+              <Input id="edit-due-date" type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingTask(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={submitEdit}
-              disabled={!editTitle.trim() || editTaskMutation.isPending}
-            >
+            <Button variant="outline" onClick={() => setEditingTask(null)}>Cancel</Button>
+            <Button onClick={submitEdit} disabled={!editTitle.trim() || editTaskMutation.isPending}>
               {editTaskMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
@@ -1921,38 +1864,21 @@ export default function TaskCenter() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Task</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this task? This action cannot be undone and will also remove it from GHL.
-            </DialogDescription>
+            <DialogDescription>Are you sure you want to delete this task? This action cannot be undone.</DialogDescription>
           </DialogHeader>
           {deletingTask && (
-            <div
-              className="rounded-md p-3"
-              style={{
-                background: "var(--g-bg-inset)",
-                border: "1px solid var(--g-border-subtle)",
-              }}
-            >
-              <p className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>
-                {deletingTask.title}
-              </p>
+            <div className="rounded-md p-3" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+              <p className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>{deletingTask.title}</p>
               {deletingTask.contactName && (
                 <p className="text-xs mt-1" style={{ color: "var(--g-text-secondary)" }}>
-                  {deletingTask.contactName}
-                  {deletingTask.contactAddress ? ` — ${deletingTask.contactAddress}` : ""}
+                  {deletingTask.contactName}{deletingTask.contactAddress ? ` — ${deletingTask.contactAddress}` : ""}
                 </p>
               )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingTask(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmDelete}
-              disabled={deleteTaskMutation.isPending}
-            >
+            <Button variant="outline" onClick={() => setDeletingTask(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleteTaskMutation.isPending}>
               {deleteTaskMutation.isPending ? "Deleting..." : "Delete Task"}
             </Button>
           </DialogFooter>

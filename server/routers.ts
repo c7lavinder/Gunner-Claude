@@ -7190,6 +7190,155 @@ selectedTimezone: { type: "string" },
           assignedTo
         );
       }),
+
+    // ─── DAY HUB ENDPOINTS ────────────────────────────────
+
+    // Get priority-scored tasks for Day Hub
+    getPriorityTasks: protectedProcedure
+      .input(z.object({
+        assignedToGhlUserId: z.string().optional(),
+        categoryFilter: z.enum(["all", "new_lead", "reschedule", "admin", "follow_up"]).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+
+        const { searchLocationTasks, enrichTasks, getTeamMemberGhlMap, getTeamMembersForFilter } = await import("./taskCenter");
+        const { prioritizeTasks } = await import("./dayHub");
+
+        const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin";
+        let assignedTo: string[] | undefined;
+        if (input?.assignedToGhlUserId) {
+          assignedTo = [input.assignedToGhlUserId];
+        }
+
+        const [rawTasks, memberMap, memberList] = await Promise.all([
+          searchLocationTasks(ctx.user.tenantId, { assignedTo, completed: false }),
+          getTeamMemberGhlMap(ctx.user.tenantId),
+          isAdmin ? getTeamMembersForFilter(ctx.user.tenantId) : Promise.resolve([]),
+        ]);
+
+        const enriched = enrichTasks(rawTasks, memberMap);
+        let prioritized = prioritizeTasks(enriched);
+
+        // Apply category filter
+        if (input?.categoryFilter && input.categoryFilter !== "all") {
+          prioritized = prioritized.filter(t => t.category === input.categoryFilter);
+        }
+
+        return { tasks: prioritized, teamMembers: memberList };
+      }),
+
+    // Get unread/missed conversations
+    getUnreadConversations: protectedProcedure
+      .input(z.object({
+        assignedToGhlUserId: z.string().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+
+        const { getUnreadConversations } = await import("./dayHub");
+        return await getUnreadConversations(ctx.user.tenantId, input?.assignedToGhlUserId);
+      }),
+
+    // Get today's appointments
+    getTodayAppointments: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+        }
+
+        const { getTodayAppointments } = await import("./dayHub");
+        return await getTodayAppointments(ctx.user.tenantId);
+      }),
+
+    // Get KPI summary for the current user
+    getKpiSummary: protectedProcedure
+      .input(z.object({
+        date: z.string().optional(), // YYYY-MM-DD, defaults to today EST
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+
+        const { getKpiSummary, getKpiColor, LM_TARGETS, AM_TARGETS } = await import("./dayHub");
+
+        // Default to today in EST
+        const now = new Date();
+        const estFormatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/New_York",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        });
+        const estDateStr = estFormatter.format(now);
+        const [month, day, year] = estDateStr.split("/").map(Number);
+        const date = input?.date || `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+        const summary = await getKpiSummary(ctx.user.tenantId, ctx.user.id, date);
+
+        return {
+          ...summary,
+          date,
+          targets: { lm: LM_TARGETS, am: AM_TARGETS },
+          colors: {
+            calls_lm: getKpiColor(summary.calls, LM_TARGETS.calls),
+            conversations_lm: getKpiColor(summary.conversations, LM_TARGETS.conversations),
+            appointments_lm: getKpiColor(summary.appointments, LM_TARGETS.appointments),
+            calls_am: getKpiColor(summary.calls, AM_TARGETS.calls),
+            offers_am: getKpiColor(summary.offers, AM_TARGETS.conversations),
+            contracts_am: getKpiColor(summary.contracts, AM_TARGETS.appointments),
+          },
+        };
+      }),
+
+    // Get daily KPI entries for the detail popup
+    getDailyKpiEntries: protectedProcedure
+      .input(z.object({
+        date: z.string(),
+        kpiType: z.enum(["call", "conversation", "appointment", "offer", "contract"]),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getDailyKpiEntries } = await import("./dayHub");
+        const entries = await getDailyKpiEntries(ctx.user.tenantId, ctx.user.id, input.date);
+        return entries.filter(e => e.kpiType === input.kpiType);
+      }),
+
+    // Add a manual KPI entry
+    addKpiEntry: protectedProcedure
+      .input(z.object({
+        date: z.string(),
+        kpiType: z.enum(["call", "conversation", "appointment", "offer", "contract"]),
+        contactName: z.string().optional(),
+        propertyAddress: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { addDailyKpiEntry } = await import("./dayHub");
+        return await addDailyKpiEntry(
+          ctx.user.tenantId,
+          ctx.user.id,
+          input.date,
+          input.kpiType,
+          { contactName: input.contactName, propertyAddress: input.propertyAddress, notes: input.notes }
+        );
+      }),
+
+    // Delete a manual KPI entry
+    deleteKpiEntry: protectedProcedure
+      .input(z.object({ entryId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { deleteDailyKpiEntry } = await import("./dayHub");
+        return await deleteDailyKpiEntry(ctx.user.tenantId, ctx.user.id, input.entryId);
+      }),
   }),
 });
 
