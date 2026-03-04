@@ -193,7 +193,7 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
     },
   });
 
-  // IMPORTANT: useMemo must be called before any early returns to satisfy React's Rules of Hooks
+  // IMPORTANT: useMemo must be called before any early returns to satisfy React's Rules of Hooks (fix for error #310)
   const targets = useMemo(() => {
     if (roleTab !== "admin" || !teamMembers || teamMembers.length === 0) {
       return ROLE_TAB_CONFIG[roleTab].kpiTargets;
