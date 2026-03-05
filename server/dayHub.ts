@@ -18,6 +18,22 @@ import { getDb } from "./db";
 import { dailyKpiEntries, calls, teamMembers } from "../drizzle/schema";
 import { eq, and, sql, gte, lt, inArray } from "drizzle-orm";
 
+// ─── SERVER-SIDE CACHE ──────────────────────────────────
+
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+const CACHE_TTL_MS = 60_000; // 60 seconds
+const inboxCache = new Map<number, CacheEntry>();
+const appointmentCache = new Map<number, CacheEntry>();
+
+export function clearDayHubCache(tenantId: number) {
+  inboxCache.delete(tenantId);
+  appointmentCache.delete(tenantId);
+}
+
 // ─── HELPERS ─────────────────────────────────────────────
 
 function toTitleCase(str: string): string {
@@ -294,10 +310,24 @@ export async function getUnreadConversations(
   tenantId: number,
   assignedToGhlUserId?: string
 ): Promise<UnreadConversation[]> {
+  // Check cache first (keyed by tenantId, ignores assignedTo for simplicity)
+  const cacheKey = tenantId;
+  const cached = inboxCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+    console.log(`[DayHub] Inbox cache hit for tenant ${tenantId}`);
+    const cachedData = cached.data as UnreadConversation[];
+    // Apply assignedTo filter on cached data if needed
+    if (assignedToGhlUserId) {
+      return cachedData.filter(c => c.assignedTo === assignedToGhlUserId);
+    }
+    return cachedData;
+  }
+
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) return [];
 
   try {
+    // Fetch ALL unread (no assignedTo filter) so cache works for any filter
     let path = `/conversations/search?locationId=${creds.locationId}&status=unread&limit=50`;
     if (assignedToGhlUserId) {
       path += `&assignedTo=${assignedToGhlUserId}`;
@@ -397,12 +427,7 @@ export async function getUnreadConversations(
               }
               // Build activity summary from contact data
               const summaryParts: string[] = [];
-              // Tags (e.g., "Hot Lead", "Motivated Seller")
-              if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) {
-                summaryParts.push(c.tags.slice(0, 3).join(", "));
-              }
-              // Pipeline stage
-              const pipelineName = c.pipelineStage || c.opportunities?.[0]?.pipelineStageId || "";
+              // Pipeline stage (most useful context)
               const stageName = c.pipelineStageName || c.opportunities?.[0]?.stageName || c.opportunities?.[0]?.status || "";
               if (stageName) summaryParts.push(`Stage: ${stageName}`);
               // DND status
@@ -438,6 +463,14 @@ export async function getUnreadConversations(
       return dateB - dateA;
     });
 
+    // Cache the full result set
+    inboxCache.set(cacheKey, { data: results, timestamp: Date.now() });
+    console.log(`[DayHub] Inbox cached ${results.length} conversations for tenant ${tenantId}`);
+
+    // Apply assignedTo filter if needed
+    if (assignedToGhlUserId) {
+      return results.filter((c: UnreadConversation) => c.assignedTo === assignedToGhlUserId);
+    }
     return results;
   } catch (error: any) {
     console.error("[DayHub] getUnreadConversations error:", error?.message);
@@ -469,6 +502,13 @@ export interface TodayAppointment {
 export async function getTodayAppointments(
   tenantId: number
 ): Promise<TodayAppointment[]> {
+  // Check cache first
+  const cached = appointmentCache.get(tenantId);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+    console.log(`[DayHub] Appointment cache hit for tenant ${tenantId}`);
+    return cached.data as TodayAppointment[];
+  }
+
   const creds = await getCredentialsForTenant(tenantId);
   if (!creds) return [];
 
@@ -552,9 +592,7 @@ export async function getTodayAppointments(
               if (!apt.contactPhone && c.phone) apt.contactPhone = c.phone;
               // Build activity summary from contact data
               const summaryParts: string[] = [];
-              if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) {
-                summaryParts.push(c.tags.slice(0, 3).join(", "));
-              }
+              // Pipeline stage (most useful context)
               const stageName = c.pipelineStageName || c.opportunities?.[0]?.stageName || c.opportunities?.[0]?.status || "";
               if (stageName) summaryParts.push(`Stage: ${stageName}`);
               if (c.dnd) summaryParts.push("DND");
@@ -566,7 +604,7 @@ export async function getTodayAppointments(
                 else if (daysDiff < 30) summaryParts.push(`Added ${daysDiff}d ago`);
               }
               if (c.source) summaryParts.push(`Source: ${c.source}`);
-              apt.activitySummary = summaryParts.join(" \u00b7 ");
+              apt.activitySummary = summaryParts.join(" · ");
             })
           );
           const failures = enrichResults.filter(r => r.status === "rejected").length;
@@ -590,6 +628,9 @@ export async function getTodayAppointments(
       if (isNaN(timeB)) return -1;
       return timeA - timeB;
     });
+    // Cache the results
+    appointmentCache.set(tenantId, { data: appointments, timestamp: Date.now() });
+    console.log(`[DayHub] Appointments cached ${appointments.length} items for tenant ${tenantId}`);
     return appointments;
   } catch (error: any) {
     console.error("[DayHub] getTodayAppointments error:", error?.message);

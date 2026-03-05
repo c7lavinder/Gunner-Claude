@@ -7489,6 +7489,35 @@ selectedTimezone: { type: "string" },
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to dismiss conversation" });
         }
       }),
+
+    // Get last 10 messages for a conversation (for inbox slide-out panel)
+    getConversationMessages: protectedProcedure
+      .input(z.object({ conversationId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getCredentialsForTenant, ghlFetch } = await import("./ghlActions");
+        const creds = await getCredentialsForTenant(ctx.user.tenantId);
+        if (!creds) throw new TRPCError({ code: "NOT_FOUND", message: "GHL not connected" });
+        try {
+          const data = await ghlFetch(
+            creds,
+            `/conversations/${input.conversationId}/messages?limit=10`
+          );
+          const messages = (data?.messages || data?.data?.messages || []).map((msg: any) => ({
+            id: msg.id || "",
+            body: msg.body || msg.message || "",
+            direction: msg.direction || (msg.type === 1 ? "inbound" : "outbound"),
+            messageType: msg.messageType || (msg.type === 1 ? "TYPE_SMS" : "TYPE_SMS"),
+            dateAdded: msg.dateAdded || msg.createdAt || "",
+          }));
+          // Reverse so oldest is first (GHL returns newest first)
+          messages.reverse();
+          return { messages };
+        } catch (err: any) {
+          console.error("[getConversationMessages] Error:", err.message);
+          return { messages: [] };
+        }
+      }),
   }),
 
   // ─── DISPO INVENTORY ───

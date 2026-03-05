@@ -899,10 +899,14 @@ async function syncGHLCall(ghlCall: ProcessedGHLCall): Promise<{ success: boolea
         propertyAddress = contactDetails.address;
         console.log(`[GHL] Got property address for contact ${ghlCall.contactId}: ${contactDetails.address}`);
       }
-      // Fill in contact name if missing from conversation data
-      if (!resolvedContactName && contactDetails.name) {
-        resolvedContactName = contactDetails.name;
-        console.log(`[GHL] Resolved contact name from API: ${resolvedContactName}`);
+      // Fill in contact name if missing or incomplete (first-name-only) from conversation data
+      if (contactDetails.name) {
+        const hasFullName = resolvedContactName && resolvedContactName.includes(' ');
+        const apiHasFullName = contactDetails.name.includes(' ');
+        if (!resolvedContactName || (!hasFullName && apiHasFullName)) {
+          resolvedContactName = contactDetails.name;
+          console.log(`[GHL] Resolved contact name from API: ${resolvedContactName}`);
+        }
       }
     }
 
@@ -1975,23 +1979,33 @@ export async function backfillGHLPropertyAddresses(): Promise<{
   const results = { updated: 0, skipped: 0, errors: 0 };
 
   try {
-    // Find GHL calls without property addresses
+    const { or, like, not } = await import("drizzle-orm");
+    // Find GHL calls without property addresses OR without full contact names
     const callsWithoutAddress = await db
       .select({
         id: callsTable.id,
         ghlContactId: callsTable.ghlContactId,
         tenantId: callsTable.tenantId,
+        contactName: callsTable.contactName,
+        propertyAddress: callsTable.propertyAddress,
       })
       .from(callsTable)
       .where(
         and(
           isNotNull(callsTable.ghlContactId),
-          isNull(callsTable.propertyAddress)
+          or(
+            isNull(callsTable.propertyAddress),
+            isNull(callsTable.contactName),
+            and(
+              isNotNull(callsTable.contactName),
+              not(like(callsTable.contactName, '% %'))
+            )
+          )
         )
       )
       .limit(200); // Process in batches
 
-    console.log(`[GHL Backfill] Found ${callsWithoutAddress.length} calls without property addresses`);
+    console.log(`[GHL Backfill] Found ${callsWithoutAddress.length} calls needing address or name backfill`);
 
     // Group by tenantId to load credentials once per tenant
     const byTenant = new Map<number, typeof callsWithoutAddress>();
@@ -2020,23 +2034,34 @@ export async function backfillGHLPropertyAddresses(): Promise<{
         newDealStageName: pollingCreds.newDealStageName,
       });
 
-      // Cache contact addresses to avoid duplicate lookups
-      const addressCache = new Map<string, string | null>();
+      // Cache contact details to avoid duplicate lookups
+      const detailsCache = new Map<string, { address: string | null; name: string | null }>();
 
       for (const call of tenantCalls) {
         try {
           if (!call.ghlContactId) { results.skipped++; continue; }
 
-          let address = addressCache.get(call.ghlContactId);
-          if (address === undefined) {
-            address = await fetchGHLContactAddress(call.ghlContactId);
-            addressCache.set(call.ghlContactId, address);
+          let details = detailsCache.get(call.ghlContactId);
+          if (!details) {
+            details = await fetchGHLContactDetails(call.ghlContactId);
+            detailsCache.set(call.ghlContactId, details);
           }
 
-          if (address) {
-            await updateCall(call.id, { propertyAddress: address });
+          const updates: any = {};
+          // Backfill address if missing
+          if (!call.propertyAddress && details.address) {
+            updates.propertyAddress = details.address;
+          }
+          // Backfill name if missing or incomplete (first-name-only)
+          const nameNeedsUpdate = !call.contactName || (call.contactName && !call.contactName.includes(' '));
+          if (nameNeedsUpdate && details.name && details.name.includes(' ')) {
+            updates.contactName = details.name;
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await updateCall(call.id, updates);
             results.updated++;
-            console.log(`[GHL Backfill] Updated call ${call.id} with address: ${address}`);
+            console.log(`[GHL Backfill] Updated call ${call.id}:`, updates);
           } else {
             results.skipped++;
           }

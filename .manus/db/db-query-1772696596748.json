@@ -1,0 +1,130 @@
+{
+  "query": "SELECT tenantId, teamRole, itemType, COUNT(*) as cnt FROM team_training_items GROUP BY tenantId, teamRole, itemType ORDER BY tenantId, teamRole, itemType LIMIT 30;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT tenantId, teamRole, itemType, COUNT(*) as cnt FROM team_training_items GROUP BY tenantId, teamRole, itemType ORDER BY tenantId, teamRole, itemType LIMIT 30;",
+  "rows": [
+    {
+      "tenantId": "1",
+      "teamRole": "NULL",
+      "itemType": "skill",
+      "cnt": "39"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "NULL",
+      "itemType": "issue",
+      "cnt": "44"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "NULL",
+      "itemType": "win",
+      "cnt": "42"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "NULL",
+      "itemType": "agenda",
+      "cnt": "40"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "lead_manager",
+      "itemType": "skill",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "lead_manager",
+      "itemType": "issue",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "lead_manager",
+      "itemType": "win",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "lead_manager",
+      "itemType": "agenda",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "acquisition_manager",
+      "itemType": "skill",
+      "cnt": "1"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "acquisition_manager",
+      "itemType": "issue",
+      "cnt": "1"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "acquisition_manager",
+      "itemType": "win",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "acquisition_manager",
+      "itemType": "agenda",
+      "cnt": "1"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "lead_generator",
+      "itemType": "skill",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "lead_generator",
+      "itemType": "issue",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "lead_generator",
+      "itemType": "win",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "1",
+      "teamRole": "lead_generator",
+      "itemType": "agenda",
+      "cnt": "2"
+    },
+    {
+      "tenantId": "540044",
+      "teamRole": "NULL",
+      "itemType": "skill",
+      "cnt": "6"
+    },
+    {
+      "tenantId": "540044",
+      "teamRole": "NULL",
+      "itemType": "issue",
+      "cnt": "6"
+    },
+    {
+      "tenantId": "540044",
+      "teamRole": "NULL",
+      "itemType": "win",
+      "cnt": "6"
+    },
+    {
+      "tenantId": "540044",
+      "teamRole": "NULL",
+      "itemType": "agenda",
+      "cnt": "6"
+    }
+  ],
+  "messages": [],
+  "stdout": "tenantId\tteamRole\titemType\tcnt\n1\tNULL\tskill\t39\n1\tNULL\tissue\t44\n1\tNULL\twin\t42\n1\tNULL\tagenda\t40\n1\tlead_manager\tskill\t2\n1\tlead_manager\tissue\t2\n1\tlead_manager\twin\t2\n1\tlead_manager\tagenda\t2\n1\tacquisition_manager\tskill\t1\n1\tacquisition_manager\tissue\t1\n1\tacquisition_manager\twin\t2\n1\tacquisition_manager\tagenda\t1\n1\tlead_generator\tskill\t2\n1\tlead_generator\tissue\t2\n1\tlead_generator\twin\t2\n1\tlead_generator\tagenda\t2\n540044\tNULL\tskill\t6\n540044\tNULL\tissue\t6\n540044\tNULL\twin\t6\n540044\tNULL\tagenda\t6\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

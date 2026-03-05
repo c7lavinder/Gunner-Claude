@@ -672,10 +672,10 @@ function TeamTrainingContent() {
           <div className="pt-6">
             <div className="w-full">
               <div className="obs-role-tabs">
-                <button className={`obs-role-tab ${materialCat === "all" ? "active" : ""}`} onClick={() => setMaterialCat("all")}><Users className="h-4 w-4 mr-2" />All Roles</button>
-                <button className={`obs-role-tab ${materialCat === "acquisition_manager" ? "active" : ""}`} onClick={() => setMaterialCat("acquisition_manager")}>Acquisition Manager</button>
-                <button className={`obs-role-tab ${materialCat === "lead_manager" ? "active" : ""}`} onClick={() => setMaterialCat("lead_manager")}>Lead Manager</button>
-                <button className={`obs-role-tab ${materialCat === "lead_generator" ? "active" : ""}`} onClick={() => setMaterialCat("lead_generator")}>Lead Generator</button>
+                <button className={`obs-role-tab ${selectedRole === "all" ? "active" : ""}`} onClick={() => { setSelectedRole("all"); setMaterialCat("all"); }}><Users className="h-4 w-4 mr-2" />All Roles</button>
+                <button className={`obs-role-tab ${selectedRole === "acquisition_manager" ? "active" : ""}`} onClick={() => { setSelectedRole("acquisition_manager"); setMaterialCat("acquisition_manager"); }}>Acquisition Manager</button>
+                <button className={`obs-role-tab ${selectedRole === "lead_manager" ? "active" : ""}`} onClick={() => { setSelectedRole("lead_manager"); setMaterialCat("lead_manager"); }}>Lead Manager</button>
+                <button className={`obs-role-tab ${selectedRole === "lead_generator" ? "active" : ""}`} onClick={() => { setSelectedRole("lead_generator"); setMaterialCat("lead_generator"); }}>Lead Generator</button>
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, lte, sql, inArray, isNotNull } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray, isNotNull, or, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
 import { 
@@ -1466,7 +1466,13 @@ export async function getTeamTrainingItems(options?: {
       conditions.push(eq(teamTrainingItems.status, options.status));
     }
     
-    conditions.push(eq(teamTrainingItems.teamRole, options.teamRole));
+    // Include items with this specific role OR items with NULL teamRole (applicable to all roles)
+    conditions.push(
+      or(
+        eq(teamTrainingItems.teamRole, options.teamRole),
+        isNull(teamTrainingItems.teamRole)
+      )!
+    );
     
     let query = db
       .select()

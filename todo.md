@@ -4202,3 +4202,13 @@
 - [x] Milestone badges on property cards
 - [ ] N+1 query fix for getProperties (use JOINs)
 - [x] Data migration: map old statuses to new ones
+
+## Critical Fixes Round 2 (User-Reported 2026-03-05)
+
+- [x] Day Hub: Inbox + Appointments load slow (GHL API calls not cached/optimized)
+- [x] Day Hub: Clicking inbox item does NOT show last 10 messages (no slide-out panel)
+- [x] Day Hub: Multiple inbox items still selectable simultaneously (should be single-select)
+- [x] Day Hub: Tags still showing raw on several items (nashville, flipper, builder, tn, ppl, al, leadzolo)
+- [x] Calls Page: AI Coach input requires scrolling — call cards too tall, coach pushed below fold
+- [x] Calls Page: Some calls still show first name only (no full name enrichment from GHL)
+- [x] Training Page: Role tabs do NOT refresh data — Issues, Wins, Long-Term Skills, Meeting Agenda stay same regardless of role selected

@@ -523,7 +523,7 @@ function DispoKpiBar() {
 
 function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }: { roleFilteredGhlUserIds: string[] | null; teamMembers?: TeamMember[] }) {
   const [activeTab, setActiveTab] = useState<"inbox" | "showings">("inbox");
-
+  const [selectedConvoId, setSelectedConvoId] = useState<string | null>(null);
   // ─── Inbox SMS Modal State (same as main LeftPanel) ───
   const [inboxSmsOpen, setInboxSmsOpen] = useState(false);
   const [inboxSmsContact, setInboxSmsContact] = useState<{ contactId: string; contactName: string; contactPhone: string } | null>(null);
@@ -672,7 +672,7 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
                     <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--g-accent)" }}>Missed Calls ({missedCalls.length})</span>
                   </div>
                   {missedCalls.map((conv: any) => (
-                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} />
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} isSelected={selectedConvoId === conv.conversationId} onSelect={setSelectedConvoId} />
                   ))}
                 </div>
               )}
@@ -683,7 +683,7 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
                     <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "oklch(0.65 0.15 250)" }}>Unread ({unreadMessages.length})</span>
                   </div>
                   {unreadMessages.map((conv: any) => (
-                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} />
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} isSelected={selectedConvoId === conv.conversationId} onSelect={setSelectedConvoId} />
                   ))}
                 </div>
               )}
@@ -817,6 +817,7 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
 
 function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersList }: { roleTab: RoleTab; roleFilteredGhlUserIds: string[] | null; teamMembers?: TeamMember[] }) {
   const [activeTab, setActiveTab] = useState<"unread" | "appointments">("unread");
+  const [selectedConvoId, setSelectedConvoId] = useState<string | null>(null);
 
   // ─── Inbox SMS Modal State ───
   const [inboxSmsOpen, setInboxSmsOpen] = useState(false);
@@ -1003,7 +1004,7 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
                     </span>
                   </div>
                   {missedCalls.map((conv) => (
-                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} />
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} isSelected={selectedConvoId === conv.conversationId} onSelect={setSelectedConvoId} />
                   ))}
                 </div>
               )}
@@ -1017,7 +1018,7 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
                     </span>
                   </div>
                   {unreadMessages.map((conv) => (
-                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} />
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} isSelected={selectedConvoId === conv.conversationId} onSelect={setSelectedConvoId} />
                   ))}
                 </div>
               )}
@@ -1148,9 +1149,15 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
   );
 }
 
-function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any; onTextContact: (contactId: string, contactName: string, contactPhone: string) => void; phoneToMemberName?: Map<string, string> }) {
+function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, onSelect }: { conv: any; onTextContact: (contactId: string, contactName: string, contactPhone: string) => void; phoneToMemberName?: Map<string, string>; isSelected: boolean; onSelect: (id: string | null) => void }) {
   const memberName = phoneToMemberName && conv.teamPhone ? phoneToMemberName.get(conv.teamPhone) : undefined;
-  const [expanded, setExpanded] = useState(false);
+  const expanded = isSelected;
+
+  // Fetch last 10 messages when expanded
+  const { data: messagesData, isLoading: messagesLoading } = (trpc.taskCenter as any).getConversationMessages.useQuery(
+    { conversationId: conv.conversationId },
+    { enabled: expanded }
+  );
 
   const handleCall = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1170,12 +1177,12 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
     }
   };
 
-  const dismissMutation = trpc.taskCenter.dismissConversation.useMutation({
+  const dismissMutation = (trpc.taskCenter as any).dismissConversation.useMutation({
     onSuccess: () => {
       toast.success(`Dismissed ${conv.contactName || "conversation"}`);
-      setExpanded(false);
+      onSelect(null);
     },
-    onError: (err) => {
+    onError: (err: any) => {
       toast.error("Failed to dismiss", { description: err.message });
     },
   });
@@ -1191,7 +1198,7 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
       style={{ background: expanded ? "var(--g-bg-card-hover)" : "transparent" }}
       onMouseEnter={(e) => { if (!expanded) e.currentTarget.style.background = "var(--g-bg-card-hover)"; }}
       onMouseLeave={(e) => { if (!expanded) e.currentTarget.style.background = "transparent"; }}
-      onClick={() => setExpanded(!expanded)}
+      onClick={() => onSelect(expanded ? null : conv.conversationId)}
     >
       <div className="flex items-start gap-2">
         <div
@@ -1230,12 +1237,11 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
                     .split(" \u00B7 ")
                     .filter((part: string) => {
                       const lower = part.toLowerCase();
-                      // Hide raw tags (dialer, tn, hot, etc) and source labels
+                      // Hide raw tags and source labels
                       if (lower.startsWith("source:")) return false;
-                      // Check if it looks like raw tags (comma-separated short words)
-                      const tagWords = lower.split(",").map(s => s.trim());
-                      const looksLikeTags = tagWords.length > 1 && tagWords.every(w => w.length < 20);
-                      if (looksLikeTags && tagWords.some(w => ["dialer", "tn", "hot", "cold", "warm", "dnc", "dnd"].includes(w))) return false;
+                      // Only keep labeled items (Stage:, Added, DND) — anything else is likely raw tags
+                      const isLabeled = /^(stage:|added |dnd$)/i.test(lower.trim());
+                      if (!isLabeled) return false;
                       return true;
                     })
                     .join(" \u00B7 ")}
@@ -1267,9 +1273,34 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
           )}
         </div>
       </div>
-      {/* Quick actions on click */}
+      {/* Messages panel + Quick actions on click */}
       {expanded && (
-        <div className="flex items-center gap-1.5 mt-2 ml-7">
+        <div className="mt-2 ml-7 space-y-2">
+          {/* Recent messages */}
+          <div className="rounded-md p-2 max-h-40 overflow-y-auto" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+            {messagesLoading ? (
+              <div className="space-y-1.5">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-4 w-full rounded" />)}
+              </div>
+            ) : messagesData?.messages && messagesData.messages.length > 0 ? (
+              <div className="space-y-1.5">
+                {messagesData.messages.map((msg: any, idx: number) => (
+                  <div key={idx} className="flex gap-1.5">
+                    <span className={`text-[9px] font-semibold shrink-0 ${msg.direction === 'inbound' ? '' : ''}`} style={{ color: msg.direction === 'inbound' ? '#3b82f6' : 'var(--g-text-tertiary)' }}>
+                      {msg.direction === 'inbound' ? conv.contactName?.split(' ')[0] || 'Lead' : 'Team'}:
+                    </span>
+                    <span className="text-[10px] break-words" style={{ color: 'var(--g-text-secondary)' }}>
+                      {msg.body || (msg.messageType === 'TYPE_CALL' ? '📞 Call' : '(no text)')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px]" style={{ color: 'var(--g-text-tertiary)' }}>No recent messages</p>
+            )}
+          </div>
+          {/* Action buttons */}
+        <div className="flex items-center gap-1.5">
           <Button
             variant="outline"
             size="sm"
@@ -1296,6 +1327,7 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
           >
             <X className="h-2.5 w-2.5" /> Dismiss
           </Button>
+        </div>
         </div>
       )}
     </div>
@@ -1348,11 +1380,21 @@ function AppointmentItem({ apt }: { apt: any }) {
         </div>
       )}
       {/* Activity summary */}
-      {apt.activitySummary && (
-        <div className="text-[9px] mt-1 truncate" style={{ color: "oklch(0.65 0.15 250)" }}>
-          {apt.activitySummary}
-        </div>
-      )}
+      {apt.activitySummary && (() => {
+        const filtered = apt.activitySummary
+          .split(" \u00B7 ")
+          .filter((part: string) => {
+            const lower = part.toLowerCase().trim();
+            if (lower.startsWith("source:")) return false;
+            return /^(stage:|added |dnd$)/i.test(lower);
+          })
+          .join(" \u00B7 ");
+        return filtered ? (
+          <div className="text-[9px] mt-1 truncate" style={{ color: "oklch(0.65 0.15 250)" }}>
+            {filtered}
+          </div>
+        ) : null;
+      })()}
       {/* Bottom row: phone + calendar */}
       <div className="flex items-center gap-3 mt-1">
         {apt.contactPhone && (
@@ -2166,7 +2208,9 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
             <Button variant="outline" onClick={() => setShowCallDialog(false)}>Cancel</Button>
             <Button onClick={() => {
               const dialNumber = callToPhone || contactPhone;
-              if (dialNumber) { window.open(`tel:${dialNumber.replace(/[^\d+]/g, "")}`, "_self"); }
+              if (dialNumber) {
+                toast.info(`Call ${task.contactName || "contact"} at ${formatPhone(dialNumber)} \u2014 use GHL dialer or phone`, { duration: 5000 });
+              }
               setShowCallDialog(false);
             }} disabled={!callToPhone && !contactPhone}>
               <Phone className="h-4 w-4 mr-1.5" /> Call Now
