@@ -240,7 +240,7 @@ export const calls = mysqlTable("calls", {
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   // Call type - now references tenant_call_types for custom types
-  callType: mysqlEnum("callType", ["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback"]).default("qualification"),
+  callType: mysqlEnum("callType", ["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback", "dispo_buyer_pitch"]).default("qualification"),
   tenantCallTypeId: int("tenantCallTypeId").references(() => tenantCallTypes.id), // Custom call type
   // How the call type was determined
   callTypeSource: mysqlEnum("callTypeSource", ["ai_suggested", "manual", "auto"]).default("ai_suggested"),
@@ -293,7 +293,7 @@ export const callGrades = mysqlTable("call_grades", {
   // Summary
   summary: text("summary"),
   // Which rubric was used (legacy)
-  rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager", "lead_generator", "follow_up", "seller_callback", "admin_callback"]).notNull(),
+  rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager", "lead_generator", "follow_up", "seller_callback", "admin_callback", "dispo_manager"]).notNull(),
   // Custom rubric reference
   tenantRubricId: int("tenantRubricId").references(() => tenantRubrics.id),
   // Timestamps
@@ -1551,6 +1551,11 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }), // GHL opportunity ID for webhook linking
   ghlPipelineId: varchar("ghlPipelineId", { length: 255 }),
   ghlPipelineStageId: varchar("ghlPipelineStageId", { length: 255 }),
+  // Market & Extra Details
+  market: varchar("market", { length: 100 }), // e.g. "Nashville", "Chattanooga"
+  lotSize: varchar("lotSize", { length: 50 }), // e.g. "0.25 acres"
+  photos: text("photos"), // JSON array of photo URLs
+  dispoAskingPrice: int("dispoAskingPrice"), // in cents — dispo-specific asking price (may differ from askingPrice)
   // Timestamps
   marketedAt: timestamp("marketedAt"), // When first blast was sent
   underContractAt: timestamp("underContractAt"),
@@ -1640,6 +1645,71 @@ export const dispoPropertyShowings = mysqlTable("dispo_property_showings", {
 });
 export type DispoPropertyShowing = typeof dispoPropertyShowings.$inferSelect;
 export type InsertDispoPropertyShowing = typeof dispoPropertyShowings.$inferInsert;
+
+// ============ PROPERTY BUYER ACTIVITY (Buyer matching, sends, offers per buyer per property) ============
+export const propertyBuyerActivity = mysqlTable("property_buyer_activity", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+  // Buyer info (from GHL contact or manual)
+  buyerName: varchar("buyerName", { length: 255 }).notNull(),
+  buyerPhone: varchar("buyerPhone", { length: 50 }),
+  buyerEmail: varchar("buyerEmail", { length: 255 }),
+  buyerCompany: varchar("buyerCompany", { length: 255 }),
+  ghlContactId: varchar("ghlContactId", { length: 255 }),
+  // Buyer preferences (from GHL custom fields or manual)
+  buyerMarkets: text("buyerMarkets"), // JSON array of markets buyer is interested in
+  buyerBudgetMin: int("buyerBudgetMin"), // in cents
+  buyerBudgetMax: int("buyerBudgetMax"), // in cents
+  buyerPropertyTypes: text("buyerPropertyTypes"), // JSON array: ["house", "lot", "land"]
+  buyerStrategy: varchar("buyerStrategy", { length: 100 }), // flip, rental, wholesale, etc.
+  isVip: mysqlEnum("isVip", ["true", "false"]).default("false"),
+  // Activity tracking per buyer per property
+  sendCount: int("sendCount").default(0).notNull(),
+  lastSentAt: timestamp("lastSentAt"),
+  lastSentChannel: varchar("lastSentChannel", { length: 50 }), // sms, email, etc.
+  offerCount: int("offerCount").default(0).notNull(),
+  lastOfferAmount: int("lastOfferAmount"), // in cents
+  lastOfferAt: timestamp("lastOfferAt"),
+  // Status for this buyer on this property
+  status: mysqlEnum("buyerStatus", ["matched", "sent", "interested", "offered", "passed", "accepted", "skipped"]).default("matched").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type PropertyBuyerActivity = typeof propertyBuyerActivity.$inferSelect;
+export type InsertPropertyBuyerActivity = typeof propertyBuyerActivity.$inferInsert;
+
+// ============ PROPERTY ACTIVITY LOG (Chronological event history per property) ============
+export const propertyActivityLog = mysqlTable("property_activity_log", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+  // Event type
+  eventType: mysqlEnum("eventType", [
+    "created", "status_change", "price_change", "send", "offer_received",
+    "offer_accepted", "offer_rejected", "showing_scheduled", "showing_completed",
+    "buyer_matched", "note_added", "call_linked", "document_generated",
+    "closing_scheduled", "closed", "field_updated"
+  ]).notNull(),
+  // Event details
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  // Optional references
+  buyerName: varchar("buyerName", { length: 255 }),
+  buyerActivityId: int("buyerActivityId"),
+  offerId: int("offerId"),
+  showingId: int("showingId"),
+  sendId: int("sendId"),
+  callId: int("callId"),
+  // Metadata
+  metadata: text("metadata"), // JSON for extra event-specific data
+  performedByUserId: int("performedByUserId").references(() => users.id),
+  performedByName: varchar("performedByName", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type PropertyActivityLog = typeof propertyActivityLog.$inferSelect;
+export type InsertPropertyActivityLog = typeof propertyActivityLog.$inferInsert;
 
 // ============ DISPO DAILY KPI ENTRIES (Dispo-specific manual KPIs) ============
 export const dispoDailyKpis = mysqlTable("dispo_daily_kpis", {

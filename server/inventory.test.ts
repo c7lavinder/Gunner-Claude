@@ -238,12 +238,13 @@ describe("Inventory Navigation", () => {
 
 // ─── Inventory Page Component tests ───
 
-describe("Inventory Page", () => {
+describe("Inventory Page (Dispo Command Center)", () => {
   it("should exist and have proper structure", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
     expect(content).toContain("export default");
     expect(content).toContain("trpc.inventory");
+    expect(content).toContain("Dispo Command Center");
   });
 
   it("should have property CRUD UI elements", async () => {
@@ -290,6 +291,71 @@ describe("Inventory Page", () => {
     expect(content).toContain("search");
     expect(content).toContain("Search properties");
   });
+
+  it("should have tabbed detail panel with Overview, Buyers, Outreach, Activity", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("OverviewTab");
+    expect(content).toContain("BuyersTab");
+    expect(content).toContain("OutreachTab");
+    expect(content).toContain("ActivityTab");
+  });
+
+  it("should have buyer activity management UI", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("addBuyerActivity");
+    expect(content).toContain("updateBuyerActivity");
+    expect(content).toContain("recordBuyerSend");
+    expect(content).toContain("recordBuyerOffer");
+    expect(content).toContain("deleteBuyerActivity");
+    expect(content).toContain("matchBuyers");
+    expect(content).toContain("Match from GHL");
+  });
+
+  it("should have activity log with note adding", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("addActivityNote");
+    expect(content).toContain("getActivityLog");
+    expect(content).toContain("Add a note");
+  });
+
+  it("should have heat indicators for days on market", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("heatColor");
+    expect(content).toContain("daysOnMarket");
+    expect(content).toContain("Days on Market");
+  });
+
+  it("should have deal progress tracker", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("Deal Progress");
+    expect(content).toContain("Apt Set");
+    expect(content).toContain("Offer Made");
+    expect(content).toContain("Under Contract");
+    expect(content).toContain("Closed");
+  });
+
+  it("should have buyer status management", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("BUYER_STATUS_CONFIG");
+    expect(content).toContain("matched");
+    expect(content).toContain("interested");
+    expect(content).toContain("offered");
+    expect(content).toContain("passed");
+    expect(content).toContain("accepted");
+  });
+
+  it("should have VIP buyer support", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("isVip");
+    expect(content).toContain("VIP Buyer");
+  });
 });
 
 // ─── DispoKpiBar tests ───
@@ -329,5 +395,108 @@ describe("Dispo Left Panel in Day Hub", () => {
     // Should have tabs for inbox and showings
     expect(content).toContain("Inbox");
     expect(content).toContain("Showings");
+  });
+});
+
+// ─── New buyer activity + activity log router procedures ───
+
+describe("Inventory Router - Buyer Activity Procedures", () => {
+  it("should have all buyer activity procedures defined", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain("getBuyerActivities:");
+    expect(content).toContain("addBuyerActivity:");
+    expect(content).toContain("updateBuyerActivity:");
+    expect(content).toContain("recordBuyerSend:");
+    expect(content).toContain("recordBuyerOffer:");
+    expect(content).toContain("deleteBuyerActivity:");
+    expect(content).toContain("matchBuyers:");
+  });
+
+  it("should have activity log procedures defined", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain("getActivityLog:");
+    expect(content).toContain("addActivityNote:");
+  });
+
+  it("should have getPropertyDetail procedure", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain("getPropertyDetail:");
+  });
+});
+
+// ─── Dispo Grading Rubric tests ───
+
+describe("Dispo Grading Rubric", () => {
+  it("should have DISPO_MANAGER_RUBRIC defined", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/grading.ts", "utf-8");
+    expect(content).toContain("DISPO_MANAGER_RUBRIC");
+    expect(content).toContain("dispo_buyer_pitch");
+  });
+
+  it("should have dispo grading criteria", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/grading.ts", "utf-8");
+    expect(content).toContain("Deal Presentation");
+    expect(content).toContain("Buyer Fit Assessment");
+    expect(content).toContain("Urgency Creation");
+    expect(content).toContain("Objection Handling");
+    expect(content).toContain("Negotiation Skill");
+    expect(content).toContain("Close");
+  });
+
+  it("should map dispo_manager role to dispo_buyer_pitch in processCall", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/grading.ts", "utf-8");
+    expect(content).toContain('dispo_manager');
+    expect(content).toContain('dispo_buyer_pitch');
+  });
+
+  it("should detect dispo_buyer_pitch in detectCallType", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/grading.ts", "utf-8");
+    // detectCallType should include dispo_buyer_pitch as a possible result
+    expect(content).toContain('"dispo_buyer_pitch"');
+  });
+});
+
+// ─── Schema: New tables for buyer activity and activity log ───
+
+describe("New Schema Tables", () => {
+  it("should have propertyBuyerActivity table", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.propertyBuyerActivity).toBeDefined();
+    expect(schema.propertyBuyerActivity.id).toBeDefined();
+    expect(schema.propertyBuyerActivity.propertyId).toBeDefined();
+    expect(schema.propertyBuyerActivity.tenantId).toBeDefined();
+    expect(schema.propertyBuyerActivity.buyerName).toBeDefined();
+    expect(schema.propertyBuyerActivity.buyerPhone).toBeDefined();
+    expect(schema.propertyBuyerActivity.buyerEmail).toBeDefined();
+    expect(schema.propertyBuyerActivity.status).toBeDefined();
+    expect(schema.propertyBuyerActivity.isVip).toBeDefined();
+    expect(schema.propertyBuyerActivity.sendCount).toBeDefined();
+    expect(schema.propertyBuyerActivity.offerCount).toBeDefined();
+  });
+
+  it("should have propertyActivityLog table", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.propertyActivityLog).toBeDefined();
+    expect(schema.propertyActivityLog.id).toBeDefined();
+    expect(schema.propertyActivityLog.propertyId).toBeDefined();
+    expect(schema.propertyActivityLog.tenantId).toBeDefined();
+    expect(schema.propertyActivityLog.eventType).toBeDefined();
+    expect(schema.propertyActivityLog.title).toBeDefined();
+    expect(schema.propertyActivityLog.description).toBeDefined();
+  });
+
+  it("should have new fields on dispoProperties", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.dispoProperties.market).toBeDefined();
+    expect(schema.dispoProperties.lotSize).toBeDefined();
+    expect(schema.dispoProperties.photos).toBeDefined();
+    expect(schema.dispoProperties.dispoAskingPrice).toBeDefined();
   });
 });

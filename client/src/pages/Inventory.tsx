@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -7,7 +7,10 @@ import {
   MoreVertical, Trash2, Edit, ChevronDown, ChevronUp, Building,
   Calendar, Phone, Mail, Facebook, Users, MessageSquare, Clock,
   CheckCircle2, XCircle, AlertCircle, Flame, Thermometer, Snowflake,
-  Package, Filter, ArrowUpDown, X,
+  Package, Filter, ArrowUpDown, X, Star, Activity, FileText,
+  Megaphone, UserPlus, Copy, ExternalLink, Hash, TrendingUp,
+  CircleDot, Zap, Target, BarChart3, ArrowRight, RefreshCw,
+  ChevronRight, Bookmark, Tag, Globe, Layers, StickyNote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,9 +30,10 @@ type SendChannel = "sms" | "email" | "facebook" | "investor_base" | "other";
 type OfferStatus = "pending" | "accepted" | "rejected" | "countered" | "expired";
 type ShowingStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 type InterestLevel = "hot" | "warm" | "cold" | "none";
+type BuyerStatus = "matched" | "sent" | "interested" | "offered" | "passed" | "accepted" | "skipped";
 
 // ─── CONSTANTS ───
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon?: string }> = {
   lead: { label: "Lead", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
   qualified: { label: "Qualified", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
   offer_made: { label: "Offer Made", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
@@ -39,7 +43,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   closing: { label: "Closing", color: "#14b8a6", bg: "rgba(20,184,166,0.12)" },
   closed: { label: "Closed", color: "#10b981", bg: "rgba(16,185,129,0.12)" },
   dead: { label: "Dead", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
-  // Legacy status aliases
   new: { label: "Lead", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
   negotiating: { label: "Buyer Negotiating", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
   sold: { label: "Closed", color: "#10b981", bg: "rgba(16,185,129,0.12)" },
@@ -58,6 +61,16 @@ const INTEREST_CONFIG: Record<InterestLevel, { label: string; icon: React.Elemen
   warm: { label: "Warm", icon: Thermometer, color: "#f59e0b" },
   cold: { label: "Cold", icon: Snowflake, color: "#3b82f6" },
   none: { label: "None", icon: XCircle, color: "#6b7280" },
+};
+
+const BUYER_STATUS_CONFIG: Record<BuyerStatus, { label: string; color: string; bg: string }> = {
+  matched: { label: "Matched", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
+  sent: { label: "Sent", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
+  interested: { label: "Interested", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+  offered: { label: "Offered", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+  passed: { label: "Passed", color: "#6b7280", bg: "rgba(107,114,128,0.12)" },
+  accepted: { label: "Accepted", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
+  skipped: { label: "Skipped", color: "#9ca3af", bg: "rgba(156,163,175,0.12)" },
 };
 
 function formatCurrency(cents: number | null | undefined): string {
@@ -87,6 +100,20 @@ function timeAgo(date: string | Date | null): string {
   if (days < 7) return `${days}d ago`;
   if (days < 30) return `${Math.floor(days / 7)}w ago`;
   return `${Math.floor(days / 30)}mo ago`;
+}
+
+function daysOnMarket(date: string | Date | null): number {
+  if (!date) return 0;
+  const d = new Date(date);
+  const now = new Date();
+  return Math.floor((now.getTime() - d.getTime()) / 86400000);
+}
+
+function heatColor(dom: number): string {
+  if (dom <= 3) return "#22c55e";
+  if (dom <= 7) return "#f59e0b";
+  if (dom <= 14) return "#f97316";
+  return "#ef4444";
 }
 
 // ─── ADD / EDIT PROPERTY DIALOG ───
@@ -159,7 +186,6 @@ function PropertyFormDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Address Section */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Property Address</label>
             <Input placeholder="Street Address *" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
@@ -169,8 +195,6 @@ function PropertyFormDialog({
               <Input placeholder="ZIP" value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} />
             </div>
           </div>
-
-          {/* Property Details */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Property Details</label>
             <div className="grid grid-cols-2 gap-2">
@@ -202,8 +226,6 @@ function PropertyFormDialog({
               <Input placeholder="Year Built" type="number" value={form.yearBuilt} onChange={(e) => setForm({ ...form, yearBuilt: e.target.value })} />
             </div>
           </div>
-
-          {/* Financials */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Financials</label>
             <div className="grid grid-cols-2 gap-2">
@@ -225,8 +247,6 @@ function PropertyFormDialog({
               </div>
             </div>
           </div>
-
-          {/* Seller Info */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Seller Info</label>
             <div className="grid grid-cols-2 gap-2">
@@ -234,8 +254,6 @@ function PropertyFormDialog({
               <Input placeholder="Seller Phone" value={form.sellerPhone} onChange={(e) => setForm({ ...form, sellerPhone: e.target.value })} />
             </div>
           </div>
-
-          {/* Access & Media */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Access & Media</label>
             <div className="grid grid-cols-2 gap-2">
@@ -243,8 +261,6 @@ function PropertyFormDialog({
               <Input placeholder="Media Link (Google Drive, etc.)" value={form.mediaLink} onChange={(e) => setForm({ ...form, mediaLink: e.target.value })} />
             </div>
           </div>
-
-          {/* Notes */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Description</label>
             <Textarea placeholder="Property description (visible to buyers)" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -442,6 +458,643 @@ function AddShowingDialog({
   );
 }
 
+// ─── ADD BUYER DIALOG ───
+function AddBuyerDialog({
+  open, onOpenChange, propertyId, onSave, isSaving,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  propertyId: number;
+  onSave: (data: any) => void;
+  isSaving: boolean;
+}) {
+  const [form, setForm] = useState({
+    buyerName: "", buyerPhone: "", buyerEmail: "", buyerCompany: "",
+    buyerStrategy: "", isVip: false, notes: "",
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent style={{ background: "var(--g-bg-surface)" }}>
+        <DialogHeader>
+          <DialogTitle style={{ color: "var(--g-text-primary)" }}>Add Buyer</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input placeholder="Buyer Name *" value={form.buyerName} onChange={(e) => setForm({ ...form, buyerName: e.target.value })} />
+          <div className="grid grid-cols-2 gap-2">
+            <Input placeholder="Phone" value={form.buyerPhone} onChange={(e) => setForm({ ...form, buyerPhone: e.target.value })} />
+            <Input placeholder="Email" value={form.buyerEmail} onChange={(e) => setForm({ ...form, buyerEmail: e.target.value })} />
+          </div>
+          <Input placeholder="Company" value={form.buyerCompany} onChange={(e) => setForm({ ...form, buyerCompany: e.target.value })} />
+          <Select value={form.buyerStrategy || "flip"} onValueChange={(v) => setForm({ ...form, buyerStrategy: v })}>
+            <SelectTrigger><SelectValue placeholder="Strategy" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="flip">Flip</SelectItem>
+              <SelectItem value="rental">Rental</SelectItem>
+              <SelectItem value="brrrr">BRRRR</SelectItem>
+              <SelectItem value="wholesale">Wholesale</SelectItem>
+              <SelectItem value="owner_occupant">Owner Occupant</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: "var(--g-text-secondary)" }}>
+            <input type="checkbox" checked={form.isVip} onChange={(e) => setForm({ ...form, isVip: e.target.checked })} className="rounded" />
+            VIP Buyer (priority notifications)
+          </label>
+          <Textarea placeholder="Notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              if (!form.buyerName) { toast.error("Buyer name is required"); return; }
+              onSave({
+                propertyId,
+                buyerName: form.buyerName,
+                buyerPhone: form.buyerPhone || undefined,
+                buyerEmail: form.buyerEmail || undefined,
+                buyerCompany: form.buyerCompany || undefined,
+                buyerStrategy: form.buyerStrategy || undefined,
+                isVip: form.isVip,
+                notes: form.notes || undefined,
+              });
+            }}
+            disabled={isSaving}
+            style={{ background: "var(--g-accent)", color: "#fff" }}
+          >
+            {isSaving ? "Adding..." : "Add Buyer"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── OVERVIEW TAB ───
+function OverviewTab({ property }: { property: any }) {
+  const statusCfg = STATUS_CONFIG[property.status as PropertyStatus] || STATUS_CONFIG.new;
+  const spread = property.askingPrice && property.contractPrice ? property.askingPrice - property.contractPrice : null;
+  const dom = daysOnMarket(property.createdAt);
+
+  return (
+    <div className="space-y-4">
+      {/* Financial Summary */}
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "Contract", value: formatCurrency(property.contractPrice), color: "var(--g-text-primary)" },
+          { label: "Asking", value: formatCurrency(property.askingPrice), color: "var(--g-accent)" },
+          { label: "ARV", value: formatCurrency(property.arv), color: "#3b82f6" },
+          { label: "Spread", value: spread ? formatCurrency(spread) : "—", color: spread && spread > 0 ? "#22c55e" : "var(--g-text-tertiary)" },
+          { label: "Est. Repairs", value: formatCurrency(property.estRepairs), color: "#f97316" },
+          { label: "Days on Market", value: `${dom}`, color: heatColor(dom) },
+        ].map((item) => (
+          <div key={item.label} className="rounded-lg px-3 py-2" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+            <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>{item.label}</div>
+            <div className="text-base font-bold" style={{ color: item.color }}>{item.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Property Details */}
+      <div className="rounded-lg p-3" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+        <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--g-text-tertiary)" }}>Details</div>
+        <div className="grid grid-cols-4 gap-2 text-sm">
+          {property.beds != null && <div><span style={{ color: "var(--g-text-tertiary)" }}>Beds:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.beds}</span></div>}
+          {property.baths && <div><span style={{ color: "var(--g-text-tertiary)" }}>Baths:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.baths}</span></div>}
+          {property.sqft && <div><span style={{ color: "var(--g-text-tertiary)" }}>Sqft:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.sqft.toLocaleString()}</span></div>}
+          {property.yearBuilt && <div><span style={{ color: "var(--g-text-tertiary)" }}>Built:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.yearBuilt}</span></div>}
+        </div>
+        {property.sellerName && (
+          <div className="mt-2 text-sm">
+            <span style={{ color: "var(--g-text-tertiary)" }}>Seller:</span>{" "}
+            <span style={{ color: "var(--g-text-primary)" }}>{property.sellerName}</span>
+            {property.sellerPhone && <span style={{ color: "var(--g-text-secondary)" }}> ({property.sellerPhone})</span>}
+          </div>
+        )}
+        {property.lockboxCode && (
+          <div className="mt-1 text-sm">
+            <span style={{ color: "var(--g-text-tertiary)" }}>Lockbox:</span>{" "}
+            <span style={{ color: "var(--g-text-primary)" }}>{property.lockboxCode}</span>
+          </div>
+        )}
+        {property.ghlContactId && (
+          <div className="mt-2 text-sm">
+            <span style={{ color: "var(--g-text-tertiary)" }}>GHL Contact:</span>{" "}
+            <a href={`https://app.gohighlevel.com/contacts/detail/${property.ghlContactId}`} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--g-accent)" }}>
+              View in GHL
+            </a>
+          </div>
+        )}
+        {property.description && (
+          <div className="mt-2 text-sm p-2 rounded" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>
+            <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--g-text-tertiary)" }}>Description</div>
+            {property.description}
+          </div>
+        )}
+        {property.notes && (
+          <div className="mt-2 text-sm p-2 rounded" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>
+            <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--g-text-tertiary)" }}>Internal Notes</div>
+            {property.notes}
+          </div>
+        )}
+      </div>
+
+      {/* Milestone Progress */}
+      <div className="rounded-lg p-3" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+        <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--g-text-tertiary)" }}>Deal Progress</div>
+        <div className="flex items-center gap-4">
+          {[
+            { label: "Apt Set", flag: property.aptEverSet, color: "#22c55e" },
+            { label: "Offer Made", flag: property.offerEverMade, color: "#f59e0b" },
+            { label: "Under Contract", flag: property.everUnderContract, color: "#3b82f6" },
+            { label: "Closed", flag: property.everClosed, color: "#10b981" },
+          ].map((m) => (
+            <div key={m.label} className="flex items-center gap-1">
+              <div className="h-3 w-3 rounded-full" style={{ background: m.flag ? m.color : "var(--g-border-subtle)" }} />
+              <span className="text-xs" style={{ color: m.flag ? m.color : "var(--g-text-tertiary)" }}>{m.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BUYERS TAB ───
+function BuyersTab({ propertyId }: { propertyId: number }) {
+  const utils = trpc.useUtils();
+  const [addBuyerOpen, setAddBuyerOpen] = useState(false);
+  const { data: buyers, isLoading } = trpc.inventory.getBuyerActivities.useQuery({ propertyId });
+  const matchMutation = trpc.inventory.matchBuyers.useMutation({
+    onSuccess: (result) => {
+      utils.inventory.getBuyerActivities.invalidate({ propertyId });
+      toast.success(`Found ${result.matched} matching buyers`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const addBuyerMutation = trpc.inventory.addBuyerActivity.useMutation({
+    onSuccess: () => {
+      utils.inventory.getBuyerActivities.invalidate({ propertyId });
+      toast.success("Buyer added");
+      setAddBuyerOpen(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const updateBuyerMutation = trpc.inventory.updateBuyerActivity.useMutation({
+    onSuccess: () => {
+      utils.inventory.getBuyerActivities.invalidate({ propertyId });
+      toast.success("Buyer updated");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const recordSendMutation = trpc.inventory.recordBuyerSend.useMutation({
+    onSuccess: () => {
+      utils.inventory.getBuyerActivities.invalidate({ propertyId });
+      toast.success("Send recorded");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const recordOfferMutation = trpc.inventory.recordBuyerOffer.useMutation({
+    onSuccess: () => {
+      utils.inventory.getBuyerActivities.invalidate({ propertyId });
+      toast.success("Offer recorded");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteBuyerMutation = trpc.inventory.deleteBuyerActivity.useMutation({
+    onSuccess: () => {
+      utils.inventory.getBuyerActivities.invalidate({ propertyId });
+      toast.success("Buyer removed");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  if (isLoading) return <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>;
+
+  const buyerList = (buyers as any[]) || [];
+
+  return (
+    <div className="space-y-3">
+      {/* Action Bar */}
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={() => setAddBuyerOpen(true)}>
+          <UserPlus className="h-3 w-3 mr-1" /> Add Buyer
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => matchMutation.mutate({ propertyId })} disabled={matchMutation.isPending}>
+          <Target className="h-3 w-3 mr-1" /> {matchMutation.isPending ? "Matching..." : "Match from GHL"}
+        </Button>
+      </div>
+
+      {buyerList.length === 0 ? (
+        <div className="text-center py-8">
+          <Users className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)" }} />
+          <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>No buyers yet</p>
+          <p className="text-xs mt-1" style={{ color: "var(--g-text-tertiary)" }}>Add buyers manually or match from GHL contacts</p>
+        </div>
+      ) : (
+        buyerList.map((buyer: any) => {
+          const statusCfg = BUYER_STATUS_CONFIG[buyer.status as BuyerStatus] || BUYER_STATUS_CONFIG.matched;
+          return (
+            <div key={buyer.id} className="rounded-lg p-3" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold" style={{ color: "var(--g-text-primary)" }}>{buyer.buyerName}</span>
+                  {buyer.isVip && <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />}
+                  {buyer.buyerCompany && <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>({buyer.buyerCompany})</span>}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Badge style={{ background: statusCfg.bg, color: statusCfg.color, border: "none", fontSize: "10px" }}>{statusCfg.label}</Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0"><MoreVertical className="h-3 w-3" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      {(["matched", "sent", "interested", "offered", "passed", "accepted", "skipped"] as BuyerStatus[]).map((s) => (
+                        <DropdownMenuItem key={s} onClick={() => updateBuyerMutation.mutate({ buyerActivityId: buyer.id, status: s })}>
+                          Set: {BUYER_STATUS_CONFIG[s].label}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuItem onClick={() => deleteBuyerMutation.mutate({ buyerActivityId: buyer.id })} className="text-red-500">
+                        <Trash2 className="h-3 w-3 mr-2" /> Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+              {/* Contact info */}
+              <div className="flex items-center gap-3 text-xs mb-2" style={{ color: "var(--g-text-tertiary)" }}>
+                {buyer.buyerPhone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{buyer.buyerPhone}</span>}
+                {buyer.buyerEmail && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{buyer.buyerEmail}</span>}
+                {buyer.buyerStrategy && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{buyer.buyerStrategy}</Badge>}
+              </div>
+              {/* Activity stats */}
+              <div className="flex items-center gap-3 text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                <span>Sends: {buyer.sendCount || 0}</span>
+                <span>Offers: {buyer.offerCount || 0}</span>
+                {buyer.lastOfferAmount && <span className="font-semibold" style={{ color: "#22c55e" }}>Last Offer: {formatCurrency(buyer.lastOfferAmount)}</span>}
+              </div>
+              {/* Quick actions */}
+              <div className="flex items-center gap-1 mt-2 pt-2" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => recordSendMutation.mutate({ buyerActivityId: buyer.id, channel: "sms" })}>
+                  <MessageSquare className="h-3 w-3 mr-1" /> SMS
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => recordSendMutation.mutate({ buyerActivityId: buyer.id, channel: "email" })}>
+                  <Mail className="h-3 w-3 mr-1" /> Email
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => {
+                  const amount = prompt("Enter offer amount (e.g. 150000):");
+                  if (amount) {
+                    const cents = Math.round(parseFloat(amount) * 100);
+                    if (!isNaN(cents)) recordOfferMutation.mutate({ buyerActivityId: buyer.id, offerAmount: cents });
+                  }
+                }}>
+                  <DollarSign className="h-3 w-3 mr-1" /> Log Offer
+                </Button>
+              </div>
+              {buyer.notes && <div className="text-xs mt-2 p-1.5 rounded" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>{buyer.notes}</div>}
+            </div>
+          );
+        })
+      )}
+
+      {addBuyerOpen && (
+        <AddBuyerDialog
+          open={addBuyerOpen}
+          onOpenChange={setAddBuyerOpen}
+          propertyId={propertyId}
+          onSave={(d: any) => addBuyerMutation.mutate(d)}
+          isSaving={addBuyerMutation.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── ACTIVITY TAB ───
+function ActivityTab({ propertyId }: { propertyId: number }) {
+  const utils = trpc.useUtils();
+  const { data: activities, isLoading } = trpc.inventory.getActivityLog.useQuery({ propertyId, limit: 50 });
+  const [noteText, setNoteText] = useState("");
+  const addNoteMutation = trpc.inventory.addActivityNote.useMutation({
+    onSuccess: () => {
+      utils.inventory.getActivityLog.invalidate({ propertyId });
+      setNoteText("");
+      toast.success("Note added");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  if (isLoading) return <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>;
+
+  const activityList = (activities as any[]) || [];
+
+  const eventIcons: Record<string, { icon: React.ElementType; color: string }> = {
+    property_created: { icon: Plus, color: "#22c55e" },
+    status_changed: { icon: RefreshCw, color: "#6366f1" },
+    send_logged: { icon: Send, color: "#3b82f6" },
+    offer_received: { icon: DollarSign, color: "#f59e0b" },
+    offer_status_changed: { icon: Handshake, color: "#f97316" },
+    showing_scheduled: { icon: Calendar, color: "#8b5cf6" },
+    showing_updated: { icon: Eye, color: "#14b8a6" },
+    buyer_added: { icon: UserPlus, color: "#3b82f6" },
+    buyer_status_changed: { icon: Users, color: "#6366f1" },
+    buyer_send: { icon: Send, color: "#3b82f6" },
+    buyer_offer: { icon: DollarSign, color: "#f59e0b" },
+    note_added: { icon: StickyNote, color: "#6b7280" },
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Add Note */}
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="Add a note..."
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && noteText.trim()) {
+              addNoteMutation.mutate({ propertyId, note: noteText.trim() });
+            }
+          }}
+        />
+        <Button
+          size="sm"
+          onClick={() => noteText.trim() && addNoteMutation.mutate({ propertyId, note: noteText.trim() })}
+          disabled={!noteText.trim() || addNoteMutation.isPending}
+          style={{ background: "var(--g-accent)", color: "#fff" }}
+        >
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {activityList.length === 0 ? (
+        <div className="text-center py-8">
+          <Activity className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)" }} />
+          <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>No activity yet</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {activityList.map((act: any) => {
+            const ei = eventIcons[act.eventType] || { icon: CircleDot, color: "#6b7280" };
+            const EIcon = ei.icon;
+            return (
+              <div key={act.id} className="flex items-start gap-2 py-2 px-2 rounded-lg hover:bg-[var(--g-bg-elevated)] transition-colors">
+                <div className="mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `${ei.color}15` }}>
+                  <EIcon className="h-3 w-3" style={{ color: ei.color }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm" style={{ color: "var(--g-text-primary)" }}>{act.title}</div>
+                  {act.description && <div className="text-xs mt-0.5" style={{ color: "var(--g-text-secondary)" }}>{act.description}</div>}
+                  <div className="text-[10px] mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
+                    {act.performedByName && `${act.performedByName} · `}{timeAgo(act.createdAt)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── OUTREACH TAB (Sends, Offers, Showings) ───
+function OutreachTab({ property, propertyId }: { property: any; propertyId: number }) {
+  const utils = trpc.useUtils();
+  const [sendOpen, setSendOpen] = useState(false);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [showingOpen, setShowingOpen] = useState(false);
+  const [subTab, setSubTab] = useState("sends");
+
+  const addSendMutation = trpc.inventory.addSend.useMutation({
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getDispoKpiSummary.invalidate(); utils.inventory.getActivityLog.invalidate({ propertyId }); toast.success("Send logged"); setSendOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteSendMutation = trpc.inventory.deleteSend.useMutation({
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Send deleted"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const addOfferMutation = trpc.inventory.addOffer.useMutation({
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getDispoKpiSummary.invalidate(); utils.inventory.getActivityLog.invalidate({ propertyId }); toast.success("Offer added"); setOfferOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const updateOfferMutation = trpc.inventory.updateOfferStatus.useMutation({
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getDispoKpiSummary.invalidate(); utils.inventory.getActivityLog.invalidate({ propertyId }); toast.success("Offer updated"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteOfferMutation = trpc.inventory.deleteOffer.useMutation({
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Offer deleted"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const addShowingMutation = trpc.inventory.addShowing.useMutation({
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getDispoKpiSummary.invalidate(); utils.inventory.getActivityLog.invalidate({ propertyId }); toast.success("Showing scheduled"); setShowingOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const updateShowingMutation = trpc.inventory.updateShowing.useMutation({
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Showing updated"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteShowingMutation = trpc.inventory.deleteShowing.useMutation({
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Showing deleted"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-3">
+      {/* Sub-tabs */}
+      <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "var(--g-bg-elevated)" }}>
+        {[
+          { key: "sends", label: "Sends", count: property.sends?.length || 0, icon: Send },
+          { key: "offers", label: "Offers", count: property.offers?.length || 0, icon: DollarSign },
+          { key: "showings", label: "Showings", count: property.showings?.length || 0, icon: Eye },
+        ].map(({ key, label, count, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setSubTab(key)}
+            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: subTab === key ? "var(--g-bg-surface)" : "transparent",
+              color: subTab === key ? "var(--g-text-primary)" : "var(--g-text-tertiary)",
+              boxShadow: subTab === key ? "var(--g-shadow-sm)" : "none",
+            }}
+          >
+            <Icon className="h-3 w-3" /> {label} ({count})
+          </button>
+        ))}
+      </div>
+
+      {/* Sends */}
+      {subTab === "sends" && (
+        <div className="space-y-2">
+          <Button size="sm" variant="outline" className="w-full" onClick={() => setSendOpen(true)}>
+            <Plus className="h-3 w-3 mr-1" /> Log Send
+          </Button>
+          {property.sends?.length === 0 && (
+            <div className="text-center py-4 text-sm" style={{ color: "var(--g-text-tertiary)" }}>No sends logged yet</div>
+          )}
+          {property.sends?.map((send: any) => {
+            const ch = CHANNEL_CONFIG[send.channel as SendChannel] || CHANNEL_CONFIG.other;
+            const ChIcon = ch.icon;
+            return (
+              <div key={send.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+                <div className="flex items-center gap-2">
+                  <ChIcon className="h-3.5 w-3.5" style={{ color: ch.color }} />
+                  <div>
+                    <div className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>
+                      {ch.label}{send.buyerGroup ? ` \u2192 ${send.buyerGroup}` : ""}
+                    </div>
+                    <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                      {send.recipientCount ? `${send.recipientCount} recipients \u00b7 ` : ""}{timeAgo(send.sentAt)}
+                    </div>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => deleteSendMutation.mutate({ sendId: send.id })}>
+                  <Trash2 className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Offers */}
+      {subTab === "offers" && (
+        <div className="space-y-2">
+          <Button size="sm" variant="outline" className="w-full" onClick={() => setOfferOpen(true)}>
+            <Plus className="h-3 w-3 mr-1" /> Add Offer
+          </Button>
+          {property.offers?.length === 0 && (
+            <div className="text-center py-4 text-sm" style={{ color: "var(--g-text-tertiary)" }}>No offers received yet</div>
+          )}
+          {property.offers?.map((offer: any) => {
+            const statusColors: Record<string, string> = {
+              pending: "#f59e0b", accepted: "#22c55e", rejected: "#ef4444", countered: "#8b5cf6", expired: "#6b7280",
+            };
+            return (
+              <div key={offer.id} className="rounded-lg px-3 py-2" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold" style={{ color: "var(--g-text-primary)" }}>{offer.buyerName}</span>
+                    {offer.buyerCompany && <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>({offer.buyerCompany})</span>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Select
+                      value={offer.status}
+                      onValueChange={(v) => updateOfferMutation.mutate({ offerId: offer.id, status: v as OfferStatus })}
+                    >
+                      <SelectTrigger className="h-6 text-xs border-none px-2" style={{ background: "transparent", color: statusColors[offer.status] || "#6b7280" }}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="accepted">Accepted</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="countered">Countered</SelectItem>
+                        <SelectItem value="expired">Expired</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="ghost" size="sm" onClick={() => deleteOfferMutation.mutate({ offerId: offer.id })}>
+                      <Trash2 className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-bold" style={{ color: "#22c55e" }}>{formatCurrency(offer.offerAmount)}</span>
+                  <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>{timeAgo(offer.offeredAt)}</span>
+                </div>
+                {offer.notes && <div className="text-xs mt-1" style={{ color: "var(--g-text-secondary)" }}>{offer.notes}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Showings */}
+      {subTab === "showings" && (
+        <div className="space-y-2">
+          <Button size="sm" variant="outline" className="w-full" onClick={() => setShowingOpen(true)}>
+            <Plus className="h-3 w-3 mr-1" /> Schedule Showing
+          </Button>
+          {property.showings?.length === 0 && (
+            <div className="text-center py-4 text-sm" style={{ color: "var(--g-text-tertiary)" }}>No showings scheduled</div>
+          )}
+          {property.showings?.map((showing: any) => {
+            const statusIcons: Record<string, { icon: React.ElementType; color: string }> = {
+              scheduled: { icon: Clock, color: "#3b82f6" },
+              completed: { icon: CheckCircle2, color: "#22c55e" },
+              cancelled: { icon: XCircle, color: "#ef4444" },
+              no_show: { icon: AlertCircle, color: "#f59e0b" },
+            };
+            const si = statusIcons[showing.status] || statusIcons.scheduled;
+            const SIcon = si.icon;
+            const interest = showing.interestLevel ? INTEREST_CONFIG[showing.interestLevel as InterestLevel] : null;
+            return (
+              <div key={showing.id} className="rounded-lg px-3 py-2" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <SIcon className="h-3.5 w-3.5" style={{ color: si.color }} />
+                    <span className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>{showing.buyerName}</span>
+                    {interest && (
+                      <Badge className="text-[10px] px-1.5 py-0" style={{ background: `${interest.color}20`, color: interest.color, border: "none" }}>
+                        {interest.label}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Select
+                      value={showing.status}
+                      onValueChange={(v) => updateShowingMutation.mutate({ showingId: showing.id, status: v as ShowingStatus })}
+                    >
+                      <SelectTrigger className="h-6 text-xs border-none px-2" style={{ background: "transparent" }}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="scheduled">Scheduled</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                        <SelectItem value="no_show">No Show</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {showing.status === "completed" && (
+                      <Select
+                        value={showing.interestLevel || "none"}
+                        onValueChange={(v) => updateShowingMutation.mutate({ showingId: showing.id, interestLevel: v as InterestLevel })}
+                      >
+                        <SelectTrigger className="h-6 text-xs border-none px-2" style={{ background: "transparent" }}>
+                          <SelectValue placeholder="Interest" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="hot">Hot</SelectItem>
+                          <SelectItem value="warm">Warm</SelectItem>
+                          <SelectItem value="cold">Cold</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => deleteShowingMutation.mutate({ showingId: showing.id })}>
+                      <Trash2 className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                  <Calendar className="h-3 w-3 inline mr-1" />
+                  {new Date(showing.showingDate).toLocaleDateString()}{showing.showingTime ? ` at ${showing.showingTime}` : ""}
+                </div>
+                {showing.feedback && <div className="text-xs mt-1 p-1.5 rounded" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>{showing.feedback}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Dialogs */}
+      {sendOpen && <LogSendDialog open={sendOpen} onOpenChange={setSendOpen} propertyId={propertyId} onSave={(d: any) => addSendMutation.mutate(d)} isSaving={addSendMutation.isPending} />}
+      {offerOpen && <AddOfferDialog open={offerOpen} onOpenChange={setOfferOpen} propertyId={propertyId} onSave={(d: any) => addOfferMutation.mutate(d)} isSaving={addOfferMutation.isPending} />}
+      {showingOpen && <AddShowingDialog open={showingOpen} onOpenChange={setShowingOpen} propertyId={propertyId} onSave={(d: any) => addShowingMutation.mutate(d)} isSaving={addShowingMutation.isPending} />}
+    </div>
+  );
+}
+
 // ─── PROPERTY DETAIL PANEL ───
 function PropertyDetail({
   propertyId, onClose,
@@ -452,49 +1105,15 @@ function PropertyDetail({
   const utils = trpc.useUtils();
   const { data: property, isLoading } = trpc.inventory.getPropertyById.useQuery({ propertyId });
   const [editOpen, setEditOpen] = useState(false);
-  const [sendOpen, setSendOpen] = useState(false);
-  const [offerOpen, setOfferOpen] = useState(false);
-  const [showingOpen, setShowingOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   const updateMutation = trpc.inventory.updateProperty.useMutation({
     onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Property updated"); setEditOpen(false); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
   const updateStatusMutation = trpc.inventory.updateProperty.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Status updated"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const addSendMutation = trpc.inventory.addSend.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getDispoKpiSummary.invalidate(); toast.success("Send logged"); setSendOpen(false); },
-    onError: (e) => toast.error(e.message),
-  });
-  const deleteSendMutation = trpc.inventory.deleteSend.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Send deleted"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const addOfferMutation = trpc.inventory.addOffer.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getDispoKpiSummary.invalidate(); toast.success("Offer added"); setOfferOpen(false); },
-    onError: (e) => toast.error(e.message),
-  });
-  const updateOfferMutation = trpc.inventory.updateOfferStatus.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getDispoKpiSummary.invalidate(); toast.success("Offer updated"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const deleteOfferMutation = trpc.inventory.deleteOffer.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Offer deleted"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const addShowingMutation = trpc.inventory.addShowing.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getDispoKpiSummary.invalidate(); toast.success("Showing scheduled"); setShowingOpen(false); },
-    onError: (e) => toast.error(e.message),
-  });
-  const updateShowingMutation = trpc.inventory.updateShowing.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Showing updated"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const deleteShowingMutation = trpc.inventory.deleteShowing.useMutation({
-    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); toast.success("Showing deleted"); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => { utils.inventory.getPropertyById.invalidate({ propertyId }); utils.inventory.getProperties.invalidate(); utils.inventory.getActivityLog.invalidate({ propertyId }); toast.success("Status updated"); },
+    onError: (e: any) => toast.error(e.message),
   });
 
   if (isLoading) return (
@@ -507,7 +1126,7 @@ function PropertyDetail({
   if (!property) return <div className="p-6 text-center" style={{ color: "var(--g-text-tertiary)" }}>Property not found</div>;
 
   const statusCfg = STATUS_CONFIG[property.status as PropertyStatus] || STATUS_CONFIG.new;
-  const spread = property.askingPrice && property.contractPrice ? property.askingPrice - property.contractPrice : null;
+  const dom = daysOnMarket(property.createdAt);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -529,6 +1148,11 @@ function PropertyDetail({
                 ))}
               </SelectContent>
             </Select>
+            {/* DOM heat indicator */}
+            <div className="flex items-center gap-1 ml-auto">
+              <div className="h-2 w-2 rounded-full" style={{ background: heatColor(dom) }} />
+              <span className="text-[10px] font-medium" style={{ color: heatColor(dom) }}>{dom}d</span>
+            </div>
           </div>
           <h2 className="text-lg font-bold truncate" style={{ color: "var(--g-text-primary)" }}>{property.address}</h2>
           <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
@@ -541,256 +1165,35 @@ function PropertyDetail({
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="px-5 py-2 flex items-center gap-1 overflow-x-auto" style={{ borderBottom: "1px solid var(--g-border-subtle)" }}>
+        {[
+          { key: "overview", label: "Overview", icon: Home },
+          { key: "buyers", label: "Buyers", icon: Users },
+          { key: "outreach", label: "Outreach", icon: Send },
+          { key: "activity", label: "Activity", icon: Activity },
+        ].map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap"
+            style={{
+              background: activeTab === key ? "var(--g-accent-soft)" : "transparent",
+              color: activeTab === key ? "var(--g-accent)" : "var(--g-text-tertiary)",
+              border: activeTab === key ? "1px solid var(--g-accent)30" : "1px solid transparent",
+            }}
+          >
+            <Icon className="h-3 w-3" /> {label}
+          </button>
+        ))}
+      </div>
+
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-        {/* Financial Summary */}
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: "Contract", value: formatCurrency(property.contractPrice) },
-            { label: "Asking", value: formatCurrency(property.askingPrice) },
-            { label: "ARV", value: formatCurrency(property.arv) },
-            { label: "Spread", value: spread ? formatCurrency(spread) : "—" },
-          ].map((item) => (
-            <div key={item.label} className="rounded-lg px-3 py-2" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
-              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>{item.label}</div>
-              <div className="text-base font-bold" style={{ color: "var(--g-text-primary)" }}>{item.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Property Details */}
-        <div className="rounded-lg p-3" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
-          <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--g-text-tertiary)" }}>Details</div>
-          <div className="grid grid-cols-4 gap-2 text-sm">
-            {property.beds != null && <div><span style={{ color: "var(--g-text-tertiary)" }}>Beds:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.beds}</span></div>}
-            {property.baths && <div><span style={{ color: "var(--g-text-tertiary)" }}>Baths:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.baths}</span></div>}
-            {property.sqft && <div><span style={{ color: "var(--g-text-tertiary)" }}>Sqft:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.sqft.toLocaleString()}</span></div>}
-            {property.yearBuilt && <div><span style={{ color: "var(--g-text-tertiary)" }}>Built:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.yearBuilt}</span></div>}
-          </div>
-          {property.sellerName && (
-            <div className="mt-2 text-sm">
-              <span style={{ color: "var(--g-text-tertiary)" }}>Seller:</span>{" "}
-              <span style={{ color: "var(--g-text-primary)" }}>{property.sellerName}</span>
-              {property.sellerPhone && <span style={{ color: "var(--g-text-secondary)" }}> ({property.sellerPhone})</span>}
-            </div>
-          )}
-          {property.lockboxCode && (
-            <div className="mt-1 text-sm">
-              <span style={{ color: "var(--g-text-tertiary)" }}>Lockbox:</span>{" "}
-              <span style={{ color: "var(--g-text-primary)" }}>{property.lockboxCode}</span>
-            </div>
-          )}
-          {property.ghlContactId && (
-            <div className="mt-2 text-sm">
-              <span style={{ color: "var(--g-text-tertiary)" }}>GHL Contact:</span>{" "}
-              <a href={`https://app.gohighlevel.com/contacts/detail/${property.ghlContactId}`} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--g-accent)" }}>
-                View in GHL
-              </a>
-            </div>
-          )}
-          {property.ghlOpportunityId && (
-            <div className="mt-1 text-sm">
-              <span style={{ color: "var(--g-text-tertiary)" }}>GHL Opportunity:</span>{" "}
-              <span style={{ color: "var(--g-text-secondary)" }}>{property.ghlOpportunityId}</span>
-            </div>
-          )}
-          {property.notes && (
-            <div className="mt-2 text-sm p-2 rounded" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>
-              {property.notes}
-            </div>
-          )}
-        </div>
-
-        {/* Milestone Progress */}
-        <div className="rounded-lg p-3" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
-          <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--g-text-tertiary)" }}>Deal Progress</div>
-          <div className="flex items-center gap-4">
-            {[
-              { label: "Apt Set", flag: property.aptEverSet, color: "#22c55e" },
-              { label: "Offer Made", flag: property.offerEverMade, color: "#f59e0b" },
-              { label: "Under Contract", flag: property.everUnderContract, color: "#3b82f6" },
-              { label: "Closed", flag: property.everClosed, color: "#10b981" },
-            ].map((m) => (
-              <div key={m.label} className="flex items-center gap-1">
-                <div className="h-3 w-3 rounded-full" style={{ background: m.flag ? m.color : "var(--g-border-subtle)" }} />
-                <span className="text-xs" style={{ color: m.flag ? m.color : "var(--g-text-tertiary)" }}>{m.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Activity Tabs */}
-        <Tabs defaultValue="sends" className="w-full">
-          <TabsList className="w-full grid grid-cols-3" style={{ background: "var(--g-bg-elevated)" }}>
-            <TabsTrigger value="sends" className="text-xs">
-              <Send className="h-3 w-3 mr-1" /> Sends ({property.sends?.length || 0})
-            </TabsTrigger>
-            <TabsTrigger value="offers" className="text-xs">
-              <DollarSign className="h-3 w-3 mr-1" /> Offers ({property.offers?.length || 0})
-            </TabsTrigger>
-            <TabsTrigger value="showings" className="text-xs">
-              <Eye className="h-3 w-3 mr-1" /> Showings ({property.showings?.length || 0})
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Sends Tab */}
-          <TabsContent value="sends" className="mt-3 space-y-2">
-            <Button size="sm" variant="outline" className="w-full" onClick={() => setSendOpen(true)}>
-              <Plus className="h-3 w-3 mr-1" /> Log Send
-            </Button>
-            {property.sends?.length === 0 && (
-              <div className="text-center py-4 text-sm" style={{ color: "var(--g-text-tertiary)" }}>No sends logged yet</div>
-            )}
-            {property.sends?.map((send: any) => {
-              const ch = CHANNEL_CONFIG[send.channel as SendChannel] || CHANNEL_CONFIG.other;
-              const ChIcon = ch.icon;
-              return (
-                <div key={send.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
-                  <div className="flex items-center gap-2">
-                    <ChIcon className="h-3.5 w-3.5" style={{ color: ch.color }} />
-                    <div>
-                      <div className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>
-                        {ch.label}{send.buyerGroup ? ` → ${send.buyerGroup}` : ""}
-                      </div>
-                      <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
-                        {send.recipientCount ? `${send.recipientCount} recipients · ` : ""}{timeAgo(send.sentAt)}
-                      </div>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => deleteSendMutation.mutate({ sendId: send.id })}>
-                    <Trash2 className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
-                  </Button>
-                </div>
-              );
-            })}
-          </TabsContent>
-
-          {/* Offers Tab */}
-          <TabsContent value="offers" className="mt-3 space-y-2">
-            <Button size="sm" variant="outline" className="w-full" onClick={() => setOfferOpen(true)}>
-              <Plus className="h-3 w-3 mr-1" /> Add Offer
-            </Button>
-            {property.offers?.length === 0 && (
-              <div className="text-center py-4 text-sm" style={{ color: "var(--g-text-tertiary)" }}>No offers received yet</div>
-            )}
-            {property.offers?.map((offer: any) => {
-              const statusColors: Record<string, string> = {
-                pending: "#f59e0b", accepted: "#22c55e", rejected: "#ef4444", countered: "#8b5cf6", expired: "#6b7280",
-              };
-              return (
-                <div key={offer.id} className="rounded-lg px-3 py-2" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold" style={{ color: "var(--g-text-primary)" }}>{offer.buyerName}</span>
-                      {offer.buyerCompany && <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>({offer.buyerCompany})</span>}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Select
-                        value={offer.status}
-                        onValueChange={(v) => updateOfferMutation.mutate({ offerId: offer.id, status: v as OfferStatus })}
-                      >
-                        <SelectTrigger className="h-6 text-xs border-none px-2" style={{ background: "transparent", color: statusColors[offer.status] || "#6b7280" }}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="accepted">Accepted</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
-                          <SelectItem value="countered">Countered</SelectItem>
-                          <SelectItem value="expired">Expired</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button variant="ghost" size="sm" onClick={() => deleteOfferMutation.mutate({ offerId: offer.id })}>
-                        <Trash2 className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg font-bold" style={{ color: "#22c55e" }}>{formatCurrency(offer.offerAmount)}</span>
-                    <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>{timeAgo(offer.offeredAt)}</span>
-                  </div>
-                  {offer.notes && <div className="text-xs mt-1" style={{ color: "var(--g-text-secondary)" }}>{offer.notes}</div>}
-                </div>
-              );
-            })}
-          </TabsContent>
-
-          {/* Showings Tab */}
-          <TabsContent value="showings" className="mt-3 space-y-2">
-            <Button size="sm" variant="outline" className="w-full" onClick={() => setShowingOpen(true)}>
-              <Plus className="h-3 w-3 mr-1" /> Schedule Showing
-            </Button>
-            {property.showings?.length === 0 && (
-              <div className="text-center py-4 text-sm" style={{ color: "var(--g-text-tertiary)" }}>No showings scheduled</div>
-            )}
-            {property.showings?.map((showing: any) => {
-              const statusIcons: Record<string, { icon: React.ElementType; color: string }> = {
-                scheduled: { icon: Clock, color: "#3b82f6" },
-                completed: { icon: CheckCircle2, color: "#22c55e" },
-                cancelled: { icon: XCircle, color: "#ef4444" },
-                no_show: { icon: AlertCircle, color: "#f59e0b" },
-              };
-              const si = statusIcons[showing.status] || statusIcons.scheduled;
-              const SIcon = si.icon;
-              const interest = showing.interestLevel ? INTEREST_CONFIG[showing.interestLevel as InterestLevel] : null;
-              return (
-                <div key={showing.id} className="rounded-lg px-3 py-2" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <SIcon className="h-3.5 w-3.5" style={{ color: si.color }} />
-                      <span className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>{showing.buyerName}</span>
-                      {interest && (
-                        <Badge className="text-[10px] px-1.5 py-0" style={{ background: `${interest.color}20`, color: interest.color, border: "none" }}>
-                          {interest.label}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Select
-                        value={showing.status}
-                        onValueChange={(v) => updateShowingMutation.mutate({ showingId: showing.id, status: v as ShowingStatus })}
-                      >
-                        <SelectTrigger className="h-6 text-xs border-none px-2" style={{ background: "transparent" }}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="scheduled">Scheduled</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                          <SelectItem value="no_show">No Show</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {showing.status === "completed" && (
-                        <Select
-                          value={showing.interestLevel || "none"}
-                          onValueChange={(v) => updateShowingMutation.mutate({ showingId: showing.id, interestLevel: v as InterestLevel })}
-                        >
-                          <SelectTrigger className="h-6 text-xs border-none px-2" style={{ background: "transparent" }}>
-                            <SelectValue placeholder="Interest" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="hot">Hot 🔥</SelectItem>
-                            <SelectItem value="warm">Warm</SelectItem>
-                            <SelectItem value="cold">Cold</SelectItem>
-                            <SelectItem value="none">None</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => deleteShowingMutation.mutate({ showingId: showing.id })}>
-                        <Trash2 className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
-                    <Calendar className="h-3 w-3 inline mr-1" />
-                    {new Date(showing.showingDate).toLocaleDateString()}{showing.showingTime ? ` at ${showing.showingTime}` : ""}
-                  </div>
-                  {showing.feedback && <div className="text-xs mt-1 p-1.5 rounded" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>{showing.feedback}</div>}
-                </div>
-              );
-            })}
-          </TabsContent>
-        </Tabs>
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {activeTab === "overview" && <OverviewTab property={property} />}
+        {activeTab === "buyers" && <BuyersTab propertyId={propertyId} />}
+        {activeTab === "outreach" && <OutreachTab property={property} propertyId={propertyId} />}
+        {activeTab === "activity" && <ActivityTab propertyId={propertyId} />}
       </div>
 
       {/* Dialogs */}
@@ -799,13 +1202,10 @@ function PropertyDetail({
           open={editOpen}
           onOpenChange={setEditOpen}
           property={property}
-          onSave={(data) => updateMutation.mutate({ propertyId, ...data })}
+          onSave={(data: any) => updateMutation.mutate({ propertyId, ...data })}
           isSaving={updateMutation.isPending}
         />
       )}
-      {sendOpen && <LogSendDialog open={sendOpen} onOpenChange={setSendOpen} propertyId={propertyId} onSave={(d) => addSendMutation.mutate(d)} isSaving={addSendMutation.isPending} />}
-      {offerOpen && <AddOfferDialog open={offerOpen} onOpenChange={setOfferOpen} propertyId={propertyId} onSave={(d) => addOfferMutation.mutate(d)} isSaving={addOfferMutation.isPending} />}
-      {showingOpen && <AddShowingDialog open={showingOpen} onOpenChange={setShowingOpen} propertyId={propertyId} onSave={(d) => addShowingMutation.mutate(d)} isSaving={addShowingMutation.isPending} />}
     </div>
   );
 }
@@ -820,6 +1220,7 @@ function PropertyCard({
 }) {
   const statusCfg = STATUS_CONFIG[property.status as PropertyStatus] || STATUS_CONFIG.new;
   const activity = property._activity || {};
+  const dom = daysOnMarket(property.createdAt);
 
   return (
     <div
@@ -831,12 +1232,19 @@ function PropertyCard({
         boxShadow: isSelected ? "var(--g-shadow-md)" : "var(--g-shadow-card)",
       }}
     >
-      {/* Status + Type */}
+      {/* Status + Type + DOM Heat */}
       <div className="flex items-center justify-between mb-2">
-        <Badge style={{ background: statusCfg.bg, color: statusCfg.color, border: "none", fontSize: "10px" }}>{statusCfg.label}</Badge>
-        <span className="text-[10px] font-medium uppercase" style={{ color: "var(--g-text-tertiary)" }}>
-          {property.propertyType?.replace("_", " ") || "House"}
-        </span>
+        <div className="flex items-center gap-2">
+          <Badge style={{ background: statusCfg.bg, color: statusCfg.color, border: "none", fontSize: "10px" }}>{statusCfg.label}</Badge>
+          <span className="text-[10px] font-medium uppercase" style={{ color: "var(--g-text-tertiary)" }}>
+            {property.propertyType?.replace("_", " ") || "House"}
+          </span>
+        </div>
+        {/* DOM heat dot */}
+        <div className="flex items-center gap-1">
+          <div className="h-2 w-2 rounded-full" style={{ background: heatColor(dom) }} />
+          <span className="text-[10px] font-medium" style={{ color: heatColor(dom) }}>{dom}d</span>
+        </div>
       </div>
 
       {/* Address */}
@@ -850,7 +1258,7 @@ function PropertyCard({
         {property.askingPrice && (
           <div>
             <div className="text-[10px] uppercase" style={{ color: "var(--g-text-tertiary)" }}>Asking</div>
-            <div className="text-sm font-bold" style={{ color: "var(--g-text-primary)" }}>{formatCurrency(property.askingPrice)}</div>
+            <div className="text-sm font-bold" style={{ color: "var(--g-accent)" }}>{formatCurrency(property.askingPrice)}</div>
           </div>
         )}
         {property.contractPrice && (
@@ -859,25 +1267,13 @@ function PropertyCard({
             <div className="text-sm font-bold" style={{ color: "var(--g-text-primary)" }}>{formatCurrency(property.contractPrice)}</div>
           </div>
         )}
+        {property.askingPrice && property.contractPrice && (
+          <div className="ml-auto">
+            <div className="text-[10px] uppercase" style={{ color: "var(--g-text-tertiary)" }}>Spread</div>
+            <div className="text-sm font-bold" style={{ color: "#22c55e" }}>{formatCurrency(property.askingPrice - property.contractPrice)}</div>
+          </div>
+        )}
       </div>
-
-      {/* Milestone Badges */}
-      {(property.aptEverSet || property.offerEverMade || property.everUnderContract || property.everClosed) && (
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] font-medium" style={{ color: property.aptEverSet ? "#22c55e" : "var(--g-text-tertiary)" }}>
-            {property.aptEverSet ? "✅" : "❌"} Apt Set
-          </span>
-          <span className="text-[10px] font-medium" style={{ color: property.offerEverMade ? "#f59e0b" : "var(--g-text-tertiary)" }}>
-            {property.offerEverMade ? "✅" : "❌"} Offer
-          </span>
-          <span className="text-[10px] font-medium" style={{ color: property.everUnderContract ? "#3b82f6" : "var(--g-text-tertiary)" }}>
-            {property.everUnderContract ? "✅" : "❌"} Contract
-          </span>
-          <span className="text-[10px] font-medium" style={{ color: property.everClosed ? "#10b981" : "var(--g-text-tertiary)" }}>
-            {property.everClosed ? "✅" : "❌"} Closed
-          </span>
-        </div>
-      )}
 
       {/* Activity Indicators */}
       <div className="flex items-center gap-3 pt-2" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
@@ -937,7 +1333,7 @@ export default function Inventory() {
       setAddOpen(false);
       setSelectedPropertyId(result.id);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   const deleteMutation = trpc.inventory.deleteProperty.useMutation({
@@ -947,13 +1343,12 @@ export default function Inventory() {
       setDeleteConfirmId(null);
       if (selectedPropertyId === deleteConfirmId) setSelectedPropertyId(null);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   const properties = data?.items || [];
   const total = data?.total || 0;
 
-  // Status counts
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: total };
     properties.forEach((p: any) => {
@@ -969,10 +1364,10 @@ export default function Inventory() {
         <div>
           <h1 className="text-xl font-bold" style={{ color: "var(--g-text-primary)" }}>
             <Package className="h-5 w-5 inline mr-2" style={{ color: "var(--g-accent)" }} />
-            Inventory
+            Dispo Command Center
           </h1>
           <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
-            {total} {total === 1 ? "property" : "properties"}
+            {total} {total === 1 ? "property" : "properties"} in inventory
           </p>
         </div>
         <Button onClick={() => setAddOpen(true)} size="sm" style={{ background: "var(--g-accent)", color: "#fff" }}>
@@ -1081,7 +1476,7 @@ export default function Inventory() {
         <PropertyFormDialog
           open={addOpen}
           onOpenChange={setAddOpen}
-          onSave={(data) => createMutation.mutate(data)}
+          onSave={(data: any) => createMutation.mutate(data)}
           isSaving={createMutation.isPending}
         />
       )}

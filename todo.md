@@ -4249,3 +4249,54 @@
 - [x] Training tab: Hidden entirely for dispo managers
 - [x] Team page: Hidden entirely for dispo managers
 - [x] Day Hub: Only show dispo manager's own tab and messages to their number
+
+## Inventory → Dispo Command Center (Spec 2026-03-05)
+
+### Database & Backend
+- [x] Expand properties table with market, propertyType, dispoAskingPrice, arv, repairEstimate, beds, baths, sqft, yearBuilt, lotSize, sellerName, sellerPhone, photos, assignedTo
+- [x] Add property_buyer_activity table (buyer matching, send tracking, offers per buyer per property)
+- [x] Add property_activity_log table (chronological event history per property)
+- [x] Property CRUD procedures (create, update, delete, list with stage filters, get by ID)
+- [x] Buyer matching via GHL custom fields (market, budget, type, strategy)
+- [x] Send tracking per buyer per property (SMS/email/blast)
+- [x] Offer logging per buyer per property with amounts
+- [x] Activity log recording for all property actions
+
+### Frontend - Phase 1: Property Cards + Overview + Buyers + Activity
+- [x] Property cards with at-a-glance status (offers count, sends count, days on market)
+- [x] Property selector with stage filter tabs (All, Marketing, Buyer Negotiating, Closing)
+- [x] Overview tab: deal details, financials, specs, deal progress tracker, notes
+- [x] Buyers tab: auto-matched from GHL, filter by status (All/VIP/Sent/Not Sent/Offered/Passed)
+- [x] Buyers tab: Send Deal / Follow Up / View Offer / Skip actions per buyer
+- [x] Activity feed tab: chronological history with type icons and stats summary
+
+### Frontend - Phase 2: Outreach + Materials
+- [x] Outreach tab: sends, offers, showings sub-tabs with full CRUD
+- [ ] Outreach tab: Pre-built templates (SMS hook, Email details, Blast multi-channel) [placeholder]
+- [ ] Outreach tab: Drip sequence enrollment for uncontacted buyers
+- [ ] Outreach tab: LLM auto-generated messages from property data (SMS, email, Facebook, InvestorLift)
+- [ ] Materials tab: PDF deal sheet auto-generation with property details
+- [ ] Materials tab: Listing descriptions (Facebook Post, InvestorLift, Craigslist Ad, Email Template)
+
+### Frontend - Phase 3: AI Assistant
+- [ ] AI Dispo Assistant tab with full property context (details, buyers, offers, outreach history)
+- [x] Responsive design for entire Dispo Command Center
+
+## Dispo Call Grading & Gamification (Spec 2026-03-05)
+
+### Grading System
+- [x] Add dispo call types to schema (Buyer Pitch, Follow-Up, Offer Negotiation, Qualification, Showing Coordination, Closing Coordination)
+- [x] Build dispo grading rubric (deal presentation, buyer fit, urgency creation, objection handling, negotiation skill, close)
+- [x] Weighted scoring matching LM/AM rubric depth
+
+### Calls Page Integration
+- [x] Add Dispo as filterable role on Calls page (dispo_buyer_pitch call type added)
+- [ ] Link dispo calls to properties in Inventory when identifiable
+- [x] Auto-detect dispo vs seller calls (detectCallType updated)
+
+### Gamification & Coaching
+- [ ] Dispo scoring, grades, leaderboard integration
+- [ ] Dispo badges, streaks, XP
+- [ ] AI coaching tips per dispo call
+- [ ] Auto-generated training modules from low-scoring dispo patterns
+- [ ] Practice mode against AI-simulated buyers

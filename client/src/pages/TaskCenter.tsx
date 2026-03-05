@@ -1263,12 +1263,12 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
     }
   };
 
-  const dismissMutation = (trpc.taskCenter as any).dismissConversation.useMutation({
+  const dismissMutation = (trpc as any).taskCenter.dismissConversation.useMutation({
     onSuccess: () => {
       toast.success(`Dismissed ${conv.contactName || "conversation"}`);
       onSelect(null);
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast.error("Failed to dismiss", { description: err.message });
     },
   });

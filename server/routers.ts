@@ -7746,6 +7746,124 @@ selectedTimezone: { type: "string" },
         return getDispoKpiSummary(ctx.user.tenantId, input.date);
       }),
 
+    // ─── ENHANCED PROPERTY DETAIL ───
+    getPropertyDetail: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getPropertyDetail } = await import("./inventory");
+        return getPropertyDetail(ctx.user.tenantId, input.propertyId);
+      }),
+
+    // ─── BUYER ACTIVITY ───
+    getBuyerActivities: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        status: z.string().optional(),
+        isVip: z.boolean().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getBuyerActivities } = await import("./inventory");
+        return getBuyerActivities(ctx.user.tenantId, input.propertyId, { status: input.status, isVip: input.isVip });
+      }),
+    addBuyerActivity: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        buyerName: z.string().min(1),
+        buyerPhone: z.string().optional(),
+        buyerEmail: z.string().optional(),
+        buyerCompany: z.string().optional(),
+        ghlContactId: z.string().optional(),
+        buyerMarkets: z.array(z.string()).optional(),
+        buyerBudgetMin: z.number().optional(),
+        buyerBudgetMax: z.number().optional(),
+        buyerPropertyTypes: z.array(z.string()).optional(),
+        buyerStrategy: z.string().optional(),
+        isVip: z.boolean().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { addBuyerActivity } = await import("./inventory");
+        return addBuyerActivity(ctx.user.tenantId, input, ctx.user.id, ctx.user.name || undefined);
+      }),
+    updateBuyerActivity: protectedProcedure
+      .input(z.object({
+        buyerActivityId: z.number(),
+        status: z.enum(["matched", "sent", "interested", "offered", "passed", "accepted", "skipped"]).optional(),
+        isVip: z.boolean().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateBuyerActivity } = await import("./inventory");
+        const { buyerActivityId, ...data } = input;
+        return updateBuyerActivity(ctx.user.tenantId, buyerActivityId, data);
+      }),
+    recordBuyerSend: protectedProcedure
+      .input(z.object({
+        buyerActivityId: z.number(),
+        channel: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { recordBuyerSend } = await import("./inventory");
+        return recordBuyerSend(ctx.user.tenantId, input.buyerActivityId, input.channel, ctx.user.id, ctx.user.name || undefined);
+      }),
+    recordBuyerOffer: protectedProcedure
+      .input(z.object({
+        buyerActivityId: z.number(),
+        offerAmount: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { recordBuyerOffer } = await import("./inventory");
+        return recordBuyerOffer(ctx.user.tenantId, input.buyerActivityId, input.offerAmount, ctx.user.id, ctx.user.name || undefined);
+      }),
+    deleteBuyerActivity: protectedProcedure
+      .input(z.object({ buyerActivityId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { deleteBuyerActivity } = await import("./inventory");
+        return deleteBuyerActivity(ctx.user.tenantId, input.buyerActivityId);
+      }),
+    matchBuyers: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { matchBuyersForProperty } = await import("./inventory");
+        return matchBuyersForProperty(ctx.user.tenantId, input.propertyId);
+      }),
+
+    // ─── ACTIVITY LOG ───
+    getActivityLog: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getPropertyActivityLog } = await import("./inventory");
+        return getPropertyActivityLog(ctx.user.tenantId, input.propertyId, input.limit);
+      }),
+    addActivityNote: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        note: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { logPropertyActivity } = await import("./inventory");
+        return logPropertyActivity(ctx.user.tenantId, input.propertyId, {
+          eventType: "note_added",
+          title: "Note added",
+          description: input.note,
+          performedByUserId: ctx.user.id,
+          performedByName: ctx.user.name || undefined,
+        });
+      }),
+
   }),
 });
 

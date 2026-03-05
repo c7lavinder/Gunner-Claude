@@ -531,3 +531,431 @@ export function getDispoKpiColor(value: number, target: number): "red" | "yellow
   if (pct >= 0.5) return "yellow";
   return "red";
 }
+
+
+// ─── BUYER ACTIVITY MANAGEMENT ───
+
+import {
+  propertyBuyerActivity,
+  propertyActivityLog,
+  contactCache,
+  type InsertPropertyBuyerActivity,
+  type InsertPropertyActivityLog,
+} from "../drizzle/schema";
+
+export async function getBuyerActivities(tenantId: number, propertyId: number, filters?: {
+  status?: string;
+  isVip?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [
+    eq(propertyBuyerActivity.tenantId, tenantId),
+    eq(propertyBuyerActivity.propertyId, propertyId),
+  ];
+  if (filters?.status && filters.status !== "all") {
+    conditions.push(sql`${propertyBuyerActivity.status} = ${filters.status}`);
+  }
+  if (filters?.isVip) {
+    conditions.push(sql`${propertyBuyerActivity.isVip} = 'true'`);
+  }
+
+  return db.select().from(propertyBuyerActivity)
+    .where(and(...conditions))
+    .orderBy(desc(propertyBuyerActivity.updatedAt));
+}
+
+export async function addBuyerActivity(tenantId: number, data: {
+  propertyId: number;
+  buyerName: string;
+  buyerPhone?: string;
+  buyerEmail?: string;
+  buyerCompany?: string;
+  ghlContactId?: string;
+  buyerMarkets?: string[];
+  buyerBudgetMin?: number;
+  buyerBudgetMax?: number;
+  buyerPropertyTypes?: string[];
+  buyerStrategy?: string;
+  isVip?: boolean;
+  notes?: string;
+}, performedByUserId?: number, performedByName?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [result] = await db.insert(propertyBuyerActivity).values({
+    tenantId,
+    propertyId: data.propertyId,
+    buyerName: data.buyerName,
+    buyerPhone: data.buyerPhone || null,
+    buyerEmail: data.buyerEmail || null,
+    buyerCompany: data.buyerCompany || null,
+    ghlContactId: data.ghlContactId || null,
+    buyerMarkets: data.buyerMarkets ? JSON.stringify(data.buyerMarkets) : null,
+    buyerBudgetMin: data.buyerBudgetMin || null,
+    buyerBudgetMax: data.buyerBudgetMax || null,
+    buyerPropertyTypes: data.buyerPropertyTypes ? JSON.stringify(data.buyerPropertyTypes) : null,
+    buyerStrategy: data.buyerStrategy || null,
+    isVip: data.isVip ? "true" : "false",
+    notes: data.notes || null,
+  });
+
+  // Log the buyer match
+  await logPropertyActivity(tenantId, data.propertyId, {
+    eventType: "buyer_matched",
+    title: `Buyer matched: ${data.buyerName}`,
+    description: data.buyerCompany ? `${data.buyerName} (${data.buyerCompany})` : data.buyerName,
+    buyerName: data.buyerName,
+    buyerActivityId: result.insertId,
+    performedByUserId,
+    performedByName,
+  });
+
+  return { id: result.insertId };
+}
+
+export async function updateBuyerActivity(tenantId: number, buyerActivityId: number, data: {
+  status?: "matched" | "sent" | "interested" | "offered" | "passed" | "accepted" | "skipped";
+  isVip?: boolean;
+  notes?: string;
+  sendCount?: number;
+  lastSentAt?: Date;
+  lastSentChannel?: string;
+  offerCount?: number;
+  lastOfferAmount?: number;
+  lastOfferAt?: Date;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updates: any = {};
+  if (data.status !== undefined) updates.status = data.status;
+  if (data.isVip !== undefined) updates.isVip = data.isVip ? "true" : "false";
+  if (data.notes !== undefined) updates.notes = data.notes;
+  if (data.sendCount !== undefined) updates.sendCount = data.sendCount;
+  if (data.lastSentAt !== undefined) updates.lastSentAt = data.lastSentAt;
+  if (data.lastSentChannel !== undefined) updates.lastSentChannel = data.lastSentChannel;
+  if (data.offerCount !== undefined) updates.offerCount = data.offerCount;
+  if (data.lastOfferAmount !== undefined) updates.lastOfferAmount = data.lastOfferAmount;
+  if (data.lastOfferAt !== undefined) updates.lastOfferAt = data.lastOfferAt;
+
+  await db.update(propertyBuyerActivity)
+    .set(updates)
+    .where(and(
+      eq(propertyBuyerActivity.id, buyerActivityId),
+      eq(propertyBuyerActivity.tenantId, tenantId),
+    ));
+
+  return { success: true };
+}
+
+export async function recordBuyerSend(tenantId: number, buyerActivityId: number, channel: string, performedByUserId?: number, performedByName?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Get current buyer activity
+  const [buyer] = await db.select().from(propertyBuyerActivity)
+    .where(and(eq(propertyBuyerActivity.id, buyerActivityId), eq(propertyBuyerActivity.tenantId, tenantId)));
+  if (!buyer) throw new Error("Buyer activity not found");
+
+  await db.update(propertyBuyerActivity)
+    .set({
+      sendCount: buyer.sendCount + 1,
+      lastSentAt: new Date(),
+      lastSentChannel: channel,
+      status: buyer.status === "matched" ? "sent" : buyer.status,
+    })
+    .where(eq(propertyBuyerActivity.id, buyerActivityId));
+
+  // Log the send
+  await logPropertyActivity(tenantId, buyer.propertyId, {
+    eventType: "send",
+    title: `Deal sent to ${buyer.buyerName} via ${channel}`,
+    buyerName: buyer.buyerName,
+    buyerActivityId,
+    performedByUserId,
+    performedByName,
+  });
+
+  return { success: true };
+}
+
+export async function recordBuyerOffer(tenantId: number, buyerActivityId: number, offerAmount: number, performedByUserId?: number, performedByName?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [buyer] = await db.select().from(propertyBuyerActivity)
+    .where(and(eq(propertyBuyerActivity.id, buyerActivityId), eq(propertyBuyerActivity.tenantId, tenantId)));
+  if (!buyer) throw new Error("Buyer activity not found");
+
+  await db.update(propertyBuyerActivity)
+    .set({
+      offerCount: buyer.offerCount + 1,
+      lastOfferAmount: offerAmount,
+      lastOfferAt: new Date(),
+      status: "offered",
+    })
+    .where(eq(propertyBuyerActivity.id, buyerActivityId));
+
+  // Also add to the legacy offers table for backwards compat
+  await db.insert(dispoPropertyOffers).values({
+    tenantId,
+    propertyId: buyer.propertyId,
+    buyerName: buyer.buyerName,
+    buyerPhone: buyer.buyerPhone,
+    buyerEmail: buyer.buyerEmail,
+    buyerCompany: buyer.buyerCompany,
+    ghlContactId: buyer.ghlContactId,
+    offerAmount,
+  });
+
+  // Log the offer
+  await logPropertyActivity(tenantId, buyer.propertyId, {
+    eventType: "offer_received",
+    title: `Offer from ${buyer.buyerName}: $${(offerAmount / 100).toLocaleString()}`,
+    buyerName: buyer.buyerName,
+    buyerActivityId,
+    metadata: JSON.stringify({ offerAmount }),
+    performedByUserId,
+    performedByName,
+  });
+
+  return { success: true };
+}
+
+export async function deleteBuyerActivity(tenantId: number, buyerActivityId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(propertyBuyerActivity)
+    .where(and(eq(propertyBuyerActivity.id, buyerActivityId), eq(propertyBuyerActivity.tenantId, tenantId)));
+
+  return { success: true };
+}
+
+// ─── BUYER MATCHING FROM GHL CONTACTS ───
+
+export async function matchBuyersForProperty(tenantId: number, propertyId: number) {
+  const db = await getDb();
+  if (!db) return { matched: 0, buyers: [] };
+
+  // Get the property details
+  const [property] = await db.select().from(dispoProperties)
+    .where(and(eq(dispoProperties.id, propertyId), eq(dispoProperties.tenantId, tenantId)));
+  if (!property) throw new Error("Property not found");
+
+  // Search contact cache for buyers with matching tags
+  // Look for contacts tagged as "buyer", "investor", "cash_buyer", etc.
+  const buyerTags = ["buyer", "investor", "cash buyer", "cash_buyer", "wholesale buyer", "flipper", "builder"];
+  const marketTag = property.market?.toLowerCase() || property.city?.toLowerCase() || "";
+
+  // Query contacts that have buyer-related tags
+  const contacts = await db.select().from(contactCache)
+    .where(and(
+      eq(contactCache.tenantId, tenantId),
+      sql`(${contactCache.tags} IS NOT NULL AND (
+        ${contactCache.tags} LIKE '%buyer%' OR
+        ${contactCache.tags} LIKE '%investor%' OR
+        ${contactCache.tags} LIKE '%cash%' OR
+        ${contactCache.tags} LIKE '%flipper%' OR
+        ${contactCache.tags} LIKE '%builder%' OR
+        ${contactCache.tags} LIKE '%wholesale%'
+      ))`,
+    ))
+    .limit(200);
+
+  // Get existing buyer activities for this property to avoid duplicates
+  const existingBuyers = await db.select({ ghlContactId: propertyBuyerActivity.ghlContactId })
+    .from(propertyBuyerActivity)
+    .where(and(
+      eq(propertyBuyerActivity.propertyId, propertyId),
+      eq(propertyBuyerActivity.tenantId, tenantId),
+    ));
+  const existingGhlIds = new Set(existingBuyers.map(b => b.ghlContactId).filter(Boolean));
+
+  // Filter and match
+  const newBuyers: Array<{
+    buyerName: string;
+    buyerPhone: string | null;
+    buyerEmail: string | null;
+    buyerCompany: string | null;
+    ghlContactId: string;
+    isVip: boolean;
+    matchReason: string;
+  }> = [];
+
+  for (const contact of contacts) {
+    if (existingGhlIds.has(contact.ghlContactId)) continue;
+
+    const tags = (() => {
+      try { return JSON.parse(contact.tags || "[]"); }
+      catch { return []; }
+    })();
+    const tagStr = tags.map((t: string) => t.toLowerCase()).join(",");
+
+    // Check market match
+    const marketMatch = marketTag && tagStr.includes(marketTag);
+    // Check VIP status
+    const isVip = tagStr.includes("vip") || tagStr.includes("a-buyer") || tagStr.includes("top buyer");
+
+    let matchReason = "Tagged as buyer";
+    if (marketMatch) matchReason += ` + ${property.market || property.city} market`;
+    if (isVip) matchReason += " (VIP)";
+
+    newBuyers.push({
+      buyerName: contact.name || `${contact.firstName || ""} ${contact.lastName || ""}`.trim() || "Unknown",
+      buyerPhone: contact.phone,
+      buyerEmail: contact.email,
+      buyerCompany: contact.companyName,
+      ghlContactId: contact.ghlContactId,
+      isVip,
+      matchReason,
+    });
+  }
+
+  // Insert matched buyers
+  let insertedCount = 0;
+  for (const buyer of newBuyers) {
+    try {
+      await db.insert(propertyBuyerActivity).values({
+        tenantId,
+        propertyId,
+        buyerName: buyer.buyerName,
+        buyerPhone: buyer.buyerPhone,
+        buyerEmail: buyer.buyerEmail,
+        buyerCompany: buyer.buyerCompany,
+        ghlContactId: buyer.ghlContactId,
+        isVip: buyer.isVip ? "true" : "false",
+        notes: buyer.matchReason,
+      });
+      insertedCount++;
+    } catch (err) {
+      console.warn(`[MatchBuyers] Failed to insert buyer ${buyer.buyerName}:`, err);
+    }
+  }
+
+  if (insertedCount > 0) {
+    await logPropertyActivity(tenantId, propertyId, {
+      eventType: "buyer_matched",
+      title: `${insertedCount} buyers auto-matched from CRM`,
+      description: `Matched based on buyer tags and market preferences`,
+      metadata: JSON.stringify({ matchedCount: insertedCount }),
+    });
+  }
+
+  return { matched: insertedCount, buyers: newBuyers };
+}
+
+// ─── ACTIVITY LOG ───
+
+export async function logPropertyActivity(tenantId: number, propertyId: number, data: {
+  eventType: InsertPropertyActivityLog["eventType"];
+  title: string;
+  description?: string;
+  buyerName?: string;
+  buyerActivityId?: number;
+  offerId?: number;
+  showingId?: number;
+  sendId?: number;
+  callId?: number;
+  metadata?: string;
+  performedByUserId?: number;
+  performedByName?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    await db.insert(propertyActivityLog).values({
+      tenantId,
+      propertyId,
+      ...data,
+    });
+  } catch (err) {
+    console.error("[ActivityLog] Failed to log activity:", err);
+  }
+}
+
+export async function getPropertyActivityLog(tenantId: number, propertyId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(propertyActivityLog)
+    .where(and(
+      eq(propertyActivityLog.tenantId, tenantId),
+      eq(propertyActivityLog.propertyId, propertyId),
+    ))
+    .orderBy(desc(propertyActivityLog.createdAt))
+    .limit(limit);
+}
+
+export async function getPropertyActivityStats(tenantId: number, propertyId: number) {
+  const db = await getDb();
+  if (!db) return { totalEvents: 0, sendCount: 0, offerCount: 0, showingCount: 0 };
+
+  const [stats] = await db.select({
+    totalEvents: sql<number>`count(*)`,
+    sendCount: sql<number>`SUM(CASE WHEN ${propertyActivityLog.eventType} = 'send' THEN 1 ELSE 0 END)`,
+    offerCount: sql<number>`SUM(CASE WHEN ${propertyActivityLog.eventType} IN ('offer_received', 'offer_accepted', 'offer_rejected') THEN 1 ELSE 0 END)`,
+    showingCount: sql<number>`SUM(CASE WHEN ${propertyActivityLog.eventType} IN ('showing_scheduled', 'showing_completed') THEN 1 ELSE 0 END)`,
+  }).from(propertyActivityLog)
+    .where(and(
+      eq(propertyActivityLog.tenantId, tenantId),
+      eq(propertyActivityLog.propertyId, propertyId),
+    ));
+
+  return {
+    totalEvents: Number(stats?.totalEvents || 0),
+    sendCount: Number(stats?.sendCount || 0),
+    offerCount: Number(stats?.offerCount || 0),
+    showingCount: Number(stats?.showingCount || 0),
+  };
+}
+
+// ─── ENHANCED PROPERTY DETAIL (with buyers + activity) ───
+
+export async function getPropertyDetail(tenantId: number, propertyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [property] = await db.select().from(dispoProperties)
+    .where(and(eq(dispoProperties.id, propertyId), eq(dispoProperties.tenantId, tenantId)));
+  if (!property) return null;
+
+  const [sends, offers, showings, buyers, activityLog, activityStats] = await Promise.all([
+    db.select().from(dispoPropertySends)
+      .where(eq(dispoPropertySends.propertyId, propertyId))
+      .orderBy(desc(dispoPropertySends.sentAt)),
+    db.select().from(dispoPropertyOffers)
+      .where(eq(dispoPropertyOffers.propertyId, propertyId))
+      .orderBy(desc(dispoPropertyOffers.offeredAt)),
+    db.select().from(dispoPropertyShowings)
+      .where(eq(dispoPropertyShowings.propertyId, propertyId))
+      .orderBy(desc(dispoPropertyShowings.showingDate)),
+    db.select().from(propertyBuyerActivity)
+      .where(and(eq(propertyBuyerActivity.propertyId, propertyId), eq(propertyBuyerActivity.tenantId, tenantId)))
+      .orderBy(desc(propertyBuyerActivity.updatedAt)),
+    db.select().from(propertyActivityLog)
+      .where(and(eq(propertyActivityLog.propertyId, propertyId), eq(propertyActivityLog.tenantId, tenantId)))
+      .orderBy(desc(propertyActivityLog.createdAt))
+      .limit(50),
+    getPropertyActivityStats(tenantId, propertyId),
+  ]);
+
+  // Calculate days on market
+  const daysOnMarket = property.marketedAt
+    ? Math.floor((Date.now() - new Date(property.marketedAt).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+
+  return {
+    ...property,
+    sends,
+    offers,
+    showings,
+    buyers,
+    activityLog,
+    activityStats,
+    daysOnMarket,
+  };
+}
