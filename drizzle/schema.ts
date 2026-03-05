@@ -1422,6 +1422,12 @@ export const contactCache = mysqlTable("contact_cache", {
   tags: text("tags"), // JSON array of tag strings
   address: text("address"),
   companyName: varchar("companyName", { length: 255 }),
+  // Pipeline & classification data (from GHL opportunities + tags)
+  currentStage: varchar("currentStage", { length: 100 }), // e.g. "New Lead", "Under Contract", "Closed"
+  source: varchar("source", { length: 100 }), // Normalized lead source e.g. "PropertyLeads", "BatchDialer"
+  market: varchar("market", { length: 100 }), // e.g. "Nashville", "Chattanooga"
+  buyBoxType: varchar("buyBoxType", { length: 100 }), // e.g. "House", "Lot", "Land", "Multifamily"
+  ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }), // Link to the opportunity in the pipeline
   // Sync metadata
   lastSyncedAt: timestamp("lastSyncedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

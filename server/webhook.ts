@@ -425,6 +425,23 @@ async function processOpportunityEvent(event: OpportunityEvent): Promise<void> {
     // auto-create or update a property record in the inventory.
     await syncPropertyFromOpportunity(event, db, logPrefix);
 
+    // ============ CONTACT CACHE SYNC ============
+    // Keep contact_cache up to date with pipeline stage changes
+    if (event.contactId && event.stageName) {
+      try {
+        const { syncContactFromOpportunityEvent } = await import("./ghlContactImport");
+        await syncContactFromOpportunityEvent(
+          event.tenantId,
+          event.contactId,
+          event.sourceOpportunityId,
+          event.stageName,
+          event.pipelineId
+        );
+      } catch (syncErr) {
+        console.warn(`${logPrefix} Contact cache sync failed (non-critical):`, syncErr);
+      }
+    }
+
   } catch (error) {
     console.error(`${logPrefix} Error processing opportunity event:`, error);
   }
@@ -738,6 +755,22 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
         )
       );
 
+    // Parse tags for source/market/type classification
+    let tagSource: string | null = null;
+    let tagMarket: string | null = null;
+    let tagBuyBoxType: string | null = null;
+    if (event.tags && event.tags.length > 0) {
+      try {
+        const { parseContactTags, normalizeSource } = await import("./ghlContactImport");
+        const tagData = parseContactTags(event.tags);
+        tagSource = tagData.source;
+        tagMarket = tagData.market;
+        tagBuyBoxType = tagData.buyBoxType;
+      } catch (e) {
+        // Non-critical — continue without tag parsing
+      }
+    }
+
     if (existing) {
       // Update existing contact
       const updateData: Record<string, any> = {
@@ -749,6 +782,10 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
       if (event.email !== undefined) updateData.email = event.email;
       if (event.phone !== undefined) updateData.phone = event.phone;
       if (event.tags) updateData.tags = JSON.stringify(event.tags);
+      // Update classification from tags (only if we got new values)
+      if (tagSource) updateData.source = tagSource;
+      if (tagMarket) updateData.market = tagMarket;
+      if (tagBuyBoxType) updateData.buyBoxType = tagBuyBoxType;
 
       await db.update(contactCache)
         .set(updateData)
@@ -766,6 +803,9 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
         email: event.email || null,
         phone: event.phone || null,
         tags: event.tags ? JSON.stringify(event.tags) : null,
+        source: tagSource || null,
+        market: tagMarket || null,
+        buyBoxType: tagBuyBoxType || null,
         lastSyncedAt: new Date(),
       });
       console.log(`${logPrefix} Added contact ${event.sourceContactId} to cache (${fullName || "unnamed"})`);

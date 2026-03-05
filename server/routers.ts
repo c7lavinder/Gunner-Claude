@@ -7896,6 +7896,36 @@ selectedTimezone: { type: "string" },
         const { getCsvTemplate } = await import("./inventory");
         return { template: getCsvTemplate() };
       }),
+    // GHL Contact Bulk Import
+    ghlBulkImport: protectedProcedure
+      .input(z.object({
+        pipelineId: z.string().optional(),
+      }).optional())
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin" && ctx.user.isTenantAdmin !== "true") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only admins can run bulk import" });
+        }
+        const { runBulkImport } = await import("./ghlContactImport");
+        // Run async — return immediately, poll for progress
+        runBulkImport(ctx.user.tenantId, input?.pipelineId).catch(err => {
+          console.error("[GHL Import] Background import error:", err);
+        });
+        return { started: true, message: "Bulk import started. Poll for progress." };
+      }),
+    ghlImportProgress: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getImportProgress } = await import("./ghlContactImport");
+        const progress = getImportProgress(ctx.user.tenantId);
+        return progress || { total: 0, processed: 0, imported: 0, updated: 0, skipped: 0, errors: [], status: "idle" as const };
+      }),
+    ghlPipelines: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getPipelinesForTenant } = await import("./ghlActions");
+        return getPipelinesForTenant(ctx.user.tenantId);
+      }),
   }),
 });
 

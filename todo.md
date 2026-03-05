@@ -4326,3 +4326,18 @@
 - [x] Import progress indicator with success/error counts
 - [x] Admin-only access for bulk import
 - [x] Downloadable CSV template with expected columns
+
+## GHL Bulk Import — Contact Data (2026-03-05)
+
+- [x] Audit existing contact_cache schema and add missing fields (currentStage, source, market, buyBoxType)
+- [x] Backend: Bulk import from GHL opportunities (GET /opportunities/search) with pagination
+- [x] Backend: Fetch contact per opportunity, extract source/market/type from tags
+- [x] Backend: Source normalization (PropertyLeads.com → PropertyLeads, etc.)
+- [x] Backend: Pipeline stage resolution (stageId → stage name)
+- [x] Backend: Webhook handler for OpportunityStageUpdate → update currentStage
+- [x] Backend: Webhook handler for ContactCreate → import new contact
+- [ ] Backend: Polling fallback every 15 min for missed updates (deferred — webhook sync active)
+- [x] Frontend: Admin trigger button for initial bulk import
+- [x] Frontend: Import progress/status display
+- [x] Handle missing tags gracefully (show "Unknown")
+- [x] GHL Location ID: from tenant config (ghlLocationId)

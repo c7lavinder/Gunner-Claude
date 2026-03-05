@@ -39,7 +39,9 @@ import {
   TestTube,
   Webhook,
   Copy,
-  BookOpen
+  BookOpen,
+  Download,
+  Database
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -1809,6 +1811,11 @@ export default function TenantSettings() {
             </div>
           </div>
 
+          {/* GHL Contact Sync Card */}
+          {crmIntegrations?.ghl?.connected && (
+            <GHLContactSyncCard />
+          )}
+
           {/* BatchDialer Integration Card */}
           <div className="obs-panel">
             <div style={{marginBottom: 16}}>
@@ -2298,6 +2305,159 @@ export default function TenantSettings() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+// ============ GHL Contact Sync Card ============
+
+function GHLContactSyncCard() {
+  const [selectedPipeline, setSelectedPipeline] = useState<string>("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [pollInterval, setPollInterval] = useState<number | false>(false);
+
+  const { data: pipelines, isLoading: pipelinesLoading } = trpc.inventory.ghlPipelines.useQuery();
+  const { data: progress, refetch: refetchProgress } = trpc.inventory.ghlImportProgress.useQuery(
+    undefined,
+    { refetchInterval: pollInterval }
+  );
+
+  const importMutation = trpc.inventory.ghlBulkImport.useMutation({
+    onSuccess: () => {
+      setIsImporting(true);
+      setPollInterval(2000); // Poll every 2 seconds
+      toast.info("Bulk import started — syncing contacts from GHL...");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to start import");
+    },
+  });
+
+  // Stop polling when import completes
+  useEffect(() => {
+    if (progress?.status === "done" || progress?.status === "error") {
+      setPollInterval(false);
+      setIsImporting(false);
+      if (progress.status === "done") {
+        toast.success(`Import complete: ${progress.imported} new, ${progress.updated} updated, ${progress.skipped} skipped`);
+      } else {
+        toast.error("Import finished with errors. Check the details below.");
+      }
+    }
+  }, [progress?.status]);
+
+  const pct = progress && progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
+  const isRunning = progress?.status === "processing" || progress?.status === "fetching_pipeline" || progress?.status === "fetching_opportunities" || isImporting;
+
+  return (
+    <div className="obs-panel">
+      <div style={{ marginBottom: 16 }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+              <Database className="h-5 w-5 text-purple-600" />
+            </div>
+            <div>
+              <h3 className="obs-section-title text-base">GHL Contact Sync</h3>
+              <p style={{ fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4 }}>
+                Import contacts from GHL pipeline opportunities into the local cache
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {/* Pipeline Selector */}
+        <div className="space-y-2">
+          <Label>Pipeline</Label>
+          {pipelinesLoading ? (
+            <Skeleton className="h-10 w-full" />
+          ) : (
+            <Select value={selectedPipeline} onValueChange={setSelectedPipeline}>
+              <SelectTrigger>
+                <SelectValue placeholder="All pipelines (recommended)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Pipelines</SelectItem>
+                {(pipelines as any)?.pipelines?.map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name} ({p.stages?.length || 0} stages)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Import Button */}
+        <Button
+          onClick={() => {
+            importMutation.mutate({
+              pipelineId: selectedPipeline && selectedPipeline !== "all" ? selectedPipeline : undefined,
+            });
+          }}
+          disabled={isRunning || importMutation.isPending}
+          className="w-full gap-2"
+        >
+          {isRunning ? (
+            <><Loader2 className="h-4 w-4 animate-spin" />Importing... ({pct}%)</>
+          ) : (
+            <><Download className="h-4 w-4" />Sync Contacts from GHL</>
+          )}
+        </Button>
+
+        {/* Progress Bar */}
+        {isRunning && progress && progress.total > 0 && (
+          <div className="space-y-2">
+            <div className="w-full bg-muted rounded-full h-2.5">
+              <div
+                className="bg-purple-600 h-2.5 rounded-full transition-all duration-300"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{progress.processed} / {progress.total} opportunities</span>
+              <span>{progress.imported} new · {progress.updated} updated · {progress.skipped} skipped</span>
+            </div>
+          </div>
+        )}
+
+        {/* Results Summary (after completion) */}
+        {!isRunning && progress && progress.status === "done" && progress.total > 0 && (
+          <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <Check className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-medium text-green-800 dark:text-green-300">Last import complete</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2 text-xs text-green-700 dark:text-green-400">
+              <div>Total: <strong>{progress.total}</strong></div>
+              <div>New: <strong>{progress.imported}</strong></div>
+              <div>Updated: <strong>{progress.updated}</strong></div>
+              <div>Skipped: <strong>{progress.skipped}</strong></div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {!isRunning && progress && progress.errors && progress.errors.length > 0 && (
+          <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <span className="text-sm font-medium text-red-800 dark:text-red-300">{progress.errors.length} error(s)</span>
+            </div>
+            <div className="max-h-32 overflow-y-auto text-xs text-red-700 dark:text-red-400 space-y-1">
+              {progress.errors.slice(0, 10).map((err: string, i: number) => (
+                <p key={i}>• {err}</p>
+              ))}
+              {progress.errors.length > 10 && <p>...and {progress.errors.length - 10} more</p>}
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Scans all opportunities in the selected pipeline, fetches linked contacts, and parses tags for source, market, and buy box type. Ongoing sync happens automatically via webhooks.
+        </p>
+      </div>
     </div>
   );
 }
