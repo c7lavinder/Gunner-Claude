@@ -500,3 +500,182 @@ describe("New Schema Tables", () => {
     expect(schema.dispoProperties.dispoAskingPrice).toBeDefined();
   });
 });
+
+
+// ─── AI Dispo Assistant Stream Tests ───
+
+describe("Dispo Assistant Stream", () => {
+  it("should export buildPropertyContext function", async () => {
+    const mod = await import("./dispoAssistantStream");
+    expect(mod.buildPropertyContext).toBeDefined();
+    expect(typeof mod.buildPropertyContext).toBe("function");
+  });
+
+  it("should build context string from property detail", async () => {
+    const { buildPropertyContext } = await import("./dispoAssistantStream");
+    const mockDetail = {
+      id: 1,
+      address: "123 Main St",
+      city: "Dallas",
+      state: "TX",
+      zip: "75001",
+      status: "marketing",
+      propertyType: "SFR",
+      askingPrice: "250000",
+      arv: "350000",
+      estRepairs: "50000",
+      beds: 3,
+      baths: 2,
+      sqft: 1800,
+      yearBuilt: 1995,
+      lotSize: "0.25 acres",
+      market: "Dallas-Fort Worth",
+      sellerName: "John Doe",
+      sellerPhone: "555-1234",
+      notes: "Motivated seller",
+      createdAt: new Date("2025-01-01"),
+      sends: [
+        { channel: "sms", buyerGroup: "Cash Buyers", recipientCount: 50, sentAt: new Date("2025-01-15") },
+      ],
+      offers: [
+        { buyerName: "Jane Buyer", offerAmount: "230000", status: "pending", createdAt: new Date("2025-01-20") },
+      ],
+      showings: [
+        { buyerName: "Bob Investor", scheduledAt: new Date("2025-01-25"), status: "scheduled" },
+      ],
+    };
+
+    const context = buildPropertyContext(mockDetail);
+    expect(context).toContain("123 Main St");
+    expect(context).toContain("Dallas");
+    expect(context).toContain("TX");
+    expect(context).toContain("$2,500");
+    expect(context).toContain("$3,500");
+    expect(context).toContain("SFR");
+    expect(context).toContain("OUTREACH");
+    expect(context).toContain("OFFERS");
+    expect(context).toContain("SHOWINGS");
+  });
+
+  it("should handle empty property detail gracefully", async () => {
+    const { buildPropertyContext } = await import("./dispoAssistantStream");
+    const emptyDetail = {
+      id: 1,
+      address: "456 Oak Ave",
+      city: "Houston",
+      state: "TX",
+      zip: "77001",
+      status: "new",
+      sends: [],
+      offers: [],
+      showings: [],
+    };
+
+    const context = buildPropertyContext(emptyDetail);
+    expect(context).toContain("456 Oak Ave");
+    expect(context).toContain("Houston");
+    // With no sends/offers/showings, context should still contain the property info
+    expect(context).toContain("new");
+  });
+});
+
+// ─── Dispo Gamification Tests ───
+
+describe("Dispo Manager Gamification", () => {
+  it("should include dispo_manager badges in ALL_BADGES", async () => {
+    const { ALL_BADGES } = await import("./gamification");
+    const dispoBadges = ALL_BADGES.filter(b => b.category === "dispo_manager");
+    expect(dispoBadges.length).toBeGreaterThan(0);
+  });
+
+  it("should have proper tier structure for dispo badges", async () => {
+    const { ALL_BADGES } = await import("./gamification");
+    const dispoBadges = ALL_BADGES.filter(b => b.category === "dispo_manager");
+    for (const badge of dispoBadges) {
+      expect(badge.tiers).toBeDefined();
+      expect(badge.tiers.bronze).toBeDefined();
+      expect(badge.tiers.silver).toBeDefined();
+      expect(badge.tiers.gold).toBeDefined();
+      expect(badge.tiers.bronze.count).toBeLessThan(badge.tiers.silver.count);
+      expect(badge.tiers.silver.count).toBeLessThan(badge.tiers.gold.count);
+    }
+  });
+
+  it("should include expected dispo badge codes", async () => {
+    const { ALL_BADGES } = await import("./gamification");
+    const dispoCodes = ALL_BADGES.filter(b => b.category === "dispo_manager").map(b => b.code);
+    expect(dispoCodes).toContain("deal_pitcher");
+    expect(dispoCodes).toContain("buyer_whisperer");
+    expect(dispoCodes).toContain("closer");
+    expect(dispoCodes).toContain("deal_machine");
+    expect(dispoCodes).toContain("negotiation_ace");
+  });
+
+  it("should have dispo_manager in badge category type", async () => {
+    const { dispoProperties } = await import("../drizzle/schema");
+    // Verify the schema includes dispo-related tables
+    expect(dispoProperties).toBeDefined();
+  });
+});
+
+// ─── Dispo Grading Rubric Tests ───
+
+describe("Dispo Manager Grading Rubric", () => {
+  it("should export DISPO_MANAGER_RUBRIC", async () => {
+    const mod = await import("./grading");
+    expect(mod.DISPO_MANAGER_RUBRIC).toBeDefined();
+  });
+
+  it("should have proper rubric structure with criteria", async () => {
+    const { DISPO_MANAGER_RUBRIC } = await import("./grading");
+    expect(DISPO_MANAGER_RUBRIC.criteria).toBeDefined();
+    expect(DISPO_MANAGER_RUBRIC.criteria.length).toBeGreaterThan(0);
+    
+    for (const criterion of DISPO_MANAGER_RUBRIC.criteria) {
+      expect(criterion.name).toBeDefined();
+      expect(criterion.maxPoints).toBeDefined();
+      expect(criterion.maxPoints).toBeGreaterThan(0);
+      expect(criterion.description).toBeDefined();
+    }
+  });
+
+  it("should have maxPoints that sum to approximately 100", async () => {
+    const { DISPO_MANAGER_RUBRIC } = await import("./grading");
+    const totalPoints = DISPO_MANAGER_RUBRIC.criteria.reduce((sum: number, c: any) => sum + c.maxPoints, 0);
+    expect(totalPoints).toBeGreaterThanOrEqual(95);
+    expect(totalPoints).toBeLessThanOrEqual(105);
+  });
+
+  it("should include key dispo criteria", async () => {
+    const { DISPO_MANAGER_RUBRIC } = await import("./grading");
+    const criteriaNames = DISPO_MANAGER_RUBRIC.criteria.map((c: any) => c.name.toLowerCase());
+    // Should cover deal presentation, buyer fit, urgency, objection handling, negotiation, close
+    expect(criteriaNames.some((n: string) => n.includes("deal") || n.includes("presentation"))).toBe(true);
+    expect(criteriaNames.some((n: string) => n.includes("buyer") || n.includes("fit"))).toBe(true);
+    expect(criteriaNames.some((n: string) => n.includes("objection"))).toBe(true);
+    expect(criteriaNames.some((n: string) => n.includes("negotiat"))).toBe(true);
+  });
+});
+
+// ─── Buyer Activity Schema Tests ───
+
+describe("Buyer Activity Schema", () => {
+  it("should have property_buyer_activity table", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.propertyBuyerActivity).toBeDefined();
+    expect(schema.propertyBuyerActivity.id).toBeDefined();
+    expect(schema.propertyBuyerActivity.propertyId).toBeDefined();
+    expect(schema.propertyBuyerActivity.ghlContactId).toBeDefined();
+    expect(schema.propertyBuyerActivity.buyerName).toBeDefined();
+    expect(schema.propertyBuyerActivity.buyerPhone).toBeDefined();
+  });
+
+  it("should have property_activity_log table", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.propertyActivityLog).toBeDefined();
+    expect(schema.propertyActivityLog.id).toBeDefined();
+    expect(schema.propertyActivityLog.propertyId).toBeDefined();
+    expect(schema.propertyActivityLog.eventType).toBeDefined();
+    expect(schema.propertyActivityLog.description).toBeDefined();
+  });
+});

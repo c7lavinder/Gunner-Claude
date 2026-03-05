@@ -35,7 +35,7 @@ export interface BadgeDefinition {
   name: string;
   description: string;
   icon: string;
-  category: "universal" | "lead_manager" | "acquisition_manager" | "lead_generator";
+  category: "universal" | "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager";
   tiers: {
     bronze: { count: number };
     silver: { count: number };
@@ -240,7 +240,74 @@ export const LEAD_GENERATOR_BADGES: BadgeDefinition[] = [
   },
 ];
 
-export const ALL_BADGES = [...UNIVERSAL_BADGES, ...LEAD_MANAGER_BADGES, ...ACQUISITION_MANAGER_BADGES, ...LEAD_GENERATOR_BADGES];
+// Dispo Manager Badges
+export const DISPO_MANAGER_BADGES: BadgeDefinition[] = [
+  {
+    code: "deal_pitcher",
+    name: "Deal Pitcher",
+    description: "Buyer pitch calls graded C or better — consistently presenting deals effectively",
+    icon: "🎤",
+    category: "dispo_manager",
+    tiers: { bronze: { count: 25 }, silver: { count: 100 }, gold: { count: 500 } },
+    criteria: { type: "consecutive_grade", minGrade: "C" },
+  },
+  {
+    code: "negotiation_ace",
+    name: "Negotiation Ace",
+    description: "Score 20+/25 on Negotiation Skill — masterful at getting top dollar",
+    icon: "💰",
+    category: "dispo_manager",
+    tiers: { bronze: { count: 15 }, silver: { count: 75 }, gold: { count: 300 } },
+    criteria: { type: "criteria_score", criteriaName: "Negotiation Skill", minScore: 20 },
+  },
+  {
+    code: "urgency_creator",
+    name: "Urgency Creator",
+    description: "Score 12+/15 on Urgency Creation — making buyers act fast",
+    icon: "⚡",
+    category: "dispo_manager",
+    tiers: { bronze: { count: 20 }, silver: { count: 80 }, gold: { count: 350 } },
+    criteria: { type: "criteria_score", criteriaName: "Urgency Creation", minScore: 12 },
+  },
+  {
+    code: "objection_crusher",
+    name: "Objection Crusher",
+    description: "Score 12+/15 on Objection Handling — turning buyer doubts into deals",
+    icon: "🛡️",
+    category: "dispo_manager",
+    tiers: { bronze: { count: 20 }, silver: { count: 80 }, gold: { count: 350 } },
+    criteria: { type: "criteria_score", criteriaName: "Objection Handling", minScore: 12 },
+  },
+  {
+    code: "closer",
+    name: "The Closer",
+    description: "Score 18+/20 on Close — sealing the deal with commitment",
+    icon: "🏆",
+    category: "dispo_manager",
+    tiers: { bronze: { count: 10 }, silver: { count: 50 }, gold: { count: 200 } },
+    criteria: { type: "criteria_score", criteriaName: "Close", minScore: 18 },
+  },
+  {
+    code: "buyer_whisperer",
+    name: "Buyer Whisperer",
+    description: "Score 18+/20 on Buyer Fit Assessment — matching the right buyers to the right deals",
+    icon: "🎯",
+    category: "dispo_manager",
+    tiers: { bronze: { count: 15 }, silver: { count: 75 }, gold: { count: 300 } },
+    criteria: { type: "criteria_score", criteriaName: "Buyer Fit Assessment", minScore: 18 },
+  },
+  {
+    code: "deal_machine",
+    name: "Deal Machine",
+    description: "Weeks with 30+ graded dispo calls — high-volume deal disposition",
+    icon: "🔥",
+    category: "dispo_manager",
+    tiers: { bronze: { count: 5 }, silver: { count: 15 }, gold: { count: 30 } },
+    criteria: { type: "weekly_volume", weeklyCount: 30 },
+  },
+];
+
+export const ALL_BADGES = [...UNIVERSAL_BADGES, ...LEAD_MANAGER_BADGES, ...ACQUISITION_MANAGER_BADGES, ...LEAD_GENERATOR_BADGES, ...DISPO_MANAGER_BADGES];
 
 // ============ XP SYSTEM ============
 
@@ -886,7 +953,8 @@ export async function getAllBadgesWithProgress(teamMemberId: number, teamRole: s
     b.category === "universal" || 
     (teamRole === "lead_manager" && b.category === "lead_manager") ||
     (teamRole === "acquisition_manager" && b.category === "acquisition_manager") ||
-    (teamRole === "lead_generator" && b.category === "lead_generator")
+    (teamRole === "lead_generator" && b.category === "lead_generator") ||
+    (teamRole === "dispo_manager" && b.category === "dispo_manager")
   );
   
   // Get earned badges
@@ -1125,7 +1193,8 @@ export async function evaluateBadgesForCall(teamMemberId: number, callId: number
     b.category === "universal" || 
     (teamMember.teamRole === "lead_manager" && b.category === "lead_manager") ||
     (teamMember.teamRole === "acquisition_manager" && b.category === "acquisition_manager") ||
-    (teamMember.teamRole === "lead_generator" && b.category === "lead_generator")
+    (teamMember.teamRole === "lead_generator" && b.category === "lead_generator") ||
+    (teamMember.teamRole === "dispo_manager" && b.category === "dispo_manager")
   );
   
   // Check each badge type

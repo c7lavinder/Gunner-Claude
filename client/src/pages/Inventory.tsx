@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -10,8 +10,9 @@ import {
   Package, Filter, ArrowUpDown, X, Star, Activity, FileText,
   Megaphone, UserPlus, Copy, ExternalLink, Hash, TrendingUp,
   CircleDot, Zap, Target, BarChart3, ArrowRight, RefreshCw,
-  ChevronRight, Bookmark, Tag, Globe, Layers, StickyNote,
+  ChevronRight, Bookmark, Tag, Globe, Layers, StickyNote, Bot, Sparkles, Loader2,
 } from "lucide-react";
+import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -1095,6 +1096,192 @@ function OutreachTab({ property, propertyId }: { property: any; propertyId: numb
   );
 }
 
+// ─── AI DISPO ASSISTANT TAB ───
+function DispoAITab({ propertyId, property }: { propertyId: number; property: any }) {
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [input, setInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const scrollToBottom = () => {
+    if (scrollRef.current) {
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+      });
+    }
+  };
+
+  useEffect(() => { scrollToBottom(); }, [messages]);
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isStreaming) return;
+    const userMsg = { role: "user" as const, content: text.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages([...newMessages, { role: "assistant", content: "" }]);
+    setInput("");
+    setIsStreaming(true);
+
+    try {
+      const response = await fetch("/api/dispo-assistant/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: text.trim(),
+          propertyId,
+          history: messages.slice(-10),
+        }),
+      });
+      if (!response.ok) throw new Error("Stream request failed");
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          try {
+            const parsed = JSON.parse(trimmed.slice(6));
+            if (parsed.type === "chunk" && parsed.content) {
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === "assistant") {
+                  updated[updated.length - 1] = { ...last, content: last.content + parsed.content };
+                }
+                return updated;
+              });
+            } else if (parsed.type === "error") {
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === "assistant") {
+                  updated[updated.length - 1] = { ...last, content: "Sorry, something went wrong. Please try again." };
+                }
+                return updated;
+              });
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch (err) {
+      setMessages(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = { ...last, content: "Failed to connect. Please try again." };
+        }
+        return updated;
+      });
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
+  const suggestedPrompts = [
+    `What's the best pricing strategy for ${property?.address || "this property"}?`,
+    "Which buyer segments should I target first?",
+    "Help me craft a compelling SMS blast for this deal",
+    "What should my follow-up cadence look like?",
+    "How do I handle lowball offers on this property?",
+    "What's my negotiation strategy with multiple offers?",
+  ];
+
+  return (
+    <div className="flex flex-col h-full" style={{ minHeight: 400 }}>
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pb-3" style={{ maxHeight: "calc(100vh - 400px)" }}>
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
+            <div className="p-3 rounded-full" style={{ background: "var(--g-accent-soft)" }}>
+              <Bot className="h-8 w-8" style={{ color: "var(--g-accent)" }} />
+            </div>
+            <div className="text-center">
+              <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--g-text-primary)" }}>AI Dispo Assistant</h3>
+              <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Property-aware AI for pricing, buyer targeting, negotiation, and deal strategy</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 w-full max-w-sm">
+              {suggestedPrompts.slice(0, 4).map((prompt, i) => (
+                <button
+                  key={i}
+                  onClick={() => sendMessage(prompt)}
+                  className="text-left text-xs px-3 py-2 rounded-lg transition-all hover:scale-[1.01]"
+                  style={{ background: "var(--g-surface)", border: "1px solid var(--g-border-subtle)", color: "var(--g-text-secondary)" }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          messages.map((msg, i) => (
+            <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" && (
+                <div className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center mt-0.5" style={{ background: "var(--g-accent-soft)" }}>
+                  <Sparkles className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
+                </div>
+              )}
+              <div
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-xs ${msg.role === "user" ? "" : ""}`}
+                style={msg.role === "user"
+                  ? { background: "var(--g-accent)", color: "#fff" }
+                  : { background: "var(--g-surface)", color: "var(--g-text-primary)", border: "1px solid var(--g-border-subtle)" }
+                }
+              >
+                {msg.role === "assistant" && msg.content ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:text-xs [&_li]:text-xs [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
+                    <Streamdown>{msg.content}</Streamdown>
+                  </div>
+                ) : msg.role === "assistant" && !msg.content && isStreaming ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" style={{ color: "var(--g-accent)" }} />
+                    <span style={{ color: "var(--g-text-tertiary)" }}>Thinking...</span>
+                  </div>
+                ) : (
+                  <span className="whitespace-pre-wrap">{msg.content}</span>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="pt-3" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
+        <form
+          onSubmit={(e) => { e.preventDefault(); sendMessage(input); }}
+          className="flex gap-2 items-end"
+        >
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+            placeholder="Ask about pricing, buyers, negotiation..."
+            rows={1}
+            className="flex-1 text-xs px-3 py-2 rounded-lg resize-none outline-none"
+            style={{ background: "var(--g-surface)", border: "1px solid var(--g-border-subtle)", color: "var(--g-text-primary)", maxHeight: 80 }}
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isStreaming}
+            className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-all disabled:opacity-40"
+            style={{ background: "var(--g-accent)", color: "#fff" }}
+          >
+            {isStreaming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── PROPERTY DETAIL PANEL ───
 function PropertyDetail({
   propertyId, onClose,
@@ -1172,6 +1359,7 @@ function PropertyDetail({
           { key: "buyers", label: "Buyers", icon: Users },
           { key: "outreach", label: "Outreach", icon: Send },
           { key: "activity", label: "Activity", icon: Activity },
+          { key: "ai", label: "AI Assistant", icon: Bot },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -1194,6 +1382,7 @@ function PropertyDetail({
         {activeTab === "buyers" && <BuyersTab propertyId={propertyId} />}
         {activeTab === "outreach" && <OutreachTab property={property} propertyId={propertyId} />}
         {activeTab === "activity" && <ActivityTab propertyId={propertyId} />}
+        {activeTab === "ai" && <DispoAITab propertyId={propertyId} property={property} />}
       </div>
 
       {/* Dialogs */}

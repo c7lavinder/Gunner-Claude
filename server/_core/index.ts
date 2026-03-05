@@ -15,6 +15,7 @@ import { handleStripeWebhook } from "../stripe/webhook";
 import selfServeAuthRoutes from "../selfServeAuthRoutes";
 import { runEmailSequenceJobs } from "../emailSequenceJobs";
 import { coachStreamRouter } from "../coachStream";
+import { dispoAssistantRouter } from "../dispoAssistantStream";
 import { startBatchDialerPolling } from "../batchDialerSync";
 import { startBatchLeadsPolling } from "../batchLeadsSync";
 import { startWebhookRetryQueue } from "../webhookRetryQueue";
@@ -65,6 +66,9 @@ async function startServer() {
 
   // AI Coach streaming endpoint
   app.use(coachStreamRouter);
+  
+  // AI Dispo Assistant streaming endpoint
+  app.use(dispoAssistantRouter);
   
   // Seed team members on startup
   seedTeamMembers().catch(err => console.error("Failed to seed team members:", err));

@@ -4295,8 +4295,24 @@
 - [x] Auto-detect dispo vs seller calls (detectCallType updated)
 
 ### Gamification & Coaching
-- [ ] Dispo scoring, grades, leaderboard integration
-- [ ] Dispo badges, streaks, XP
-- [ ] AI coaching tips per dispo call
+- [x] Dispo scoring, grades, leaderboard integration
+- [x] Dispo badges, streaks, XP
+- [x] AI coaching tips per dispo call
 - [ ] Auto-generated training modules from low-scoring dispo patterns
 - [ ] Practice mode against AI-simulated buyers
+
+## AI Dispo Assistant Tab (2026-03-05)
+
+- [x] Backend: Dispo assistant streaming endpoint with full property context (details, buyers, offers, outreach, activity)
+- [x] Frontend: AI Dispo Assistant tab in Inventory detail panel
+- [x] Chat interface with property-aware context injection
+- [x] Suggested prompts for common dispo scenarios (pricing strategy, buyer follow-up, negotiation tactics)
+
+## Dispo Gamification (2026-03-05)
+
+- [x] Dispo-specific badges (deal_pitcher, negotiation_ace, urgency_creator, objection_crusher, closer, buyer_whisperer, deal_machine)
+- [x] Dispo XP awards for key actions (integrated into existing processCallViewRewards)
+- [x] Dispo streaks tracking (uses existing streak system for dispo_manager role)
+- [x] Dispo leaderboard integration on existing leaderboard page + sidebar nav
+- [x] Dispo scoring and grades on Calls page (dispo_buyer_pitch call type + DISPO_MANAGER_RUBRIC)
+- [x] AI coaching tips per dispo call

@@ -690,7 +690,7 @@ export const badges = mysqlTable("badges", {
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   icon: varchar("icon", { length: 10 }), // Emoji icon
-  category: mysqlEnum("category", ["universal", "lead_manager", "acquisition_manager", "lead_generator"]).notNull(),
+  category: mysqlEnum("category", ["universal", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).notNull(),
   tier: mysqlEnum("tier", ["bronze", "silver", "gold"]).notNull(),
   target: int("target").notNull(), // Target count to earn this badge tier
   criteriaType: varchar("criteriaType", { length: 50 }).notNull(), // Type of criteria

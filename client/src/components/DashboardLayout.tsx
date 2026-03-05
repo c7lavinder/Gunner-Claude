@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import {
   LayoutDashboard, LogOut, Users, Phone, BarChart3, BookOpen,
   Building2, Shield, AlertTriangle, Settings, Sun, Moon, Menu, X,
-  Zap, ClipboardList, Warehouse,
+  Zap, ClipboardList, Warehouse, Trophy,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, Redirect, useSearch } from "wouter";
@@ -50,8 +50,9 @@ const getMenuItems = (
   const isDispoManager = teamRole === 'dispo_manager';
 
   if (isDispoManager) {
-    // Dispo managers: Day Hub, Calls, Inventory only — no Training, no Team
+    // Dispo managers: Day Hub, Calls, Inventory, Leaderboard — no Training, no Team
     items.push({ icon: Warehouse, label: "Inventory", path: "/inventory" });
+    items.push({ icon: Trophy, label: "Leaderboard", path: "/leaderboard" });
     return items;
   }
 
