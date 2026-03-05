@@ -7507,9 +7507,22 @@ selectedTimezone: { type: "string" },
             creds,
             `/conversations/${input.conversationId}/messages?limit=50`
           );
-          console.log(`[getConversationMessages] Raw response keys:`, Object.keys(data || {}), `messages count:`, (data?.messages || data?.data?.messages || []).length, `for conv ${input.conversationId}`);
-          // GHL returns messages in data.messages (v2) or data.data.messages
-          const rawMessages = data?.messages || data?.data?.messages || (data?.lastMessageBody ? [{ body: data.lastMessageBody, direction: "inbound" }] : []);
+          console.log(`[getConversationMessages] Raw response structure:`, JSON.stringify({
+            topKeys: Object.keys(data || {}),
+            hasNestedMessages: !!data?.messages?.messages,
+            topMessagesIsArray: Array.isArray(data?.messages),
+            nestedCount: data?.messages?.messages?.length,
+          }), `for conv ${input.conversationId}`);
+          // GHL response is NESTED: { messages: { messages: [...] } }
+          // data.messages is an object with a .messages array inside it
+          let rawMessages: any[] = [];
+          if (data?.messages?.messages && Array.isArray(data.messages.messages)) {
+            rawMessages = data.messages.messages;
+          } else if (Array.isArray(data?.messages)) {
+            rawMessages = data.messages;
+          } else if (data?.data?.messages && Array.isArray(data.data.messages)) {
+            rawMessages = data.data.messages;
+          }
           const messages = rawMessages.map((msg: any) => ({
             id: msg.id || "",
             body: msg.body || msg.message || msg.text || "",
@@ -7517,6 +7530,8 @@ selectedTimezone: { type: "string" },
             messageType: msg.messageType || msg.type || "TYPE_SMS",
             dateAdded: msg.dateAdded || msg.createdAt || "",
             userId: msg.userId || "",
+            from: msg.from || "",
+            to: msg.to || "",
           }));
           // Reverse so oldest is first (GHL returns newest first)
           messages.reverse();

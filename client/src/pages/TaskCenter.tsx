@@ -1469,11 +1469,16 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
                               opacity: msg.optimistic ? 0.6 : 1,
                             }}
                           >
-                            {/* Sender name */}
+                            {/* Sender name + phone number */}
                             <div className="flex items-center gap-1 mb-0.5">
                               <span className="text-[8px] font-semibold" style={{ color: isInbound ? "oklch(0.7 0.12 250)" : "oklch(0.75 0.1 250)" }}>
                                 {isInbound ? (conv.contactName?.split(' ')[0] || 'Lead') : 'Team'}
                               </span>
+                              {!isInbound && msg.from && (
+                                <span className="text-[7px]" style={{ color: "var(--g-text-tertiary)" }}>
+                                  from {formatPhone(msg.from)}
+                                </span>
+                              )}
                               {!isInbound && msg.userId === "automation" && (
                                 <span className="text-[7px] px-1 rounded" style={{ background: "rgba(139,92,246,0.15)", color: "oklch(0.7 0.15 290)" }}>Auto</span>
                               )}

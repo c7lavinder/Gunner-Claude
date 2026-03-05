@@ -4236,3 +4236,8 @@
 - [x] Fetch up to 50 most recent messages
 - [x] Auto-scroll to bottom on load
 - [x] Conversation header with contact name + address
+
+## Critical Fixes Round 4 (User-reported 2026-03-05)
+
+- [x] Inbox: "Couldn't load messages" error — fixed nested response structure (data.messages.messages)
+- [x] Inbox: Show which team phone number each outbound message was sent FROM to the lead (msg.from field)
