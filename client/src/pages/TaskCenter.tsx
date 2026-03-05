@@ -90,6 +90,11 @@ import {
   CheckCircle,
   Tag,
   X,
+  Home,
+  Eye,
+  DollarSign,
+  Building2,
+  Handshake,
 } from "lucide-react";
 import { useDemo } from "@/hooks/useDemo";
 
@@ -155,10 +160,11 @@ interface TeamMember {
   lcPhones?: string | null; // JSON array of LC phone numbers
 }
 
-type RoleTab = "admin" | "lm" | "am";
+type RoleTab = "admin" | "lm" | "am" | "dispo";
 
 const LM_KPI_PER_PERSON = { calls: 150, convos: 20, apts: 4, offers: 0, contracts: 0 };
 const AM_KPI_PER_PERSON = { calls: 40, convos: 0, apts: 0, offers: 4, contracts: 1 };
+const DISPO_KPI_TARGETS = { propertiesSent: 5, showings: 3, offersReceived: 2, dealsAssigned: 1 };
 
 const ROLE_TAB_CONFIG: Record<RoleTab, { label: string; description: string; kpiTargets: { calls: number; convos: number; apts: number; offers: number; contracts: number }; teamRoles: string[] }> = {
   admin: {
@@ -175,9 +181,15 @@ const ROLE_TAB_CONFIG: Record<RoleTab, { label: string; description: string; kpi
   },
   am: {
     label: "AM",
-    description: "Acquisition Manager view — offers & contracts",
+    description: "Acquisition Manager view \u2014 offers & contracts",
     kpiTargets: AM_KPI_PER_PERSON,
     teamRoles: ["acquisition_manager"],
+  },
+  dispo: {
+    label: "Dispo",
+    description: "Disposition Manager \u2014 properties, showings & buyer offers",
+    kpiTargets: { calls: 0, convos: 0, apts: 0, offers: 0, contracts: 0 },
+    teamRoles: ["dispo_manager"],
   },
 };
 
@@ -321,6 +333,370 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── DISPO KPI BAR ─────────────────────────────────────
+
+function DispoKpiBar() {
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+  const { data: kpi, isLoading } = trpc.inventory.getDispoKpiSummary.useQuery(
+    { date: todayStr },
+    { refetchInterval: 120000 }
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 flex-1 rounded-lg" />)}
+      </div>
+    );
+  }
+
+  const items = [
+    { label: "Properties Sent", value: kpi?.properties_sent || 0, target: DISPO_KPI_TARGETS.propertiesSent, icon: Send, color: "#3b82f6" },
+    { label: "Showings", value: kpi?.showings_scheduled || 0, target: DISPO_KPI_TARGETS.showings, icon: Eye, color: "#8b5cf6" },
+    { label: "Offers", value: kpi?.offers_received || 0, target: DISPO_KPI_TARGETS.offersReceived, icon: DollarSign, color: "#f59e0b" },
+    { label: "Deals Assigned", value: kpi?.deals_assigned || 0, target: DISPO_KPI_TARGETS.dealsAssigned, icon: Handshake, color: "#22c55e" },
+  ];
+
+  function getStatusColor(current: number, target: number) {
+    if (target === 0) return current > 0 ? "green" : "yellow";
+    if (current >= target) return "green";
+    if (current / target >= 0.5) return "yellow";
+    return "red";
+  }
+  const colorMap: Record<string, { bg: string; text: string; border: string }> = {
+    green: { bg: "rgba(22,163,74,0.12)", text: "#22c55e", border: "rgba(22,163,74,0.25)" },
+    yellow: { bg: "rgba(234,179,8,0.12)", text: "#eab308", border: "rgba(234,179,8,0.25)" },
+    red: { bg: "rgba(239,68,68,0.12)", text: "#ef4444", border: "rgba(239,68,68,0.25)" },
+  };
+
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {items.map((item) => {
+        const status = getStatusColor(item.value, item.target);
+        const c = colorMap[status];
+        const Icon = item.icon;
+        const pct = item.target > 0 ? Math.min(100, Math.round((item.value / item.target) * 100)) : 0;
+        return (
+          <div
+            key={item.label}
+            className="flex-1 min-w-[120px] rounded-lg px-3 py-2.5 relative overflow-hidden"
+            style={{ background: "var(--g-bg-card)", border: `1px solid ${c.border}` }}
+          >
+            <div className="absolute bottom-0 left-0 h-1 transition-all duration-500" style={{ width: `${pct}%`, background: c.text, opacity: 0.6 }} />
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <Icon className="h-3.5 w-3.5" style={{ color: c.text }} />
+                <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>{item.label}</span>
+              </div>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-bold tabular-nums" style={{ color: c.text }}>{item.value}</span>
+              <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>/ {item.target}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── DISPO LEFT PANEL: INBOX + SHOWINGS ─────────────────
+
+function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }: { roleFilteredGhlUserIds: string[] | null; teamMembers?: TeamMember[] }) {
+  const [activeTab, setActiveTab] = useState<"inbox" | "showings">("inbox");
+
+  // ─── Inbox SMS Modal State (same as main LeftPanel) ───
+  const [inboxSmsOpen, setInboxSmsOpen] = useState(false);
+  const [inboxSmsContact, setInboxSmsContact] = useState<{ contactId: string; contactName: string; contactPhone: string } | null>(null);
+  const [inboxSmsMessage, setInboxSmsMessage] = useState("");
+  const [inboxSmsFromGhlUserId, setInboxSmsFromGhlUserId] = useState("");
+  const [inboxSmsFromOpen, setInboxSmsFromOpen] = useState(false);
+  const [inboxSmsScheduleMode, setInboxSmsScheduleMode] = useState<"now" | "later">("now");
+  const [inboxSmsScheduleDate, setInboxSmsScheduleDate] = useState("");
+  const [inboxSmsScheduleTime, setInboxSmsScheduleTime] = useState("");
+  const { data: userPhoneInfo } = trpc.taskCenter.getUserPhoneInfo.useQuery();
+  const sendSmsMutation = trpc.taskCenter.sendSms.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.scheduled) {
+        toast.success(`SMS scheduled for ${new Date(data.scheduledAt).toLocaleString()}`);
+      } else {
+        toast.success(`SMS sent to ${inboxSmsContact?.contactName || "contact"}`);
+      }
+      setInboxSmsOpen(false);
+      setInboxSmsMessage("");
+    },
+    onError: (err) => toast.error("Failed to send SMS", { description: err.message }),
+  });
+  const handleTextContact = (contactId: string, contactName: string, contactPhone: string) => {
+    setInboxSmsContact({ contactId, contactName, contactPhone });
+    setInboxSmsMessage("");
+    setInboxSmsFromGhlUserId("");
+    setInboxSmsScheduleMode("now");
+    setInboxSmsOpen(true);
+  };
+
+  // Fetch inbox (GHL conversations for dispo team)
+  const { data: allUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
+    undefined,
+    { refetchInterval: 60000 }
+  );
+
+  // Fetch today's showings from inventory
+  const { data: todayShowings, isLoading: showingsLoading } = trpc.inventory.getTodayShowings.useQuery(
+    undefined,
+    { refetchInterval: 120000 }
+  );
+
+  // Filter conversations for dispo team members
+  const rolePhoneNumbers = useMemo(() => {
+    if (!teamMembersList) return null;
+    const phones = new Set<string>();
+    for (const m of teamMembersList) {
+      if (m.teamRole !== "dispo_manager") continue;
+      if (m.lcPhones) {
+        try {
+          const parsed = JSON.parse(m.lcPhones) as string[];
+          parsed.forEach(p => phones.add(p));
+        } catch { /* skip */ }
+      }
+    }
+    return phones.size > 0 ? phones : null;
+  }, [teamMembersList]);
+
+  const unreadConvos = useMemo(() => {
+    if (!allUnreadConvos) return [];
+    if (!rolePhoneNumbers) return allUnreadConvos; // show all if no dispo phones configured
+    return allUnreadConvos.filter(c => {
+      if (c.teamPhone && rolePhoneNumbers.has(c.teamPhone)) return true;
+      if (!c.teamPhone && c.assignedTo && roleFilteredGhlUserIds) {
+        return roleFilteredGhlUserIds.includes(c.assignedTo);
+      }
+      return false;
+    });
+  }, [allUnreadConvos, rolePhoneNumbers, roleFilteredGhlUserIds]);
+
+  const missedCalls = useMemo(() => unreadConvos.filter((c: any) => c.isMissedCall), [unreadConvos]);
+  const unreadMessages = useMemo(() => unreadConvos.filter((c: any) => !c.isMissedCall), [unreadConvos]);
+
+  const phoneToMemberName = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!teamMembersList) return map;
+    for (const m of teamMembersList) {
+      if (!m.lcPhones) continue;
+      try {
+        const parsed = JSON.parse(m.lcPhones) as string[];
+        const firstName = m.name.split(" ")[0];
+        parsed.forEach(p => map.set(p, firstName));
+      } catch { /* skip */ }
+    }
+    return map;
+  }, [teamMembersList]);
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden flex flex-col"
+      style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)", boxShadow: "var(--g-shadow-card)", height: "100%" }}
+    >
+      {/* Tab header */}
+      <div className="flex border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
+        <button
+          className="flex-1 px-3 py-2.5 text-xs font-semibold transition-all"
+          style={{
+            color: activeTab === "inbox" ? "var(--g-accent-text)" : "var(--g-text-tertiary)",
+            background: activeTab === "inbox" ? "var(--g-accent-soft)" : "transparent",
+          }}
+          onClick={() => setActiveTab("inbox")}
+        >
+          <div className="flex items-center justify-center gap-1.5">
+            <PhoneIncoming className="h-3.5 w-3.5" />
+            Inbox
+            {(unreadConvos?.length || 0) > 0 && (
+              <Badge className="h-4 px-1 text-[10px] font-bold" style={{ background: "var(--g-accent)", color: "white", border: "none" }}>
+                {unreadConvos?.length}
+              </Badge>
+            )}
+          </div>
+        </button>
+        <button
+          className="flex-1 px-3 py-2.5 text-xs font-semibold transition-all"
+          style={{
+            color: activeTab === "showings" ? "var(--g-accent-text)" : "var(--g-text-tertiary)",
+            background: activeTab === "showings" ? "var(--g-accent-soft)" : "transparent",
+          }}
+          onClick={() => setActiveTab("showings")}
+        >
+          <div className="flex items-center justify-center gap-1.5">
+            <Eye className="h-3.5 w-3.5" />
+            Showings
+            {(todayShowings?.length || 0) > 0 && (
+              <Badge className="h-4 px-1 text-[10px] font-bold" style={{ background: "oklch(0.65 0.15 250)", color: "white", border: "none" }}>
+                {todayShowings?.length}
+              </Badge>
+            )}
+          </div>
+        </button>
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-1" style={{ maxHeight: "calc(100vh - 280px)" }}>
+        {activeTab === "inbox" ? (
+          unreadLoading ? (
+            <div className="space-y-2 p-2">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-md" />)}
+            </div>
+          ) : (
+            <>
+              {missedCalls.length > 0 && (
+                <div className="mb-2">
+                  <div className="flex items-center gap-1.5 px-2 py-1.5">
+                    <PhoneMissed className="h-3 w-3" style={{ color: "var(--g-accent)" }} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--g-accent)" }}>Missed Calls ({missedCalls.length})</span>
+                  </div>
+                  {missedCalls.map((conv: any) => (
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} />
+                  ))}
+                </div>
+              )}
+              {unreadMessages.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 px-2 py-1.5">
+                    <MessageSquare className="h-3 w-3" style={{ color: "oklch(0.65 0.15 250)" }} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "oklch(0.65 0.15 250)" }}>Unread ({unreadMessages.length})</span>
+                  </div>
+                  {unreadMessages.map((conv: any) => (
+                    <UnreadConvoItem key={conv.conversationId} conv={conv} onTextContact={handleTextContact} phoneToMemberName={phoneToMemberName} />
+                  ))}
+                </div>
+              )}
+              {missedCalls.length === 0 && unreadMessages.length === 0 && (
+                <div className="text-center py-8">
+                  <CheckCircle2 className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-grade-a)", opacity: 0.5 }} />
+                  <p className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>All caught up</p>
+                </div>
+              )}
+            </>
+          )
+        ) : (
+          showingsLoading ? (
+            <div className="space-y-2 p-2">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-md" />)}
+            </div>
+          ) : todayShowings && todayShowings.length > 0 ? (
+            todayShowings.map((showing: any) => (
+              <div
+                key={showing.id}
+                className="rounded-lg px-3 py-2.5 transition-colors hover:brightness-95 cursor-default"
+                style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <Home className="h-3 w-3 shrink-0" style={{ color: "var(--g-accent)" }} />
+                      <span className="text-xs font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
+                        {showing.propertyAddress || "Property"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[11px]" style={{ color: "var(--g-text-secondary)" }}>
+                        {showing.buyerName}
+                      </span>
+                      {showing.buyerPhone && (
+                        <span className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>
+                          {formatPhone(showing.buyerPhone)}
+                        </span>
+                      )}
+                    </div>
+                    {showing.notes && (
+                      <p className="text-[10px] mt-1 truncate" style={{ color: "var(--g-text-tertiary)" }}>{showing.notes}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[11px] font-medium" style={{ color: "var(--g-accent-text)" }}>
+                      {showing.showingTime || "TBD"}
+                    </span>
+                    <Badge
+                      className="text-[9px] px-1.5 py-0"
+                      style={{
+                        background: showing.status === "completed" ? "rgba(22,163,74,0.15)" : showing.status === "cancelled" ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)",
+                        color: showing.status === "completed" ? "#22c55e" : showing.status === "cancelled" ? "#ef4444" : "#3b82f6",
+                        border: "none",
+                      }}
+                    >
+                      {showing.status}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-8">
+              <Eye className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)", opacity: 0.3 }} />
+              <p className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>No showings today</p>
+              <p className="text-[10px] mt-1" style={{ color: "var(--g-text-tertiary)" }}>Schedule showings from the Inventory page</p>
+            </div>
+          )
+        )}
+      </div>
+
+      {/* SMS Dialog — same as main LeftPanel */}
+      <Dialog open={inboxSmsOpen} onOpenChange={setInboxSmsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Send SMS to {inboxSmsContact?.contactName}</DialogTitle>
+            <DialogDescription className="text-xs">{inboxSmsContact?.contactPhone ? formatPhone(inboxSmsContact.contactPhone) : ""}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Type your message..."
+              value={inboxSmsMessage}
+              onChange={(e) => setInboxSmsMessage(e.target.value)}
+              className="min-h-[100px] text-sm"
+            />
+            {/* Send As selector */}
+            {userPhoneInfo?.teamMembers && userPhoneInfo.teamMembers.length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-xs">Send As</Label>
+                <Select value={inboxSmsFromGhlUserId} onValueChange={setInboxSmsFromGhlUserId}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Default (your number)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default (your number)</SelectItem>
+                    {userPhoneInfo.teamMembers.map((m: any) => (
+                      <SelectItem key={m.ghlUserId} value={m.ghlUserId}>{m.name} — {m.lcPhone || "no phone"}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setInboxSmsOpen(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              disabled={!inboxSmsMessage.trim() || sendSmsMutation.isPending}
+              onClick={() => {
+                if (!inboxSmsContact) return;
+                sendSmsMutation.mutate({
+                  contactId: inboxSmsContact.contactId,
+                  message: inboxSmsMessage.trim(),
+                  fromGhlUserId: inboxSmsFromGhlUserId && inboxSmsFromGhlUserId !== "default" ? inboxSmsFromGhlUserId : undefined,
+                });
+              }}
+            >
+              {sendSmsMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -3108,7 +3484,7 @@ export default function TaskCenter() {
             className="flex items-center rounded-lg p-0.5"
             style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
           >
-            {(["admin", "lm", "am"] as RoleTab[]).map((tab) => {
+            {(["admin", "lm", "am", "dispo"] as RoleTab[]).map((tab) => {
               const config = ROLE_TAB_CONFIG[tab];
               const isActive = roleTab === tab;
               return (
@@ -3146,14 +3522,27 @@ export default function TaskCenter() {
         </Button>
       </div>
 
-      {/* KPI Bar */}
-      <KpiBar roleTab={roleTab} teamMembers={data?.teamMembers as TeamMember[] | undefined} />
-
-      {/* Top half: Inbox + AI Coach side by side */}
-      <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
-        <LeftPanel roleTab={roleTab} roleFilteredGhlUserIds={roleFilteredGhlUserIds} teamMembers={data?.teamMembers} />
-        <DayHubCoach />
-      </div>
+       {roleTab === "dispo" ? (
+        <>
+          {/* Dispo KPI Bar */}
+          <DispoKpiBar />
+          {/* Top half: Inbox/Showings + AI Coach */}
+          <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
+            <DispoLeftPanel roleFilteredGhlUserIds={roleFilteredGhlUserIds} teamMembers={data?.teamMembers} />
+            <DayHubCoach />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* KPI Bar */}
+          <KpiBar roleTab={roleTab} teamMembers={data?.teamMembers as TeamMember[] | undefined} />
+          {/* Top half: Inbox + AI Coach side by side */}
+          <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
+            <LeftPanel roleTab={roleTab} roleFilteredGhlUserIds={roleFilteredGhlUserIds} teamMembers={data?.teamMembers} />
+            <DayHubCoach />
+          </div>
+        </>
+      )}
 
       {/* Bottom: Full-width Task List */}
       <div className="space-y-3">

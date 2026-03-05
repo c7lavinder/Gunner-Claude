@@ -4097,3 +4097,30 @@
 - [x] Fix Inbox not loading / super slow to load (51 test tenants consuming API quota - disconnected)
 - [x] Fix Appointments showing "No appointments today" when there should be data (was loading, just slow due to API quota)
 - [x] Fix AI Coach returning "CRM is temporarily busy" error (test tenants consuming all rate limit slots - disconnected)
+
+## Dispo Manager — Database Schema
+- [x] Create dispo_properties table (address, city, state, zip, beds, baths, sqft, yearBuilt, contractPrice, assignmentFee, arv, estRepairs, lockboxCode, occupancyStatus, mediaLink, notes, status, tenantId)
+- [x] Create dispo_property_sends table (propertyId, channel, buyerGroup, count, notes, tenantId)
+- [x] Create dispo_property_offers table (propertyId, buyerName, buyerPhone, offerAmount, status, interestLevel, notes, tenantId)
+- [x] Create dispo_property_showings table (propertyId, buyerName, buyerPhone, showingDate, showingTime, status, notes, tenantId)
+- [x] Create dispo_daily_kpis table for manual KPI tracking
+- [x] Add dispo_manager role to team member roles across all tables
+
+## Dispo Manager — Day Hub
+- [x] Add "dispo" tab to Day Hub role tabs with dispo-specific KPIs
+- [x] Dispo KPIs: Properties Sent, Showings, Offers, Deals Assigned, Contracts
+- [x] Inbox section: GHL conversations filtered to Dispo Manager team members
+- [x] Showing appointment log: today's property showings from inventory
+- [x] AI Coach: dispo-aware context (properties, buyer matching, pricing strategy, negotiation)
+- [ ] Daily task checklist for dispo activities (Phase 2)
+
+## Dispo Manager — Inventory Page
+- [x] Property cards with full details (address, price, ARV, status, notes)
+- [x] Per-property activity tracking (sends count, offers, showings)
+- [x] Deal status management (New → Marketing → Negotiating → Under Contract → Sold → Dead)
+- [x] Add property form (manual entry with all fields)
+- [x] Offer tracking per property (buyer name, amount, status, interest level)
+- [x] Showing scheduling per property (buyer, date, time, status)
+- [x] Send tracking per property (channel, buyer group, count)
+- [x] Add Inventory to navigation menu (visible to dispo_manager, admin, super_admin)
+- [x] 30 vitest tests passing for schema, KPIs, navigation, and page structure

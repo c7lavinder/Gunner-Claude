@@ -505,7 +505,7 @@ export async function setupTenant(data: {
   industryPlaybook?: string;
   teamMembers?: Array<{
     name: string;
-    teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
+    teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager';
     phone?: string;
     email?: string;
     isTenantAdmin?: boolean;
@@ -648,7 +648,7 @@ export async function bulkAddTeamMembers(
   tenantId: number,
   members: Array<{
     name: string;
-    teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
+    teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager';
     phone?: string;
   }>
 ) {
@@ -744,7 +744,7 @@ export async function inviteUserToTenant(
   tenantId: number,
   email: string,
   role: 'admin' | 'user' = 'user',
-  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator' = 'lead_manager',
+  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator' | 'dispo_manager' = 'lead_manager',
   invitedBy?: number
 ) {
   const db = await getDb();
@@ -868,7 +868,7 @@ export async function updateUserRole(
   tenantId: number,
   userId: number,
   role: 'admin' | 'user',
-  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator'
+  teamRole: 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator' | 'dispo_manager'
 ) {
   const db = await getDb();
   if (!db) return { success: false, error: 'Database not available' };
@@ -951,7 +951,7 @@ export async function autoMatchTeamMember(
 
   const tenantId = matchedMember.tenantId;
   // Map team_member teamRole to user teamRole
-  const teamRole = matchedMember.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
+  const teamRole = matchedMember.teamRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager';
 
   // Assign user to the team member's tenant
   await db

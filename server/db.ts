@@ -1444,7 +1444,7 @@ export async function getTeamTrainingItems(options?: {
   itemType?: "skill" | "issue" | "win" | "agenda";
   status?: "active" | "in_progress" | "completed" | "archived";
   teamMemberId?: number;
-  teamRole?: "lead_manager" | "acquisition_manager" | "lead_generator";
+  teamRole?: "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager";
   meetingDate?: Date;
   tenantId?: number; // For multi-tenant filtering
   limit?: number; // Max items to return (used for "All Roles" view)
@@ -2193,7 +2193,7 @@ export async function removeLeadManagerAssignment(leadManagerId: number): Promis
 
 export type UserPermissionContext = {
   teamMemberId?: number;
-  teamRole?: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator';
+  teamRole?: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager';
   userId?: number;
   tenantId?: number; // Required for multi-tenant isolation
 };
@@ -2325,7 +2325,7 @@ export async function getViewableTeamMemberIds(
 
 export async function updateTeamMemberRole(
   teamMemberId: number, 
-  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator'
+  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager'
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
@@ -2398,7 +2398,7 @@ export async function getAllUsers(tenantId?: number): Promise<Array<{
 
 export async function updateUserTeamRole(
   userId: number, 
-  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator'
+  teamRole: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager'
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;

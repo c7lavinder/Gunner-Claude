@@ -66,7 +66,7 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }), // 'manus_oauth' or 'email_password'
   role: mysqlEnum("role", ["user", "admin", "super_admin"]).default("user").notNull(), // Added super_admin for platform owner
   // Team role for call coaching (consolidated - this is the single source of truth for roles)
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator"]).default("lead_manager"),
+  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).default("lead_manager"),
   // Is this user a tenant admin?
   isTenantAdmin: mysqlEnum("isTenantAdmin", ["true", "false"]).default("false"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -117,7 +117,7 @@ export const teamMembers = mysqlTable("team_members", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   name: varchar("name", { length: 255 }).notNull(),
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator"]).notNull(),
+  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).notNull(),
   userId: int("userId").references(() => users.id),
   ghlUserId: varchar("ghlUserId", { length: 255 }), // GoHighLevel user ID for matching
   lcPhone: varchar("lcPhone", { length: 20 }), // LC phone number from GHL (e.g. +16157688784)
@@ -384,7 +384,7 @@ export const trainingMaterials = mysqlTable("training_materials", {
     "other"
   ]).default("other"),
   // Which role this applies to (legacy - use tenantRoleId for custom roles)
-  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager", "lead_generator"]).default("all"),
+  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).default("all"),
   tenantRoleId: int("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
   // Status
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
@@ -453,7 +453,7 @@ export const gradingRules = mysqlTable("grading_rules", {
   // Priority (higher = more important)
   priority: int("priority").default(0),
   // Which rubric this applies to (legacy)
-  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager", "lead_generator"]).default("all"),
+  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).default("all"),
   tenantRoleId: int("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
   // Status
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
@@ -495,7 +495,7 @@ export const teamTrainingItems = mysqlTable("team_training_items", {
   teamMemberId: int("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   // Which role this insight applies to
-  teamRole: mysqlEnum("teamRole", ["lead_manager", "acquisition_manager", "lead_generator"]),
+  teamRole: mysqlEnum("teamRole", ["lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]),
   // Status
   status: mysqlEnum("status", ["active", "in_progress", "completed", "archived"]).default("active"),
   // AI generation tracking
@@ -1054,7 +1054,7 @@ export const pendingInvitations = mysqlTable("pending_invitations", {
   tenantId: int("tenantId").references(() => tenants.id).notNull(),
   email: varchar("email", { length: 320 }).notNull(),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator"]).default("lead_manager").notNull(),
+  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).default("lead_manager").notNull(),
   // Invitation metadata
   invitedBy: int("invitedBy").references(() => users.id),
   inviteToken: varchar("inviteToken", { length: 64 }), // For email invite links
@@ -1484,3 +1484,130 @@ export const dailyKpiEntries = mysqlTable("daily_kpi_entries", {
 });
 export type DailyKpiEntry = typeof dailyKpiEntries.$inferSelect;
 export type InsertDailyKpiEntry = typeof dailyKpiEntries.$inferInsert;
+
+
+// ============ DISPO PROPERTIES (Inventory Management) ============
+export const dispoProperties = mysqlTable("dispo_properties", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  // Property Details
+  address: varchar("address", { length: 500 }).notNull(),
+  city: varchar("city", { length: 100 }).notNull(),
+  state: varchar("state", { length: 50 }).notNull(),
+  zip: varchar("zip", { length: 20 }).notNull(),
+  propertyType: mysqlEnum("propertyType", ["house", "lot", "land", "multi_family", "commercial", "other"]).default("house").notNull(),
+  beds: int("beds"),
+  baths: varchar("baths", { length: 10 }), // e.g. "2.5"
+  sqft: int("sqft"),
+  yearBuilt: int("yearBuilt"),
+  // Financials
+  contractPrice: int("contractPrice"), // in cents
+  askingPrice: int("askingPrice"), // in cents — what we're asking buyers
+  assignmentFee: int("assignmentFee"), // in cents — target assignment fee
+  arv: int("arv"), // in cents — after repair value
+  estRepairs: int("estRepairs"), // in cents — estimated repairs
+  // Access & Status
+  lockboxCode: varchar("lockboxCode", { length: 50 }),
+  occupancyStatus: mysqlEnum("occupancyStatus", ["vacant", "occupied", "tenant", "unknown"]).default("unknown"),
+  // Deal Pipeline Status
+  status: mysqlEnum("status", ["new", "marketing", "negotiating", "under_contract", "sold", "dead"]).default("new").notNull(),
+  // Media & Notes
+  mediaLink: text("mediaLink"), // Google Drive or other link to photos/video
+  description: text("description"), // Property description / notes
+  notes: text("notes"), // Internal notes (e.g. "Seller is sensitive")
+  // Tracking
+  addedByUserId: int("addedByUserId").references(() => users.id),
+  assignedToUserId: int("assignedToUserId").references(() => users.id), // Dispo manager assigned
+  ghlContactId: varchar("ghlContactId", { length: 255 }), // Link to GHL contact (seller)
+  sellerName: varchar("sellerName", { length: 255 }),
+  sellerPhone: varchar("sellerPhone", { length: 50 }),
+  // Timestamps
+  marketedAt: timestamp("marketedAt"), // When first blast was sent
+  underContractAt: timestamp("underContractAt"),
+  soldAt: timestamp("soldAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type DispoProperty = typeof dispoProperties.$inferSelect;
+export type InsertDispoProperty = typeof dispoProperties.$inferInsert;
+
+// ============ DISPO PROPERTY SENDS (Tracking blasts/sends per property) ============
+export const dispoPropertySends = mysqlTable("dispo_property_sends", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+  // Send details
+  channel: mysqlEnum("channel", ["sms", "email", "facebook", "investor_base", "other"]).notNull(),
+  buyerGroup: varchar("buyerGroup", { length: 255 }), // e.g. "Nashville Buyers", "Chattanooga Buyers"
+  recipientCount: int("recipientCount").default(0), // How many buyers received it
+  notes: text("notes"),
+  sentByUserId: int("sentByUserId").references(() => users.id),
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type DispoPropertySend = typeof dispoPropertySends.$inferSelect;
+export type InsertDispoPropertySend = typeof dispoPropertySends.$inferInsert;
+
+// ============ DISPO PROPERTY OFFERS (Buyer offers on properties) ============
+export const dispoPropertyOffers = mysqlTable("dispo_property_offers", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+  // Buyer info
+  buyerName: varchar("buyerName", { length: 255 }).notNull(),
+  buyerPhone: varchar("buyerPhone", { length: 50 }),
+  buyerEmail: varchar("buyerEmail", { length: 255 }),
+  buyerCompany: varchar("buyerCompany", { length: 255 }),
+  ghlContactId: varchar("ghlContactId", { length: 255 }), // Link to GHL buyer contact
+  // Offer details
+  offerAmount: int("offerAmount").notNull(), // in cents
+  status: mysqlEnum("status", ["pending", "accepted", "rejected", "countered", "expired"]).default("pending").notNull(),
+  notes: text("notes"),
+  // Timestamps
+  offeredAt: timestamp("offeredAt").defaultNow().notNull(),
+  respondedAt: timestamp("respondedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type DispoPropertyOffer = typeof dispoPropertyOffers.$inferSelect;
+export type InsertDispoPropertyOffer = typeof dispoPropertyOffers.$inferInsert;
+
+// ============ DISPO PROPERTY SHOWINGS (Showing appointments) ============
+export const dispoPropertyShowings = mysqlTable("dispo_property_showings", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+  // Buyer info
+  buyerName: varchar("buyerName", { length: 255 }).notNull(),
+  buyerPhone: varchar("buyerPhone", { length: 50 }),
+  buyerCompany: varchar("buyerCompany", { length: 255 }),
+  ghlContactId: varchar("ghlContactId", { length: 255 }),
+  // Showing details
+  showingDate: varchar("showingDate", { length: 10 }).notNull(), // YYYY-MM-DD
+  showingTime: varchar("showingTime", { length: 10 }), // HH:MM (24h)
+  status: mysqlEnum("status", ["scheduled", "completed", "cancelled", "no_show"]).default("scheduled").notNull(),
+  feedback: text("feedback"), // Buyer feedback after showing
+  interestLevel: mysqlEnum("interestLevel", ["hot", "warm", "cold", "none"]),
+  notes: text("notes"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type DispoPropertyShowing = typeof dispoPropertyShowings.$inferSelect;
+export type InsertDispoPropertyShowing = typeof dispoPropertyShowings.$inferInsert;
+
+// ============ DISPO DAILY KPI ENTRIES (Dispo-specific manual KPIs) ============
+export const dispoDailyKpis = mysqlTable("dispo_daily_kpis", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  userId: int("userId").notNull(),
+  date: varchar("entryDate", { length: 10 }).notNull(), // YYYY-MM-DD
+  kpiType: mysqlEnum("kpiType", ["properties_sent", "showings_scheduled", "offers_received", "deals_assigned", "contracts_closed"]).notNull(),
+  value: int("value").default(1).notNull(),
+  propertyId: int("propertyId").references(() => dispoProperties.id),
+  notes: text("notes"),
+  source: mysqlEnum("kpi_source", ["auto", "manual"]).default("manual").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type DispoDailyKpi = typeof dispoDailyKpis.$inferSelect;
+export type InsertDispoDailyKpi = typeof dispoDailyKpis.$inferInsert;

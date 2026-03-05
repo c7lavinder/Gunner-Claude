@@ -280,7 +280,7 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({
         name: z.string(),
-        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator"]),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]),
         ghlUserId: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -370,7 +370,7 @@ export const appRouter = router({
     updateRole: protectedProcedure
       .input(z.object({
         teamMemberId: z.number(),
-        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator"]),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user?.teamRole !== 'admin') {
@@ -515,7 +515,7 @@ export const appRouter = router({
     updateUserRole: protectedProcedure
       .input(z.object({
         userId: z.number(),
-        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator"]),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user?.teamRole !== 'admin') {
@@ -542,7 +542,7 @@ export const appRouter = router({
         const normalizedRole = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : rawRole;
         const permissionContext: UserPermissionContext = {
           teamMemberId: teamMember?.id,
-          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator') || 'lead_manager',
+          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager') || 'lead_manager',
           userId: ctx.user?.id,
           tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };
@@ -564,7 +564,7 @@ export const appRouter = router({
         const normalizedRole = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : rawRole;
         const permissionContext: UserPermissionContext = {
           teamMemberId: teamMember?.id,
-          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator') || 'lead_manager',
+          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager') || 'lead_manager',
           userId: ctx.user?.id,
           tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };
@@ -609,7 +609,7 @@ export const appRouter = router({
         const rawRole = teamMember?.teamRole || ctx.user?.teamRole || ctx.user?.role;
         const normalizedRole = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : rawRole;
         const permissionContext = {
-          teamRole: normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | undefined,
+          teamRole: normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager' | undefined,
           teamMemberId: teamMember?.id,
           tenantId: ctx.user?.tenantId ?? undefined,
         };
@@ -1779,7 +1779,7 @@ Generate the core next steps for this call. ALWAYS include a detailed first-pers
         
         const permissionContext: UserPermissionContext = {
           teamMemberId: teamMember?.id,
-          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator') || 'lead_manager',
+          teamRole: (normalizedRole as 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager') || 'lead_manager',
           userId: ctx.user?.id,
           tenantId: ctx.user?.tenantId ?? undefined, // Multi-tenant isolation
         };
@@ -1855,7 +1855,7 @@ Generate the core next steps for this call. ALWAYS include a detailed first-pers
         fileType: z.string().optional(),
         fileData: z.string().optional(), // Base64 encoded file data for PDF/DOCX
         category: z.enum(["script", "objection_handling", "methodology", "best_practices", "examples", "other"]).optional(),
-        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         let extractedContent = input.content;
@@ -1896,7 +1896,7 @@ Generate the core next steps for this call. ALWAYS include a detailed first-pers
         description: z.string().optional(),
         content: z.string().optional(),
         category: z.enum(["script", "objection_handling", "methodology", "best_practices", "examples", "other"]).optional(),
-        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).optional(),
         isActive: z.enum(["true", "false"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2030,7 +2030,7 @@ Generate the core next steps for this call. ALWAYS include a detailed first-pers
         description: z.string().optional(),
         ruleText: z.string(),
         priority: z.number().optional(),
-        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // CRITICAL: Include tenantId for multi-tenant isolation
@@ -2051,7 +2051,7 @@ Generate the core next steps for this call. ALWAYS include a detailed first-pers
         description: z.string().optional(),
         ruleText: z.string().optional(),
         priority: z.number().optional(),
-        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator"]).optional(),
+        applicableTo: z.enum(["all", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).optional(),
         isActive: z.enum(["true", "false"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2964,7 +2964,7 @@ Keep it brief and actionable.`;
         itemType: z.enum(["skill", "issue", "win", "agenda"]).optional(),
         status: z.enum(["active", "in_progress", "completed", "archived"]).optional(),
         teamMemberId: z.number().optional(),
-        teamRole: z.enum(["lead_manager", "acquisition_manager", "lead_generator"]).optional(),
+        teamRole: z.enum(["lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         // CRITICAL: Include tenantId for multi-tenant isolation
@@ -4273,7 +4273,7 @@ Create content that:
         }).optional(),
         teamMembers: z.array(z.object({
           name: z.string().min(1),
-          teamRole: z.enum(['admin', 'lead_manager', 'acquisition_manager', 'lead_generator']),
+          teamRole: z.enum(['admin', 'lead_manager', 'acquisition_manager', 'lead_generator', 'dispo_manager']),
           phone: z.string().optional(),
           email: z.string().email().optional(),
           isTenantAdmin: z.boolean().optional(),
@@ -4293,7 +4293,7 @@ Create content that:
         tenantId: z.number(),
         members: z.array(z.object({
           name: z.string().min(1),
-          teamRole: z.enum(['admin', 'lead_manager', 'acquisition_manager', 'lead_generator']),
+          teamRole: z.enum(['admin', 'lead_manager', 'acquisition_manager', 'lead_generator', 'dispo_manager']),
           phone: z.string().optional(),
         })).min(1),
       }))
@@ -4396,7 +4396,7 @@ Create content that:
       .input(z.object({
         email: z.string().email(),
         role: z.enum(['admin', 'user']).default('user'),
-        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager', 'lead_generator']).default('lead_manager'),
+        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager', 'lead_generator', 'dispo_manager']).default('lead_manager'),
       }))
       .mutation(async ({ ctx, input }) => {
         const { inviteUserToTenant } = await import("./tenant");
@@ -4441,7 +4441,7 @@ Create content that:
       .input(z.object({
         userId: z.number(),
         role: z.enum(['admin', 'user']),
-        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager', 'lead_generator']),
+        teamRole: z.enum(['admin', 'acquisition_manager', 'lead_manager', 'lead_generator', 'dispo_manager']),
       }))
       .mutation(async ({ ctx, input }) => {
         const { updateUserRole } = await import("./tenant");
@@ -7389,7 +7389,7 @@ selectedTimezone: { type: "string" },
     getKpiSummary: protectedProcedure
       .input(z.object({
         date: z.string().optional(), // YYYY-MM-DD, defaults to today EST
-        roleTab: z.enum(["admin", "lm", "am"]).optional(), // which role view is active
+        roleTab: z.enum(["admin", "lm", "am", "dispo"]).optional(), // which role view is active
       }).optional())
       .query(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
@@ -7471,6 +7471,209 @@ selectedTimezone: { type: "string" },
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         const { deleteDailyKpiEntry } = await import("./dayHub");
         return await deleteDailyKpiEntry(ctx.user.tenantId, ctx.user.id, input.entryId);
+      }),
+  }),
+
+  // ─── DISPO INVENTORY ───
+  inventory: router({
+    getProperties: protectedProcedure
+      .input(z.object({
+        status: z.string().optional(),
+        search: z.string().optional(),
+        limit: z.number().optional(),
+        offset: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getProperties } = await import("./inventory");
+        return getProperties(ctx.user.tenantId, input);
+      }),
+    getPropertyById: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getPropertyById } = await import("./inventory");
+        return getPropertyById(ctx.user.tenantId, input.propertyId);
+      }),
+    createProperty: protectedProcedure
+      .input(z.object({
+        address: z.string().min(1),
+        city: z.string().min(1),
+        state: z.string().min(1),
+        zip: z.string().optional(),
+        propertyType: z.string().optional(),
+        askingPrice: z.number().optional(),
+        arv: z.number().optional(),
+        repairEstimate: z.number().optional(),
+        contractPrice: z.number().optional(),
+        sellerName: z.string().optional(),
+        sellerPhone: z.string().optional(),
+        ghlContactId: z.string().optional(),
+        notes: z.string().optional(),
+        bedrooms: z.number().optional(),
+        bathrooms: z.number().optional(),
+        sqft: z.number().optional(),
+        lotSize: z.string().optional(),
+        yearBuilt: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { createProperty } = await import("./inventory");
+        const { bedrooms, bathrooms, repairEstimate, lotSize, propertyType, ...rest } = input;
+        return createProperty(ctx.user.tenantId, ctx.user.id, {
+          ...rest,
+          zip: rest.zip || "",
+          propertyType: (propertyType || "house") as any,
+          beds: bedrooms ?? undefined,
+          baths: bathrooms?.toString() ?? undefined,
+          estRepairs: repairEstimate ?? undefined,
+          addedByUserId: ctx.user.id,
+        } as any);
+      }),
+    updateProperty: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        address: z.string().optional(),
+        city: z.string().optional(),
+        state: z.string().optional(),
+        zip: z.string().optional(),
+        propertyType: z.enum(["house", "lot", "land", "multi_family", "commercial", "other"]).optional(),
+        status: z.enum(["new", "marketing", "negotiating", "under_contract", "sold"]).optional(),
+        askingPrice: z.number().optional(),
+        arv: z.number().optional(),
+        repairEstimate: z.number().optional(),
+        contractPrice: z.number().optional(),
+        sellerName: z.string().optional(),
+        sellerPhone: z.string().optional(),
+        ghlContactId: z.string().optional(),
+        notes: z.string().optional(),
+        bedrooms: z.number().optional(),
+        bathrooms: z.number().optional(),
+        sqft: z.number().optional(),
+        lotSize: z.string().optional(),
+        yearBuilt: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateProperty } = await import("./inventory");
+        const { propertyId, bedrooms, bathrooms, repairEstimate, lotSize, ...rest } = input;
+        return updateProperty(ctx.user.tenantId, propertyId, {
+          ...rest,
+          ...(bedrooms !== undefined ? { beds: bedrooms } : {}),
+          ...(bathrooms !== undefined ? { baths: bathrooms.toString() } : {}),
+          ...(repairEstimate !== undefined ? { estRepairs: repairEstimate } : {}),
+        } as any);
+      }),
+    deleteProperty: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { deleteProperty } = await import("./inventory");
+        return deleteProperty(ctx.user.tenantId, input.propertyId);
+      }),
+    addSend: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        channel: z.enum(["sms", "email", "facebook", "investor_base", "other"]),
+        buyerGroup: z.string().optional(),
+        recipientCount: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { addPropertySend } = await import("./inventory");
+        return addPropertySend(ctx.user.tenantId, ctx.user.id, input);
+      }),
+    deleteSend: protectedProcedure
+      .input(z.object({ sendId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { deletePropertySend } = await import("./inventory");
+        return deletePropertySend(ctx.user.tenantId, input.sendId);
+      }),
+    addOffer: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        buyerName: z.string().min(1),
+        buyerPhone: z.string().optional(),
+        buyerEmail: z.string().optional(),
+        buyerCompany: z.string().optional(),
+        ghlContactId: z.string().optional(),
+        offerAmount: z.number(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { addPropertyOffer } = await import("./inventory");
+        return addPropertyOffer(ctx.user.tenantId, input);
+      }),
+    updateOfferStatus: protectedProcedure
+      .input(z.object({
+        offerId: z.number(),
+        status: z.enum(["pending", "accepted", "rejected", "countered", "expired"]),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateOfferStatus } = await import("./inventory");
+        return updateOfferStatus(ctx.user.tenantId, input.offerId, input.status, input.notes);
+      }),
+    deleteOffer: protectedProcedure
+      .input(z.object({ offerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { deletePropertyOffer } = await import("./inventory");
+        return deletePropertyOffer(ctx.user.tenantId, input.offerId);
+      }),
+    addShowing: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        buyerName: z.string().min(1),
+        buyerPhone: z.string().optional(),
+        buyerCompany: z.string().optional(),
+        ghlContactId: z.string().optional(),
+        showingDate: z.string(),
+        showingTime: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { addPropertyShowing } = await import("./inventory");
+        return addPropertyShowing(ctx.user.tenantId, input);
+      }),
+    updateShowing: protectedProcedure
+      .input(z.object({
+        showingId: z.number(),
+        status: z.enum(["scheduled", "completed", "cancelled", "no_show"]).optional(),
+        feedback: z.string().optional(),
+        interestLevel: z.enum(["hot", "warm", "cold", "none"]).optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateShowing } = await import("./inventory");
+        const { showingId, ...data } = input;
+        return updateShowing(ctx.user.tenantId, showingId, data);
+      }),
+    deleteShowing: protectedProcedure
+      .input(z.object({ showingId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { deletePropertyShowing } = await import("./inventory");
+        return deletePropertyShowing(ctx.user.tenantId, input.showingId);
+      }),
+    getTodayShowings: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getTodayShowings } = await import("./inventory");
+        return getTodayShowings(ctx.user.tenantId);
+      }),
+    getDispoKpiSummary: protectedProcedure
+      .input(z.object({ date: z.string() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getDispoKpiSummary } = await import("./inventory");
+        return getDispoKpiSummary(ctx.user.tenantId, input.date);
       }),
   }),
 });

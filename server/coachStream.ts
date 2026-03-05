@@ -99,6 +99,7 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
     const currentUserTeamMember = user.id ? await getTeamMemberByUserId(user.id) : null;
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';
     const isLeadGenerator = currentUserTeamMember?.teamRole === 'lead_generator' || (user as any).teamRole === 'lead_generator';
+    const isDispoManager = currentUserTeamMember?.teamRole === 'dispo_manager' || (user as any).teamRole === 'dispo_manager';
     const visibleMemberIds = new Set<number>();
     if (isAdmin) {
       teamMembersList.forEach(m => visibleMemberIds.add(m.id));
@@ -277,7 +278,52 @@ coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) 
       }
     } catch { /* stats are optional */ }
 
-    const systemPrompt = `${isLeadGenerator ? (industryCtx?.leadGenFocus || `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.
+    // Load dispo inventory context if user is dispo manager
+    let dispoInventoryContext = "";
+    if (isDispoManager && tenantId) {
+      try {
+        const { getDb } = await import("./db");
+        const { dispoProperties, dispoPropertyOffers, dispoPropertyShowings, dispoPropertySends } = await import("../drizzle/schema");
+        const { eq, and, desc, sql } = await import("drizzle-orm");
+        const db = await getDb();
+        if (db) {
+          const properties = await db.select().from(dispoProperties).where(and(eq(dispoProperties.tenantId, tenantId), sql`${dispoProperties.status} != 'sold'`)).orderBy(desc(dispoProperties.createdAt)).limit(20);
+          if (properties.length > 0) {
+            dispoInventoryContext = `\nACTIVE DISPO INVENTORY (${properties.length} properties):\n`;
+            for (const p of properties) {
+              dispoInventoryContext += `- ${p.address}, ${p.city} ${p.state} ${p.zip || ''} | Status: ${p.status} | Ask: $${p.askingPrice ? (p.askingPrice / 100).toLocaleString() : 'TBD'} | Type: ${p.propertyType || 'N/A'}`;
+              // Get send count
+              const [sendData] = await db.select({ count: sql<number>`count(*)`, totalRecipients: sql<number>`COALESCE(SUM(recipientCount), 0)` }).from(dispoPropertySends).where(eq(dispoPropertySends.propertyId, p.id));
+              if (sendData) dispoInventoryContext += ` | Blasts: ${sendData.count}, Reached: ${sendData.totalRecipients}`;
+              // Get offer count
+              const [offerData] = await db.select({ count: sql<number>`count(*)` }).from(dispoPropertyOffers).where(eq(dispoPropertyOffers.propertyId, p.id));
+              if (offerData) dispoInventoryContext += ` | Offers: ${offerData.count}`;
+              // Get showing count
+              const [showingData] = await db.select({ count: sql<number>`count(*)` }).from(dispoPropertyShowings).where(eq(dispoPropertyShowings.propertyId, p.id));
+              if (showingData) dispoInventoryContext += ` | Showings: ${showingData.count}`;
+              dispoInventoryContext += '\n';
+            }
+          }
+        }
+      } catch { /* best effort */ }
+    }
+
+    const systemPrompt = `${isDispoManager ? `You are a data-driven disposition coach for a real estate wholesaling team. Your focus is on DISPOSITION — helping the Dispo Manager market properties to buyers, manage showings, negotiate offers, and close assignments.
+
+Your coaching should focus on:
+- Property marketing strategy (which buyer groups to target, pricing strategy, channels)
+- Buyer relationship management and follow-up cadence
+- Showing scheduling and preparation tips
+- Offer negotiation tactics and counter-offer strategy
+- Assignment fee optimization and deal structuring
+- Managing multiple properties and prioritizing based on aging and interest level
+- Facebook marketplace posting best practices for wholesale deals
+- Investor base outreach and networking strategies
+- Tracking buyer feedback and interest levels after showings
+- Closing deals efficiently and coordinating with title companies
+
+The Dispo Manager's workflow: receive properties under contract from AM, market to buyer lists via SMS/email/Facebook, schedule showings, collect offers, negotiate best price, assign contract, coordinate closing. They are the revenue engine — every property they move generates the assignment fee.
+${dispoInventoryContext}` : isLeadGenerator ? (industryCtx?.leadGenFocus || `You are a data-driven cold calling coach for a lead generator on a real estate wholesaling team. Your focus is on LEAD GENERATION — helping this caller gauge seller interest, gather key details, and let interested sellers know their manager will follow up.
 
 Your coaching should focus on:
 - Opening lines and hooks for cold calls
