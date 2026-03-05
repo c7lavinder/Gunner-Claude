@@ -232,7 +232,7 @@ export interface KpiTarget {
 }
 
 export const LM_TARGETS: KpiTarget = { calls: 150, conversations: 20, appointments: 4 };
-export const AM_TARGETS: KpiTarget = { calls: 40, conversations: 4, appointments: 1 };
+export const AM_TARGETS: KpiTarget = { calls: 40, conversations: 4, appointments: 4 };
 
 /**
  * Get time-aware KPI color based on progress and time of day.
@@ -683,7 +683,9 @@ export async function deleteDailyKpiEntry(
 export async function getKpiSummary(
   tenantId: number,
   userId: number,
-  date: string
+  date: string,
+  teamMemberId?: number | null,
+  roleTab?: string
 ) {
   const db = await getDb();
   if (!db) return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
@@ -695,59 +697,44 @@ export async function getKpiSummary(
     const dayStartUTC = new Date(Date.UTC(year, month - 1, day, 6, 0, 0)); // midnight CT = 6am UTC
     const dayEndUTC = new Date(Date.UTC(year, month - 1, day + 1, 6, 0, 0)); // next midnight CT
 
-    // Auto-count from calls table — all calls for this tenant today
+    // Build base conditions — always filter by tenant + date range
+    const baseConditions = [
+      eq(calls.tenantId, tenantId),
+      gte(calls.callTimestamp, dayStartUTC),
+      lt(calls.callTimestamp, dayEndUTC),
+    ];
+
+    // For non-admin views with a specific team member, filter by teamMemberId
+    if (teamMemberId && roleTab !== "admin") {
+      baseConditions.push(eq(calls.teamMemberId, teamMemberId));
+    }
+
+    // Auto-count from calls table — every single dial today
     const [autoCallsResult] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(calls)
-      .where(
-        and(
-          eq(calls.tenantId, tenantId),
-          gte(calls.callTimestamp, dayStartUTC),
-          lt(calls.callTimestamp, dayEndUTC)
-        )
-      );
+      .where(and(...baseConditions));
     const autoCalls = Number(autoCallsResult?.count || 0);
 
     // Auto-count conversations (classification = 'conversation')
     const [autoConvosResult] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(calls)
-      .where(
-        and(
-          eq(calls.tenantId, tenantId),
-          gte(calls.callTimestamp, dayStartUTC),
-          lt(calls.callTimestamp, dayEndUTC),
-          eq(calls.classification, "conversation")
-        )
-      );
+      .where(and(...baseConditions, eq(calls.classification, "conversation")));
     const autoConvos = Number(autoConvosResult?.count || 0);
 
     // Auto-count appointments set (callOutcome = 'appointment_set')
     const [autoAptsResult] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(calls)
-      .where(
-        and(
-          eq(calls.tenantId, tenantId),
-          gte(calls.callTimestamp, dayStartUTC),
-          lt(calls.callTimestamp, dayEndUTC),
-          eq(calls.callOutcome, "appointment_set")
-        )
-      );
+      .where(and(...baseConditions, eq(calls.callOutcome, "appointment_set")));
     const autoApts = Number(autoAptsResult?.count || 0);
 
     // Auto-count offers made (callOutcome = 'offer_made')
     const [autoOffersResult] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(calls)
-      .where(
-        and(
-          eq(calls.tenantId, tenantId),
-          gte(calls.callTimestamp, dayStartUTC),
-          lt(calls.callTimestamp, dayEndUTC),
-          eq(calls.callOutcome, "offer_made")
-        )
-      );
+      .where(and(...baseConditions, eq(calls.callOutcome, "offer_made")));
     const autoOffers = Number(autoOffersResult?.count || 0);
 
     // Manual entries (supplements for things like contracts that can't be auto-detected)

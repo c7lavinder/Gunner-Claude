@@ -7389,11 +7389,13 @@ selectedTimezone: { type: "string" },
     getKpiSummary: protectedProcedure
       .input(z.object({
         date: z.string().optional(), // YYYY-MM-DD, defaults to today EST
+        roleTab: z.enum(["admin", "lm", "am"]).optional(), // which role view is active
       }).optional())
       .query(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
 
         const { getKpiSummary, getKpiColor, LM_TARGETS, AM_TARGETS } = await import("./dayHub");
+        const { getTeamMemberByUserId } = await import("./db");
 
         // Default to today in Central time
         const now = new Date();
@@ -7407,7 +7409,11 @@ selectedTimezone: { type: "string" },
         const [month, day, year] = ctDateStr.split("/").map(Number);
         const date = input?.date || `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
-        const summary = await getKpiSummary(ctx.user.tenantId, ctx.user.id, date);
+        // Look up the user's team member for per-member filtering
+        const teamMember = await getTeamMemberByUserId(ctx.user.id);
+        const roleTab = input?.roleTab || "admin";
+
+        const summary = await getKpiSummary(ctx.user.tenantId, ctx.user.id, date, teamMember?.id, roleTab);
 
         return {
           ...summary,

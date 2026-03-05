@@ -158,7 +158,7 @@ interface TeamMember {
 type RoleTab = "admin" | "lm" | "am";
 
 const LM_KPI_PER_PERSON = { calls: 150, convos: 20, apts: 4, offers: 0, contracts: 0 };
-const AM_KPI_PER_PERSON = { calls: 40, convos: 0, apts: 0, offers: 2, contracts: 1 };
+const AM_KPI_PER_PERSON = { calls: 40, convos: 0, apts: 0, offers: 4, contracts: 1 };
 
 const ROLE_TAB_CONFIG: Record<RoleTab, { label: string; description: string; kpiTargets: { calls: number; convos: number; apts: number; offers: number; contracts: number }; teamRoles: string[] }> = {
   admin: {
@@ -184,7 +184,7 @@ const ROLE_TAB_CONFIG: Record<RoleTab, { label: string; description: string; kpi
 // ─── KPI BAR ────────────────────────────────────────────
 
 function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: TeamMember[] }) {
-  const { data: kpi, isLoading } = trpc.taskCenter.getKpiSummary.useQuery(undefined, {
+  const { data: kpi, isLoading } = trpc.taskCenter.getKpiSummary.useQuery({ roleTab }, {
     refetchInterval: 120000,
   });
 

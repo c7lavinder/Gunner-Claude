@@ -4080,3 +4080,10 @@
 - [x] Count today's offers (from call outcomes = offer_made), contracts remain manual
 - [x] Update getKpiSummary to return auto-counted values from calls table
 - [x] Keep manual KPI click-to-increment as supplement (adds on top of auto-counts)
+
+## Day Hub — Per-Team-Member KPIs + Target Update
+- [x] Update AM offer target from 2 to 4
+- [x] CALLS KPI = every single GHL dial (not just graded calls)
+- [x] Filter KPI counts by team member (each LM/AM sees their own numbers)
+- [x] Admin view aggregates all team members
+- [x] Pass team member context to getKpiSummary backend
