@@ -64,6 +64,9 @@ function PublicRouter() {
 }
 
 function ProtectedRouter() {
+  const { data: meData } = trpc.auth.me.useQuery();
+  const isDispoManager = (meData as any)?.teamRole === 'dispo_manager';
+
   return (
     <Switch>
       <Route path="/day-hub" component={TaskCenter} />
@@ -78,9 +81,13 @@ function ProtectedRouter() {
       <Route path="/tasks" component={TaskCenter} />
       <Route path="/inventory" component={Inventory} />
       <Route path="/calls/:id" component={CallDetail} />
-      <Route path="/team" component={TeamMembers} />
+      <Route path="/team">
+        {isDispoManager ? <Redirect to="/tasks" /> : <TeamMembers />}
+      </Route>
       <Route path="/analytics" component={Analytics} />
-      <Route path="/training" component={Training} />
+      <Route path="/training">
+        {isDispoManager ? <Redirect to="/tasks" /> : <Training />}
+      </Route>
       <Route path="/social" component={SocialMedia} />
       <Route path="/team-management" component={TeamManagement} />
       <Route path="/profile" component={Profile} />

@@ -982,7 +982,7 @@ export default function TenantSettings() {
                             value={u.teamRole || 'lead_manager'}
                             onValueChange={(value) => updateTeamRoleMutation.mutate({ 
                               userId: u.id, 
-                              teamRole: value as 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator'
+                              teamRole: value as 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator' | 'dispo_manager'
                             })}
                             disabled={u.id === user?.id}
                           >
@@ -994,6 +994,7 @@ export default function TenantSettings() {
                               <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
                               <SelectItem value="lead_manager">Lead Manager</SelectItem>
                               <SelectItem value="lead_generator">Lead Generator</SelectItem>
+                              <SelectItem value="dispo_manager">Disposition Manager</SelectItem>
                             </SelectContent>
                           </Select>
                           
@@ -1002,6 +1003,7 @@ export default function TenantSettings() {
                             acquisition_manager: "bg-blue-100 text-blue-700",
                             lead_manager: "bg-green-100 text-green-700",
                             lead_generator: "bg-orange-100 text-orange-700",
+                            dispo_manager: "bg-amber-100 text-amber-700",
                           }[u.teamRole || 'lead_manager']}>
                             {t.role(u.teamRole || 'lead_manager')}
                           </Badge>

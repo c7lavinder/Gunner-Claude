@@ -4241,3 +4241,11 @@
 
 - [x] Inbox: "Couldn't load messages" error — fixed nested response structure (data.messages.messages)
 - [x] Inbox: Show which team phone number each outbound message was sent FROM to the lead (msg.from field)
+
+## Feature: Disposition Manager Role (2026-03-05)
+
+- [x] Add "Disposition Manager" as a selectable role option in account settings
+- [x] Calls tab: Dispo manager only sees their own calls
+- [x] Training tab: Hidden entirely for dispo managers
+- [x] Team page: Hidden entirely for dispo managers
+- [x] Day Hub: Only show dispo manager's own tab and messages to their number

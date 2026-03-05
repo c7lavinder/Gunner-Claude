@@ -49,6 +49,7 @@ const DEFAULT_ROLE_TEMPLATES = [
   { id: "lead_manager", name: "Lead Manager", description: "Qualifies leads, sets appointments for walkthroughs, manages Lead Generators" },
   { id: "acquisition_manager", name: "Acquisition Manager", description: "Handles offer/closing calls" },
   { id: "lead_generator", name: "Lead Generator", description: "Cold calls homeowners to generate interest in selling — does NOT set appointments" },
+  { id: "dispo_manager", name: "Disposition Manager", description: "Manages properties, showings & buyer offers — sees own calls and inbox only" },
 ];
 
 // ============ PLAYBOOK REVIEW STEP (Step 4) ============

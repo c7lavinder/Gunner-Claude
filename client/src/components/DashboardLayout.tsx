@@ -48,7 +48,14 @@ const getMenuItems = (
   ];
 
   const isDispoManager = teamRole === 'dispo_manager';
-  if (isAdmin || isSuperAdmin || isDispoManager) {
+
+  if (isDispoManager) {
+    // Dispo managers: Day Hub, Calls, Inventory only — no Training, no Team
+    items.push({ icon: Warehouse, label: "Inventory", path: "/inventory" });
+    return items;
+  }
+
+  if (isAdmin || isSuperAdmin) {
     items.push({ icon: Warehouse, label: "Inventory", path: "/inventory" });
   }
 

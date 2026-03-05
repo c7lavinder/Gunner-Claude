@@ -3692,6 +3692,15 @@ export default function TaskCenter() {
     user?.role === "admin" ||
     (user as any)?.isTenantAdmin === "true";
 
+  const isDispoManager = user?.teamRole === 'dispo_manager';
+
+  // Force dispo managers to their own tab
+  useEffect(() => {
+    if (isDispoManager && roleTab !== 'dispo') {
+      setRoleTab('dispo');
+    }
+  }, [isDispoManager]);
+
   // Fetch priority tasks
   const { data, isLoading, isError } = trpc.taskCenter.getPriorityTasks.useQuery(
     {
@@ -3955,7 +3964,7 @@ export default function TaskCenter() {
             className="flex items-center rounded-lg p-0.5"
             style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
           >
-            {(["admin", "lm", "am", "dispo"] as RoleTab[]).map((tab) => {
+            {(isDispoManager ? ["dispo"] as RoleTab[] : ["admin", "lm", "am", "dispo"] as RoleTab[]).map((tab) => {
               const config = ROLE_TAB_CONFIG[tab];
               const isActive = roleTab === tab;
               return (

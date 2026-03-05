@@ -2278,7 +2278,10 @@ export async function getCallsWithPermissions(
       conditions.push(sql`${calls.teamMemberId} IN (${sql.join(allowedTeamMemberIds.map(id => sql`${id}`), sql`, `)})`);
     }
   } else if (permissionContext.teamRole === 'lead_generator' && permissionContext.teamMemberId) {
-    // Lead Generator sees only own calls (same as lead_manager for now)
+    // Lead Generator sees only own calls
+    conditions.push(eq(calls.teamMemberId, permissionContext.teamMemberId));
+  } else if (permissionContext.teamRole === 'dispo_manager' && permissionContext.teamMemberId) {
+    // Disposition Manager sees only own calls
     conditions.push(eq(calls.teamMemberId, permissionContext.teamMemberId));
   } else if (permissionContext.teamMemberId) {
     // Fallback: if role not set but teamMemberId exists, show only own calls

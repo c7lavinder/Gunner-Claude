@@ -30,6 +30,7 @@ const DEFAULT_TERMINOLOGY = {
     lead_generator: "Lead Generator",
     lead_manager: "Lead Manager",
     acquisition_manager: "Acquisition Manager",
+    dispo_manager: "Disposition Manager",
   } as Record<string, string>,
   callTypeLabels: {
     cold_call: "Cold Call",
@@ -147,6 +148,7 @@ export function useTenantConfig() {
       { code: "lead_generator", name: t.role("lead_generator"), description: "Makes cold calls to generate leads" },
       { code: "lead_manager", name: t.role("lead_manager"), description: "Qualifies leads and sets appointments" },
       { code: "acquisition_manager", name: t.role("acquisition_manager"), description: "Closes deals and makes offers" },
+      { code: "dispo_manager", name: t.role("dispo_manager"), description: "Manages properties, showings & buyer offers" },
     ];
   }, [playbook, t]);
 
