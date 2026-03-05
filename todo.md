@@ -399,8 +399,12 @@
 - [x] Create edit dialog for modifying campaign data entries
 - [x] Add edit button to inventory/deals table rows
 - [x] Create edit dialog for modifying inventory entries
-- [x] Add edit button to team KPI table rows
-- [x] Create edit dialog for modifying team KPI entries
+
+## Day Hub Production Issues
+- [ ] Fix KPIs showing 0 on AM view - auto-population not working in production
+- [ ] Fix Inbox not loading / super slow to load
+- [ ] Fix Appointments showing "No appointments today" when there should be data
+- [ ] Fix AI Coach returning "CRM is temporarily busy" error
 
 
 ## Inventory Field Updates
@@ -4087,3 +4091,9 @@
 - [x] Filter KPI counts by team member (each LM/AM sees their own numbers)
 - [x] Admin view aggregates all team members
 - [x] Pass team member context to getKpiSummary backend
+
+## Day Hub Production Issues
+- [x] Fix KPIs showing 0 on AM view - auto-population not working in production (schema mismatch: date→entryDate, source→kpi_source)
+- [x] Fix Inbox not loading / super slow to load (51 test tenants consuming API quota - disconnected)
+- [x] Fix Appointments showing "No appointments today" when there should be data (was loading, just slow due to API quota)
+- [x] Fix AI Coach returning "CRM is temporarily busy" error (test tenants consuming all rate limit slots - disconnected)

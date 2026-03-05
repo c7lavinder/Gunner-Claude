@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, name, role FROM users WHERE name LIKE '%Corey%' OR role IN ('admin', 'super_admin');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, role FROM users WHERE name LIKE '%Corey%' OR role IN ('admin', 'super_admin');",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Corey Lavinder",
+      "role": "super_admin"
+    },
+    {
+      "id": "90493",
+      "name": "Kyle Barks",
+      "role": "admin"
+    },
+    {
+      "id": "180239",
+      "name": "Xhaka Lavinder",
+      "role": "admin"
+    },
+    {
+      "id": "600044",
+      "name": "Pablo Martin",
+      "role": "admin"
+    },
+    {
+      "id": "630004",
+      "name": "Jessica Guzman",
+      "role": "admin"
+    },
+    {
+      "id": "900007",
+      "name": "Zac Chrisman",
+      "role": "admin"
+    },
+    {
+      "id": "990002",
+      "name": "Demo Admin",
+      "role": "admin"
+    },
+    {
+      "id": "1050001",
+      "name": "Declan Highbury",
+      "role": "admin"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\trole\n1\tCorey Lavinder\tsuper_admin\n90493\tKyle Barks\tadmin\n180239\tXhaka Lavinder\tadmin\n600044\tPablo Martin\tadmin\n630004\tJessica Guzman\tadmin\n900007\tZac Chrisman\tadmin\n990002\tDemo Admin\tadmin\n1050001\tDeclan Highbury\tadmin\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

@@ -1472,13 +1472,14 @@ export const dailyKpiEntries = mysqlTable("daily_kpi_entries", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull(),
   userId: int("userId").notNull(),
-  date: varchar("date", { length: 10 }).notNull(), // YYYY-MM-DD
+  date: varchar("entryDate", { length: 10 }).notNull(), // YYYY-MM-DD (column is entryDate in DB)
   kpiType: mysqlEnum("kpiType", ["call", "conversation", "appointment", "offer", "contract"]).notNull(),
   contactId: varchar("contactId", { length: 255 }),
   contactName: varchar("contactName", { length: 255 }),
-  propertyAddress: varchar("propertyAddress", { length: 500 }),
+  propertyAddress: text("propertyAddress"),
   notes: text("notes"),
-  source: mysqlEnum("source", ["auto", "manual"]).default("manual").notNull(),
+  ghlReferenceId: varchar("ghlReferenceId", { length: 255 }),
+  source: mysqlEnum("kpi_source", ["auto", "manual"]).default("manual").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type DailyKpiEntry = typeof dailyKpiEntries.$inferSelect;

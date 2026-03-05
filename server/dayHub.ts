@@ -710,11 +710,14 @@ export async function getKpiSummary(
     }
 
     // Auto-count from calls table — every single dial today
+    console.log(`[DayHub KPI] Query params: tenantId=${tenantId}, date=${date}, teamMemberId=${teamMemberId}, roleTab=${roleTab}`);
+    console.log(`[DayHub KPI] Date range: ${dayStartUTC.toISOString()} to ${dayEndUTC.toISOString()}`);
     const [autoCallsResult] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(calls)
       .where(and(...baseConditions));
     const autoCalls = Number(autoCallsResult?.count || 0);
+    console.log(`[DayHub KPI] Auto calls: ${autoCalls}`);
 
     // Auto-count conversations (classification = 'conversation')
     const [autoConvosResult] = await db
@@ -738,24 +741,28 @@ export async function getKpiSummary(
     const autoOffers = Number(autoOffersResult?.count || 0);
 
     // Manual entries (supplements for things like contracts that can't be auto-detected)
-    const manualEntries = await db
-      .select({
-        kpiType: dailyKpiEntries.kpiType,
-        count: sql<number>`COUNT(*)`,
-      })
-      .from(dailyKpiEntries)
-      .where(
-        and(
-          eq(dailyKpiEntries.tenantId, tenantId),
-          eq(dailyKpiEntries.userId, userId),
-          eq(dailyKpiEntries.date, date)
-        )
-      )
-      .groupBy(dailyKpiEntries.kpiType);
-
     const manual: Record<string, number> = {};
-    for (const row of manualEntries) {
-      manual[row.kpiType] = Number(row.count);
+    try {
+      const manualEntries = await db
+        .select({
+          kpiType: dailyKpiEntries.kpiType,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(dailyKpiEntries)
+        .where(
+          and(
+            eq(dailyKpiEntries.tenantId, tenantId),
+            eq(dailyKpiEntries.userId, userId),
+            eq(dailyKpiEntries.date, date)
+          )
+        )
+        .groupBy(dailyKpiEntries.kpiType);
+
+      for (const row of manualEntries) {
+        manual[row.kpiType] = Number(row.count);
+      }
+    } catch (manualError) {
+      console.error("[DayHub] Manual KPI entries query failed (non-fatal):", (manualError as any)?.message);
     }
 
     // Use auto-counts as the primary source, add manual entries for contracts
@@ -768,6 +775,7 @@ export async function getKpiSummary(
     };
   } catch (error) {
     console.error("[DayHub] getKpiSummary error:", error);
+    console.error("[DayHub] getKpiSummary error stack:", (error as any)?.stack);
     return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
   }
 }
