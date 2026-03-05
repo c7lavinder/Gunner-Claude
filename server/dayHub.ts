@@ -15,7 +15,7 @@ import {
 } from "./ghlActions";
 import { type TaskWithContext } from "./taskCenter";
 import { getDb } from "./db";
-import { dailyKpiEntries, calls } from "../drizzle/schema";
+import { dailyKpiEntries, calls, teamMembers } from "../drizzle/schema";
 import { eq, and, sql, gte, lt, inArray } from "drizzle-orm";
 
 // ─── HELPERS ─────────────────────────────────────────────
@@ -704,8 +704,34 @@ export async function getKpiSummary(
       lt(calls.callTimestamp, dayEndUTC),
     ];
 
-    // For non-admin views with a specific team member, filter by teamMemberId
-    if (teamMemberId && roleTab !== "admin") {
+    // Role-based filtering: when admin selects a role tab, filter by ALL team members in that role
+    const roleToTeamRole: Record<string, string> = {
+      lm: "lead_manager",
+      am: "acquisition_manager",
+      dispo: "dispo_manager",
+    };
+
+    if (roleTab && roleTab !== "admin" && roleToTeamRole[roleTab]) {
+      // Get all team member IDs for this role
+      const roleMembers = await db
+        .select({ id: teamMembers.id })
+        .from(teamMembers)
+        .where(
+          and(
+            eq(teamMembers.tenantId, tenantId),
+            eq(teamMembers.teamRole, roleToTeamRole[roleTab] as any),
+            eq(teamMembers.isActive, "true")
+          )
+        );
+      const roleMemberIds = roleMembers.map(m => m.id);
+      if (roleMemberIds.length > 0) {
+        baseConditions.push(inArray(calls.teamMemberId, roleMemberIds));
+      } else {
+        // No members in this role — return zeros
+        return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
+      }
+    } else if (teamMemberId && roleTab !== "admin") {
+      // Non-admin user viewing their own stats
       baseConditions.push(eq(calls.teamMemberId, teamMemberId));
     }
 

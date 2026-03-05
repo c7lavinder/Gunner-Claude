@@ -20,7 +20,7 @@ import { createCall, getTeamMemberByName, getTeamMemberByGhlUserId, getCallByGhl
 import { processCall } from "./grading";
 import { getTenantsWithCrm, parseCrmConfig } from "./tenant";
 import type { CallEvent, OpportunityEvent, ContactEvent } from "./crmEvents";
-import { webhookEvents, contactCache, tenants } from "../drizzle/schema";
+import { webhookEvents, contactCache, tenants, dispoProperties, propertyStageHistory } from "../drizzle/schema";
 import { eq, and, desc, sql, gte } from "drizzle-orm";
 import PQueue from "p-queue";
 
@@ -420,8 +420,229 @@ async function processOpportunityEvent(event: OpportunityEvent): Promise<void> {
       });
       console.log(`${logPrefix} Created opportunity ${event.sourceOpportunityId}`);
     }
+    // ============ PROPERTY AUTO-IMPORT ============
+    // When an opportunity enters a tracked stage in the Sales Process Pipeline,
+    // auto-create or update a property record in the inventory.
+    await syncPropertyFromOpportunity(event, db, logPrefix);
+
   } catch (error) {
     console.error(`${logPrefix} Error processing opportunity event:`, error);
+  }
+}
+
+// ============ PROPERTY AUTO-IMPORT FROM PIPELINE ============
+
+/**
+ * Pipeline stage names that trigger property auto-import.
+ * Trigger: New Lead, Warm Lead, or Hot Lead in Sales Process Pipeline.
+ * Any stage update also updates existing property records.
+ */
+const TRACKED_STAGE_NAMES = [
+  "new lead",
+  "warm lead",
+  "hot lead",
+  // Also track later stages for status updates
+  "appointment set",
+  "offer made",
+  "under contract",
+  "closing",
+  "closed",
+  "dead",
+];
+
+/**
+ * Map GHL stage names to Gunner property statuses.
+ * Case-insensitive matching.
+ */
+function mapStageToPropertyStatus(stageName: string): string | null {
+  const lower = stageName.toLowerCase().trim();
+  const mapping: Record<string, string> = {
+    "new lead": "lead",
+    "warm lead": "qualified",
+    "hot lead": "qualified",
+    "appointment set": "qualified",
+    "offer made": "offer_made",
+    "under contract": "under_contract",
+    "marketing": "marketing",
+    "buyer negotiating": "buyer_negotiating",
+    "closing": "closing",
+    "closed": "closed",
+    "dead": "dead",
+    "lost": "dead",
+  };
+  return mapping[lower] || null;
+}
+
+/**
+ * Determine which milestone flags to set based on the new status.
+ */
+function getMilestoneFlags(status: string): Record<string, boolean> {
+  const flags: Record<string, boolean> = {};
+  const statusOrder = ["lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed"];
+  const idx = statusOrder.indexOf(status);
+  if (idx >= 1) flags.aptEverSet = true; // qualified or beyond implies apt was set
+  if (idx >= 2) flags.offerEverMade = true;
+  if (idx >= 3) flags.everUnderContract = true;
+  if (idx >= 7) flags.everClosed = true;
+  return flags;
+}
+
+/**
+ * Sync a property record from a GHL opportunity event.
+ * Creates new property if none exists for this opportunity ID.
+ * Updates existing property status and milestone flags.
+ */
+async function syncPropertyFromOpportunity(
+  event: OpportunityEvent,
+  db: any,
+  logPrefix: string
+): Promise<void> {
+  // Only process if we have a stage name to map
+  if (!event.stageName || !event.tenantId) return;
+
+  const mappedStatus = mapStageToPropertyStatus(event.stageName);
+  if (!mappedStatus) {
+    // Stage not in our mapping — skip property sync
+    return;
+  }
+
+  const oppId = event.sourceOpportunityId;
+  const contactId = event.contactId;
+
+  try {
+    // Check if a property already exists for this GHL opportunity
+    const [existingProp] = await db.select()
+      .from(dispoProperties)
+      .where(and(
+        eq(dispoProperties.tenantId, event.tenantId),
+        eq(dispoProperties.ghlOpportunityId, oppId)
+      ));
+
+    if (existingProp) {
+      // Update existing property status
+      const oldStatus = existingProp.status;
+      if (oldStatus === mappedStatus) {
+        console.log(`${logPrefix} Property ${existingProp.id} already at status '${mappedStatus}', skipping`);
+        return;
+      }
+
+      const milestoneFlags = getMilestoneFlags(mappedStatus);
+      const updateData: Record<string, any> = {
+        status: mappedStatus,
+        stageChangedAt: new Date(),
+        ghlPipelineId: event.pipelineId || existingProp.ghlPipelineId,
+        ghlPipelineStageId: event.stageId || existingProp.ghlPipelineStageId,
+      };
+
+      // Only set milestone flags to true, never back to false
+      if (milestoneFlags.aptEverSet) updateData.aptEverSet = true;
+      if (milestoneFlags.offerEverMade) updateData.offerEverMade = true;
+      if (milestoneFlags.everUnderContract) {
+        updateData.everUnderContract = true;
+        if (!existingProp.underContractAt) updateData.underContractAt = new Date();
+      }
+      if (milestoneFlags.everClosed) {
+        updateData.everClosed = true;
+        if (!existingProp.soldAt) updateData.soldAt = new Date();
+        if (!existingProp.actualCloseDate) updateData.actualCloseDate = new Date();
+      }
+
+      await db.update(dispoProperties)
+        .set(updateData)
+        .where(eq(dispoProperties.id, existingProp.id));
+
+      // Log stage change in history
+      await db.insert(propertyStageHistory).values({
+        tenantId: event.tenantId,
+        propertyId: existingProp.id,
+        fromStatus: oldStatus,
+        toStatus: mappedStatus,
+        source: "webhook",
+        notes: `GHL stage: ${event.stageName} (pipeline: ${event.pipelineName || "unknown"})`,
+      });
+
+      console.log(`${logPrefix} Updated property ${existingProp.id} status: ${oldStatus} → ${mappedStatus}`);
+    } else {
+      // Create new property — fetch contact details from GHL for address/name/phone
+      let address = "";
+      let city = "";
+      let state = "";
+      let zip = "";
+      let sellerName = event.contactName || "";
+      let sellerPhone = "";
+
+      if (contactId) {
+        try {
+          const { getContact } = await import("./ghlActions");
+          const contact = await getContact(event.tenantId, contactId);
+          if (contact) {
+            sellerName = contact.name || sellerName;
+            sellerPhone = contact.phone || "";
+            // Parse address from contact
+            if (contact.address) {
+              const parts = contact.address.split(",").map((p: string) => p.trim());
+              if (parts.length >= 4) {
+                address = parts[0];
+                city = parts[1];
+                state = parts[2];
+                zip = parts[3];
+              } else if (parts.length === 3) {
+                address = parts[0];
+                city = parts[1];
+                // state and zip might be combined
+                const stateZip = parts[2].split(" ").filter(Boolean);
+                state = stateZip[0] || "";
+                zip = stateZip[1] || "";
+              } else {
+                address = contact.address;
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`${logPrefix} Could not fetch contact details for ${contactId}:`, err);
+        }
+      }
+
+      const milestoneFlags = getMilestoneFlags(mappedStatus);
+
+      const [inserted] = await db.insert(dispoProperties).values({
+        tenantId: event.tenantId,
+        address: address || "Address Pending",
+        city: city || "",
+        state: state || "",
+        zip: zip || "",
+        status: mappedStatus,
+        ghlContactId: contactId || null,
+        ghlOpportunityId: oppId,
+        ghlPipelineId: event.pipelineId || null,
+        ghlPipelineStageId: event.stageId || null,
+        sellerName: sellerName || null,
+        sellerPhone: sellerPhone || null,
+        stageChangedAt: new Date(),
+        aptEverSet: milestoneFlags.aptEverSet || false,
+        offerEverMade: milestoneFlags.offerEverMade || false,
+        everUnderContract: milestoneFlags.everUnderContract || false,
+        everClosed: milestoneFlags.everClosed || false,
+      });
+
+      // Get the inserted property ID
+      const insertId = inserted?.insertId || inserted?.id;
+      if (insertId) {
+        // Log initial stage in history
+        await db.insert(propertyStageHistory).values({
+          tenantId: event.tenantId,
+          propertyId: insertId,
+          fromStatus: null,
+          toStatus: mappedStatus,
+          source: "webhook",
+          notes: `Auto-imported from GHL. Stage: ${event.stageName} (pipeline: ${event.pipelineName || "unknown"})`,
+        });
+      }
+
+      console.log(`${logPrefix} Auto-imported property for opportunity ${oppId} (contact: ${sellerName}, address: ${address || "pending"}, status: ${mappedStatus})`);
+    }
+  } catch (error) {
+    console.error(`${logPrefix} Error syncing property from opportunity:`, error);
   }
 }
 

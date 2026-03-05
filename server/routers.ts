@@ -7472,6 +7472,23 @@ selectedTimezone: { type: "string" },
         const { deleteDailyKpiEntry } = await import("./dayHub");
         return await deleteDailyKpiEntry(ctx.user.tenantId, ctx.user.id, input.entryId);
       }),
+
+    // Dismiss conversation (mark as read in GHL)
+    dismissConversation: protectedProcedure
+      .input(z.object({ conversationId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getCredentialsForTenant, ghlFetch } = await import("./ghlActions");
+        const creds = await getCredentialsForTenant(ctx.user.tenantId);
+        if (!creds) throw new TRPCError({ code: "NOT_FOUND", message: "GHL not connected" });
+        try {
+          await ghlFetch(creds, `/conversations/${input.conversationId}`, "PUT", { unreadCount: 0 });
+          return { success: true };
+        } catch (err: any) {
+          console.error("[dismissConversation] Error:", err.message);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to dismiss conversation" });
+        }
+      }),
   }),
 
   // ─── DISPO INVENTORY ───
@@ -7538,7 +7555,7 @@ selectedTimezone: { type: "string" },
         state: z.string().optional(),
         zip: z.string().optional(),
         propertyType: z.enum(["house", "lot", "land", "multi_family", "commercial", "other"]).optional(),
-        status: z.enum(["new", "marketing", "negotiating", "under_contract", "sold"]).optional(),
+        status: z.string().optional(),
         askingPrice: z.number().optional(),
         arv: z.number().optional(),
         repairEstimate: z.number().optional(),
@@ -7562,7 +7579,7 @@ selectedTimezone: { type: "string" },
           ...(bedrooms !== undefined ? { beds: bedrooms } : {}),
           ...(bathrooms !== undefined ? { baths: bathrooms.toString() } : {}),
           ...(repairEstimate !== undefined ? { estRepairs: repairEstimate } : {}),
-        } as any);
+        } as any, ctx.user.id);
       }),
     deleteProperty: protectedProcedure
       .input(z.object({ propertyId: z.number() }))
@@ -7675,6 +7692,7 @@ selectedTimezone: { type: "string" },
         const { getDispoKpiSummary } = await import("./inventory");
         return getDispoKpiSummary(ctx.user.tenantId, input.date);
       }),
+
   }),
 });
 

@@ -9,6 +9,7 @@ import {
   dispoPropertyOffers,
   dispoPropertyShowings,
   dispoDailyKpis,
+  propertyStageHistory,
   type InsertDispoProperty,
   type InsertDispoPropertySend,
   type InsertDispoPropertyOffer,
@@ -124,12 +125,47 @@ export async function createProperty(tenantId: number, userId: number, data: Omi
   return { id: result.insertId };
 }
 
-export async function updateProperty(tenantId: number, propertyId: number, data: Partial<InsertDispoProperty>) {
+export async function updateProperty(tenantId: number, propertyId: number, data: Partial<InsertDispoProperty>, userId?: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   // Remove fields that shouldn't be updated
   const { id, tenantId: _, createdAt, ...updateData } = data as any;
+
+  // If status is changing, log it in stage history and update milestone flags
+  if (updateData.status) {
+    const [existing] = await db.select({ status: dispoProperties.status })
+      .from(dispoProperties)
+      .where(and(eq(dispoProperties.id, propertyId), eq(dispoProperties.tenantId, tenantId)));
+
+    if (existing && existing.status !== updateData.status) {
+      // Log stage change
+      await db.insert(propertyStageHistory).values({
+        tenantId,
+        propertyId,
+        fromStatus: existing.status,
+        toStatus: updateData.status,
+        changedByUserId: userId || null,
+        source: "manual",
+      });
+
+      // Update milestone flags (only set to true, never back to false)
+      updateData.stageChangedAt = new Date();
+      const s = updateData.status;
+      const statusOrder = ["lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed"];
+      const idx = statusOrder.indexOf(s);
+      if (idx >= 1) updateData.aptEverSet = true;
+      if (idx >= 2) updateData.offerEverMade = true;
+      if (idx >= 3) {
+        updateData.everUnderContract = true;
+        if (!updateData.underContractAt) updateData.underContractAt = new Date();
+      }
+      if (idx >= 7) {
+        updateData.everClosed = true;
+        if (!updateData.soldAt) updateData.soldAt = new Date();
+      }
+    }
+  }
 
   await db.update(dispoProperties)
     .set(updateData)

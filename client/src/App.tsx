@@ -66,9 +66,12 @@ function PublicRouter() {
 function ProtectedRouter() {
   return (
     <Switch>
-      <Route path="/dashboard" component={Home} />
+      <Route path="/day-hub" component={TaskCenter} />
+      <Route path="/dashboard">
+        <Redirect to="/tasks" />
+      </Route>
       <Route path="/lead-gen-dashboard">
-        <Redirect to="/dashboard" />
+        <Redirect to="/tasks" />
       </Route>
       <Route path="/calls" component={CallInbox} />
       <Route path="/coach-log" component={CoachActivityLog} />
@@ -131,7 +134,7 @@ function AppContent() {
   if (shouldRedirect) {
     // Use useEffect-safe redirect via window.location for immediate navigation
     if (typeof window !== 'undefined') {
-      window.location.replace('/dashboard');
+      window.location.replace('/tasks');
     }
     return null;
   }

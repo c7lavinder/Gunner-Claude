@@ -4124,3 +4124,81 @@
 - [x] Send tracking per property (channel, buyer group, count)
 - [x] Add Inventory to navigation menu (visible to dispo_manager, admin, super_admin)
 - [x] 30 vitest tests passing for schema, KPIs, navigation, and page structure
+
+## Audit Fixes — Day Hub / Dashboard
+- [x] KPI Trust Ledger: clicking any KPI opens pop-up modal showing Time | User Name | Lead Name | Property Address
+- [x] KPI Trust Ledger: Add (+) manual entry with Lead Name + Address, confirmation modal
+- [x] KPI Trust Ledger: Remove (-) trash icon on row, confirmation modal
+- [x] Role filtering fix: LM shows sum of LM users only, AM shows sum of AM users only (currently broken)
+
+## Audit Fixes — Unified Inbox (Left Panel)
+- [x] Tabs: Inbox (Count) | Today (Count) — only ONE tab selectable at a time
+- [ ] Show which user/team member the lead messaged or called
+- [x] Hide raw tags (dialer, tn, hot) and source labels from inbox items
+- [ ] Show message preview (truncated) in inbox items
+- [ ] Click to Expand: show last 10 messages from GHL conversation (slide-out panel)
+- [ ] Call Button: confirmation modal with From/To info, initiate GHL Twilio call (not FaceTime)
+- [ ] Text Button: SMS modal with context (last messages visible), verify sends via GHL API
+- [x] Dismiss Button: fire conversations.markRead API to GHL, remove from inbox
+- [ ] Today Tab: cleaner card UI (Name, Address, Time only)
+- [ ] Today Tab: status badge CONFIRMED/CANCELLED/RESCHEDULED
+- [ ] Today Tab: show Assignee name prominently
+- [ ] Today Tab: add Call/Text/Note action buttons
+- [ ] Today Tab: remove tags/source clutter
+
+## Audit Fixes — AI Coach (Right Panel)
+- [ ] Must respond in < 2 seconds for simple queries
+- [x] Fuzzy search: "pablo martins" must find "Pablo Martin" — ask if ambiguous
+- [ ] Add Note: if no content provided, ASK "What should the note say?" — no generic notes
+- [ ] Add Note: edit button to modify before confirming
+- [ ] Create Task: must include Title, Assignee dropdown, Due Date picker, Description — all editable
+- [ ] Update Task: same fields as Create (Assignee, Due Date, Title, Description)
+- [ ] Change Pipeline: show Current → New stage, auto-create opportunity if none exists
+- [ ] Add Tag: edit button to modify tag name, autocomplete existing tags
+- [ ] Update Field: searchable dropdown of all GHL fields, editable value with format validation
+
+## Audit Fixes — Calls Page
+- [ ] Missing Names: enrich on ingest — query GHL by phone number to get Full Name + Address
+- [ ] Call Type Cleanup: merge "Seller Callback" + "Admin Callback" → "Admin Call"
+- [ ] Outcome Cleanup: remove "No Answer" and "Left Voicemail" from short calls
+- [x] Time Filter: default to "Today" (not "All Time")
+- [ ] Call cards too tall — reduce height so AI Coach input visible without scrolling
+- [x] Grading Logic: fix admin price-drop call graded as "Offer Call"
+- [x] Context-aware grading: don't auto-fail "Offer Rejected" if rep handled professionally
+- [ ] Next Steps: test all action buttons (Push to GHL, Edit, Skip)
+- [ ] Next Steps: Note, Task, Stage Change should auto-populate on most calls
+- [ ] For LMs: if outcome = "Appointment Set", suggest "Add to Calendar"
+- [ ] Ensure Create Task has Assignee + Due Date in Next Steps
+
+## Audit Fixes — Training Page
+- [x] Role filtering BROKEN: clicking AM/LM/LG must refresh data with different content
+- [x] Issues, Wins, Long-Term Skills must show DIFFERENT content per role
+- [x] Meeting Agenda must change based on selected role
+- [ ] Evidence Links: each Issue/Win card needs "See Examples" button linking to call transcripts
+- [ ] "Generate AI Insights" should run fresh analysis NOW (not wait for Monday)
+
+## Audit Fixes — Task List (Bottom Section)
+- [x] Pagination: load first 50 tasks, "View More" button appends next batch
+- [x] Overdue Toggle: "44 Overdue" badge becomes clickable filter button
+- [x] HTML Cleanup: strip/sanitize raw HTML in task notes (DOMPurify or strip tags)
+- [x] Hide Task Score: remove the "900" badge from task cards
+- [ ] Create Apt: add Time Zone picker (default to property's TZ)
+- [ ] Ensure ALL buttons work: Call, Text, Update Workflow, Create Apt, Add Note
+- [ ] Call Button (Task List): same confirmation modal + Twilio Browser Call pattern as Inbox
+
+## Property Database Expansion
+- [ ] Rename dispo_properties → properties table
+- [x] Change status from ENUM to VARCHAR(50)
+- [x] Add new acquisition-stage fields (leadSource, assignedAmUserId, assignedLmUserId, etc.)
+- [x] Add milestone flags (aptEverSet, offerEverMade, everUnderContract, everClosed)
+- [x] Create property_stage_history table
+- [x] Add indexes for performance
+- [ ] Update all code references from dispo_properties → properties
+- [x] GHL webhook handler: auto-import on OpportunityStageUpdate
+- [x] Trigger: New Lead Stage, Warm Lead Stage, Hot Lead Stage in Sales Process Pipeline
+- [ ] Address parser for multi-property splitting
+- [ ] Property-to-call linking (propertyId on calls table)
+- [ ] Role-based default filters on Inventory page
+- [x] Milestone badges on property cards
+- [ ] N+1 query fix for getProperties (use JOINs)
+- [x] Data migration: map old statuses to new ones

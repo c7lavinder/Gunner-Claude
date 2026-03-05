@@ -212,7 +212,8 @@ async function searchLocalContactCache(
 
   const searchTerm = `%${query.trim()}%`;
   
-  const results = await db
+  // Layer 1: Exact LIKE match (fast)
+  const exactResults = await db
     .select({
       ghlContactId: contactCache.ghlContactId,
       name: contactCache.name,
@@ -236,7 +237,51 @@ async function searchLocalContactCache(
     )
     .limit(10);
 
-  return results.map(c => ({
+  if (exactResults.length > 0) {
+    return exactResults.map(c => ({
+      id: c.ghlContactId,
+      name: c.name || `${c.firstName || ""} ${c.lastName || ""}`.trim() || "Unknown",
+      phone: c.phone || "",
+      email: c.email || "",
+    }));
+  }
+
+  // Layer 2: Fuzzy match — split query into parts and match each part loosely
+  // This handles "pablo martins" finding "Pablo Martin" (missing/extra letters)
+  const queryParts = query.trim().toLowerCase().split(/\s+/);
+  const fuzzyConditions = queryParts.map(part => {
+    // Create multiple LIKE patterns: exact, starts-with, contains, and partial (first N-1 chars)
+    const partialTerm = part.length > 2 ? `%${part.slice(0, -1)}%` : `%${part}%`;
+    return or(
+      like(sql`LOWER(${contactCache.name})`, `%${part}%`),
+      like(sql`LOWER(${contactCache.firstName})`, `%${part}%`),
+      like(sql`LOWER(${contactCache.lastName})`, `%${part}%`),
+      // Also try partial match (drops last char for typos like "martins" -> "martin")
+      like(sql`LOWER(${contactCache.name})`, partialTerm),
+      like(sql`LOWER(${contactCache.firstName})`, partialTerm),
+      like(sql`LOWER(${contactCache.lastName})`, partialTerm)
+    );
+  });
+
+  const fuzzyResults = await db
+    .select({
+      ghlContactId: contactCache.ghlContactId,
+      name: contactCache.name,
+      firstName: contactCache.firstName,
+      lastName: contactCache.lastName,
+      phone: contactCache.phone,
+      email: contactCache.email,
+    })
+    .from(contactCache)
+    .where(
+      and(
+        eq(contactCache.tenantId, tenantId),
+        ...fuzzyConditions
+      )
+    )
+    .limit(10);
+
+  return fuzzyResults.map(c => ({
     id: c.ghlContactId,
     name: c.name || `${c.firstName || ""} ${c.lastName || ""}`.trim() || "Unknown",
     phone: c.phone || "",

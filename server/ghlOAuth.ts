@@ -55,6 +55,7 @@ const GHL_REQUIRED_SCOPES = [
   "contacts.readonly",
   "contacts.write",
   "conversations.readonly",
+  "conversations.write",
   "conversations/message.readonly",
   "conversations/message.write",
   "opportunities.readonly",

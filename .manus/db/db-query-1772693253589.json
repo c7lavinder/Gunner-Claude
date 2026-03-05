@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE `dispo_properties` SET `status` = 'lead' WHERE `status` = 'new'; UPDATE `dispo_properties` SET `status` = 'closed' WHERE `status` = 'sold'; UPDATE `dispo_properties` SET `status` = 'buyer_negotiating' WHERE `status` = 'negotiating'; UPDATE `dispo_properties` SET `everClosed` = true, `everUnderContract` = true, `offerEverMade` = true WHERE `status` = 'closed'; UPDATE `dispo_properties` SET `everUnderContract` = true, `offerEverMade` = true WHERE `status` IN ('under_contract', 'marketing', 'buyer_negotiating', 'closing'); UPDATE `dispo_properties` SET `offerEverMade` = true WHERE `status` = 'offer_made';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute UPDATE `dispo_properties` SET `status` = 'lead' WHERE `status` = 'new'; UPDATE `dispo_properties` SET `status` = 'closed' WHERE `status` = 'sold'; UPDATE `dispo_properties` SET `status` = 'buyer_negotiating' WHERE `status` = 'negotiating'; UPDATE `dispo_properties` SET `everClosed` = true, `everUnderContract` = true, `offerEverMade` = true WHERE `status` = 'closed'; UPDATE `dispo_properties` SET `everUnderContract` = true, `offerEverMade` = true WHERE `status` IN ('under_contract', 'marketing', 'buyer_negotiating', 'closing'); UPDATE `dispo_properties` SET `offerEverMade` = true WHERE `status` = 'offer_made';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 91
+}

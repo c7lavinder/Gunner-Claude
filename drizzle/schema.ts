@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, decimal } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, decimal, boolean } from "drizzle-orm/mysql-core";
 
 // ============ MULTI-TENANCY SYSTEM ============
 
@@ -1486,7 +1486,7 @@ export type DailyKpiEntry = typeof dailyKpiEntries.$inferSelect;
 export type InsertDailyKpiEntry = typeof dailyKpiEntries.$inferInsert;
 
 
-// ============ DISPO PROPERTIES (Inventory Management) ============
+// ============ PROPERTIES (Full Pipeline Inventory) ============
 export const dispoProperties = mysqlTable("dispo_properties", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").references(() => tenants.id).notNull(),
@@ -1509,8 +1509,9 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   // Access & Status
   lockboxCode: varchar("lockboxCode", { length: 50 }),
   occupancyStatus: mysqlEnum("occupancyStatus", ["vacant", "occupied", "tenant", "unknown"]).default("unknown"),
-  // Deal Pipeline Status
-  status: mysqlEnum("status", ["new", "marketing", "negotiating", "under_contract", "sold", "dead"]).default("new").notNull(),
+  // Deal Pipeline Status — expanded to cover full funnel
+  // Stages: lead → qualified → offer_made → under_contract → marketing → buyer_negotiating → closing → closed → dead
+  status: varchar("status", { length: 50 }).default("lead").notNull(),
   // Media & Notes
   mediaLink: text("mediaLink"), // Google Drive or other link to photos/video
   description: text("description"), // Property description / notes
@@ -1521,6 +1522,35 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   ghlContactId: varchar("ghlContactId", { length: 255 }), // Link to GHL contact (seller)
   sellerName: varchar("sellerName", { length: 255 }),
   sellerPhone: varchar("sellerPhone", { length: 50 }),
+  // Acquisition-stage fields
+  leadSource: varchar("leadSource", { length: 100 }), // direct_mail, cold_call, driving_for_dollars, referral, ppc, seo
+  leadSourceDetail: varchar("leadSourceDetail", { length: 255 }), // specific campaign name or list name
+  assignedAmUserId: int("assignedAmUserId").references(() => users.id), // Acquisition Manager working this deal
+  assignedLmUserId: int("assignedLmUserId").references(() => users.id), // Lead Manager who sourced it
+  // Offer tracking (acquisition side)
+  ourOfferAmount: int("ourOfferAmount"), // in cents — what AM offered the seller
+  offerDate: timestamp("offerDate"),
+  counterOfferAmount: int("counterOfferAmount"), // in cents — seller's counter
+  contractDate: timestamp("contractDate"),
+  // Closing details
+  closingDate: timestamp("closingDate"), // scheduled closing date
+  actualCloseDate: timestamp("actualCloseDate"), // actual close date
+  assignmentAmount: int("assignmentAmount"), // in cents — actual assignment fee received
+  buyerGhlContactId: varchar("buyerGhlContactId", { length: 255 }), // GHL contact ID of the buyer
+  buyerName: varchar("buyerName", { length: 255 }),
+  buyerCompany: varchar("buyerCompany", { length: 255 }),
+  expectedCloseDate: timestamp("expectedCloseDate"), // enables "Closing This Week" widget
+  // Pipeline metadata
+  stageChangedAt: timestamp("stageChangedAt"), // last time status changed
+  // Milestone flags — set to TRUE when property hits that stage, NEVER reset to FALSE
+  aptEverSet: boolean("aptEverSet").default(false),
+  offerEverMade: boolean("offerEverMade").default(false),
+  everUnderContract: boolean("everUnderContract").default(false),
+  everClosed: boolean("everClosed").default(false),
+  // GHL Opportunity tracking
+  ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }), // GHL opportunity ID for webhook linking
+  ghlPipelineId: varchar("ghlPipelineId", { length: 255 }),
+  ghlPipelineStageId: varchar("ghlPipelineStageId", { length: 255 }),
   // Timestamps
   marketedAt: timestamp("marketedAt"), // When first blast was sent
   underContractAt: timestamp("underContractAt"),
@@ -1530,6 +1560,21 @@ export const dispoProperties = mysqlTable("dispo_properties", {
 });
 export type DispoProperty = typeof dispoProperties.$inferSelect;
 export type InsertDispoProperty = typeof dispoProperties.$inferInsert;
+
+// ============ PROPERTY STAGE HISTORY (Track all stage transitions) ============
+export const propertyStageHistory = mysqlTable("property_stage_history", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+  fromStatus: varchar("fromStatus", { length: 50 }), // null for initial creation
+  toStatus: varchar("toStatus", { length: 50 }).notNull(),
+  changedByUserId: int("changedByUserId").references(() => users.id),
+  source: varchar("source", { length: 50 }).default("manual"), // manual, webhook, system
+  notes: text("notes"),
+  changedAt: timestamp("changedAt").defaultNow().notNull(),
+});
+export type PropertyStageHistory = typeof propertyStageHistory.$inferSelect;
+export type InsertPropertyStageHistory = typeof propertyStageHistory.$inferInsert;
 
 // ============ DISPO PROPERTY SENDS (Tracking blasts/sends per property) ============
 export const dispoPropertySends = mysqlTable("dispo_property_sends", {

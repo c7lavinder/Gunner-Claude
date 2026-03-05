@@ -1169,10 +1169,10 @@ export default function TeamTraining() {
           <div>
             <div className="w-full">
               <div className="obs-role-tabs">
-                <button className={`obs-role-tab ${trainingTab === "all" ? "active" : ""}`} onClick={() => setTrainingTab("all")}>All Roles</button>
-                <button className={`obs-role-tab ${trainingTab === "acquisition_manager" ? "active" : ""}`} onClick={() => setTrainingTab("acquisition_manager")}>Acquisition Manager</button>
-                <button className={`obs-role-tab ${trainingTab === "lead_manager" ? "active" : ""}`} onClick={() => setTrainingTab("lead_manager")}>Lead Manager</button>
-                <button className={`obs-role-tab ${trainingTab === "lead_generator" ? "active" : ""}`} onClick={() => setTrainingTab("lead_generator")}>Lead Generator</button>
+                <button className={`obs-role-tab ${selectedRole === "all" ? "active" : ""}`} onClick={() => setSelectedRole("all")}>All Roles</button>
+                <button className={`obs-role-tab ${selectedRole === "acquisition_manager" ? "active" : ""}`} onClick={() => setSelectedRole("acquisition_manager")}>Acquisition Manager</button>
+                <button className={`obs-role-tab ${selectedRole === "lead_manager" ? "active" : ""}`} onClick={() => setSelectedRole("lead_manager")}>Lead Manager</button>
+                <button className={`obs-role-tab ${selectedRole === "lead_generator" ? "active" : ""}`} onClick={() => setSelectedRole("lead_generator")}>Lead Generator</button>
               </div>
             </div>
           </div>

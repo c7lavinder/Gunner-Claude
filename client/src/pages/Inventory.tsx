@@ -22,20 +22,27 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── TYPES ───
-type PropertyStatus = "new" | "marketing" | "negotiating" | "under_contract" | "sold" | "dead";
+type PropertyStatus = "lead" | "qualified" | "offer_made" | "under_contract" | "marketing" | "buyer_negotiating" | "closing" | "closed" | "dead" | "new" | "negotiating" | "sold";
 type SendChannel = "sms" | "email" | "facebook" | "investor_base" | "other";
 type OfferStatus = "pending" | "accepted" | "rejected" | "countered" | "expired";
 type ShowingStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 type InterestLevel = "hot" | "warm" | "cold" | "none";
 
 // ─── CONSTANTS ───
-const STATUS_CONFIG: Record<PropertyStatus, { label: string; color: string; bg: string }> = {
-  new: { label: "New", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
-  marketing: { label: "Marketing", color: "#8b5cf6", bg: "rgba(139,92,246,0.12)" },
-  negotiating: { label: "Negotiating", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  lead: { label: "Lead", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
+  qualified: { label: "Qualified", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
+  offer_made: { label: "Offer Made", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
   under_contract: { label: "Under Contract", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
-  sold: { label: "Sold", color: "#10b981", bg: "rgba(16,185,129,0.12)" },
+  marketing: { label: "Marketing", color: "#8b5cf6", bg: "rgba(139,92,246,0.12)" },
+  buyer_negotiating: { label: "Buyer Negotiating", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+  closing: { label: "Closing", color: "#14b8a6", bg: "rgba(20,184,166,0.12)" },
+  closed: { label: "Closed", color: "#10b981", bg: "rgba(16,185,129,0.12)" },
   dead: { label: "Dead", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+  // Legacy status aliases
+  new: { label: "Lead", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
+  negotiating: { label: "Buyer Negotiating", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+  sold: { label: "Closed", color: "#10b981", bg: "rgba(16,185,129,0.12)" },
 };
 
 const CHANNEL_CONFIG: Record<SendChannel, { label: string; icon: React.ElementType; color: string }> = {
@@ -517,8 +524,8 @@ function PropertyDetail({
                 <ChevronDown className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                {["lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "dead"].map((k) => (
+                  <SelectItem key={k} value={k}>{STATUS_CONFIG[k]?.label || k}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -573,11 +580,43 @@ function PropertyDetail({
               <span style={{ color: "var(--g-text-primary)" }}>{property.lockboxCode}</span>
             </div>
           )}
+          {property.ghlContactId && (
+            <div className="mt-2 text-sm">
+              <span style={{ color: "var(--g-text-tertiary)" }}>GHL Contact:</span>{" "}
+              <a href={`https://app.gohighlevel.com/contacts/detail/${property.ghlContactId}`} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--g-accent)" }}>
+                View in GHL
+              </a>
+            </div>
+          )}
+          {property.ghlOpportunityId && (
+            <div className="mt-1 text-sm">
+              <span style={{ color: "var(--g-text-tertiary)" }}>GHL Opportunity:</span>{" "}
+              <span style={{ color: "var(--g-text-secondary)" }}>{property.ghlOpportunityId}</span>
+            </div>
+          )}
           {property.notes && (
             <div className="mt-2 text-sm p-2 rounded" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>
               {property.notes}
             </div>
           )}
+        </div>
+
+        {/* Milestone Progress */}
+        <div className="rounded-lg p-3" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+          <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--g-text-tertiary)" }}>Deal Progress</div>
+          <div className="flex items-center gap-4">
+            {[
+              { label: "Apt Set", flag: property.aptEverSet, color: "#22c55e" },
+              { label: "Offer Made", flag: property.offerEverMade, color: "#f59e0b" },
+              { label: "Under Contract", flag: property.everUnderContract, color: "#3b82f6" },
+              { label: "Closed", flag: property.everClosed, color: "#10b981" },
+            ].map((m) => (
+              <div key={m.label} className="flex items-center gap-1">
+                <div className="h-3 w-3 rounded-full" style={{ background: m.flag ? m.color : "var(--g-border-subtle)" }} />
+                <span className="text-xs" style={{ color: m.flag ? m.color : "var(--g-text-tertiary)" }}>{m.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Activity Tabs */}
@@ -822,6 +861,24 @@ function PropertyCard({
         )}
       </div>
 
+      {/* Milestone Badges */}
+      {(property.aptEverSet || property.offerEverMade || property.everUnderContract || property.everClosed) && (
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] font-medium" style={{ color: property.aptEverSet ? "#22c55e" : "var(--g-text-tertiary)" }}>
+            {property.aptEverSet ? "✅" : "❌"} Apt Set
+          </span>
+          <span className="text-[10px] font-medium" style={{ color: property.offerEverMade ? "#f59e0b" : "var(--g-text-tertiary)" }}>
+            {property.offerEverMade ? "✅" : "❌"} Offer
+          </span>
+          <span className="text-[10px] font-medium" style={{ color: property.everUnderContract ? "#3b82f6" : "var(--g-text-tertiary)" }}>
+            {property.everUnderContract ? "✅" : "❌"} Contract
+          </span>
+          <span className="text-[10px] font-medium" style={{ color: property.everClosed ? "#10b981" : "var(--g-text-tertiary)" }}>
+            {property.everClosed ? "✅" : "❌"} Closed
+          </span>
+        </div>
+      )}
+
       {/* Activity Indicators */}
       <div className="flex items-center gap-3 pt-2" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
         <div className="flex items-center gap-1" title="Sends">
@@ -935,7 +992,7 @@ export default function Inventory() {
           />
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto">
-          {(["all", "new", "marketing", "negotiating", "under_contract", "sold", "dead"] as const).map((s) => {
+          {(["all", "lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "dead"] as const).map((s) => {
             const cfg = s === "all" ? { label: "All", color: "var(--g-text-primary)", bg: "var(--g-bg-elevated)" } : STATUS_CONFIG[s];
             const isActive = statusFilter === s;
             return (

@@ -1905,7 +1905,7 @@ export default function CallInbox() {
       types: sp.get('types') ? sp.get('types')!.split(',') : [],
       outcomes: sp.get('outcomes') ? sp.get('outcomes')!.split(',') : [],
       scores: sp.get('scores') ? sp.get('scores')!.split(',') : [],
-      date: sp.get('date') || 'all',
+      date: sp.get('date') || '1d',
     };
   }, []); // Only parse once on mount
 
@@ -1923,7 +1923,7 @@ export default function CallInbox() {
   const [showFilters, setShowFilters] = useState(
     initialParams.team.length > 0 || initialParams.types.length > 0 || 
     initialParams.outcomes.length > 0 || initialParams.scores.length > 0 || 
-    initialParams.date !== 'all'
+    initialParams.date !== '1d'
   );
 
   // Sync filter state to URL query params (replaceState to avoid polluting history)

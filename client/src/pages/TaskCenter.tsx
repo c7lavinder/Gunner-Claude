@@ -196,13 +196,43 @@ const ROLE_TAB_CONFIG: Record<RoleTab, { label: string; description: string; kpi
 // ─── KPI BAR ────────────────────────────────────────────
 
 function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: TeamMember[] }) {
+  const utils = trpc.useUtils();
   const { data: kpi, isLoading } = trpc.taskCenter.getKpiSummary.useQuery({ roleTab }, {
     refetchInterval: 120000,
   });
 
+  // Trust Ledger state
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [ledgerType, setLedgerType] = useState<"call" | "conversation" | "appointment" | "offer" | "contract">("call");
+  const [ledgerLabel, setLedgerLabel] = useState("");
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addAddress, setAddAddress] = useState("");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  // Fetch ledger entries when modal is open
+  const { data: ledgerEntries, isLoading: ledgerLoading } = trpc.taskCenter.getDailyKpiEntries.useQuery(
+    { date: kpi?.date || "", kpiType: ledgerType },
+    { enabled: ledgerOpen && !!kpi?.date }
+  );
+
   const addKpiMutation = trpc.taskCenter.addKpiEntry.useMutation({
     onSuccess: () => {
-      toast.success("KPI entry added");
+      toast.success("Entry added to ledger");
+      utils.taskCenter.getDailyKpiEntries.invalidate();
+      utils.taskCenter.getKpiSummary.invalidate();
+      setAddModalOpen(false);
+      setAddName("");
+      setAddAddress("");
+    },
+  });
+
+  const deleteKpiMutation = trpc.taskCenter.deleteKpiEntry.useMutation({
+    onSuccess: () => {
+      toast.success("Entry removed from ledger");
+      utils.taskCenter.getDailyKpiEntries.invalidate();
+      utils.taskCenter.getKpiSummary.invalidate();
+      setDeleteConfirmId(null);
     },
   });
 
@@ -235,41 +265,11 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
   if (!kpi) return null;
 
   const kpiItems = [
-    {
-      label: "Calls",
-      value: kpi.calls,
-      target: targets.calls,
-      icon: Phone,
-      type: "call" as const,
-    },
-    {
-      label: "Convos",
-      value: kpi.conversations,
-      target: targets.convos,
-      icon: MessageCircle,
-      type: "conversation" as const,
-    },
-    {
-      label: "Apts",
-      value: kpi.appointments,
-      target: targets.apts,
-      icon: CalendarDays,
-      type: "appointment" as const,
-    },
-    {
-      label: "Offers",
-      value: kpi.offers,
-      target: targets.offers,
-      icon: Target,
-      type: "offer" as const,
-    },
-    {
-      label: "Contracts",
-      value: kpi.contracts,
-      target: targets.contracts,
-      icon: FileText,
-      type: "contract" as const,
-    },
+    { label: "Calls", value: kpi.calls, target: targets.calls, icon: Phone, type: "call" as const },
+    { label: "Convos", value: kpi.conversations, target: targets.convos, icon: MessageCircle, type: "conversation" as const },
+    { label: "Apts", value: kpi.appointments, target: targets.apts, icon: CalendarDays, type: "appointment" as const },
+    { label: "Offers", value: kpi.offers, target: targets.offers, icon: Target, type: "offer" as const },
+    { label: "Contracts", value: kpi.contracts, target: targets.contracts, icon: FileText, type: "contract" as const },
   ].filter(item => item.target > 0 || roleTab === "admin");
 
   const colorMap = {
@@ -287,53 +287,165 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
   }
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
-      {kpiItems.map((item) => {
-        const c = colorMap[getColor(item.value, item.target)];
-        const Icon = item.icon;
-        const pct = item.target > 0 ? Math.min(100, Math.round((item.value / item.target) * 100)) : 0;
-        return (
-          <div
-            key={item.label}
-            className="flex-1 min-w-[100px] rounded-lg px-3 py-2.5 relative overflow-hidden group cursor-pointer"
-            style={{
-              background: "var(--g-bg-card)",
-              border: `1px solid ${c.border}`,
-            }}
-            onClick={() => {
-              if (!kpi.date) return;
-              addKpiMutation.mutate({
-                date: kpi.date,
-                kpiType: item.type,
-              });
-            }}
-          >
-            {/* Progress bar background */}
+    <>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {kpiItems.map((item) => {
+          const c = colorMap[getColor(item.value, item.target)];
+          const Icon = item.icon;
+          const pct = item.target > 0 ? Math.min(100, Math.round((item.value / item.target) * 100)) : 0;
+          return (
             <div
-              className="absolute bottom-0 left-0 h-1 transition-all duration-500"
-              style={{ width: `${pct}%`, background: c.text, opacity: 0.6 }}
-            />
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1.5">
-                <Icon className="h-3.5 w-3.5" style={{ color: c.text }} />
-                <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>
-                  {item.label}
-                </span>
+              key={item.label}
+              className="flex-1 min-w-[100px] rounded-lg px-3 py-2.5 relative overflow-hidden group cursor-pointer"
+              style={{ background: "var(--g-bg-card)", border: `1px solid ${c.border}` }}
+              onClick={() => {
+                setLedgerType(item.type);
+                setLedgerLabel(item.label);
+                setLedgerOpen(true);
+              }}
+            >
+              <div className="absolute bottom-0 left-0 h-1 transition-all duration-500" style={{ width: `${pct}%`, background: c.text, opacity: 0.6 }} />
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5">
+                  <Icon className="h-3.5 w-3.5" style={{ color: c.text }} />
+                  <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>{item.label}</span>
+                </div>
+                <Eye className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: "var(--g-text-tertiary)" }} />
               </div>
-              <Plus className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: "var(--g-text-tertiary)" }} />
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-bold tabular-nums" style={{ color: c.text }}>{item.value}</span>
+                <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>/ {item.target}</span>
+              </div>
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-xl font-bold tabular-nums" style={{ color: c.text }}>
-                {item.value}
-              </span>
-              <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
-                / {item.target}
-              </span>
+          );
+        })}
+      </div>
+
+      {/* Trust Ledger Modal */}
+      <Dialog open={ledgerOpen} onOpenChange={setLedgerOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span>{ledgerLabel} Ledger</span>
+              <Badge variant="outline" className="text-xs">{kpi.date}</Badge>
+            </DialogTitle>
+            <DialogDescription>View, add, or remove manual {ledgerLabel.toLowerCase()} entries for today.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {/* Entries list */}
+            <ScrollArea className="max-h-[300px]">
+              {ledgerLoading ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
+                </div>
+              ) : !ledgerEntries || ledgerEntries.length === 0 ? (
+                <div className="text-center py-6" style={{ color: "var(--g-text-tertiary)" }}>
+                  <p className="text-sm">No manual entries yet.</p>
+                  <p className="text-xs mt-1">Auto-detected {ledgerLabel.toLowerCase()} from calls are counted separately.</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {ledgerEntries.map((entry: any) => (
+                    <div key={entry.id} className="flex items-center justify-between rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs tabular-nums" style={{ color: "var(--g-text-tertiary)" }}>
+                            {new Date(entry.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" })}
+                          </span>
+                          <span className="text-sm font-medium truncate" style={{ color: "var(--g-text-primary)" }}>
+                            {entry.contactName || "Manual Entry"}
+                          </span>
+                        </div>
+                        {entry.propertyAddress && (
+                          <p className="text-xs truncate mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
+                            <MapPin className="inline h-3 w-3 mr-1" />{entry.propertyAddress}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 shrink-0"
+                        onClick={() => setDeleteConfirmId(entry.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+
+            {/* Add button */}
+            <Button variant="outline" size="sm" className="w-full" onClick={() => setAddModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Add Manual Entry
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Entry Modal */}
+      <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add {ledgerLabel} Entry</DialogTitle>
+            <DialogDescription>Add a manual {ledgerLabel.toLowerCase()} count. This will increase the KPI total.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="kpi-name">Lead Name</Label>
+              <Input id="kpi-name" placeholder="e.g. Sue Ashburn" value={addName} onChange={(e) => setAddName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="kpi-address">Property Address</Label>
+              <Input id="kpi-address" placeholder="e.g. 123 Main St" value={addAddress} onChange={(e) => setAddAddress(e.target.value)} />
             </div>
           </div>
-        );
-      })}
-    </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddModalOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!kpi.date) return;
+                addKpiMutation.mutate({
+                  date: kpi.date,
+                  kpiType: ledgerType,
+                  contactName: addName || undefined,
+                  propertyAddress: addAddress || undefined,
+                });
+              }}
+              disabled={addKpiMutation.isPending}
+            >
+              {addKpiMutation.isPending ? "Adding..." : "Confirm Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteConfirmId !== null} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove Entry</DialogTitle>
+            <DialogDescription>Are you sure you want to remove this count? This will decrease the KPI total.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteConfirmId !== null) {
+                  deleteKpiMutation.mutate({ entryId: deleteConfirmId });
+                }
+              }}
+              disabled={deleteKpiMutation.isPending}
+            >
+              {deleteKpiMutation.isPending ? "Removing..." : "Confirm Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1043,7 +1155,7 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
   const handleCall = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (conv.contactPhone) {
-      window.open(`tel:${conv.contactPhone}`, "_self");
+      toast.info(`Call ${conv.contactName || 'contact'} at ${formatPhone(conv.contactPhone)} — use GHL dialer or phone`, { duration: 5000 });
     } else {
       toast.info("No phone number available");
     }
@@ -1058,10 +1170,19 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
     }
   };
 
+  const dismissMutation = trpc.taskCenter.dismissConversation.useMutation({
+    onSuccess: () => {
+      toast.success(`Dismissed ${conv.contactName || "conversation"}`);
+      setExpanded(false);
+    },
+    onError: (err) => {
+      toast.error("Failed to dismiss", { description: err.message });
+    },
+  });
+
   const handleDismiss = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpanded(false);
-    toast.success(`Dismissed ${conv.contactName || "conversation"}`);
+    dismissMutation.mutate({ conversationId: conv.conversationId });
   };
 
   return (
@@ -1105,7 +1226,19 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName }: { conv: any
               )}
               {conv.activitySummary && (
                 <span className="text-[9px] mt-0.5 truncate block" style={{ color: "oklch(0.65 0.15 250)" }}>
-                  {conv.activitySummary}
+                  {conv.activitySummary
+                    .split(" \u00B7 ")
+                    .filter((part: string) => {
+                      const lower = part.toLowerCase();
+                      // Hide raw tags (dialer, tn, hot, etc) and source labels
+                      if (lower.startsWith("source:")) return false;
+                      // Check if it looks like raw tags (comma-separated short words)
+                      const tagWords = lower.split(",").map(s => s.trim());
+                      const looksLikeTags = tagWords.length > 1 && tagWords.every(w => w.length < 20);
+                      if (looksLikeTags && tagWords.some(w => ["dialer", "tn", "hot", "cold", "warm", "dnc", "dnd"].includes(w))) return false;
+                      return true;
+                    })
+                    .join(" \u00B7 ")}
                 </span>
               )}
             </div>
@@ -1476,20 +1609,7 @@ function PriorityTaskRow({
         {/* AM/PM indicators — uses cached activity data from tRPC query cache */}
         <AmPmIndicatorFromCache contactId={task.contactId} fallbackAm={task.amCallMade || false} fallbackPm={task.pmCallMade || false} batchData={batchAmPm} />
 
-        {/* Priority score */}
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                className="shrink-0 text-xs font-bold tabular-nums px-1.5 py-0.5 rounded"
-                style={{ color: scoreColor, background: `${scoreColor}15` }}
-              >
-                {task.priorityScore || 0}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="top"><p>Priority score — higher = work first</p></TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {/* Priority score hidden per audit — tasks still sorted by score internally */}
 
         {/* Due label */}
         <div className="shrink-0 w-[90px] text-right">
@@ -3352,6 +3472,20 @@ export default function TaskCenter() {
 
   const totalTasks = filteredTasks.length;
   const overdueCount = useMemo(() => filteredTasks.filter((t: Task) => t.group === "overdue").length, [filteredTasks]);
+  const [showOverdueOnly, setShowOverdueOnly] = useState(false);
+  const TASKS_PER_PAGE = 50;
+  const [visibleCount, setVisibleCount] = useState(TASKS_PER_PAGE);
+
+  // Apply overdue filter and pagination
+  const displayTasks = useMemo(() => {
+    let tasks = filteredTasks;
+    if (showOverdueOnly) {
+      tasks = tasks.filter((t: Task) => t.group === "overdue");
+    }
+    return tasks;
+  }, [filteredTasks, showOverdueOnly]);
+  const paginatedTasks = useMemo(() => displayTasks.slice(0, visibleCount), [displayTasks, visibleCount]);
+  const hasMore = displayTasks.length > visibleCount;
 
   // Batch pre-fetch AM/PM status for all contacts on page load — single DB query
   const allContactIds = useMemo(() => {
@@ -3600,10 +3734,19 @@ export default function TaskCenter() {
               <span className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>{totalTasks} tasks</span>
             </div>
             {overdueCount > 0 && (
-              <div className="flex items-center gap-2 rounded-lg px-3 py-1.5" style={{ background: "oklch(0.25 0.03 25 / 0.4)", border: "1px solid var(--g-accent)" }}>
-                <AlertTriangle className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
-                <span className="text-sm font-medium" style={{ color: "var(--g-accent)" }}>{overdueCount} overdue</span>
-              </div>
+              <button
+                className="flex items-center gap-2 rounded-lg px-3 py-1.5 transition-all cursor-pointer"
+                style={{
+                  background: showOverdueOnly ? "var(--g-accent)" : "oklch(0.25 0.03 25 / 0.4)",
+                  border: "1px solid var(--g-accent)",
+                }}
+                onClick={() => { setShowOverdueOnly(!showOverdueOnly); setVisibleCount(TASKS_PER_PAGE); }}
+              >
+                <AlertTriangle className="h-3.5 w-3.5" style={{ color: showOverdueOnly ? "white" : "var(--g-accent)" }} />
+                <span className="text-sm font-medium" style={{ color: showOverdueOnly ? "white" : "var(--g-accent)" }}>
+                  {overdueCount} overdue {showOverdueOnly ? "(filtered)" : ""}
+                </span>
+              </button>
             )}
           </div>
 
@@ -3630,7 +3773,7 @@ export default function TaskCenter() {
           </div>
         ) : (
           <div className="space-y-1.5">
-            {filteredTasks.map((task: Task, index: number) => (
+            {paginatedTasks.map((task: Task, index: number) => (
               <PriorityTaskRow
                 key={task.id}
                 task={task}
@@ -3645,6 +3788,18 @@ export default function TaskCenter() {
                 batchAmPm={batchAmPm}
               />
             ))}
+            {hasMore && (
+              <div className="flex justify-center pt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVisibleCount(prev => prev + TASKS_PER_PAGE)}
+                  className="gap-2"
+                >
+                  View More ({displayTasks.length - visibleCount} remaining)
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

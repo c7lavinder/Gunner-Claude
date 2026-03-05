@@ -36,22 +36,18 @@ const getMenuItems = (
 
   if (isLeadGenerator) {
     return [
-      { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+      { icon: LayoutDashboard, label: "Day Hub", path: "/tasks" },
       { icon: Phone, label: "Calls", path: "/calls" },
       { icon: BookOpen, label: "Training", path: "/training" },
     ];
   }
 
-  const items = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+  const items: { icon: any; label: string; path: string }[] = [
+    { icon: LayoutDashboard, label: "Day Hub", path: "/tasks" },
     { icon: Phone, label: "Calls", path: "/calls" },
-    // Analytics hidden per user request
   ];
 
   const isDispoManager = teamRole === 'dispo_manager';
-  if (isAdmin || isSuperAdmin || isDispoManager) {
-    items.push({ icon: ClipboardList, label: "Day Hub", path: "/tasks" });
-  }
   if (isAdmin || isSuperAdmin || isDispoManager) {
     items.push({ icon: Warehouse, label: "Inventory", path: "/inventory" });
   }
@@ -246,7 +242,7 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
           {/* Brand */}
           <div
             className="flex items-center gap-3 cursor-pointer group"
-            onClick={() => setLocation('/dashboard')}
+            onClick={() => setLocation('/tasks')}
           >
             <img
               src="https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/gunner-logo-small-transparent_1ea33474.png"
@@ -261,7 +257,7 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
             <div className="flex items-center gap-1">
               {menuItems.map((item) => {
                 const isActive = location === item.path ||
-                  (item.path !== '/dashboard' && location.startsWith(item.path));
+                  (item.path !== '/tasks' && location.startsWith(item.path));
                 return (
                   <button
                     key={item.path}
@@ -430,7 +426,7 @@ function TopNavBar({ user, isDemo }: { user: any; isDemo: boolean }) {
         >
           {menuItems.map((item) => {
             const isActive = location === item.path ||
-              (item.path !== '/dashboard' && location.startsWith(item.path));
+              (item.path !== '/tasks' && location.startsWith(item.path));
             return (
               <button
                 key={item.path}
