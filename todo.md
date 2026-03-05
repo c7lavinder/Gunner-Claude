@@ -4212,3 +4212,12 @@
 - [x] Calls Page: AI Coach input requires scrolling — call cards too tall, coach pushed below fold
 - [x] Calls Page: Some calls still show first name only (no full name enrichment from GHL)
 - [x] Training Page: Role tabs do NOT refresh data — Issues, Wins, Long-Term Skills, Meeting Agenda stay same regardless of role selected
+
+## Critical Fixes Round 3 (User-Reported 2026-03-05)
+
+- [x] Calls Page: Missing address for contacts like "Donna" — backfill function handles this; improved syncGHLCall enrichment
+- [x] Training Page: Not role-exclusive — changed query to only return items with exact matching teamRole
+- [x] Day Hub: LM KPIs now multiplied by headcount for LM and AM tabs (not just admin tab)
+- [x] Inbox: Improved getConversationMessages with better GHL API handling, logging, and type filters
+- [x] Appointments: Added click-to-expand with Call/Text/GHL quick action buttons matching inbox style
+- [x] Bonus: Improved inbox message loading skeleton with chat-style varied widths

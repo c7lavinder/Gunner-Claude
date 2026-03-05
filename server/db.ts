@@ -1466,12 +1466,9 @@ export async function getTeamTrainingItems(options?: {
       conditions.push(eq(teamTrainingItems.status, options.status));
     }
     
-    // Include items with this specific role OR items with NULL teamRole (applicable to all roles)
+    // Role-exclusive filtering: only return items specifically tagged for this role
     conditions.push(
-      or(
-        eq(teamTrainingItems.teamRole, options.teamRole),
-        isNull(teamTrainingItems.teamRole)
-      )!
+      eq(teamTrainingItems.teamRole, options.teamRole)
     );
     
     let query = db

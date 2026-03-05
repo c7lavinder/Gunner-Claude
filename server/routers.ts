@@ -7497,25 +7497,33 @@ selectedTimezone: { type: "string" },
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         const { getCredentialsForTenant, ghlFetch } = await import("./ghlActions");
         const creds = await getCredentialsForTenant(ctx.user.tenantId);
-        if (!creds) throw new TRPCError({ code: "NOT_FOUND", message: "GHL not connected" });
+        if (!creds) {
+          console.warn("[getConversationMessages] No GHL credentials for tenant", ctx.user.tenantId);
+          return { messages: [], error: "GHL not connected" };
+        }
         try {
+          // GHL v2 API: GET /conversations/:id/messages
           const data = await ghlFetch(
             creds,
-            `/conversations/${input.conversationId}/messages?limit=10`
+            `/conversations/${input.conversationId}/messages?limit=10&type=TYPE_SMS,TYPE_CALL,TYPE_EMAIL`
           );
-          const messages = (data?.messages || data?.data?.messages || []).map((msg: any) => ({
+          console.log(`[getConversationMessages] Raw response keys:`, Object.keys(data || {}), `for conv ${input.conversationId}`);
+          // GHL returns messages in data.messages (v2) or data.data.messages
+          const rawMessages = data?.messages || data?.data?.messages || (data?.lastMessageBody ? [{ body: data.lastMessageBody, direction: "inbound" }] : []);
+          const messages = rawMessages.map((msg: any) => ({
             id: msg.id || "",
-            body: msg.body || msg.message || "",
+            body: msg.body || msg.message || msg.text || "",
             direction: msg.direction || (msg.type === 1 ? "inbound" : "outbound"),
-            messageType: msg.messageType || (msg.type === 1 ? "TYPE_SMS" : "TYPE_SMS"),
+            messageType: msg.messageType || msg.type || "TYPE_SMS",
             dateAdded: msg.dateAdded || msg.createdAt || "",
           }));
           // Reverse so oldest is first (GHL returns newest first)
           messages.reverse();
+          console.log(`[getConversationMessages] Returning ${messages.length} messages for conv ${input.conversationId}`);
           return { messages };
         } catch (err: any) {
-          console.error("[getConversationMessages] Error:", err.message);
-          return { messages: [] };
+          console.error("[getConversationMessages] Error:", err.message, "for conv", input.conversationId);
+          return { messages: [], error: err.message };
         }
       }),
   }),

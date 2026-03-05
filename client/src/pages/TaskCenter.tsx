@@ -238,18 +238,39 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
 
   // IMPORTANT: useMemo must be called before any early returns to satisfy React's Rules of Hooks (fix for error #310)
   const targets = useMemo(() => {
-    if (roleTab !== "admin" || !teamMembers || teamMembers.length === 0) {
+    if (!teamMembers || teamMembers.length === 0) {
       return ROLE_TAB_CONFIG[roleTab].kpiTargets;
     }
     const lmCount = teamMembers.filter(m => m.teamRole === "lead_manager" && m.ghlUserId).length || 1;
     const amCount = teamMembers.filter(m => m.teamRole === "acquisition_manager" && m.ghlUserId).length || 1;
-    return {
-      calls: (lmCount * LM_KPI_PER_PERSON.calls) + (amCount * AM_KPI_PER_PERSON.calls),
-      convos: lmCount * LM_KPI_PER_PERSON.convos,
-      apts: lmCount * LM_KPI_PER_PERSON.apts,
-      offers: amCount * AM_KPI_PER_PERSON.offers,
-      contracts: amCount * AM_KPI_PER_PERSON.contracts,
-    };
+    if (roleTab === "admin") {
+      return {
+        calls: (lmCount * LM_KPI_PER_PERSON.calls) + (amCount * AM_KPI_PER_PERSON.calls),
+        convos: lmCount * LM_KPI_PER_PERSON.convos,
+        apts: lmCount * LM_KPI_PER_PERSON.apts,
+        offers: amCount * AM_KPI_PER_PERSON.offers,
+        contracts: amCount * AM_KPI_PER_PERSON.contracts,
+      };
+    }
+    if (roleTab === "lm") {
+      return {
+        calls: lmCount * LM_KPI_PER_PERSON.calls,
+        convos: lmCount * LM_KPI_PER_PERSON.convos,
+        apts: lmCount * LM_KPI_PER_PERSON.apts,
+        offers: lmCount * LM_KPI_PER_PERSON.offers,
+        contracts: lmCount * LM_KPI_PER_PERSON.contracts,
+      };
+    }
+    if (roleTab === "am") {
+      return {
+        calls: amCount * AM_KPI_PER_PERSON.calls,
+        convos: amCount * AM_KPI_PER_PERSON.convos,
+        apts: amCount * AM_KPI_PER_PERSON.apts,
+        offers: amCount * AM_KPI_PER_PERSON.offers,
+        contracts: amCount * AM_KPI_PER_PERSON.contracts,
+      };
+    }
+    return ROLE_TAB_CONFIG[roleTab].kpiTargets;
   }, [roleTab, teamMembers]);
 
   if (isLoading) {
@@ -818,6 +839,7 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
 function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersList }: { roleTab: RoleTab; roleFilteredGhlUserIds: string[] | null; teamMembers?: TeamMember[] }) {
   const [activeTab, setActiveTab] = useState<"unread" | "appointments">("unread");
   const [selectedConvoId, setSelectedConvoId] = useState<string | null>(null);
+  const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
 
   // ─── Inbox SMS Modal State ───
   const [inboxSmsOpen, setInboxSmsOpen] = useState(false);
@@ -1040,7 +1062,7 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
           ) : appointments && appointments.length > 0 ? (
             <div className="space-y-1.5">
               {appointments.map((apt) => (
-                <AppointmentItem key={apt.id} apt={apt} />
+                <AppointmentItem key={apt.id} apt={apt} onTextContact={handleTextContact} isSelected={selectedAptId === apt.id} onSelect={setSelectedAptId} />
               ))}
             </div>
           ) : (
@@ -1279,8 +1301,24 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
           {/* Recent messages */}
           <div className="rounded-md p-2 max-h-40 overflow-y-auto" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
             {messagesLoading ? (
-              <div className="space-y-1.5">
-                {[1,2,3].map(i => <Skeleton key={i} className="h-4 w-full rounded" />)}
+              <div className="space-y-2">
+                {/* Chat-style loading skeleton with varied widths */}
+                <div className="flex gap-1.5 items-start">
+                  <Skeleton className="h-3 w-8 rounded shrink-0" />
+                  <Skeleton className="h-3 w-3/4 rounded" />
+                </div>
+                <div className="flex gap-1.5 items-start">
+                  <Skeleton className="h-3 w-8 rounded shrink-0" />
+                  <Skeleton className="h-3 w-1/2 rounded" />
+                </div>
+                <div className="flex gap-1.5 items-start">
+                  <Skeleton className="h-3 w-8 rounded shrink-0" />
+                  <Skeleton className="h-3 w-2/3 rounded" />
+                </div>
+                <div className="flex gap-1.5 items-start">
+                  <Skeleton className="h-3 w-8 rounded shrink-0" />
+                  <Skeleton className="h-3 w-5/6 rounded" />
+                </div>
               </div>
             ) : messagesData?.messages && messagesData.messages.length > 0 ? (
               <div className="space-y-1.5">
@@ -1334,7 +1372,7 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
   );
 }
 
-function AppointmentItem({ apt }: { apt: any }) {
+function AppointmentItem({ apt, onTextContact, isSelected, onSelect }: { apt: any; onTextContact?: (contactId: string, contactName: string, contactPhone: string) => void; isSelected: boolean; onSelect: (id: string | null) => void }) {
   const startTime = new Date(apt.startTime);
   const endTime = new Date(apt.endTime);
   const timeStr = startTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
@@ -1346,12 +1384,13 @@ function AppointmentItem({ apt }: { apt: any }) {
 
   return (
     <div
-      className="rounded-lg px-3 py-2.5 transition-all"
+      className="rounded-lg px-3 py-2.5 transition-all cursor-pointer"
       style={{
-        background: isUpcoming ? "rgba(59,130,246,0.06)" : "var(--g-bg-card)",
-        border: isUpcoming ? "1px solid rgba(59,130,246,0.2)" : "1px solid var(--g-border-subtle)",
-        opacity: 1, // Keep past appointments fully visible
+        background: isSelected ? "rgba(59,130,246,0.10)" : isUpcoming ? "rgba(59,130,246,0.06)" : "var(--g-bg-card)",
+        border: isSelected ? "1px solid rgba(59,130,246,0.4)" : isUpcoming ? "1px solid rgba(59,130,246,0.2)" : "1px solid var(--g-border-subtle)",
+        opacity: 1,
       }}
+      onClick={() => onSelect(isSelected ? null : apt.id)}
     >
       {/* Top row: time range + status badge */}
       <div className="flex items-center justify-between mb-1.5">
@@ -1410,6 +1449,56 @@ function AppointmentItem({ apt }: { apt: any }) {
           </span>
         )}
       </div>
+      {/* Quick action buttons when selected */}
+      {isSelected && (
+        <div className="flex items-center gap-1.5 mt-2 pt-2" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2 gap-1"
+            style={{ borderColor: "#22c55e", color: "#22c55e" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (apt.contactPhone) {
+                toast.info(`Call ${apt.contactName || 'contact'} at ${apt.contactPhone} \u2014 use GHL dialer or phone`, { duration: 5000 });
+              } else {
+                toast.info("No phone number available");
+              }
+            }}
+          >
+            <Phone className="h-2.5 w-2.5" /> Call
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2 gap-1"
+            style={{ borderColor: "oklch(0.65 0.15 250)", color: "oklch(0.65 0.15 250)" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onTextContact && apt.contactId && apt.contactPhone) {
+                onTextContact(apt.contactId, apt.contactName || "Unknown", apt.contactPhone);
+              } else {
+                toast.info("No phone number available for texting");
+              }
+            }}
+          >
+            <MessageSquare className="h-2.5 w-2.5" /> Text
+          </Button>
+          {apt.ghlContactId && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] px-2 gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(`https://app.gohighlevel.com/v2/location/contacts/detail/${apt.ghlContactId}`, '_blank');
+              }}
+            >
+              <ExternalLink className="h-2.5 w-2.5" /> GHL
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
