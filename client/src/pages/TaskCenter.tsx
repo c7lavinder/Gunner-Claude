@@ -1171,15 +1171,88 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
   );
 }
 
+// ─── CONVERSATION TIMESTAMP HELPERS ─────────────────────
+function formatMsgTime(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  if (isToday) return timeStr;
+  if (isYesterday) return `Yesterday ${timeStr}`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + `, ${timeStr}`;
+}
+
+function getDateLabel(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return "Today";
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
 function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, onSelect }: { conv: any; onTextContact: (contactId: string, contactName: string, contactPhone: string) => void; phoneToMemberName?: Map<string, string>; isSelected: boolean; onSelect: (id: string | null) => void }) {
   const memberName = phoneToMemberName && conv.teamPhone ? phoneToMemberName.get(conv.teamPhone) : undefined;
   const expanded = isSelected;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [replyText, setReplyText] = useState("");
+  const [isRead, setIsRead] = useState(false);
+  const [optimisticMessages, setOptimisticMessages] = useState<any[]>([]);
 
-  // Fetch last 10 messages when expanded
-  const { data: messagesData, isLoading: messagesLoading } = (trpc.taskCenter as any).getConversationMessages.useQuery(
+  // Fetch last 50 messages when expanded
+  const { data: messagesData, isLoading: messagesLoading, isError: messagesError, refetch: refetchMessages } = (trpc.taskCenter as any).getConversationMessages.useQuery(
     { conversationId: conv.conversationId },
-    { enabled: expanded }
+    { enabled: expanded, staleTime: 5 * 60 * 1000 }
   );
+
+  // Send SMS mutation (reuse existing sendSms)
+  const sendSmsMutation = (trpc.taskCenter as any).sendSms.useMutation({
+    onSuccess: () => {
+      refetchMessages();
+    },
+    onError: (err: any) => {
+      // Remove optimistic message on failure
+      setOptimisticMessages((prev) => prev.slice(0, -1));
+      toast.error("Failed to send", { description: err.message });
+    },
+  });
+
+  // Auto-scroll to bottom when messages load or new message sent
+  useEffect(() => {
+    if (expanded && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [expanded, messagesData, optimisticMessages]);
+
+  // Mark as read when expanded
+  useEffect(() => {
+    if (expanded && !isRead) {
+      setIsRead(true);
+    }
+  }, [expanded, isRead]);
+
+  const handleSendReply = (e: React.MouseEvent | React.FormEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!replyText.trim() || !conv.contactId) return;
+    // Optimistic update
+    setOptimisticMessages((prev) => [...prev, {
+      id: `opt-${Date.now()}`,
+      body: replyText.trim(),
+      direction: "outbound",
+      messageType: "TYPE_SMS",
+      dateAdded: new Date().toISOString(),
+      optimistic: true,
+    }]);
+    sendSmsMutation.mutate({ contactId: conv.contactId, message: replyText.trim() });
+    setReplyText("");
+  };
 
   const handleCall = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1187,15 +1260,6 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
       toast.info(`Call ${conv.contactName || 'contact'} at ${formatPhone(conv.contactPhone)} — use GHL dialer or phone`, { duration: 5000 });
     } else {
       toast.info("No phone number available");
-    }
-  };
-
-  const handleText = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (conv.contactId) {
-      onTextContact(conv.contactId, conv.contactName || "Unknown", conv.contactPhone || "");
-    } else {
-      toast.info("No contact ID available");
     }
   };
 
@@ -1214,10 +1278,22 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
     dismissMutation.mutate({ conversationId: conv.conversationId });
   };
 
+  // Combine real + optimistic messages
+  const allMessages = [...(messagesData?.messages || []), ...optimisticMessages];
+
+  // Group messages by date for date separators
+  const getDateKey = (dateStr: string) => {
+    if (!dateStr) return "";
+    return new Date(dateStr).toDateString();
+  };
+
   return (
     <div
       className="rounded-md px-2.5 py-2 transition-colors cursor-pointer"
-      style={{ background: expanded ? "var(--g-bg-card-hover)" : "transparent" }}
+      style={{
+        background: expanded ? "var(--g-bg-card-hover)" : "transparent",
+        opacity: isRead && !expanded ? 0.65 : 1,
+      }}
       onMouseEnter={(e) => { if (!expanded) e.currentTarget.style.background = "var(--g-bg-card-hover)"; }}
       onMouseLeave={(e) => { if (!expanded) e.currentTarget.style.background = "transparent"; }}
       onClick={() => onSelect(expanded ? null : conv.conversationId)}
@@ -1244,9 +1320,14 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <span className="text-xs font-semibold truncate block" style={{ color: "var(--g-text-primary)" }}>
-                {conv.contactName || "Unknown"}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
+                  {conv.contactName || "Unknown"}
+                </span>
+                {!isRead && (
+                  <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: "oklch(0.65 0.15 250)" }} />
+                )}
+              </div>
               {conv.contactAddress && (
                 <span className="text-[10px] flex items-center gap-1 mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
                   <MapPin className="h-2 w-2 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
@@ -1259,9 +1340,7 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
                     .split(" \u00B7 ")
                     .filter((part: string) => {
                       const lower = part.toLowerCase();
-                      // Hide raw tags and source labels
                       if (lower.startsWith("source:")) return false;
-                      // Only keep labeled items (Stage:, Added, DND) — anything else is likely raw tags
                       const isLabeled = /^(stage:|added |dnd$)/i.test(lower.trim());
                       if (!isLabeled) return false;
                       return true;
@@ -1288,84 +1367,204 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
               </span>
             </div>
           </div>
-          {conv.lastMessage && (
+          {conv.lastMessage && !expanded && (
             <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--g-text-secondary)" }}>
               {conv.lastMessage.length > 60 ? conv.lastMessage.slice(0, 60) + "..." : conv.lastMessage}
             </p>
           )}
         </div>
       </div>
-      {/* Messages panel + Quick actions on click */}
+
+      {/* ─── EXPANDED: Conversation Thread ─── */}
       {expanded && (
-        <div className="mt-2 ml-7 space-y-2">
-          {/* Recent messages */}
-          <div className="rounded-md p-2 max-h-40 overflow-y-auto" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-            {messagesLoading ? (
-              <div className="space-y-2">
-                {/* Chat-style loading skeleton with varied widths */}
-                <div className="flex gap-1.5 items-start">
-                  <Skeleton className="h-3 w-8 rounded shrink-0" />
-                  <Skeleton className="h-3 w-3/4 rounded" />
-                </div>
-                <div className="flex gap-1.5 items-start">
-                  <Skeleton className="h-3 w-8 rounded shrink-0" />
-                  <Skeleton className="h-3 w-1/2 rounded" />
-                </div>
-                <div className="flex gap-1.5 items-start">
-                  <Skeleton className="h-3 w-8 rounded shrink-0" />
-                  <Skeleton className="h-3 w-2/3 rounded" />
-                </div>
-                <div className="flex gap-1.5 items-start">
-                  <Skeleton className="h-3 w-8 rounded shrink-0" />
-                  <Skeleton className="h-3 w-5/6 rounded" />
-                </div>
-              </div>
-            ) : messagesData?.messages && messagesData.messages.length > 0 ? (
-              <div className="space-y-1.5">
-                {messagesData.messages.map((msg: any, idx: number) => (
-                  <div key={idx} className="flex gap-1.5">
-                    <span className={`text-[9px] font-semibold shrink-0 ${msg.direction === 'inbound' ? '' : ''}`} style={{ color: msg.direction === 'inbound' ? '#3b82f6' : 'var(--g-text-tertiary)' }}>
-                      {msg.direction === 'inbound' ? conv.contactName?.split(' ')[0] || 'Lead' : 'Team'}:
-                    </span>
-                    <span className="text-[10px] break-words" style={{ color: 'var(--g-text-secondary)' }}>
-                      {msg.body || (msg.messageType === 'TYPE_CALL' ? '📞 Call' : '(no text)')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[10px]" style={{ color: 'var(--g-text-tertiary)' }}>No recent messages</p>
+        <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+          {/* Conversation header */}
+          <div className="flex items-center gap-1.5 px-1">
+            <MessageSquare className="h-3 w-3" style={{ color: "oklch(0.65 0.15 250)" }} />
+            <span className="text-[10px] font-semibold" style={{ color: "var(--g-text-secondary)" }}>
+              Conversation with {conv.contactName?.split(' ')[0] || 'Contact'}
+            </span>
+            {conv.contactAddress && (
+              <span className="text-[9px] truncate" style={{ color: "var(--g-text-tertiary)" }}>
+                — {conv.contactAddress}
+              </span>
             )}
           </div>
+
+          {/* Message thread */}
+          <div
+            className="rounded-lg overflow-y-auto px-2.5 py-2"
+            style={{
+              background: "var(--g-bg-inset)",
+              border: "1px solid var(--g-border-subtle)",
+              maxHeight: "240px",
+              minHeight: "80px",
+            }}
+          >
+            {messagesLoading ? (
+              <div className="space-y-3 py-1">
+                {/* Loading skeleton: alternating left/right bubbles */}
+                <div className="flex justify-start"><Skeleton className="h-8 w-3/5 rounded-xl" /></div>
+                <div className="flex justify-end"><Skeleton className="h-8 w-1/2 rounded-xl" /></div>
+                <div className="flex justify-start"><Skeleton className="h-6 w-2/5 rounded-xl" /></div>
+                <div className="flex justify-end"><Skeleton className="h-10 w-3/5 rounded-xl" /></div>
+                <div className="flex justify-start"><Skeleton className="h-6 w-1/3 rounded-xl" /></div>
+              </div>
+            ) : messagesError || messagesData?.error ? (
+              <div className="flex flex-col items-center justify-center py-4 gap-2">
+                <AlertTriangle className="h-4 w-4" style={{ color: "#ef4444" }} />
+                <p className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>
+                  Couldn't load messages
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-[9px] px-2 gap-1"
+                  onClick={(e) => { e.stopPropagation(); refetchMessages(); }}
+                >
+                  <RefreshCw className="h-2.5 w-2.5" /> Tap to retry
+                </Button>
+              </div>
+            ) : allMessages.length > 0 ? (
+              <div className="space-y-1">
+                {allMessages.map((msg: any, idx: number) => {
+                  const isInbound = msg.direction === "inbound";
+                  const prevMsg = idx > 0 ? allMessages[idx - 1] : null;
+                  const showDateSep = !prevMsg || getDateKey(msg.dateAdded) !== getDateKey(prevMsg.dateAdded);
+                  const isCall = msg.messageType === "TYPE_CALL" || msg.messageType === "call";
+
+                  return (
+                    <div key={msg.id || idx}>
+                      {/* Date separator */}
+                      {showDateSep && msg.dateAdded && (
+                        <div className="flex items-center gap-2 my-2">
+                          <div className="flex-1 h-px" style={{ background: "var(--g-border-subtle)" }} />
+                          <span className="text-[8px] font-medium px-2" style={{ color: "var(--g-text-tertiary)" }}>
+                            {getDateLabel(msg.dateAdded)}
+                          </span>
+                          <div className="flex-1 h-px" style={{ background: "var(--g-border-subtle)" }} />
+                        </div>
+                      )}
+
+                      {/* Call indicator (centered) */}
+                      {isCall ? (
+                        <div className="flex justify-center my-1">
+                          <span className="text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1" style={{ background: "rgba(34,197,94,0.08)", color: "var(--g-text-tertiary)" }}>
+                            <Phone className="h-2 w-2" /> Call
+                            {msg.dateAdded && <span className="ml-1">{formatMsgTime(msg.dateAdded)}</span>}
+                          </span>
+                        </div>
+                      ) : (
+                        /* Message bubble */
+                        <div className={`flex ${isInbound ? "justify-start" : "justify-end"} mb-0.5`}>
+                          <div
+                            className="max-w-[80%] rounded-xl px-2.5 py-1.5"
+                            style={{
+                              background: isInbound
+                                ? "rgba(255,255,255,0.06)"
+                                : "rgba(59,130,246,0.15)",
+                              border: isInbound
+                                ? "1px solid var(--g-border-subtle)"
+                                : "1px solid rgba(59,130,246,0.25)",
+                              opacity: msg.optimistic ? 0.6 : 1,
+                            }}
+                          >
+                            {/* Sender name */}
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <span className="text-[8px] font-semibold" style={{ color: isInbound ? "oklch(0.7 0.12 250)" : "oklch(0.75 0.1 250)" }}>
+                                {isInbound ? (conv.contactName?.split(' ')[0] || 'Lead') : 'Team'}
+                              </span>
+                              {!isInbound && msg.userId === "automation" && (
+                                <span className="text-[7px] px-1 rounded" style={{ background: "rgba(139,92,246,0.15)", color: "oklch(0.7 0.15 290)" }}>Auto</span>
+                              )}
+                            </div>
+                            {/* Message body */}
+                            <p className="text-[10px] leading-relaxed break-words" style={{ color: "var(--g-text-primary)" }}>
+                              {msg.body || '(no text)'}
+                            </p>
+                            {/* Timestamp */}
+                            {msg.dateAdded && (
+                              <p className="text-[7px] mt-0.5 text-right" style={{ color: "var(--g-text-tertiary)" }}>
+                                {formatMsgTime(msg.dateAdded)}
+                                {msg.optimistic && " · Sending..."}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-4 gap-1">
+                <MessageSquare className="h-4 w-4" style={{ color: "var(--g-text-tertiary)", opacity: 0.5 }} />
+                <p className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>No conversation history yet</p>
+              </div>
+            )}
+          </div>
+
+          {/* Quick reply input */}
+          <form
+            className="flex items-center gap-1.5"
+            onSubmit={handleSendReply}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Input
+              className="h-7 text-[10px] flex-1"
+              placeholder="Type a reply..."
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              disabled={sendSmsMutation.isPending}
+              style={{ background: "var(--g-bg-inset)", borderColor: "var(--g-border-subtle)" }}
+            />
+            <Button
+              type="submit"
+              size="sm"
+              className="h-7 w-7 p-0 shrink-0"
+              disabled={!replyText.trim() || sendSmsMutation.isPending}
+              style={{ background: replyText.trim() ? "oklch(0.55 0.15 250)" : undefined }}
+            >
+              {sendSmsMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Send className="h-3 w-3" />
+              )}
+            </Button>
+          </form>
+
           {/* Action buttons */}
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-6 text-[10px] px-2 gap-1"
-            style={{ borderColor: "#22c55e", color: "#22c55e" }}
-            onClick={handleCall}
-          >
-            <Phone className="h-2.5 w-2.5" /> Call
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-6 text-[10px] px-2 gap-1"
-            style={{ borderColor: "oklch(0.65 0.15 250)", color: "oklch(0.65 0.15 250)" }}
-            onClick={handleText}
-          >
-            <MessageSquare className="h-2.5 w-2.5" /> Text
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-6 text-[10px] px-2 gap-1"
-            onClick={handleDismiss}
-          >
-            <X className="h-2.5 w-2.5" /> Dismiss
-          </Button>
-        </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] px-2 gap-1"
+              style={{ borderColor: "#22c55e", color: "#22c55e" }}
+              onClick={handleCall}
+            >
+              <Phone className="h-2.5 w-2.5" /> Call
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] px-2 gap-1"
+              onClick={handleDismiss}
+            >
+              <X className="h-2.5 w-2.5" /> Dismiss
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] px-2 gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(`https://app.gohighlevel.com/v2/location/${conv.locationId || ''}/conversations/${conv.conversationId}`, '_blank');
+              }}
+            >
+              <ExternalLink className="h-2.5 w-2.5" /> GHL
+            </Button>
+          </div>
         </div>
       )}
     </div>

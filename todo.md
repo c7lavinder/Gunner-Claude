@@ -4221,3 +4221,18 @@
 - [x] Inbox: Improved getConversationMessages with better GHL API handling, logging, and type filters
 - [x] Appointments: Added click-to-expand with Call/Text/GHL quick action buttons matching inbox style
 - [x] Bonus: Improved inbox message loading skeleton with chat-style varied widths
+
+## Inbox Conversation Expander (Spec 2026-03-05)
+
+- [x] Chat-style message thread with bubbles (inbound left/gray, outbound right/blue)
+- [x] Human-readable timestamps (same day, yesterday, older) with date separators
+- [x] Loading spinner while fetching conversation
+- [x] Error state with retry button if API fails
+- [x] Quick reply input with Send button (POST SMS via GHL)
+- [x] Optimistic update: sent message appears immediately in thread
+- [x] Accordion behavior (only one expanded at a time)
+- [x] Read/unread visual state tracking
+- [x] Responsive design (works on mobile)
+- [x] Fetch up to 50 most recent messages
+- [x] Auto-scroll to bottom on load
+- [x] Conversation header with contact name + address

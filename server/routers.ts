@@ -7505,9 +7505,9 @@ selectedTimezone: { type: "string" },
           // GHL v2 API: GET /conversations/:id/messages
           const data = await ghlFetch(
             creds,
-            `/conversations/${input.conversationId}/messages?limit=10&type=TYPE_SMS,TYPE_CALL,TYPE_EMAIL`
+            `/conversations/${input.conversationId}/messages?limit=50`
           );
-          console.log(`[getConversationMessages] Raw response keys:`, Object.keys(data || {}), `for conv ${input.conversationId}`);
+          console.log(`[getConversationMessages] Raw response keys:`, Object.keys(data || {}), `messages count:`, (data?.messages || data?.data?.messages || []).length, `for conv ${input.conversationId}`);
           // GHL returns messages in data.messages (v2) or data.data.messages
           const rawMessages = data?.messages || data?.data?.messages || (data?.lastMessageBody ? [{ body: data.lastMessageBody, direction: "inbound" }] : []);
           const messages = rawMessages.map((msg: any) => ({
@@ -7516,6 +7516,7 @@ selectedTimezone: { type: "string" },
             direction: msg.direction || (msg.type === 1 ? "inbound" : "outbound"),
             messageType: msg.messageType || msg.type || "TYPE_SMS",
             dateAdded: msg.dateAdded || msg.createdAt || "",
+            userId: msg.userId || "",
           }));
           // Reverse so oldest is first (GHL returns newest first)
           messages.reverse();
