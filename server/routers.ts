@@ -7863,7 +7863,39 @@ selectedTimezone: { type: "string" },
           performedByName: ctx.user.name || undefined,
         });
       }),
-
+    // ─── CSV BULK IMPORT ───
+    parseCsvPreview: protectedProcedure
+      .input(z.object({ csvText: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin" && ctx.user.isTenantAdmin !== "true") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only admins can import properties" });
+        }
+        const { parseCsvPreview } = await import("./inventory");
+        return parseCsvPreview(input.csvText);
+      }),
+    importFromCsv: protectedProcedure
+      .input(z.object({
+        csvText: z.string().min(1),
+        mapping: z.array(z.object({
+          csvColumn: z.string(),
+          mappedTo: z.string(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        if (ctx.user.role !== "admin" && ctx.user.isTenantAdmin !== "true") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only admins can import properties" });
+        }
+        const { importPropertiesFromCsv } = await import("./inventory");
+        return importPropertiesFromCsv(ctx.user.tenantId, ctx.user.id, input.csvText, input.mapping);
+      }),
+    getCsvTemplate: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getCsvTemplate } = await import("./inventory");
+        return { template: getCsvTemplate() };
+      }),
   }),
 });
 

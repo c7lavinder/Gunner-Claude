@@ -959,3 +959,315 @@ export async function getPropertyDetail(tenantId: number, propertyId: number) {
     daysOnMarket,
   };
 }
+
+// ─── CSV BULK IMPORT ───
+
+/** Known column aliases → canonical field name */
+const COLUMN_ALIASES: Record<string, string> = {
+  // Address
+  "address": "address", "street": "address", "street address": "address", "property address": "address", "prop address": "address",
+  // City
+  "city": "city", "town": "city",
+  // State
+  "state": "state", "st": "state",
+  // Zip
+  "zip": "zip", "zipcode": "zip", "zip code": "zip", "postal": "zip", "postal code": "zip",
+  // Property type
+  "property type": "propertyType", "type": "propertyType", "prop type": "propertyType",
+  // Beds
+  "beds": "beds", "bedrooms": "beds", "bed": "beds", "br": "beds",
+  // Baths
+  "baths": "baths", "bathrooms": "baths", "bath": "baths", "ba": "baths",
+  // Sqft
+  "sqft": "sqft", "sq ft": "sqft", "square feet": "sqft", "square footage": "sqft", "sf": "sqft", "living area": "sqft",
+  // Year built
+  "year built": "yearBuilt", "yearbuilt": "yearBuilt", "year": "yearBuilt", "built": "yearBuilt",
+  // Lot size
+  "lot size": "lotSize", "lotsize": "lotSize", "lot": "lotSize", "lot area": "lotSize", "acres": "lotSize",
+  // Contract price (what we paid / are paying the seller)
+  "contract price": "contractPrice", "purchase price": "contractPrice", "contract": "contractPrice", "pp": "contractPrice",
+  // Asking price (what we're asking buyers)
+  "asking price": "askingPrice", "asking": "askingPrice", "list price": "askingPrice", "price": "askingPrice",
+  // ARV
+  "arv": "arv", "after repair value": "arv", "after repair": "arv",
+  // Est repairs
+  "est repairs": "estRepairs", "repairs": "estRepairs", "repair estimate": "estRepairs", "rehab": "estRepairs", "rehab cost": "estRepairs", "repair cost": "estRepairs",
+  // Assignment fee
+  "assignment fee": "assignmentFee", "fee": "assignmentFee", "assignment": "assignmentFee", "spread": "assignmentFee",
+  // Seller
+  "seller name": "sellerName", "seller": "sellerName", "owner": "sellerName", "owner name": "sellerName",
+  "seller phone": "sellerPhone", "seller #": "sellerPhone", "owner phone": "sellerPhone",
+  // Status
+  "status": "status", "stage": "status", "deal status": "status", "pipeline stage": "status",
+  // Notes
+  "notes": "notes", "note": "notes", "comments": "notes", "description": "description",
+  // Occupancy
+  "occupancy": "occupancyStatus", "occupancy status": "occupancyStatus", "occupied": "occupancyStatus",
+  // Lockbox
+  "lockbox": "lockboxCode", "lockbox code": "lockboxCode", "lock code": "lockboxCode",
+  // Media
+  "media link": "mediaLink", "photos": "mediaLink", "photo link": "mediaLink", "drive link": "mediaLink", "google drive": "mediaLink",
+  // Market
+  "market": "market", "area": "market", "submarket": "market",
+  // Lead source
+  "lead source": "leadSource", "source": "leadSource",
+};
+
+/** Parse a dollar string like "$125,000" or "125000" into cents */
+function parseDollarsToCents(val: string): number | null {
+  if (!val || val.trim() === "") return null;
+  const cleaned = val.replace(/[$,\s]/g, "");
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return null;
+  return Math.round(num * 100);
+}
+
+/** Parse an integer from a string, stripping commas */
+function parseIntSafe(val: string): number | null {
+  if (!val || val.trim() === "") return null;
+  const cleaned = val.replace(/[,\s]/g, "");
+  const num = parseInt(cleaned, 10);
+  return isNaN(num) ? null : num;
+}
+
+/** Normalize a status string to match our enum */
+function normalizeStatus(val: string): string {
+  const lower = val.toLowerCase().trim();
+  const statusMap: Record<string, string> = {
+    "lead": "lead", "new": "lead", "new lead": "lead",
+    "qualified": "qualified",
+    "offer made": "offer_made", "offer": "offer_made", "offered": "offer_made",
+    "under contract": "under_contract", "uc": "under_contract", "contracted": "under_contract",
+    "marketing": "marketing", "marketed": "marketing", "dispo": "marketing",
+    "buyer negotiating": "buyer_negotiating", "negotiating": "buyer_negotiating",
+    "closing": "closing",
+    "closed": "closed", "sold": "closed",
+    "dead": "dead", "lost": "dead", "cancelled": "dead", "canceled": "dead",
+  };
+  return statusMap[lower] || "marketing"; // default to marketing for dispo imports
+}
+
+/** Normalize property type */
+function normalizePropertyType(val: string): "house" | "lot" | "land" | "multi_family" | "commercial" | "other" {
+  const lower = val.toLowerCase().trim();
+  if (lower.includes("house") || lower.includes("sfr") || lower.includes("single family") || lower.includes("sfh")) return "house";
+  if (lower.includes("multi") || lower.includes("duplex") || lower.includes("triplex") || lower.includes("fourplex") || lower.includes("mfr")) return "multi_family";
+  if (lower.includes("commercial") || lower.includes("comm")) return "commercial";
+  if (lower.includes("lot")) return "lot";
+  if (lower.includes("land") || lower.includes("vacant")) return "land";
+  return "house"; // default
+}
+
+export interface CsvColumnMapping {
+  csvColumn: string;
+  mappedTo: string; // canonical field name or "skip"
+}
+
+export interface CsvImportPreview {
+  headers: string[];
+  autoMapping: CsvColumnMapping[];
+  sampleRows: Record<string, string>[];
+  totalRows: number;
+}
+
+/**
+ * Parse CSV text and return a preview with auto-detected column mappings.
+ */
+export function parseCsvPreview(csvText: string): CsvImportPreview {
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim() !== "");
+  if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
+
+  // Parse header
+  const headers = parseCsvLine(lines[0]);
+
+  // Auto-map columns
+  const autoMapping: CsvColumnMapping[] = headers.map(h => {
+    const normalized = h.toLowerCase().trim().replace(/[_\-]/g, " ");
+    const mapped = COLUMN_ALIASES[normalized] || "skip";
+    return { csvColumn: h, mappedTo: mapped };
+  });
+
+  // Parse sample rows (up to 5)
+  const sampleRows: Record<string, string>[] = [];
+  for (let i = 1; i < Math.min(lines.length, 6); i++) {
+    const values = parseCsvLine(lines[i]);
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = values[idx] || "";
+    });
+    sampleRows.push(row);
+  }
+
+  return {
+    headers,
+    autoMapping,
+    sampleRows,
+    totalRows: lines.length - 1,
+  };
+}
+
+/** Simple CSV line parser that handles quoted fields */
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+        current += '"';
+        i++; // skip escaped quote
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+export interface CsvImportResult {
+  imported: number;
+  skipped: number;
+  duplicates: number;
+  errors: string[];
+}
+
+/**
+ * Execute the CSV import with the user-confirmed column mapping.
+ */
+export async function importPropertiesFromCsv(
+  tenantId: number,
+  userId: number,
+  csvText: string,
+  mapping: CsvColumnMapping[],
+): Promise<CsvImportResult> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim() !== "");
+  if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
+
+  const headers = parseCsvLine(lines[0]);
+  const mappingLookup: Record<string, string> = {};
+  mapping.forEach(m => {
+    if (m.mappedTo !== "skip") {
+      mappingLookup[m.csvColumn] = m.mappedTo;
+    }
+  });
+
+  // Check that address is mapped (required)
+  const hasAddress = Object.values(mappingLookup).includes("address");
+  if (!hasAddress) throw new Error("Address column must be mapped for import");
+
+  // Get existing addresses for duplicate detection
+  const existing = await db.select({ address: dispoProperties.address })
+    .from(dispoProperties)
+    .where(eq(dispoProperties.tenantId, tenantId));
+  const existingAddresses = new Set(existing.map(e => e.address.toLowerCase().trim()));
+
+  const result: CsvImportResult = { imported: 0, skipped: 0, duplicates: 0, errors: [] };
+  const dollarFields = ["contractPrice", "askingPrice", "arv", "estRepairs", "assignmentFee", "dispoAskingPrice"];
+  const intFields = ["beds", "sqft", "yearBuilt"];
+
+  for (let i = 1; i < lines.length; i++) {
+    try {
+      const values = parseCsvLine(lines[i]);
+      const raw: Record<string, string> = {};
+      headers.forEach((h, idx) => {
+        const field = mappingLookup[h];
+        if (field && values[idx]) {
+          raw[field] = values[idx].trim();
+        }
+      });
+
+      // Skip rows without address
+      if (!raw.address || raw.address === "") {
+        result.skipped++;
+        continue;
+      }
+
+      // Duplicate check
+      if (existingAddresses.has(raw.address.toLowerCase().trim())) {
+        result.duplicates++;
+        continue;
+      }
+
+      // Build the insert object
+      const insert: Record<string, any> = {
+        tenantId,
+        address: raw.address,
+        city: raw.city || "Unknown",
+        state: raw.state || "TN", // default to TN for Nashville market
+        zip: raw.zip || "",
+        addedByUserId: userId,
+        status: raw.status ? normalizeStatus(raw.status) : "marketing",
+      };
+
+      // Property type
+      if (raw.propertyType) insert.propertyType = normalizePropertyType(raw.propertyType);
+
+      // Dollar fields → cents
+      for (const field of dollarFields) {
+        if (raw[field]) {
+          const cents = parseDollarsToCents(raw[field]);
+          if (cents !== null) insert[field] = cents;
+        }
+      }
+
+      // Integer fields
+      for (const field of intFields) {
+        if (raw[field]) {
+          const num = parseIntSafe(raw[field]);
+          if (num !== null) insert[field] = num;
+        }
+      }
+
+      // String fields
+      if (raw.baths) insert.baths = raw.baths;
+      if (raw.lotSize) insert.lotSize = raw.lotSize;
+      if (raw.sellerName) insert.sellerName = raw.sellerName;
+      if (raw.sellerPhone) insert.sellerPhone = raw.sellerPhone;
+      if (raw.notes) insert.notes = raw.notes;
+      if (raw.description) insert.description = raw.description;
+      if (raw.occupancyStatus) insert.occupancyStatus = raw.occupancyStatus;
+      if (raw.lockboxCode) insert.lockboxCode = raw.lockboxCode;
+      if (raw.mediaLink) insert.mediaLink = raw.mediaLink;
+      if (raw.market) insert.market = raw.market;
+      if (raw.leadSource) insert.leadSource = raw.leadSource;
+
+      await db.insert(dispoProperties).values(insert as any);
+      existingAddresses.add(raw.address.toLowerCase().trim()); // prevent dupes within same batch
+      result.imported++;
+    } catch (err: any) {
+      result.errors.push(`Row ${i + 1}: ${err.message || "Unknown error"}`);
+    }
+  }
+
+  return result;
+}
+
+/** Generate a CSV template with all supported columns */
+export function getCsvTemplate(): string {
+  const headers = [
+    "Address", "City", "State", "Zip", "Property Type",
+    "Beds", "Baths", "Sqft", "Year Built", "Lot Size",
+    "Contract Price", "Asking Price", "ARV", "Est Repairs", "Assignment Fee",
+    "Seller Name", "Seller Phone", "Status", "Market",
+    "Lockbox Code", "Occupancy", "Notes", "Media Link", "Lead Source",
+  ];
+  const sampleRow = [
+    "123 Main St", "Nashville", "TN", "37201", "House",
+    "3", "2", "1500", "1985", "0.25 acres",
+    "$150,000", "$185,000", "$250,000", "$35,000", "$35,000",
+    "John Smith", "(615) 555-1234", "Marketing", "Nashville",
+    "1234", "Vacant", "Motivated seller, needs quick close", "https://drive.google.com/...", "Direct Mail",
+  ];
+  return headers.join(",") + "\n" + sampleRow.join(",") + "\n";
+}

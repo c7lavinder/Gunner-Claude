@@ -9,7 +9,7 @@ import {
   CheckCircle2, XCircle, AlertCircle, Flame, Thermometer, Snowflake,
   Package, Filter, ArrowUpDown, X, Star, Activity, FileText,
   Megaphone, UserPlus, Copy, ExternalLink, Hash, TrendingUp,
-  CircleDot, Zap, Target, BarChart3, ArrowRight, RefreshCw,
+  CircleDot, Zap, Target, BarChart3, ArrowRight, RefreshCw, Upload, Download, FileUp,
   ChevronRight, Bookmark, Tag, Globe, Layers, StickyNote, Bot, Sparkles, Loader2,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
@@ -1509,6 +1509,12 @@ export default function Inventory() {
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importStep, setImportStep] = useState<"upload" | "mapping" | "importing" | "done">("upload");
+  const [csvText, setCsvText] = useState("");
+  const [csvPreview, setCsvPreview] = useState<any>(null);
+  const [columnMapping, setColumnMapping] = useState<Array<{ csvColumn: string; mappedTo: string }>>([]);
+  const [importResult, setImportResult] = useState<any>(null);
 
   const { data, isLoading } = trpc.inventory.getProperties.useQuery(
     { status: statusFilter, search: search || undefined, limit: 100 },
@@ -1524,6 +1530,89 @@ export default function Inventory() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const parseCsvMutation = trpc.inventory.parseCsvPreview.useMutation({
+    onSuccess: (data) => {
+      setCsvPreview(data);
+      setColumnMapping(data.autoMapping);
+      setImportStep("mapping");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const importCsvMutation = trpc.inventory.importFromCsv.useMutation({
+    onSuccess: (result) => {
+      setImportResult(result);
+      setImportStep("done");
+      utils.inventory.getProperties.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".csv")) {
+      toast.error("Please upload a CSV file");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setCsvText(text);
+      parseCsvMutation.mutate({ csvText: text });
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = ["Address","City","State","Zip","Property Type","Beds","Baths","Sqft","Year Built","Lot Size","Contract Price","Asking Price","ARV","Est Repairs","Assignment Fee","Seller Name","Seller Phone","Status","Market","Lockbox Code","Occupancy","Notes","Media Link","Lead Source"];
+    const sample = ["123 Main St","Nashville","TN","37201","House","3","2","1500","1985","0.25 acres","$150,000","$185,000","$250,000","$35,000","$35,000","John Smith","(615) 555-1234","Marketing","Nashville","1234","Vacant","Motivated seller","https://drive.google.com/...","Direct Mail"];
+    const csv = headers.join(",") + "\n" + sample.join(",") + "\n";
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "gunner-property-import-template.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const resetImport = () => {
+    setImportOpen(false);
+    setImportStep("upload");
+    setCsvText("");
+    setCsvPreview(null);
+    setColumnMapping([]);
+    setImportResult(null);
+  };
+
+  const FIELD_OPTIONS = [
+    { value: "skip", label: "— Skip —" },
+    { value: "address", label: "Address" },
+    { value: "city", label: "City" },
+    { value: "state", label: "State" },
+    { value: "zip", label: "Zip" },
+    { value: "propertyType", label: "Property Type" },
+    { value: "beds", label: "Beds" },
+    { value: "baths", label: "Baths" },
+    { value: "sqft", label: "Sqft" },
+    { value: "yearBuilt", label: "Year Built" },
+    { value: "lotSize", label: "Lot Size" },
+    { value: "contractPrice", label: "Contract Price" },
+    { value: "askingPrice", label: "Asking Price" },
+    { value: "arv", label: "ARV" },
+    { value: "estRepairs", label: "Est Repairs" },
+    { value: "assignmentFee", label: "Assignment Fee" },
+    { value: "sellerName", label: "Seller Name" },
+    { value: "sellerPhone", label: "Seller Phone" },
+    { value: "status", label: "Status" },
+    { value: "market", label: "Market" },
+    { value: "lockboxCode", label: "Lockbox Code" },
+    { value: "occupancyStatus", label: "Occupancy" },
+    { value: "notes", label: "Notes" },
+    { value: "description", label: "Description" },
+    { value: "mediaLink", label: "Media Link" },
+    { value: "leadSource", label: "Lead Source" },
+  ];
 
   const deleteMutation = trpc.inventory.deleteProperty.useMutation({
     onSuccess: () => {
@@ -1559,9 +1648,17 @@ export default function Inventory() {
             {total} {total === 1 ? "property" : "properties"} in inventory
           </p>
         </div>
-        <Button onClick={() => setAddOpen(true)} size="sm" style={{ background: "var(--g-accent)", color: "#fff" }}>
-          <Plus className="h-4 w-4 mr-1" /> Add Property
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleDownloadTemplate} size="sm" variant="outline" className="text-xs">
+            <Download className="h-3.5 w-3.5 mr-1" /> Template
+          </Button>
+          <Button onClick={() => setImportOpen(true)} size="sm" variant="outline" className="text-xs">
+            <Upload className="h-3.5 w-3.5 mr-1" /> Import CSV
+          </Button>
+          <Button onClick={() => setAddOpen(true)} size="sm" style={{ background: "var(--g-accent)", color: "#fff" }}>
+            <Plus className="h-4 w-4 mr-1" /> Add Property
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -1669,6 +1766,161 @@ export default function Inventory() {
           isSaving={createMutation.isPending}
         />
       )}
+
+      {/* CSV Import Dialog */}
+      <Dialog open={importOpen} onOpenChange={(open) => { if (!open) resetImport(); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" style={{ background: "var(--g-bg-surface)" }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: "var(--g-text-primary)" }}>
+              <FileUp className="h-5 w-5 inline mr-2" style={{ color: "var(--g-accent)" }} />
+              {importStep === "upload" ? "Import Properties from CSV" :
+               importStep === "mapping" ? "Map Columns" :
+               importStep === "importing" ? "Importing..." : "Import Complete"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {importStep === "upload" && (
+            <div className="space-y-4">
+              <div
+                className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:border-opacity-60 transition-all"
+                style={{ borderColor: "var(--g-border-subtle)" }}
+                onClick={() => document.getElementById("csv-file-input")?.click()}
+              >
+                <Upload className="h-10 w-10 mx-auto mb-3" style={{ color: "var(--g-text-tertiary)" }} />
+                <p className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>Click to upload CSV file</p>
+                <p className="text-xs mt-1" style={{ color: "var(--g-text-tertiary)" }}>or drag and drop</p>
+                <input id="csv-file-input" type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+              </div>
+              {parseCsvMutation.isPending && (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--g-accent)" }} />
+                  <span className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Parsing CSV...</span>
+                </div>
+              )}
+              <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                Need a template? Click the "Template" button in the header to download one with all supported columns.
+              </p>
+            </div>
+          )}
+
+          {importStep === "mapping" && csvPreview && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+                  <strong>{csvPreview.totalRows}</strong> rows found. Map your CSV columns to property fields:
+                </p>
+                <Badge variant="outline" className="text-xs">
+                  {columnMapping.filter((m: any) => m.mappedTo !== "skip").length} mapped
+                </Badge>
+              </div>
+
+              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--g-border-subtle)" }}>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ background: "var(--g-bg-elevated)" }}>
+                      <th className="text-left px-3 py-2 font-medium" style={{ color: "var(--g-text-secondary)" }}>CSV Column</th>
+                      <th className="text-left px-3 py-2 font-medium" style={{ color: "var(--g-text-secondary)" }}>Sample Data</th>
+                      <th className="text-left px-3 py-2 font-medium" style={{ color: "var(--g-text-secondary)" }}>Map To</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {columnMapping.map((m: any, idx: number) => (
+                      <tr key={idx} style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
+                        <td className="px-3 py-2 font-mono" style={{ color: "var(--g-text-primary)" }}>{m.csvColumn}</td>
+                        <td className="px-3 py-2" style={{ color: "var(--g-text-tertiary)" }}>
+                          {csvPreview.sampleRows[0]?.[m.csvColumn] || "—"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={m.mappedTo}
+                            onChange={(e) => {
+                              const updated = [...columnMapping];
+                              updated[idx] = { ...updated[idx], mappedTo: e.target.value };
+                              setColumnMapping(updated);
+                            }}
+                            className="w-full px-2 py-1 rounded text-xs"
+                            style={{
+                              background: "var(--g-bg-base)",
+                              color: m.mappedTo === "skip" ? "var(--g-text-tertiary)" : "var(--g-text-primary)",
+                              border: "1px solid var(--g-border-subtle)",
+                            }}
+                          >
+                            {FIELD_OPTIONS.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {!columnMapping.some((m: any) => m.mappedTo === "address") && (
+                <p className="text-xs font-medium" style={{ color: "#ef4444" }}>
+                  ⚠ Address column must be mapped to import properties
+                </p>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={resetImport}>Cancel</Button>
+                <Button
+                  onClick={() => {
+                    setImportStep("importing");
+                    importCsvMutation.mutate({ csvText, mapping: columnMapping });
+                  }}
+                  disabled={!columnMapping.some((m: any) => m.mappedTo === "address") || importCsvMutation.isPending}
+                  style={{ background: "var(--g-accent)", color: "#fff" }}
+                >
+                  Import {csvPreview.totalRows} Properties
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {importStep === "importing" && (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin mb-3" style={{ color: "var(--g-accent)" }} />
+              <p className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>Importing properties...</p>
+              <p className="text-xs mt-1" style={{ color: "var(--g-text-tertiary)" }}>This may take a moment for large files</p>
+            </div>
+          )}
+
+          {importStep === "done" && importResult && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg p-4 text-center" style={{ background: "var(--g-bg-elevated)" }}>
+                  <p className="text-2xl font-bold" style={{ color: "#22c55e" }}>{importResult.imported}</p>
+                  <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Imported</p>
+                </div>
+                <div className="rounded-lg p-4 text-center" style={{ background: "var(--g-bg-elevated)" }}>
+                  <p className="text-2xl font-bold" style={{ color: "#f59e0b" }}>{importResult.duplicates}</p>
+                  <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Duplicates</p>
+                </div>
+                <div className="rounded-lg p-4 text-center" style={{ background: "var(--g-bg-elevated)" }}>
+                  <p className="text-2xl font-bold" style={{ color: "var(--g-text-tertiary)" }}>{importResult.skipped}</p>
+                  <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Skipped</p>
+                </div>
+              </div>
+              {importResult.errors.length > 0 && (
+                <div className="rounded-lg p-3" style={{ background: "#fef2f2", border: "1px solid #fecaca" }}>
+                  <p className="text-xs font-medium mb-1" style={{ color: "#dc2626" }}>Errors ({importResult.errors.length}):</p>
+                  <div className="max-h-24 overflow-y-auto">
+                    {importResult.errors.map((err: string, i: number) => (
+                      <p key={i} className="text-xs" style={{ color: "#dc2626" }}>{err}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button onClick={resetImport} style={{ background: "var(--g-accent)", color: "#fff" }}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
       <Dialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>

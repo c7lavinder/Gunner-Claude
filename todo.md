@@ -4316,3 +4316,13 @@
 - [x] Dispo leaderboard integration on existing leaderboard page + sidebar nav
 - [x] Dispo scoring and grades on Calls page (dispo_buyer_pitch call type + DISPO_MANAGER_RUBRIC)
 - [x] AI coaching tips per dispo call
+
+## Bulk Property Import from GHL (2026-03-05)
+
+- [x] Backend: CSV upload and parsing endpoint with validation
+- [x] Column auto-detection and mapping (address, city, state, zip, beds, baths, sqft, ARV, contract price, etc.)
+- [x] Duplicate detection by address to prevent re-importing
+- [x] Frontend: CSV upload dialog with column mapping preview and confirmation
+- [x] Import progress indicator with success/error counts
+- [x] Admin-only access for bulk import
+- [x] Downloadable CSV template with expected columns
