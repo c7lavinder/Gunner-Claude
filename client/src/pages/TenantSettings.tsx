@@ -63,7 +63,7 @@ export default function TenantSettings() {
   const [blApiKey, setBlApiKey] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
-  const [inviteTeamRole, setInviteTeamRole] = useState<'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator'>('lead_manager');
+  const [inviteTeamRole, setInviteTeamRole] = useState<'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator' | 'dispo_manager'>('lead_manager');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'starter' | 'growth' | 'scale'>('growth');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
@@ -674,7 +674,7 @@ export default function TenantSettings() {
                   onChange={(e) => setInviteEmail(e.target.value)}
                   className="flex-1 min-w-[200px]"
                 />
-                <Select value={inviteTeamRole} onValueChange={(v) => setInviteTeamRole(v as 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator')}>
+                <Select value={inviteTeamRole} onValueChange={(v) => setInviteTeamRole(v as 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator' | 'dispo_manager')}>
                   <SelectTrigger className="w-44">
                     <SelectValue placeholder="Team Role" />
                   </SelectTrigger>
@@ -683,6 +683,7 @@ export default function TenantSettings() {
                     <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
                     <SelectItem value="lead_manager">Lead Manager</SelectItem>
                     <SelectItem value="lead_generator">Lead Generator</SelectItem>
+                    <SelectItem value="dispo_manager">Disposition Manager</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'user')}>
@@ -2253,6 +2254,8 @@ export default function TenantSettings() {
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
                   <SelectItem value="lead_manager">Lead Manager</SelectItem>
+                  <SelectItem value="lead_generator">Lead Generator</SelectItem>
+                  <SelectItem value="dispo_manager">Disposition Manager</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2282,7 +2285,7 @@ export default function TenantSettings() {
                     updateUserRoleMutation.mutate({ 
                       userId: editingMember.id, 
                       role: editingMember.role as 'admin' | 'user',
-                      teamRole: editingMember.teamRole as 'admin' | 'acquisition_manager' | 'lead_manager' 
+                      teamRole: editingMember.teamRole as 'admin' | 'acquisition_manager' | 'lead_manager' | 'lead_generator' | 'dispo_manager' 
                     });
                     setEditingMember(null);
                   }
