@@ -636,44 +636,10 @@ export async function sendEmail(options: EmailOptions & { fromEmail?: string }):
     });
   }
   
-  // For user-facing emails, use Resend if configured
-  if (resend) {
-    try {
-      const { error } = await resend.emails.send({
-        from: options.fromEmail || FROM_EMAIL,
-        to: options.to,
-        subject,
-        html,
-        text,
-      });
-      
-      if (error) {
-        console.error('[EmailService] Resend error:', error);
-        // Fall back to owner notification
-        return notifyOwner({
-          title: `[EMAIL FAILED] ${subject}`,
-          content: `Failed to send to: ${options.to}\nError: ${error.message}\n\n${text}`
-        });
-      }
-      
-      console.log(`[EmailService] Email sent successfully to ${options.to}`);
-      return true;
-    } catch (err) {
-      console.error('[EmailService] Failed to send email:', err);
-      // Fall back to owner notification
-      return notifyOwner({
-        title: `[EMAIL FAILED] ${subject}`,
-        content: `Failed to send to: ${options.to}\nError: ${err}\n\n${text}`
-      });
-    }
-  } else {
-    // No Resend configured - notify owner instead
-    console.warn('[EmailService] Resend not configured, sending to owner instead');
-    return notifyOwner({
-      title: `[NO EMAIL SERVICE] ${subject}`,
-      content: `Would send to: ${options.to}\n\n${text}`
-    });
-  }
+  // ⛔ ALL EMAIL SENDING DISABLED — Resend client is null, no fallback to owner notifications
+  // This prevents flooding the owner's inbox with [EMAIL FAILED] notifications
+  console.log(`[EmailService] ⛔ Email sending disabled. Would have sent "${subject}" to ${options.to}`);
+  return false;
 }
 
 /**
