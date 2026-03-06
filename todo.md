@@ -4377,3 +4377,4 @@
 - [x] Add duplicate address detection in webhook property auto-import
 - [x] Add pipeline stage cache (10min TTL) to avoid excessive GHL API calls
 - [x] Add detailed [PropertySync] logging for debugging webhook property flow
+- [x] Fix stage name matching: GHL sends "New Lead (1)" not "New Lead" — strip parenthetical counts before mapping

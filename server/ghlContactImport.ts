@@ -121,11 +121,16 @@ export function parseContactTags(tags: string[]): {
  * Case-insensitive matching.
  */
 function mapStageToPropertyStatus(stageName: string): string {
-  const lower = stageName.toLowerCase().trim();
+  // GHL stage names often have counts appended like "New Lead (1)" or "Hot Leads(2)"
+  const cleaned = stageName.replace(/\s*\(\d+\)\s*$/, '').trim();
+  const lower = cleaned.toLowerCase();
   const mapping: Record<string, string> = {
     "new lead": "lead",
+    "new leads": "lead",
     "warm lead": "apt_set",
+    "warm leads": "apt_set",
     "hot lead": "apt_set",
+    "hot leads": "apt_set",
     "appointment set": "apt_set",
     "apt set": "apt_set",
     "qualified": "apt_set",
