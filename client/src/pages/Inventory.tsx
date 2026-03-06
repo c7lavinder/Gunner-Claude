@@ -26,7 +26,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── TYPES ───
-type PropertyStatus = "lead" | "qualified" | "offer_made" | "under_contract" | "marketing" | "buyer_negotiating" | "closing" | "closed" | "dead" | "new" | "negotiating" | "sold";
+type PropertyStatus = "lead" | "apt_set" | "offer_made" | "under_contract" | "marketing" | "buyer_negotiating" | "closing" | "follow_up" | "closed" | "dead" | "new" | "negotiating" | "sold" | "qualified";
 type SendChannel = "sms" | "email" | "facebook" | "investor_base" | "other";
 type OfferStatus = "pending" | "accepted" | "rejected" | "countered" | "expired";
 type ShowingStatus = "scheduled" | "completed" | "cancelled" | "no_show";
@@ -36,12 +36,14 @@ type BuyerStatus = "matched" | "sent" | "interested" | "offered" | "passed" | "a
 // ─── CONSTANTS ───
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon?: string }> = {
   lead: { label: "Lead", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
-  qualified: { label: "Qualified", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
+  apt_set: { label: "Apt Set", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
+  qualified: { label: "Apt Set", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
   offer_made: { label: "Offer Made", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
   under_contract: { label: "Under Contract", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
   marketing: { label: "Marketing", color: "#8b5cf6", bg: "rgba(139,92,246,0.12)" },
   buyer_negotiating: { label: "Buyer Negotiating", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
   closing: { label: "Closing", color: "#14b8a6", bg: "rgba(20,184,166,0.12)" },
+  follow_up: { label: "Follow Up", color: "#a855f7", bg: "rgba(168,85,247,0.12)" },
   closed: { label: "Closed", color: "#10b981", bg: "rgba(16,185,129,0.12)" },
   dead: { label: "Dead", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
   new: { label: "Lead", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
@@ -1330,7 +1332,7 @@ function PropertyDetail({
                 <ChevronDown className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
               </SelectTrigger>
               <SelectContent>
-                {["lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "dead"].map((k) => (
+                {["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "follow_up", "closed", "dead"].map((k) => (
                   <SelectItem key={k} value={k}>{STATUS_CONFIG[k]?.label || k}</SelectItem>
                 ))}
               </SelectContent>
@@ -1673,7 +1675,7 @@ export default function Inventory() {
           />
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto">
-          {(["all", "lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "dead"] as const).map((s) => {
+          {(["all", "lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "follow_up", "closed", "dead"] as const).map((s) => {
             const cfg = s === "all" ? { label: "All", color: "var(--g-text-primary)", bg: "var(--g-bg-elevated)" } : STATUS_CONFIG[s];
             const isActive = statusFilter === s;
             return (

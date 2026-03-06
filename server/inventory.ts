@@ -152,7 +152,7 @@ export async function updateProperty(tenantId: number, propertyId: number, data:
       // Update milestone flags (only set to true, never back to false)
       updateData.stageChangedAt = new Date();
       const s = updateData.status;
-      const statusOrder = ["lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed"];
+      const statusOrder = ["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "follow_up", "closed"];
       const idx = statusOrder.indexOf(s);
       if (idx >= 1) updateData.aptEverSet = true;
       if (idx >= 2) updateData.offerEverMade = true;
@@ -160,7 +160,7 @@ export async function updateProperty(tenantId: number, propertyId: number, data:
         updateData.everUnderContract = true;
         if (!updateData.underContractAt) updateData.underContractAt = new Date();
       }
-      if (idx >= 7) {
+      if (idx >= 8) {
         updateData.everClosed = true;
         if (!updateData.soldAt) updateData.soldAt = new Date();
       }
@@ -1031,12 +1031,13 @@ function normalizeStatus(val: string): string {
   const lower = val.toLowerCase().trim();
   const statusMap: Record<string, string> = {
     "lead": "lead", "new": "lead", "new lead": "lead",
-    "qualified": "qualified",
+    "apt set": "apt_set", "apt_set": "apt_set", "appointment set": "apt_set", "qualified": "apt_set",
     "offer made": "offer_made", "offer": "offer_made", "offered": "offer_made",
     "under contract": "under_contract", "uc": "under_contract", "contracted": "under_contract",
     "marketing": "marketing", "marketed": "marketing", "dispo": "marketing",
     "buyer negotiating": "buyer_negotiating", "negotiating": "buyer_negotiating",
     "closing": "closing",
+    "follow up": "follow_up", "follow_up": "follow_up", "follow-up": "follow_up", "followup": "follow_up",
     "closed": "closed", "sold": "closed",
     "dead": "dead", "lost": "dead", "cancelled": "dead", "canceled": "dead",
   };

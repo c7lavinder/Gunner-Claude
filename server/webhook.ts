@@ -461,14 +461,19 @@ function mapStageToPropertyStatus(stageName: string): string | null {
   const lower = stageName.toLowerCase().trim();
   const mapping: Record<string, string> = {
     "new lead": "lead",
-    "warm lead": "qualified",
-    "hot lead": "qualified",
-    "appointment set": "qualified",
+    "warm lead": "apt_set",
+    "hot lead": "apt_set",
+    "appointment set": "apt_set",
+    "apt set": "apt_set",
+    "qualified": "apt_set",
     "offer made": "offer_made",
     "under contract": "under_contract",
     "marketing": "marketing",
     "buyer negotiating": "buyer_negotiating",
     "closing": "closing",
+    "follow up": "follow_up",
+    "follow-up": "follow_up",
+    "followup": "follow_up",
     "closed": "closed",
     "dead": "dead",
     "lost": "dead",
@@ -481,12 +486,12 @@ function mapStageToPropertyStatus(stageName: string): string | null {
  */
 function getMilestoneFlags(status: string): Record<string, boolean> {
   const flags: Record<string, boolean> = {};
-  const statusOrder = ["lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed"];
+  const statusOrder = ["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "follow_up", "closed"];
   const idx = statusOrder.indexOf(status);
-  if (idx >= 1) flags.aptEverSet = true; // qualified or beyond implies apt was set
+  if (idx >= 1) flags.aptEverSet = true; // apt_set or beyond implies apt was set
   if (idx >= 2) flags.offerEverMade = true;
   if (idx >= 3) flags.everUnderContract = true;
-  if (idx >= 7) flags.everClosed = true;
+  if (idx >= 8) flags.everClosed = true;
   return flags;
 }
 
