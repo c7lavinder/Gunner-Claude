@@ -624,27 +624,39 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
     { refetchInterval: 120000 }
   );
 
-  // Build phone numbers for dispo team members
-  const rolePhoneArray = useMemo(() => {
-    if (!teamMembersList) return null;
+  // Build phone numbers AND GHL user IDs for dispo team members
+  const { rolePhoneArray: dispoPhoneArray, roleGhlUserIds: dispoGhlUserIds } = useMemo(() => {
+    if (!teamMembersList) return { rolePhoneArray: null, roleGhlUserIds: null };
     const phones: string[] = [];
+    const ghlIds: string[] = [];
     for (const m of teamMembersList) {
       if (m.teamRole !== "dispo_manager") continue;
       if (m.lcPhones) {
         try {
           const parsed = JSON.parse(m.lcPhones) as string[];
-          parsed.forEach(p => phones.push(p));
+          parsed.forEach(p => { if (!phones.includes(p)) phones.push(p); });
         } catch { /* skip */ }
       }
-      // Fallback: also include lcPhone (singular)
       if (m.lcPhone && !phones.includes(m.lcPhone)) phones.push(m.lcPhone);
+      if (m.ghlUserId && !ghlIds.includes(m.ghlUserId)) ghlIds.push(m.ghlUserId);
     }
-    return phones.length > 0 ? phones : null;
+    return {
+      rolePhoneArray: phones.length > 0 ? phones : null,
+      roleGhlUserIds: ghlIds.length > 0 ? ghlIds : null,
+    };
   }, [teamMembersList]);
 
-  // Fetch inbox with phone filter — server filters by dispo phone numbers
+  // Fetch inbox with phone + GHL user ID filter — server filters by dispo phone numbers + assignedTo fallback
+  const dispoFilterInput = useMemo(() => {
+    if (!dispoPhoneArray && !dispoGhlUserIds) return undefined;
+    return {
+      ...(dispoPhoneArray ? { rolePhoneFilter: dispoPhoneArray } : {}),
+      ...(dispoGhlUserIds ? { roleGhlUserIds: dispoGhlUserIds } : {}),
+    };
+  }, [dispoPhoneArray, dispoGhlUserIds]);
+
   const { data: filteredUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
-    rolePhoneArray ? { rolePhoneFilter: rolePhoneArray } : undefined,
+    dispoFilterInput,
     { refetchInterval: 60000 }
   );
 
@@ -925,11 +937,12 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
     setInboxSmsOpen(true);
   };
 
-  // Build phone numbers for the selected role tab
-  const rolePhoneArray = useMemo(() => {
-    if (roleTab === "admin" || !teamMembersList) return null; // null = show all (admin)
+  // Build phone numbers AND GHL user IDs for the selected role tab
+  const { rolePhoneArray, roleGhlUserIds } = useMemo(() => {
+    if (roleTab === "admin" || !teamMembersList) return { rolePhoneArray: null, roleGhlUserIds: null };
     const allowedRoles = ROLE_TAB_CONFIG[roleTab].teamRoles;
     const phones: string[] = [];
+    const ghlIds: string[] = [];
     for (const m of teamMembersList) {
       if (!m.teamRole || !allowedRoles.includes(m.teamRole)) continue;
       if (m.lcPhones) {
@@ -939,13 +952,25 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
         } catch { /* skip */ }
       }
       if (m.lcPhone && !phones.includes(m.lcPhone)) phones.push(m.lcPhone);
+      if (m.ghlUserId && !ghlIds.includes(m.ghlUserId)) ghlIds.push(m.ghlUserId);
     }
-    return phones.length > 0 ? phones : null;
+    return {
+      rolePhoneArray: phones.length > 0 ? phones : null,
+      roleGhlUserIds: ghlIds.length > 0 ? ghlIds : null,
+    };
   }, [roleTab, teamMembersList]);
 
-  // Fetch unread conversations with server-side phone filtering for role tabs
+  // Fetch unread conversations with server-side phone + GHL user ID filtering
+  const roleFilterInput = useMemo(() => {
+    if (!rolePhoneArray && !roleGhlUserIds) return undefined;
+    return {
+      ...(rolePhoneArray ? { rolePhoneFilter: rolePhoneArray } : {}),
+      ...(roleGhlUserIds ? { roleGhlUserIds } : {}),
+    };
+  }, [rolePhoneArray, roleGhlUserIds]);
+
   const { data: allUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
-    rolePhoneArray ? { rolePhoneFilter: rolePhoneArray } : undefined,
+    roleFilterInput,
     { refetchInterval: 60000 }
   );
 
@@ -1229,6 +1254,7 @@ function getDateLabel(dateStr: string): string {
 function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, onSelect }: { conv: any; onTextContact: (contactId: string, contactName: string, contactPhone: string) => void; phoneToMemberName?: Map<string, string>; isSelected: boolean; onSelect: (id: string | null) => void }) {
   const memberName = phoneToMemberName && conv.teamPhone ? phoneToMemberName.get(conv.teamPhone) : undefined;
   const expanded = isSelected;
+  const itemRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [replyText, setReplyText] = useState("");
   const [isRead, setIsRead] = useState(false);
@@ -1252,10 +1278,22 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
     },
   });
 
-  // Auto-scroll to bottom when messages load or new message sent
+  // Scroll the expanded item into view in the parent container
+  useEffect(() => {
+    if (expanded && itemRef.current) {
+      // Small delay to let the DOM expand first
+      setTimeout(() => {
+        itemRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+  }, [expanded]);
+
+  // Auto-scroll to bottom of messages when messages load or new message sent
   useEffect(() => {
     if (expanded && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }, 200);
     }
   }, [expanded, messagesData, optimisticMessages]);
 
@@ -1318,6 +1356,7 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
 
   return (
     <div
+      ref={itemRef}
       className="rounded-md px-2.5 py-2 transition-colors cursor-pointer"
       style={{
         background: expanded ? "var(--g-bg-card-hover)" : "transparent",
@@ -3831,8 +3870,9 @@ export default function TaskCenter() {
     if (!data?.tasks) return [];
     let tasks = data.tasks as Task[];
 
-    // Apply role-based filtering
-    if (roleFilteredGhlUserIds !== null) {
+    // Apply role-based filtering (only for admins who see all tasks)
+    // Non-admin users already have tasks scoped by the backend to their own GHL user ID
+    if (isAdmin && roleFilteredGhlUserIds !== null && roleFilteredGhlUserIds.length > 0) {
       tasks = tasks.filter((t: Task) => roleFilteredGhlUserIds.includes(t.assignedTo));
     }
 

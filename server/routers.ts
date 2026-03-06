@@ -7371,6 +7371,7 @@ selectedTimezone: { type: "string" },
       .input(z.object({
         assignedToGhlUserId: z.string().optional(),
         rolePhoneFilter: z.array(z.string()).optional(),
+        roleGhlUserIds: z.array(z.string()).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
@@ -7378,29 +7379,46 @@ selectedTimezone: { type: "string" },
         const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin" || (ctx.user as any).isTenantAdmin === "true";
         let ghlUserId = input?.assignedToGhlUserId;
 
+        // For non-admin users: auto-scope to their own ghlUserId and phone numbers
+        let myPhones: string[] = [];
         if (!ghlUserId && !isAdmin) {
           const { getTeamMemberByUserId } = await import("./db");
           const myTeamMember = await getTeamMemberByUserId(ctx.user.id);
           if (myTeamMember?.ghlUserId) {
             ghlUserId = myTeamMember.ghlUserId;
-          } else {
-            // Non-admin with no GHL user ID: try phone-based filtering
-            if (!input?.rolePhoneFilter?.length) return [];
           }
+          // Collect this user's phone numbers for phone-based filtering
+          if (myTeamMember?.lcPhone) myPhones.push(myTeamMember.lcPhone);
+          if (myTeamMember?.lcPhones) {
+            try {
+              const parsed = JSON.parse(myTeamMember.lcPhones as string) as string[];
+              parsed.forEach(p => { if (!myPhones.includes(p)) myPhones.push(p); });
+            } catch { /* skip */ }
+          }
+          if (!ghlUserId && myPhones.length === 0) return []; // No way to identify this user
         }
 
         const { getUnreadConversations } = await import("./dayHub");
-        const conversations = await getUnreadConversations(ctx.user.tenantId, ghlUserId);
 
-        // If rolePhoneFilter is provided, filter server-side by teamPhone
-        if (input?.rolePhoneFilter && input.rolePhoneFilter.length > 0) {
-          const phoneSet = new Set(input.rolePhoneFilter);
+        // Determine phone + GHL user ID sets for filtering
+        const hasRoleFilter = input?.rolePhoneFilter && input.rolePhoneFilter.length > 0;
+        const hasMyPhones = myPhones.length > 0;
+
+        // For admin with role filter OR non-admin with phone numbers: fetch ALL conversations
+        // so we can filter by phone + assignedTo
+        const fetchGhlUserId = (hasRoleFilter || hasMyPhones) ? undefined : ghlUserId;
+        const conversations = await getUnreadConversations(ctx.user.tenantId, fetchGhlUserId);
+
+        // Server-side filtering by phone numbers + GHL user IDs
+        if (hasRoleFilter || hasMyPhones) {
+          const phoneSet = new Set([...(input?.rolePhoneFilter || []), ...myPhones]);
+          const ghlUserIdSet = new Set(input?.roleGhlUserIds || []);
+          if (ghlUserId) ghlUserIdSet.add(ghlUserId);
           return conversations.filter(c => {
             // Primary: match by teamPhone (the LC phone the lead contacted)
             if (c.teamPhone && phoneSet.has(c.teamPhone)) return true;
-            // Fallback: if teamPhone is empty but assignedTo matches a role's GHL user
-            // (only when ghlUserId filter was also passed)
-            if (!c.teamPhone && ghlUserId && c.assignedTo === ghlUserId) return true;
+            // Fallback: if teamPhone is empty, match by assignedTo against GHL user IDs
+            if (!c.teamPhone && c.assignedTo && ghlUserIdSet.size > 0 && ghlUserIdSet.has(c.assignedTo)) return true;
             return false;
           });
         }

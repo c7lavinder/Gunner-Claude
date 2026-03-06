@@ -4520,3 +4520,7 @@
 - [ ] Verify/fix #22 (stage permissions by role)
 - [x] Fix sync_status column mismatch in sync_log table (schema column mapping corrected to 'status')
 - [x] #2 - Dispo inbox now filters by role phone numbers (server-side + frontend). LM/AM/Dispo tabs only show conversations routed to that role's assigned phone numbers.
+- [x] Link Esteban's GHL User ID (BhVAeJjAfojeX9AJdqbf) in the database
+- [x] #3 - Dispo inbox now filters by role phone numbers + GHL user ID fallback. Non-admin users auto-scope by their own phones + ghlUserId.
+- [x] #5 - Scroll fix: expanded inbox items now scroll into view with smooth animation + messages scroll to bottom
+- [x] #7 - Team members now see their tasks — removed frontend role filtering for non-admin (backend already scopes). Also auto-scopes inbox by user's own phone + GHL ID.
