@@ -1509,7 +1509,7 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   lockboxCode: varchar("lockboxCode", { length: 50 }),
   occupancyStatus: mysqlEnum("occupancyStatus", ["vacant", "occupied", "tenant", "unknown"]).default("unknown"),
   // Deal Pipeline Status — expanded to cover full funnel
-  // Stages: lead → apt_set → offer_made → under_contract → marketing → buyer_negotiating → closing → follow_up → closed → dead
+  // Stages: lead → apt_set → offer_made → under_contract → marketing → buyer_negotiating → closing → closed → follow_up → dead
   status: varchar("status", { length: 50 }).default("lead").notNull(),
   // Media & Notes
   mediaLink: text("mediaLink"), // Google Drive or other link to photos/video

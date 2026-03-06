@@ -4372,3 +4372,4 @@
 ## Pipeline Stage Updates (2026-03-06)
 - [x] Rename "Qualified" to "Apt Set" across schema, frontend, and backend
 - [x] Add "Follow Up" stage before "Closed" in pipeline stages
+- [x] Move "Follow Up" stage after "Closed" (before "Dead") in pipeline order

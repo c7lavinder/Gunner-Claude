@@ -149,12 +149,12 @@ function mapStageToPropertyStatus(stageName: string): string {
  */
 function getMilestoneFlags(status: string): Record<string, boolean> {
   const flags: Record<string, boolean> = {};
-  const statusOrder = ["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "follow_up", "closed"];
+  const statusOrder = ["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up"];
   const idx = statusOrder.indexOf(status);
   if (idx >= 1) flags.aptEverSet = true;
   if (idx >= 2) flags.offerEverMade = true;
   if (idx >= 3) flags.everUnderContract = true;
-  if (idx >= 8) flags.everClosed = true;
+  if (idx >= 7) flags.everClosed = true;
   return flags;
 }
 
