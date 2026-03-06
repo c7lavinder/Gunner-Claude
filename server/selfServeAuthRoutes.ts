@@ -35,8 +35,13 @@ function getClientIp(req: Request): string {
   return req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip || 'unknown';
 }
 
-// Email/password signup — Turnstile + rate limit + spam filter
-router.post("/signup", async (req: Request, res: Response) => {
+// ⛔ SIGNUPS DISABLED — All new user creation blocked
+router.post("/signup", async (_req: Request, res: Response) => {
+  console.warn(`[Auth] ⛔ BLOCKED email signup attempt — signups disabled`);
+  res.status(403).json({ success: false, error: "Signups are currently disabled. Contact admin for access." });
+  return;
+  // Original code below disabled:
+  const req = _req;
   try {
     const { email, password, name, companyName, turnstileToken } = req.body;
     const clientIp = getClientIp(req);
@@ -78,8 +83,8 @@ router.post("/signup", async (req: Request, res: Response) => {
     let finalTenantId = result.tenantId!;
     let joinedExistingTenant = false;
     try {
-      const inviteResult = await checkAndAcceptPendingInvitation(result.userId!, email);
-      if (inviteResult) {
+      const inviteResult: any = await checkAndAcceptPendingInvitation(result.userId!, email);
+      if (inviteResult?.tenantId) {
         finalTenantId = inviteResult.tenantId;
         joinedExistingTenant = true;
       }
@@ -87,8 +92,8 @@ router.post("/signup", async (req: Request, res: Response) => {
 
     if (!joinedExistingTenant) {
       try {
-        const matchResult = await autoMatchTeamMember(result.userId!, name, email);
-        if (matchResult) {
+        const matchResult: any = await autoMatchTeamMember(result.userId!, name, email);
+        if (matchResult?.tenantId) {
           finalTenantId = matchResult.tenantId;
           joinedExistingTenant = true;
         }
@@ -319,8 +324,9 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     if (!result.success) { res.redirect(`/login?error=${encodeURIComponent(result.error || 'unknown_error')}`); return; }
 
     if (result.isNewUser) {
-      const googleData = encodeURIComponent(JSON.stringify({ googleId: userInfo.sub, email: userInfo.email, name: userInfo.name, picture: userInfo.picture }));
-      res.redirect(`/signup?google=${googleData}`);
+      // ⛔ SIGNUPS DISABLED — block new Google users
+      console.warn(`[Auth] ⛔ BLOCKED new Google signup: ${userInfo.email}`);
+      res.redirect(`/login?error=signups_disabled`);
       return;
     }
 
@@ -332,8 +338,13 @@ router.get("/google/callback", async (req: Request, res: Response) => {
   }
 });
 
-// Google complete signup — Turnstile + rate limit + spam filter
-router.post("/google/complete-signup", async (req: Request, res: Response) => {
+// ⛔ SIGNUPS DISABLED — Google complete signup blocked
+router.post("/google/complete-signup", async (_req: Request, res: Response) => {
+  console.warn(`[Auth] ⛔ BLOCKED Google complete-signup attempt — signups disabled`);
+  res.status(403).json({ success: false, error: "Signups are currently disabled. Contact admin for access." });
+  return;
+  // Original code below disabled:
+  const req = _req;
   try {
     const { googleId, email, name, picture, companyName, turnstileToken } = req.body;
     const clientIp = getClientIp(req);

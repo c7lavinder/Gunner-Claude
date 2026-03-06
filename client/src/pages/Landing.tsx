@@ -678,11 +678,7 @@ export default function Landing() {
                 ))}
               </div>
 
-              <Link href="/signup">
-                <Button className="bg-gradient-to-r from-[#c41e3a] to-[#a01830] hover:from-[#d42040] hover:to-[#b01e38] text-white rounded-xl gap-2 shadow-lg shadow-[#c41e3a]/20 hover:shadow-[#c41e3a]/30 transition-all">
-                  Try It Free <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+
             </div>
 
             <div className="relative group">
