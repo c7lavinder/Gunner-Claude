@@ -241,6 +241,7 @@ ${Object.entries(byTeamMember).map(([name, memberCalls]) => {
   const roleName = role === 'lead_manager' ? 'Lead Manager' : role === 'acquisition_manager' ? 'Acquisition Manager' : 'Lead Generator';
   return `
 ### ${name} (${roleName})
+- ⚠️ AVAILABLE CALL IDs FOR ${name}: [${memberCalls.map(c => c.id).join(', ')}] — YOU MUST USE THESE IDs IN sourceCallIds
 - Calls: ${memberCalls.length}
 - Average Score: ${avgScore.toFixed(1)}%
 - Common Strengths: ${Array.from(new Set(memberCalls.map(c => c.strengths).filter(Boolean))).slice(0, 3).join("; ")}
@@ -266,6 +267,8 @@ CRITICAL LIMITS:
 
 Every item MUST include a "teamRole" field set to one of: "lead_manager", "acquisition_manager", or "lead_generator".
 Every item MUST include a "teamMemberName" field (set to a specific team member name, or null for role-wide items).
+
+CRITICAL: For issues and wins, you MUST include "sourceCallIds" with at least 1-3 call IDs from the data above that support the insight. Use the exact numeric call IDs listed under each team member's "AVAILABLE CALL IDs" field. NEVER return an empty sourceCallIds array — always reference the specific calls that demonstrate the issue or win.
 
 TITLE FORMAT RULE: All titles MUST be 6 words or fewer. Be direct and punchy. Examples:
 - GOOD: "Weak Price Anchoring" (3 words)
@@ -341,7 +344,7 @@ Respond with a JSON object in this exact format:
                     teamMemberName: { type: ["string", "null"] },
                     sourceCallIds: { type: "array", items: { type: "number" } },
                   },
-                  required: ["title", "description", "priority", "teamRole"],
+                  required: ["title", "description", "priority", "teamRole", "teamMemberName", "sourceCallIds"],
                   additionalProperties: false,
                 },
               },
@@ -357,7 +360,7 @@ Respond with a JSON object in this exact format:
                     teamMemberName: { type: ["string", "null"] },
                     sourceCallIds: { type: "array", items: { type: "number" } },
                   },
-                  required: ["title", "description", "priority", "teamRole"],
+                  required: ["title", "description", "priority", "teamRole", "teamMemberName", "sourceCallIds"],
                   additionalProperties: false,
                 },
               },

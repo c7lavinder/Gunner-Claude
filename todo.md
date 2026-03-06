@@ -4528,3 +4528,10 @@
 - [x] #15-19: Property details — opportunitySource from GHL import + manual projectType/market fields
 - [x] #6 AI property research — DEFERRED per user
 - [x] Property-to-call linking → View in CRM button opens GHL contact page in new tab
+
+## Visual Audit Bug Fixes (2026-03-06)
+- [x] BUG: Training evidence links — sourceCallIds were empty; fixed LLM prompt + made sourceCallIds required in JSON schema
+- [x] BUG: Property detail fields (opportunitySource/projectType/market) — UI code correct, fields show when data exists
+- [x] BUG: Seller Callback retroactively updated to admin_callback via SQL
+- [x] BUG: LM/AM/DISPO task tabs — confirmed working (transient loading issue)
+- [x] BUG: Duplicate properties removed via SQL + fixed import race condition (Promise.all → sequential for loop with continue)

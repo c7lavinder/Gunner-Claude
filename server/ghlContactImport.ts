@@ -517,12 +517,12 @@ export async function runBulkImport(
     for (let i = 0; i < allOpportunities.length; i += BATCH_SIZE) {
       const batch = allOpportunities.slice(i, i + BATCH_SIZE);
 
-      await Promise.all(batch.map(async (opp) => {
+      for (const opp of batch) {
         try {
           if (!opp.contactId) {
             progress.skipped++;
             progress.processed++;
-            return;
+            continue;
           }
 
           // Resolve stage name → property status
@@ -531,7 +531,7 @@ export async function runBulkImport(
             // Unknown stage — skip
             progress.skipped++;
             progress.processed++;
-            return;
+            continue;
           }
 
           // Source from opportunity (not tags)
@@ -569,7 +569,7 @@ export async function runBulkImport(
               progress.skipped++;
               progress.processed++;
               progress.errors.push(`Could not fetch contact for opportunity ${opp.name || opp.id}`);
-              return;
+              continue;
             }
 
             // Resolve property address
@@ -579,14 +579,14 @@ export async function runBulkImport(
             if (!address || address === "Address Pending") {
               progress.skipped++;
               progress.processed++;
-              return;
+              continue;
             }
 
             // Duplicate address check
             if (existingAddresses.has(address.toLowerCase().trim())) {
               progress.skipped++;
               progress.processed++;
-              return;
+              continue;
             }
 
             // Insert new property
@@ -640,7 +640,7 @@ export async function runBulkImport(
           progress.processed++;
           progress.errors.push(`Error processing ${opp.name || opp.id}: ${error.message}`);
         }
-      }));
+      }
 
       // Update progress in memory
       importProgress.set(tenantId, { ...progress });
