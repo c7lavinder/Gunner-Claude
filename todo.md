@@ -4535,3 +4535,7 @@
 - [x] BUG: Seller Callback retroactively updated to admin_callback via SQL
 - [x] BUG: LM/AM/DISPO task tabs — confirmed working (transient loading issue)
 - [x] BUG: Duplicate properties removed via SQL + fixed import race condition (Promise.all → sequential for loop with continue)
+
+## Property Improvements (2026-03-06)
+- [ ] Add unique constraint on dispo_properties(tenantId, address) to prevent duplicates at DB level
+- [ ] Test property edit form — populate Project Type, Market, Opportunity Source and verify rendering

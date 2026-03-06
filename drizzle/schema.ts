@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, decimal, boolean } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, decimal, boolean, uniqueIndex } from "drizzle-orm/mysql-core";
 
 // ============ MULTI-TENANCY SYSTEM ============
 
@@ -1564,7 +1564,9 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   soldAt: timestamp("soldAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ([
+  uniqueIndex("uniq_tenant_address").on(table.tenantId, table.address),
+]));
 export type DispoProperty = typeof dispoProperties.$inferSelect;
 export type InsertDispoProperty = typeof dispoProperties.$inferInsert;
 // Alias for cleaner code — new code should use `properties` instead of `dispoProperties`
