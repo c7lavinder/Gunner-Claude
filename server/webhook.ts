@@ -423,6 +423,10 @@ async function processOpportunityEvent(event: OpportunityEvent): Promise<void> {
     // ============ PROPERTY AUTO-IMPORT ============
     // When an opportunity enters a tracked stage in the Sales Process Pipeline,
     // auto-create or update a property record in the inventory.
+    try {
+      const { sql } = await import("drizzle-orm");
+      await db.execute(sql`INSERT INTO debug_log (source, message, data) VALUES ('processOppEvent', ${`About to call syncPropertyFromOpportunity for oppId: ${event.sourceOpportunityId}, eventType: ${event.eventType}`}, ${JSON.stringify({ tenantId: event.tenantId, stageId: event.stageId, stageName: event.stageName, contactId: event.contactId })})`);
+    } catch (e) { /* ignore */ }
     await syncPropertyFromOpportunity(event, db, logPrefix);
 
     // Note: contact_cache sync is handled by processContactEvent (webhook ContactCreate/Update).
@@ -1197,6 +1201,15 @@ async function routeGHLEvent(eventType: string, payload: Record<string, any>): P
     case "OpportunityMonetaryValueUpdate":
     case "OpportunityDelete":
     case "OpportunityUpdate": {
+      // Debug: log at dispatch level to confirm code version is running
+      try {
+        const { getDb: getDbDebug } = await import("./db");
+        const dbDebug = await getDbDebug();
+        if (dbDebug) {
+          const { sql: sqlDebug } = await import("drizzle-orm");
+          await dbDebug.execute(sqlDebug`INSERT INTO debug_log (source, message, data) VALUES ('webhookDispatch', ${`Dispatching ${eventType} event`}, ${JSON.stringify({ id: payload.id, contactId: payload.contactId, pipelineStageId: payload.pipelineStageId, pipelineStageName: payload.pipelineStageName, stageName: payload.stageName, locationId: payload.locationId })})`);
+        }
+      } catch (e) { /* ignore */ }
       const oppEvent = normalizeGHLOpportunityEvent(payload, eventType);
       if (oppEvent) {
         await processOpportunityEvent(oppEvent);
