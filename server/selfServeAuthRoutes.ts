@@ -18,26 +18,14 @@ function isSignupRateLimited(ip: string): boolean {
   return record.count > 3;
 }
 
-// Sign up with email/password
+// ⛔ SIGNUPS COMPLETELY DISABLED — under spam attack
 router.post("/signup", async (req: Request, res: Response) => {
+  console.warn(`[Auth] ⛔ SIGNUP DISABLED — blocked attempt from ${req.headers['x-forwarded-for'] || req.ip}`);
+  res.status(403).json({ success: false, error: "Signups are temporarily disabled. Please try again later." });
+  return;
+  // --- ORIGINAL CODE BELOW (disabled) ---
   try {
     const { email, password, name, companyName } = req.body;
-
-    // ⛔ ANTI-SPAM: Rate limit
-    const clientIp = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip || 'unknown';
-    if (isSignupRateLimited(clientIp)) {
-      console.warn(`[Auth] ⛔ RATE LIMITED signup from IP ${clientIp}`);
-      res.status(429).json({ success: false, error: "Too many signup attempts. Please try again later." });
-      return;
-    }
-
-    // ⛔ ANTI-SPAM: Block obvious spam names
-    const spamPatterns = /https?:\/\/|bit\.ly|\d{4,}.*lira|mucizesi|hemen senin|free money|click here/i;
-    if (spamPatterns.test(name) || spamPatterns.test(companyName)) {
-      console.warn(`[Auth] ⛔ BLOCKED spam signup: name="${name}" company="${companyName}"`);
-      res.status(400).json({ success: false, error: "Invalid signup data" });
-      return;
-    }
 
     // Validate required fields (planId no longer required - user selects plan at paywall after onboarding)
     if (!email || !password || !name || !companyName) {
@@ -519,25 +507,14 @@ router.get("/google/callback", async (req: Request, res: Response) => {
 });
 
 // Complete Google signup with company info
+// ⛔ GOOGLE SIGNUPS COMPLETELY DISABLED — under spam attack
 router.post("/google/complete-signup", async (req: Request, res: Response) => {
+  console.warn(`[Auth] ⛔ GOOGLE SIGNUP DISABLED — blocked attempt from ${req.headers['x-forwarded-for'] || req.ip}`);
+  res.status(403).json({ success: false, error: "Signups are temporarily disabled. Please try again later." });
+  return;
+  // --- ORIGINAL CODE BELOW (disabled) ---
   try {
     const { googleId, email, name, picture, companyName } = req.body;
-
-    // ⛔ ANTI-SPAM: Rate limit
-    const clientIp = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip || 'unknown';
-    if (isSignupRateLimited(clientIp)) {
-      console.warn(`[Auth] ⛔ RATE LIMITED Google signup from IP ${clientIp}`);
-      res.status(429).json({ success: false, error: "Too many signup attempts. Please try again later." });
-      return;
-    }
-
-    // ⛔ ANTI-SPAM: Block obvious spam names
-    const spamPatterns = /https?:\/\/|bit\.ly|\d{4,}.*lira|mucizesi|hemen senin|free money|click here/i;
-    if (spamPatterns.test(name) || spamPatterns.test(companyName)) {
-      console.warn(`[Auth] ⛔ BLOCKED spam Google signup: name="${name}" company="${companyName}"`);
-      res.status(400).json({ success: false, error: "Invalid signup data" });
-      return;
-    }
     
     // planId no longer required - user selects plan at paywall after onboarding
     if (!googleId || !email || !name || !companyName) {
