@@ -145,42 +145,27 @@ describe("GHL Property Import — Source normalization", () => {
   });
 });
 
-// ─── Tag parsing tests ───────────────────────────────────
+// ─── Source from opportunity (not tags) ───────────────────────────────────
 
-describe("GHL Property Import — Tag parsing", () => {
-  it("extracts source, market, and buyBoxType from tags", async () => {
-    const { parseContactTags } = await import("./ghlContactImport");
-    const result = parseContactTags([
-      "source:PropertyLeads",
-      "market:Nashville",
-      "type:House",
-      "other-tag",
-    ]);
-    expect(result.source).toBe("PropertyLeads");
-    expect(result.market).toBe("Nashville");
-    expect(result.buyBoxType).toBe("House");
+describe("GHL Property Import — Source from opportunity", () => {
+  const importSource = readFileSync(join(SERVER_DIR, "ghlContactImport.ts"), "utf-8");
+
+  it("uses opp.source instead of contact tags", () => {
+    expect(importSource).toContain("opp.source");
+    expect(importSource).toContain("normalizeSource(opp.source)");
+    // Should NOT use parseContactTags in the processing loop
+    expect(importSource).not.toContain("parseContactTags(contact.tags)");
   });
 
-  it("returns null for missing tags", async () => {
-    const { parseContactTags } = await import("./ghlContactImport");
-    const result = parseContactTags(["unrelated-tag"]);
-    expect(result.source).toBeNull();
-    expect(result.market).toBeNull();
-    expect(result.buyBoxType).toBeNull();
+  it("does not export parseContactTags or extractTagValue", () => {
+    expect(importSource).not.toContain("export function parseContactTags");
+    expect(importSource).not.toContain("export function extractTagValue");
   });
 
-  it("handles empty tags array", async () => {
-    const { parseContactTags } = await import("./ghlContactImport");
-    const result = parseContactTags([]);
-    expect(result.source).toBeNull();
-    expect(result.market).toBeNull();
-    expect(result.buyBoxType).toBeNull();
-  });
-
-  it("normalizes source from tags", async () => {
-    const { parseContactTags } = await import("./ghlContactImport");
-    const result = parseContactTags(["source:cold call"]);
-    expect(result.source).toBe("BatchDialer");
+  it("normalizes opportunity source through normalizeSource", async () => {
+    const { normalizeSource } = await import("./ghlContactImport");
+    expect(normalizeSource("cold call")).toBe("BatchDialer");
+    expect(normalizeSource("propertyleads")).toBe("PropertyLeads");
   });
 });
 

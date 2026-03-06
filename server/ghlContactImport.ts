@@ -1,14 +1,21 @@
 /**
  * GHL Property Bulk Import
  * 
- * Pulls property data from GHL opportunities in a specified pipeline,
- * fetches linked contact for seller info, extracts source/market/type from tags,
+ * Pulls property data from GHL opportunities in BOTH the Sales Process and Dispo pipelines,
+ * fetches linked contact for seller info, pulls source from the opportunity object,
  * and upserts into dispo_properties.
  * 
  * Architecture: Gunner stores properties. GHL is the CRM for contacts.
  * Each GHL opportunity = one property. The linked contact = the seller.
  * Business name field on the contact = the property address (GHL convention).
  * Duplicate detection by address — no duplicate addresses allowed.
+ * 
+ * CREATION RULES:
+ *   - Only create new properties from New Lead, Warm Leads, or Hot Leads stages (Sales Process pipeline)
+ *   - Dispo pipeline NEVER creates new properties, only updates existing ones
+ *   - All other Sales Process stages only update existing properties
+ * 
+ * SOURCE: Pulled from the opportunity's source field (not contact tags)
  */
 
 import { getDb } from "./db";
@@ -80,73 +87,84 @@ export function normalizeSource(rawSource: string): string {
   return SOURCE_NORMALIZATION_MAP[lower] || rawSource.trim();
 }
 
-// ============ TAG PARSING ============
-
-/**
- * Extract tagged values from contact tags array.
- * Data Hygiene applies tags like: source:PropertyLeads, market:Nashville, type:House
- */
-export function extractTagValue(tags: string[], prefix: string): string | null {
-  for (const tag of tags) {
-    const lower = tag.toLowerCase().trim();
-    if (lower.startsWith(prefix.toLowerCase() + ":")) {
-      return tag.substring(prefix.length + 1).trim();
-    }
-  }
-  return null;
-}
-
-/**
- * Parse all classification fields from contact tags.
- */
-export function parseContactTags(tags: string[]): {
-  source: string | null;
-  market: string | null;
-  buyBoxType: string | null;
-} {
-  const source = extractTagValue(tags, "source");
-  const market = extractTagValue(tags, "market");
-  const buyBoxType = extractTagValue(tags, "type");
-  return {
-    source: source ? normalizeSource(source) : null,
-    market: market || null,
-    buyBoxType: buyBoxType || null,
-  };
-}
-
 // ============ STAGE MAPPING ============
 
 /**
+ * Stages that allow CREATION of new properties.
+ * Only opportunities in these stages (Sales Process pipeline) will create new dispo_properties.
+ */
+const CREATION_STAGES = new Set([
+  "new lead",
+  "new leads",
+  "warm lead",
+  "warm leads",
+  "hot lead",
+  "hot leads",
+]);
+
+/**
  * Map GHL pipeline stage names to Gunner property statuses.
+ * Covers both Sales Process and Dispo Pipeline stages.
  * Case-insensitive matching.
  */
-function mapStageToPropertyStatus(stageName: string): string {
+function mapStageToPropertyStatus(stageName: string): string | null {
   // GHL stage names often have counts appended like "New Lead (1)" or "Hot Leads(2)"
   const cleaned = stageName.replace(/\s*\(\d+\)\s*$/, '').trim();
   const lower = cleaned.toLowerCase();
   const mapping: Record<string, string> = {
+    // ---- Sales Process Pipeline ----
     "new lead": "lead",
     "new leads": "lead",
-    "warm lead": "apt_set",
-    "warm leads": "apt_set",
-    "hot lead": "apt_set",
-    "hot leads": "apt_set",
+    "warm lead": "lead",
+    "warm leads": "lead",
+    "hot lead": "lead",
+    "hot leads": "lead",
+    "pending apt": "apt_set",
+    "walkthrough apt scheduled": "apt_set",
+    "offer apt scheduled": "apt_set",
+    "made offer": "offer_made",
+    "under contract": "under_contract",
+    "purchased": "closed",
+    "1 month follow up": "follow_up",
+    "4 month follow up": "follow_up",
+    "1 year follow up": "follow_up",
+    "ghosted lead": "follow_up",
+    "agreement not closed": "dead",
+    "sold": "dead",
+    "do not want": "dead",
+    // ---- Dispo Pipeline ----
+    "new deal": "marketing",
+    "clear to send out": "marketing",
+    "sent to buyers": "marketing",
+    "offers received": "buyer_negotiating",
+    "<1 day — need to terminate": "marketing",
+    "<1 day - need to terminate": "marketing",
+    "with jv partner": "buyer_negotiating",
+    "uc w/ buyer": "closing",
+    "working w/ title": "closing",
+    "closed": "closed",
+    // ---- Legacy / generic fallbacks ----
     "appointment set": "apt_set",
     "apt set": "apt_set",
-    "qualified": "apt_set",
     "offer made": "offer_made",
-    "under contract": "under_contract",
     "marketing": "marketing",
     "buyer negotiating": "buyer_negotiating",
     "closing": "closing",
     "follow up": "follow_up",
     "follow-up": "follow_up",
     "followup": "follow_up",
-    "closed": "closed",
     "dead": "dead",
     "lost": "dead",
   };
-  return mapping[lower] || "marketing"; // default to marketing for dispo imports
+  return mapping[lower] || null;
+}
+
+/**
+ * Check if a stage name is a creation-eligible stage.
+ */
+function isCreationStage(stageName: string): boolean {
+  const cleaned = stageName.replace(/\s*\(\d+\)\s*$/, '').trim();
+  return CREATION_STAGES.has(cleaned.toLowerCase());
 }
 
 /**
@@ -185,6 +203,7 @@ export function getImportProgress(tenantId: number): BulkImportProgress | null {
 /**
  * Search all opportunities in a pipeline with pagination.
  * GHL API: GET /opportunities/search?location_id={}&pipeline_id={}&limit=100&startAfter=...
+ * Now also captures the opportunity's source field.
  */
 async function fetchAllOpportunitiesInPipeline(
   creds: any,
@@ -196,6 +215,7 @@ async function fetchAllOpportunitiesInPipeline(
   name: string;
   status: string;
   monetaryValue: number | null;
+  source: string;
 }>> {
   const allOpps: any[] = [];
   let startAfter: string | undefined;
@@ -238,6 +258,7 @@ async function fetchAllOpportunitiesInPipeline(
     name: opp.name || opp.contact?.name || "",
     status: opp.status || "open",
     monetaryValue: opp.monetaryValue || null,
+    source: opp.source || "",
   }));
 }
 
@@ -247,7 +268,6 @@ async function fetchAllOpportunitiesInPipeline(
  *   - companyName / businessName = property address (visual convention)
  *   - contact name = seller name
  *   - contact phone = seller phone
- *   - tags = source:X, market:Y, type:Z
  */
 async function fetchContactForProperty(
   creds: any,
@@ -261,8 +281,6 @@ async function fetchContactForProperty(
   city: string;
   state: string;
   postalCode: string;
-  tags: string[];
-  source: string;
 } | null> {
   try {
     const data = await ghlFetch(creds, `/contacts/${contactId}`, "GET");
@@ -277,8 +295,6 @@ async function fetchContactForProperty(
       city: c.city || "",
       state: c.state || "",
       postalCode: c.postalCode || c.zip || "",
-      tags: Array.isArray(c.tags) ? c.tags : [],
-      source: c.source || "",
     };
   } catch (error) {
     console.error(`[GHL Import] Error fetching contact ${contactId}:`, error);
@@ -353,8 +369,12 @@ function resolvePropertyAddress(contact: {
 
 /**
  * Run the bulk import for a tenant.
- * Scans a specified pipeline (or auto-detects "Dispo" / "Sales Process" pipeline),
+ * Scans BOTH the Sales Process pipeline and Dispo pipeline,
  * fetches each opportunity's contact, and upserts into dispo_properties.
+ * 
+ * CREATION: Only from New Lead / Warm Leads / Hot Leads stages in Sales Process.
+ * UPDATES: All other stages in both pipelines update existing properties.
+ * SOURCE: Pulled from the opportunity's source field (not contact tags).
  * Duplicate detection by address — no duplicate addresses.
  */
 export async function runBulkImport(
@@ -387,54 +407,91 @@ export async function runBulkImport(
   }
 
   try {
-    // Step 1: Resolve pipeline
-    let targetPipelineId = pipelineId;
-    let pipelineName = "";
-    let stageMap = new Map<string, string>(); // stageId → stageName
+    // Step 1: Resolve pipelines — we need BOTH Sales Process and Dispo
+    const allPipelines = await getPipelinesForTenant(tenantId);
+    
+    // Build a list of pipelines to scan
+    const pipelinesToScan: Array<{
+      id: string;
+      name: string;
+      stageMap: Map<string, string>;
+      isDispo: boolean;
+    }> = [];
 
-    if (!targetPipelineId) {
-      // Auto-detect: look for "Sales Process" or "Dispo" pipeline
-      const pipelines = await getPipelinesForTenant(tenantId);
-      const salesPipeline = pipelines.find(p =>
-        p.name.toLowerCase().includes("sales process") ||
-        p.name.toLowerCase().includes("dispo") ||
-        p.name.toLowerCase().includes("acquisition")
-      );
-      if (!salesPipeline) {
-        // Fall back to the first pipeline
-        if (pipelines.length > 0) {
-          targetPipelineId = pipelines[0].id;
-          pipelineName = pipelines[0].name;
-          for (const s of pipelines[0].stages) stageMap.set(s.id, s.name);
-        } else {
-          progress.status = "error";
-          progress.errors.push("No pipelines found in GHL");
-          return progress;
-        }
-      } else {
-        targetPipelineId = salesPipeline.id;
-        pipelineName = salesPipeline.name;
-        for (const s of salesPipeline.stages) stageMap.set(s.id, s.name);
+    if (pipelineId) {
+      // Specific pipeline requested
+      const found = allPipelines.find(p => p.id === pipelineId);
+      if (found) {
+        const sm = new Map<string, string>();
+        for (const s of found.stages) sm.set(s.id, s.name);
+        const isDispo = found.name.toLowerCase().includes("dispo");
+        pipelinesToScan.push({ id: found.id, name: found.name, stageMap: sm, isDispo });
       }
     } else {
-      // Fetch pipeline details for stage name resolution
-      const pipelines = await getPipelinesForTenant(tenantId);
-      const found = pipelines.find(p => p.id === targetPipelineId);
-      if (found) {
-        pipelineName = found.name;
-        for (const s of found.stages) stageMap.set(s.id, s.name);
+      // Auto-detect: find Sales Process and Dispo pipelines
+      for (const p of allPipelines) {
+        const lower = p.name.toLowerCase();
+        const isSalesProcess = lower.includes("sales process") || lower.includes("acquisition");
+        const isDispo = lower.includes("dispo");
+        
+        if (isSalesProcess || isDispo) {
+          const sm = new Map<string, string>();
+          for (const s of p.stages) sm.set(s.id, s.name);
+          pipelinesToScan.push({ id: p.id, name: p.name, stageMap: sm, isDispo });
+        }
+      }
+
+      // If no matching pipelines found, fall back to first pipeline
+      if (pipelinesToScan.length === 0 && allPipelines.length > 0) {
+        const p = allPipelines[0];
+        const sm = new Map<string, string>();
+        for (const s of p.stages) sm.set(s.id, s.name);
+        pipelinesToScan.push({ id: p.id, name: p.name, stageMap: sm, isDispo: false });
+      }
+
+      if (pipelinesToScan.length === 0) {
+        progress.status = "error";
+        progress.errors.push("No pipelines found in GHL");
+        return progress;
       }
     }
 
-    console.log(`[GHL Import] Starting property import for tenant ${tenantId}, pipeline: ${pipelineName} (${targetPipelineId})`);
+    console.log(`[GHL Import] Scanning ${pipelinesToScan.length} pipeline(s) for tenant ${tenantId}: ${pipelinesToScan.map(p => p.name).join(", ")}`);
 
-    // Step 2: Fetch all opportunities in the pipeline
+    // Step 2: Fetch all opportunities from all pipelines
     progress.status = "fetching_opportunities";
     importProgress.set(tenantId, { ...progress });
 
-    const opportunities = await fetchAllOpportunitiesInPipeline(creds, targetPipelineId!);
-    progress.total = opportunities.length;
-    console.log(`[GHL Import] Found ${opportunities.length} opportunities in pipeline "${pipelineName}"`);
+    const allOpportunities: Array<{
+      id: string;
+      contactId: string;
+      pipelineStageId: string;
+      name: string;
+      status: string;
+      monetaryValue: number | null;
+      source: string;
+      pipelineId: string;
+      pipelineName: string;
+      stageName: string;
+      isDispo: boolean;
+    }> = [];
+
+    for (const pipeline of pipelinesToScan) {
+      const opps = await fetchAllOpportunitiesInPipeline(creds, pipeline.id);
+      for (const opp of opps) {
+        const stageName = pipeline.stageMap.get(opp.pipelineStageId) || "Unknown";
+        allOpportunities.push({
+          ...opp,
+          pipelineId: pipeline.id,
+          pipelineName: pipeline.name,
+          stageName,
+          isDispo: pipeline.isDispo,
+        });
+      }
+    }
+
+    progress.total = allOpportunities.length;
+    console.log(`[GHL Import] Found ${allOpportunities.length} total opportunities across ${pipelinesToScan.length} pipeline(s)`);
 
     // Step 3: Build existing address set for duplicate detection
     const existingProps = await db.select({
@@ -457,8 +514,8 @@ export async function runBulkImport(
 
     // Process in batches to avoid rate limiting
     const BATCH_SIZE = 5;
-    for (let i = 0; i < opportunities.length; i += BATCH_SIZE) {
-      const batch = opportunities.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < allOpportunities.length; i += BATCH_SIZE) {
+      const batch = allOpportunities.slice(i, i + BATCH_SIZE);
 
       await Promise.all(batch.map(async (opp) => {
         try {
@@ -468,50 +525,32 @@ export async function runBulkImport(
             return;
           }
 
-          // Fetch contact details (seller info + address)
-          const contact = await fetchContactForProperty(creds, opp.contactId);
-          if (!contact) {
-            progress.skipped++;
-            progress.processed++;
-            progress.errors.push(`Could not fetch contact for opportunity ${opp.name || opp.id}`);
-            return;
-          }
-
-          // Resolve property address
-          const { address, city, state, zip } = resolvePropertyAddress(contact, opp.name);
-
-          // Skip if no meaningful address
-          if (!address || address === "Address Pending") {
-            progress.skipped++;
-            progress.processed++;
-            return;
-          }
-
           // Resolve stage name → property status
-          const stageName = stageMap.get(opp.pipelineStageId) || "Unknown";
-          const mappedStatus = mapStageToPropertyStatus(stageName);
+          const mappedStatus = mapStageToPropertyStatus(opp.stageName);
+          if (!mappedStatus) {
+            // Unknown stage — skip
+            progress.skipped++;
+            progress.processed++;
+            return;
+          }
 
-          // Parse tags for source/market/buyBoxType
-          const tagData = parseContactTags(contact.tags);
-          const finalSource = tagData.source || normalizeSource(contact.source);
+          // Source from opportunity (not tags)
+          const finalSource = opp.source ? normalizeSource(opp.source) : null;
 
           // Milestone flags
           const milestoneFlags = getMilestoneFlags(mappedStatus);
 
-          // Check if property already exists by ghlOpportunityId first, then by address
+          // Check if property already exists by ghlOpportunityId
           const existingPropId = existingOppIds.get(opp.id);
 
           if (existingPropId) {
-            // Update existing property (matched by opportunity ID)
+            // UPDATE existing property (matched by opportunity ID)
             await db.update(dispoProperties)
               .set({
                 status: mappedStatus,
-                sellerName: contact.name || undefined,
-                sellerPhone: contact.phone || undefined,
                 ghlContactId: opp.contactId,
-                ghlPipelineId: targetPipelineId,
+                ghlPipelineId: opp.pipelineId,
                 ghlPipelineStageId: opp.pipelineStageId,
-                market: tagData.market || undefined,
                 leadSource: finalSource || undefined,
                 stageChangedAt: new Date(),
                 ...(milestoneFlags.aptEverSet ? { aptEverSet: true } : {}),
@@ -521,10 +560,34 @@ export async function runBulkImport(
               })
               .where(eq(dispoProperties.id, existingPropId));
             progress.updated++;
-          } else if (existingAddresses.has(address.toLowerCase().trim())) {
-            // Duplicate address — skip
-            progress.skipped++;
-          } else {
+          } else if (isCreationStage(opp.stageName) && !opp.isDispo) {
+            // CREATE new property — only from New Lead / Warm Leads / Hot Leads in Sales Process
+            // Fetch contact details (seller info + address)
+            const contact = await fetchContactForProperty(creds, opp.contactId);
+            if (!contact) {
+              progress.skipped++;
+              progress.processed++;
+              progress.errors.push(`Could not fetch contact for opportunity ${opp.name || opp.id}`);
+              return;
+            }
+
+            // Resolve property address
+            const { address, city, state, zip } = resolvePropertyAddress(contact, opp.name);
+
+            // Skip if no meaningful address
+            if (!address || address === "Address Pending") {
+              progress.skipped++;
+              progress.processed++;
+              return;
+            }
+
+            // Duplicate address check
+            if (existingAddresses.has(address.toLowerCase().trim())) {
+              progress.skipped++;
+              progress.processed++;
+              return;
+            }
+
             // Insert new property
             const [result] = await db.insert(dispoProperties).values({
               tenantId,
@@ -537,9 +600,8 @@ export async function runBulkImport(
               sellerPhone: contact.phone || null,
               ghlContactId: opp.contactId,
               ghlOpportunityId: opp.id,
-              ghlPipelineId: targetPipelineId || null,
+              ghlPipelineId: opp.pipelineId || null,
               ghlPipelineStageId: opp.pipelineStageId || null,
-              market: tagData.market || null,
               leadSource: finalSource || null,
               stageChangedAt: new Date(),
               aptEverSet: milestoneFlags.aptEverSet || false,
@@ -561,11 +623,14 @@ export async function runBulkImport(
                 fromStatus: null,
                 toStatus: mappedStatus,
                 source: "ghl_import",
-                notes: `Imported from GHL pipeline "${pipelineName}". Stage: ${stageName}. Seller: ${contact.name || "unknown"}`,
+                notes: `Imported from GHL pipeline "${opp.pipelineName}". Stage: ${opp.stageName}. Source: ${finalSource || "unknown"}. Seller: ${contact.name || "unknown"}`,
               });
             }
 
             progress.imported++;
+          } else {
+            // Not a creation stage OR is Dispo pipeline — skip (no existing property to update)
+            progress.skipped++;
           }
 
           progress.processed++;
@@ -579,7 +644,7 @@ export async function runBulkImport(
       importProgress.set(tenantId, { ...progress });
 
       // Rate limit between batches
-      if (i + BATCH_SIZE < opportunities.length) {
+      if (i + BATCH_SIZE < allOpportunities.length) {
         await new Promise(resolve => setTimeout(resolve, 300));
       }
     }

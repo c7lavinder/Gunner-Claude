@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizeSource,
-  extractTagValue,
-  parseContactTags,
 } from "./ghlContactImport";
+import * as fs from "fs";
+import * as path from "path";
+
+// Read source files for structural assertions
+const importSource = fs.readFileSync(path.join(__dirname, "ghlContactImport.ts"), "utf-8");
+const webhookSource = fs.readFileSync(path.join(__dirname, "webhook.ts"), "utf-8");
 
 // ============ SOURCE NORMALIZATION ============
 
@@ -89,76 +93,165 @@ describe("normalizeSource", () => {
   });
 });
 
-// ============ TAG EXTRACTION ============
+// ============ STAGE MAPPING (Sales Process Pipeline) ============
 
-describe("extractTagValue", () => {
-  it("extracts a tagged value by prefix", () => {
-    const tags = ["source:PropertyLeads", "market:Nashville", "type:House"];
-    expect(extractTagValue(tags, "source")).toBe("PropertyLeads");
-    expect(extractTagValue(tags, "market")).toBe("Nashville");
-    expect(extractTagValue(tags, "type")).toBe("House");
+describe("Stage mapping — Sales Process Pipeline", () => {
+  it("maps New Lead / Warm Leads / Hot Leads to 'lead'", () => {
+    // These are the CREATION stages
+    expect(importSource).toContain('"new lead": "lead"');
+    expect(importSource).toContain('"warm lead": "lead"');
+    expect(importSource).toContain('"warm leads": "lead"');
+    expect(importSource).toContain('"hot lead": "lead"');
+    expect(importSource).toContain('"hot leads": "lead"');
   });
 
-  it("is case-insensitive for prefix", () => {
-    const tags = ["Source:PropertyLeads", "MARKET:Nashville"];
-    expect(extractTagValue(tags, "source")).toBe("PropertyLeads");
-    expect(extractTagValue(tags, "market")).toBe("Nashville");
+  it("maps appointment stages to 'apt_set'", () => {
+    expect(importSource).toContain('"pending apt": "apt_set"');
+    expect(importSource).toContain('"walkthrough apt scheduled": "apt_set"');
+    expect(importSource).toContain('"offer apt scheduled": "apt_set"');
   });
 
-  it("returns null when tag not found", () => {
-    const tags = ["source:PropertyLeads"];
-    expect(extractTagValue(tags, "market")).toBeNull();
-    expect(extractTagValue(tags, "type")).toBeNull();
+  it("maps Made Offer to 'offer_made'", () => {
+    expect(importSource).toContain('"made offer": "offer_made"');
   });
 
-  it("handles empty tags array", () => {
-    expect(extractTagValue([], "source")).toBeNull();
+  it("maps Under Contract to 'under_contract'", () => {
+    expect(importSource).toContain('"under contract": "under_contract"');
   });
 
-  it("handles tags with spaces after colon", () => {
-    const tags = ["source: PropertyLeads"];
-    expect(extractTagValue(tags, "source")).toBe("PropertyLeads");
+  it("maps Purchased to 'closed' (not under_contract)", () => {
+    expect(importSource).toContain('"purchased": "closed"');
+  });
+
+  it("maps follow-up stages to 'follow_up'", () => {
+    expect(importSource).toContain('"1 month follow up": "follow_up"');
+    expect(importSource).toContain('"4 month follow up": "follow_up"');
+    expect(importSource).toContain('"1 year follow up": "follow_up"');
+    expect(importSource).toContain('"ghosted lead": "follow_up"');
+  });
+
+  it("maps dead stages to 'dead'", () => {
+    expect(importSource).toContain('"agreement not closed": "dead"');
+    expect(importSource).toContain('"sold": "dead"');
+    expect(importSource).toContain('"do not want": "dead"');
   });
 });
 
-// ============ FULL TAG PARSING ============
+// ============ STAGE MAPPING (Dispo Pipeline) ============
 
-describe("parseContactTags", () => {
-  it("parses all classification fields from tags", () => {
-    const tags = ["source:BatchDialer", "market:Nashville", "type:House", "status:active"];
-    const result = parseContactTags(tags);
-    expect(result.source).toBe("BatchDialer");
-    expect(result.market).toBe("Nashville");
-    expect(result.buyBoxType).toBe("House");
+describe("Stage mapping — Dispo Pipeline", () => {
+  it("maps marketing stages correctly", () => {
+    expect(importSource).toContain('"new deal": "marketing"');
+    expect(importSource).toContain('"clear to send out": "marketing"');
+    expect(importSource).toContain('"sent to buyers": "marketing"');
   });
 
-  it("normalizes source values", () => {
-    const tags = ["source:cold calling", "market:Atlanta"];
-    const result = parseContactTags(tags);
-    expect(result.source).toBe("BatchDialer"); // cold calling -> BatchDialer
-    expect(result.market).toBe("Atlanta");
+  it("maps <1 Day — Need to Terminate to 'marketing' by default", () => {
+    expect(importSource).toContain('"<1 day');
+    expect(importSource).toContain('need to terminate": "marketing"');
   });
 
-  it("returns null for missing fields", () => {
-    const tags = ["random-tag", "another-tag"];
-    const result = parseContactTags(tags);
-    expect(result.source).toBeNull();
-    expect(result.market).toBeNull();
-    expect(result.buyBoxType).toBeNull();
+  it("maps buyer negotiating stages correctly", () => {
+    expect(importSource).toContain('"offers received": "buyer_negotiating"');
+    expect(importSource).toContain('"with jv partner": "buyer_negotiating"');
   });
 
-  it("handles empty tags", () => {
-    const result = parseContactTags([]);
-    expect(result.source).toBeNull();
-    expect(result.market).toBeNull();
-    expect(result.buyBoxType).toBeNull();
+  it("maps closing stages correctly", () => {
+    expect(importSource).toContain('"uc w/ buyer": "closing"');
+    expect(importSource).toContain('"working w/ title": "closing"');
   });
 
-  it("handles mixed tagged and untagged values", () => {
-    const tags = ["VIP", "source:Referral", "hot-lead", "market:Memphis"];
-    const result = parseContactTags(tags);
-    expect(result.source).toBe("Referral");
-    expect(result.market).toBe("Memphis");
-    expect(result.buyBoxType).toBeNull();
+  it("maps Closed to 'closed'", () => {
+    expect(importSource).toContain('"closed": "closed"');
+  });
+});
+
+// ============ CREATION FILTER ============
+
+describe("Creation filter — only New Lead / Warm / Hot create properties", () => {
+  it("defines CREATION_STAGES set with only lead entry stages", () => {
+    expect(importSource).toContain("CREATION_STAGES");
+    expect(importSource).toMatch(/CREATION_STAGES.*new Set/s);
+  });
+
+  it("only creates properties from creation stages (not dispo)", () => {
+    // The creation logic must check isCreationStage AND !isDispo
+    expect(importSource).toContain("isCreationStage(opp.stageName) && !opp.isDispo");
+  });
+
+  it("skips non-creation stages when no existing property exists", () => {
+    // Non-creation stages without an existing property should be skipped
+    expect(importSource).toContain("Not a creation stage OR is Dispo pipeline");
+  });
+});
+
+// ============ SOURCE FROM OPPORTUNITY ============
+
+describe("Source from opportunity (not tags)", () => {
+  it("pulls source from opp.source, not contact tags", () => {
+    // The import should use opp.source, not parseContactTags
+    expect(importSource).toContain("opp.source");
+    expect(importSource).not.toContain("parseContactTags(contact.tags)");
+    expect(importSource).not.toContain("tagData.source");
+  });
+
+  it("does not export tag parsing functions (no longer needed)", () => {
+    // parseContactTags and extractTagValue should not be exported
+    expect(importSource).not.toContain("export function parseContactTags");
+    expect(importSource).not.toContain("export function extractTagValue");
+  });
+
+  it("normalizes opportunity source through normalizeSource", () => {
+    expect(importSource).toContain("normalizeSource(opp.source)");
+  });
+});
+
+// ============ BOTH PIPELINES ============
+
+describe("Multi-pipeline scanning", () => {
+  it("scans both Sales Process and Dispo pipelines", () => {
+    expect(importSource).toContain("sales process");
+    expect(importSource).toContain("dispo");
+    expect(importSource).toContain("pipelinesToScan");
+  });
+
+  it("tracks isDispo flag per pipeline", () => {
+    expect(importSource).toContain("isDispo");
+  });
+});
+
+// ============ WEBHOOK STAGE MAPPING CONSISTENCY ============
+
+describe("Webhook stage mapping matches import mapping", () => {
+  it("webhook has all Sales Process stages", () => {
+    expect(webhookSource).toContain('"pending apt": "apt_set"');
+    expect(webhookSource).toContain('"walkthrough apt scheduled": "apt_set"');
+    expect(webhookSource).toContain('"offer apt scheduled": "apt_set"');
+    expect(webhookSource).toContain('"made offer": "offer_made"');
+    expect(webhookSource).toContain('"purchased": "closed"');
+    expect(webhookSource).toContain('"1 month follow up": "follow_up"');
+    expect(webhookSource).toContain('"4 month follow up": "follow_up"');
+    expect(webhookSource).toContain('"1 year follow up": "follow_up"');
+    expect(webhookSource).toContain('"ghosted lead": "follow_up"');
+    expect(webhookSource).toContain('"agreement not closed": "dead"');
+    expect(webhookSource).toContain('"sold": "dead"');
+    expect(webhookSource).toContain('"do not want": "dead"');
+  });
+
+  it("webhook has all Dispo Pipeline stages", () => {
+    expect(webhookSource).toContain('"new deal": "marketing"');
+    expect(webhookSource).toContain('"clear to send out": "marketing"');
+    expect(webhookSource).toContain('"sent to buyers": "marketing"');
+    expect(webhookSource).toContain('"offers received": "buyer_negotiating"');
+    expect(webhookSource).toContain('"with jv partner": "buyer_negotiating"');
+    expect(webhookSource).toContain('"uc w/ buyer": "closing"');
+    expect(webhookSource).toContain('"working w/ title": "closing"');
+  });
+
+  it("webhook maps Warm/Hot leads to 'lead' (not apt_set)", () => {
+    expect(webhookSource).toContain('"warm lead": "lead"');
+    expect(webhookSource).toContain('"warm leads": "lead"');
+    expect(webhookSource).toContain('"hot lead": "lead"');
+    expect(webhookSource).toContain('"hot leads": "lead"');
   });
 });

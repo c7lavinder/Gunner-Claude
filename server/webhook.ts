@@ -527,24 +527,47 @@ function mapStageToPropertyStatus(stageName: string): string | null {
   const cleaned = stageName.replace(/\s*\(\d+\)\s*$/, '').trim();
   const lower = cleaned.toLowerCase();
   const mapping: Record<string, string> = {
+    // ---- Sales Process Pipeline ----
     "new lead": "lead",
     "new leads": "lead",
-    "warm lead": "apt_set",
-    "warm leads": "apt_set",
-    "hot lead": "apt_set",
-    "hot leads": "apt_set",
+    "warm lead": "lead",
+    "warm leads": "lead",
+    "hot lead": "lead",
+    "hot leads": "lead",
+    "pending apt": "apt_set",
+    "walkthrough apt scheduled": "apt_set",
+    "offer apt scheduled": "apt_set",
+    "made offer": "offer_made",
+    "under contract": "under_contract",
+    "purchased": "closed",
+    "1 month follow up": "follow_up",
+    "4 month follow up": "follow_up",
+    "1 year follow up": "follow_up",
+    "ghosted lead": "follow_up",
+    "agreement not closed": "dead",
+    "sold": "dead",
+    "do not want": "dead",
+    // ---- Dispo Pipeline ----
+    "new deal": "marketing",
+    "clear to send out": "marketing",
+    "sent to buyers": "marketing",
+    "offers received": "buyer_negotiating",
+    "<1 day — need to terminate": "marketing",
+    "<1 day - need to terminate": "marketing",
+    "with jv partner": "buyer_negotiating",
+    "uc w/ buyer": "closing",
+    "working w/ title": "closing",
+    "closed": "closed",
+    // ---- Legacy / generic fallbacks ----
     "appointment set": "apt_set",
     "apt set": "apt_set",
-    "qualified": "apt_set",
     "offer made": "offer_made",
-    "under contract": "under_contract",
     "marketing": "marketing",
     "buyer negotiating": "buyer_negotiating",
     "closing": "closing",
     "follow up": "follow_up",
     "follow-up": "follow_up",
     "followup": "follow_up",
-    "closed": "closed",
     "dead": "dead",
     "lost": "dead",
   };
@@ -885,17 +908,23 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
         )
       );
 
-    // Parse tags for source/market/type classification
+    // Parse tags for source/market/type classification (inline extraction)
     let tagSource: string | null = null;
     let tagMarket: string | null = null;
     let tagBuyBoxType: string | null = null;
     if (event.tags && event.tags.length > 0) {
       try {
-        const { parseContactTags, normalizeSource } = await import("./ghlContactImport");
-        const tagData = parseContactTags(event.tags);
-        tagSource = tagData.source;
-        tagMarket = tagData.market;
-        tagBuyBoxType = tagData.buyBoxType;
+        const { normalizeSource } = await import("./ghlContactImport");
+        for (const tag of event.tags) {
+          const lower = tag.toLowerCase().trim();
+          if (lower.startsWith("source:")) {
+            tagSource = normalizeSource(tag.substring(7).trim());
+          } else if (lower.startsWith("market:")) {
+            tagMarket = tag.substring(7).trim();
+          } else if (lower.startsWith("type:")) {
+            tagBuyBoxType = tag.substring(5).trim();
+          }
+        }
       } catch (e) {
         // Non-critical — continue without tag parsing
       }
@@ -1481,11 +1510,17 @@ export async function batchImportContacts(tenantId: number): Promise<{ imported:
           let tagBuyBoxType: string | null = null;
           if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) {
             try {
-              const { parseContactTags, normalizeSource } = await import("./ghlContactImport");
-              const tagData = parseContactTags(c.tags);
-              tagSource = tagData.source;
-              tagMarket = tagData.market;
-              tagBuyBoxType = tagData.buyBoxType;
+              const { normalizeSource } = await import("./ghlContactImport");
+              for (const tag of c.tags) {
+                const lower = tag.toLowerCase().trim();
+                if (lower.startsWith("source:")) {
+                  tagSource = normalizeSource(tag.substring(7).trim());
+                } else if (lower.startsWith("market:")) {
+                  tagMarket = tag.substring(7).trim();
+                } else if (lower.startsWith("type:")) {
+                  tagBuyBoxType = tag.substring(5).trim();
+                }
+              }
             } catch (e) { /* non-critical */ }
           }
 

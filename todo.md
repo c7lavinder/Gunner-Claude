@@ -4387,3 +4387,15 @@
 - [x] Fix TS errors in grading.ts referencing deleted contact_cache columns
 - [x] Add manual "Import Properties from GHL" button in Settings/CRM page
 - [x] Verify polling interval creates properties within reasonable time
+
+## Property Import Filter Fix (2026-03-06)
+- [x] Only create new properties from New Lead, Warm Lead, or Hot Lead stages (not all stages)
+- [x] Pull opportunity source from the opportunity object (not contact tags)
+- [x] Remove tag parsing for source/market/buyBoxType from import flow
+- [x] Show full pipeline stage mapping for user review
+- [x] Existing properties should still get status updates when opportunity moves to later stages
+- [x] Update tests for new filtered import logic
+- [x] Scan both Sales Process AND Dispo pipelines
+- [x] Dispo pipeline never creates new properties, only updates
+- [x] Updated webhook.ts stage mapping to match confirmed stages
+- [x] Fixed inline tag extraction in webhook.ts (removed parseContactTags dependency)
