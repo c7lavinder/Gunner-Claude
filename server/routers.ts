@@ -7370,6 +7370,7 @@ selectedTimezone: { type: "string" },
     getUnreadConversations: protectedProcedure
       .input(z.object({
         assignedToGhlUserId: z.string().optional(),
+        rolePhoneFilter: z.array(z.string()).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
@@ -7383,12 +7384,28 @@ selectedTimezone: { type: "string" },
           if (myTeamMember?.ghlUserId) {
             ghlUserId = myTeamMember.ghlUserId;
           } else {
-            return [];
+            // Non-admin with no GHL user ID: try phone-based filtering
+            if (!input?.rolePhoneFilter?.length) return [];
           }
         }
 
         const { getUnreadConversations } = await import("./dayHub");
-        return await getUnreadConversations(ctx.user.tenantId, ghlUserId);
+        const conversations = await getUnreadConversations(ctx.user.tenantId, ghlUserId);
+
+        // If rolePhoneFilter is provided, filter server-side by teamPhone
+        if (input?.rolePhoneFilter && input.rolePhoneFilter.length > 0) {
+          const phoneSet = new Set(input.rolePhoneFilter);
+          return conversations.filter(c => {
+            // Primary: match by teamPhone (the LC phone the lead contacted)
+            if (c.teamPhone && phoneSet.has(c.teamPhone)) return true;
+            // Fallback: if teamPhone is empty but assignedTo matches a role's GHL user
+            // (only when ghlUserId filter was also passed)
+            if (!c.teamPhone && ghlUserId && c.assignedTo === ghlUserId) return true;
+            return false;
+          });
+        }
+
+        return conversations;
       }),
 
     // Get today's appointments

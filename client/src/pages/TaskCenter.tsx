@@ -618,47 +618,37 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
     setInboxSmsOpen(true);
   };
 
-  // Fetch inbox (GHL conversations for dispo team)
-  const { data: allUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
-    undefined,
-    { refetchInterval: 60000 }
-  );
-
   // Fetch today's showings from inventory
   const { data: todayShowings, isLoading: showingsLoading } = trpc.inventory.getTodayShowings.useQuery(
     undefined,
     { refetchInterval: 120000 }
   );
 
-  // Filter conversations for dispo team members
-  const rolePhoneNumbers = useMemo(() => {
+  // Build phone numbers for dispo team members
+  const rolePhoneArray = useMemo(() => {
     if (!teamMembersList) return null;
-    const phones = new Set<string>();
+    const phones: string[] = [];
     for (const m of teamMembersList) {
       if (m.teamRole !== "dispo_manager") continue;
       if (m.lcPhones) {
         try {
           const parsed = JSON.parse(m.lcPhones) as string[];
-          parsed.forEach(p => phones.add(p));
+          parsed.forEach(p => phones.push(p));
         } catch { /* skip */ }
       }
-      // Fallback: also include lcPhone (singular) if lcPhones is empty
-      if (m.lcPhone) phones.add(m.lcPhone);
+      // Fallback: also include lcPhone (singular)
+      if (m.lcPhone && !phones.includes(m.lcPhone)) phones.push(m.lcPhone);
     }
-    return phones.size > 0 ? phones : null;
+    return phones.length > 0 ? phones : null;
   }, [teamMembersList]);
 
-  const unreadConvos = useMemo(() => {
-    if (!allUnreadConvos) return [];
-    if (!rolePhoneNumbers) return allUnreadConvos; // show all if no dispo phones configured
-    return allUnreadConvos.filter(c => {
-      if (c.teamPhone && rolePhoneNumbers.has(c.teamPhone)) return true;
-      if (!c.teamPhone && c.assignedTo && roleFilteredGhlUserIds) {
-        return roleFilteredGhlUserIds.includes(c.assignedTo);
-      }
-      return false;
-    });
-  }, [allUnreadConvos, rolePhoneNumbers, roleFilteredGhlUserIds]);
+  // Fetch inbox with phone filter — server filters by dispo phone numbers
+  const { data: filteredUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
+    rolePhoneArray ? { rolePhoneFilter: rolePhoneArray } : undefined,
+    { refetchInterval: 60000 }
+  );
+
+  const unreadConvos = filteredUnreadConvos || [];
 
   const missedCalls = useMemo(() => unreadConvos.filter((c: any) => c.isMissedCall), [unreadConvos]);
   const unreadMessages = useMemo(() => unreadConvos.filter((c: any) => !c.isMissedCall), [unreadConvos]);
@@ -935,9 +925,27 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
     setInboxSmsOpen(true);
   };
 
-  // Fetch all unread conversations (we filter client-side for multi-user role tabs)
+  // Build phone numbers for the selected role tab
+  const rolePhoneArray = useMemo(() => {
+    if (roleTab === "admin" || !teamMembersList) return null; // null = show all (admin)
+    const allowedRoles = ROLE_TAB_CONFIG[roleTab].teamRoles;
+    const phones: string[] = [];
+    for (const m of teamMembersList) {
+      if (!m.teamRole || !allowedRoles.includes(m.teamRole)) continue;
+      if (m.lcPhones) {
+        try {
+          const parsed = JSON.parse(m.lcPhones) as string[];
+          parsed.forEach(p => { if (!phones.includes(p)) phones.push(p); });
+        } catch { /* skip */ }
+      }
+      if (m.lcPhone && !phones.includes(m.lcPhone)) phones.push(m.lcPhone);
+    }
+    return phones.length > 0 ? phones : null;
+  }, [roleTab, teamMembersList]);
+
+  // Fetch unread conversations with server-side phone filtering for role tabs
   const { data: allUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
-    undefined,
+    rolePhoneArray ? { rolePhoneFilter: rolePhoneArray } : undefined,
     { refetchInterval: 60000 }
   );
 
@@ -946,40 +954,8 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
     { refetchInterval: 120000 }
   );
 
-  // Build a set of phone numbers for the selected role tab
-  const rolePhoneNumbers = useMemo(() => {
-    if (roleTab === "admin" || !teamMembersList) return null; // null = show all
-    const allowedRoles = ROLE_TAB_CONFIG[roleTab].teamRoles;
-    const phones = new Set<string>();
-    for (const m of teamMembersList) {
-      if (!m.teamRole || !allowedRoles.includes(m.teamRole)) continue;
-      // Parse lcPhones JSON array
-      if (m.lcPhones) {
-        try {
-          const parsed = JSON.parse(m.lcPhones) as string[];
-          parsed.forEach(p => phones.add(p));
-        } catch { /* skip */ }
-      }
-      // Fallback: also include lcPhone (singular)
-      if (m.lcPhone) phones.add(m.lcPhone);
-    }
-    return phones;
-  }, [roleTab, teamMembersList]);
-
-  // Filter by role tab — admin sees all, LM/AM sees only conversations matching their team phones
-  const unreadConvos = useMemo(() => {
-    if (!allUnreadConvos) return [];
-    if (!rolePhoneNumbers) return allUnreadConvos; // admin = show all
-    return allUnreadConvos.filter(c => {
-      // Primary filter: match by teamPhone (the LC phone the lead contacted)
-      if (c.teamPhone && rolePhoneNumbers.has(c.teamPhone)) return true;
-      // Fallback: if no teamPhone data, use assignedTo
-      if (!c.teamPhone && c.assignedTo && roleFilteredGhlUserIds) {
-        return roleFilteredGhlUserIds.includes(c.assignedTo);
-      }
-      return false;
-    });
-  }, [allUnreadConvos, rolePhoneNumbers, roleFilteredGhlUserIds]);
+  // Conversations are already filtered server-side by phone numbers
+  const unreadConvos = allUnreadConvos || [];
   const appointments = useMemo(() => {
     if (!allAppointments) return [];
     if (!roleFilteredGhlUserIds) return allAppointments; // admin = show all

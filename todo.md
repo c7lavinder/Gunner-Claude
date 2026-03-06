@@ -4519,3 +4519,4 @@
 - [ ] Verify/fix #15-19 (property detail features)
 - [ ] Verify/fix #22 (stage permissions by role)
 - [x] Fix sync_status column mismatch in sync_log table (schema column mapping corrected to 'status')
+- [x] #2 - Dispo inbox now filters by role phone numbers (server-side + frontend). LM/AM/Dispo tabs only show conversations routed to that role's assigned phone numbers.

@@ -503,7 +503,7 @@ export async function getTeamMemberGhlMap(
  */
 export async function getTeamMembersForFilter(
   tenantId: number
-): Promise<Array<{ id: number; name: string; ghlUserId: string | null; teamRole: string; lcPhones: string | null }>> {
+): Promise<Array<{ id: number; name: string; ghlUserId: string | null; teamRole: string; lcPhones: string | null; lcPhone: string | null }>> {
   const db = await getDb();
   if (!db) return [];
 
@@ -515,6 +515,7 @@ export async function getTeamMembersForFilter(
         ghlUserId: teamMembers.ghlUserId,
         teamRole: teamMembers.teamRole,
         lcPhones: teamMembers.lcPhones,
+        lcPhone: teamMembers.lcPhone,
       })
       .from(teamMembers)
       .where(eq(teamMembers.tenantId, tenantId));
@@ -525,6 +526,7 @@ export async function getTeamMembersForFilter(
       ghlUserId: m.ghlUserId,
       teamRole: m.teamRole,
       lcPhones: m.lcPhones ?? null,
+      lcPhone: m.lcPhone ?? null,
     }));
   } catch (error) {
     console.error("[TaskCenter] getTeamMembersForFilter error:", error);
