@@ -546,36 +546,58 @@ async function syncPropertyFromOpportunity(
   db: any,
   logPrefix: string
 ): Promise<void> {
+  // Helper to write debug logs to database for production tracing
+  async function dbLog(message: string, data?: any) {
+    try {
+      const { sql } = await import("drizzle-orm");
+      await db.execute(sql`INSERT INTO debug_log (source, message, data) VALUES ('PropertySync', ${message}, ${data ? JSON.stringify(data) : null})`);
+    } catch (e) { /* ignore debug log errors */ }
+    console.log(`${logPrefix} [PropertySync] ${message}`);
+  }
+
+  await dbLog('syncPropertyFromOpportunity called', {
+    tenantId: event.tenantId,
+    oppId: event.sourceOpportunityId,
+    contactId: event.contactId,
+    stageId: event.stageId,
+    stageName: event.stageName,
+    pipelineId: event.pipelineId,
+    eventType: event.eventType,
+  });
+
   if (!event.tenantId) {
-    console.log(`${logPrefix} [PropertySync] No tenantId — skipping property sync`);
+    await dbLog('No tenantId — skipping property sync');
     return;
   }
 
   // Resolve stage name: prefer payload field, fall back to API lookup by stageId
   let stageName = event.stageName;
   if (!stageName && event.stageId) {
-    console.log(`${logPrefix} [PropertySync] No stageName in payload, resolving from stageId: ${event.stageId}`);
-    stageName = await resolveStageNameById(event.tenantId, event.stageId);
+    await dbLog(`No stageName in payload, resolving from stageId: ${event.stageId}`);
+    try {
+      stageName = await resolveStageNameById(event.tenantId, event.stageId);
+    } catch (resolveErr: any) {
+      await dbLog(`resolveStageNameById threw error`, { error: resolveErr?.message || String(resolveErr) });
+    }
     if (stageName) {
-      console.log(`${logPrefix} [PropertySync] Resolved stageName: "${stageName}" from stageId: ${event.stageId}`);
+      await dbLog(`Resolved stageName: "${stageName}" from stageId: ${event.stageId}`);
     } else {
-      console.warn(`${logPrefix} [PropertySync] Could not resolve stageName for stageId: ${event.stageId}`);
+      await dbLog(`Could not resolve stageName for stageId: ${event.stageId}`);
     }
   }
 
   if (!stageName) {
-    console.log(`${logPrefix} [PropertySync] No stageName and no stageId — skipping property sync (oppId: ${event.sourceOpportunityId})`);
+    await dbLog(`No stageName and no stageId — skipping (oppId: ${event.sourceOpportunityId})`);
     return;
   }
 
   const mappedStatus = mapStageToPropertyStatus(stageName);
   if (!mappedStatus) {
-    // Stage not in our mapping — skip property sync
-    console.log(`${logPrefix} [PropertySync] Stage "${stageName}" not in mapping — skipping (oppId: ${event.sourceOpportunityId})`);
+    await dbLog(`Stage "${stageName}" not in mapping — skipping (oppId: ${event.sourceOpportunityId})`);
     return;
   }
 
-  console.log(`${logPrefix} [PropertySync] Stage "${stageName}" → status "${mappedStatus}" (oppId: ${event.sourceOpportunityId})`);
+  await dbLog(`Stage "${stageName}" → status "${mappedStatus}" (oppId: ${event.sourceOpportunityId})`);
 
   const oppId = event.sourceOpportunityId;
   const contactId = event.contactId;
