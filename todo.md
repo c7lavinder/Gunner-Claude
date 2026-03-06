@@ -4484,3 +4484,12 @@
 - [x] brandingAudit.test.ts: Replace manuscdn URLs with CDN URLs in Landing.tsx (all pass)
 - [x] onboardingAuditFixes.test.ts: Fix owner check to use OWNER_OPEN_ID instead of tenantId===1 (all pass)
 - [x] workflowTracking.test.ts: Fix empty state text assertion (all pass)
+
+## CAPTCHA & Anti-Spam (2026-03-06)
+- [x] Add Cloudflare Turnstile CAPTCHA to email signup form
+- [x] Add Cloudflare Turnstile CAPTCHA to Google signup form
+- [x] Add server-side Turnstile token verification on signup endpoints
+- [x] Re-enable signups with CAPTCHA protection
+- [ ] Re-enable email sending with rate limits and safeguards (kept disabled for now)
+- [x] Keep rate limiting (3 per IP per 10min) as secondary protection
+- [x] Keep spam name blocking as tertiary protection

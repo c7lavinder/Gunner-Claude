@@ -15,4 +15,5 @@ export const ENV = {
   batchLeadsApiKey: process.env.BATCHLEADS_API_KEY ?? "",
   ghlClientId: process.env.GHL_CLIENT_ID ?? "",
   ghlClientSecret: process.env.GHL_CLIENT_SECRET ?? "",
+  turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY ?? "",
 };

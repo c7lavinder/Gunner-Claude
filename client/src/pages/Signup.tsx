@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
+import Turnstile from "@/components/Turnstile";
 
 // Google icon component
 function GoogleIcon({ className }: { className?: string }) {
@@ -65,6 +66,9 @@ export default function Signup() {
   const [companyName, setCompanyName] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
+  // Turnstile CAPTCHA
+  const [turnstileToken, setTurnstileToken] = useState("");
+
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -117,6 +121,10 @@ export default function Signup() {
     if (!agreedToTerms) {
       newErrors.terms = "You must agree to the Terms of Service and Privacy Policy";
     }
+
+    if (!turnstileToken) {
+      newErrors.captcha = "Please complete the verification";
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -160,6 +168,7 @@ export default function Signup() {
             name,
             picture: googleUser.picture,
             companyName,
+            turnstileToken,
           }),
         });
 
@@ -182,6 +191,7 @@ export default function Signup() {
             password,
             name,
             companyName,
+            turnstileToken,
           }),
         });
 
@@ -369,7 +379,18 @@ export default function Signup() {
                 </div>
                 {errors.terms && <p className="text-sm text-destructive">{errors.terms}</p>}
 
-                <Button type="submit" className="w-full" disabled={loading}>
+                {/* Cloudflare Turnstile CAPTCHA */}
+                <div className="flex justify-center">
+                  <Turnstile
+                    onVerify={(token) => setTurnstileToken(token)}
+                    onExpire={() => setTurnstileToken("")}
+                    onError={() => setTurnstileToken("")}
+                    theme="auto"
+                  />
+                </div>
+                {errors.captcha && <p className="text-sm text-destructive text-center">{errors.captcha}</p>}
+
+                <Button type="submit" className="w-full" disabled={loading || !turnstileToken}>
                   {loading ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
