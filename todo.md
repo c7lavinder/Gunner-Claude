@@ -4408,3 +4408,49 @@
 - [x] Allow choosing specific pipeline or "All pipelines"
 - [x] Fix pipeline data access (was accessing .pipelines on already-flat array)
 - [x] Rename component from GHLContactSyncCard to GHLPropertyImportCard
+
+## Pipeline Dropdown Bug (2026-03-06)
+- [ ] Fix ghlPipelines endpoint returning empty array — pipelines not showing in dropdown
+
+## 22-Item Fix List (2026-03-06)
+- [x] 1. KPI boxes clickable → contact list shown (already implemented: Trust Ledger modal)
+- [x] 2. Role views show personal data only (backend auto-scopes by ghlUserId for non-admins)
+- [x] 3. Dispo inbox filtered to dispo contacts only (DispoLeftPanel already filters by dispo phone numbers + ghlUserIds)
+- [x] 4. Inbox shows team member assignment (already implemented: member name badge)
+- [x] 5. Conversation expander — no scroll, proper layout (already implemented: scrollIntoView + maxHeight)
+- [ ] 6. AI Coach knows property research data (Notte integration for Zillow etc) — DEFERRED: requires external Notte/Zillow API integration
+- [x] 7. "View As" tasks load for all team members (admin role tabs + member selector preserved)
+- [x] 8. Inbox loads fast, never goes blank (already uses refetchInterval + loading states + useMemo filtering)
+- [x] 9. Calls under 1 min auto-skipped (already was 60s threshold)
+- [x] 10. Transcription errors handled gracefully (transient errors retry, not permanent fail)
+- [x] 11. "No recording" calls archived as skipped/admin_call, not failed
+- [x] 12. Dispo gamification active (already implemented: 7 dispo_manager badges in gamification.ts)
+- [x] 13. Dispo Manager in Teammate Classes + Training roles (added to all Training sections + role tabs)
+- [x] 14. Stage filter works for all stages (role-based visibleStages)
+- [x] 15. Property description persists after save (added to updateProperty input schema)
+- [x] 16. Buyer match: market + buy box + tier + speed (BOTH market AND buy box REQUIRED, tier+speed are bonus scoring)
+- [x] 17. AI Assistant typing doesn't scroll page (DayHubCoach already uses overflow-y-auto + scrollRef within fixed-height container)
+- [x] 18. Add Buyer autocompletes from GHL (GhlContactAutocomplete in AddBuyerDialog)
+- [x] 19. Showings/Offers autocomplete from GHL (GhlContactAutocomplete in AddOfferDialog + AddShowingDialog)
+- [x] 20. 3-dot menu removed, card fully clickable (cards already clickable, removed 3-dot in table view)
+- [x] 21. Inventory switched to compact list/table view (default=table, toggle to card)
+- [x] 22. Inventory stage tabs filtered by role (LM/AM: 7 stages, Dispo: 5 stages, Admin: all)
+
+## Polling Gaps (2026-03-06)
+- [x] Reduce polling interval from 10 min to 5 min, opportunity detection from 2 hrs to 30 min
+- [x] Add sync log table for audit trail
+- [x] Add failure alerts (email/notification to owner on poll failures)
+
+## Day Hub Personal Data Scoping Bug (2026-03-06)
+- [x] Non-admin team members (e.g. Chris) see ALL data on Day Hub instead of only their own
+- [x] KPIs should show only the logged-in user's numbers when non-admin (getKpiSummary already uses teamMember)
+- [x] Inbox should show only conversations assigned to the logged-in user when non-admin (getUnreadConversations scoped)
+- [x] Tasks should show only the logged-in user's tasks when non-admin (getPriorityTasks scoped by ghlUserId)
+- [x] Admin users retain full visibility of all data (isAdmin check preserves full access)
+- [x] Role tabs hidden for non-admin users (only see their own data)
+- [x] Appointments scoped to non-admin user's ghlUserId
+
+## Buyer Match Fix (2026-03-06)
+- [x] Market MUST match property market (required, not optional) — SQL uses AND, also includes Nationwide buyers
+- [x] Buy box type MUST match property type (required, not optional) — SQL uses AND with LIKE match
+- [x] Only tier (VIP) and speed are bonus scoring on top of required matches — scoring: market=30/20, buyBox=25, VIP=20, speed=15, closer=10

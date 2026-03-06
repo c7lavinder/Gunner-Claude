@@ -89,6 +89,7 @@ const APPLICABLE_TO = [
   { value: "lead_manager", label: "Lead Managers" },
   { value: "acquisition_manager", label: "Acquisition Managers" },
   { value: "lead_generator", label: "Lead Generators" },
+  { value: "dispo_manager", label: "Dispo Managers" },
 ];
 
 function getCategoryIcon(category: string) {
@@ -272,18 +273,18 @@ function GenerateInsightsBtn({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
+function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
-  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
     teamRole = roleFilter;
   } else if (!isAdmin && user?.teamRole && user.teamRole !== 'admin') {
-    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager";
   }
   
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "skill", status: "active", teamRole });
@@ -321,18 +322,18 @@ function TeamSkillsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   );
 }
 
-function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
+function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
-  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
     teamRole = roleFilter;
   } else if (!isAdmin && user?.teamRole && user.teamRole !== 'admin') {
-    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager";
   }
   
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "issue", status: "active", teamRole });
@@ -370,18 +371,18 @@ function TeamIssuesSection({ roleFilter }: { roleFilter?: "all" | "lead_manager"
   );
 }
 
-function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
+function TeamWinsSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager" }) {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   const [showAll, setShowAll] = useState(false);
   const DISPLAY_LIMIT = 3;
   
-  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
     teamRole = roleFilter;
   } else if (!isAdmin && user?.teamRole && user.teamRole !== 'admin') {
-    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager";
   }
   
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "win", status: "active", teamRole });
@@ -583,17 +584,17 @@ function MeetingFacilitator({ agendaItems, onClose }: { agendaItems: Array<{ id:
   );
 }
 
-function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" }) {
+function TeamAgendaSection({ roleFilter }: { roleFilter?: "all" | "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager" }) {
   const utils = trpc.useUtils();
   const [showFacilitator, setShowFacilitator] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
   
-  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | undefined;
+  let teamRole: "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager" | undefined;
   if (isAdmin && roleFilter && roleFilter !== "all") {
     teamRole = roleFilter;
   } else if (!isAdmin && user?.teamRole && user.teamRole !== 'admin') {
-    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator";
+    teamRole = user.teamRole as "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager";
   }
   
   const { data: items, isLoading } = trpc.teamTraining.list.useQuery({ itemType: "agenda", status: "active", teamRole });
@@ -643,7 +644,7 @@ function TeamTrainingContent() {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const isAdmin = user?.teamRole === 'admin' || user?.isTenantAdmin === 'true' || user?.role === 'admin' || user?.role === 'super_admin';
-  const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator">("all");
+  const [selectedRole, setSelectedRole] = useState<"all" | "lead_manager" | "acquisition_manager" | "lead_generator" | "dispo_manager">("all");
   const [materialCat, setMaterialCat] = useState("all");
   const [mainTab, setMainTab] = useState("overview");
   const handleInsightsGenerated = () => utils.teamTraining.list.invalidate();
@@ -676,6 +677,7 @@ function TeamTrainingContent() {
                 <button className={`obs-role-tab ${selectedRole === "acquisition_manager" ? "active" : ""}`} onClick={() => { setSelectedRole("acquisition_manager"); setMaterialCat("acquisition_manager"); }}>Acquisition Manager</button>
                 <button className={`obs-role-tab ${selectedRole === "lead_manager" ? "active" : ""}`} onClick={() => { setSelectedRole("lead_manager"); setMaterialCat("lead_manager"); }}>Lead Manager</button>
                 <button className={`obs-role-tab ${selectedRole === "lead_generator" ? "active" : ""}`} onClick={() => { setSelectedRole("lead_generator"); setMaterialCat("lead_generator"); }}>Lead Generator</button>
+                <button className={`obs-role-tab ${selectedRole === "dispo_manager" ? "active" : ""}`} onClick={() => { setSelectedRole("dispo_manager"); setMaterialCat("dispo_manager"); }}>Dispo Manager</button>
               </div>
             </div>
           </div>

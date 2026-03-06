@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS sync_log (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  tenantId INT NOT NULL,\n  syncType VARCHAR(50) NOT NULL,\n  sync_status ENUM('success', 'partial', 'failed') NOT NULL,\n  recordsProcessed INT DEFAULT 0,\n  recordsCreated INT DEFAULT 0,\n  recordsUpdated INT DEFAULT 0,\n  errorMessage TEXT,\n  durationMs INT,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute CREATE TABLE IF NOT EXISTS sync_log (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  tenantId INT NOT NULL,\n  syncType VARCHAR(50) NOT NULL,\n  sync_status ENUM('success', 'partial', 'failed') NOT NULL,\n  recordsProcessed INT DEFAULT 0,\n  recordsCreated INT DEFAULT 0,\n  recordsUpdated INT DEFAULT 0,\n  errorMessage TEXT,\n  durationMs INT,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 103
+}

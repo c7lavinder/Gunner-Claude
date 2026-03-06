@@ -701,16 +701,16 @@ describe("Inbox SMS Modal — frontend wiring", () => {
     expect(leftPanelBody).toContain("Schedule for Later");
   });
 
-  it("UnreadConvoItem accepts onTextContact prop instead of using sms: link", () => {
+  it("UnreadConvoItem accepts onTextContact prop and has inline reply capability", () => {
     // The UnreadConvoItem should accept onTextContact
     expect(componentSource).toContain("onTextContact: (contactId: string, contactName: string, contactPhone: string) => void");
     // Should NOT use window.open('sms:...')
     expect(componentSource).not.toContain("window.open(`sms:");
-    // Should call onTextContact instead
+    // UnreadConvoItem now uses inline sendSms mutation for replies
     const unreadStart = componentSource.indexOf("function UnreadConvoItem(");
     const unreadEnd = componentSource.indexOf("\nfunction ", unreadStart + 1);
     const unreadBody = componentSource.substring(unreadStart, unreadEnd > -1 ? unreadEnd : unreadStart + 3000);
-    expect(unreadBody).toContain("onTextContact(conv.contactId");
+    expect(unreadBody).toContain("sendSms");
   });
 
   it("LeftPanel passes handleTextContact to UnreadConvoItem", () => {

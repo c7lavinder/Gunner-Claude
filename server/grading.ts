@@ -1157,8 +1157,12 @@ export async function processCall(callId: number): Promise<void> {
   }
 
   if (!call.recordingUrl) {
-    console.error(`[ProcessCall] Call ${callId} has no recording URL`);
-    await updateCall(callId, { status: "failed" });
+    console.log(`[ProcessCall] Call ${callId} has no recording URL — archiving (not grading)`);
+    await updateCall(callId, {
+      status: "skipped",
+      classification: "admin_call",
+      classificationReason: "No recording available — archived automatically",
+    });
     return;
   }
 
@@ -1726,19 +1730,27 @@ export async function processCall(callId: number): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[ProcessCall] Error processing call ${callId}:`, errorMsg);
     
-    // For transient DB errors (DrizzleQueryError / connection issues), truncate the error message
-    // to avoid storing the full transcript text in classificationReason
+    // Determine if this is a transient error that should be retried
+    const isTransient = errorMsg.includes('ECONNRESET') || errorMsg.includes('ETIMEDOUT') ||
+      errorMsg.includes('Failed query:') || errorMsg.includes('429') || errorMsg.includes('rate limit') ||
+      errorMsg.includes('transcription') || errorMsg.includes('Transcription');
+    
+    // For transient DB errors, truncate the error message
     let storedError = errorMsg;
     if (errorMsg.startsWith('Failed query:')) {
-      // DrizzleQueryError includes the full query + params in the message
-      // Just store the query part, not the params (which may contain the full transcript)
       const paramsIdx = errorMsg.indexOf('\nparams:');
       storedError = paramsIdx > 0 
         ? errorMsg.substring(0, paramsIdx) + ' (transient DB error — will auto-retry)'
         : errorMsg.substring(0, 200) + '... (truncated)';
     }
     
-    await updateCall(callId, { status: "failed", classificationReason: storedError });
+    if (isTransient) {
+      // Mark as pending so the stuck-call retry picks it up
+      console.log(`[ProcessCall] Transient error for call ${callId} — marking as pending for retry`);
+      await updateCall(callId, { status: "pending", classificationReason: `Retry pending: ${storedError.substring(0, 200)}` });
+    } else {
+      await updateCall(callId, { status: "failed", classificationReason: storedError });
+    }
   }
 }
 

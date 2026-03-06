@@ -745,30 +745,25 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
     .where(and(eq(dispoProperties.id, propertyId), eq(dispoProperties.tenantId, tenantId)));
   if (!property) throw new Error("Property not found");
 
-  // Search contact cache for buyers matching market or buyBoxType
+  // Search contact cache for buyers matching BOTH market AND buyBoxType (both required)
   // contact_cache stores: name, phone, market, buyBoxType, source
   const marketTag = property.market?.toLowerCase() || property.city?.toLowerCase() || "";
-  const propertyType = property.propertyType || "house";
+  const propertyType = (property.propertyType || "house").toLowerCase();
 
-  // Query contacts that match by buyBoxType or market
-  const conditions = [eq(contactCache.tenantId, tenantId)];
-  const matchConditions: any[] = [];
-  if (marketTag) {
-    matchConditions.push(sql`LOWER(${contactCache.market}) = ${marketTag}`);
-  }
-  if (propertyType) {
-    matchConditions.push(sql`LOWER(${contactCache.buyBoxType}) LIKE ${`%${propertyType}%`}`);
-  }
-
-  // If we have no matching criteria, return empty
-  if (matchConditions.length === 0) {
+  // Both market AND buy box must match — if either is missing from the property, no match possible
+  if (!marketTag || !propertyType) {
     return { matched: 0, buyers: [] };
   }
 
+  // Query contacts that match BOTH market AND buyBoxType
+  // Also include "Nationwide" buyers who buy in any market
   const contacts = await db.select().from(contactCache)
     .where(and(
       eq(contactCache.tenantId, tenantId),
-      sql`(${sql.join(matchConditions, sql` OR `)})`,
+      // Market must match (exact) OR buyer is "Nationwide"
+      sql`(LOWER(${contactCache.market}) = ${marketTag} OR LOWER(${contactCache.market}) = 'nationwide')`,
+      // Buy box type must match the property type
+      sql`LOWER(${contactCache.buyBoxType}) LIKE ${`%${propertyType}%`}`,
     ))
     .limit(200);
 
@@ -781,36 +776,96 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
     ));
   const existingGhlIds = new Set(existingBuyers.map(b => b.ghlContactId).filter(Boolean));
 
-  // Filter and match
-  const newBuyers: Array<{
+  // Check existing buyer activity across ALL properties for tier/speed scoring
+  const allBuyerActivity = await db.select({
+    ghlContactId: propertyBuyerActivity.ghlContactId,
+    isVip: propertyBuyerActivity.isVip,
+    offerCount: propertyBuyerActivity.offerCount,
+    sendCount: propertyBuyerActivity.sendCount,
+    status: propertyBuyerActivity.status,
+  })
+    .from(propertyBuyerActivity)
+    .where(eq(propertyBuyerActivity.tenantId, tenantId));
+
+  // Build a map of ghlContactId -> { isVip, totalOffers, totalSends }
+  const buyerActivityMap = new Map<string, { isVip: boolean; totalOffers: number; totalSends: number; hasAccepted: boolean }>();
+  for (const ba of allBuyerActivity) {
+    if (!ba.ghlContactId) continue;
+    const existing = buyerActivityMap.get(ba.ghlContactId) || { isVip: false, totalOffers: 0, totalSends: 0, hasAccepted: false };
+    if (ba.isVip === "true") existing.isVip = true;
+    existing.totalOffers += ba.offerCount || 0;
+    existing.totalSends += ba.sendCount || 0;
+    if (ba.status === "accepted") existing.hasAccepted = true;
+    buyerActivityMap.set(ba.ghlContactId, existing);
+  }
+
+  // Filter, score, and match
+  const scoredBuyers: Array<{
     buyerName: string;
     buyerPhone: string | null;
     ghlContactId: string;
     isVip: boolean;
     matchReason: string;
+    score: number;
   }> = [];
 
   for (const contact of contacts) {
     if (existingGhlIds.has(contact.ghlContactId)) continue;
 
-    // Check market match
-    const marketMatch = marketTag && contact.market?.toLowerCase() === marketTag;
-    // Check buyBoxType match
-    const typeMatch = contact.buyBoxType?.toLowerCase()?.includes(propertyType);
+    let score = 0;
+    const reasons: string[] = [];
 
-    let matchReason = "";
-    if (marketMatch) matchReason += `${property.market || property.city} market`;
-    if (typeMatch) matchReason += `${matchReason ? " + " : ""}${contact.buyBoxType} buyer`;
-    if (!matchReason) matchReason = "Matched from contact cache";
+    // Market match (required — all contacts already passed the SQL filter)
+    const isNationwide = contact.market?.toLowerCase() === 'nationwide';
+    if (isNationwide) {
+      score += 20; // Nationwide buyers get slightly less market score since they're not local specialists
+      reasons.push("Nationwide buyer");
+    } else {
+      score += 30; // Exact market match gets full points
+      reasons.push(`${property.market || property.city} market`);
+    }
 
-    newBuyers.push({
+    // Buy box type match (required — all contacts already passed the SQL filter)
+    score += 25;
+    reasons.push(`${contact.buyBoxType || propertyType} buyer`);
+
+    // Tier: VIP buyers (+20 points)
+    const activity = buyerActivityMap.get(contact.ghlContactId);
+    const isVip = activity?.isVip || false;
+    if (isVip) {
+      score += 20;
+      reasons.push("VIP buyer");
+    }
+
+    // Speed: buyers with more offers/activity are faster closers (+15 points max)
+    if (activity) {
+      const speedScore = Math.min(15, (activity.totalOffers * 5) + (activity.totalSends * 1));
+      if (speedScore > 0) {
+        score += speedScore;
+        reasons.push(`${activity.totalOffers} prior offers`);
+      }
+      // Proven closer bonus (+10 points)
+      if (activity.hasAccepted) {
+        score += 10;
+        reasons.push("proven closer");
+      }
+    }
+
+    if (reasons.length === 0) reasons.push("Matched from contact cache");
+
+    scoredBuyers.push({
       buyerName: contact.name || "Unknown",
       buyerPhone: contact.phone,
       ghlContactId: contact.ghlContactId,
-      isVip: false, // VIP status managed manually on buyer activity
-      matchReason,
+      isVip,
+      matchReason: reasons.join(" + ") + ` (score: ${score})`,
+      score,
     });
   }
+
+  // Sort by score descending — best matches first
+  scoredBuyers.sort((a, b) => b.score - a.score);
+  const newBuyers = scoredBuyers;
 
   // Insert matched buyers
   let insertedCount = 0;
@@ -835,7 +890,7 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
     await logPropertyActivity(tenantId, propertyId, {
       eventType: "buyer_matched",
       title: `${insertedCount} buyers auto-matched from CRM`,
-      description: `Matched based on market and property type preferences`,
+      description: `Matched based on required market + buy box match, scored by tier & speed`,
       metadata: JSON.stringify({ matchedCount: insertedCount }),
     });
   }

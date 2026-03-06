@@ -1725,3 +1725,19 @@ export const dispoDailyKpis = mysqlTable("dispo_daily_kpis", {
 });
 export type DispoDailyKpi = typeof dispoDailyKpis.$inferSelect;
 export type InsertDispoDailyKpi = typeof dispoDailyKpis.$inferInsert;
+
+// ─── SYNC LOG (audit trail for GHL polling) ───
+export const syncLog = mysqlTable("sync_log", {
+  id: int("id").primaryKey().autoincrement(),
+  tenantId: int("tenantId").notNull(),
+  syncType: varchar("syncType", { length: 50 }).notNull(),
+  status: mysqlEnum("sync_status", ["success", "partial", "failed"]).notNull(),
+  recordsProcessed: int("recordsProcessed").default(0),
+  recordsCreated: int("recordsCreated").default(0),
+  recordsUpdated: int("recordsUpdated").default(0),
+  errorMessage: text("errorMessage"),
+  durationMs: int("durationMs"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type SyncLog = typeof syncLog.$inferSelect;
+export type InsertSyncLog = typeof syncLog.$inferInsert;

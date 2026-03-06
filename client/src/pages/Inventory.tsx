@@ -4,7 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import {
   Plus, Search, Home, MapPin, DollarSign, Send, Eye, Handshake,
-  MoreVertical, Trash2, Edit, ChevronDown, ChevronUp, Building,
+  MoreVertical, Trash2, Edit, ChevronDown, ChevronUp, Building, LayoutGrid, List as ListIcon,
   Calendar, Phone, Mail, Facebook, Users, MessageSquare, Clock,
   CheckCircle2, XCircle, AlertCircle, Flame, Thermometer, Snowflake,
   Package, Filter, ArrowUpDown, X, Star, Activity, FileText,
@@ -344,6 +344,76 @@ function LogSendDialog({
   );
 }
 
+// ─── GHL CONTACT AUTOCOMPLETE ───
+function GhlContactAutocomplete({
+  value, onChange, onSelect, placeholder = "Buyer Name *",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSelect: (contact: { name: string; phone?: string; email?: string; company?: string }) => void;
+  placeholder?: string;
+}) {
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; name: string; phone?: string; email?: string; company?: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchMutation = trpc.coachActions.searchContacts.useMutation();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleChange = (text: string) => {
+    onChange(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (text.length >= 2) {
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const results = await searchMutation.mutateAsync({ query: text });
+          setSuggestions((results as any[]).slice(0, 5));
+          setShowSuggestions(true);
+        } catch { setSuggestions([]); }
+      }, 300);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <Input
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+      />
+      {showSuggestions && suggestions.length > 0 && (
+        <div
+          className="absolute z-50 w-full mt-1 rounded-lg shadow-lg overflow-hidden"
+          style={{ background: "var(--g-bg-card)", border: "1px solid var(--g-border-subtle)" }}
+        >
+          {suggestions.map((c) => (
+            <button
+              key={c.id}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+              style={{ color: "var(--g-text-primary)" }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSelect({ name: c.name, phone: c.phone, email: c.email, company: c.company });
+                setShowSuggestions(false);
+              }}
+            >
+              <div className="font-medium">{c.name}</div>
+              {(c.phone || c.email) && (
+                <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                  {c.phone}{c.phone && c.email ? " · " : ""}{c.email}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ADD OFFER DIALOG ───
 function AddOfferDialog({
   open, onOpenChange, propertyId, onSave, isSaving,
@@ -365,7 +435,11 @@ function AddOfferDialog({
           <DialogTitle style={{ color: "var(--g-text-primary)" }}>Add Offer</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <Input placeholder="Buyer Name *" value={form.buyerName} onChange={(e) => setForm({ ...form, buyerName: e.target.value })} />
+          <GhlContactAutocomplete
+            value={form.buyerName}
+            onChange={(v) => setForm({ ...form, buyerName: v })}
+            onSelect={(c) => setForm({ ...form, buyerName: c.name, buyerPhone: c.phone || form.buyerPhone, buyerEmail: c.email || form.buyerEmail, buyerCompany: c.company || form.buyerCompany })}
+          />
           <div className="grid grid-cols-2 gap-2">
             <Input placeholder="Phone" value={form.buyerPhone} onChange={(e) => setForm({ ...form, buyerPhone: e.target.value })} />
             <Input placeholder="Email" value={form.buyerEmail} onChange={(e) => setForm({ ...form, buyerEmail: e.target.value })} />
@@ -424,7 +498,11 @@ function AddShowingDialog({
           <DialogTitle style={{ color: "var(--g-text-primary)" }}>Schedule Showing</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <Input placeholder="Buyer Name *" value={form.buyerName} onChange={(e) => setForm({ ...form, buyerName: e.target.value })} />
+          <GhlContactAutocomplete
+            value={form.buyerName}
+            onChange={(v) => setForm({ ...form, buyerName: v })}
+            onSelect={(c) => setForm({ ...form, buyerName: c.name, buyerPhone: c.phone || form.buyerPhone, buyerCompany: c.company || form.buyerCompany })}
+          />
           <div className="grid grid-cols-2 gap-2">
             <Input placeholder="Phone" value={form.buyerPhone} onChange={(e) => setForm({ ...form, buyerPhone: e.target.value })} />
             <Input placeholder="Company" value={form.buyerCompany} onChange={(e) => setForm({ ...form, buyerCompany: e.target.value })} />
@@ -483,7 +561,11 @@ function AddBuyerDialog({
           <DialogTitle style={{ color: "var(--g-text-primary)" }}>Add Buyer</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <Input placeholder="Buyer Name *" value={form.buyerName} onChange={(e) => setForm({ ...form, buyerName: e.target.value })} />
+          <GhlContactAutocomplete
+            value={form.buyerName}
+            onChange={(v) => setForm({ ...form, buyerName: v })}
+            onSelect={(c) => setForm({ ...form, buyerName: c.name, buyerPhone: c.phone || form.buyerPhone, buyerEmail: c.email || form.buyerEmail, buyerCompany: c.company || form.buyerCompany })}
+          />
           <div className="grid grid-cols-2 gap-2">
             <Input placeholder="Phone" value={form.buyerPhone} onChange={(e) => setForm({ ...form, buyerPhone: e.target.value })} />
             <Input placeholder="Email" value={form.buyerEmail} onChange={(e) => setForm({ ...form, buyerEmail: e.target.value })} />
@@ -1517,6 +1599,20 @@ export default function Inventory() {
   const [csvPreview, setCsvPreview] = useState<any>(null);
   const [columnMapping, setColumnMapping] = useState<Array<{ csvColumn: string; mappedTo: string }>>([]);
   const [importResult, setImportResult] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"table" | "card">("table");
+
+  // Role-based stage filtering
+  const teamRole = user?.teamRole || "admin";
+  const visibleStages = useMemo(() => {
+    const allStages = ["all", "lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up", "dead"] as const;
+    if (teamRole === "dispo_manager") {
+      return ["all", "marketing", "buyer_negotiating", "closing", "closed", "dead"] as const;
+    }
+    if (teamRole === "lead_manager" || teamRole === "acquisition_manager") {
+      return ["all", "lead", "apt_set", "offer_made", "under_contract", "marketing", "closing", "closed"] as const;
+    }
+    return allStages;
+  }, [teamRole]);
 
   const { data, isLoading } = trpc.inventory.getProperties.useQuery(
     { status: statusFilter, search: search || undefined, limit: 100 },
@@ -1674,8 +1770,17 @@ export default function Inventory() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        {/* View mode toggle */}
+        <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--g-bg-inset)" }}>
+          <button onClick={() => setViewMode("table")} className={`p-1.5 rounded ${viewMode === "table" ? "bg-white shadow-sm" : ""}`} title="Table view">
+            <ListIcon className="h-4 w-4" style={{ color: viewMode === "table" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
+          </button>
+          <button onClick={() => setViewMode("card")} className={`p-1.5 rounded ${viewMode === "card" ? "bg-white shadow-sm" : ""}`} title="Card view">
+            <LayoutGrid className="h-4 w-4" style={{ color: viewMode === "card" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
+          </button>
+        </div>
         <div className="flex items-center gap-1.5 overflow-x-auto">
-          {(["all", "lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up", "dead"] as const).map((s) => {
+          {visibleStages.map((s) => {
             const cfg = s === "all" ? { label: "All", color: "var(--g-text-primary)", bg: "var(--g-bg-elevated)" } : STATUS_CONFIG[s];
             const isActive = statusFilter === s;
             return (
@@ -1713,38 +1818,78 @@ export default function Inventory() {
                 <Plus className="h-4 w-4 mr-1" /> Add Property
               </Button>
             </div>
-          ) : (
-            <div className={`grid gap-3 ${selectedPropertyId ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"}`}>
-              {properties.map((p: any) => (
-                <div key={p.id} className="relative group">
+          ) : viewMode === "table" ? (
+              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--g-border-subtle)" }}>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ background: "var(--g-bg-inset)" }}>
+                      <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Address</th>
+                      <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Status</th>
+                      <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Asking</th>
+                      <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Contract</th>
+                      <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Sends</th>
+                      <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Offers</th>
+                      <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>DOM</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {properties.map((p: any) => {
+                      const statusCfg = STATUS_CONFIG[p.status as PropertyStatus] || STATUS_CONFIG.lead;
+                      const act = p._activity || {};
+                      const dom = daysOnMarket(p.createdAt);
+                      return (
+                        <tr
+                          key={p.id}
+                          onClick={() => setSelectedPropertyId(p.id)}
+                          className="cursor-pointer transition-colors"
+                          style={{
+                            background: selectedPropertyId === p.id ? "var(--g-accent-soft)" : "var(--g-bg-card)",
+                            borderBottom: "1px solid var(--g-border-subtle)",
+                          }}
+                          onMouseEnter={(e) => { if (selectedPropertyId !== p.id) e.currentTarget.style.background = "var(--g-bg-card-hover)"; }}
+                          onMouseLeave={(e) => { if (selectedPropertyId !== p.id) e.currentTarget.style.background = "var(--g-bg-card)"; }}
+                        >
+                          <td className="px-3 py-2.5">
+                            <div className="font-semibold truncate max-w-[200px]" style={{ color: "var(--g-text-primary)" }}>{p.address}</div>
+                            <div className="text-[10px] truncate" style={{ color: "var(--g-text-tertiary)" }}>{p.city}, {p.state} {p.zip}</div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <Badge style={{ background: statusCfg.bg, color: statusCfg.color, border: "none", fontSize: "10px" }}>{statusCfg.label}</Badge>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-semibold" style={{ color: "var(--g-accent)" }}>
+                            {p.askingPrice ? formatCurrency(p.askingPrice) : "—"}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-semibold" style={{ color: "var(--g-text-primary)" }}>
+                            {p.contractPrice ? formatCurrency(p.contractPrice) : "—"}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: act.sendCount > 0 ? "#3b82f6" : "var(--g-text-tertiary)" }}>
+                            {act.sendCount || 0}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: act.offerCount > 0 ? "#f59e0b" : "var(--g-text-tertiary)" }}>
+                            {act.offerCount || 0}
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            <span style={{ color: heatColor(dom) }}>{dom}d</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className={`grid gap-3 ${selectedPropertyId ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"}`}>
+                {properties.map((p: any) => (
                   <PropertyCard
+                    key={p.id}
                     property={p}
                     onClick={() => setSelectedPropertyId(p.id)}
                     isSelected={selectedPropertyId === p.id}
                   />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem onClick={() => setSelectedPropertyId(p.id)}>
-                        <Eye className="h-4 w-4 mr-2" /> View Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setDeleteConfirmId(p.id)} className="text-red-500">
-                        <Trash2 className="h-4 w-4 mr-2" /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )
+          }
         </div>
 
         {/* Detail Panel */}

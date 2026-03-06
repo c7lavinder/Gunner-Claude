@@ -7306,17 +7306,25 @@ selectedTimezone: { type: "string" },
       }).optional())
       .query(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
-        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
-        }
 
         const { searchLocationTasks, enrichTasks, getTeamMemberGhlMap, getTeamMembersForFilter } = await import("./taskCenter");
         const { prioritizeTasks } = await import("./dayHub");
+        const { getTeamMemberByUserId } = await import("./db");
 
-        const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin";
+        const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin" || (ctx.user as any).isTenantAdmin === "true";
         let assignedTo: string[] | undefined;
+
         if (input?.assignedToGhlUserId) {
           assignedTo = [input.assignedToGhlUserId];
+        } else if (!isAdmin) {
+          // Non-admin users: auto-scope to their own ghlUserId
+          const myTeamMember = await getTeamMemberByUserId(ctx.user.id);
+          if (myTeamMember?.ghlUserId) {
+            assignedTo = [myTeamMember.ghlUserId];
+          } else {
+            // No GHL user ID linked — return empty results rather than showing all data
+            return { tasks: [], teamMembers: [] };
+          }
         }
 
         const [rawTasks, memberMap, memberList] = await Promise.all([
@@ -7365,24 +7373,45 @@ selectedTimezone: { type: "string" },
       }).optional())
       .query(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
-        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
+
+        const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin" || (ctx.user as any).isTenantAdmin === "true";
+        let ghlUserId = input?.assignedToGhlUserId;
+
+        if (!ghlUserId && !isAdmin) {
+          const { getTeamMemberByUserId } = await import("./db");
+          const myTeamMember = await getTeamMemberByUserId(ctx.user.id);
+          if (myTeamMember?.ghlUserId) {
+            ghlUserId = myTeamMember.ghlUserId;
+          } else {
+            return [];
+          }
         }
 
         const { getUnreadConversations } = await import("./dayHub");
-        return await getUnreadConversations(ctx.user.tenantId, input?.assignedToGhlUserId);
+        return await getUnreadConversations(ctx.user.tenantId, ghlUserId);
       }),
 
     // Get today's appointments
     getTodayAppointments: protectedProcedure
       .query(async ({ ctx }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
-        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Task Center is currently available to admins only" });
-        }
+
+        const isAdmin = ctx.user.role === "super_admin" || ctx.user.role === "admin" || (ctx.user as any).isTenantAdmin === "true";
 
         const { getTodayAppointments } = await import("./dayHub");
-        return await getTodayAppointments(ctx.user.tenantId);
+        const appointments = await getTodayAppointments(ctx.user.tenantId);
+
+        // Non-admin users: filter to only their own appointments
+        if (!isAdmin) {
+          const { getTeamMemberByUserId } = await import("./db");
+          const myTeamMember = await getTeamMemberByUserId(ctx.user.id);
+          if (myTeamMember?.ghlUserId) {
+            return appointments.filter((a: any) => a.assignedTo === myTeamMember.ghlUserId);
+          }
+          return [];
+        }
+
+        return appointments;
       }),
 
     // Get KPI summary for the current user
@@ -7622,6 +7651,13 @@ selectedTimezone: { type: "string" },
         sqft: z.number().optional(),
         lotSize: z.string().optional(),
         yearBuilt: z.number().optional(),
+        description: z.string().optional(),
+        lockboxCode: z.string().optional(),
+        occupancyStatus: z.string().optional(),
+        assignmentFee: z.number().optional(),
+        market: z.string().optional(),
+        mediaLink: z.string().optional(),
+        leadSource: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });

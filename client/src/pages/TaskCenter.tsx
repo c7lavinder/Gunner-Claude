@@ -3694,12 +3694,17 @@ export default function TaskCenter() {
 
   const isDispoManager = user?.teamRole === 'dispo_manager';
 
-  // Force dispo managers to their own tab
+  // Force non-admin users to their appropriate tab
   useEffect(() => {
     if (isDispoManager && roleTab !== 'dispo') {
       setRoleTab('dispo');
+    } else if (!isAdmin && !isDispoManager) {
+      // Non-admin LM/AM/LG users: set to their role tab (doesn't matter much since backend scopes data)
+      const teamRole = user?.teamRole;
+      if (teamRole === 'lead_manager' && roleTab === 'admin') setRoleTab('lm');
+      else if (teamRole === 'acquisition_manager' && roleTab === 'admin') setRoleTab('am');
     }
-  }, [isDispoManager]);
+  }, [isDispoManager, isAdmin, user?.teamRole]);
 
   // Fetch priority tasks
   const { data, isLoading, isError } = trpc.taskCenter.getPriorityTasks.useQuery(
@@ -3959,37 +3964,44 @@ export default function TaskCenter() {
               Day Hub
             </h1>
           </div>
-          {/* Role Tabs */}
-          <div
-            className="flex items-center rounded-lg p-0.5"
-            style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
-          >
-            {(isDispoManager ? ["dispo"] as RoleTab[] : ["admin", "lm", "am", "dispo"] as RoleTab[]).map((tab) => {
-              const config = ROLE_TAB_CONFIG[tab];
-              const isActive = roleTab === tab;
-              return (
-                <button
-                  key={tab}
-                  className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all"
-                  style={{
-                    background: isActive ? "var(--g-accent)" : "transparent",
-                    color: isActive ? "white" : "var(--g-text-tertiary)",
-                    boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
-                  }}
-                  onClick={() => {
-                    setRoleTab(tab);
-                    setSelectedMember("all");
-                  }}
-                  title={config.description}
-                >
-                  {config.label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-xs hidden md:block" style={{ color: "var(--g-text-tertiary)" }}>
-            {ROLE_TAB_CONFIG[roleTab].description}
-          </p>
+          {/* Role Tabs - only visible for admins */}
+          {isAdmin && (
+            <>
+              <div
+                className="flex items-center rounded-lg p-0.5"
+                style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}
+              >
+                {(isDispoManager ? ["dispo"] as RoleTab[] : ["admin", "lm", "am", "dispo"] as RoleTab[]).map((tab) => {
+                  const config = ROLE_TAB_CONFIG[tab];
+                  const isActive = roleTab === tab;
+                  return (
+                    <button
+                      key={tab}
+                      className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all"
+                      style={{
+                        background: isActive ? "var(--g-accent)" : "transparent",
+                        color: isActive ? "white" : "var(--g-text-tertiary)",
+                        boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+                      }}
+                      onClick={() => {
+                        setRoleTab(tab);
+                        setSelectedMember("all");
+                      }}
+                      title={config.description}
+                    >
+                      {config.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs hidden md:block" style={{ color: "var(--g-text-tertiary)" }}>
+                {ROLE_TAB_CONFIG[roleTab].description}
+              </p>
+            </>
+          )}
+          {!isAdmin && (
+            <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Your tasks &amp; conversations</p>
+          )}
         </div>
         <Button
           variant="outline"

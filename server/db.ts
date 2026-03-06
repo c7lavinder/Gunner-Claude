@@ -13,7 +13,8 @@ import {
   BrandAsset, SocialPost, ContentIdea, BrandProfile, InsertBrandProfile,
   teamAssignments, TeamAssignment, InsertTeamAssignment,
   emailsSent, InsertEmailSent, EmailSent, tenants, tenantRubrics,
-  coachMessages, InsertCoachMessage, CoachMessage
+  coachMessages, InsertCoachMessage, CoachMessage,
+  syncLog, InsertSyncLog, SyncLog
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2696,4 +2697,36 @@ export async function getAmPmCallStatusForContacts(
   }
 
   return result;
+}
+
+
+// ─── SYNC LOG HELPERS ───
+
+export async function logSync(data: {
+  tenantId: number;
+  syncType: string;
+  status: "success" | "partial" | "failed";
+  recordsProcessed?: number;
+  recordsCreated?: number;
+  recordsUpdated?: number;
+  errorMessage?: string;
+  durationMs?: number;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(syncLog).values(data);
+  } catch (err) {
+    console.error("[SyncLog] Failed to write sync log:", err);
+  }
+}
+
+export async function getRecentSyncLogs(tenantId: number, limit = 20): Promise<SyncLog[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const { eq, desc } = await import("drizzle-orm");
+  return db.select().from(syncLog)
+    .where(eq(syncLog.tenantId, tenantId))
+    .orderBy(desc(syncLog.createdAt))
+    .limit(limit);
 }

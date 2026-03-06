@@ -1095,6 +1095,37 @@ export async function pollForNewCalls(): Promise<{
   }
 
   console.log(`[GHL] Poll complete: ${results.synced} synced, ${results.skipped} skipped, ${results.failed} failed`);
+
+  // Log sync result for audit trail
+  try {
+    const { logSync } = await import("./db");
+    const crmTenants = await getTenantsWithCrm();
+    for (const tenant of crmTenants) {
+      await logSync({
+        tenantId: tenant.id,
+        syncType: "calls",
+        status: results.failed > 0 ? (results.synced > 0 ? "partial" : "failed") : "success",
+        recordsProcessed: results.synced + results.skipped + results.failed,
+        recordsCreated: results.synced,
+        errorMessage: results.errors.length > 0 ? results.errors.join("; ").substring(0, 500) : undefined,
+      });
+    }
+    // Notify owner on failures
+    if (results.failed > 0 && results.errors.length > 0) {
+      try {
+        const { notifyOwner } = await import("./_core/notification");
+        await notifyOwner({
+          title: `GHL Sync: ${results.failed} call(s) failed`,
+          content: `Poll results: ${results.synced} synced, ${results.skipped} skipped, ${results.failed} failed.\nErrors: ${results.errors.slice(0, 3).join("\n")}`,
+        });
+      } catch (notifErr) {
+        console.warn("[GHL] Failed to send failure notification:", notifErr);
+      }
+    }
+  } catch (logErr) {
+    console.warn("[GHL] Failed to write sync log:", logErr);
+  }
+
   return results;
 }
 
@@ -1323,17 +1354,17 @@ export function startPolling(intervalMinutes: number = 5): void {
   }
 
   currentIntervalMinutes = intervalMinutes;
-  const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
-  console.log(`[GHL] Starting polling mode (every 10 minutes)`);
+  const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  console.log(`[GHL] Starting polling mode (every 5 minutes)`);
   
   // Initial sync — fetch recent calls for all tenants immediately
   pollForNewCalls()
     .catch(err => console.error("[GHL] Initial sync error:", err));
 
-  // Regular polling every 10 minutes
+  // Regular polling every 5 minutes
   const scheduleNextPoll = () => {
     pollInterval = setTimeout(async () => {
-      console.log(`[GHL] Running scheduled poll (10-minute interval)`);
+      console.log(`[GHL] Running scheduled poll (5-minute interval)`);
       try {
         await pollForNewCalls();
       } catch (err) {
@@ -1396,7 +1427,7 @@ export function startPolling(intervalMinutes: number = 5): void {
 
   // Start opportunity detection every 2 hours (reduced from 1 hour to save API quota)
   if (!opportunityDetectionInterval) {
-    console.log("[OpportunityDetection] Starting opportunity detection scheduler (every 2 hours)");
+    console.log("[OpportunityDetection] Starting opportunity detection scheduler (every 30 minutes)");
     // Run initial detection after 15-minute delay (staggered from call sync and opportunity poll)
     setTimeout(() => {
       runOpportunityDetection()
@@ -1415,7 +1446,7 @@ export function startPolling(intervalMinutes: number = 5): void {
           console.log(`[OpportunityDetection] Scheduled run: detected ${result.detected}, errors ${result.errors}`);
         })
         .catch(err => console.error("[OpportunityDetection] Scheduled run error:", err));
-    }, 2 * 60 * 60 * 1000); // 2 hours
+    }, 30 * 60 * 1000); // 30 minutes
   }
 
   // Start GHL property address backfill (every 30 minutes)
