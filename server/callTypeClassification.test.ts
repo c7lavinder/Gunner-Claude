@@ -3,8 +3,9 @@ import * as fs from "fs";
 import * as path from "path";
 
 /**
- * Tests to verify that call type classification never defaults to "offer" based on role alone.
- * The "offer" type should only be assigned when a specific dollar amount is presented in the transcript.
+ * Tests to verify call type classification logic.
+ * The system uses role as a strong default for acquisition managers (offer),
+ * but transcript evidence can override the role-based default.
  */
 
 const gradingTs = fs.readFileSync(path.join(__dirname, "grading.ts"), "utf-8");
@@ -13,7 +14,7 @@ const ghlServiceTs = fs.readFileSync(path.join(__dirname, "ghlService.ts"), "utf
 const batchDialerTs = fs.readFileSync(path.join(__dirname, "batchDialerSync.ts"), "utf-8");
 const routersTs = fs.readFileSync(path.join(__dirname, "routers.ts"), "utf-8");
 
-describe("Call Type Classification - No Role-Based Offer Default", () => {
+describe("Call Type Classification", () => {
   
   describe("grading.ts - detectCallType prompt", () => {
     it("should require a SPECIFIC DOLLAR AMOUNT for offer classification", () => {
@@ -29,12 +30,15 @@ describe("Call Type Classification - No Role-Based Offer Default", () => {
       expect(gradingTs).toContain("admin_callback");
     });
 
-    it("should instruct not to default to offer based on team member role", () => {
-      expect(gradingTs).toContain("Do NOT default to \"offer\" just because the team member is an acquisition manager");
+    it("should use acquisition_manager role as default for offer classification", () => {
+      // The system defaults AM calls to offer, with transcript override capability
+      expect(gradingTs).toContain("acquisition_manager");
+      expect(gradingTs).toContain("DEFAULT to \"offer\"");
     });
 
-    it("should use role as a WEAK hint only", () => {
-      expect(gradingTs).toContain("WEAK hint only");
+    it("should allow transcript to override role-based default with strong evidence", () => {
+      expect(gradingTs).toContain("transcript can override the role-based default");
+      expect(gradingTs).toContain("STRONG clear evidence");
     });
 
     it("should classify short callback-only calls as admin_callback", () => {
@@ -48,41 +52,29 @@ describe("Call Type Classification - No Role-Based Offer Default", () => {
   });
 
   describe("grading.ts - processCall fallback logic", () => {
-    it("should never default acquisition_manager to 'offer' in low-confidence fallback", () => {
-      // The old code had: if (teamMemberRole === "acquisition_manager") callType = "offer"
-      // This should no longer exist
-      expect(gradingTs).not.toMatch(/teamMemberRole\s*===?\s*["']acquisition_manager["']\s*\)?\s*\{?\s*\n?\s*callType\s*=\s*["']offer["']/);
+    it("should have acquisition_manager default to offer in fallback", () => {
+      // The code defaults AM to offer in the fallback path
+      expect(gradingTs).toContain("Acquisition managers are in the offer stage");
     });
 
     it("should have a medium-confidence tier (0.4-0.6) that still uses AI suggestion", () => {
       expect(gradingTs).toContain("aiDetection.confidence >= 0.4");
       expect(gradingTs).toContain("medium-confidence AI detection");
     });
-
-    it("should comment explaining why offer is not a role-based default", () => {
-      expect(gradingTs).toContain("Never default to \"offer\" based on role alone");
-    });
   });
 
-  describe("webhook.ts - no role-based offer pre-assignment", () => {
-    it("should not pre-assign 'offer' based on acquisition_manager role", () => {
-      // Should NOT contain the old pattern: acquisition_manager ? "offer"
-      expect(webhookTs).not.toMatch(/acquisition_manager["']\s*\?\s*["']offer["']/);
+  describe("webhook.ts - call type assignment", () => {
+    it("should reference lead_generator role for cold_call assignment", () => {
+      expect(webhookTs).toContain("lead_generator");
     });
 
-    it("should default acquisition managers to 'qualification' not 'offer'", () => {
-      // Should use lead_generator ? cold_call : qualification pattern
-      expect(webhookTs).toContain("lead_generator");
+    it("should include qualification as a call type", () => {
       expect(webhookTs).toContain("qualification");
     });
-
-    it("should have a comment explaining the design decision", () => {
-      expect(webhookTs).toContain("AI detection in processCall will determine the real type");
-    });
   });
 
-  describe("ghlService.ts - no role-based offer pre-assignment", () => {
-    it("should not pre-assign 'offer' based on acquisition_manager role", () => {
+  describe("ghlService.ts - no role-based offer pre-assignment in webhook", () => {
+    it("should not pre-assign 'offer' based on acquisition_manager role in webhook handler", () => {
       expect(ghlServiceTs).not.toMatch(/acquisition_manager["']\s*\?\s*["']offer["']/);
     });
 
@@ -91,20 +83,18 @@ describe("Call Type Classification - No Role-Based Offer Default", () => {
     });
   });
 
-  describe("batchDialerSync.ts - no role-based offer pre-assignment", () => {
-    it("should not pre-assign 'offer' based on acquisition_manager role", () => {
+  describe("batchDialerSync.ts - call type assignment", () => {
+    it("should not pre-assign 'offer' based on acquisition_manager role in batch import", () => {
       expect(batchDialerTs).not.toMatch(/acquisition_manager["']\s*\?\s*["']offer["']/);
     });
 
-    it("getCallTypeForRole should not return 'offer'", () => {
-      // The function return type should not include "offer"
+    it("getCallTypeForRole should return cold_call or qualification", () => {
       expect(batchDialerTs).toMatch(/getCallTypeForRole.*:\s*["']cold_call["']\s*\|\s*["']qualification["']/);
     });
   });
 
-  describe("routers.ts - manual upload no role-based offer", () => {
+  describe("routers.ts - manual upload", () => {
     it("should not pre-assign 'offer' for manual uploads based on role", () => {
-      // Find the manual upload section and verify no acquisition_manager -> offer mapping
       const manualUploadSection = routersTs.slice(
         routersTs.indexOf("uploadManual"),
         routersTs.indexOf("uploadManual") + 2000

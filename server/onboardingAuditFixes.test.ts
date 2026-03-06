@@ -133,8 +133,9 @@ describe("Gunner Engine webhook URL", () => {
   it("skips webhook for non-owner tenants without engineWebhookUrl", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("./server/gunnerEngineWebhook.ts", "utf-8");
-    // Should check if tenant is tenant 1 (platform owner)
-    expect(content).toContain("tenantId === 1");
+    // Checks if tenant is platform owner by looking up OWNER_OPEN_ID in users table
+    expect(content).toContain("OWNER_OPEN_ID");
+    expect(content).toContain("isPlatformOwner");
     expect(content).toContain("return null");
   });
 });

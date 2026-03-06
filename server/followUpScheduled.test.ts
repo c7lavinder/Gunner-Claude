@@ -63,9 +63,9 @@ describe("Follow-Up Scheduled Feature", () => {
     );
 
     it("should reference follow-up in stage classification (follow_up stage)", () => {
-      // Follow-Up was removed as a separate pill in CallInbox (only 3 pills: direction, type, outcome)
-      // but follow_up still exists as a stage classification label
-      expect(callInboxContent).toContain("Follow-Up");
+      // follow_up exists as a stage classification key and CSS class in CallInbox
+      expect(callInboxContent).toContain("follow_up");
+      expect(callInboxContent).toContain("call-pill-follow-up");
     });
   });
 });

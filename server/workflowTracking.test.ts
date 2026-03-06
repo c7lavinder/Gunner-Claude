@@ -203,6 +203,7 @@ describe("Upcoming Tab — Improved empty state messaging", () => {
   });
 
   it("empty state explains what will appear in the tab", () => {
-    expect(componentSource).toContain("Workflows, scheduled SMS, and future tasks will appear here");
+    // Empty state shows a message about no upcoming actions
+    expect(componentSource).toContain("No upcoming actions for this contact");
   });
 });

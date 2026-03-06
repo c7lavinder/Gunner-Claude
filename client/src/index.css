@@ -126,6 +126,9 @@
   --g-role-gen: #a16207;
   --g-role-gen-bg: rgba(161,98,7,0.08);
   --g-role-gen-border: rgba(161,98,7,0.15);
+  --g-role-dispo: #7c3aed;
+  --g-role-dispo-bg: rgba(124,58,237,0.08);
+  --g-role-dispo-border: rgba(124,58,237,0.15);
 
   /* Grade colors with glow */
   --g-grade-a: #16a34a;
@@ -299,6 +302,9 @@
   --g-role-gen: #eab308;
   --g-role-gen-bg: rgba(234,179,8,0.12);
   --g-role-gen-border: rgba(234,179,8,0.2);
+  --g-role-dispo: #a78bfa;
+  --g-role-dispo-bg: rgba(167,139,250,0.12);
+  --g-role-dispo-border: rgba(167,139,250,0.2);
 
   --g-grade-a: #22c55e;
   --g-grade-a-bg: rgba(34,197,94,0.12);
@@ -932,6 +938,9 @@
   .obs-roster-card-header.admin {
     background: linear-gradient(135deg, var(--g-role-acq), rgba(185,28,28,0.6));
   }
+  .obs-roster-card-header.dispo {
+    background: linear-gradient(135deg, var(--g-role-dispo), rgba(124,58,237,0.6));
+  }
   .obs-roster-card-header-inner {
     background: var(--g-bg-card);
     padding: 18px 18px 16px;
@@ -1012,6 +1021,11 @@
     color: var(--g-role-acq);
     background: var(--g-role-acq-bg);
     border: 1px solid var(--g-role-acq-border);
+  }
+  .obs-roster-role-badge.dispo {
+    color: var(--g-role-dispo);
+    background: var(--g-role-dispo-bg);
+    border: 1px solid var(--g-role-dispo-border);
   }
 
   /* Level display */

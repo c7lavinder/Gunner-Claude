@@ -39,19 +39,19 @@ describe("Signal Detection Improvements", () => {
   });
 
   describe("Daily cap for signals", () => {
-    it("should have a daily signal cap", () => {
-      // Check for daily cap logic
-      const hasDailyCap = opportunityDetectionCode.includes("DAILY_SIGNAL_CAP") || 
-                          opportunityDetectionCode.includes("dailyCap") ||
-                          opportunityDetectionCode.includes("signalsCreatedToday");
+    it("should have a per-tier daily signal cap", () => {
+      // Implementation uses PER_TIER_CAP for per-tier daily limits
+      const hasDailyCap = opportunityDetectionCode.includes("PER_TIER_CAP") || 
+                          opportunityDetectionCode.includes("DAILY_SIGNAL_CAP") ||
+                          opportunityDetectionCode.includes("dailyCap");
       expect(hasDailyCap).toBe(true);
     });
 
-    it("should count signals created today before saving new ones", () => {
-      // Check for today's signal count check
-      const hasCountCheck = opportunityDetectionCode.includes("signalsCreatedToday") ||
-                            opportunityDetectionCode.includes("todayCount") ||
-                            opportunityDetectionCode.includes("createdToday");
+    it("should count signals created today per tier before saving new ones", () => {
+      // Check for today's signal count check per tier
+      const hasCountCheck = opportunityDetectionCode.includes("todayTierCounts") ||
+                            opportunityDetectionCode.includes("signalsCreatedToday") ||
+                            opportunityDetectionCode.includes("todayCount");
       expect(hasCountCheck).toBe(true);
     });
 
@@ -60,10 +60,10 @@ describe("Signal Detection Improvements", () => {
       expect(opportunityDetectionCode).toContain("sort");
     });
 
-    it("should limit new signals per scan based on remaining daily budget", () => {
-      const hasBudget = opportunityDetectionCode.includes("remainingBudget") ||
+    it("should limit new signals per scan based on tier caps", () => {
+      const hasBudget = opportunityDetectionCode.includes("allTiersFull") ||
                         opportunityDetectionCode.includes("savedThisScan") ||
-                        opportunityDetectionCode.includes("dailyLimit");
+                        opportunityDetectionCode.includes("remainingBudget");
       expect(hasBudget).toBe(true);
     });
   });

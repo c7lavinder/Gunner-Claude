@@ -37,14 +37,15 @@ describe("Signal Deduplication & Daily Cap", () => {
     );
   });
 
-  it("has a daily signal cap of 5 per tenant", () => {
-    expect(opportunityDetectionSource).toContain("DAILY_SIGNAL_CAP = 5");
+  it("has a per-tier daily signal cap", () => {
+    // Implementation uses PER_TIER_CAP instead of a flat DAILY_SIGNAL_CAP
+    expect(opportunityDetectionSource).toContain("PER_TIER_CAP");
   });
 
-  it("checks how many signals were already created today before saving", () => {
-    // Should count today's signals
-    expect(opportunityDetectionSource).toContain("alreadyCreatedToday");
-    expect(opportunityDetectionSource).toContain("remainingSlots");
+  it("checks how many signals were already created today per tier before saving", () => {
+    // Should count today's signals per tier
+    expect(opportunityDetectionSource).toContain("todayTierCounts");
+    expect(opportunityDetectionSource).toContain("todayStart");
   });
 
   it("sorts detections by priority before saving (highest first)", () => {
@@ -52,26 +53,21 @@ describe("Signal Deduplication & Daily Cap", () => {
     expect(opportunityDetectionSource).toContain("tierWeight");
     expect(opportunityDetectionSource).toContain("detections.sort");
     // missed tier should have highest weight
-    const tierWeightMatch = opportunityDetectionSource.match(
-      /missed:\s*(\d+).*warning:\s*(\d+).*possible:\s*(\d+)/s
-    );
-    expect(tierWeightMatch).toBeTruthy();
-    const missedWeight = parseInt(tierWeightMatch![1]);
-    const warningWeight = parseInt(tierWeightMatch![2]);
-    const possibleWeight = parseInt(tierWeightMatch![3]);
-    expect(missedWeight).toBeGreaterThan(warningWeight);
-    expect(warningWeight).toBeGreaterThan(possibleWeight);
+    // Verify tierWeight record exists with correct ordering
+    expect(opportunityDetectionSource).toContain("missed: 300");
+    expect(opportunityDetectionSource).toContain("warning: 200");
+    expect(opportunityDetectionSource).toContain("possible: 100");
   });
 
-  it("stops saving when daily cap is reached", () => {
-    // Should break out of the loop when savedThisScan >= remainingSlots
-    expect(opportunityDetectionSource).toContain("savedThisScan >= remainingSlots");
-    expect(opportunityDetectionSource).toContain("savedThisScan++");
+  it("skips saving when all tier caps are reached", () => {
+    // Should check if all tiers are full and skip
+    expect(opportunityDetectionSource).toContain("allTiersFull");
+    expect(opportunityDetectionSource).toContain("Skipping new signals");
   });
 
-  it("early returns when daily cap is already at 0", () => {
-    // Should return early if remainingSlots === 0
-    expect(opportunityDetectionSource).toContain("if (remainingSlots === 0)");
-    expect(opportunityDetectionSource).toContain("Daily cap reached");
+  it("early returns when all tier caps are reached", () => {
+    // Should return early if all tiers are at capacity
+    expect(opportunityDetectionSource).toContain("if (allTiersFull)");
+    expect(opportunityDetectionSource).toContain("All tier caps reached");
   });
 });

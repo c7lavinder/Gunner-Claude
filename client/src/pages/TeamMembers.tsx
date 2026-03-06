@@ -21,6 +21,7 @@ const roleClassMap: Record<string, string> = {
   acquisition_manager: "acq",
   lead_manager: "lead",
   lead_generator: "gen",
+  dispo_manager: "dispo",
 };
 
 function getRoleClass(teamRole: string): string {
@@ -774,9 +775,15 @@ function TeamMembersContent() {
             <Swords className="h-4 w-4" /> Teammate Classes
           </h3>
         </div>
-        <div style={{padding: 16}} className="grid gap-3 sm:grid-cols-3">
-          {roles.map((r, i) => {
-            const roleClass = i === 0 ? "lead" : i === 1 ? "acq" : "gen";
+        <div style={{padding: 16}} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {roles.map((r) => {
+            const roleClassMap: Record<string, string> = {
+              lead_generator: "gen",
+              lead_manager: "lead",
+              acquisition_manager: "acq",
+              dispo_manager: "dispo",
+            };
+            const roleClass = roleClassMap[r.code] || "gen";
             return { role: r.code, label: r.name, desc: r.description || r.name, roleClass };
           }).map(r => (
             <div key={r.role} style={{borderRadius: 10, overflow: 'hidden'}}>

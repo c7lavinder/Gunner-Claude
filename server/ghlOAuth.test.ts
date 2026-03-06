@@ -69,7 +69,8 @@ describe("GHL OAuth Install URL", () => {
     expect(url).toContain("opportunities.readonly");
     expect(url).toContain("users.readonly");
     expect(url).toContain("locations.readonly");
-    expect(url).toContain(encodeURIComponent("https://app.example.com/api/crm/oauth/callback"));
+    // Redirect URI uses /setup/oauth/callback (which internally redirects to /api/crm/oauth/callback)
+    expect(url).toContain(encodeURIComponent("https://app.example.com/setup/oauth/callback"));
   });
 
   it("includes state parameter when provided", async () => {
@@ -839,7 +840,8 @@ describe("Super Admin OAuth Overview - Redirect URI Update", () => {
     const { getInstallUrl } = await import("./ghlOAuth");
     const url = getInstallUrl();
     
-    expect(url).toContain(encodeURIComponent("https://getgunner.ai/api/crm/oauth/callback"));
+    // Redirect URI uses /setup/oauth/callback (which internally redirects to /api/crm/oauth/callback)
+    expect(url).toContain(encodeURIComponent("https://getgunner.ai/setup/oauth/callback"));
     expect(url).not.toContain(encodeURIComponent("/api/ghl/callback"));
   });
 });

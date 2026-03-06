@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendCallGradedWebhook } from "./gunnerEngineWebhook";
+
+// Set the env var BEFORE importing the module so the default URL is picked up
+const WEBHOOK_URL = "https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded";
+process.env.GUNNER_ENGINE_WEBHOOK_URL = WEBHOOK_URL;
+// Also set OWNER_OPEN_ID to a test value so the platform owner check can work
+process.env.OWNER_OPEN_ID = "test-owner-open-id";
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -10,15 +15,45 @@ vi.mock("./ghlActions", () => ({
   searchContacts: vi.fn().mockResolvedValue([]),
 }));
 
-// Mock the db updateCall (used for backfilling ghlContactId)
+// Mock the db — getDb returns a mock that finds the owner user
+const mockDbSelect = vi.fn().mockReturnValue({
+  from: vi.fn().mockReturnValue({
+    where: vi.fn().mockReturnValue({
+      limit: vi.fn().mockResolvedValue([{ id: 1, openId: "test-owner-open-id" }]),
+    }),
+  }),
+});
 vi.mock("./db", () => ({
   updateCall: vi.fn().mockResolvedValue(null),
+  getDb: vi.fn().mockResolvedValue({
+    select: () => mockDbSelect(),
+  }),
+}));
+
+// Mock the tenant module — return tenant with no engineWebhookUrl so it falls through to env var
+vi.mock("./tenant", () => ({
+  getTenantById: vi.fn().mockResolvedValue({ id: 1, name: "Test Tenant", crmConfig: '{}' }),
+  parseCrmConfig: vi.fn().mockReturnValue({}),
+  isPlatformOwner: vi.fn().mockReturnValue(true),
 }));
 
 // Mock the webhook retry queue
 vi.mock("./webhookRetryQueue", () => ({
   queueFailedWebhook: vi.fn().mockResolvedValue(undefined),
 }));
+
+// Need to also mock drizzle schema and drizzle-orm for the dynamic imports in getWebhookUrl
+vi.mock("../drizzle/schema", () => ({
+  users: { tenantId: "tenantId", openId: "openId" },
+}));
+
+vi.mock("drizzle-orm", () => ({
+  eq: vi.fn((...args: any[]) => args),
+  and: vi.fn((...args: any[]) => args),
+}));
+
+// We need a fresh import for each test since the module caches
+let sendCallGradedWebhook: any;
 
 describe("Gunner Engine Webhook", () => {
   const validPayload = {
@@ -39,8 +74,10 @@ describe("Gunner Engine Webhook", () => {
   const tenantId = 1;
   const callId = 123;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockFetch.mockReset();
+    const mod = await import("./gunnerEngineWebhook");
+    sendCallGradedWebhook = mod.sendCallGradedWebhook;
   });
 
   afterEach(() => {
@@ -57,16 +94,10 @@ describe("Gunner Engine Webhook", () => {
 
     expect(result).toBe(true);
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://gunner-engine-production.up.railway.app/webhooks/gunner/call-graded",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(validPayload),
-      }
-    );
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe(WEBHOOK_URL);
+    expect(options.method).toBe("POST");
+    expect(options.headers["Content-Type"]).toBe("application/json");
   });
 
   it("should return true on successful response", async () => {
@@ -170,7 +201,6 @@ describe("Gunner Engine Webhook", () => {
     const result = await sendCallGradedWebhook(payloadNoContact, tenantId, callId);
 
     expect(result).toBe(true);
-    // Webhook should still fire even if contact lookup failed
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
@@ -206,7 +236,6 @@ describe("Gunner Engine Webhook", () => {
 
     await sendCallGradedWebhook(validPayload, tenantId, callId);
 
-    // Should NOT have called searchContacts since contactId was already set
     expect(mockSearch).not.toHaveBeenCalled();
   });
 
@@ -277,7 +306,6 @@ describe("Gunner Engine Webhook", () => {
   });
 
   it("should accept tenantId and callId as required parameters", () => {
-    // Verify function signature requires 3 parameters
     expect(sendCallGradedWebhook.length).toBe(3);
   });
 });

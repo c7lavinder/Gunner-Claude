@@ -29,10 +29,10 @@ import {
 } from "lucide-react";
 
 // ─── CDN Image URLs ───
-const HERO_DASHBOARD = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/vNQGmAQJzCbyfSPK.png";
-const CALL_SCORING_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/JFwhthFRYPSiFrvr.png";
-const LEADERBOARD_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/vNQGmAQJzCbyfSPK.png";
-const AI_COACH_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663328210645/JFwhthFRYPSiFrvr.png";
+const HERO_DASHBOARD = "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/hero_dashboard_59b3ce9a.png";
+const CALL_SCORING_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/call_scoring_232c2796.png";
+const LEADERBOARD_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/hero_dashboard_59b3ce9a.png";
+const AI_COACH_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/call_scoring_232c2796.png";
 const GUNNER_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663328210645/nusXfQu5XBTMz3NUCR6brb/gunner-logo-small-transparent_1ea33474.png";
 
 // ─── Feature label mapping ───

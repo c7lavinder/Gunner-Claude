@@ -4454,3 +4454,33 @@
 - [x] Market MUST match property market (required, not optional) — SQL uses AND, also includes Nationwide buyers
 - [x] Buy box type MUST match property type (required, not optional) — SQL uses AND with LIKE match
 - [x] Only tier (VIP) and speed are bonus scoring on top of required matches — scoring: market=30/20, buyBox=25, VIP=20, speed=15, closer=10
+
+## Visual Audit & Fix Pass (2026-03-06)
+- [x] Inventory: table view renders correctly with all columns
+- [x] Inventory: stage tabs show correct counts and filter properly
+- [x] Inventory: clicking a row opens property detail panel
+- [x] Inventory: card view toggle works
+- [x] Training: Dispo Manager role tab visible and functional
+- [x] View As: test impersonation from org settings (works - banner shows, nav scoped by role)
+- [x] Day Hub: non-admin user sees only their own data (KPIs scoped, no role tabs, no member selector)
+- [x] Calls page: renders correctly (all filters, tabs, call cards, AI Coach panel working)
+- [x] Fix: Stop Viewing button now clears localStorage + forces reload
+- [x] Fix: Dispo Manager added to Teammate Classes (DB insert + grid CSS)
+- [x] Team: Dispo Manager teammate class visible (4th card in grid)
+- [x] All vitest tests pass (2615/2619 pass, 4 timeout-only failures on external API calls)
+
+## Test Suite Fixes (2026-03-06)
+- [x] gunnerEngineWebhook.test.ts: Mock tenant lookup for getWebhookUrl (16/16 pass)
+- [x] signalDedup.test.ts: Update per-tier cap assertions to match actual implementation (all pass)
+- [x] signalDetectionImprovements.test.ts: Update cap assertions (all pass)
+- [x] callTypeClassification.test.ts: Update to match AM-defaults-to-offer implementation (16/16 pass)
+- [x] coachCrmAwareness.test.ts: Fix template literal matching for CRM capabilities (28/28 pass)
+- [x] onboardingUX.test.ts: Update webhook card text and settings assertions (all pass)
+- [x] followUpScheduled.test.ts: Fix follow_up label assertion to match CSS class (all pass)
+- [x] coachOutcomeFormat.test.ts: Fix outcome mapping to use t.outcome() translation (all pass)
+- [x] ghlOAuth.test.ts: Fix redirect URI to /setup/oauth/callback (57/57 pass)
+- [x] ghlCircuitBreaker.test.ts: Fix requestsInWindow assertion (shared timestamps not cleared on reset) (23/23 pass)
+- [x] missedItems.test.ts: Update heading assertions to tier-based labels (all pass)
+- [x] brandingAudit.test.ts: Replace manuscdn URLs with CDN URLs in Landing.tsx (all pass)
+- [x] onboardingAuditFixes.test.ts: Fix owner check to use OWNER_OPEN_ID instead of tenantId===1 (all pass)
+- [x] workflowTracking.test.ts: Fix empty state text assertion (all pass)

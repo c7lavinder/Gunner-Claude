@@ -47,12 +47,15 @@ describe("Opportunity Detection Rule Descriptions", () => {
     expect(content).toContain("missedItems");
   });
 
-  it("frontend renders 'What They Missed' heading", async () => {
+  it("frontend renders tier-based heading for missed items", async () => {
     const fs = await import("fs");
     const path = await import("path");
     const filePath = path.join(process.cwd(), "client/src/pages/Opportunities.tsx");
     const content = fs.readFileSync(filePath, "utf-8");
-    expect(content).toContain("What They Missed");
+    // Headings are now tier-based: "What Happened" (missed), "Why This Is Worth a Look" (possible), "Red Flags" (other)
+    expect(content).toContain("What Happened");
+    expect(content).toContain("Why This Is Worth a Look");
+    expect(content).toContain("Red Flags");
   });
 
   it("generateAIReason LLM schema includes missedItems field", async () => {
@@ -107,8 +110,8 @@ describe("Opportunity Card missedItems Rendering", () => {
     const filePath = path.join(process.cwd(), "client/src/pages/Opportunities.tsx");
     const content = fs.readFileSync(filePath, "utf-8");
     
-    // Verify the UI renders missedItems
-    expect(content).toContain("What They Missed");
+    // Verify the UI renders missedItems with tier-based headings
+    expect(content).toContain("What Happened");
     expect(content).toContain("missedItems");
     // Should render as a list
     expect(content).toContain("<ul");

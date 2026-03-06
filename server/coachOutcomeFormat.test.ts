@@ -79,10 +79,13 @@ describe("CallDetail.tsx outcome formatting", () => {
   const callDetailPath = path.join(__dirname, "../client/src/pages/CallDetail.tsx");
   const callDetailContent = fs.readFileSync(callDetailPath, "utf-8");
 
-  it("should have proper outcome label mapping instead of raw replace", () => {
-    expect(callDetailContent).toContain("appointment_set: { label: 'Appointment Set'");
-    expect(callDetailContent).toContain("callback_scheduled: { label: 'Callback Scheduled'");
-    expect(callDetailContent).toContain("offer_made: { label: 'Offer Made'");
-    expect(callDetailContent).toContain("left_vm: { label: 'Left Voicemail'");
+  it("should have proper outcome label mapping using t.outcome() translation helper", () => {
+    // CallDetail uses t.outcome(code) for clean English labels via the translation system
+    expect(callDetailContent).toContain("t.outcome(code)");
+    // It maps outcome codes to color categories
+    expect(callDetailContent).toContain("appointment_set");
+    expect(callDetailContent).toContain("callback_scheduled");
+    expect(callDetailContent).toContain("offer_made");
+    expect(callDetailContent).toContain("left_vm");
   });
 });

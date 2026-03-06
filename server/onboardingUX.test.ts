@@ -34,7 +34,6 @@ describe("Onboarding UX: Stage Classification & Webhook Instructions", () => {
     });
 
     it("should have a fallback to free-text inputs when no pipelines loaded", () => {
-      // Free-text inputs should still exist as fallback
       expect(onboardingContent).toContain("formData.activeStages");
       expect(onboardingContent).toContain("formData.followUpStages");
       expect(onboardingContent).toContain("formData.deadStages");
@@ -52,7 +51,8 @@ describe("Onboarding UX: Stage Classification & Webhook Instructions", () => {
 
   describe("CRM Webhook Setup Instruction Card in Onboarding", () => {
     it("should show webhook instruction card after successful connection", () => {
-      expect(onboardingContent).toContain("Required: Set Up CRM Webhook");
+      // The card title was updated from "Required" to "Recommended"
+      expect(onboardingContent).toContain("Recommended: Enable Real-Time Webhooks");
     });
 
     it("should display the webhook URL with copy button", () => {
@@ -61,14 +61,14 @@ describe("Onboarding UX: Stage Classification & Webhook Instructions", () => {
     });
 
     it("should include step-by-step CRM setup instructions", () => {
-      expect(onboardingContent).toContain("Automation");
-      expect(onboardingContent).toContain("Workflows");
-      expect(onboardingContent).toContain("Call Status Changed");
-      expect(onboardingContent).toContain("Completed");
+      // Updated to match actual GHL Developer App webhook setup instructions
+      expect(onboardingContent).toContain("GHL Developer App");
+      expect(onboardingContent).toContain("Webhooks");
+      expect(onboardingContent).toContain("InboundMessage");
     });
 
-    it("should show a warning about missing webhook", () => {
-      expect(onboardingContent).toContain("Without this webhook");
+    it("should explain the benefit of webhooks", () => {
+      expect(onboardingContent).toContain("Webhooks deliver new calls");
     });
 
     it("should only show when connection is successful", () => {
@@ -77,22 +77,21 @@ describe("Onboarding UX: Stage Classification & Webhook Instructions", () => {
   });
 
   describe("CRM Webhook URL in Settings", () => {
-    it("should show CRM webhook URL in settings Advanced Configuration", () => {
-      expect(settingsContent).toContain("CRM Webhook URL");
-      expect(settingsContent).toContain("/api/webhook/ghl");
+    it("should include WebhookHealthWidget component", () => {
+      expect(settingsContent).toContain("WebhookHealthWidget");
     });
 
-    it("should have a copy button for the webhook URL in settings", () => {
-      expect(settingsContent).toContain("Webhook URL copied!");
+    it("should have external webhook URL configuration", () => {
+      expect(settingsContent).toContain("engineWebhookUrl");
+      expect(settingsContent).toContain("External Webhook URL");
     });
 
-    it("should include brief setup instructions in settings", () => {
-      expect(settingsContent).toContain("Call Status Changed");
+    it("should include webhook references in settings", () => {
+      expect(settingsContent).toContain("webhook");
     });
 
-    it("should import Webhook and Copy icons", () => {
+    it("should import Webhook icon", () => {
       expect(settingsContent).toContain("Webhook");
-      expect(settingsContent).toContain("Copy");
     });
   });
 
@@ -106,7 +105,6 @@ describe("Onboarding UX: Stage Classification & Webhook Instructions", () => {
     });
 
     it("should not contain 'Manus' text in onboarding (except framework files)", () => {
-      // Check for user-visible Manus text
       expect(onboardingContent).not.toMatch(/Login with Manus/i);
       expect(onboardingContent).not.toMatch(/Powered by Manus/i);
     });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { UserCheck, LogOut, Eye } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -12,6 +12,17 @@ interface AdminImpersonationData {
 
 type ImpersonationType = 'super_admin' | 'admin' | null;
 
+// Utility to clear all impersonation data from localStorage
+function clearAllImpersonationData() {
+  try {
+    localStorage.removeItem('impersonateUserId');
+    localStorage.removeItem('impersonateUserName');
+    localStorage.removeItem('gunner_impersonation');
+  } catch {
+    // Ignore errors
+  }
+}
+
 export function ImpersonationBanner() {
   const { user } = useAuth();
   const [adminData, setAdminData] = useState<AdminImpersonationData | null>(null);
@@ -19,12 +30,12 @@ export function ImpersonationBanner() {
   // Backend mutation to clear the session cookie when ending super_admin impersonation
   const stopImpersonationMutation = trpc.admin.stopImpersonation.useMutation({
     onSuccess: () => {
-      localStorage.removeItem('gunner_impersonation');
+      clearAllImpersonationData();
       window.location.href = '/admin-dashboard';
     },
     onError: () => {
       // Even if backend fails, clear localStorage and redirect
-      localStorage.removeItem('gunner_impersonation');
+      clearAllImpersonationData();
       window.location.href = '/admin-dashboard';
     },
   });
@@ -64,23 +75,33 @@ export function ImpersonationBanner() {
     ? 'admin'
     : null;
 
-  const handleEndImpersonation = () => {
+  const handleEndImpersonation = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (impersonationType === 'super_admin') {
       // Call backend to clear session cookie, then redirect
       stopImpersonationMutation.mutate();
-    } else if (impersonationType === 'admin') {
-      localStorage.removeItem('impersonateUserId');
-      localStorage.removeItem('impersonateUserName');
+    } else {
+      // Always clear all impersonation data regardless of type
+      clearAllImpersonationData();
+      // Force a hard page reload — this is the most reliable way to reset all React state
+      // We clear localStorage first, then reload. The reload will re-initialize the app
+      // without impersonation data in localStorage.
       window.location.href = '/settings';
+      // Fallback: if href assignment doesn't trigger a full reload (same URL), force it
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
     }
-  };
+  }, [impersonationType, stopImpersonationMutation]);
 
   if (!impersonationType) {
     return null;
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[200] bg-amber-500 text-amber-950 shadow-lg">
+    <div className="fixed top-0 left-0 right-0 z-[200] bg-amber-500 text-amber-950 shadow-lg" style={{ pointerEvents: 'auto' }}>
       <div className="container flex items-center justify-between py-2 px-4">
         <div className="flex items-center gap-3">
           {impersonationType === 'super_admin' ? (
@@ -108,6 +129,7 @@ export function ImpersonationBanner() {
           onClick={handleEndImpersonation}
           disabled={stopImpersonationMutation.isPending}
           className="text-amber-950 hover:bg-amber-600 hover:text-amber-950"
+          style={{ pointerEvents: 'auto', position: 'relative', zIndex: 201 }}
         >
           <LogOut className="h-4 w-4 mr-2" />
           {stopImpersonationMutation.isPending ? 'Ending...' : 'Stop Viewing'}
