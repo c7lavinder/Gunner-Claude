@@ -55,34 +55,53 @@ export async function getProperties(tenantId: number, filters?: {
     db.select({ count: sql<number>`count(*)` }).from(dispoProperties).where(where),
   ]);
 
-  // Enrich each property with activity counts
-  const enriched = await Promise.all(items.map(async (p) => {
-    const [sends] = await db.select({
-      count: sql<number>`count(*)`,
-      totalRecipients: sql<number>`COALESCE(SUM(${dispoPropertySends.recipientCount}), 0)`,
-    }).from(dispoPropertySends).where(eq(dispoPropertySends.propertyId, p.id));
+  // Batch-fetch activity counts for all properties in one query each (fixes N+1)
+  const propertyIds = items.map(p => p.id);
+  
+  let sendsByProp = new Map<number, { count: number; totalRecipients: number }>();
+  let offersByProp = new Map<number, { count: number; highestOffer: number }>();
+  let showingsByProp = new Map<number, { count: number; upcoming: number }>();
 
-    const [offers] = await db.select({
-      count: sql<number>`count(*)`,
-      highestOffer: sql<number>`COALESCE(MAX(${dispoPropertyOffers.offerAmount}), 0)`,
-    }).from(dispoPropertyOffers).where(eq(dispoPropertyOffers.propertyId, p.id));
+  if (propertyIds.length > 0) {
+    const [sendsData, offersData, showingsData] = await Promise.all([
+      db.select({
+        propertyId: dispoPropertySends.propertyId,
+        count: sql<number>`count(*)`,
+        totalRecipients: sql<number>`COALESCE(SUM(${dispoPropertySends.recipientCount}), 0)`,
+      }).from(dispoPropertySends)
+        .where(sql`${dispoPropertySends.propertyId} IN (${sql.join(propertyIds.map(id => sql`${id}`), sql`, `)})`)
+        .groupBy(dispoPropertySends.propertyId),
+      db.select({
+        propertyId: dispoPropertyOffers.propertyId,
+        count: sql<number>`count(*)`,
+        highestOffer: sql<number>`COALESCE(MAX(${dispoPropertyOffers.offerAmount}), 0)`,
+      }).from(dispoPropertyOffers)
+        .where(sql`${dispoPropertyOffers.propertyId} IN (${sql.join(propertyIds.map(id => sql`${id}`), sql`, `)})`)
+        .groupBy(dispoPropertyOffers.propertyId),
+      db.select({
+        propertyId: dispoPropertyShowings.propertyId,
+        count: sql<number>`count(*)`,
+        upcoming: sql<number>`SUM(CASE WHEN ${dispoPropertyShowings.status} = 'scheduled' THEN 1 ELSE 0 END)`,
+      }).from(dispoPropertyShowings)
+        .where(sql`${dispoPropertyShowings.propertyId} IN (${sql.join(propertyIds.map(id => sql`${id}`), sql`, `)})`)
+        .groupBy(dispoPropertyShowings.propertyId),
+    ]);
 
-    const [showings] = await db.select({
-      count: sql<number>`count(*)`,
-      upcoming: sql<number>`SUM(CASE WHEN ${dispoPropertyShowings.status} = 'scheduled' THEN 1 ELSE 0 END)`,
-    }).from(dispoPropertyShowings).where(eq(dispoPropertyShowings.propertyId, p.id));
+    sendsData.forEach(s => sendsByProp.set(s.propertyId, { count: Number(s.count), totalRecipients: Number(s.totalRecipients) }));
+    offersData.forEach(o => offersByProp.set(o.propertyId, { count: Number(o.count), highestOffer: Number(o.highestOffer) }));
+    showingsData.forEach(s => showingsByProp.set(s.propertyId, { count: Number(s.count), upcoming: Number(s.upcoming) }));
+  }
 
-    return {
-      ...p,
-      _activity: {
-        sendCount: Number(sends?.count || 0),
-        totalRecipients: Number(sends?.totalRecipients || 0),
-        offerCount: Number(offers?.count || 0),
-        highestOffer: Number(offers?.highestOffer || 0),
-        showingCount: Number(showings?.count || 0),
-        upcomingShowings: Number(showings?.upcoming || 0),
-      },
-    };
+  const enriched = items.map(p => ({
+    ...p,
+    _activity: {
+      sendCount: sendsByProp.get(p.id)?.count || 0,
+      totalRecipients: sendsByProp.get(p.id)?.totalRecipients || 0,
+      offerCount: offersByProp.get(p.id)?.count || 0,
+      highestOffer: offersByProp.get(p.id)?.highestOffer || 0,
+      showingCount: showingsByProp.get(p.id)?.count || 0,
+      upcomingShowings: showingsByProp.get(p.id)?.upcoming || 0,
+    },
   }));
 
   return { items: enriched, total: Number(countResult[0]?.count || 0) };

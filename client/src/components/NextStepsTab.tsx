@@ -139,7 +139,7 @@ const ALL_ACTION_TYPES = [
 ];
 
 /** Field definitions for each action type — now includes "select" type for dropdowns */
-type FieldType = "text" | "textarea" | "date" | "time" | "datetime" | "select-pipeline" | "select-stage" | "select-task" | "select-workflow" | "select-calendar" | "select-assignee";
+type FieldType = "text" | "textarea" | "date" | "time" | "datetime" | "select-pipeline" | "select-stage" | "select-task" | "select-workflow" | "select-calendar" | "select-assignee" | "select-timezone";
 
 function getFieldsForAction(actionType: string): { key: string; label: string; type: FieldType }[] {
   switch (actionType) {
@@ -168,6 +168,7 @@ function getFieldsForAction(actionType: string): { key: string; label: string; t
         { key: "startTime", label: "Start time", type: "datetime" },
         { key: "endTime", label: "End time", type: "datetime" },
         { key: "calendarName", label: "Calendar", type: "select-calendar" },
+        { key: "timezone", label: "Time Zone", type: "select-timezone" },
       ];
     case "change_pipeline_stage":
       return [
@@ -623,6 +624,44 @@ function ActionCard({
                   </SelectItem>
                 ))
               )}
+            </SelectContent>
+          </Select>
+        );
+      }
+
+      case "select-timezone": {
+        const TZ_OPTIONS = [
+          "America/New_York",
+          "America/Chicago",
+          "America/Denver",
+          "America/Los_Angeles",
+          "America/Phoenix",
+          "America/Anchorage",
+          "Pacific/Honolulu",
+        ];
+        const TZ_LABELS: Record<string, string> = {
+          "America/New_York": "Eastern (ET)",
+          "America/Chicago": "Central (CT)",
+          "America/Denver": "Mountain (MT)",
+          "America/Los_Angeles": "Pacific (PT)",
+          "America/Phoenix": "Arizona (MST)",
+          "America/Anchorage": "Alaska (AKT)",
+          "Pacific/Honolulu": "Hawaii (HST)",
+        };
+        return (
+          <Select
+            value={value || "America/Chicago"}
+            onValueChange={(v) => updateField(field.key, v)}
+          >
+            <SelectTrigger className="text-sm bg-background">
+              <SelectValue placeholder="Select timezone..." />
+            </SelectTrigger>
+            <SelectContent>
+              {TZ_OPTIONS.map(tz => (
+                <SelectItem key={tz} value={tz}>
+                  {TZ_LABELS[tz] || tz}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         );

@@ -490,6 +490,7 @@ function getGradeFromScore(score: number): "A" | "B" | "C" | "D" | "F" {
 }
 
 export type GradableCallType = "cold_call" | "qualification" | "follow_up" | "offer" | "seller_callback" | "admin_callback" | "dispo_buyer_pitch";
+// Note: seller_callback is kept in the type for backward compatibility but maps to admin_callback rubric
 
 export async function gradeCall(
   transcript: string,
@@ -504,12 +505,12 @@ export async function gradeCall(
     tenantRubrics?: { name: string; description: string | null; criteria: string; callType?: string | null; redFlags?: string | null }[];
   }
 ): Promise<GradingResult> {
-  // Rubric mapping (6 call types → 6 rubrics):
+  // Rubric mapping (call types → rubrics):
   // cold_call → Lead Generator rubric (generating interest, NOT setting appointments)
   // qualification → Lead Manager rubric (qualifying leads, setting appointments)
   // follow_up → Follow-Up rubric (re-engagement, anchoring previous offer, pushing for decision)
   // offer → Acquisition Manager rubric (presenting offers, closing deals)
-  // seller_callback → Seller Callback rubric (inbound high-intent, capitalize on momentum)
+  // seller_callback → Admin Callback rubric (merged into admin_callback)
   // admin_callback → Admin Callback rubric (operational task execution, simple checklist)
   // dispo_buyer_pitch → Dispo Manager rubric (buyer pitches, deal presentation, negotiation)
   const rubricMap: Record<GradableCallType, { name: string; description: string; criteria: { name: string; maxPoints: number; description: string; keyPhrases: string[] }[]; redFlags: string[]; criticalFailures?: string[]; criticalFailureCap?: number; talkRatioTarget?: number; disqualificationTarget?: string; excludeFromLeaderboard?: boolean }> = {
@@ -517,7 +518,7 @@ export async function gradeCall(
     qualification: LEAD_MANAGER_RUBRIC,
     follow_up: FOLLOW_UP_RUBRIC,
     offer: ACQUISITION_MANAGER_RUBRIC,
-    seller_callback: SELLER_CALLBACK_RUBRIC,
+    seller_callback: ADMIN_CALLBACK_RUBRIC, // Merged: seller_callback now uses admin rubric
     admin_callback: ADMIN_CALLBACK_RUBRIC,
     dispo_buyer_pitch: DISPO_MANAGER_RUBRIC,
   };
@@ -584,11 +585,10 @@ export async function gradeCall(
   const systemPrompt = `You are an expert sales coach for a ${industry} company called ${companyName}. 
 Your job is to analyze phone call transcripts and grade them based on a specific rubric.
 
-You are grading a ${callType === "cold_call" ? "Cold Call (Lead Generation)" : callType === "qualification" ? "Qualification/Diagnosis" : callType === "follow_up" ? "Follow-Up" : callType === "seller_callback" ? "Seller Callback (Inbound)" : callType === "admin_callback" ? "Admin Callback (Operational)" : callType === "dispo_buyer_pitch" ? "Dispo Buyer Pitch" : "Offer"} call made by ${teamMemberName}.
+You are grading a ${callType === "cold_call" ? "Cold Call (Lead Generation)" : callType === "qualification" ? "Qualification/Diagnosis" : callType === "follow_up" ? "Follow-Up" : callType === "seller_callback" ? "Admin Call" : callType === "admin_callback" ? "Admin Call" : callType === "dispo_buyer_pitch" ? "Dispo Buyer Pitch" : "Offer"} call made by ${teamMemberName}.
 ${callType === "cold_call" ? "\nIMPORTANT: This is a Lead Generator cold call. The goal of this call is NOT to set appointments. The goal is to identify motivated sellers and generate interest in selling their property. A Lead Manager will follow up to qualify and set appointments. Grade accordingly." : ""}
 ${callType === "follow_up" ? "\nIMPORTANT: This is a Follow-Up call. The rep is re-engaging a known lead who went cold or said 'call me later.' Full qualification already happened. Do NOT penalize for skipping qualification steps. Focus on: referencing the previous conversation, anchoring the previous offer, surfacing roadblocks (and PAUSING to let the seller speak), and pushing for a binary decision. Talk ratio target: seller should talk ≥50%.\n\nCRITICAL FAILURES (cap score at 50% max if any of these occur):\n- Never referenced the previous offer amount\n- Never asked for a decision\n- Talked through the seller's silence after the roadblock question\n- Didn't identify/confirm who the decision maker is" : ""}
-${callType === "seller_callback" ? "\nIMPORTANT: This is a Seller Callback — the seller called US back. This is a high-intent signal. The dynamic is completely different from outbound calls. Do NOT run a cold call or full qualification script. Focus on: acknowledging they called back, asking what prompted the callback, matching energy to their intent, and moving toward commitment. Talk ratio target: seller should talk ≥60%.\n\nCRITICAL FAILURES (cap score at 50% max if any of these occur):\n- Ran a full cold call script on someone who called back\n- Didn't ask why they're calling\n- Let them hang up without a next step" : ""}
-${callType === "admin_callback" ? "\nIMPORTANT: This is an Admin Callback — an operational call about documents, scheduling, closing details, or other administrative tasks. This is NOT a sales call. Score on task execution: did they state the purpose clearly, get what they needed, confirm next steps with a timeline, maintain professional tone, and keep it efficient? No critical failures — these are low-stakes calls." : ""}
+${(callType === "seller_callback" || callType === "admin_callback") ? "\nIMPORTANT: This is an Admin Call — an operational call about documents, scheduling, closing details, callbacks, or other administrative tasks. This is NOT a sales call. Score on task execution: did they state the purpose clearly, get what they needed, confirm next steps with a timeline, maintain professional tone, and keep it efficient? No critical failures — these are low-stakes calls." : ""}
 ${callType === "dispo_buyer_pitch" ? "\nIMPORTANT: This is a Dispo Manager call with a BUYER about a wholesale deal. This is NOT a seller call. The dispo manager is SELLING a deal to a buyer — pitching the property, creating urgency, negotiating the assignment fee, and driving toward a showing or contract. Grade on deal presentation quality, buyer qualification, urgency creation, negotiation skill, and closing ability. The dispo manager should know their numbers cold (ARV, repairs, asking price, assignment fee).\n\nCRITICAL FAILURES (cap score at 50% max if any of these occur):\n- Didn't know basic property details (address, price, condition)\n- Agreed to a price below contract price (would lose money)\n- Let buyer hang up without any next step or follow-up plan" : ""}
 
 RUBRIC: ${rubric.name}
@@ -1057,9 +1057,10 @@ CALL TYPES:
    KEY DISTINCTION FROM FOLLOW_UP: If no specific offer price was previously presented to the seller and this is the first time price/terms are being discussed, this is "offer" — even if there was a prior cold call or qualification call.
    CRITICAL: The word "offer" appearing in the transcript does NOT automatically make this an offer call if the context is about a PREVIOUSLY-MADE offer being referenced.
 
-5. "seller_callback" - INBOUND call where the seller called the company back. High-intent signal. Signs: seller says "I got your letter/postcard/voicemail", "you called me earlier", seller is asking questions, seller initiated the contact. The rep should acknowledge the callback and capitalize on momentum.
-
-6. "admin_callback" - OUTBOUND operational call about documents, scheduling, closing details, title info, walkthrough times, or scheduling a callback. NOT a sales call. Signs: discussing DocuSign, purchase agreements to sign/review, scheduling inspections, coordinating closing dates, helping with paperwork, vendor coordination, or simply scheduling a time to call back because the person is busy/unavailable. No active selling happening.
+5. "admin_callback" - Administrative/operational call. This includes:
+   - INBOUND callbacks where the seller called back ("I got your letter/postcard/voicemail", "you called me earlier") AND the call is short/administrative without substantive sales conversation
+   - OUTBOUND operational calls about documents, scheduling, closing details, title info, walkthrough times, or scheduling a callback. NOT a sales call.
+   NOTE: If an inbound callback leads to a substantive sales conversation (qualification, offer discussion), classify it by the sales activity instead. Signs: discussing DocuSign, purchase agreements to sign/review, scheduling inspections, coordinating closing dates, helping with paperwork, vendor coordination, or simply scheduling a time to call back because the person is busy/unavailable. No active selling happening.
   POST-OFFER ADMIN CALLS: If the rep is discussing SENDING a purchase agreement for the seller to review/sign, walking through the signing process, explaining what happens after they sign, or following up on a deal that's already in progress — this is admin_callback, NOT offer. The offer phase is OVER and this is now administrative. Key phrases: "send you the purchase agreement", "review and sign", "get this signed", "email you the contract", "construction partner visit", "closing process".
   PRICE ADJUSTMENT ADMIN CALLS: If the rep is calling to inform the seller of a price adjustment/reduction on a PREVIOUSLY-MADE offer (e.g., "after our inspection we need to adjust the price", "the numbers came back different", "we need to lower our offer based on repairs"), this is admin_callback — NOT offer. The original offer was already made; this call is an administrative update about the deal terms. Even if a specific dollar amount is mentioned, if it's adjusting a prior offer rather than presenting a new one, it's admin_callback.
 
@@ -1106,7 +1107,7 @@ Respond with JSON only.`,
             properties: {
               callType: {
                 type: "string",
-                enum: ["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback", "dispo_buyer_pitch"],
+                enum: ["cold_call", "qualification", "follow_up", "offer", "admin_callback", "dispo_buyer_pitch"],
               },
               confidence: {
                 type: "number",

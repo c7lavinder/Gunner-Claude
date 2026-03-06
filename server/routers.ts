@@ -6858,6 +6858,15 @@ selectedTimezone: { type: "string" },
           userName: member?.name || ctx.user.name || "You",
           userPhone: member?.lcPhone || null,
           userGhlUserId: member?.ghlUserId || null,
+          ghlLocationId: await (async () => {
+            const { parseCrmConfig, getTenantById } = await import("./tenant");
+            const tenant = await getTenantById(ctx.user!.tenantId!);
+            if (!tenant) return null;
+            const config = parseCrmConfig(tenant);
+            const { getOAuthStatus } = await import("./ghlOAuth");
+            const oauthStatus = await getOAuthStatus(ctx.user!.tenantId!);
+            return oauthStatus.locationId || config.ghlLocationId || null;
+          })(),
           // All team members with GHL user IDs (for the From selector)
           teamMembers: allMembers
             .filter(m => m.ghlUserId)
@@ -7716,6 +7725,8 @@ selectedTimezone: { type: "string" },
         market: z.string().optional(),
         mediaLink: z.string().optional(),
         leadSource: z.string().optional(),
+        projectType: z.enum(["wholesale", "novation", "creative_finance", "fix_and_flip", "buy_and_hold", "other"]).optional(),
+        opportunitySource: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });

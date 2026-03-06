@@ -124,6 +124,7 @@ interface TrainingItem {
   status: string | null;
   sortOrder: number | null;
   isAiGenerated: string | null;
+  sourceCallIds: string | null;
   createdAt: Date;
 }
 
@@ -234,6 +235,7 @@ function TeamItemCard({ item, onComplete, onDelete, showPriority = true, isAdmin
   const completeMutation = trpc.teamTraining.complete.useMutation({ onSuccess: () => { toast.success("Item marked as complete"); onComplete(); } });
   const deleteMutation = trpc.teamTraining.delete.useMutation({ onSuccess: () => { toast.success("Item deleted"); onDelete(); } });
   const isAiGenerated = item.isAiGenerated === "true";
+  const callIds: number[] = item.sourceCallIds ? (() => { try { return JSON.parse(item.sourceCallIds); } catch { return []; } })() : [];
 
   return (
     <div className={`flex items-start gap-2 py-2 px-3 rounded-md border bg-card ${isAiGenerated ? "border-l-2 border-l-purple-500" : ""}`}>
@@ -245,6 +247,15 @@ function TeamItemCard({ item, onComplete, onDelete, showPriority = true, isAdmin
           {item.teamMemberName && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{item.teamMemberName}</Badge>}
         </div>
         {item.description && <p className="text-xs text-muted-foreground line-clamp-10 mt-0.5">{item.description}</p>}
+        {callIds.length > 0 && (
+          <div className="flex items-center gap-1 mt-1">
+            <span className="text-[10px] text-muted-foreground">Evidence:</span>
+            {callIds.slice(0, 3).map((callId) => (
+              <a key={callId} href={`/calls/${callId}`} className="text-[10px] text-purple-600 hover:text-purple-800 underline" onClick={(e) => e.stopPropagation()}>Call #{callId}</a>
+            ))}
+            {callIds.length > 3 && <span className="text-[10px] text-muted-foreground">+{callIds.length - 3} more</span>}
+          </div>
+        )}
       </div>
       {isAdmin && (
         <div className="flex items-center gap-0.5 shrink-0">

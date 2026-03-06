@@ -292,7 +292,8 @@ Respond with a JSON object in this exact format:
       "description": "What happened and why it's worth celebrating",
       "priority": "medium",
       "teamRole": "lead_manager" | "acquisition_manager" | "lead_generator",
-      "teamMemberName": "Name of person to celebrate, or null for role-wide"
+      "teamMemberName": "Name of person to celebrate, or null for role-wide",
+      "sourceCallIds": [list of relevant call IDs]
     }
   ],
   "skills": [
@@ -354,6 +355,7 @@ Respond with a JSON object in this exact format:
                     priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
                     teamRole: { type: "string", enum: ["lead_manager", "acquisition_manager", "lead_generator"] },
                     teamMemberName: { type: ["string", "null"] },
+                    sourceCallIds: { type: "array", items: { type: "number" } },
                   },
                   required: ["title", "description", "priority", "teamRole"],
                   additionalProperties: false,
@@ -438,6 +440,7 @@ Respond with a JSON object in this exact format:
       priority: w.priority || "medium",
       teamRole: w.teamRole || undefined,
       teamMemberName: w.teamMemberName || undefined,
+      sourceCallIds: w.sourceCallIds || [],
     }));
     const rawSkills = insights.skills.map((s: any) => ({
       itemType: "skill" as const,

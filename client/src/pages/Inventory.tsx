@@ -150,6 +150,9 @@ function PropertyFormDialog({
     mediaLink: property?.mediaLink || "",
     lockboxCode: property?.lockboxCode || "",
     occupancyStatus: property?.occupancyStatus || "unknown",
+    projectType: property?.projectType || "",
+    market: property?.market || "",
+    opportunitySource: property?.opportunitySource || "",
   });
 
   const handleSubmit = () => {
@@ -177,6 +180,9 @@ function PropertyFormDialog({
       description: form.description || undefined,
       mediaLink: form.mediaLink || undefined,
       lockboxCode: form.lockboxCode || undefined,
+      projectType: form.projectType || undefined,
+      market: form.market || undefined,
+      opportunitySource: form.opportunitySource || undefined,
     });
   };
 
@@ -255,6 +261,25 @@ function PropertyFormDialog({
             <div className="grid grid-cols-2 gap-2">
               <Input placeholder="Seller Name" value={form.sellerName} onChange={(e) => setForm({ ...form, sellerName: e.target.value })} />
               <Input placeholder="Seller Phone" value={form.sellerPhone} onChange={(e) => setForm({ ...form, sellerPhone: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Deal Info</label>
+            <div className="grid grid-cols-3 gap-2">
+              <Select value={form.projectType || "none"} onValueChange={(v) => setForm({ ...form, projectType: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Project Type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Project Type</SelectItem>
+                  <SelectItem value="wholesale">Wholesale</SelectItem>
+                  <SelectItem value="novation">Novation</SelectItem>
+                  <SelectItem value="creative_finance">Creative Finance</SelectItem>
+                  <SelectItem value="fix_and_flip">Fix & Flip</SelectItem>
+                  <SelectItem value="buy_and_hold">Buy & Hold</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input placeholder="Market" value={form.market} onChange={(e) => setForm({ ...form, market: e.target.value })} />
+              <Input placeholder="Opportunity Source" value={form.opportunitySource} onChange={(e) => setForm({ ...form, opportunitySource: e.target.value })} />
             </div>
           </div>
           <div className="space-y-2">
@@ -662,6 +687,21 @@ function OverviewTab({ property }: { property: any }) {
             <span style={{ color: "var(--g-text-primary)" }}>{property.lockboxCode}</span>
           </div>
         )}
+        {/* Source & Deal Info */}
+        <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+          {property.opportunitySource && (
+            <div><span style={{ color: "var(--g-text-tertiary)" }}>Source:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.opportunitySource}</span></div>
+          )}
+          {property.leadSource && (
+            <div><span style={{ color: "var(--g-text-tertiary)" }}>Lead Source:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.leadSource}</span></div>
+          )}
+          {property.projectType && (
+            <div><span style={{ color: "var(--g-text-tertiary)" }}>Project Type:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.projectType.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}</span></div>
+          )}
+          {property.market && (
+            <div><span style={{ color: "var(--g-text-tertiary)" }}>Market:</span> <span style={{ color: "var(--g-text-primary)" }}>{property.market}</span></div>
+          )}
+        </div>
         {property.ghlContactId && (
           <div className="mt-2 text-sm">
             <span style={{ color: "var(--g-text-tertiary)" }}>GHL Contact:</span>{" "}
@@ -1373,6 +1413,14 @@ function PropertyDetail({
   propertyId: number;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
+  const teamRole = user?.teamRole || "admin";
+  const allowedStages = useMemo(() => {
+    const allStages = ["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up", "dead"];
+    if (teamRole === "dispo_manager") return ["marketing", "buyer_negotiating", "closing", "closed", "dead"];
+    if (teamRole === "lead_manager" || teamRole === "acquisition_manager") return ["lead", "apt_set", "offer_made", "under_contract", "marketing", "closing", "closed"];
+    return allStages;
+  }, [teamRole]);
   const utils = trpc.useUtils();
   const { data: property, isLoading } = trpc.inventory.getPropertyById.useQuery({ propertyId });
   const [editOpen, setEditOpen] = useState(false);
@@ -1414,7 +1462,7 @@ function PropertyDetail({
                 <ChevronDown className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
               </SelectTrigger>
               <SelectContent>
-                {["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up", "dead"].map((k) => (
+                {allowedStages.map((k) => (
                   <SelectItem key={k} value={k}>{STATUS_CONFIG[k]?.label || k}</SelectItem>
                 ))}
               </SelectContent>
@@ -1589,7 +1637,14 @@ export default function Inventory() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  // Role-based default filter: dispo sees marketing, LM/AM see lead, admin sees all
+  const defaultStatus = useMemo(() => {
+    const role = user?.teamRole;
+    if (role === "dispo_manager") return "marketing";
+    if (role === "lead_manager" || role === "acquisition_manager") return "lead";
+    return "all";
+  }, [user?.teamRole]);
+  const [statusFilter, setStatusFilter] = useState(defaultStatus);
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);

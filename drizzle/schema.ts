@@ -1555,6 +1555,9 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   lotSize: varchar("lotSize", { length: 50 }), // e.g. "0.25 acres"
   photos: text("photos"), // JSON array of photo URLs
   dispoAskingPrice: int("dispoAskingPrice"), // in cents — dispo-specific asking price (may differ from askingPrice)
+  // Opportunity & Project Details
+  opportunitySource: varchar("opportunitySource", { length: 255 }), // Source from GHL opportunity (e.g. "Cold Call", "Direct Mail")
+  projectType: mysqlEnum("projectType", ["wholesale", "novation", "creative_finance", "fix_and_flip", "buy_and_hold", "other"]),
   // Timestamps
   marketedAt: timestamp("marketedAt"), // When first blast was sent
   underContractAt: timestamp("underContractAt"),
@@ -1564,6 +1567,10 @@ export const dispoProperties = mysqlTable("dispo_properties", {
 });
 export type DispoProperty = typeof dispoProperties.$inferSelect;
 export type InsertDispoProperty = typeof dispoProperties.$inferInsert;
+// Alias for cleaner code — new code should use `properties` instead of `dispoProperties`
+export const properties = dispoProperties;
+export type Property = DispoProperty;
+export type InsertProperty = InsertDispoProperty;
 
 // ============ PROPERTY STAGE HISTORY (Track all stage transitions) ============
 export const propertyStageHistory = mysqlTable("property_stage_history", {

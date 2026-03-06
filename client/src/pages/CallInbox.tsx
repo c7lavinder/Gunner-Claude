@@ -1964,7 +1964,7 @@ export default function CallInbox() {
     offset: page * PAGE_SIZE,
     startDate: dateFilter.startDate,
     statuses: ["completed"],
-    callTypes: selectedCallTypes.length > 0 ? selectedCallTypes.flatMap(t => t === "admin" ? ["seller_callback", "admin_callback"] : [t]) : undefined,
+    callTypes: selectedCallTypes.length > 0 ? selectedCallTypes.flatMap(t => t === "admin" ? ["admin_callback", "seller_callback"] : [t]) : undefined,
     outcomes: selectedOutcomes.length > 0 ? selectedOutcomes : undefined,
     teamMembers: selectedTeamMembers.length > 0 ? selectedTeamMembers : undefined,
   }), [page, dateFilter, selectedCallTypes, selectedOutcomes, selectedTeamMembers]);

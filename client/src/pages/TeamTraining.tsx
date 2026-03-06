@@ -32,6 +32,7 @@ interface TrainingItem {
   status: string | null;
   sortOrder: number | null;
   isAiGenerated: string | null;
+  sourceCallIds: string | null;
   createdAt: Date;
 }
 
@@ -245,6 +246,7 @@ function TrainingItemCard({
   });
 
   const isAiGenerated = item.isAiGenerated === "true";
+  const callIds: number[] = item.sourceCallIds ? (() => { try { return JSON.parse(item.sourceCallIds); } catch { return []; } })() : [];
 
   return (
     <div className={`flex items-start gap-3 p-4 rounded-lg border bg-card ${isAiGenerated ? "border-l-4 border-l-purple-500" : ""}`}>
@@ -270,6 +272,15 @@ function TrainingItemCard({
         </div>
         {item.description && (
           <p className="text-sm text-muted-foreground mb-2">{item.description}</p>
+        )}
+        {callIds.length > 0 && (
+          <div className="flex items-center gap-1.5 mt-1 mb-2">
+            <span className="text-xs text-muted-foreground">Evidence:</span>
+            {callIds.slice(0, 3).map((callId) => (
+              <a key={callId} href={`/calls/${callId}`} className="text-xs text-purple-600 hover:text-purple-800 underline" onClick={(e) => e.stopPropagation()}>Call #{callId}</a>
+            ))}
+            {callIds.length > 3 && <span className="text-xs text-muted-foreground">+{callIds.length - 3} more</span>}
+          </div>
         )}
         {item.targetBehavior && (
           <div className="text-sm bg-muted/50 p-2 rounded mt-2">

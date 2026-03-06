@@ -2291,6 +2291,13 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
         <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowNoteDialog(true)}>
           <StickyNote className="h-3.5 w-3.5 mr-1.5" /> Add Note
         </Button>
+        {task.contactId && userPhoneInfo?.ghlLocationId && (
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
+            window.open(`https://app.gohighlevel.com/v2/location/${userPhoneInfo.ghlLocationId}/contacts/detail/${task.contactId}`, '_blank');
+          }}>
+            <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> View in CRM
+          </Button>
+        )}
       </div>
 
       {/* Contact Info Line */}
@@ -2568,13 +2575,20 @@ function TaskExpandedSection({ task, allTasks }: { task: Task; allTasks: Task[] 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCallDialog(false)}>Cancel</Button>
             <Button onClick={() => {
-              const dialNumber = callToPhone || contactPhone;
-              if (dialNumber) {
-                toast.info(`Call ${task.contactName || "contact"} at ${formatPhone(dialNumber)} \u2014 use GHL dialer or phone`, { duration: 5000 });
+              const locationId = userPhoneInfo?.ghlLocationId;
+              if (locationId && task.contactId) {
+                window.open(`https://app.gohighlevel.com/v2/location/${locationId}/contacts/detail/${task.contactId}`, '_blank');
+                toast.success(`Opening ${task.contactName || "contact"} in GHL — use the dialer to call`, { duration: 4000 });
+              } else {
+                const dialNumber = callToPhone || contactPhone;
+                if (dialNumber) {
+                  window.open(`tel:${dialNumber.replace(/[^+\d]/g, '')}`, '_blank');
+                  toast.info(`Dialing ${formatPhone(dialNumber)}`, { duration: 3000 });
+                }
               }
               setShowCallDialog(false);
             }} disabled={!callToPhone && !contactPhone}>
-              <Phone className="h-4 w-4 mr-1.5" /> Call Now
+              <Phone className="h-4 w-4 mr-1.5" /> Call via GHL
             </Button>
           </DialogFooter>
         </DialogContent>

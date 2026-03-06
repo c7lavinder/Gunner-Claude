@@ -37,8 +37,8 @@ const DEFAULT_TERMINOLOGY = {
     qualification: "Qualification",
     offer: "Offer",
     follow_up: "Follow-Up",
-    seller_callback: "Seller Callback",
-    admin_callback: "Admin Callback",
+    seller_callback: "Admin Call",
+    admin_callback: "Admin Call",
   } as Record<string, string>,
   outcomeLabels: {
     appointment_set: "Appointment Set",
@@ -167,7 +167,6 @@ export function useTenantConfig() {
       { code: "qualification", name: t.callType("qualification"), description: null },
       { code: "offer", name: t.callType("offer"), description: null },
       { code: "follow_up", name: t.callType("follow_up"), description: null },
-      { code: "seller_callback", name: t.callType("seller_callback"), description: null },
       { code: "admin_callback", name: t.callType("admin_callback"), description: null },
     ];
   }, [playbook, t]);
