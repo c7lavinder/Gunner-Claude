@@ -4498,3 +4498,8 @@
 - [ ] Disable all public signups immediately (invite-only mode)
 - [ ] Clean up new spam tenants/users
 - [ ] Save checkpoint with all fixes
+
+## Signup Lockdown UI (2026-03-06)
+- [x] Hide Sign In and Start Free Trial buttons from landing page
+- [x] Hide pricing signup CTAs
+- [x] Keep login accessible via direct URL only (/login)

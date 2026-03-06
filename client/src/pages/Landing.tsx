@@ -333,19 +333,6 @@ export default function Landing() {
             </div>
 
             <div className="hidden md:flex items-center gap-3">
-              <Link href="/login">
-                <Button
-                  variant="ghost"
-                  className="text-white/60 hover:text-white hover:bg-white/[0.06]"
-                >
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/signup">
-                <Button className="bg-gradient-to-r from-[#c41e3a] to-[#a01830] hover:from-[#d42040] hover:to-[#b01e38] text-white rounded-lg shadow-lg shadow-[#c41e3a]/20 hover:shadow-[#c41e3a]/30 transition-all">
-                  Start Free Trial
-                </Button>
-              </Link>
             </div>
 
             {/* Mobile hamburger */}
@@ -370,14 +357,7 @@ export default function Landing() {
                   {link.label}
                 </button>
               ))}
-              <div className="pt-3 border-t border-white/[0.06] flex flex-col gap-2">
-                <Link href="/login">
-                  <Button variant="outline" className="w-full border-white/10 text-white hover:bg-white/[0.06]">Sign In</Button>
-                </Link>
-                <Link href="/signup">
-                  <Button className="w-full bg-gradient-to-r from-[#c41e3a] to-[#a01830] text-white">Start Free Trial</Button>
-                </Link>
-              </div>
+
             </div>
           </div>
         )}
@@ -429,11 +409,7 @@ export default function Landing() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 mb-8">
-                <Link href="/signup">
-                  <Button size="lg" className="bg-gradient-to-r from-[#c41e3a] to-[#a01830] hover:from-[#d42040] hover:to-[#b01e38] text-white rounded-xl text-base px-8 h-13 gap-2 w-full sm:w-auto shadow-xl shadow-[#c41e3a]/25 hover:shadow-[#c41e3a]/40 transition-all duration-300 hover:-translate-y-0.5">
-                    Start {trialDays}-Day Free Trial <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
+
                 <a href="mailto:corey@getgunner.ai?subject=Gunner%20AI%20Demo%20Request&body=Hi%20Corey%2C%0A%0AI%27d%20like%20to%20schedule%20a%20demo%20of%20Gunner%20AI%20for%20my%20team.%0A%0ATeam%20size%3A%20%0ACurrent%20CRM%3A%20%0A%0AThanks!">
                   <Button
                     size="lg"
@@ -952,17 +928,7 @@ export default function Landing() {
                   )}
                 </div>
 
-                <Link href="/signup">
-                  <Button
-                    className={`w-full mb-6 rounded-xl h-11 transition-all duration-300 ${
-                      plan.popular
-                        ? "bg-gradient-to-r from-[#c41e3a] to-[#a01830] hover:from-[#d42040] hover:to-[#b01e38] text-white shadow-lg shadow-[#c41e3a]/20"
-                        : "bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.1]"
-                    }`}
-                  >
-                    Start Free Trial
-                  </Button>
-                </Link>
+
 
                 <ul className="space-y-3">
                   {plan.features.map((feature, fi) => (
@@ -1145,11 +1111,7 @@ export default function Landing() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/signup">
-              <Button size="lg" className="bg-gradient-to-r from-[#c41e3a] to-[#a01830] hover:from-[#d42040] hover:to-[#b01e38] text-white rounded-xl text-lg px-10 h-14 gap-2 font-bold shadow-xl shadow-[#c41e3a]/25 hover:shadow-[#c41e3a]/40 transition-all duration-300 hover:-translate-y-0.5">
-                Start {trialDays}-Day Free Trial <ArrowRight className="h-5 w-5" />
-              </Button>
-            </Link>
+
             <a href="mailto:corey@getgunner.ai?subject=Gunner%20AI%20Demo%20Request&body=Hi%20Corey%2C%0A%0AI%27d%20like%20to%20schedule%20a%20demo%20of%20Gunner%20AI%20for%20my%20team.%0A%0ATeam%20size%3A%20%0ACurrent%20CRM%3A%20%0A%0AThanks!">
               <Button size="lg" variant="outline" className="border-white/10 text-white/70 hover:text-white hover:bg-white/[0.06] hover:border-white/20 rounded-xl text-lg px-10 h-14 gap-2 font-bold bg-transparent transition-all duration-300">
                 <MessageSquare className="h-5 w-5" /> Book a Demo
@@ -1215,11 +1177,7 @@ export default function Landing() {
                     corey@getgunner.ai
                   </a>
                 </li>
-                <li>
-                  <Link href="/signup" className="text-sm text-white/25 hover:text-white/60 transition-colors">
-                    Start Free Trial
-                  </Link>
-                </li>
+
               </ul>
             </div>
 
