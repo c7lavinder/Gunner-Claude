@@ -4493,3 +4493,8 @@
 - [ ] Re-enable email sending with rate limits and safeguards (kept disabled for now)
 - [x] Keep rate limiting (3 per IP per 10min) as secondary protection
 - [x] Keep spam name blocking as tertiary protection
+
+## Emergency: Second Spam Attack (2026-03-06)
+- [ ] Disable all public signups immediately (invite-only mode)
+- [ ] Clean up new spam tenants/users
+- [ ] Save checkpoint with all fixes

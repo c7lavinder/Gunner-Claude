@@ -10,6 +10,35 @@ function getQueryParam(req: Request, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+// ─── RATE LIMITING ───
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_ATTEMPTS_PER_IP = 3;
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    return false;
+  }
+  entry.count++;
+  if (entry.count > MAX_ATTEMPTS_PER_IP) {
+    return true;
+  }
+  return false;
+}
+
+// Clean up stale entries every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  const keys = Array.from(loginAttempts.keys());
+  for (const ip of keys) {
+    const entry = loginAttempts.get(ip);
+    if (entry && now > entry.resetAt) loginAttempts.delete(ip);
+  }
+}, 30 * 60 * 1000);
+
 export function registerOAuthRoutes(app: Express) {
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
@@ -17,6 +46,14 @@ export function registerOAuthRoutes(app: Express) {
 
     if (!code || !state) {
       res.status(400).json({ error: "code and state are required" });
+      return;
+    }
+
+    // Rate limit by IP
+    const clientIp = req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || req.ip || "unknown";
+    if (isRateLimited(clientIp)) {
+      console.warn(`[OAuth] Rate limited IP: ${clientIp}`);
+      res.status(429).json({ error: "Too many login attempts. Please try again later." });
       return;
     }
 
@@ -28,6 +65,16 @@ export function registerOAuthRoutes(app: Express) {
         res.status(400).json({ error: "openId missing from user info" });
         return;
       }
+
+      // ─── SIGNUP LOCKDOWN: Only allow existing users to log in ───
+      const existingUser = await db.getUserByOpenId(userInfo.openId);
+      if (!existingUser) {
+        // NEW USER — block signup entirely
+        console.warn(`[OAuth] BLOCKED new signup attempt: ${userInfo.email || userInfo.openId} from IP ${clientIp}`);
+        res.redirect(302, "/?error=signups_disabled");
+        return;
+      }
+      // ─── END SIGNUP LOCKDOWN ───
 
       const user = await db.upsertUser({
         openId: userInfo.openId,
