@@ -1,0 +1,13 @@
+{
+  "query": "SELECT GROUP_CONCAT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'webhook_events';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT GROUP_CONCAT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'webhook_events';",
+  "rows": [
+    {
+      "GROUP_CONCAT(COLUMN_NAME)": "id,eventId,eventType,agentSlug,contactId,contactName,contactPhone,summary,detail,actualContent,icon,status,category,metadata,dryRun,processedAt,receivedAt,id,tenantId,provider,locationId,eventType,eventId,status,errorMessage,processedAt,createdAt"
+    }
+  ],
+  "messages": [],
+  "stdout": "GROUP_CONCAT(COLUMN_NAME)\nid,eventId,eventType,agentSlug,contactId,contactName,contactPhone,summary,detail,actualContent,icon,status,category,metadata,dryRun,processedAt,receivedAt,id,tenantId,provider,locationId,eventType,eventId,status,errorMessage,processedAt,createdAt\n",
+  "stderr": "",
+  "execution_time_ms": 48
+}

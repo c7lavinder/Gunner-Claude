@@ -4373,3 +4373,7 @@
 - [x] Rename "Qualified" to "Apt Set" across schema, frontend, and backend
 - [x] Add "Follow Up" stage before "Closed" in pipeline stages
 - [x] Move "Follow Up" stage after "Closed" (before "Dead") in pipeline order
+- [x] Fix syncPropertyFromOpportunity: resolve stage name from GHL API when webhook payload doesn't include pipelineStageName
+- [x] Add duplicate address detection in webhook property auto-import
+- [x] Add pipeline stage cache (10min TTL) to avoid excessive GHL API calls
+- [x] Add detailed [PropertySync] logging for debugging webhook property flow

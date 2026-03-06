@@ -454,6 +454,47 @@ const TRACKED_STAGE_NAMES = [
 ];
 
 /**
+ * In-memory cache for pipeline stages by tenant.
+ * Maps tenantId → { stages: Map<stageId, stageName>, expiry: timestamp }
+ * TTL: 10 minutes to avoid hammering the GHL API.
+ */
+const pipelineStageCache = new Map<number, { stages: Map<string, string>; expiry: number }>();
+const STAGE_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Resolve a stage name from a stageId by looking up the GHL Pipelines API.
+ * Uses an in-memory cache to avoid excessive API calls.
+ */
+async function resolveStageNameById(
+  tenantId: number,
+  stageId: string
+): Promise<string | null> {
+  // Check cache first
+  const cached = pipelineStageCache.get(tenantId);
+  if (cached && cached.expiry > Date.now()) {
+    const name = cached.stages.get(stageId);
+    if (name) return name;
+  }
+
+  // Fetch fresh pipeline data from GHL
+  try {
+    const { getPipelinesForTenant } = await import("./ghlActions");
+    const pipelines = await getPipelinesForTenant(tenantId);
+    const stageMap = new Map<string, string>();
+    for (const pipeline of pipelines) {
+      for (const stage of pipeline.stages) {
+        stageMap.set(stage.id, stage.name);
+      }
+    }
+    pipelineStageCache.set(tenantId, { stages: stageMap, expiry: Date.now() + STAGE_CACHE_TTL_MS });
+    return stageMap.get(stageId) || null;
+  } catch (error) {
+    console.error(`[Webhook] Failed to resolve stage name for stageId ${stageId}:`, error);
+    return null;
+  }
+}
+
+/**
  * Map GHL stage names to Gunner property statuses.
  * Case-insensitive matching.
  */
@@ -505,14 +546,36 @@ async function syncPropertyFromOpportunity(
   db: any,
   logPrefix: string
 ): Promise<void> {
-  // Only process if we have a stage name to map
-  if (!event.stageName || !event.tenantId) return;
-
-  const mappedStatus = mapStageToPropertyStatus(event.stageName);
-  if (!mappedStatus) {
-    // Stage not in our mapping — skip property sync
+  if (!event.tenantId) {
+    console.log(`${logPrefix} [PropertySync] No tenantId — skipping property sync`);
     return;
   }
+
+  // Resolve stage name: prefer payload field, fall back to API lookup by stageId
+  let stageName = event.stageName;
+  if (!stageName && event.stageId) {
+    console.log(`${logPrefix} [PropertySync] No stageName in payload, resolving from stageId: ${event.stageId}`);
+    stageName = await resolveStageNameById(event.tenantId, event.stageId);
+    if (stageName) {
+      console.log(`${logPrefix} [PropertySync] Resolved stageName: "${stageName}" from stageId: ${event.stageId}`);
+    } else {
+      console.warn(`${logPrefix} [PropertySync] Could not resolve stageName for stageId: ${event.stageId}`);
+    }
+  }
+
+  if (!stageName) {
+    console.log(`${logPrefix} [PropertySync] No stageName and no stageId — skipping property sync (oppId: ${event.sourceOpportunityId})`);
+    return;
+  }
+
+  const mappedStatus = mapStageToPropertyStatus(stageName);
+  if (!mappedStatus) {
+    // Stage not in our mapping — skip property sync
+    console.log(`${logPrefix} [PropertySync] Stage "${stageName}" not in mapping — skipping (oppId: ${event.sourceOpportunityId})`);
+    return;
+  }
+
+  console.log(`${logPrefix} [PropertySync] Stage "${stageName}" → status "${mappedStatus}" (oppId: ${event.sourceOpportunityId})`);
 
   const oppId = event.sourceOpportunityId;
   const contactId = event.contactId;
@@ -613,6 +676,31 @@ async function syncPropertyFromOpportunity(
 
       const milestoneFlags = getMilestoneFlags(mappedStatus);
 
+      // Duplicate address check: skip if a property with the same address already exists for this tenant
+      const normalizedAddr = (address || "").toLowerCase().trim();
+      if (normalizedAddr && normalizedAddr !== "address pending") {
+        const { like } = await import("drizzle-orm");
+        const [dupeProp] = await db.select({ id: dispoProperties.id })
+          .from(dispoProperties)
+          .where(and(
+            eq(dispoProperties.tenantId, event.tenantId!),
+            eq(dispoProperties.address, address)
+          ));
+        if (dupeProp) {
+          console.log(`${logPrefix} [PropertySync] Duplicate address "${address}" — linking oppId ${oppId} to existing property ${dupeProp.id} instead of creating new`);
+          // Link the GHL opportunity to the existing property if not already linked
+          await db.update(dispoProperties)
+            .set({
+              ghlOpportunityId: oppId,
+              ghlContactId: contactId || undefined,
+              ghlPipelineId: event.pipelineId || undefined,
+              ghlPipelineStageId: event.stageId || undefined,
+            })
+            .where(eq(dispoProperties.id, dupeProp.id));
+          return;
+        }
+      }
+
       const [inserted] = await db.insert(dispoProperties).values({
         tenantId: event.tenantId,
         address: address || "Address Pending",
@@ -647,7 +735,7 @@ async function syncPropertyFromOpportunity(
         });
       }
 
-      console.log(`${logPrefix} Auto-imported property for opportunity ${oppId} (contact: ${sellerName}, address: ${address || "pending"}, status: ${mappedStatus})`);
+      console.log(`${logPrefix} [PropertySync] Auto-imported property for opportunity ${oppId} (contact: ${sellerName}, address: ${address || "pending"}, status: ${mappedStatus})`);
     }
   } catch (error) {
     console.error(`${logPrefix} Error syncing property from opportunity:`, error);
