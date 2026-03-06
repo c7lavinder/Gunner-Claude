@@ -4399,3 +4399,12 @@
 - [x] Dispo pipeline never creates new properties, only updates
 - [x] Updated webhook.ts stage mapping to match confirmed stages
 - [x] Fixed inline tag extraction in webhook.ts (removed parseContactTags dependency)
+
+## GHL Import Card UI Fix (2026-03-06)
+- [x] Update card title from "GHL Contact Sync" to "GHL Property Import"
+- [x] Update card description to reflect property import (not contact sync)
+- [x] Update button text from "Sync Contacts from GHL" to "Import Properties from GHL"
+- [x] Make pipeline dropdown show real pipelines fetched from GHL API
+- [x] Allow choosing specific pipeline or "All pipelines"
+- [x] Fix pipeline data access (was accessing .pipelines on already-flat array)
+- [x] Rename component from GHLContactSyncCard to GHLPropertyImportCard

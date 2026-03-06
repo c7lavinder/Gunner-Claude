@@ -1813,7 +1813,7 @@ export default function TenantSettings() {
 
           {/* GHL Property Import Card */}
           {crmIntegrations?.ghl?.connected && (
-            <GHLContactSyncCard />
+            <GHLPropertyImportCard />
           )}
 
           {/* BatchDialer Integration Card */}
@@ -2312,7 +2312,7 @@ export default function TenantSettings() {
 
 // ============ GHL Property Import Card ============
 
-function GHLContactSyncCard() {
+function GHLPropertyImportCard() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>("");
   const [isImporting, setIsImporting] = useState(false);
   const [pollInterval, setPollInterval] = useState<number | false>(false);
@@ -2380,8 +2380,8 @@ function GHLContactSyncCard() {
                 <SelectValue placeholder="All pipelines (recommended)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Pipelines</SelectItem>
-                {(pipelines as any)?.pipelines?.map((p: any) => (
+                <SelectItem value="all">All Pipelines (recommended)</SelectItem>
+                {Array.isArray(pipelines) && pipelines.map((p: any) => (
                   <SelectItem key={p.id} value={p.id}>{p.name} ({p.stages?.length || 0} stages)</SelectItem>
                 ))}
               </SelectContent>
@@ -2455,7 +2455,7 @@ function GHLContactSyncCard() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Scans all opportunities in the selected pipeline, creates properties with seller info, and maps pipeline stages to property status. The poller also runs automatically every 2 hours.
+          Creates properties from New Lead, Warm Lead, and Hot Lead stages. Updates existing properties when they move to later stages. Source is pulled from the opportunity. The poller also runs automatically every 2 hours.
         </p>
       </div>
     </div>
