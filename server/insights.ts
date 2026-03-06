@@ -488,6 +488,18 @@ export async function saveGeneratedInsights(insights: InsightsResult, tenantId?:
     return;
   }
 
+  // Archive ALL old active insight items before inserting new ones
+  // This ensures fresh insights replace stale ones regardless of origin
+  console.log('[Insights] Archiving old active items for tenant', tenantId);
+  await db.update(teamTrainingItems)
+    .set({ status: "archived" })
+    .where(
+      and(
+        eq(teamTrainingItems.tenantId, tenantId),
+        eq(teamTrainingItems.status, "active")
+      )
+    );
+
   // Get team member IDs for matching names (filtered by tenant)
   const conditions = [];
   if (tenantId) {
