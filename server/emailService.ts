@@ -1,10 +1,12 @@
-import { Resend } from 'resend';
+// ⛔ Resend import removed — all email sending permanently disabled
+// import { Resend } from 'resend';
 import { notifyOwner } from "./_core/notification";
 import { getDb } from "./db";
 import { outreachHistory } from "../drizzle/schema";
 
-// Initialize Resend client
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// ⛔ RESEND COMPLETELY DISABLED — No client initialization, no API calls possible
+// const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const resend = null;
 
 // Email sender configuration — configurable via env var
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Gunner <noreply@getgunner.ai>';
@@ -636,26 +638,20 @@ export async function sendEmail(options: EmailOptions & { fromEmail?: string }):
 
 /**
  * Send password reset email
+ * ⛔ DISABLED — all email sending blocked
  */
 export async function sendPasswordResetEmail(
   email: string,
   resetToken: string,
   baseUrl: string
 ): Promise<boolean> {
-  const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
-  
-  return sendEmail({
-    to: email,
-    type: "password_reset",
-    data: {
-      email,
-      resetLink
-    }
-  });
+  console.log(`[EmailService] ⛔ Password reset email BLOCKED for ${email}`);
+  return false;
 }
 
 /**
  * Send email verification email
+ * ⛔ DISABLED — all email sending blocked
  */
 export async function sendEmailVerificationEmail(
   email: string,
@@ -664,18 +660,8 @@ export async function sendEmailVerificationEmail(
   verificationToken: string,
   baseUrl: string
 ): Promise<boolean> {
-  const verificationLink = `${baseUrl}/verify-email?token=${verificationToken}`;
-  
-  return sendEmail({
-    to: email,
-    type: "email_verification",
-    data: {
-      email,
-      name,
-      companyName,
-      verificationLink
-    }
-  });
+  console.log(`[EmailService] ⛔ Verification email BLOCKED for ${email}`);
+  return false;
 }
 
 /**

@@ -1,0 +1,9 @@
+{
+  "query": "SET FOREIGN_KEY_CHECKS = 0; DELETE FROM tenants WHERE id IN (1000373, 1000374, 1000375, 1000376, 1000377, 1000378, 1000379); SET FOREIGN_KEY_CHECKS = 1",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SET FOREIGN_KEY_CHECKS = 0; DELETE FROM tenants WHERE id IN (1000373, 1000374, 1000375, 1000376, 1000377, 1000378, 1000379); SET FOREIGN_KEY_CHECKS = 1",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 59
+}

@@ -4495,9 +4495,12 @@
 - [x] Keep spam name blocking as tertiary protection
 
 ## Emergency: Second Spam Attack (2026-03-06)
-- [ ] Disable all public signups immediately (invite-only mode)
-- [ ] Clean up new spam tenants/users
-- [ ] Save checkpoint with all fixes
+- [x] Disable all public signups immediately (invite-only mode)
+- [x] Clean up new spam tenants/users (purged 10,374 tokens, deleted 7 test tenants)
+- [x] Remove Resend client initialization entirely — no email API calls possible
+- [x] Short-circuit all send functions (sendEmail, sendEmailVerificationEmail, sendPasswordResetEmail)
+- [x] Block all 3 signup endpoints (email, Google, Google complete-signup)
+- [x] Save checkpoint with all fixes
 
 ## Signup Lockdown UI (2026-03-06)
 - [x] Hide Sign In and Start Free Trial buttons from landing page
