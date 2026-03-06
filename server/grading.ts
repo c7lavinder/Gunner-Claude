@@ -1327,9 +1327,6 @@ export async function processCall(callId: number): Promise<void> {
           if (cached?.name && cached.name.includes(' ')) {
             resolvedName = cached.name;
             console.log(`[ProcessCall] Resolved full name from contact cache for call ${callId}: ${resolvedName}`);
-          } else if (cached?.firstName && cached?.lastName) {
-            resolvedName = `${cached.firstName} ${cached.lastName}`;
-            console.log(`[ProcessCall] Resolved full name from cache first+last for call ${callId}: ${resolvedName}`);
           }
         } catch (e) {
           console.warn(`[ProcessCall] Contact cache lookup failed for call ${callId}:`, e);

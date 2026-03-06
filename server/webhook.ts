@@ -604,7 +604,7 @@ async function syncPropertyFromOpportunity(
   if (!stageName && event.stageId) {
     await dbLog(`No stageName in payload, resolving from stageId: ${event.stageId}`);
     try {
-      stageName = await resolveStageNameById(event.tenantId, event.stageId);
+      stageName = await resolveStageNameById(event.tenantId!, event.stageId) ?? undefined;
     } catch (resolveErr: any) {
       await dbLog(`resolveStageNameById threw error`, { error: resolveErr?.message || String(resolveErr) });
     }

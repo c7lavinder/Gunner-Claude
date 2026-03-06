@@ -4362,7 +4362,7 @@
 - [x] Duplicate detection by address (no duplicate addresses)
 - [x] Link ghlOpportunityId and ghlContactId on the property record
 - [x] sellerName, sellerPhone columns already exist in dispo_properties schema
-- [ ] Update frontend sync card label to "Import Properties from GHL"
+- [x] Update frontend sync card label to "Import Properties from GHL"
 - [x] Update webhook to sync property data (not contact_cache) on opportunity updates
 - [x] Fix batchImportContacts to only use existing contact_cache columns (name, phone, source, market, buyBoxType)
 - [x] Fix matchBuyersForProperty to use market/buyBoxType matching instead of old tags column
@@ -4378,3 +4378,12 @@
 - [x] Add pipeline stage cache (10min TTL) to avoid excessive GHL API calls
 - [x] Add detailed [PropertySync] logging for debugging webhook property flow
 - [x] Fix stage name matching: GHL sends "New Lead (1)" not "New Lead" — strip parenthetical counts before mapping
+
+## Poller-Based Property Auto-Import (2026-03-06)
+- [x] Wire GHL poller to auto-create dispo_properties when new leads or stage changes are detected
+- [x] Use syncPropertyFromOpportunity logic from the poller instead of relying on webhooks
+- [x] Modify pollOpportunitiesForTenant to sync ALL opportunities (not just "New Deal" stage) as dispo_properties
+- [x] Call runBulkImport from poller for property sync instead of only processNewDeal
+- [x] Fix TS errors in grading.ts referencing deleted contact_cache columns
+- [x] Add manual "Import Properties from GHL" button in Settings/CRM page
+- [x] Verify polling interval creates properties within reasonable time

@@ -723,25 +723,25 @@ describe("Inbox SMS Modal — frontend wiring", () => {
 describe("Appointment contact enrichment — backend", () => {
   const dayHubSource = readFileSync(join(SERVER_DIR, "dayHub.ts"), "utf-8");
 
-  it("getTodayAppointments enriches contacts from local cache", () => {
-    expect(dayHubSource).toContain("contactIdsToEnrich");
-    expect(dayHubSource).toContain("contactCache");
-    expect(dayHubSource).toContain("cacheMap");
+  it("getTodayAppointments enriches contacts from GHL API", () => {
+    expect(dayHubSource).toContain("aptsToEnrich");
+    expect(dayHubSource).toContain("/contacts/");
+    expect(dayHubSource).toContain("enrichBatchSize");
   });
 
   it("enrichment fills in contactName when it is Unknown", () => {
     expect(dayHubSource).toContain('apt.contactName === "Unknown"');
-    expect(dayHubSource).toContain("cached.name");
-    expect(dayHubSource).toContain("cached.firstName");
+    expect(dayHubSource).toContain("c.firstName");
+    expect(dayHubSource).toContain("c.name");
   });
 
-  it("enrichment fills in address and phone from cache", () => {
-    expect(dayHubSource).toContain("!apt.address && cached.address");
-    expect(dayHubSource).toContain("!apt.contactPhone && cached.phone");
+  it("enrichment fills in address and phone from GHL contact", () => {
+    expect(dayHubSource).toContain("apt.address");
+    expect(dayHubSource).toContain("apt.contactPhone");
   });
 
   it("enrichment handles errors gracefully", () => {
-    expect(dayHubSource).toContain("Failed to enrich appointments from cache");
+    expect(dayHubSource).toContain("Appointment enrichment failed");
   });
 });
 

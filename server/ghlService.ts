@@ -1767,45 +1767,57 @@ export async function pollOpportunities(): Promise<{ processed: number; errors: 
 }
 
 async function pollOpportunitiesForTenant(result: { processed: number; errors: number }): Promise<void> {
-    // Get pipelines to find Dispo Pipeline
-    const pipelines = await getPipelines();
     const creds = getActiveCredentials();
-    const pipelineName = (creds.dispoPipelineName || DEFAULT_DISPO_PIPELINE_NAME).toLowerCase();
-    const dispoPipeline = pipelines.find(p => p.name.toLowerCase() === pipelineName);
     
-    if (!dispoPipeline) {
-      console.log(`[GHL Opportunities] Dispo pipeline not found`);
-      return;
+    // ---- Part 1: Sync ALL opportunities as dispo_properties via runBulkImport ----
+    // This creates/updates properties for every opportunity in the pipeline,
+    // handling duplicate detection, stage mapping, and contact resolution.
+    try {
+      const { runBulkImport } = await import("./ghlContactImport");
+      console.log(`[GHL Opportunities] Tenant ${creds.tenantId}: Running property sync via runBulkImport`);
+      const importResult = await runBulkImport(creds.tenantId);
+      console.log(`[GHL Opportunities] Tenant ${creds.tenantId}: Property sync complete — imported: ${importResult.imported}, updated: ${importResult.updated}, skipped: ${importResult.skipped}, errors: ${importResult.errors.length}`);
+      result.processed += importResult.imported + importResult.updated;
+      result.errors += importResult.errors.length;
+    } catch (importError) {
+      console.error(`[GHL Opportunities] Tenant ${creds.tenantId}: Property sync error:`, importError);
+      result.errors++;
     }
-    
-    const stageName = (creds.newDealStageName || DEFAULT_NEW_DEAL_STAGE_NAME).toLowerCase();
-    const newDealStage = dispoPipeline.stages.find(s => s.name.toLowerCase() === stageName);
-    if (!newDealStage) {
-      console.log(`[GHL Opportunities] New Deal stage not found in Dispo pipeline`);
-      return;
-    }
-    
-    // Fetch opportunities
-    const opportunities = await fetchOpportunities(lastOpportunityPollTimestamp || undefined);
-    
-    // Filter to only Dispo Pipeline / New Deal stage
-    const newDeals = opportunities.filter(
-      opp => opp.pipelineId === dispoPipeline.id && opp.pipelineStageId === newDealStage.id
-    );
-    
-    console.log(`[GHL Opportunities] Tenant ${creds.tenantId}: Found ${newDeals.length} opportunities in New Deal stage`);
-    
-    // Process each new deal
-    for (const opp of newDeals) {
-      try {
-        const processed = await processNewDeal(opp);
-        if (processed) {
-          result.processed++;
-        }
-      } catch (error) {
-        console.error(`[GHL Opportunities] Error processing opportunity ${opp.id}:`, error);
-        result.errors++;
+
+    // ---- Part 2: Process "New Deal" stage for Closer badge tracking ----
+    try {
+      const pipelines = await getPipelines();
+      const pipelineName = (creds.dispoPipelineName || DEFAULT_DISPO_PIPELINE_NAME).toLowerCase();
+      const dispoPipeline = pipelines.find(p => p.name.toLowerCase() === pipelineName);
+      
+      if (!dispoPipeline) {
+        console.log(`[GHL Opportunities] Dispo pipeline not found for badge tracking`);
+        return;
       }
+      
+      const stageName = (creds.newDealStageName || DEFAULT_NEW_DEAL_STAGE_NAME).toLowerCase();
+      const newDealStage = dispoPipeline.stages.find(s => s.name.toLowerCase() === stageName);
+      if (!newDealStage) {
+        console.log(`[GHL Opportunities] New Deal stage not found for badge tracking`);
+        return;
+      }
+      
+      const opportunities = await fetchOpportunities(lastOpportunityPollTimestamp || undefined);
+      const newDeals = opportunities.filter(
+        opp => opp.pipelineId === dispoPipeline.id && opp.pipelineStageId === newDealStage.id
+      );
+      
+      console.log(`[GHL Opportunities] Tenant ${creds.tenantId}: Found ${newDeals.length} opportunities in New Deal stage for badge tracking`);
+      
+      for (const opp of newDeals) {
+        try {
+          await processNewDeal(opp);
+        } catch (error) {
+          console.error(`[GHL Opportunities] Error processing deal badge for ${opp.id}:`, error);
+        }
+      }
+    } catch (badgeError) {
+      console.error(`[GHL Opportunities] Badge tracking error:`, badgeError);
     }
 }
 

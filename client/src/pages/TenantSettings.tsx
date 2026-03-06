@@ -1811,7 +1811,7 @@ export default function TenantSettings() {
             </div>
           </div>
 
-          {/* GHL Contact Sync Card */}
+          {/* GHL Property Import Card */}
           {crmIntegrations?.ghl?.connected && (
             <GHLContactSyncCard />
           )}
@@ -2310,7 +2310,7 @@ export default function TenantSettings() {
 }
 
 
-// ============ GHL Contact Sync Card ============
+// ============ GHL Property Import Card ============
 
 function GHLContactSyncCard() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>("");
@@ -2327,7 +2327,7 @@ function GHLContactSyncCard() {
     onSuccess: () => {
       setIsImporting(true);
       setPollInterval(2000); // Poll every 2 seconds
-      toast.info("Bulk import started — syncing contacts from GHL...");
+      toast.info("Import started — pulling properties from GHL pipeline...");
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to start import");
@@ -2359,9 +2359,9 @@ function GHLContactSyncCard() {
               <Database className="h-5 w-5 text-purple-600" />
             </div>
             <div>
-              <h3 className="obs-section-title text-base">GHL Contact Sync</h3>
+              <h3 className="obs-section-title text-base">Import Properties from GHL</h3>
               <p style={{ fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4 }}>
-                Import contacts from GHL pipeline opportunities into the local cache
+                Pull opportunities from your GHL pipeline and create properties in Inventory
               </p>
             </div>
           </div>
@@ -2402,7 +2402,7 @@ function GHLContactSyncCard() {
           {isRunning ? (
             <><Loader2 className="h-4 w-4 animate-spin" />Importing... ({pct}%)</>
           ) : (
-            <><Download className="h-4 w-4" />Sync Contacts from GHL</>
+            <><Download className="h-4 w-4" />Import Properties from GHL</>
           )}
         </Button>
 
@@ -2455,7 +2455,7 @@ function GHLContactSyncCard() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Scans all opportunities in the selected pipeline, fetches linked contacts, and parses tags for source, market, and buy box type. Ongoing sync happens automatically via webhooks.
+          Scans all opportunities in the selected pipeline, creates properties with seller info, and maps pipeline stages to property status. The poller also runs automatically every 2 hours.
         </p>
       </div>
     </div>
