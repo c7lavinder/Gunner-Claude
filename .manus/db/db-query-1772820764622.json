@@ -1,0 +1,20 @@
+{
+  "query": "SELECT id, name, teamRole, ghlUserId, lcPhone, lcPhones, isActive, tenantId FROM team_members WHERE teamRole = 'dispo_manager' OR name LIKE '%Esteban%'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, teamRole, ghlUserId, lcPhone, lcPhones, isActive, tenantId FROM team_members WHERE teamRole = 'dispo_manager' OR name LIKE '%Esteban%'",
+  "rows": [
+    {
+      "id": "780082",
+      "name": "Esteban Leiva",
+      "teamRole": "dispo_manager",
+      "ghlUserId": "NULL",
+      "lcPhone": "+16158525930",
+      "lcPhones": "NULL",
+      "isActive": "true",
+      "tenantId": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tteamRole\tghlUserId\tlcPhone\tlcPhones\tisActive\ttenantId\n780082\tEsteban Leiva\tdispo_manager\tNULL\t+16158525930\tNULL\ttrue\t1\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

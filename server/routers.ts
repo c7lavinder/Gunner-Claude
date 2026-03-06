@@ -7459,7 +7459,7 @@ selectedTimezone: { type: "string" },
         };
       }),
 
-    // Get daily KPI entries for the detail popup
+    // Get daily KPI entries for the detail popup (manual only - legacy)
     getDailyKpiEntries: protectedProcedure
       .input(z.object({
         date: z.string(),
@@ -7470,6 +7470,29 @@ selectedTimezone: { type: "string" },
         const { getDailyKpiEntries } = await import("./dayHub");
         const entries = await getDailyKpiEntries(ctx.user.tenantId, ctx.user.id, input.date);
         return entries.filter(e => e.kpiType === input.kpiType);
+      }),
+
+    // Get ALL items counted toward a KPI (auto-detected + manual)
+    getKpiLedgerItems: protectedProcedure
+      .input(z.object({
+        date: z.string(),
+        kpiType: z.enum(["call", "conversation", "appointment", "offer", "contract"]),
+        roleTab: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getKpiLedgerItems } = await import("./dayHub");
+        // Resolve team member ID for the current user
+        const { getTeamMemberByUserId } = await import("./db");
+        const member = await getTeamMemberByUserId(ctx.user.id);
+        return await getKpiLedgerItems(
+          ctx.user.tenantId,
+          ctx.user.id,
+          input.date,
+          input.kpiType,
+          member?.id || null,
+          input.roleTab
+        );
       }),
 
     // Add a manual KPI entry

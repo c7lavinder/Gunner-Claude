@@ -2715,7 +2715,34 @@ export async function logSync(data: {
   const db = await getDb();
   if (!db) return;
   try {
-    await db.insert(syncLog).values(data);
+    // Map legacy field names to actual DB column names
+    const syncTypeMap: Record<string, string> = {
+      calls: "ghl_call_poll",
+      properties: "ghl_property_poll",
+      property_import: "ghl_property_import",
+      batchdialer: "batchdialer_poll",
+      batchleads: "batchleads_poll",
+    };
+    const statusMap: Record<string, string> = {
+      success: "completed",
+      partial: "completed",
+      failed: "failed",
+    };
+    const mappedSyncType = syncTypeMap[data.syncType] || data.syncType;
+    const mappedStatus = statusMap[data.status] || data.status;
+    await db.insert(syncLog).values({
+      tenantId: data.tenantId,
+      syncType: mappedSyncType as any,
+      syncStatus: mappedStatus as any,
+      totalProcessed: data.recordsProcessed ?? 0,
+      imported: data.recordsCreated ?? 0,
+      updated: data.recordsUpdated ?? 0,
+      errorMessages: data.errorMessage ?? null,
+      durationMs: data.durationMs ?? null,
+      triggeredBy: "system",
+      startedAt: new Date(),
+      completedAt: new Date(),
+    });
   } catch (err) {
     console.error("[SyncLog] Failed to write sync log:", err);
   }

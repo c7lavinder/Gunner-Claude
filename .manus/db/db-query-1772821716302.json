@@ -1,0 +1,170 @@
+{
+  "query": "SELECT c.id, c.duration, c.classification, c.status, c.teamMemberId, tm.name \nFROM calls c \nLEFT JOIN team_members tm ON c.teamMemberId = tm.id \nWHERE c.duration < 60 AND c.duration > 0 AND c.classification != 'too_short'\nORDER BY c.duration ASC\nLIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT c.id, c.duration, c.classification, c.status, c.teamMemberId, tm.name \nFROM calls c \nLEFT JOIN team_members tm ON c.teamMemberId = tm.id \nWHERE c.duration < 60 AND c.duration > 0 AND c.classification != 'too_short'\nORDER BY c.duration ASC\nLIMIT 20;",
+  "rows": [
+    {
+      "id": "2730060",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2820034",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2970549",
+      "duration": "1",
+      "classification": "pending",
+      "status": "dismissed",
+      "teamMemberId": "1",
+      "name": "Chris Segura"
+    },
+    {
+      "id": "2820097",
+      "duration": "1",
+      "classification": "voicemail",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2850137",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2850022",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "3",
+      "name": "Kyle Barks"
+    },
+    {
+      "id": "2940116",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "3",
+      "name": "Kyle Barks"
+    },
+    {
+      "id": "2970168",
+      "duration": "1",
+      "classification": "pending",
+      "status": "skipped",
+      "teamMemberId": "NULL",
+      "name": "NULL"
+    },
+    {
+      "id": "2850062",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "3",
+      "name": "Kyle Barks"
+    },
+    {
+      "id": "2940158",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2820116",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "3",
+      "name": "Kyle Barks"
+    },
+    {
+      "id": "2730218",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2970682",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2730224",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "3000151",
+      "duration": "1",
+      "classification": "pending",
+      "status": "skipped",
+      "teamMemberId": "NULL",
+      "name": "NULL"
+    },
+    {
+      "id": "2730223",
+      "duration": "1",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2730279",
+      "duration": "2",
+      "classification": "voicemail",
+      "status": "skipped",
+      "teamMemberId": "3",
+      "name": "Kyle Barks"
+    },
+    {
+      "id": "2820047",
+      "duration": "2",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2820045",
+      "duration": "2",
+      "classification": "voicemail",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    },
+    {
+      "id": "2730234",
+      "duration": "2",
+      "classification": "no_answer",
+      "status": "skipped",
+      "teamMemberId": "2",
+      "name": "Daniel Lozano"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tduration\tclassification\tstatus\tteamMemberId\tname\n2730060\t1\tno_answer\tskipped\t2\tDaniel Lozano\n2820034\t1\tno_answer\tskipped\t2\tDaniel Lozano\n2970549\t1\tpending\tdismissed\t1\tChris Segura\n2820097\t1\tvoicemail\tskipped\t2\tDaniel Lozano\n2850137\t1\tno_answer\tskipped\t2\tDaniel Lozano\n2850022\t1\tno_answer\tskipped\t3\tKyle Barks\n2940116\t1\tno_answer\tskipped\t3\tKyle Barks\n2970168\t1\tpending\tskipped\tNULL\tNULL\n2850062\t1\tno_answer\tskipped\t3\tKyle Barks\n2940158\t1\tno_answer\tskipped\t2\tDaniel Lozano\n2820116\t1\tno_answer\tskipped\t3\tKyle Barks\n2730218\t1\tno_answer\tskipped\t2\tDaniel Lozano\n2970682\t1\tno_answer\tskipped\t2\tDaniel Lozano\n2730224\t1\tno_answer\tskipped\t2\tDaniel Lozano\n3000151\t1\tpending\tskipped\tNULL\tNULL\n2730223\t1\tno_answer\tskipped\t2\tDaniel Lozano\n2730279\t2\tvoicemail\tskipped\t3\tKyle Barks\n2820047\t2\tno_answer\tskipped\t2\tDaniel Lozano\n2820045\t2\tvoicemail\tskipped\t2\tDaniel Lozano\n2730234\t2\tno_answer\tskipped\t2\tDaniel Lozano\n",
+  "stderr": "",
+  "execution_time_ms": 175
+}

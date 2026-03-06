@@ -4506,3 +4506,16 @@
 - [x] Hide Sign In and Start Free Trial buttons from landing page
 - [x] Hide pricing signup CTAs
 - [x] Keep login accessible via direct URL only (/login)
+
+## Bug Fixes Round 2 (2026-03-06)
+- [x] #1 - KPI ledger now shows auto-detected calls + manual entries (getKpiLedgerItems procedure + KpiLedgerDialog updated)
+- [x] #4 - Dispo inbox now uses lcPhone fallback when lcPhones is null for team member filtering
+- [x] #9 - Reclassified 1,024 calls under 60s to too_short (743 short + 281 zero-duration)
+- [ ] Verify/fix #2 (personal data filtering)
+- [ ] Verify/fix #3 (dispo inbox)
+- [ ] Verify/fix #5 (scroll fix)
+- [ ] Verify/fix #6 (AI property research)
+- [ ] Verify/fix #7 (View As tasks)
+- [ ] Verify/fix #15-19 (property detail features)
+- [ ] Verify/fix #22 (stage permissions by role)
+- [x] Fix sync_status column mismatch in sync_log table (schema column mapping corrected to 'status')

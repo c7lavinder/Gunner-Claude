@@ -15,7 +15,7 @@ import {
 } from "./ghlActions";
 import { type TaskWithContext } from "./taskCenter";
 import { getDb } from "./db";
-import { dailyKpiEntries, calls, teamMembers } from "../drizzle/schema";
+import { dailyKpiEntries, calls, teamMembers, callGrades } from "../drizzle/schema";
 import { eq, and, sql, gte, lt, inArray } from "drizzle-orm";
 
 // ─── SERVER-SIDE CACHE ──────────────────────────────────
@@ -844,5 +844,158 @@ export async function getKpiSummary(
     console.error("[DayHub] getKpiSummary error:", error);
     console.error("[DayHub] getKpiSummary error stack:", (error as any)?.stack);
     return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
+  }
+}
+
+/**
+ * Get all individual items counted toward a KPI for the ledger popup.
+ * Returns both auto-detected items (from calls table) and manual entries.
+ */
+export async function getKpiLedgerItems(
+  tenantId: number,
+  userId: number,
+  date: string,
+  kpiType: "call" | "conversation" | "appointment" | "offer" | "contract",
+  teamMemberId?: number | null,
+  roleTab?: string
+) {
+  const db = await getDb();
+  if (!db) return { autoItems: [], manualItems: [] };
+
+  try {
+    const [year, month, day] = date.split("-").map(Number);
+    const dayStartUTC = new Date(Date.UTC(year, month - 1, day, 6, 0, 0));
+    const dayEndUTC = new Date(Date.UTC(year, month - 1, day + 1, 6, 0, 0));
+
+    // Build base conditions for calls query
+    const baseConditions = [
+      eq(calls.tenantId, tenantId),
+      gte(calls.callTimestamp, dayStartUTC),
+      lt(calls.callTimestamp, dayEndUTC),
+    ];
+
+    // Role-based filtering
+    const roleToTeamRole: Record<string, string> = {
+      lm: "lead_manager",
+      am: "acquisition_manager",
+      dispo: "dispo_manager",
+    };
+
+    if (roleTab && roleTab !== "admin" && roleToTeamRole[roleTab]) {
+      const roleMembers = await db
+        .select({ id: teamMembers.id })
+        .from(teamMembers)
+        .where(
+          and(
+            eq(teamMembers.tenantId, tenantId),
+            eq(teamMembers.teamRole, roleToTeamRole[roleTab] as any),
+            eq(teamMembers.isActive, "true")
+          )
+        );
+      const roleMemberIds = roleMembers.map(m => m.id);
+      if (roleMemberIds.length > 0) {
+        baseConditions.push(inArray(calls.teamMemberId, roleMemberIds));
+      } else {
+        return { autoItems: [], manualItems: [] };
+      }
+    } else if (teamMemberId && roleTab !== "admin") {
+      baseConditions.push(eq(calls.teamMemberId, teamMemberId));
+    }
+
+    // Get auto-detected items from calls table
+    let autoItems: Array<{
+      id: number;
+      source: "auto";
+      contactName: string;
+      contactPhone: string;
+      teamMemberName: string;
+      timestamp: string;
+      duration: number;
+      grade: string | null;
+      classification: string | null;
+      callOutcome: string | null;
+    }> = [];
+
+    if (kpiType !== "contract") {
+      // Build KPI-specific conditions
+      const kpiConditions = [...baseConditions];
+      if (kpiType === "conversation") {
+        kpiConditions.push(eq(calls.classification, "conversation"));
+      } else if (kpiType === "appointment") {
+        kpiConditions.push(eq(calls.callOutcome, "appointment_set"));
+      } else if (kpiType === "offer") {
+        kpiConditions.push(eq(calls.callOutcome, "offer_made"));
+      }
+      // For "call" type, no additional filter — all calls count
+
+      const autoRows = await db
+        .select({
+          id: calls.id,
+          contactName: calls.contactName,
+          contactPhone: calls.contactPhone,
+          teamMemberId: calls.teamMemberId,
+          callTimestamp: calls.callTimestamp,
+          duration: calls.duration,
+          overallGrade: callGrades.overallGrade,
+          classification: calls.classification,
+          callOutcome: calls.callOutcome,
+        })
+        .from(calls)
+        .leftJoin(callGrades, eq(calls.id, callGrades.callId))
+        .where(and(...kpiConditions))
+        .orderBy(sql`${calls.callTimestamp} DESC`)
+        .limit(100);
+
+      // Resolve team member names
+      const memberIds = Array.from(new Set(autoRows.map(r => r.teamMemberId).filter(Boolean))) as number[];
+      const memberMap = new Map<number, string>();
+      if (memberIds.length > 0) {
+        const members = await db
+          .select({ id: teamMembers.id, name: teamMembers.name })
+          .from(teamMembers)
+          .where(inArray(teamMembers.id, memberIds));
+        members.forEach(m => memberMap.set(m.id, m.name));
+      }
+
+      autoItems = autoRows.map(r => ({
+        id: r.id,
+        source: "auto" as const,
+        contactName: r.contactName || "Unknown",
+        contactPhone: r.contactPhone || "",
+        teamMemberName: r.teamMemberId ? (memberMap.get(r.teamMemberId) || "Unknown") : "Unknown",
+        timestamp: r.callTimestamp ? new Date(r.callTimestamp).toISOString() : "",
+        duration: r.duration || 0,
+        grade: r.overallGrade || null,
+        classification: r.classification || null,
+        callOutcome: r.callOutcome || null,
+      }));
+    }
+
+    // Get manual entries
+    const manualRows = await db
+      .select()
+      .from(dailyKpiEntries)
+      .where(
+        and(
+          eq(dailyKpiEntries.tenantId, tenantId),
+          eq(dailyKpiEntries.userId, userId),
+          eq(dailyKpiEntries.date, date),
+          eq(dailyKpiEntries.kpiType, kpiType)
+        )
+      );
+
+    const manualItems = manualRows.map(r => ({
+      id: r.id,
+      source: "manual" as const,
+      contactName: r.contactName || "",
+      propertyAddress: r.propertyAddress || "",
+      notes: r.notes || "",
+      createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : "",
+    }));
+
+    return { autoItems, manualItems };
+  } catch (error) {
+    console.error("[DayHub] getKpiLedgerItems error:", error);
+    return { autoItems: [], manualItems: [] };
   }
 }

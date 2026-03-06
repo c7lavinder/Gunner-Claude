@@ -158,6 +158,7 @@ interface TeamMember {
   ghlUserId: string | null;
   teamRole?: string;
   lcPhones?: string | null; // JSON array of LC phone numbers
+  lcPhone?: string | null; // Single LC phone number
 }
 
 type RoleTab = "admin" | "lm" | "am" | "dispo";
@@ -210,16 +211,16 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
   const [addAddress, setAddAddress] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
-  // Fetch ledger entries when modal is open
-  const { data: ledgerEntries, isLoading: ledgerLoading } = trpc.taskCenter.getDailyKpiEntries.useQuery(
-    { date: kpi?.date || "", kpiType: ledgerType },
+  // Fetch ALL ledger items (auto-detected + manual) when modal is open
+  const { data: ledgerData, isLoading: ledgerLoading } = trpc.taskCenter.getKpiLedgerItems.useQuery(
+    { date: kpi?.date || "", kpiType: ledgerType, roleTab },
     { enabled: ledgerOpen && !!kpi?.date }
   );
 
   const addKpiMutation = trpc.taskCenter.addKpiEntry.useMutation({
     onSuccess: () => {
       toast.success("Entry added to ledger");
-      utils.taskCenter.getDailyKpiEntries.invalidate();
+      utils.taskCenter.getKpiLedgerItems.invalidate();
       utils.taskCenter.getKpiSummary.invalidate();
       setAddModalOpen(false);
       setAddName("");
@@ -230,7 +231,7 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
   const deleteKpiMutation = trpc.taskCenter.deleteKpiEntry.useMutation({
     onSuccess: () => {
       toast.success("Entry removed from ledger");
-      utils.taskCenter.getDailyKpiEntries.invalidate();
+      utils.taskCenter.getKpiLedgerItems.invalidate();
       utils.taskCenter.getKpiSummary.invalidate();
       setDeleteConfirmId(null);
     },
@@ -344,59 +345,101 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
 
       {/* Trust Ledger Modal */}
       <Dialog open={ledgerOpen} onOpenChange={setLedgerOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <span>{ledgerLabel} Ledger</span>
               <Badge variant="outline" className="text-xs">{kpi.date}</Badge>
             </DialogTitle>
-            <DialogDescription>View, add, or remove manual {ledgerLabel.toLowerCase()} entries for today.</DialogDescription>
+            <DialogDescription>All {ledgerLabel.toLowerCase()} counted toward today's KPI total.</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
-            {/* Entries list */}
-            <ScrollArea className="max-h-[300px]">
-              {ledgerLoading ? (
-                <div className="space-y-2">
-                  {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
-                </div>
-              ) : !ledgerEntries || ledgerEntries.length === 0 ? (
-                <div className="text-center py-6" style={{ color: "var(--g-text-tertiary)" }}>
-                  <p className="text-sm">No manual entries yet.</p>
-                  <p className="text-xs mt-1">Auto-detected {ledgerLabel.toLowerCase()} from calls are counted separately.</p>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {ledgerEntries.map((entry: any) => (
-                    <div key={entry.id} className="flex items-center justify-between rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs tabular-nums" style={{ color: "var(--g-text-tertiary)" }}>
-                            {new Date(entry.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" })}
-                          </span>
-                          <span className="text-sm font-medium truncate" style={{ color: "var(--g-text-primary)" }}>
-                            {entry.contactName || "Manual Entry"}
-                          </span>
-                        </div>
-                        {entry.propertyAddress && (
-                          <p className="text-xs truncate mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
-                            <MapPin className="inline h-3 w-3 mr-1" />{entry.propertyAddress}
-                          </p>
+          <div className="space-y-4">
+            {/* Auto-detected items */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-secondary)" }}>Auto-Detected</span>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ledgerData?.autoItems?.length || 0}</Badge>
+              </div>
+              <ScrollArea className="max-h-[250px]">
+                {ledgerLoading ? (
+                  <div className="space-y-2">
+                    {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
+                  </div>
+                ) : !ledgerData?.autoItems || ledgerData.autoItems.length === 0 ? (
+                  <div className="text-center py-4" style={{ color: "var(--g-text-tertiary)" }}>
+                    <p className="text-xs">No auto-detected {ledgerLabel.toLowerCase()} today.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {ledgerData.autoItems.map((item: any) => (
+                      <div key={`auto-${item.id}`} className="flex items-center gap-3 rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                        <span className="text-xs tabular-nums shrink-0 w-16" style={{ color: "var(--g-text-tertiary)" }}>
+                          {item.timestamp ? new Date(item.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" }) : "--"}
+                        </span>
+                        <span className="text-sm font-medium truncate flex-1" style={{ color: "var(--g-text-primary)" }}>
+                          {item.contactName}
+                        </span>
+                        <span className="text-xs truncate max-w-[120px]" style={{ color: "var(--g-text-secondary)" }}>
+                          {item.teamMemberName}
+                        </span>
+                        <span className="text-xs tabular-nums shrink-0" style={{ color: "var(--g-text-tertiary)" }}>
+                          {item.duration ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}` : "0:00"}
+                        </span>
+                        {item.grade && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{item.grade}</Badge>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 shrink-0"
-                        onClick={() => setDeleteConfirmId(entry.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+
+            {/* Manual entries */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-secondary)" }}>Manual Entries</span>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ledgerData?.manualItems?.length || 0}</Badge>
+              </div>
+              <ScrollArea className="max-h-[150px]">
+                {!ledgerData?.manualItems || ledgerData.manualItems.length === 0 ? (
+                  <div className="text-center py-3" style={{ color: "var(--g-text-tertiary)" }}>
+                    <p className="text-xs">No manual entries.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {ledgerData.manualItems.map((entry: any) => (
+                      <div key={`manual-${entry.id}`} className="flex items-center justify-between rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs tabular-nums" style={{ color: "var(--g-text-tertiary)" }}>
+                              {entry.createdAt ? new Date(entry.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" }) : "--"}
+                            </span>
+                            <span className="text-sm font-medium truncate" style={{ color: "var(--g-text-primary)" }}>
+                              {entry.contactName || "Manual Entry"}
+                            </span>
+                          </div>
+                          {entry.propertyAddress && (
+                            <p className="text-xs truncate mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
+                              <MapPin className="inline h-3 w-3 mr-1" />{entry.propertyAddress}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 shrink-0"
+                          onClick={() => setDeleteConfirmId(entry.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
 
             {/* Add button */}
             <Button variant="outline" size="sm" className="w-full" onClick={() => setAddModalOpen(true)}>
@@ -599,6 +642,8 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
           parsed.forEach(p => phones.add(p));
         } catch { /* skip */ }
       }
+      // Fallback: also include lcPhone (singular) if lcPhones is empty
+      if (m.lcPhone) phones.add(m.lcPhone);
     }
     return phones.size > 0 ? phones : null;
   }, [teamMembersList]);
@@ -622,12 +667,15 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
     const map = new Map<string, string>();
     if (!teamMembersList) return map;
     for (const m of teamMembersList) {
-      if (!m.lcPhones) continue;
-      try {
-        const parsed = JSON.parse(m.lcPhones) as string[];
-        const firstName = m.name.split(" ")[0];
-        parsed.forEach(p => map.set(p, firstName));
-      } catch { /* skip */ }
+      const firstName = m.name.split(" ")[0];
+      if (m.lcPhones) {
+        try {
+          const parsed = JSON.parse(m.lcPhones) as string[];
+          parsed.forEach(p => map.set(p, firstName));
+        } catch { /* skip */ }
+      }
+      // Fallback: also map lcPhone (singular) to member name
+      if (m.lcPhone) map.set(m.lcPhone, firstName);
     }
     return map;
   }, [teamMembersList]);
@@ -912,6 +960,8 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
           parsed.forEach(p => phones.add(p));
         } catch { /* skip */ }
       }
+      // Fallback: also include lcPhone (singular)
+      if (m.lcPhone) phones.add(m.lcPhone);
     }
     return phones;
   }, [roleTab, teamMembersList]);
@@ -947,12 +997,15 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
     const map = new Map<string, string>();
     if (!teamMembersList) return map;
     for (const m of teamMembersList) {
-      if (!m.lcPhones) continue;
-      try {
-        const parsed = JSON.parse(m.lcPhones) as string[];
-        const firstName = m.name.split(" ")[0];
-        parsed.forEach(p => map.set(p, firstName));
-      } catch { /* skip */ }
+      const firstName = m.name.split(" ")[0];
+      if (m.lcPhones) {
+        try {
+          const parsed = JSON.parse(m.lcPhones) as string[];
+          parsed.forEach(p => map.set(p, firstName));
+        } catch { /* skip */ }
+      }
+      // Fallback: also map lcPhone (singular) to member name
+      if (m.lcPhone) map.set(m.lcPhone, firstName);
     }
     return map;
   }, [teamMembersList]);
