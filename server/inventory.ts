@@ -745,23 +745,30 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
     .where(and(eq(dispoProperties.id, propertyId), eq(dispoProperties.tenantId, tenantId)));
   if (!property) throw new Error("Property not found");
 
-  // Search contact cache for buyers with matching tags
-  // Look for contacts tagged as "buyer", "investor", "cash_buyer", etc.
-  const buyerTags = ["buyer", "investor", "cash buyer", "cash_buyer", "wholesale buyer", "flipper", "builder"];
+  // Search contact cache for buyers matching market or buyBoxType
+  // contact_cache stores: name, phone, market, buyBoxType, source
   const marketTag = property.market?.toLowerCase() || property.city?.toLowerCase() || "";
+  const propertyType = property.propertyType || "house";
 
-  // Query contacts that have buyer-related tags
+  // Query contacts that match by buyBoxType or market
+  const conditions = [eq(contactCache.tenantId, tenantId)];
+  const matchConditions: any[] = [];
+  if (marketTag) {
+    matchConditions.push(sql`LOWER(${contactCache.market}) = ${marketTag}`);
+  }
+  if (propertyType) {
+    matchConditions.push(sql`LOWER(${contactCache.buyBoxType}) LIKE ${`%${propertyType}%`}`);
+  }
+
+  // If we have no matching criteria, return empty
+  if (matchConditions.length === 0) {
+    return { matched: 0, buyers: [] };
+  }
+
   const contacts = await db.select().from(contactCache)
     .where(and(
       eq(contactCache.tenantId, tenantId),
-      sql`(${contactCache.tags} IS NOT NULL AND (
-        ${contactCache.tags} LIKE '%buyer%' OR
-        ${contactCache.tags} LIKE '%investor%' OR
-        ${contactCache.tags} LIKE '%cash%' OR
-        ${contactCache.tags} LIKE '%flipper%' OR
-        ${contactCache.tags} LIKE '%builder%' OR
-        ${contactCache.tags} LIKE '%wholesale%'
-      ))`,
+      sql`(${sql.join(matchConditions, sql` OR `)})`,
     ))
     .limit(200);
 
@@ -778,8 +785,6 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
   const newBuyers: Array<{
     buyerName: string;
     buyerPhone: string | null;
-    buyerEmail: string | null;
-    buyerCompany: string | null;
     ghlContactId: string;
     isVip: boolean;
     matchReason: string;
@@ -788,28 +793,21 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
   for (const contact of contacts) {
     if (existingGhlIds.has(contact.ghlContactId)) continue;
 
-    const tags = (() => {
-      try { return JSON.parse(contact.tags || "[]"); }
-      catch { return []; }
-    })();
-    const tagStr = tags.map((t: string) => t.toLowerCase()).join(",");
-
     // Check market match
-    const marketMatch = marketTag && tagStr.includes(marketTag);
-    // Check VIP status
-    const isVip = tagStr.includes("vip") || tagStr.includes("a-buyer") || tagStr.includes("top buyer");
+    const marketMatch = marketTag && contact.market?.toLowerCase() === marketTag;
+    // Check buyBoxType match
+    const typeMatch = contact.buyBoxType?.toLowerCase()?.includes(propertyType);
 
-    let matchReason = "Tagged as buyer";
-    if (marketMatch) matchReason += ` + ${property.market || property.city} market`;
-    if (isVip) matchReason += " (VIP)";
+    let matchReason = "";
+    if (marketMatch) matchReason += `${property.market || property.city} market`;
+    if (typeMatch) matchReason += `${matchReason ? " + " : ""}${contact.buyBoxType} buyer`;
+    if (!matchReason) matchReason = "Matched from contact cache";
 
     newBuyers.push({
-      buyerName: contact.name || `${contact.firstName || ""} ${contact.lastName || ""}`.trim() || "Unknown",
+      buyerName: contact.name || "Unknown",
       buyerPhone: contact.phone,
-      buyerEmail: contact.email,
-      buyerCompany: contact.companyName,
       ghlContactId: contact.ghlContactId,
-      isVip,
+      isVip: false, // VIP status managed manually on buyer activity
       matchReason,
     });
   }
@@ -823,8 +821,6 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
         propertyId,
         buyerName: buyer.buyerName,
         buyerPhone: buyer.buyerPhone,
-        buyerEmail: buyer.buyerEmail,
-        buyerCompany: buyer.buyerCompany,
         ghlContactId: buyer.ghlContactId,
         isVip: buyer.isVip ? "true" : "false",
         notes: buyer.matchReason,
@@ -839,7 +835,7 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
     await logPropertyActivity(tenantId, propertyId, {
       eventType: "buyer_matched",
       title: `${insertedCount} buyers auto-matched from CRM`,
-      description: `Matched based on buyer tags and market preferences`,
+      description: `Matched based on market and property type preferences`,
       metadata: JSON.stringify({ matchedCount: insertedCount }),
     });
   }

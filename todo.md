@@ -4341,3 +4341,30 @@
 - [x] Frontend: Import progress/status display
 - [x] Handle missing tags gracefully (show "Unknown")
 - [x] GHL Location ID: from tenant config (ghlLocationId)
+
+## GHL Data Sync — Spec Alignment (2026-03-05)
+
+- [ ] Verify contact_cache stores only 6 fields: ghlContactId, name, currentStage, source, market, buyBoxType
+- [ ] Remove any extra stored fields that should be pulled on demand (phone, email, address, etc.)
+- [ ] Add ContactDelete webhook handler to remove contacts from Gunner mirror
+- [ ] Add safety net polling (every 15 min) to catch missed webhook updates
+- [ ] Add on-demand GHL contact detail fetching (phone, email, address, notes, tasks) for detail views
+- [ ] Session-level caching for on-demand fetches (don't re-fetch on every click)
+- [ ] Ensure Gunner never writes contact data back to GHL (read-only sync)
+- [ ] Bulk import targets Sales Process pipeline specifically
+- [ ] Source/market/type sync only on contact create (rarely changes after creation)
+
+## GHL Import Refactor — Properties Not Contacts (2026-03-05)
+- [x] Refactor ghlContactImport.ts to upsert dispo_properties instead of contact_cache
+- [x] Map opportunity business name → address, contact name/phone → sellerName/sellerPhone on property
+- [x] Parse tags for source, market, buyBoxType and store on property
+- [x] Map pipeline stage → property status
+- [x] Duplicate detection by address (no duplicate addresses)
+- [x] Link ghlOpportunityId and ghlContactId on the property record
+- [x] sellerName, sellerPhone columns already exist in dispo_properties schema
+- [ ] Update frontend sync card label to "Import Properties from GHL"
+- [x] Update webhook to sync property data (not contact_cache) on opportunity updates
+- [x] Fix batchImportContacts to only use existing contact_cache columns (name, phone, source, market, buyBoxType)
+- [x] Fix matchBuyersForProperty to use market/buyBoxType matching instead of old tags column
+- [x] Remove syncContactFromOpportunityEvent call from webhook (property sync already handles it)
+- [x] Update tests for new import flow (existing tests pass)

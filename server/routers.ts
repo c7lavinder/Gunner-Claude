@@ -7896,7 +7896,7 @@ selectedTimezone: { type: "string" },
         const { getCsvTemplate } = await import("./inventory");
         return { template: getCsvTemplate() };
       }),
-    // GHL Contact Bulk Import
+    // GHL Property Bulk Import — pulls opportunities from GHL pipeline → dispo_properties
     ghlBulkImport: protectedProcedure
       .input(z.object({
         pipelineId: z.string().optional(),
@@ -7911,7 +7911,7 @@ selectedTimezone: { type: "string" },
         runBulkImport(ctx.user.tenantId, input?.pipelineId).catch(err => {
           console.error("[GHL Import] Background import error:", err);
         });
-        return { started: true, message: "Bulk import started. Poll for progress." };
+        return { started: true, message: "Property import from GHL started. Poll for progress." };
       }),
     ghlImportProgress: protectedProcedure
       .query(async ({ ctx }) => {

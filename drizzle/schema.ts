@@ -1412,16 +1412,9 @@ export const contactCache = mysqlTable("contact_cache", {
   // CRM identifiers
   ghlContactId: varchar("ghlContactId", { length: 255 }).notNull(),
   ghlLocationId: varchar("ghlLocationId", { length: 255 }),
-  // Contact info
-  firstName: varchar("firstName", { length: 255 }),
-  lastName: varchar("lastName", { length: 255 }),
-  name: varchar("name", { length: 512 }), // Full name (computed or from CRM)
-  email: varchar("email", { length: 320 }),
-  phone: varchar("phone", { length: 50 }),
-  // Additional data
-  tags: text("tags"), // JSON array of tag strings
-  address: text("address"),
-  companyName: varchar("companyName", { length: 255 }),
+  // Contact info (minimal — full details fetched on demand from GHL)
+  name: varchar("name", { length: 512 }), // Full name for search/display
+  phone: varchar("phone", { length: 50 }), // For quick search and call matching
   // Pipeline & classification data (from GHL opportunities + tags)
   currentStage: varchar("currentStage", { length: 100 }), // e.g. "New Lead", "Under Contract", "Closed"
   source: varchar("source", { length: 100 }), // Normalized lead source e.g. "PropertyLeads", "BatchDialer"

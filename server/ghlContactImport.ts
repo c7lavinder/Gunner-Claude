@@ -1,17 +1,20 @@
 /**
- * GHL Contact Bulk Import
+ * GHL Property Bulk Import
  * 
- * Pulls contact data from GHL opportunities in a specified pipeline,
- * extracts source/market/type from contact tags, and upserts into contact_cache.
+ * Pulls property data from GHL opportunities in a specified pipeline,
+ * fetches linked contact for seller info, extracts source/market/type from tags,
+ * and upserts into dispo_properties.
  * 
- * Spec: Gunner does NOT store contacts as its own data — it mirrors from GHL.
- * 4 fields per contact: currentStage, source, market, buyBoxType
+ * Architecture: Gunner stores properties. GHL is the CRM for contacts.
+ * Each GHL opportunity = one property. The linked contact = the seller.
+ * Business name field on the contact = the property address (GHL convention).
+ * Duplicate detection by address — no duplicate addresses allowed.
  */
 
 import { getDb } from "./db";
-import { contactCache } from "../drizzle/schema";
-import { eq, and } from "drizzle-orm";
-import { ghlFetch, getCredentialsForTenant, getPipelinesForTenant, getContact } from "./ghlActions";
+import { dispoProperties, propertyStageHistory } from "../drizzle/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { ghlFetch, getCredentialsForTenant, getPipelinesForTenant } from "./ghlActions";
 
 // ============ SOURCE NORMALIZATION ============
 
@@ -111,6 +114,45 @@ export function parseContactTags(tags: string[]): {
   };
 }
 
+// ============ STAGE MAPPING ============
+
+/**
+ * Map GHL pipeline stage names to Gunner property statuses.
+ * Case-insensitive matching.
+ */
+function mapStageToPropertyStatus(stageName: string): string {
+  const lower = stageName.toLowerCase().trim();
+  const mapping: Record<string, string> = {
+    "new lead": "lead",
+    "warm lead": "qualified",
+    "hot lead": "qualified",
+    "appointment set": "qualified",
+    "offer made": "offer_made",
+    "under contract": "under_contract",
+    "marketing": "marketing",
+    "buyer negotiating": "buyer_negotiating",
+    "closing": "closing",
+    "closed": "closed",
+    "dead": "dead",
+    "lost": "dead",
+  };
+  return mapping[lower] || "marketing"; // default to marketing for dispo imports
+}
+
+/**
+ * Determine which milestone flags to set based on the new status.
+ */
+function getMilestoneFlags(status: string): Record<string, boolean> {
+  const flags: Record<string, boolean> = {};
+  const statusOrder = ["lead", "qualified", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed"];
+  const idx = statusOrder.indexOf(status);
+  if (idx >= 1) flags.aptEverSet = true;
+  if (idx >= 2) flags.offerEverMade = true;
+  if (idx >= 3) flags.everUnderContract = true;
+  if (idx >= 7) flags.everClosed = true;
+  return flags;
+}
+
 // ============ BULK IMPORT ============
 
 export interface BulkImportProgress {
@@ -143,6 +185,7 @@ async function fetchAllOpportunitiesInPipeline(
   pipelineStageId: string;
   name: string;
   status: string;
+  monetaryValue: number | null;
 }>> {
   const allOpps: any[] = [];
   let startAfter: string | undefined;
@@ -184,50 +227,48 @@ async function fetchAllOpportunitiesInPipeline(
     pipelineStageId: opp.pipelineStageId || "",
     name: opp.name || opp.contact?.name || "",
     status: opp.status || "open",
+    monetaryValue: opp.monetaryValue || null,
   }));
 }
 
 /**
- * Fetch a full contact from GHL including tags, source, and all fields.
+ * Fetch a contact from GHL to get seller info and address.
+ * In GHL Dispo Pipeline:
+ *   - companyName / businessName = property address (visual convention)
+ *   - contact name = seller name
+ *   - contact phone = seller phone
+ *   - tags = source:X, market:Y, type:Z
  */
-async function fetchFullContact(
+async function fetchContactForProperty(
   creds: any,
   contactId: string
 ): Promise<{
   id: string;
-  firstName: string;
-  lastName: string;
   name: string;
-  email: string;
   phone: string;
-  address: string;
+  companyName: string; // used as property address in GHL
+  address1: string;
+  city: string;
+  state: string;
+  postalCode: string;
   tags: string[];
   source: string;
-  companyName: string;
 } | null> {
   try {
     const data = await ghlFetch(creds, `/contacts/${contactId}`, "GET");
     const c = data.contact || data;
 
-    // Build address from contact fields
-    const addressParts = [
-      c.address1 || c.streetAddress || "",
-      c.city || "",
-      c.state || "",
-      c.postalCode || c.zip || "",
-    ].filter(Boolean);
-
     return {
       id: c.id,
-      firstName: c.firstName || "",
-      lastName: c.lastName || "",
       name: `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name || "",
-      email: c.email || "",
       phone: c.phone || "",
-      address: addressParts.join(", "),
+      companyName: c.companyName || c.company || "",
+      address1: c.address1 || c.streetAddress || "",
+      city: c.city || "",
+      state: c.state || "",
+      postalCode: c.postalCode || c.zip || "",
       tags: Array.isArray(c.tags) ? c.tags : [],
       source: c.source || "",
-      companyName: c.companyName || c.company || "",
     };
   } catch (error) {
     console.error(`[GHL Import] Error fetching contact ${contactId}:`, error);
@@ -236,9 +277,75 @@ async function fetchFullContact(
 }
 
 /**
+ * Resolve the property address from GHL contact data.
+ * Priority:
+ *   1. companyName (GHL convention: business name = address for visual display)
+ *   2. address1 field from contact
+ *   3. Opportunity name as fallback
+ */
+function resolvePropertyAddress(contact: {
+  companyName: string;
+  address1: string;
+  city: string;
+  state: string;
+  postalCode: string;
+}, oppName: string): { address: string; city: string; state: string; zip: string } {
+  // Try companyName first (GHL convention for dispo pipeline)
+  if (contact.companyName && contact.companyName.trim()) {
+    // companyName might be full address like "123 Main St, Nashville, TN 37201"
+    // or just the street address like "123 Main St"
+    const parts = contact.companyName.split(",").map(p => p.trim());
+    if (parts.length >= 3) {
+      // Full address in companyName
+      const stateZip = parts[2].split(" ").filter(Boolean);
+      return {
+        address: parts[0],
+        city: parts[1] || contact.city || "",
+        state: stateZip[0] || contact.state || "",
+        zip: stateZip[1] || contact.postalCode || "",
+      };
+    } else if (parts.length === 2) {
+      return {
+        address: parts[0],
+        city: parts[1] || contact.city || "",
+        state: contact.state || "",
+        zip: contact.postalCode || "",
+      };
+    } else {
+      // Just the street address
+      return {
+        address: contact.companyName.trim(),
+        city: contact.city || "",
+        state: contact.state || "",
+        zip: contact.postalCode || "",
+      };
+    }
+  }
+
+  // Fall back to address1
+  if (contact.address1 && contact.address1.trim()) {
+    return {
+      address: contact.address1.trim(),
+      city: contact.city || "",
+      state: contact.state || "",
+      zip: contact.postalCode || "",
+    };
+  }
+
+  // Last resort: opportunity name
+  return {
+    address: oppName || "Address Pending",
+    city: contact.city || "",
+    state: contact.state || "",
+    zip: contact.postalCode || "",
+  };
+}
+
+/**
  * Run the bulk import for a tenant.
  * Scans a specified pipeline (or auto-detects "Dispo" / "Sales Process" pipeline),
- * fetches each opportunity's contact, extracts tags, and upserts into contact_cache.
+ * fetches each opportunity's contact, and upserts into dispo_properties.
+ * Duplicate detection by address — no duplicate addresses.
  */
 export async function runBulkImport(
   tenantId: number,
@@ -309,7 +416,7 @@ export async function runBulkImport(
       }
     }
 
-    console.log(`[GHL Import] Starting bulk import for tenant ${tenantId}, pipeline: ${pipelineName} (${targetPipelineId})`);
+    console.log(`[GHL Import] Starting property import for tenant ${tenantId}, pipeline: ${pipelineName} (${targetPipelineId})`);
 
     // Step 2: Fetch all opportunities in the pipeline
     progress.status = "fetching_opportunities";
@@ -319,7 +426,22 @@ export async function runBulkImport(
     progress.total = opportunities.length;
     console.log(`[GHL Import] Found ${opportunities.length} opportunities in pipeline "${pipelineName}"`);
 
-    // Step 3: Process each opportunity
+    // Step 3: Build existing address set for duplicate detection
+    const existingProps = await db.select({
+      address: dispoProperties.address,
+      ghlOpportunityId: dispoProperties.ghlOpportunityId,
+      id: dispoProperties.id,
+    })
+      .from(dispoProperties)
+      .where(eq(dispoProperties.tenantId, tenantId));
+
+    const existingAddresses = new Set(existingProps.map(p => p.address.toLowerCase().trim()));
+    const existingOppIds = new Map<string, number>(); // oppId → propertyId
+    existingProps.forEach(p => {
+      if (p.ghlOpportunityId) existingOppIds.set(p.ghlOpportunityId, p.id);
+    });
+
+    // Step 4: Process each opportunity → create/update dispo_properties
     progress.status = "processing";
     importProgress.set(tenantId, { ...progress });
 
@@ -336,8 +458,8 @@ export async function runBulkImport(
             return;
           }
 
-          // Fetch full contact details
-          const contact = await fetchFullContact(creds, opp.contactId);
+          // Fetch contact details (seller info + address)
+          const contact = await fetchContactForProperty(creds, opp.contactId);
           if (!contact) {
             progress.skipped++;
             progress.processed++;
@@ -345,67 +467,94 @@ export async function runBulkImport(
             return;
           }
 
-          // Resolve stage name
+          // Resolve property address
+          const { address, city, state, zip } = resolvePropertyAddress(contact, opp.name);
+
+          // Skip if no meaningful address
+          if (!address || address === "Address Pending") {
+            progress.skipped++;
+            progress.processed++;
+            return;
+          }
+
+          // Resolve stage name → property status
           const stageName = stageMap.get(opp.pipelineStageId) || "Unknown";
+          const mappedStatus = mapStageToPropertyStatus(stageName);
 
-          // Parse tags for source/market/type
+          // Parse tags for source/market/buyBoxType
           const tagData = parseContactTags(contact.tags);
-
-          // Determine source: prefer tag, fall back to contact source field
           const finalSource = tagData.source || normalizeSource(contact.source);
 
-          // Check if contact already exists in cache
-          const [existing] = await db.select()
-            .from(contactCache)
-            .where(
-              and(
-                eq(contactCache.tenantId, tenantId),
-                eq(contactCache.ghlContactId, opp.contactId)
-              )
-            );
+          // Milestone flags
+          const milestoneFlags = getMilestoneFlags(mappedStatus);
 
-          if (existing) {
-            // Update existing contact with new pipeline data
-            await db.update(contactCache)
+          // Check if property already exists by ghlOpportunityId first, then by address
+          const existingPropId = existingOppIds.get(opp.id);
+
+          if (existingPropId) {
+            // Update existing property (matched by opportunity ID)
+            await db.update(dispoProperties)
               .set({
-                currentStage: stageName,
-                source: finalSource || existing.source || null,
-                market: tagData.market || existing.market || null,
-                buyBoxType: tagData.buyBoxType || existing.buyBoxType || null,
-                ghlOpportunityId: opp.id,
-                tags: JSON.stringify(contact.tags),
-                name: contact.name || existing.name,
-                firstName: contact.firstName || existing.firstName,
-                lastName: contact.lastName || existing.lastName,
-                email: contact.email || existing.email,
-                phone: contact.phone || existing.phone,
-                address: contact.address || existing.address,
-                companyName: contact.companyName || existing.companyName,
-                lastSyncedAt: new Date(),
+                status: mappedStatus,
+                sellerName: contact.name || undefined,
+                sellerPhone: contact.phone || undefined,
+                ghlContactId: opp.contactId,
+                ghlPipelineId: targetPipelineId,
+                ghlPipelineStageId: opp.pipelineStageId,
+                market: tagData.market || undefined,
+                leadSource: finalSource || undefined,
+                stageChangedAt: new Date(),
+                ...(milestoneFlags.aptEverSet ? { aptEverSet: true } : {}),
+                ...(milestoneFlags.offerEverMade ? { offerEverMade: true } : {}),
+                ...(milestoneFlags.everUnderContract ? { everUnderContract: true } : {}),
+                ...(milestoneFlags.everClosed ? { everClosed: true } : {}),
               })
-              .where(eq(contactCache.id, existing.id));
+              .where(eq(dispoProperties.id, existingPropId));
             progress.updated++;
+          } else if (existingAddresses.has(address.toLowerCase().trim())) {
+            // Duplicate address — skip
+            progress.skipped++;
           } else {
-            // Insert new contact
-            await db.insert(contactCache).values({
+            // Insert new property
+            const [result] = await db.insert(dispoProperties).values({
               tenantId,
+              address,
+              city: city || "",
+              state: state || "",
+              zip: zip || "",
+              status: mappedStatus,
+              sellerName: contact.name || null,
+              sellerPhone: contact.phone || null,
               ghlContactId: opp.contactId,
-              ghlLocationId: creds.locationId,
               ghlOpportunityId: opp.id,
-              firstName: contact.firstName || null,
-              lastName: contact.lastName || null,
-              name: contact.name || null,
-              email: contact.email || null,
-              phone: contact.phone || null,
-              address: contact.address || null,
-              companyName: contact.companyName || null,
-              tags: JSON.stringify(contact.tags),
-              currentStage: stageName,
-              source: finalSource || null,
+              ghlPipelineId: targetPipelineId || null,
+              ghlPipelineStageId: opp.pipelineStageId || null,
               market: tagData.market || null,
-              buyBoxType: tagData.buyBoxType || null,
-              lastSyncedAt: new Date(),
+              leadSource: finalSource || null,
+              stageChangedAt: new Date(),
+              aptEverSet: milestoneFlags.aptEverSet || false,
+              offerEverMade: milestoneFlags.offerEverMade || false,
+              everUnderContract: milestoneFlags.everUnderContract || false,
+              everClosed: milestoneFlags.everClosed || false,
             });
+
+            // Track for duplicate detection within this batch
+            existingAddresses.add(address.toLowerCase().trim());
+            if (opp.id) existingOppIds.set(opp.id, result.insertId);
+
+            // Log initial stage in history
+            const insertId = result?.insertId;
+            if (insertId) {
+              await db.insert(propertyStageHistory).values({
+                tenantId,
+                propertyId: insertId,
+                fromStatus: null,
+                toStatus: mappedStatus,
+                source: "ghl_import",
+                notes: `Imported from GHL pipeline "${pipelineName}". Stage: ${stageName}. Seller: ${contact.name || "unknown"}`,
+              });
+            }
+
             progress.imported++;
           }
 
@@ -427,175 +576,14 @@ export async function runBulkImport(
 
     progress.status = "done";
     importProgress.set(tenantId, { ...progress });
-    console.log(`[GHL Import] Bulk import complete for tenant ${tenantId}: ${progress.imported} imported, ${progress.updated} updated, ${progress.skipped} skipped, ${progress.errors.length} errors`);
+    console.log(`[GHL Import] Property import complete for tenant ${tenantId}: ${progress.imported} imported, ${progress.updated} updated, ${progress.skipped} skipped, ${progress.errors.length} errors`);
 
     return progress;
   } catch (error: any) {
     progress.status = "error";
     progress.errors.push(error.message);
     importProgress.set(tenantId, { ...progress });
-    console.error(`[GHL Import] Bulk import failed for tenant ${tenantId}:`, error);
+    console.error(`[GHL Import] Property import failed for tenant ${tenantId}:`, error);
     return progress;
-  }
-}
-
-// ============ INCREMENTAL SYNC ============
-
-/**
- * Sync a single contact's pipeline data when a stage update occurs.
- * Called from webhook handler.
- */
-export async function syncContactFromOpportunityEvent(
-  tenantId: number,
-  contactId: string,
-  opportunityId: string,
-  stageName: string,
-  pipelineId?: string
-): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-
-  const creds = await getCredentialsForTenant(tenantId);
-  if (!creds) return;
-
-  try {
-    // Fetch full contact for tags
-    const contact = await fetchFullContact(creds, contactId);
-    const tags = contact?.tags || [];
-    const tagData = parseContactTags(tags);
-    const finalSource = tagData.source || (contact ? normalizeSource(contact.source) : null);
-
-    // Upsert into contact_cache
-    const [existing] = await db.select()
-      .from(contactCache)
-      .where(
-        and(
-          eq(contactCache.tenantId, tenantId),
-          eq(contactCache.ghlContactId, contactId)
-        )
-      );
-
-    if (existing) {
-      await db.update(contactCache)
-        .set({
-          currentStage: stageName,
-          source: finalSource || existing.source || null,
-          market: tagData.market || existing.market || null,
-          buyBoxType: tagData.buyBoxType || existing.buyBoxType || null,
-          ghlOpportunityId: opportunityId,
-          tags: tags.length > 0 ? JSON.stringify(tags) : existing.tags,
-          name: contact?.name || existing.name,
-          firstName: contact?.firstName || existing.firstName,
-          lastName: contact?.lastName || existing.lastName,
-          email: contact?.email || existing.email,
-          phone: contact?.phone || existing.phone,
-          address: contact?.address || existing.address,
-          lastSyncedAt: new Date(),
-        })
-        .where(eq(contactCache.id, existing.id));
-    } else if (contact) {
-      await db.insert(contactCache).values({
-        tenantId,
-        ghlContactId: contactId,
-        ghlLocationId: creds.locationId,
-        ghlOpportunityId: opportunityId,
-        firstName: contact.firstName || null,
-        lastName: contact.lastName || null,
-        name: contact.name || null,
-        email: contact.email || null,
-        phone: contact.phone || null,
-        address: contact.address || null,
-        companyName: contact.companyName || null,
-        tags: JSON.stringify(tags),
-        currentStage: stageName,
-        source: finalSource || null,
-        market: tagData.market || null,
-        buyBoxType: tagData.buyBoxType || null,
-        lastSyncedAt: new Date(),
-      });
-    }
-
-    console.log(`[GHL Import] Synced contact ${contactId} stage → ${stageName}`);
-  } catch (error) {
-    console.error(`[GHL Import] Error syncing contact ${contactId}:`, error);
-  }
-}
-
-/**
- * Sync a new contact from a ContactCreate webhook event.
- */
-export async function syncNewContactFromWebhook(
-  tenantId: number,
-  contactId: string,
-  contactData: {
-    firstName?: string;
-    lastName?: string;
-    email?: string;
-    phone?: string;
-    tags?: string[];
-    source?: string;
-    address?: string;
-    companyName?: string;
-  }
-): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-
-  try {
-    const tags = contactData.tags || [];
-    const tagData = parseContactTags(tags);
-    const finalSource = tagData.source || (contactData.source ? normalizeSource(contactData.source) : null);
-    const fullName = [contactData.firstName, contactData.lastName].filter(Boolean).join(" ") || null;
-
-    // Check if already exists
-    const [existing] = await db.select()
-      .from(contactCache)
-      .where(
-        and(
-          eq(contactCache.tenantId, tenantId),
-          eq(contactCache.ghlContactId, contactId)
-        )
-      );
-
-    if (existing) {
-      // Update
-      await db.update(contactCache)
-        .set({
-          source: finalSource || existing.source || null,
-          market: tagData.market || existing.market || null,
-          buyBoxType: tagData.buyBoxType || existing.buyBoxType || null,
-          tags: tags.length > 0 ? JSON.stringify(tags) : existing.tags,
-          name: fullName || existing.name,
-          firstName: contactData.firstName || existing.firstName,
-          lastName: contactData.lastName || existing.lastName,
-          email: contactData.email || existing.email,
-          phone: contactData.phone || existing.phone,
-          address: contactData.address || existing.address,
-          companyName: contactData.companyName || existing.companyName,
-          lastSyncedAt: new Date(),
-        })
-        .where(eq(contactCache.id, existing.id));
-    } else {
-      await db.insert(contactCache).values({
-        tenantId,
-        ghlContactId: contactId,
-        firstName: contactData.firstName || null,
-        lastName: contactData.lastName || null,
-        name: fullName,
-        email: contactData.email || null,
-        phone: contactData.phone || null,
-        address: contactData.address || null,
-        companyName: contactData.companyName || null,
-        tags: tags.length > 0 ? JSON.stringify(tags) : null,
-        source: finalSource || null,
-        market: tagData.market || null,
-        buyBoxType: tagData.buyBoxType || null,
-        lastSyncedAt: new Date(),
-      });
-    }
-
-    console.log(`[GHL Import] Synced new contact ${contactId} from webhook`);
-  } catch (error) {
-    console.error(`[GHL Import] Error syncing new contact ${contactId}:`, error);
   }
 }

@@ -196,8 +196,8 @@ export async function searchContacts(
 
 /**
  * Search the local contact_cache database table.
- * Uses LIKE matching on name, phone, and email fields.
- * Returns results in the same format as GHL API search.
+ * Uses LIKE matching on name and phone fields only.
+ * Full contact details (email, address) are fetched on demand from GHL.
  */
 async function searchLocalContactCache(
   tenantId: number,
@@ -212,15 +212,12 @@ async function searchLocalContactCache(
 
   const searchTerm = `%${query.trim()}%`;
   
-  // Layer 1: Exact LIKE match (fast)
+  // Layer 1: Exact LIKE match on name and phone (fast)
   const exactResults = await db
     .select({
       ghlContactId: contactCache.ghlContactId,
       name: contactCache.name,
-      firstName: contactCache.firstName,
-      lastName: contactCache.lastName,
       phone: contactCache.phone,
-      email: contactCache.email,
     })
     .from(contactCache)
     .where(
@@ -228,10 +225,7 @@ async function searchLocalContactCache(
         eq(contactCache.tenantId, tenantId),
         or(
           like(contactCache.name, searchTerm),
-          like(contactCache.firstName, searchTerm),
-          like(contactCache.lastName, searchTerm),
-          like(contactCache.phone, searchTerm),
-          like(contactCache.email, searchTerm)
+          like(contactCache.phone, searchTerm)
         )
       )
     )
@@ -240,26 +234,19 @@ async function searchLocalContactCache(
   if (exactResults.length > 0) {
     return exactResults.map(c => ({
       id: c.ghlContactId,
-      name: c.name || `${c.firstName || ""} ${c.lastName || ""}`.trim() || "Unknown",
+      name: c.name || "Unknown",
       phone: c.phone || "",
-      email: c.email || "",
+      email: "", // Not stored locally — fetch from GHL on demand
     }));
   }
 
   // Layer 2: Fuzzy match — split query into parts and match each part loosely
-  // This handles "pablo martins" finding "Pablo Martin" (missing/extra letters)
   const queryParts = query.trim().toLowerCase().split(/\s+/);
   const fuzzyConditions = queryParts.map(part => {
-    // Create multiple LIKE patterns: exact, starts-with, contains, and partial (first N-1 chars)
     const partialTerm = part.length > 2 ? `%${part.slice(0, -1)}%` : `%${part}%`;
     return or(
       like(sql`LOWER(${contactCache.name})`, `%${part}%`),
-      like(sql`LOWER(${contactCache.firstName})`, `%${part}%`),
-      like(sql`LOWER(${contactCache.lastName})`, `%${part}%`),
-      // Also try partial match (drops last char for typos like "martins" -> "martin")
-      like(sql`LOWER(${contactCache.name})`, partialTerm),
-      like(sql`LOWER(${contactCache.firstName})`, partialTerm),
-      like(sql`LOWER(${contactCache.lastName})`, partialTerm)
+      like(sql`LOWER(${contactCache.name})`, partialTerm)
     );
   });
 
@@ -267,10 +254,7 @@ async function searchLocalContactCache(
     .select({
       ghlContactId: contactCache.ghlContactId,
       name: contactCache.name,
-      firstName: contactCache.firstName,
-      lastName: contactCache.lastName,
       phone: contactCache.phone,
-      email: contactCache.email,
     })
     .from(contactCache)
     .where(
@@ -283,9 +267,9 @@ async function searchLocalContactCache(
 
   return fuzzyResults.map(c => ({
     id: c.ghlContactId,
-    name: c.name || `${c.firstName || ""} ${c.lastName || ""}`.trim() || "Unknown",
+    name: c.name || "Unknown",
     phone: c.phone || "",
-    email: c.email || "",
+    email: "", // Not stored locally — fetch from GHL on demand
   }));
 }
 

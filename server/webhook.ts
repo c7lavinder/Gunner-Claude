@@ -425,22 +425,8 @@ async function processOpportunityEvent(event: OpportunityEvent): Promise<void> {
     // auto-create or update a property record in the inventory.
     await syncPropertyFromOpportunity(event, db, logPrefix);
 
-    // ============ CONTACT CACHE SYNC ============
-    // Keep contact_cache up to date with pipeline stage changes
-    if (event.contactId && event.stageName) {
-      try {
-        const { syncContactFromOpportunityEvent } = await import("./ghlContactImport");
-        await syncContactFromOpportunityEvent(
-          event.tenantId,
-          event.contactId,
-          event.sourceOpportunityId,
-          event.stageName,
-          event.pipelineId
-        );
-      } catch (syncErr) {
-        console.warn(`${logPrefix} Contact cache sync failed (non-critical):`, syncErr);
-      }
-    }
+    // Note: contact_cache sync is handled by processContactEvent (webhook ContactCreate/Update).
+    // Property sync is handled above by syncPropertyFromOpportunity.
 
   } catch (error) {
     console.error(`${logPrefix} Error processing opportunity event:`, error);
@@ -772,16 +758,12 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
     }
 
     if (existing) {
-      // Update existing contact
+      // Update existing contact — only name, phone, and classification
       const updateData: Record<string, any> = {
         lastSyncedAt: new Date(),
       };
-      if (event.firstName !== undefined) updateData.firstName = event.firstName;
-      if (event.lastName !== undefined) updateData.lastName = event.lastName;
       if (fullName) updateData.name = fullName;
-      if (event.email !== undefined) updateData.email = event.email;
       if (event.phone !== undefined) updateData.phone = event.phone;
-      if (event.tags) updateData.tags = JSON.stringify(event.tags);
       // Update classification from tags (only if we got new values)
       if (tagSource) updateData.source = tagSource;
       if (tagMarket) updateData.market = tagMarket;
@@ -792,17 +774,13 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
         .where(eq(contactCache.id, existing.id));
       console.log(`${logPrefix} Updated contact ${event.sourceContactId} in cache (${fullName || existing.name})`);
     } else {
-      // Insert new contact
+      // Insert new contact — only name, phone, and classification
       await db.insert(contactCache).values({
         tenantId: event.tenantId,
         ghlContactId: event.sourceContactId,
         ghlLocationId: event.sourceLocationId || null,
-        firstName: event.firstName || null,
-        lastName: event.lastName || null,
         name: fullName,
-        email: event.email || null,
         phone: event.phone || null,
-        tags: event.tags ? JSON.stringify(event.tags) : null,
         source: tagSource || null,
         market: tagMarket || null,
         buyBoxType: tagBuyBoxType || null,
@@ -948,13 +926,13 @@ export async function getWebhookHealthStats(tenantId?: number) {
 }
 
 /**
- * Search the contact cache for a contact by name, phone, or email.
+ * Search the contact cache for a contact by name or phone.
  * Used as a fast alternative to GHL API search.
  */
 export async function searchContactCache(
   tenantId: number,
   query: string
-): Promise<Array<{ ghlContactId: string; name: string | null; phone: string | null; email: string | null }>> {
+): Promise<Array<{ ghlContactId: string; name: string | null; phone: string | null }>> {
   try {
     const db = await getDb();
     if (!db) return [];
@@ -963,13 +941,12 @@ export async function searchContactCache(
       ghlContactId: contactCache.ghlContactId,
       name: contactCache.name,
       phone: contactCache.phone,
-      email: contactCache.email,
     })
       .from(contactCache)
       .where(
         and(
           eq(contactCache.tenantId, tenantId),
-          sql`(${contactCache.name} LIKE ${`%${query}%`} OR ${contactCache.phone} LIKE ${`%${query}%`} OR ${contactCache.email} LIKE ${`%${query}%`})`
+          sql`(${contactCache.name} LIKE ${`%${query}%`} OR ${contactCache.phone} LIKE ${`%${query}%`})`
         )
       )
       .limit(10);
@@ -1345,6 +1322,20 @@ export async function batchImportContacts(tenantId: number): Promise<{ imported:
         try {
           const fullName = `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.name || null;
           
+          // Parse tags for source/market/buyBoxType classification
+          let tagSource: string | null = null;
+          let tagMarket: string | null = null;
+          let tagBuyBoxType: string | null = null;
+          if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) {
+            try {
+              const { parseContactTags, normalizeSource } = await import("./ghlContactImport");
+              const tagData = parseContactTags(c.tags);
+              tagSource = tagData.source;
+              tagMarket = tagData.market;
+              tagBuyBoxType = tagData.buyBoxType;
+            } catch (e) { /* non-critical */ }
+          }
+
           // Check if contact already exists
           const [existing] = await db.select({ id: contactCache.id })
             .from(contactCache)
@@ -1357,31 +1348,31 @@ export async function batchImportContacts(tenantId: number): Promise<{ imported:
             .limit(1);
 
           if (existing) {
-            // Update existing
+            // Update existing — only columns that exist in contact_cache
+            const updateData: Record<string, any> = {
+              name: fullName,
+              phone: c.phone || null,
+              lastSyncedAt: new Date(),
+            };
+            if (tagSource) updateData.source = tagSource;
+            if (tagMarket) updateData.market = tagMarket;
+            if (tagBuyBoxType) updateData.buyBoxType = tagBuyBoxType;
+
             await db.update(contactCache)
-              .set({
-                name: fullName,
-                firstName: c.firstName || null,
-                lastName: c.lastName || null,
-                phone: c.phone || null,
-                email: c.email || null,
-                tags: c.tags ? JSON.stringify(c.tags) : null,
-                lastSyncedAt: new Date(),
-              })
+              .set(updateData)
               .where(eq(contactCache.id, existing.id));
             skipped++;
           } else {
-            // Insert new
+            // Insert new — only columns that exist in contact_cache
             await db.insert(contactCache).values({
               tenantId,
               ghlContactId: c.id,
               ghlLocationId: locationId,
               name: fullName,
-              firstName: c.firstName || null,
-              lastName: c.lastName || null,
               phone: c.phone || null,
-              email: c.email || null,
-              tags: c.tags ? JSON.stringify(c.tags) : null,
+              source: tagSource || null,
+              market: tagMarket || null,
+              buyBoxType: tagBuyBoxType || null,
               lastSyncedAt: new Date(),
             });
             imported++;
