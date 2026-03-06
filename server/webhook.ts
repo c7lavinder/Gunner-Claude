@@ -348,6 +348,16 @@ async function processCallEvent(event: CallEvent): Promise<void> {
 async function processOpportunityEvent(event: OpportunityEvent): Promise<void> {
   const logPrefix = `[Webhook:Opp:${event.source}]`;
 
+  // Debug: log entry into processOpportunityEvent
+  try {
+    const { getDb: getDbEntry } = await import("./db");
+    const dbEntry = await getDbEntry();
+    if (dbEntry) {
+      const { sql: sqlEntry } = await import("drizzle-orm");
+      await dbEntry.execute(sqlEntry`INSERT INTO debug_log (source, message, data) VALUES ('processOppEntry', ${`Entered processOpportunityEvent for ${event.sourceOpportunityId}, type: ${event.eventType}`}, ${JSON.stringify({ locationId: event.sourceLocationId, tenantId: event.tenantId, stageId: event.stageId, stageName: event.stageName })})`);
+    }
+  } catch (e) { /* ignore */ }
+
   // Resolve tenant
   if (!event.tenantId && event.sourceLocationId) {
     const tenant = await resolveTenantByLocationId(event.sourceLocationId);
@@ -358,6 +368,15 @@ async function processOpportunityEvent(event: OpportunityEvent): Promise<void> {
 
   if (!event.tenantId) {
     console.error(`${logPrefix} Cannot process opportunity without tenantId`);
+    // Debug: log tenant resolution failure
+    try {
+      const { getDb: getDbTenant } = await import("./db");
+      const dbTenant = await getDbTenant();
+      if (dbTenant) {
+        const { sql: sqlTenant } = await import("drizzle-orm");
+        await dbTenant.execute(sqlTenant`INSERT INTO debug_log (source, message, data) VALUES ('processOppEntry', ${`FAILED: No tenantId for ${event.sourceOpportunityId}`}, ${JSON.stringify({ locationId: event.sourceLocationId })})`);
+      }
+    } catch (e) { /* ignore */ }
     return;
   }
 
