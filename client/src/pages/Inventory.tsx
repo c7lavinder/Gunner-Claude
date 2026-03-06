@@ -1884,6 +1884,8 @@ export default function Inventory() {
                       <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Contract</th>
                       <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Sends</th>
                       <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Offers</th>
+                      <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Type</th>
+                      <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Market</th>
                       <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>DOM</th>
                     </tr>
                   </thead>
@@ -1922,6 +1924,16 @@ export default function Inventory() {
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: act.offerCount > 0 ? "#f59e0b" : "var(--g-text-tertiary)" }}>
                             {act.offerCount || 0}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="text-[10px] truncate max-w-[80px] block" style={{ color: p.projectType ? "var(--g-text-primary)" : "var(--g-text-tertiary)" }}>
+                              {p.projectType ? p.projectType.charAt(0).toUpperCase() + p.projectType.slice(1) : "—"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="text-[10px] truncate max-w-[100px] block" style={{ color: p.market ? "var(--g-text-primary)" : "var(--g-text-tertiary)" }}>
+                              {p.market || "—"}
+                            </span>
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <span style={{ color: heatColor(dom) }}>{dom}d</span>

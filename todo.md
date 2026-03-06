@@ -4537,5 +4537,9 @@
 - [x] BUG: Duplicate properties removed via SQL + fixed import race condition (Promise.all → sequential for loop with continue)
 
 ## Property Improvements (2026-03-06)
-- [ ] Add unique constraint on dispo_properties(tenantId, address) to prevent duplicates at DB level
-- [ ] Test property edit form — populate Project Type, Market, Opportunity Source and verify rendering
+- [x] Add unique constraint on dispo_properties(tenantId, address) to prevent duplicates at DB level
+- [x] Test property edit form — populate Project Type, Market, Opportunity Source and verify rendering
+
+## Inventory & Training Improvements (2026-03-06)
+- [x] Add Project Type and Market columns to inventory table view with filtering/sorting
+- [x] Set up automatic weekly training insight regeneration every Monday morning (already implemented in weeklyInsightsRefresh.ts)
