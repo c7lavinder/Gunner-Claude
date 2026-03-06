@@ -625,16 +625,8 @@ P.S. - We truly believe Gunner can help your team close more deals. Let us prove
 export async function sendEmail(options: EmailOptions & { fromEmail?: string }): Promise<boolean> {
   const { subject, html, text } = generateEmailContent(options.type, options.data);
   
-  // Churn emails always notify owner (they're internal notifications about outreach)
-  const isChurnEmail = options.type.startsWith('churn_');
-  
-  if (isChurnEmail) {
-    // Notify owner about the outreach
-    return notifyOwner({
-      title: subject,
-      content: text
-    });
-  }
+  // ⛔ ALL emails disabled including churn notifications
+  // const isChurnEmail = options.type.startsWith('churn_');
   
   // ⛔ ALL EMAIL SENDING DISABLED — Resend client is null, no fallback to owner notifications
   // This prevents flooding the owner's inbox with [EMAIL FAILED] notifications

@@ -33,6 +33,10 @@ interface LoopsEvent {
 }
 
 async function loopsRequest(endpoint: string, method: string, body?: object) {
+  // ⛔ ALL LOOPS API CALLS DISABLED — spam attack mitigation
+  console.log(`[Loops] ⛔ DISABLED — would have called ${endpoint}`);
+  return null;
+
   if (!LOOPS_API_KEY) {
     console.warn("[Loops] API key not configured, skipping request");
     return null;
