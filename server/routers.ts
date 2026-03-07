@@ -8092,17 +8092,24 @@ selectedTimezone: { type: "string" },
         sellerPhone: z.string().optional(),
         ghlContactId: z.string().optional(),
         notes: z.string().optional(),
+        description: z.string().optional(),
         bedrooms: z.number().optional(),
         bathrooms: z.number().optional(),
         sqft: z.number().optional(),
         lotSize: z.string().optional(),
         yearBuilt: z.number().optional(),
+        market: z.string().optional(),
+        lockboxCode: z.string().optional(),
+        occupancyStatus: z.string().optional(),
+        assignmentFee: z.number().optional(),
+        mediaLink: z.string().optional(),
+        leadSource: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         const { createProperty } = await import("./inventory");
         const { bedrooms, bathrooms, repairEstimate, lotSize, propertyType, ...rest } = input;
-        return createProperty(ctx.user.tenantId, ctx.user.id, {
+        const result = await createProperty(ctx.user.tenantId, ctx.user.id, {
           ...rest,
           zip: rest.zip || "",
           propertyType: (propertyType || "house") as any,
@@ -8111,6 +8118,15 @@ selectedTimezone: { type: "string" },
           estRepairs: repairEstimate ?? undefined,
           addedByUserId: ctx.user.id,
         } as any);
+        // Fire-and-forget: auto-research the property in the background
+        if (result?.id) {
+          import("./propertyResearch").then(({ researchAndSaveProperty }) => {
+            researchAndSaveProperty(ctx.user.tenantId!, result.id).catch(err =>
+              console.error("[PropertyResearch] Background research failed:", err)
+            );
+          });
+        }
+        return result;
       }),
     updateProperty: protectedProcedure
       .input(z.object({
@@ -8447,6 +8463,57 @@ selectedTimezone: { type: "string" },
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         const { getPipelinesForTenant } = await import("./ghlActions");
         return getPipelinesForTenant(ctx.user.tenantId);
+      }),
+    // Get all GHL contact IDs linked to inventory properties (for dispo inbox filtering)
+    getInventoryContactIds: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        const { dispoProperties } = await import("../drizzle/schema");
+        const { eq, isNotNull, and } = await import("drizzle-orm");
+        const rows = await db.select({ ghlContactId: dispoProperties.ghlContactId })
+          .from(dispoProperties)
+          .where(and(eq(dispoProperties.tenantId, ctx.user.tenantId), isNotNull(dispoProperties.ghlContactId)));
+        return rows.map(r => r.ghlContactId).filter(Boolean) as string[];
+      }),
+    // Search GHL contacts for autocomplete (buyer/showing/offer entry)
+    searchGhlContacts: protectedProcedure
+      .input(z.object({ query: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getCredentialsForTenant, ghlFetch } = await import("./ghlActions");
+        const creds = await getCredentialsForTenant(ctx.user.tenantId);
+        if (!creds) throw new TRPCError({ code: "NOT_FOUND", message: "No GHL credentials" });
+        try {
+          const data = await ghlFetch(creds, `/contacts/search`, "POST", {
+            locationId: creds.locationId,
+            query: input.query,
+            limit: 10,
+          });
+          return (data.contacts || []).map((c: any) => ({
+            id: c.id,
+            name: `${c.firstName || ""} ${c.lastName || ""}`.trim(),
+            phone: c.phone || "",
+            email: c.email || "",
+            company: c.companyName || "",
+            tags: c.tags || [],
+            customFields: c.customFields || [],
+          }));
+        } catch (err: any) {
+          console.error("[GHL] Contact search error:", err?.message);
+          return [];
+        }
+      }),
+    // Trigger property research (manual or re-research)
+    researchProperty: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { researchAndSaveProperty } = await import("./propertyResearch");
+        const result = await researchAndSaveProperty(ctx.user.tenantId, input.propertyId);
+        return { success: Object.keys(result).length > 0, research: result };
       }),
   }),
 });

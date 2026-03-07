@@ -491,6 +491,20 @@
       "when": 1772859030674,
       "tag": "0069_round_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "5",
+      "when": 1772923796809,
+      "tag": "0070_slow_joseph",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "5",
+      "when": 1772924780752,
+      "tag": "0071_moaning_black_cat",
+      "breakpoints": true
     }
   ]
 }

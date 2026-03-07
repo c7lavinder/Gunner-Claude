@@ -1,0 +1,28 @@
+{
+  "query": "SELECT t.id, t.name, t.crmConnected, t.webhookActive, o.isActive as oauthActive, o.lastRefreshedAt, o.lastError FROM tenants t LEFT JOIN ghl_oauth_tokens o ON t.id = o.tenantId WHERE t.crmConnected = 'true' AND t.id < 1020000;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT t.id, t.name, t.crmConnected, t.webhookActive, o.isActive as oauthActive, o.lastRefreshedAt, o.lastError FROM tenants t LEFT JOIN ghl_oauth_tokens o ON t.id = o.tenantId WHERE t.crmConnected = 'true' AND t.id < 1020000;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "crmConnected": "true",
+      "webhookActive": "true",
+      "oauthActive": "true",
+      "lastRefreshedAt": "2026-03-07 15:45:33",
+      "lastError": "NULL"
+    },
+    {
+      "id": "450029",
+      "name": "NAH Kitty Hawk",
+      "crmConnected": "true",
+      "webhookActive": "false",
+      "oauthActive": "NULL",
+      "lastRefreshedAt": "NULL",
+      "lastError": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcrmConnected\twebhookActive\toauthActive\tlastRefreshedAt\tlastError\n1\tNew Again Houses\ttrue\ttrue\ttrue\t2026-03-07 15:45:33\tNULL\n450029\tNAH Kitty Hawk\ttrue\tfalse\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

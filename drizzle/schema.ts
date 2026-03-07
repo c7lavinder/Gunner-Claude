@@ -1473,6 +1473,15 @@ export const contactCache = mysqlTable("contact_cache", {
   market: varchar("market", { length: 100 }), // e.g. "Nashville", "Chattanooga"
   buyBoxType: varchar("buyBoxType", { length: 100 }), // e.g. "House", "Lot", "Land", "Multifamily"
   ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }), // Link to the opportunity in the pipeline
+  // Buyer-specific fields (from GHL custom fields)
+  buyerTier: varchar("buyerTier", { length: 50 }), // Priority, Qualified, JV Partner, Unqualified, Halted
+  responseSpeed: varchar("responseSpeed", { length: 50 }), // Lightning, Same Day, Slow, Ghost
+  verifiedFunding: varchar("verifiedFunding", { length: 10 }), // true/false
+  hasPurchasedBefore: varchar("hasPurchasedBefore", { length: 10 }), // true/false
+  secondaryMarket: varchar("secondaryMarket", { length: 255 }), // Backup market text field
+  buyerNotes: text("buyerNotes"), // Buyer notes from GHL
+  lastContactDate: timestamp("lastContactDate"), // Last contact date from GHL
+  email: varchar("email", { length: 255 }), // Buyer email for display
   // Sync metadata
   lastSyncedAt: timestamp("lastSyncedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1624,6 +1633,23 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   // Opportunity & Project Details
   opportunitySource: varchar("opportunitySource", { length: 255 }), // Source from GHL opportunity (e.g. "Cold Call", "Direct Mail")
   projectType: mysqlEnum("projectType", ["wholesale", "novation", "creative_finance", "fix_and_flip", "buy_and_hold", "other"]),
+  // AI Property Research (auto-fetched from Zillow, county records, etc.)
+  propertyResearch: json("property_research").$type<{
+    zestimate?: number;
+    taxAssessment?: number;
+    taxAmount?: number;
+    ownerName?: string;
+    deedDate?: string;
+    legalDescription?: string;
+    listingHistory?: Array<{ date: string; event: string; price?: number }>;
+    recentComps?: Array<{ address: string; soldPrice: number; soldDate: string; sqft?: number; beds?: number; baths?: number }>;
+    priceHistory?: Array<{ date: string; price: number; event: string }>;
+    neighborhoodInfo?: string;
+    streetViewUrl?: string;
+    zillowUrl?: string;
+    additionalNotes?: string;
+  }>(),
+  researchUpdatedAt: timestamp("research_updated_at"),
   // Timestamps
   marketedAt: timestamp("marketedAt"), // When first blast was sent
   soldAt: timestamp("soldAt"),

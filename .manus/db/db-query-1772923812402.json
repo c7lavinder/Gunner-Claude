@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE contact_cache\n  ADD COLUMN buyerTier varchar(50) DEFAULT NULL,\n  ADD COLUMN responseSpeed varchar(50) DEFAULT NULL,\n  ADD COLUMN verifiedFunding varchar(10) DEFAULT NULL,\n  ADD COLUMN hasPurchasedBefore varchar(10) DEFAULT NULL,\n  ADD COLUMN secondaryMarket varchar(255) DEFAULT NULL,\n  ADD COLUMN buyerNotes text DEFAULT NULL,\n  ADD COLUMN lastContactDate timestamp DEFAULT NULL,\n  ADD COLUMN email varchar(255) DEFAULT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE contact_cache\n  ADD COLUMN buyerTier varchar(50) DEFAULT NULL,\n  ADD COLUMN responseSpeed varchar(50) DEFAULT NULL,\n  ADD COLUMN verifiedFunding varchar(10) DEFAULT NULL,\n  ADD COLUMN hasPurchasedBefore varchar(10) DEFAULT NULL,\n  ADD COLUMN secondaryMarket varchar(255) DEFAULT NULL,\n  ADD COLUMN buyerNotes text DEFAULT NULL,\n  ADD COLUMN lastContactDate timestamp DEFAULT NULL,\n  ADD COLUMN email varchar(255) DEFAULT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1458
+}

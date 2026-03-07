@@ -875,7 +875,7 @@ export async function transcribeCallRecording(recordingUrl: string): Promise<{ t
 
 // ============ CALL CLASSIFICATION ============
 
-const MINIMUM_CALL_DURATION_SECONDS = 60; // Calls under 60 seconds are auto-skipped
+const MINIMUM_CALL_DURATION_SECONDS = 120; // Calls under 2 minutes are auto-skipped (spec item #9)
 
 export type CallClassification = 
   | "conversation"      // Real conversation - should be graded
@@ -1730,6 +1730,25 @@ export async function processCall(callId: number): Promise<void> {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[ProcessCall] Error processing call ${callId}:`, errorMsg);
+    
+    // Determine if this is a transcription failure that should be auto-skipped (Item #10)
+    const isTranscriptionFailure = errorMsg.includes('Audio file is too short') ||
+      errorMsg.includes('400 Bad Request') || errorMsg.includes('audio_too_short') ||
+      (errorMsg.includes('Transcription') && errorMsg.includes('400'));
+    
+    if (isTranscriptionFailure) {
+      // Auto-skip with clean human-readable message instead of raw JSON error
+      const cleanReason = errorMsg.includes('Audio file is too short')
+        ? 'Call too short to transcribe — auto-skipped'
+        : 'Transcription failed (audio issue) — auto-skipped';
+      console.log(`[ProcessCall] Transcription failure for call ${callId} — auto-skipping: ${cleanReason}`);
+      await updateCall(callId, {
+        status: "skipped",
+        classification: "too_short",
+        classificationReason: cleanReason,
+      });
+      return;
+    }
     
     // Determine if this is a transient error that should be retried
     const isTransient = errorMsg.includes('ECONNRESET') || errorMsg.includes('ETIMEDOUT') ||

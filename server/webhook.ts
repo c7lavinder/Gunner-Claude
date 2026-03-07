@@ -949,6 +949,7 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
     let tagSource: string | null = null;
     let tagMarket: string | null = null;
     let tagBuyBoxType: string | null = null;
+    let tagSecondaryMarket: string | null = null;
     if (event.tags && event.tags.length > 0) {
       try {
         const { normalizeSource } = await import("./ghlContactImport");
@@ -960,6 +961,8 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
             tagMarket = tag.substring(7).trim();
           } else if (lower.startsWith("type:")) {
             tagBuyBoxType = tag.substring(5).trim();
+          } else if (lower.startsWith("secondary market:") || lower.startsWith("secondary_market:")) {
+            tagSecondaryMarket = tag.substring(tag.indexOf(":") + 1).trim();
           }
         }
       } catch (e) {
@@ -967,33 +970,70 @@ async function processContactEvent(event: ContactEvent): Promise<void> {
       }
     }
 
+    // Extract buyer-specific fields from GHL custom fields
+    let buyerTier: string | null = null;
+    let responseSpeed: string | null = null;
+    let verifiedFunding: string | null = null;
+    let hasPurchasedBefore: string | null = null;
+    let contactEmail: string | null = (event as any).email || null;
+    if ((event as any).customFields && Array.isArray((event as any).customFields)) {
+      for (const cf of (event as any).customFields) {
+        const key = (cf.key || cf.id || "").toLowerCase();
+        const val = cf.value || cf.field_value || "";
+        if (!val) continue;
+        // Match by field name patterns (GHL custom field keys vary by account)
+        if (key.includes("buyer_tier") || key.includes("buyer tier") || key.includes("buyertier")) {
+          buyerTier = String(val).trim();
+        } else if (key.includes("response_speed") || key.includes("response speed") || key.includes("responsespeed")) {
+          responseSpeed = String(val).trim();
+        } else if (key.includes("verified_funding") || key.includes("verified funding") || key.includes("verifiedfunding") || key.includes("proof_of_funds")) {
+          verifiedFunding = ["true", "yes", "1", "verified"].includes(String(val).toLowerCase()) ? "true" : "false";
+        } else if (key.includes("purchased_before") || key.includes("has_purchased") || key.includes("previous_purchase") || key.includes("repeat_buyer")) {
+          hasPurchasedBefore = ["true", "yes", "1"].includes(String(val).toLowerCase()) ? "true" : "false";
+        }
+      }
+    }
+
     if (existing) {
-      // Update existing contact — only name, phone, and classification
+      // Update existing contact — name, phone, classification, and buyer fields
       const updateData: Record<string, any> = {
         lastSyncedAt: new Date(),
       };
       if (fullName) updateData.name = fullName;
       if (event.phone !== undefined) updateData.phone = event.phone;
+      if (contactEmail) updateData.email = contactEmail;
       // Update classification from tags (only if we got new values)
       if (tagSource) updateData.source = tagSource;
       if (tagMarket) updateData.market = tagMarket;
       if (tagBuyBoxType) updateData.buyBoxType = tagBuyBoxType;
+      if (tagSecondaryMarket) updateData.secondaryMarket = tagSecondaryMarket;
+      // Update buyer-specific fields from GHL custom fields
+      if (buyerTier) updateData.buyerTier = buyerTier;
+      if (responseSpeed) updateData.responseSpeed = responseSpeed;
+      if (verifiedFunding) updateData.verifiedFunding = verifiedFunding;
+      if (hasPurchasedBefore) updateData.hasPurchasedBefore = hasPurchasedBefore;
 
       await db.update(contactCache)
         .set(updateData)
         .where(eq(contactCache.id, existing.id));
       console.log(`${logPrefix} Updated contact ${event.sourceContactId} in cache (${fullName || existing.name})`);
     } else {
-      // Insert new contact — only name, phone, and classification
+      // Insert new contact — name, phone, classification, and buyer fields
       await db.insert(contactCache).values({
         tenantId: event.tenantId,
         ghlContactId: event.sourceContactId,
         ghlLocationId: event.sourceLocationId || null,
         name: fullName,
         phone: event.phone || null,
+        email: contactEmail,
         source: tagSource || null,
         market: tagMarket || null,
         buyBoxType: tagBuyBoxType || null,
+        secondaryMarket: tagSecondaryMarket || null,
+        buyerTier: buyerTier || null,
+        responseSpeed: responseSpeed || null,
+        verifiedFunding: verifiedFunding || null,
+        hasPurchasedBefore: hasPurchasedBefore || null,
         lastSyncedAt: new Date(),
       });
       console.log(`${logPrefix} Added contact ${event.sourceContactId} to cache (${fullName || "unnamed"})`);

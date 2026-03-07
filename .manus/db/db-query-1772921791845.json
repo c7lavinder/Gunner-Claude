@@ -1,0 +1,22 @@
+{
+  "query": "SELECT id, name, crmConnected, webhookActive FROM tenants WHERE crmConnected = 'true' AND id < 1020000 ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, crmConnected, webhookActive FROM tenants WHERE crmConnected = 'true' AND id < 1020000 ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses",
+      "crmConnected": "true",
+      "webhookActive": "true"
+    },
+    {
+      "id": "450029",
+      "name": "NAH Kitty Hawk",
+      "crmConnected": "true",
+      "webhookActive": "false"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcrmConnected\twebhookActive\n1\tNew Again Houses\ttrue\ttrue\n450029\tNAH Kitty Hawk\ttrue\tfalse\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

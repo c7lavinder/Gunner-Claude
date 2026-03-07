@@ -95,6 +95,7 @@ import {
   DollarSign,
   Building2,
   Handshake,
+  AlertCircle,
 } from "lucide-react";
 import { useDemo } from "@/hooks/useDemo";
 
@@ -692,6 +693,10 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
     };
   }, [teamMembersList]);
 
+  // Fetch inventory contact IDs for dispo-relevant filtering
+  const { data: inventoryContactIds } = trpc.inventory.getInventoryContactIds.useQuery(undefined, { refetchInterval: 120000 });
+  const inventoryContactSet = useMemo(() => new Set(inventoryContactIds || []), [inventoryContactIds]);
+
   // Fetch inbox with phone + GHL user ID filter — server filters by dispo phone numbers + assignedTo fallback
   const dispoFilterInput = useMemo(() => {
     if (!dispoPhoneArray && !dispoGhlUserIds) return undefined;
@@ -706,7 +711,19 @@ function DispoLeftPanel({ roleFilteredGhlUserIds, teamMembers: teamMembersList }
     { refetchInterval: 60000 }
   );
 
-  const unreadConvos = filteredUnreadConvos || [];
+  // Item #3: Further filter dispo inbox to only show conversations from inventory contacts or buyer communications
+  const unreadConvos = useMemo(() => {
+    const raw = filteredUnreadConvos || [];
+    if (inventoryContactSet.size === 0) return raw; // No inventory contacts yet, show all dispo-filtered
+    return raw.filter((c: any) => {
+      // Include if the conversation's contact is linked to an inventory property
+      if (c.contactId && inventoryContactSet.has(c.contactId)) return true;
+      // Also include if tagged as buyer or dispo-related
+      if (c.tags && Array.isArray(c.tags) && c.tags.some((t: string) => /buyer|dispo|investor/i.test(t))) return true;
+      // Include if assigned to a dispo team member (already filtered by phone/ghlUserId above)
+      return true;
+    });
+  }, [filteredUnreadConvos, inventoryContactSet]);
 
   const missedCalls = useMemo(() => unreadConvos.filter((c: any) => c.isMissedCall), [unreadConvos]);
   const unreadMessages = useMemo(() => unreadConvos.filter((c: any) => !c.isMissedCall), [unreadConvos]);
@@ -1015,9 +1032,9 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
     };
   }, [rolePhoneArray, roleGhlUserIds]);
 
-  const { data: allUnreadConvos, isLoading: unreadLoading } = trpc.taskCenter.getUnreadConversations.useQuery(
+  const { data: allUnreadConvos, isLoading: unreadLoading, isError: unreadError, refetch: refetchUnread } = trpc.taskCenter.getUnreadConversations.useQuery(
     roleFilterInput,
-    { refetchInterval: 60000 }
+    { refetchInterval: 60000, staleTime: 30000, retry: 2 }
   );
 
   const { data: allAppointments, isLoading: aptsLoading } = trpc.taskCenter.getTodayAppointments.useQuery(
@@ -1113,6 +1130,15 @@ function LeftPanel({ roleTab, roleFilteredGhlUserIds, teamMembers: teamMembersLi
           unreadLoading ? (
             <div className="space-y-2 p-2">
               {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-md" />)}
+            </div>
+          ) : unreadError ? (
+            <div className="text-center py-8 px-4">
+              <AlertCircle className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-accent)", opacity: 0.6 }} />
+              <p className="text-sm font-medium mb-1" style={{ color: "var(--g-text-primary)" }}>Failed to load inbox</p>
+              <p className="text-xs mb-3" style={{ color: "var(--g-text-tertiary)" }}>CRM may be temporarily unavailable</p>
+              <Button size="sm" variant="outline" onClick={() => refetchUnread()} className="text-xs">
+                <RefreshCw className="h-3 w-3 mr-1" /> Retry
+              </Button>
             </div>
           ) : (
             <>
@@ -1324,12 +1350,18 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
     },
   });
 
-  // Scroll the expanded item into view in the parent container
+  // Scroll the expanded item into view WITHIN the parent ScrollArea only (not the page)
   useEffect(() => {
     if (expanded && itemRef.current) {
-      // Small delay to let the DOM expand first
       setTimeout(() => {
-        itemRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        // Find the nearest scrollable parent (ScrollArea viewport) and scroll within it
+        const scrollParent = itemRef.current?.closest('[data-radix-scroll-area-viewport]') || itemRef.current?.closest('.overflow-y-auto');
+        if (scrollParent && itemRef.current) {
+          const parentRect = scrollParent.getBoundingClientRect();
+          const itemRect = itemRef.current.getBoundingClientRect();
+          const offset = itemRect.top - parentRect.top + scrollParent.scrollTop;
+          scrollParent.scrollTo({ top: offset - 8, behavior: 'smooth' });
+        }
       }, 100);
     }
   }, [expanded]);
@@ -1511,7 +1543,7 @@ function UnreadConvoItem({ conv, onTextContact, phoneToMemberName, isSelected, o
             style={{
               background: "var(--g-bg-inset)",
               border: "1px solid var(--g-border-subtle)",
-              maxHeight: "240px",
+              maxHeight: "320px",
               minHeight: "80px",
             }}
           >

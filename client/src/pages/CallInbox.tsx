@@ -37,7 +37,8 @@ import {
   Pencil,
   ClipboardList,
   MoreVertical,
-  Users
+  Users,
+  Archive
 } from "lucide-react";
 import { Link, useSearch, useLocation, useRoute } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -2611,14 +2612,37 @@ export default function CallInbox() {
 
             {/* === TAB: Skipped === */}
             {activeTab === "skipped" && (<div key="skipped" className="space-y-4 obs-fade-in">
-              {/* Sync-skipped calls: unmatched team member or no recording */}
-              {syncSkippedCalls.length > 0 && (
+              {/* Auto-Archived: No recording calls (Item #11) — collapsed by default */}
+              {syncSkippedCalls.filter((c: any) => !c.recordingUrl && c.classificationReason?.includes('No recording available')).length > 0 && (
+                <details className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
+                  <summary className="flex items-center justify-between gap-2 p-3 cursor-pointer select-none">
+                    <div className="flex items-center gap-2">
+                      <Archive className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {syncSkippedCalls.filter((c: any) => !c.recordingUrl && c.classificationReason?.includes('No recording available')).length} auto-archived (no recording)
+                      </span>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Click to expand</Badge>
+                  </summary>
+                  <div className="p-3 pt-0 space-y-2">
+                    {syncSkippedCalls.filter((c: any) => !c.recordingUrl && c.classificationReason?.includes('No recording available')).map((item: any) => (
+                      <div key={item.id} className="flex items-center justify-between py-1.5 px-2 rounded text-sm opacity-60">
+                        <span>{item.contactName || item.contactPhone || 'Unknown'}</span>
+                        <span className="text-xs text-muted-foreground">{item.teamMemberName || ''} · {item.duration || 0}s</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              {/* Sync-skipped calls: unmatched team member only (no-recording moved to archived above) */}
+              {syncSkippedCalls.filter((c: any) => c.classificationReason?.includes('Could not match team member')).length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                       <span className="text-sm text-amber-800 dark:text-amber-200">
-                        {syncSkippedCalls.length} call(s) were found in CRM but couldn't be processed (unmatched team member or missing recording).
+                        {syncSkippedCalls.filter((c: any) => c.classificationReason?.includes('Could not match team member')).length} call(s) couldn't match a team member.
                       </span>
                     </div>
                     <div className="flex gap-2 shrink-0">
@@ -2796,7 +2820,12 @@ export default function CallInbox() {
                             </div>
                             {item.classificationReason && (
                               <p className="text-sm text-muted-foreground mt-2 italic">
-                                {item.classificationReason}
+                                {/* Clean up raw JSON/API errors for display (Item #10) */}
+                                {item.classificationReason.includes('{"error') || item.classificationReason.includes('400 Bad Request')
+                                  ? 'Call too short to transcribe — auto-skipped'
+                                  : item.classificationReason.length > 150
+                                    ? item.classificationReason.substring(0, 150) + '...'
+                                    : item.classificationReason}
                               </p>
                             )}
                           </div>

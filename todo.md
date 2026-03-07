@@ -4647,3 +4647,35 @@
 - [x] Fix opportunities.test.ts runDetection timeout (3 tests) — add 30s race timeout for external API calls
 - [x] Clean up test tenants (id >= 1020000) causing BatchDialer 403 errors — disconnected from CRM
 - [x] Full test suite audit: 150 files, 2695 tests — all passing
+
+## 22 Fixes & Features Spec (2026-03-07)
+
+### Day Hub
+- [x] #1 KPI boxes clickable → show contact list modal with name, address, time, clickable to detail (already implemented)
+- [x] #2 Role views show only personal data (LM sees LM, AM sees AM, Dispo sees Dispo, Admin sees all) (already implemented)
+- [x] #3 Dispo inbox — only dispo-relevant messages (inventory contacts, buyer comms)
+- [x] #4 Inbox shows which team member the call/text was sent to (already implemented)
+- [x] #5 Conversation expander — no page scroll, in-place expand, last 10 messages visible
+- [x] #6 AI Coach knows inventory property data (auto-research Zillow/county/comps)
+- [x] #7 "View As" Daniel — task list error fix (already correctly scoped by GHL user ID)
+- [x] #8 Inbox loading — must load within 2s, never blank, show skeleton, retry on error
+
+### Calls Page
+- [x] #9 Don't grade calls under 2 minutes — auto-skip with reason
+- [x] #10 Handle transcription failures gracefully — clean message, auto-skip
+- [x] #11 "No recording available" calls archived separately, not in Skipped tab
+
+### Team / Gamification
+- [x] #12 Disposition Manager gamification (XP, badges, levels for dispo activities) (already implemented)
+- [x] #13 Add Dispo Manager to Teammate Classes, Training role filter, everywhere missing (already implemented)
+
+### Inventory / Dispo Command Center
+- [x] #14 Property stage filter not working — fixed to client-side filtering
+- [x] #15 Property description disappears after adding — added to createProperty schema
+- [x] #16 Buyer match logic — enhanced with GHL custom fields (tier, speed, funding, purchased)
+- [x] #17 AI Assistant — fix scroll issue on type (fixed container overflow)
+- [x] #18 "Add Buyer" must auto-complete from GHL contacts (already implemented)
+- [x] #19 Showings & Offers — auto-complete contacts from GHL (already implemented)
+- [x] #20 Remove 3-dot menu on property card, make entire card clickable (already clean)
+- [x] #21 Inventory — table view default, added Spread/Buyers/Showings columns
+- [x] #22 Inventory stage tabs filtered by role (already implemented)

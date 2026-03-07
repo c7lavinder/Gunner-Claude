@@ -1357,9 +1357,9 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
   ];
 
   return (
-    <div className="flex flex-col h-full" style={{ minHeight: 400 }}>
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pb-3" style={{ maxHeight: "calc(100vh - 400px)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100vh - 320px)", minHeight: 400, overflow: "hidden" }}>
+      {/* Messages - self-contained scroll (Item #17 fix: typing must not scroll page) */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pb-3" style={{ overscrollBehavior: "contain" }}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 gap-4">
             <div className="p-3 rounded-full" style={{ background: "var(--g-accent-soft)" }}>
@@ -1441,6 +1441,165 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ─── RESEARCH TAB ───
+function ResearchTab({ propertyId, property }: { propertyId: number; property: any }) {
+  const research = property?.propertyResearch;
+  const researchUpdatedAt = property?.researchUpdatedAt;
+  const utils = trpc.useUtils();
+  const researchMutation = trpc.inventory.researchProperty.useMutation({
+    onSuccess: () => {
+      toast.success("Property research completed!");
+      utils.inventory.getPropertyDetail.invalidate({ propertyId });
+    },
+    onError: (err: any) => toast.error(err.message || "Research failed"),
+  });
+
+  const fmt = (v: number | undefined | null) => v ? `$${v.toLocaleString()}` : "—";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--g-text-primary)" }}>Property Research</h3>
+          {researchUpdatedAt && (
+            <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
+              Last updated: {new Date(researchUpdatedAt).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => researchMutation.mutate({ propertyId })}
+          disabled={researchMutation.isPending}
+          className="gap-1"
+        >
+          {researchMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+          {research ? "Re-Research" : "Run Research"}
+        </Button>
+      </div>
+
+      {!research && !researchMutation.isPending && (
+        <div className="text-center py-8 rounded-lg" style={{ background: "var(--g-surface-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+          <Globe className="h-8 w-8 mx-auto mb-2" style={{ color: "var(--g-text-tertiary)" }} />
+          <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>No research data yet</p>
+          <p className="text-xs mt-1" style={{ color: "var(--g-text-tertiary)" }}>Click "Run Research" to gather Zillow estimates, tax records, comps, and more</p>
+        </div>
+      )}
+
+      {researchMutation.isPending && (
+        <div className="text-center py-8 rounded-lg" style={{ background: "var(--g-surface-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+          <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" style={{ color: "var(--g-accent)" }} />
+          <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Researching property...</p>
+          <p className="text-xs mt-1" style={{ color: "var(--g-text-tertiary)" }}>This may take 15-30 seconds</p>
+        </div>
+      )}
+
+      {research && (
+        <div className="space-y-3">
+          {/* Valuation */}
+          <div className="rounded-lg p-3" style={{ background: "var(--g-surface-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+            <h4 className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: "var(--g-accent)" }}>
+              <DollarSign className="h-3 w-3" /> Valuation & Tax
+            </h4>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div><span style={{ color: "var(--g-text-tertiary)" }}>Zestimate</span><br/><span className="font-medium" style={{ color: "var(--g-text-primary)" }}>{fmt(research.zestimate)}</span></div>
+              <div><span style={{ color: "var(--g-text-tertiary)" }}>Tax Assessment</span><br/><span className="font-medium" style={{ color: "var(--g-text-primary)" }}>{fmt(research.taxAssessment)}</span></div>
+              <div><span style={{ color: "var(--g-text-tertiary)" }}>Annual Tax</span><br/><span className="font-medium" style={{ color: "var(--g-text-primary)" }}>{fmt(research.taxAmount)}</span></div>
+            </div>
+          </div>
+
+          {/* Public Records */}
+          {(research.ownerName || research.deedDate || research.legalDescription) && (
+            <div className="rounded-lg p-3" style={{ background: "var(--g-surface-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+              <h4 className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: "var(--g-accent)" }}>
+                <FileText className="h-3 w-3" /> Public Records
+              </h4>
+              <div className="space-y-1 text-xs">
+                {research.ownerName && <div><span style={{ color: "var(--g-text-tertiary)" }}>Owner:</span> <span style={{ color: "var(--g-text-primary)" }}>{research.ownerName}</span></div>}
+                {research.deedDate && <div><span style={{ color: "var(--g-text-tertiary)" }}>Deed Date:</span> <span style={{ color: "var(--g-text-primary)" }}>{research.deedDate}</span></div>}
+                {research.legalDescription && <div><span style={{ color: "var(--g-text-tertiary)" }}>Legal:</span> <span style={{ color: "var(--g-text-primary)" }}>{research.legalDescription}</span></div>}
+              </div>
+            </div>
+          )}
+
+          {/* Comps */}
+          {research.recentComps && research.recentComps.length > 0 && (
+            <div className="rounded-lg p-3" style={{ background: "var(--g-surface-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+              <h4 className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: "var(--g-accent)" }}>
+                <BarChart3 className="h-3 w-3" /> Recent Comps ({research.recentComps.length})
+              </h4>
+              <div className="space-y-1.5">
+                {research.recentComps.map((c: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between text-xs py-1" style={{ borderBottom: i < research.recentComps!.length - 1 ? "1px solid var(--g-border-subtle)" : "none" }}>
+                    <div>
+                      <span style={{ color: "var(--g-text-primary)" }}>{c.address}</span>
+                      <span className="ml-2" style={{ color: "var(--g-text-tertiary)" }}>{c.beds || "?"}bd/{c.baths || "?"}ba {c.sqft ? `${c.sqft}sqft` : ""}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium" style={{ color: "var(--g-text-primary)" }}>${c.soldPrice?.toLocaleString()}</span>
+                      <span className="ml-1" style={{ color: "var(--g-text-tertiary)" }}>{c.soldDate}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Price History */}
+          {research.priceHistory && research.priceHistory.length > 0 && (
+            <div className="rounded-lg p-3" style={{ background: "var(--g-surface-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+              <h4 className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: "var(--g-accent)" }}>
+                <TrendingUp className="h-3 w-3" /> Price History
+              </h4>
+              <div className="space-y-1">
+                {research.priceHistory.map((h: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span style={{ color: "var(--g-text-tertiary)" }}>{h.date} — {h.event}</span>
+                    <span className="font-medium" style={{ color: "var(--g-text-primary)" }}>${h.price?.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Neighborhood */}
+          {research.neighborhoodInfo && (
+            <div className="rounded-lg p-3" style={{ background: "var(--g-surface-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+              <h4 className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: "var(--g-accent)" }}>
+                <MapPin className="h-3 w-3" /> Neighborhood
+              </h4>
+              <p className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{research.neighborhoodInfo}</p>
+            </div>
+          )}
+
+          {/* Links */}
+          <div className="flex items-center gap-2">
+            {research.zillowUrl && (
+              <a href={research.zillowUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs px-2 py-1 rounded" style={{ background: "var(--g-surface-elevated)", color: "var(--g-accent)", border: "1px solid var(--g-border-subtle)" }}>
+                <ExternalLink className="h-3 w-3" /> Zillow
+              </a>
+            )}
+            {research.streetViewUrl && (
+              <a href={research.streetViewUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs px-2 py-1 rounded" style={{ background: "var(--g-surface-elevated)", color: "var(--g-accent)", border: "1px solid var(--g-border-subtle)" }}>
+                <ExternalLink className="h-3 w-3" /> Street View
+              </a>
+            )}
+          </div>
+
+          {/* Additional Notes */}
+          {research.additionalNotes && (
+            <div className="rounded-lg p-3" style={{ background: "var(--g-surface-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+              <h4 className="text-xs font-semibold mb-1" style={{ color: "var(--g-accent)" }}>Additional Notes</h4>
+              <p className="text-xs" style={{ color: "var(--g-text-secondary)" }}>{research.additionalNotes}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1533,6 +1692,7 @@ function PropertyDetail({
           { key: "outreach", label: "Outreach", icon: Send },
           { key: "activity", label: "Activity", icon: Activity },
           { key: "ai", label: "AI Assistant", icon: Bot },
+          { key: "research", label: "Research", icon: Globe },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -1556,6 +1716,7 @@ function PropertyDetail({
         {activeTab === "outreach" && <OutreachTab property={property} propertyId={propertyId} />}
         {activeTab === "activity" && <ActivityTab propertyId={propertyId} />}
         {activeTab === "ai" && <DispoAITab propertyId={propertyId} property={property} />}
+        {activeTab === "research" && <ResearchTab propertyId={propertyId} property={property} />}
       </div>
 
       {/* Dialogs */}
@@ -1716,8 +1877,10 @@ export default function Inventory() {
     return allStages;
   }, [teamRole]);
 
+  // Always fetch ALL properties (no server-side status filter) so stage counts are accurate
+  // Client-side filtering handles the status tab selection (Item #14 fix)
   const { data, isLoading } = trpc.inventory.getProperties.useQuery(
-    { status: statusFilter, search: search || undefined, limit: 100 },
+    { search: search || undefined, limit: 500 },
     { refetchInterval: 60000 }
   );
 
@@ -1844,9 +2007,13 @@ export default function Inventory() {
     return Array.from(markets).sort();
   }, [rawProperties]);
 
-  // Apply type and market filters
+  // Apply status, type, and market filters (client-side for accurate stage counts)
   const filteredProperties = useMemo(() => {
     let result = rawProperties;
+    // Status filter (Item #14 fix: filter client-side so tab counts stay correct)
+    if (statusFilter && statusFilter !== "all") {
+      result = result.filter((p: any) => p.status === statusFilter);
+    }
     if (typeFilter !== "all") {
       result = result.filter((p: any) => p.projectType === typeFilter);
     }
@@ -1854,7 +2021,7 @@ export default function Inventory() {
       result = result.filter((p: any) => p.market === marketFilter);
     }
     return result;
-  }, [rawProperties, typeFilter, marketFilter]);
+  }, [rawProperties, statusFilter, typeFilter, marketFilter]);
 
   // Apply sorting
   const properties = useMemo(() => {
@@ -1866,10 +2033,15 @@ export default function Inventory() {
         case "status": aVal = a.status || ""; bVal = b.status || ""; break;
         case "asking": aVal = a.askingPrice || 0; bVal = b.askingPrice || 0; break;
         case "contract": aVal = a.contractPrice || 0; bVal = b.contractPrice || 0; break;
+        case "spread": {
+          const aSpread = (a.acceptedOffer || a.askingPrice) && a.contractPrice ? (a.acceptedOffer || a.askingPrice) - a.contractPrice : 0;
+          const bSpread = (b.acceptedOffer || b.askingPrice) && b.contractPrice ? (b.acceptedOffer || b.askingPrice) - b.contractPrice : 0;
+          aVal = aSpread; bVal = bSpread; break;
+        }
         case "sends": aVal = a._activity?.sendCount || 0; bVal = b._activity?.sendCount || 0; break;
+        case "buyers": aVal = a._activity?.totalRecipients || 0; bVal = b._activity?.totalRecipients || 0; break;
         case "offers": aVal = a._activity?.offerCount || 0; bVal = b._activity?.offerCount || 0; break;
-        case "type": aVal = (a.projectType || "").toLowerCase(); bVal = (b.projectType || "").toLowerCase(); break;
-        case "market": aVal = (a.market || "").toLowerCase(); bVal = (b.market || "").toLowerCase(); break;
+        case "showings": aVal = a._activity?.showingCount || 0; bVal = b._activity?.showingCount || 0; break;
         case "dom": aVal = daysOnMarket(a.createdAt); bVal = daysOnMarket(b.createdAt); break;
         default: return 0;
       }
@@ -2037,10 +2209,11 @@ export default function Inventory() {
                         { key: "status", label: "Status", align: "text-left" },
                         { key: "asking", label: "Asking", align: "text-right" },
                         { key: "contract", label: "Contract", align: "text-right" },
+                        { key: "spread", label: "Spread", align: "text-right" },
                         { key: "sends", label: "Sends", align: "text-center" },
+                        { key: "buyers", label: "Buyers", align: "text-center" },
                         { key: "offers", label: "Offers", align: "text-center" },
-                        { key: "type", label: "Type", align: "text-left" },
-                        { key: "market", label: "Market", align: "text-left" },
+                        { key: "showings", label: "Showings", align: "text-center" },
                         { key: "dom", label: "DOM", align: "text-center" },
                       ].map(col => (
                         <th
@@ -2091,21 +2264,20 @@ export default function Inventory() {
                           <td className="px-3 py-2.5 text-right font-semibold" style={{ color: "var(--g-text-primary)" }}>
                             {p.contractPrice ? formatCurrency(p.contractPrice) : "—"}
                           </td>
+                          <td className="px-3 py-2.5 text-right font-semibold" style={{ color: (p.acceptedOffer || p.askingPrice) && p.contractPrice ? "#22c55e" : "var(--g-text-tertiary)" }}>
+                            {(p.acceptedOffer || p.askingPrice) && p.contractPrice ? formatCurrency((p.acceptedOffer || p.askingPrice) - p.contractPrice) : "—"}
+                          </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: act.sendCount > 0 ? "#3b82f6" : "var(--g-text-tertiary)" }}>
                             {act.sendCount || 0}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: (act.totalRecipients || 0) > 0 ? "#8b5cf6" : "var(--g-text-tertiary)" }}>
+                            {act.totalRecipients || 0}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: act.offerCount > 0 ? "#f59e0b" : "var(--g-text-tertiary)" }}>
                             {act.offerCount || 0}
                           </td>
-                          <td className="px-3 py-2.5">
-                            <span className="text-[10px] truncate max-w-[80px] block" style={{ color: p.projectType ? "var(--g-text-primary)" : "var(--g-text-tertiary)" }}>
-                              {p.projectType ? p.projectType.charAt(0).toUpperCase() + p.projectType.slice(1) : "—"}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span className="text-[10px] truncate max-w-[100px] block" style={{ color: p.market ? "var(--g-text-primary)" : "var(--g-text-tertiary)" }}>
-                              {p.market || "—"}
-                            </span>
+                          <td className="px-3 py-2.5 text-center" style={{ color: act.showingCount > 0 ? "#22c55e" : "var(--g-text-tertiary)" }}>
+                            {act.showingCount || 0}
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <span style={{ color: heatColor(dom) }}>{dom}d</span>

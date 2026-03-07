@@ -1,0 +1,15 @@
+{
+  "query": "SELECT COUNT(*) as total, MIN(createdAt) as firstEvent, MAX(createdAt) as lastEvent FROM webhook_events;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT COUNT(*) as total, MIN(createdAt) as firstEvent, MAX(createdAt) as lastEvent FROM webhook_events;",
+  "rows": [
+    {
+      "total": "25786",
+      "firstEvent": "2026-02-26 17:34:27",
+      "lastEvent": "2026-03-07 22:00:22"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\tfirstEvent\tlastEvent\n25786\t2026-02-26 17:34:27\t2026-03-07 22:00:22\n",
+  "stderr": "",
+  "execution_time_ms": 73
+}

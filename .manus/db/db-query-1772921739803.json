@@ -1,0 +1,130 @@
+{
+  "query": "SELECT eventType, status, COUNT(*) as cnt, MAX(createdAt) as lastReceived FROM webhook_events GROUP BY eventType, status ORDER BY cnt DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT eventType, status, COUNT(*) as cnt, MAX(createdAt) as lastReceived FROM webhook_events GROUP BY eventType, status ORDER BY cnt DESC LIMIT 20;",
+  "rows": [
+    {
+      "eventType": "ContactUpdate",
+      "status": "processed",
+      "cnt": "10829",
+      "lastReceived": "2026-03-07 21:48:45"
+    },
+    {
+      "eventType": "OutboundMessage",
+      "status": "processed",
+      "cnt": "4765",
+      "lastReceived": "2026-03-07 22:00:13"
+    },
+    {
+      "eventType": "NoteCreate",
+      "status": "processed",
+      "cnt": "3676",
+      "lastReceived": "2026-03-07 21:01:31"
+    },
+    {
+      "eventType": "ConversationUnreadUpdate",
+      "status": "processed",
+      "cnt": "1552",
+      "lastReceived": "2026-03-07 22:00:22"
+    },
+    {
+      "eventType": "OpportunityUpdate",
+      "status": "processed",
+      "cnt": "1455",
+      "lastReceived": "2026-03-07 21:41:46"
+    },
+    {
+      "eventType": "ContactTagUpdate",
+      "status": "processed",
+      "cnt": "1247",
+      "lastReceived": "2026-03-07 18:20:37"
+    },
+    {
+      "eventType": "InboundMessage",
+      "status": "processed",
+      "cnt": "782",
+      "lastReceived": "2026-03-07 21:55:51"
+    },
+    {
+      "eventType": "OpportunityStageUpdate",
+      "status": "processed",
+      "cnt": "399",
+      "lastReceived": "2026-03-06 23:09:49"
+    },
+    {
+      "eventType": "NoteUpdate",
+      "status": "processed",
+      "cnt": "172",
+      "lastReceived": "2026-03-07 21:41:26"
+    },
+    {
+      "eventType": "OpportunityCreate",
+      "status": "processed",
+      "cnt": "160",
+      "lastReceived": "2026-03-07 21:01:31"
+    },
+    {
+      "eventType": "OpportunityDelete",
+      "status": "processed",
+      "cnt": "140",
+      "lastReceived": "2026-03-07 21:41:26"
+    },
+    {
+      "eventType": "ContactCreate",
+      "status": "processed",
+      "cnt": "116",
+      "lastReceived": "2026-03-07 21:01:22"
+    },
+    {
+      "eventType": "TaskComplete",
+      "status": "processed",
+      "cnt": "107",
+      "lastReceived": "2026-03-06 21:17:28"
+    },
+    {
+      "eventType": "TaskCreate",
+      "status": "processed",
+      "cnt": "100",
+      "lastReceived": "2026-03-07 21:01:52"
+    },
+    {
+      "eventType": "OpportunityStatusUpdate",
+      "status": "processed",
+      "cnt": "96",
+      "lastReceived": "2026-03-07 00:09:56"
+    },
+    {
+      "eventType": "OpportunityAssignedToUpdate",
+      "status": "processed",
+      "cnt": "77",
+      "lastReceived": "2026-03-06 20:41:53"
+    },
+    {
+      "eventType": "ContactDndUpdate",
+      "status": "processed",
+      "cnt": "30",
+      "lastReceived": "2026-03-07 15:09:49"
+    },
+    {
+      "eventType": "AppointmentCreate",
+      "status": "processed",
+      "cnt": "27",
+      "lastReceived": "2026-03-06 20:45:46"
+    },
+    {
+      "eventType": "AppointmentUpdate",
+      "status": "processed",
+      "cnt": "22",
+      "lastReceived": "2026-03-06 18:03:50"
+    },
+    {
+      "eventType": "UserUpdate",
+      "status": "processed",
+      "cnt": "16",
+      "lastReceived": "2026-03-07 21:48:06"
+    }
+  ],
+  "messages": [],
+  "stdout": "eventType\tstatus\tcnt\tlastReceived\nContactUpdate\tprocessed\t10829\t2026-03-07 21:48:45\nOutboundMessage\tprocessed\t4765\t2026-03-07 22:00:13\nNoteCreate\tprocessed\t3676\t2026-03-07 21:01:31\nConversationUnreadUpdate\tprocessed\t1552\t2026-03-07 22:00:22\nOpportunityUpdate\tprocessed\t1455\t2026-03-07 21:41:46\nContactTagUpdate\tprocessed\t1247\t2026-03-07 18:20:37\nInboundMessage\tprocessed\t782\t2026-03-07 21:55:51\nOpportunityStageUpdate\tprocessed\t399\t2026-03-06 23:09:49\nNoteUpdate\tprocessed\t172\t2026-03-07 21:41:26\nOpportunityCreate\tprocessed\t160\t2026-03-07 21:01:31\nOpportunityDelete\tprocessed\t140\t2026-03-07 21:41:26\nContactCreate\tprocessed\t116\t2026-03-07 21:01:22\nTaskComplete\tprocessed\t107\t2026-03-06 21:17:28\nTaskCreate\tprocessed\t100\t2026-03-07 21:01:52\nOpportunityStatusUpdate\tprocessed\t96\t2026-03-07 00:09:56\nOpportunityAssignedToUpdate\tprocessed\t77\t2026-03-06 20:41:53\nContactDndUpdate\tprocessed\t30\t2026-03-07 15:09:49\nAppointmentCreate\tprocessed\t27\t2026-03-06 20:45:46\nAppointmentUpdate\tprocessed\t22\t2026-03-06 18:03:50\nUserUpdate\tprocessed\t16\t2026-03-07 21:48:06\n",
+  "stderr": "",
+  "execution_time_ms": 72
+}

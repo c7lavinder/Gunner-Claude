@@ -775,14 +775,20 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
   }
 
   // Query contacts that match BOTH market AND buyBoxType
-  // Also include "Nationwide" buyers who buy in any market
+  // Also include "Nationwide" buyers, secondary market matches, and exclude Halted buyers
   const contacts = await db.select().from(contactCache)
     .where(and(
       eq(contactCache.tenantId, tenantId),
-      // Market must match (exact) OR buyer is "Nationwide"
-      sql`(LOWER(${contactCache.market}) = ${marketTag} OR LOWER(${contactCache.market}) = 'nationwide')`,
+      // Market must match (primary or secondary) OR buyer is "Nationwide"
+      sql`(
+        LOWER(${contactCache.market}) = ${marketTag}
+        OR LOWER(${contactCache.market}) = 'nationwide'
+        OR LOWER(${contactCache.secondaryMarket}) LIKE ${`%${marketTag}%`}
+      )`,
       // Buy box type must match the property type
       sql`LOWER(${contactCache.buyBoxType}) LIKE ${`%${propertyType}%`}`,
+      // Exclude halted buyers
+      sql`(${contactCache.buyerTier} IS NULL OR LOWER(${contactCache.buyerTier}) != 'halted')`,
     ))
     .limit(200);
 
@@ -848,25 +854,74 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
     score += 25;
     reasons.push(`${contact.buyBoxType || propertyType} buyer`);
 
-    // Tier: VIP buyers (+20 points)
+    // ─── Tier scoring from GHL custom field ───
     const activity = buyerActivityMap.get(contact.ghlContactId);
     const isVip = activity?.isVip || false;
-    if (isVip) {
+    const tier = (contact.buyerTier || "").toLowerCase();
+    if (tier === "priority" || tier === "jv partner") {
+      score += 25;
+      reasons.push(tier === "jv partner" ? "JV Partner" : "Priority buyer");
+    } else if (tier === "qualified") {
+      score += 15;
+      reasons.push("Qualified buyer");
+    } else if (tier === "unqualified") {
+      score += 5;
+      reasons.push("Unqualified");
+    }
+    // Fallback: VIP from buyer activity if no GHL tier set
+    if (!tier && isVip) {
       score += 20;
       reasons.push("VIP buyer");
     }
 
-    // Speed: buyers with more offers/activity are faster closers (+15 points max)
+    // ─── Response Speed scoring from GHL custom field ───
+    const speed = (contact.responseSpeed || "").toLowerCase();
+    if (speed === "lightning") {
+      score += 20;
+      reasons.push("Lightning responder");
+    } else if (speed === "same day" || speed === "same-day") {
+      score += 12;
+      reasons.push("Same-day responder");
+    } else if (speed === "slow") {
+      score += 5;
+      reasons.push("Slow responder");
+    } else if (speed === "ghost") {
+      score += 0;
+      reasons.push("Ghost (no response history)");
+    }
+
+    // ─── Verified Funding bonus ───
+    if (contact.verifiedFunding === "true") {
+      score += 15;
+      reasons.push("Verified funding");
+    }
+
+    // ─── Has Purchased Before bonus ───
+    if (contact.hasPurchasedBefore === "true") {
+      score += 10;
+      reasons.push("Has purchased before");
+    }
+
+    // ─── Historical activity scoring (fallback for contacts without GHL custom fields) ───
     if (activity) {
       const speedScore = Math.min(15, (activity.totalOffers * 5) + (activity.totalSends * 1));
       if (speedScore > 0) {
         score += speedScore;
         reasons.push(`${activity.totalOffers} prior offers`);
       }
-      // Proven closer bonus (+10 points)
+      // Proven closer bonus
       if (activity.hasAccepted) {
         score += 10;
         reasons.push("proven closer");
+      }
+    }
+
+    // ─── Secondary market match (slightly lower than primary) ───
+    if (contact.secondaryMarket && contact.secondaryMarket.toLowerCase().includes(marketTag)) {
+      if (!isNationwide && contact.market?.toLowerCase() !== marketTag) {
+        // This buyer matched via secondary market, not primary
+        score -= 5; // Slight penalty vs primary market match
+        reasons.push("secondary market match");
       }
     }
 

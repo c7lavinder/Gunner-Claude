@@ -100,6 +100,34 @@ export function buildPropertyContext(detail: any): string {
     lines.push(`\nBUYERS: None matched yet`);
   }
 
+  // Property Research Data (from AI auto-research)
+  if (detail.propertyResearch) {
+    const r = detail.propertyResearch as any;
+    lines.push(`\nPROPERTY RESEARCH (auto-gathered from public sources):`);
+    if (r.zestimate) lines.push(`Zestimate: $${r.zestimate.toLocaleString()}`);
+    if (r.taxAssessment) lines.push(`Tax Assessment: $${r.taxAssessment.toLocaleString()}`);
+    if (r.taxAmount) lines.push(`Annual Tax: $${r.taxAmount.toLocaleString()}`);
+    if (r.ownerName) lines.push(`Owner (public records): ${r.ownerName}`);
+    if (r.deedDate) lines.push(`Last Deed Date: ${r.deedDate}`);
+    if (r.legalDescription) lines.push(`Legal Description: ${r.legalDescription}`);
+    if (r.neighborhoodInfo) lines.push(`Neighborhood: ${r.neighborhoodInfo}`);
+    if (r.recentComps?.length > 0) {
+      lines.push(`\nCOMPS (${r.recentComps.length} recent sales):`);
+      for (const c of r.recentComps) {
+        lines.push(`  - ${c.address}: $${c.soldPrice?.toLocaleString()} (${c.soldDate}) ${c.sqft ? c.sqft + 'sqft' : ''} ${c.beds || '?'}bd/${c.baths || '?'}ba`);
+      }
+    }
+    if (r.priceHistory?.length > 0) {
+      lines.push(`\nPRICE HISTORY:`);
+      for (const h of r.priceHistory.slice(0, 5)) {
+        lines.push(`  - ${h.date}: $${h.price?.toLocaleString()} (${h.event})`);
+      }
+    }
+    if (r.zillowUrl) lines.push(`Zillow: ${r.zillowUrl}`);
+    if (r.streetViewUrl) lines.push(`Street View: ${r.streetViewUrl}`);
+    if (r.additionalNotes) lines.push(`Notes: ${r.additionalNotes}`);
+  }
+
   // Activity stats
   if (detail.activityStats) {
     const stats = detail.activityStats;
