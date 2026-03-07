@@ -784,7 +784,10 @@ function MarketsSettings() {
                     {m.isGlobal ? <Badge variant="outline" className="text-[10px]">Global</Badge> : null}
                     {m.isActive === "false" && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
                   </div>
-                  {m.zipCodes && Array.isArray(m.zipCodes) && m.zipCodes.length > 0 && (
+                  {m.isGlobal && (
+                    <div className="text-xs text-muted-foreground mt-0.5">Catches all zip codes not assigned to other markets</div>
+                  )}
+                  {!m.isGlobal && m.zipCodes && Array.isArray(m.zipCodes) && m.zipCodes.length > 0 && (
                     <div className="text-xs text-muted-foreground mt-0.5">
                       Zips: {(m.zipCodes as string[]).slice(0, 8).join(", ")}
                       {(m.zipCodes as string[]).length > 8 && ` +${(m.zipCodes as string[]).length - 8} more`}

@@ -206,6 +206,7 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [ledgerType, setLedgerType] = useState<"call" | "conversation" | "appointment" | "offer" | "contract">("call");
   const [ledgerLabel, setLedgerLabel] = useState("");
+  const [ledgerSearch, setLedgerSearch] = useState("");
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addAddress, setAddAddress] = useState("");
@@ -354,6 +355,17 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
             <DialogDescription>All {ledgerLabel.toLowerCase()} counted toward today's KPI total.</DialogDescription>
           </DialogHeader>
 
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: "var(--g-text-tertiary)" }} />
+            <Input
+              placeholder="Search entries..."
+              value={ledgerSearch}
+              onChange={(e) => setLedgerSearch(e.target.value)}
+              className="pl-9 h-8 text-sm"
+            />
+          </div>
+
           <div className="space-y-4">
             {/* Auto-detected items */}
             <div>
@@ -372,22 +384,32 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {ledgerData.autoItems.map((item: any) => (
+                    {ledgerData.autoItems.filter((item: any) => {
+                      if (!ledgerSearch) return true;
+                      const s = ledgerSearch.toLowerCase();
+                      return (item.contactName || "").toLowerCase().includes(s) || (item.teamMemberName || "").toLowerCase().includes(s) || (item.propertyAddress || "").toLowerCase().includes(s);
+                    }).map((item: any) => (
                       <div key={`auto-${item.id}`} className="flex items-center gap-3 rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                         <span className="text-xs tabular-nums shrink-0 w-16" style={{ color: "var(--g-text-tertiary)" }}>
                           {item.timestamp ? new Date(item.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" }) : "--"}
                         </span>
                         <span className="text-sm font-medium truncate flex-1" style={{ color: "var(--g-text-primary)" }}>
                           {item.contactName}
+                          {item.propertyAddress && <span className="text-xs ml-1" style={{ color: "var(--g-text-tertiary)" }}>({item.propertyAddress})</span>}
                         </span>
                         <span className="text-xs truncate max-w-[120px]" style={{ color: "var(--g-text-secondary)" }}>
                           {item.teamMemberName}
+                          {item.teamMemberRole && <span className="text-[10px] ml-0.5" style={{ color: "var(--g-text-tertiary)" }}>({item.teamMemberRole === "lead_gen" ? "LG" : item.teamMemberRole === "lead_manager" ? "LM" : item.teamMemberRole === "acq_manager" ? "AM" : ""})</span>}
                         </span>
                         <span className="text-xs tabular-nums shrink-0" style={{ color: "var(--g-text-tertiary)" }}>
                           {item.duration ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}` : "0:00"}
                         </span>
-                        {item.grade && (
+                        {item.detectionType === "am_direct" ? (
+                          <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-amber-500/20 text-amber-400 border-amber-500/30">AM Direct</Badge>
+                        ) : item.grade ? (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{item.grade}</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 opacity-60">Auto</Badge>
                         )}
                       </div>
                     ))}
@@ -409,13 +431,18 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {ledgerData.manualItems.map((entry: any) => (
+                    {ledgerData.manualItems.filter((entry: any) => {
+                      if (!ledgerSearch) return true;
+                      const s = ledgerSearch.toLowerCase();
+                      return (entry.contactName || "").toLowerCase().includes(s) || (entry.propertyAddress || "").toLowerCase().includes(s);
+                    }).map((entry: any) => (
                       <div key={`manual-${entry.id}`} className="flex items-center justify-between rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-xs tabular-nums" style={{ color: "var(--g-text-tertiary)" }}>
                               {entry.createdAt ? new Date(entry.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" }) : "--"}
                             </span>
+                            <Badge className="text-[10px] px-1.5 py-0 bg-blue-500/20 text-blue-400 border-blue-500/30">Manual</Badge>
                             <span className="text-sm font-medium truncate" style={{ color: "var(--g-text-primary)" }}>
                               {entry.contactName || "Manual Entry"}
                             </span>

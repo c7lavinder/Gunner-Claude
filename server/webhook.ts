@@ -791,6 +791,19 @@ async function syncPropertyFromOpportunity(
         }
       }
 
+      // Resolve KPI sourceId and marketId
+      let kpiSourceId: number | null = null;
+      let kpiMarketId: number | null = null;
+      try {
+        const { resolveSourceId, resolveMarketId, normalizeSource } = await import("./ghlContactImport");
+        const rawSource = typeof (event as any).rawPayload?.source === "string" ? (event as any).rawPayload.source : "";
+        if (rawSource) {
+          const normalized = normalizeSource(rawSource);
+          kpiSourceId = await resolveSourceId(db, event.tenantId, normalized);
+        }
+        kpiMarketId = await resolveMarketId(db, event.tenantId, zip || "");
+      } catch { /* KPI resolution is best-effort */ }
+
       const now = new Date();
       const [inserted] = await db.insert(dispoProperties).values({
         tenantId: event.tenantId,
@@ -805,6 +818,8 @@ async function syncPropertyFromOpportunity(
         ghlPipelineStageId: event.stageId || null,
         sellerName: sellerName || null,
         sellerPhone: sellerPhone || null,
+        sourceId: kpiSourceId,
+        marketId: kpiMarketId,
         stageChangedAt: now,
         aptEverSet: milestoneFlags.aptEverSet || false,
         offerEverMade: milestoneFlags.offerEverMade || false,

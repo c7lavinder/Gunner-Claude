@@ -136,6 +136,7 @@ function PropertyFormDialog({
     zip: property?.zip || "",
     propertyType: property?.propertyType || "house",
     askingPrice: formatCurrencyInput(property?.askingPrice),
+    acceptedOffer: formatCurrencyInput(property?.acceptedOffer),
     contractPrice: formatCurrencyInput(property?.contractPrice),
     arv: formatCurrencyInput(property?.arv),
     repairEstimate: formatCurrencyInput(property?.estRepairs),
@@ -167,6 +168,7 @@ function PropertyFormDialog({
       zip: form.zip || undefined,
       propertyType: form.propertyType || undefined,
       askingPrice: parseCurrencyInput(form.askingPrice),
+      acceptedOffer: parseCurrencyInput(form.acceptedOffer),
       contractPrice: parseCurrencyInput(form.contractPrice),
       arv: parseCurrencyInput(form.arv),
       repairEstimate: parseCurrencyInput(form.repairEstimate),
@@ -245,6 +247,10 @@ function PropertyFormDialog({
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: "var(--g-text-tertiary)" }}>$</span>
                 <Input className="pl-7" placeholder="Asking Price" value={form.askingPrice} onChange={(e) => setForm({ ...form, askingPrice: e.target.value })} />
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: "var(--g-text-tertiary)" }}>$</span>
+                <Input className="pl-7" placeholder="Accepted Offer" value={form.acceptedOffer} onChange={(e) => setForm({ ...form, acceptedOffer: e.target.value })} />
               </div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: "var(--g-text-tertiary)" }}>$</span>
@@ -654,6 +660,7 @@ function OverviewTab({ property }: { property: any }) {
         {[
           { label: "Contract", value: formatCurrency(property.contractPrice), color: "var(--g-text-primary)" },
           { label: "Asking", value: formatCurrency(property.askingPrice), color: "var(--g-accent)" },
+          { label: "Accepted Offer", value: formatCurrency(property.acceptedOffer), color: "#a855f7" },
           { label: "ARV", value: formatCurrency(property.arv), color: "#3b82f6" },
           { label: spreadLabel, value: spread ? formatCurrency(spread) : "—", color: spread && spread > 0 ? "#22c55e" : "var(--g-text-tertiary)" },
           { label: "Est. Repairs", value: formatCurrency(property.estRepairs), color: "#f97316" },

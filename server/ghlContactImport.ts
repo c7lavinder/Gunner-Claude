@@ -220,7 +220,7 @@ export function getStageTimestamps(status: string): Record<string, Date> {
 /**
  * Look up the KPI sourceId for a normalized source name.
  */
-async function resolveSourceId(db: any, tenantId: number, normalizedSource: string): Promise<number | null> {
+export async function resolveSourceId(db: any, tenantId: number, normalizedSource: string): Promise<number | null> {
   if (!normalizedSource || normalizedSource === "Unknown") return null;
   try {
     const { kpiSources } = await import("../drizzle/schema");
@@ -251,8 +251,8 @@ async function resolveSourceId(db: any, tenantId: number, normalizedSource: stri
 /**
  * Look up the KPI marketId for a zip code.
  */
-async function resolveMarketId(db: any, tenantId: number, zip: string): Promise<number | null> {
-  if (!zip) return null;
+export async function resolveMarketId(db: any, tenantId: number, zip: string): Promise<number | null> {
+  // No zip guard — Global market catches properties with no zip too
   try {
     const { kpiMarkets } = await import("../drizzle/schema");
     const allMarkets = await db.select()
@@ -695,7 +695,7 @@ export async function runBulkImport(
             }
 
             // Resolve marketId from zip code
-            const kpiMarketId = zip ? await resolveMarketId(db, tenantId, zip) : null;
+            const kpiMarketId = await resolveMarketId(db, tenantId, zip || "");
 
             // Insert new property
             const [result] = await db.insert(dispoProperties).values({
