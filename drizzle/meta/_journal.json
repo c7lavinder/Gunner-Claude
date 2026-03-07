@@ -484,6 +484,13 @@
       "when": 1772847016917,
       "tag": "0068_fearless_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "5",
+      "when": 1772859030674,
+      "tag": "0069_round_nightshade",
+      "breakpoints": true
     }
   ]
 }

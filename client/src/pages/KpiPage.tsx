@@ -677,6 +677,7 @@ function KpiSettingsDialog({ open, onClose }: { open: boolean; onClose: () => vo
             <TabsTrigger value="markets">Markets</TabsTrigger>
             <TabsTrigger value="sources">Sources</TabsTrigger>
             <TabsTrigger value="spend">Spend & Volume</TabsTrigger>
+            <TabsTrigger value="backfill">Backfill</TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-auto mt-4">
@@ -688,6 +689,9 @@ function KpiSettingsDialog({ open, onClose }: { open: boolean; onClose: () => vo
             </TabsContent>
             <TabsContent value="spend" className="mt-0">
               <SpendVolumeSettings />
+            </TabsContent>
+            <TabsContent value="backfill" className="mt-0">
+              <BackfillSettings />
             </TabsContent>
           </div>
         </Tabs>
@@ -1111,6 +1115,94 @@ function SpendVolumeSettings() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ─── BACKFILL SETTINGS ───
+
+function BackfillSettings() {
+  const backfillMutation = trpc.kpi.backfillSourceMarket.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Backfill complete: ${data.updated} updated, ${data.skipped} skipped out of ${data.total} properties`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-6 p-1">
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">Backfill Source & Market</h3>
+        <p className="text-xs text-muted-foreground">
+          Scan all existing properties and auto-assign their Source (from GHL opportunity source) and Market (from zip code matching).
+          Properties that already have a source or market assigned will be skipped.
+        </p>
+      </div>
+
+      {backfillMutation.data && (
+        <div className="rounded-md border p-3 bg-muted/30 text-sm space-y-1">
+          <p><strong>Last run results:</strong></p>
+          <p className="text-muted-foreground">
+            {backfillMutation.data.updated} properties updated, {backfillMutation.data.skipped} skipped, {backfillMutation.data.total} total
+          </p>
+        </div>
+      )}
+
+      <Button
+        onClick={() => backfillMutation.mutate()}
+        disabled={backfillMutation.isPending}
+        className="w-full"
+      >
+        {backfillMutation.isPending ? (
+          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Running Backfill...</>
+        ) : (
+          <><Zap className="w-4 h-4 mr-2" /> Run Backfill Now</>
+        )}
+      </Button>
+
+      <SplitAddressesSection />
+    </div>
+  );
+}
+
+function SplitAddressesSection() {
+  const splitMutation = trpc.kpi.splitMultiAddresses.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Split complete: ${data.split} properties split, ${data.created} new properties created`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-2 pt-4 border-t">
+      <h3 className="text-sm font-semibold">Split Multi-Address Properties</h3>
+      <p className="text-xs text-muted-foreground">
+        Find properties with multiple addresses joined by "&" (e.g. "123 Main St & 456 Oak Ave") and split them into separate property records.
+        Each new property inherits the same city, state, zip, status, source, and market.
+      </p>
+
+      {splitMutation.data && (
+        <div className="rounded-md border p-3 bg-muted/30 text-sm space-y-1">
+          <p><strong>Last run results:</strong></p>
+          <p className="text-muted-foreground">
+            {splitMutation.data.found} multi-address properties found, {splitMutation.data.split} split, {splitMutation.data.created} new properties created
+          </p>
+        </div>
+      )}
+
+      <Button
+        onClick={() => splitMutation.mutate()}
+        disabled={splitMutation.isPending}
+        variant="outline"
+        className="w-full"
+      >
+        {splitMutation.isPending ? (
+          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Splitting Addresses...</>
+        ) : (
+          <>Split Multi-Address Properties</>
+        )}
+      </Button>
     </div>
   );
 }

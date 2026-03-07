@@ -1550,7 +1550,7 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   city: varchar("city", { length: 100 }).notNull(),
   state: varchar("state", { length: 50 }).notNull(),
   zip: varchar("zip", { length: 20 }).notNull(),
-  propertyType: mysqlEnum("propertyType", ["house", "lot", "land", "multi_family", "commercial", "other"]).default("house").notNull(),
+  propertyType: mysqlEnum("propertyType", ["house", "lot", "land", "multi_family", "commercial", "other", "flipper", "landlord", "builder", "turn_key", "wholesale"]).default("house").notNull(),
   beds: int("beds"),
   baths: varchar("baths", { length: 10 }), // e.g. "2.5"
   sqft: int("sqft"),

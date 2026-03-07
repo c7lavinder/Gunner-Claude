@@ -4605,3 +4605,24 @@
 ### Other Fixes
 - [ ] Add Accepted Offer field to property edit form
 - [x] Fix spread display to use Accepted Offer - Contract
+
+## UI Fixes & Backfill (2026-03-07)
+
+### Pipeline Stage Tabs
+- [x] Fix bouncing/shifting when switching pipeline stage tabs - stabilize widths
+
+### Searchable Dropdowns
+- [x] Make Market dropdown searchable combobox (inventory table filter + property edit form)
+- [x] Make Project Type dropdown searchable combobox (property edit form)
+- [x] Make Source dropdown searchable combobox (property edit form)
+- [x] Update Project Type list: Flipper, Landlord, Builder, Multi Family, Turn Key, Wholesale
+- [x] Update DB enum and normalizePropertyType to support new types
+
+### Backfill Properties
+- [x] Backfill sourceId from GHL opportunity source for all existing properties
+- [x] Backfill marketId from zip code for all existing properties
+- [x] Backfill UI button in KPI Settings
+
+### Multi-Address Separation
+- [x] Detect and separate properties with multiple addresses (e.g. "124 Powell Creek Cir & 2213 Barry...")
+- [x] Split addresses UI button in KPI Settings

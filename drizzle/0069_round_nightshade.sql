@@ -1,0 +1,1 @@
+ALTER TABLE `dispo_properties` MODIFY COLUMN `propertyType` enum('house','lot','land','multi_family','commercial','other','flipper','landlord','builder','turn_key','wholesale') NOT NULL DEFAULT 'house';

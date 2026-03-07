@@ -1119,8 +1119,13 @@ function normalizeStatus(val: string): string {
 }
 
 /** Normalize property type */
-function normalizePropertyType(val: string): "house" | "lot" | "land" | "multi_family" | "commercial" | "other" {
+function normalizePropertyType(val: string): "house" | "lot" | "land" | "multi_family" | "commercial" | "other" | "flipper" | "landlord" | "builder" | "turn_key" | "wholesale" {
   const lower = val.toLowerCase().trim();
+  if (lower.includes("flipper") || lower === "flip") return "flipper";
+  if (lower.includes("landlord") || lower.includes("rental") || lower.includes("rent")) return "landlord";
+  if (lower.includes("builder") || lower.includes("new construction")) return "builder";
+  if (lower.includes("turn key") || lower.includes("turnkey") || lower.includes("turn_key")) return "turn_key";
+  if (lower.includes("wholesale")) return "wholesale";
   if (lower.includes("house") || lower.includes("sfr") || lower.includes("single family") || lower.includes("sfh")) return "house";
   if (lower.includes("multi") || lower.includes("duplex") || lower.includes("triplex") || lower.includes("fourplex") || lower.includes("mfr")) return "multi_family";
   if (lower.includes("commercial") || lower.includes("comm")) return "commercial";

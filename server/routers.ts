@@ -4443,6 +4443,123 @@ Create content that:
         const { getVolumeForMonth } = await import("./kpiPage");
         return getVolumeForMonth(ctx.user.tenantId!, input.month);
       }),
+
+    // Backfill source/market on existing properties
+    backfillSourceMarket: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      const { getDb } = await import("./db");
+      const { dispoProperties } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const { resolveSourceId, resolveMarketId, normalizeSource } = await import("./ghlContactImport");
+      const db = (await getDb())!;
+      const tenantId = ctx.user.tenantId!;
+      // Get all properties for this tenant
+      const properties = await db.select().from(dispoProperties).where(eq(dispoProperties.tenantId, tenantId));
+      let updated = 0;
+      let skipped = 0;
+      for (const p of properties) {
+        const updates: any = {};
+        // Backfill sourceId from opportunitySource
+        if (!p.sourceId && p.opportunitySource) {
+          const normalized = normalizeSource(p.opportunitySource);
+          const sourceId = await resolveSourceId(db, tenantId, normalized);
+          if (sourceId) updates.sourceId = sourceId;
+        }
+        // Backfill marketId from zip
+        if (!p.marketId) {
+          const marketId = await resolveMarketId(db, tenantId, p.zip || "");
+          if (marketId) updates.marketId = marketId;
+        }
+        if (Object.keys(updates).length > 0) {
+          await db.update(dispoProperties).set(updates).where(eq(dispoProperties.id, p.id));
+          updated++;
+        } else {
+          skipped++;
+        }
+      }
+      return { updated, skipped, total: properties.length };
+    }),
+
+    // Split properties with multiple addresses (e.g. "123 Main St & 456 Oak Ave")
+    splitMultiAddresses: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+      }
+      const { getDb } = await import("./db");
+      const { dispoProperties } = await import("../drizzle/schema");
+      const { eq, and, like, or } = await import("drizzle-orm");
+      const db = (await getDb())!;
+      const tenantId = ctx.user.tenantId!;
+      // Find properties with & in address
+      const multiProps = await db.select().from(dispoProperties).where(
+        and(
+          eq(dispoProperties.tenantId, tenantId),
+          like(dispoProperties.address, '%&%')
+        )
+      );
+      let split = 0;
+      let created = 0;
+      for (const p of multiProps) {
+        const parts = p.address!.split('&').map((s: string) => s.trim()).filter(Boolean);
+        if (parts.length <= 1) continue;
+        // Check if it's adjacent numbers like "104 & 108 N Knob Creek Rd"
+        // Pattern: first part is just a number, rest of address is on the last part
+        const isAdjacentNumbers = parts.length >= 2 && parts.slice(0, -1).every((part: string) => /^\d+$/.test(part));
+        let addresses: string[];
+        if (isAdjacentNumbers) {
+          // "104 & 108 N Knob Creek Rd" -> ["104 N Knob Creek Rd", "108 N Knob Creek Rd"]
+          const lastPart = parts[parts.length - 1]; // "108 N Knob Creek Rd"
+          const lastMatch = lastPart.match(/^(\d+)\s+(.+)$/);
+          if (lastMatch) {
+            const streetName = lastMatch[2];
+            addresses = parts.map((part: string, i: number) => {
+              if (i === parts.length - 1) return lastPart;
+              return `${part} ${streetName}`;
+            });
+          } else {
+            addresses = parts;
+          }
+        } else {
+          // "213 Lookout Dr & 4954 Karen Ray Drive" -> separate addresses
+          addresses = parts;
+        }
+        // Update original property with first address
+        await db.update(dispoProperties).set({ address: addresses[0] }).where(eq(dispoProperties.id, p.id));
+        // Create new properties for remaining addresses
+        for (let i = 1; i < addresses.length; i++) {
+          // Check if address already exists
+          const existing = await db.select({ id: dispoProperties.id }).from(dispoProperties).where(
+            and(
+              eq(dispoProperties.tenantId, tenantId),
+              eq(dispoProperties.address, addresses[i])
+            )
+          );
+          if (existing.length > 0) continue;
+          const { id, address, createdAt, updatedAt, ...rest } = p as any;
+          await db.insert(dispoProperties).values({
+            ...rest,
+            address: addresses[i],
+            tenantId,
+          });
+          created++;
+        }
+        split++;
+      }
+      return { split, created, found: multiProps.length };
+    }),
+
+    // Public list endpoints for dropdowns (any authenticated user)
+    listMarkets: protectedProcedure.query(async ({ ctx }) => {
+      const { getKpiMarketsList } = await import("./kpiPage");
+      return getKpiMarketsList(ctx.user.tenantId!, false);
+    }),
+
+    listSources: protectedProcedure.query(async ({ ctx }) => {
+      const { getKpiSourcesList } = await import("./kpiPage");
+      return getKpiSourcesList(ctx.user.tenantId!, false);
+    }),
   }),
 
   // ============ TENANT MANAGEMENT (Multi-Tenancy) ============

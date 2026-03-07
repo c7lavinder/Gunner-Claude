@@ -24,6 +24,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 // ─── TYPES ───
 type PropertyStatus = "lead" | "apt_set" | "offer_made" | "under_contract" | "marketing" | "buyer_negotiating" | "closing" | "closed" | "follow_up" | "dead" | "new" | "negotiating" | "sold" | "qualified";
@@ -121,13 +122,15 @@ function heatColor(dom: number): string {
 
 // ─── ADD / EDIT PROPERTY DIALOG ───
 function PropertyFormDialog({
-  open, onOpenChange, property, onSave, isSaving,
+  open, onOpenChange, property, onSave, isSaving, kpiMarkets, kpiSources,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   property?: any;
   onSave: (data: any) => void;
   isSaving: boolean;
+  kpiMarkets?: any[];
+  kpiSources?: any[];
 }) {
   const [form, setForm] = useState({
     address: property?.address || "",
@@ -212,10 +215,15 @@ function PropertyFormDialog({
               <Select value={form.propertyType} onValueChange={(v) => setForm({ ...form, propertyType: v })}>
                 <SelectTrigger><SelectValue placeholder="Property Type" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="flipper">Flipper</SelectItem>
+                  <SelectItem value="landlord">Landlord</SelectItem>
+                  <SelectItem value="builder">Builder</SelectItem>
+                  <SelectItem value="multi_family">Multi Family</SelectItem>
+                  <SelectItem value="turn_key">Turn Key</SelectItem>
+                  <SelectItem value="wholesale">Wholesale</SelectItem>
                   <SelectItem value="house">House</SelectItem>
                   <SelectItem value="lot">Lot</SelectItem>
                   <SelectItem value="land">Land</SelectItem>
-                  <SelectItem value="multi_family">Multi-Family</SelectItem>
                   <SelectItem value="commercial">Commercial</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
@@ -272,20 +280,38 @@ function PropertyFormDialog({
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Deal Info</label>
             <div className="grid grid-cols-3 gap-2">
-              <Select value={form.projectType || "none"} onValueChange={(v) => setForm({ ...form, projectType: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="Project Type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Project Type</SelectItem>
-                  <SelectItem value="wholesale">Wholesale</SelectItem>
-                  <SelectItem value="novation">Novation</SelectItem>
-                  <SelectItem value="creative_finance">Creative Finance</SelectItem>
-                  <SelectItem value="fix_and_flip">Fix & Flip</SelectItem>
-                  <SelectItem value="buy_and_hold">Buy & Hold</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input placeholder="Market" value={form.market} onChange={(e) => setForm({ ...form, market: e.target.value })} />
-              <Input placeholder="Opportunity Source" value={form.opportunitySource} onChange={(e) => setForm({ ...form, opportunitySource: e.target.value })} />
+              <SearchableSelect
+                placeholder="Project Type"
+                value={form.projectType || ""}
+                onValueChange={(v) => setForm({ ...form, projectType: v })}
+                options={[
+                  { value: "flipper", label: "Flipper" },
+                  { value: "landlord", label: "Landlord" },
+                  { value: "builder", label: "Builder" },
+                  { value: "multi_family", label: "Multi Family" },
+                  { value: "turn_key", label: "Turn Key" },
+                  { value: "wholesale", label: "Wholesale" },
+                  { value: "novation", label: "Novation" },
+                  { value: "creative_finance", label: "Creative Finance" },
+                  { value: "fix_and_flip", label: "Fix & Flip" },
+                  { value: "buy_and_hold", label: "Buy & Hold" },
+                  { value: "other", label: "Other" },
+                ]}
+              />
+              <SearchableSelect
+                placeholder="Market"
+                value={form.market || ""}
+                onValueChange={(v) => setForm({ ...form, market: v })}
+                options={(kpiMarkets || []).map((m: any) => ({ value: m.name, label: m.name }))}
+                emptyText="No markets configured"
+              />
+              <SearchableSelect
+                placeholder="Source"
+                value={form.opportunitySource || ""}
+                onValueChange={(v) => setForm({ ...form, opportunitySource: v })}
+                options={(kpiSources || []).map((s: any) => ({ value: s.name, label: s.name }))}
+                emptyText="No sources configured"
+              />
             </div>
           </div>
           <div className="space-y-2">
@@ -1436,6 +1462,8 @@ function PropertyDetail({
   }, [teamRole]);
   const utils = trpc.useUtils();
   const { data: property, isLoading } = trpc.inventory.getPropertyById.useQuery({ propertyId });
+  const { data: kpiMarkets } = trpc.kpi.listMarkets.useQuery();
+  const { data: kpiSources } = trpc.kpi.listSources.useQuery();
   const [editOpen, setEditOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -1533,11 +1561,13 @@ function PropertyDetail({
       {/* Dialogs */}
       {editOpen && (
         <PropertyFormDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          property={property}
-          onSave={(data: any) => updateMutation.mutate({ propertyId, ...data })}
-          isSaving={updateMutation.isPending}
+           open={editOpen}
+           onOpenChange={setEditOpen}
+           property={property}
+           onSave={(data: any) => updateMutation.mutate({ propertyId, ...data })}
+           isSaving={updateMutation.isPending}
+           kpiMarkets={kpiMarkets}
+           kpiSources={kpiSources}
         />
       )}
     </div>
@@ -1690,6 +1720,10 @@ export default function Inventory() {
     { status: statusFilter, search: search || undefined, limit: 100 },
     { refetchInterval: 60000 }
   );
+
+  // KPI markets/sources for searchable dropdowns
+  const { data: kpiMarkets } = trpc.kpi.listMarkets.useQuery();
+  const { data: kpiSources } = trpc.kpi.listSources.useQuery();
 
   const createMutation = trpc.inventory.createProperty.useMutation({
     onSuccess: (result) => {
@@ -1949,22 +1983,27 @@ export default function Inventory() {
             <X className="h-3 w-3" /> Clear
           </button>
         )}
-        <div className="flex items-center gap-1.5 overflow-x-auto">
+        <div className="flex items-center gap-1 overflow-x-auto">
           {visibleStages.map((s) => {
             const cfg = s === "all" ? { label: "All", color: "var(--g-text-primary)", bg: "var(--g-bg-elevated)" } : STATUS_CONFIG[s];
             const isActive = statusFilter === s;
+            const count = statusCounts[s] || 0;
             return (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all"
+                className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors"
                 style={{
+                  minWidth: "fit-content",
                   background: isActive ? (s === "all" ? "var(--g-accent-soft)" : cfg.bg) : "transparent",
                   color: isActive ? (s === "all" ? "var(--g-accent)" : cfg.color) : "var(--g-text-tertiary)",
                   border: isActive ? `1px solid ${s === "all" ? "var(--g-accent)" : cfg.color}40` : "1px solid transparent",
                 }}
               >
-                {cfg.label} {statusCounts[s] ? `(${statusCounts[s]})` : ""}
+                <span className="inline-flex items-center gap-1">
+                  {cfg.label}
+                  {count > 0 && <span className="tabular-nums">({count})</span>}
+                </span>
               </button>
             );
           })}
@@ -2107,11 +2146,13 @@ export default function Inventory() {
       {/* Add Property Dialog */}
       {addOpen && (
         <PropertyFormDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          onSave={(data: any) => createMutation.mutate(data)}
-          isSaving={createMutation.isPending}
-        />
+           open={addOpen}
+           onOpenChange={setAddOpen}
+           onSave={(data: any) => createMutation.mutate(data)}
+           isSaving={createMutation.isPending}
+           kpiMarkets={kpiMarkets}
+           kpiSources={kpiSources}
+         />
       )}
 
       {/* CSV Import Dialog */}
