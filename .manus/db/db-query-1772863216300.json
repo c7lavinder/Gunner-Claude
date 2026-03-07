@@ -1,0 +1,14 @@
+{
+  "query": "SELECT opportunitySource, COUNT(*) as cnt FROM dispo_properties WHERE tenantId = 1 AND opportunitySource IS NOT NULL AND opportunitySource != '' GROUP BY opportunitySource ORDER BY cnt DESC",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT opportunitySource, COUNT(*) as cnt FROM dispo_properties WHERE tenantId = 1 AND opportunitySource IS NOT NULL AND opportunitySource != '' GROUP BY opportunitySource ORDER BY cnt DESC",
+  "rows": [
+    {
+      "opportunitySource": "BatchLeads",
+      "cnt": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "opportunitySource\tcnt\nBatchLeads\t1\n",
+  "stderr": "",
+  "execution_time_ms": 113
+}

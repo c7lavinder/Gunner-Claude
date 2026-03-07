@@ -4461,11 +4461,14 @@ Create content that:
       let skipped = 0;
       for (const p of properties) {
         const updates: any = {};
-        // Backfill sourceId from opportunitySource
-        if (!p.sourceId && p.opportunitySource) {
-          const normalized = normalizeSource(p.opportunitySource);
-          const sourceId = await resolveSourceId(db, tenantId, normalized);
-          if (sourceId) updates.sourceId = sourceId;
+        // Backfill sourceId from leadSource (normalized) or opportunitySource (raw)
+        if (!p.sourceId) {
+          const rawSource = p.leadSource || p.opportunitySource;
+          if (rawSource) {
+            const normalized = normalizeSource(rawSource);
+            const sourceId = await resolveSourceId(db, tenantId, normalized);
+            if (sourceId) updates.sourceId = sourceId;
+          }
         }
         // Backfill marketId from zip
         if (!p.marketId) {

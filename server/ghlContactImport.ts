@@ -220,17 +220,28 @@ export function getStageTimestamps(status: string): Record<string, Date> {
 /**
  * Look up the KPI sourceId for a normalized source name.
  */
+/**
+ * Secondary alias map: maps normalized source names to possible ghlSourceMapping values.
+ * This bridges the gap when leadSource values (e.g. "PropertyLeads") don't directly match
+ * the KPI source name or ghlSourceMapping (e.g. "PPL").
+ */
+const SOURCE_ALIAS_MAP: Record<string, string[]> = {
+  "propertyleads": ["ppl", "propertyleads", "property leads"],
+  "motivatedsellers": ["ppl", "motivatedsellers", "motivated sellers"],
+  "batchdialer": ["dialer", "cold calling", "batchdialer", "batch dialer"],
+  "batchleads": ["texts", "cold sms", "batchleads", "batch leads", "sms"],
+  "web form": ["form", "seo", "web form", "webform", "website"],
+  "referral": ["referral", "referrals", "jv"],
+  "direct mail": ["postcards", "direct mail", "mail", "mailer"],
+  "driving for dollars": ["d4d", "driving for dollars"],
+  "bandit signs": ["bandit", "bandit signs"],
+  "social media": ["social", "social media", "facebook", "instagram"],
+};
+
 export async function resolveSourceId(db: any, tenantId: number, normalizedSource: string): Promise<number | null> {
   if (!normalizedSource || normalizedSource === "Unknown") return null;
   try {
     const { kpiSources } = await import("../drizzle/schema");
-    const [source] = await db.select({ id: kpiSources.id })
-      .from(kpiSources)
-      .where(and(
-        eq(kpiSources.tenantId, tenantId),
-        eq(kpiSources.isActive, true),
-      ));
-    // Try exact name match first, then ghlSourceMapping
     const allSources = await db.select()
       .from(kpiSources)
       .where(and(
@@ -238,9 +249,24 @@ export async function resolveSourceId(db: any, tenantId: number, normalizedSourc
         eq(kpiSources.isActive, true),
       ));
     const lowerSource = normalizedSource.toLowerCase();
+    // Pass 1: exact name match
     for (const s of allSources) {
       if (s.name.toLowerCase() === lowerSource) return s.id;
+    }
+    // Pass 2: exact ghlSourceMapping match
+    for (const s of allSources) {
       if (s.ghlSourceMapping && s.ghlSourceMapping.toLowerCase() === lowerSource) return s.id;
+    }
+    // Pass 3: alias map — check if the normalized source has known aliases that match a KPI source
+    const aliases = SOURCE_ALIAS_MAP[lowerSource];
+    if (aliases) {
+      for (const s of allSources) {
+        const sName = s.name.toLowerCase();
+        const sMapping = (s.ghlSourceMapping || "").toLowerCase();
+        for (const alias of aliases) {
+          if (sName === alias || sMapping === alias) return s.id;
+        }
+      }
     }
     return null;
   } catch {

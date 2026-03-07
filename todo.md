@@ -4626,3 +4626,8 @@
 ### Multi-Address Separation
 - [x] Detect and separate properties with multiple addresses (e.g. "124 Powell Creek Cir & 2213 Barry...")
 - [x] Split addresses UI button in KPI Settings
+
+## Fix Opportunity Source Backfill (2026-03-07)
+- [x] Investigate which GHL field is being used for opportunitySource — may be pulling wrong field
+- [x] Fix source mapping so backfill correctly assigns sourceId from GHL data
+- [x] Re-run source backfill after fix
