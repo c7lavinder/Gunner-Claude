@@ -87,6 +87,7 @@ import {
   assignLeadManagerToAcquisitionManager,
   removeLeadManagerAssignment,
   updateTeamMemberRole,
+  updateTeamMember,
   linkUserToTeamMember,
   getAllUsers,
   updateUserTeamRole,
@@ -376,7 +377,35 @@ export const appRouter = router({
         if (ctx.user?.teamRole !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
         }
+        // Tenant scoping: verify target member belongs to same tenant
+        const target = await getTeamMemberById(input.teamMemberId);
+        if (!target || target.tenantId !== ctx.user.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Team member not found' });
+        }
         await updateTeamMemberRole(input.teamMemberId, input.teamRole);
+        return { success: true };
+      }),
+
+    // Admin: Update team member name and/or role
+    updateMember: protectedProcedure
+      .input(z.object({
+        teamMemberId: z.number(),
+        name: z.string().min(1).max(100).optional(),
+        teamRole: z.enum(["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.teamRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        // Tenant scoping: verify target member belongs to same tenant
+        const target = await getTeamMemberById(input.teamMemberId);
+        if (!target || target.tenantId !== ctx.user.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Team member not found' });
+        }
+        await updateTeamMember(input.teamMemberId, {
+          name: input.name,
+          teamRole: input.teamRole,
+        });
         return { success: true };
       }),
 
@@ -389,6 +418,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (ctx.user?.teamRole !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        // Tenant scoping: verify target member belongs to same tenant
+        const target = await getTeamMemberById(input.teamMemberId);
+        if (!target || target.tenantId !== ctx.user.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Team member not found' });
         }
         await linkUserToTeamMember(input.userId, input.teamMemberId);
         
@@ -457,6 +491,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (ctx.user?.teamRole !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        // Tenant scoping: verify target member belongs to same tenant
+        const target = await getTeamMemberById(input.leadManagerId);
+        if (!target || target.tenantId !== ctx.user.tenantId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Team member not found' });
         }
         await removeLeadManagerAssignment(input.leadManagerId);
         return { success: true };

@@ -7,8 +7,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { 
   Users, UserPlus, Trophy, Flame, Zap, Target, 
   Camera, Upload, Award, Lock, CheckCircle, User,
-  Swords
+  Swords, Pencil
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useDemo } from "@/hooks/useDemo";
@@ -257,10 +260,22 @@ function CharacterCard({
 }
 
 // ─── SELECTED TEAMMATE DETAIL PANEL ────────────────────
-function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
-  member: any; gamificationData?: any; scoreData?: any; rank: number;
+function CharacterDetailPanel({ member, gamificationData, scoreData, rank, isAdmin }: {
+  member: any; gamificationData?: any; scoreData?: any; rank: number; isAdmin?: boolean;
 }) {
   const { t } = useTenantConfig();
+  const utils = trpc.useUtils();
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState(member.name || "");
+  const [editRole, setEditRole] = useState(member.teamRole || "lead_manager");
+  const updateMemberMutation = trpc.team.updateMember.useMutation({
+    onSuccess: () => {
+      toast.success("Team member updated");
+      utils.team.list.invalidate();
+      setEditOpen(false);
+    },
+    onError: (err) => toast.error(err.message),
+  });
   const xp = gamificationData?.xp || 0;
   const level = gamificationData?.level || 1;
   const title = gamificationData?.title || "Rookie";
@@ -292,7 +307,18 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
             
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <div className="obs-roster-name" style={{fontSize: 18}}>{member.name}</div>
+              <div className="flex items-center gap-2">
+                <div className="obs-roster-name" style={{fontSize: 18}}>{member.name}</div>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditName(member.name || ""); setEditRole(member.teamRole || "lead_manager"); setEditOpen(true); }}
+                    className="p-1 rounded hover:bg-white/10 transition-colors"
+                    title="Edit team member"
+                  >
+                    <Pencil className="h-3.5 w-3.5" style={{color: 'var(--obs-text-tertiary)'}} />
+                  </button>
+                )}
+              </div>
               <div className={`obs-roster-role-badge ${roleClass}`}>
                 {t.role(member.teamRole)}
               </div>
@@ -369,6 +395,47 @@ function CharacterDetailPanel({ member, gamificationData, scoreData, rank }: {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Edit Dialog */}
+      {isAdmin && (
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Team Member</DialogTitle>
+              <DialogDescription>Update name and role for {member.name}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Team member name" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-role">Role</Label>
+                <Select value={editRole} onValueChange={setEditRole}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lead_manager">Lead Manager</SelectItem>
+                    <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
+                    <SelectItem value="lead_generator">Lead Generator</SelectItem>
+                    <SelectItem value="dispo_manager">Dispo Manager</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={() => updateMemberMutation.mutate({ teamMemberId: member.id, name: editName, teamRole: editRole as any })}
+                  disabled={updateMemberMutation.isPending || !editName.trim()}
+                  style={{background: 'linear-gradient(135deg, var(--obs-accent), var(--obs-accent-light))', color: '#fff', border: 'none'}}
+                >
+                  {updateMemberMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
@@ -713,6 +780,7 @@ function TeamMembersContent() {
           gamificationData={gamificationMap.get(selectedMember.id)}
           scoreData={scoreMap.get(selectedMember.id)}
           rank={selectedRank}
+          isAdmin={user?.teamRole === 'admin'}
         />
       )}
 

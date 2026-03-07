@@ -277,9 +277,9 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
 
   if (isLoading) {
     return (
-      <div className="flex gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:flex gap-3">
         {[...Array(5)].map((_, i) => (
-          <Skeleton key={i} className="h-16 flex-1 rounded-lg" />
+          <Skeleton key={i} className="h-16 md:flex-1 rounded-lg" />
         ))}
       </div>
     );
@@ -311,7 +311,7 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
 
   return (
     <>
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:flex gap-2 pb-1">
         {kpiItems.map((item) => {
           const c = colorMap[getColor(item.value, item.target)];
           const Icon = item.icon;
@@ -319,7 +319,7 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
           return (
             <div
               key={item.label}
-              className="flex-1 min-w-[100px] rounded-lg px-3 py-2.5 relative overflow-hidden group cursor-pointer"
+              className="md:flex-1 min-w-0 rounded-lg px-3 py-2.5 relative overflow-hidden group cursor-pointer"
               style={{ background: "var(--g-bg-card)", border: `1px solid ${c.border}` }}
               onClick={() => {
                 setLedgerType(item.type);
@@ -1697,8 +1697,22 @@ function AppointmentItem({ apt, onTextContact, isSelected, onSelect }: { apt: an
   const endTimeStr = endTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const isPast = startTime.getTime() < Date.now();
   const isUpcoming = !isPast && (startTime.getTime() - Date.now()) < 30 * 60 * 1000; // within 30 min
-  const statusColor = apt.status === "confirmed" ? "#22c55e" : apt.status === "showed" ? "#3b82f6" : apt.status === "noshow" ? "#ef4444" : "#eab308";
-  const statusLabel = apt.status === "noshow" ? "No Show" : apt.status;
+  const statusColorMap: Record<string, string> = {
+    confirmed: "#22c55e",
+    showed: "#3b82f6",
+    noshow: "#ef4444",
+    cancelled: "#6b7280",
+    rescheduled: "#f97316",
+  };
+  const statusLabelMap: Record<string, string> = {
+    confirmed: "Confirmed",
+    showed: "Showed",
+    noshow: "No Show",
+    cancelled: "Cancelled",
+    rescheduled: "Rescheduled",
+  };
+  const statusColor = statusColorMap[apt.status] || "#eab308";
+  const statusLabel = statusLabelMap[apt.status] || apt.status;
 
   return (
     <div
@@ -1729,6 +1743,12 @@ function AppointmentItem({ apt, onTextContact, isSelected, onSelect }: { apt: an
       <div className="text-xs font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
         {apt.contactName || apt.title}
       </div>
+      {/* Assignee name */}
+      {apt.assigneeName && (
+        <div className="text-[10px] font-medium mt-0.5" style={{ color: "var(--g-accent)" }}>
+          {apt.assigneeName}
+        </div>
+      )}
       {/* Property address — prominent if available */}
       {apt.address && (
         <div className="flex items-center gap-1 mt-1" style={{ color: "var(--g-text-secondary)" }}>
@@ -4148,7 +4168,7 @@ export default function TaskCenter() {
           {/* Dispo KPI Bar */}
           <DispoKpiBar />
           {/* Top half: Inbox/Showings + AI Coach */}
-          <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minHeight: "380px" }}>
             <DispoLeftPanel roleFilteredGhlUserIds={roleFilteredGhlUserIds} teamMembers={data?.teamMembers} />
             <DayHubCoach />
           </div>
@@ -4158,7 +4178,7 @@ export default function TaskCenter() {
           {/* KPI Bar */}
           <KpiBar roleTab={roleTab} teamMembers={data?.teamMembers as TeamMember[] | undefined} />
           {/* Top half: Inbox + AI Coach side by side */}
-          <div className="grid grid-cols-2 gap-4" style={{ height: "380px" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minHeight: "380px" }}>
             <LeftPanel roleTab={roleTab} roleFilteredGhlUserIds={roleFilteredGhlUserIds} teamMembers={data?.teamMembers} />
             <DayHubCoach />
           </div>

@@ -493,6 +493,7 @@ export interface TodayAppointment {
   calendarId: string;
   calendarName: string;
   assignedUserId?: string;
+  assigneeName?: string;
   activitySummary: string; // Brief context: tags, pipeline stage, recent activity
 }
 
@@ -616,6 +617,31 @@ export async function getTodayAppointments(
       }
     } catch (enrichErr: any) {
       console.warn("[DayHub] Appointment enrichment failed (non-blocking):", enrichErr?.message);
+    }
+
+    // Resolve assignee names from team_members table
+    try {
+      const assignedUserIds = Array.from(new Set(appointments.map(a => a.assignedUserId).filter(Boolean))) as string[];
+      if (assignedUserIds.length > 0) {
+        const db = await getDb();
+        if (db) {
+          const members = await db
+            .select({ ghlUserId: teamMembers.ghlUserId, name: teamMembers.name })
+            .from(teamMembers)
+            .where(and(
+              eq(teamMembers.tenantId, tenantId),
+              inArray(teamMembers.ghlUserId, assignedUserIds)
+            ));
+          const nameMap = new Map(members.map(m => [m.ghlUserId, m.name]));
+          for (const apt of appointments) {
+            if (apt.assignedUserId && nameMap.has(apt.assignedUserId)) {
+              apt.assigneeName = nameMap.get(apt.assignedUserId)!;
+            }
+          }
+        }
+      }
+    } catch (assigneeErr: any) {
+      console.warn("[DayHub] Assignee name resolution failed (non-blocking):", assigneeErr?.message);
     }
 
     // Sort by start time — parse robustly to handle various date formats
@@ -752,6 +778,10 @@ export async function getKpiSummary(
       dispo: "dispo_manager",
     };
 
+    // For AM tab: calls/convos filter by AM team members, but offers/contracts show ALL sources
+    // because AMs work on leads sourced by LMs — they attend appointments set by LMs.
+    let amRoleMemberIds: number[] | null = null;
+
     if (roleTab && roleTab !== "admin" && roleToTeamRole[roleTab]) {
       // Get all team member IDs for this role
       const roleMembers = await db
@@ -765,11 +795,21 @@ export async function getKpiSummary(
           )
         );
       const roleMemberIds = roleMembers.map(m => m.id);
-      if (roleMemberIds.length > 0) {
-        baseConditions.push(inArray(calls.teamMemberId, roleMemberIds));
+
+      if (roleTab === "am") {
+        // AM tab: only filter calls/convos by AM members; offers/contracts are tenant-wide
+        amRoleMemberIds = roleMemberIds;
+        if (roleMemberIds.length > 0) {
+          baseConditions.push(inArray(calls.teamMemberId, roleMemberIds));
+        }
+        // Don't return zeros for AM — offers/contracts come from all sources
       } else {
-        // No members in this role — return zeros
-        return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
+        if (roleMemberIds.length > 0) {
+          baseConditions.push(inArray(calls.teamMemberId, roleMemberIds));
+        } else {
+          // No members in this role — return zeros
+          return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
+        }
       }
     } else if (teamMemberId && roleTab !== "admin") {
       // Non-admin user viewing their own stats
@@ -795,10 +835,17 @@ export async function getKpiSummary(
 
     // Auto-count appointments set (callOutcome = 'appointment_set')
     // DEDUP: Count 1 per unique property (by ghlContactId) per day
+    // For AM tab: use tenant-wide conditions (not filtered by AM members) for apts/offers/contracts
+    const aptOfferConditions = roleTab === "am" ? [
+      eq(calls.tenantId, tenantId),
+      gte(calls.callTimestamp, dayStartUTC),
+      lt(calls.callTimestamp, dayEndUTC),
+    ] : baseConditions;
+
     const [autoAptsResult] = await db
       .select({ count: sql<number>`COUNT(DISTINCT COALESCE(${calls.ghlContactId}, CAST(${calls.id} AS CHAR)))` })
       .from(calls)
-      .where(and(...baseConditions, eq(calls.callOutcome, "appointment_set")));
+      .where(and(...aptOfferConditions, eq(calls.callOutcome, "appointment_set")));
     const autoApts = Number(autoAptsResult?.count || 0);
 
     // AM Direct count: AMs who set appointments (counts toward apts but NOT toward LM credit)
@@ -808,7 +855,7 @@ export async function getKpiSummary(
       .from(calls)
       .innerJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
       .where(and(
-        ...baseConditions,
+        ...aptOfferConditions,
         eq(calls.callOutcome, "appointment_set"),
         eq(teamMembers.teamRole, "acquisition_manager")
       ));
@@ -816,10 +863,11 @@ export async function getKpiSummary(
 
     // Auto-count offers made (callOutcome = 'offer_made')
     // DEDUP: Count 1 per unique property (by ghlContactId) per day
+    // For AM tab: use tenant-wide conditions so AMs see all offers, not just their own
     const [autoOffersResult] = await db
       .select({ count: sql<number>`COUNT(DISTINCT COALESCE(${calls.ghlContactId}, CAST(${calls.id} AS CHAR)))` })
       .from(calls)
-      .where(and(...baseConditions, eq(calls.callOutcome, "offer_made")));
+      .where(and(...aptOfferConditions, eq(calls.callOutcome, "offer_made")));
     const autoOffers = Number(autoOffersResult?.count || 0);
 
     // ─── CASCADING FALLBACK: GHL stage changes ───

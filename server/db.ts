@@ -481,19 +481,27 @@ export async function getCallsWithGrades(options: {
   const countResult = await db.select({ count: sql<number>`count(*)` }).from(calls).where(whereClause);
   const total = Number(countResult[0]?.count || 0);
 
-  // Get paginated calls
+  // Get paginated calls with grades in a single query (avoids N+1)
   const callsList = await db.select().from(calls)
     .where(whereClause)
     .orderBy(desc(calls.createdAt))
     .limit(options.limit || 25)
     .offset(options.offset || 0);
 
-  const result = await Promise.all(
-    callsList.map(async (call) => {
-      const grade = await getCallGradeByCallId(call.id);
-      return { ...call, grade };
-    })
-  );
+  // Batch-fetch grades for all calls in one query
+  let gradesMap = new Map<number, CallGrade>();
+  if (callsList.length > 0) {
+    const callIds = callsList.map(c => c.id);
+    const grades = await db.select().from(callGrades).where(inArray(callGrades.callId, callIds));
+    for (const g of grades) {
+      gradesMap.set(g.callId, g);
+    }
+  }
+
+  const result = callsList.map(call => ({
+    ...call,
+    grade: gradesMap.get(call.id) || null,
+  }));
 
   // Return all calls regardless of grade status.
   // Previously we filtered out ungraded calls, but this caused newly-synced calls
@@ -2339,6 +2347,23 @@ export async function updateTeamMemberRole(
 
   await db.update(teamMembers)
     .set({ teamRole })
+    .where(eq(teamMembers.id, teamMemberId));
+}
+
+export async function updateTeamMember(
+  teamMemberId: number,
+  updates: { name?: string; teamRole?: 'admin' | 'lead_manager' | 'acquisition_manager' | 'lead_generator' | 'dispo_manager' }
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const setFields: Record<string, any> = {};
+  if (updates.name !== undefined) setFields.name = updates.name;
+  if (updates.teamRole !== undefined) setFields.teamRole = updates.teamRole;
+  if (Object.keys(setFields).length === 0) return;
+
+  await db.update(teamMembers)
+    .set(setFields)
     .where(eq(teamMembers.id, teamMemberId));
 }
 

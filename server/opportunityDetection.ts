@@ -426,6 +426,10 @@ function isWalkthroughStage(stageName: string): boolean {
 
 // ============ GHL API HELPERS ============
 
+// Throttle OpportunityDetection API calls to avoid exhausting shared GHL quota
+let lastOppDetectionFetchTime = 0;
+const OPP_DETECTION_MIN_INTERVAL_MS = 800; // At least 800ms between API calls (~75/min max)
+
 async function ghlFetch(creds: GHLCredentials, path: string, _retries = 1): Promise<any> {
   const url = `${GHL_API_BASE}${path}`;
 
@@ -434,6 +438,13 @@ async function ghlFetch(creds: GHLCredentials, path: string, _retries = 1): Prom
     console.log(`[OpportunityDetection] Circuit breaker open — skipping ${path}`);
     throw new Error("CRM is temporarily busy due to rate limiting.");
   }
+
+  // Throttle: wait if we're calling too fast
+  const elapsed = Date.now() - lastOppDetectionFetchTime;
+  if (elapsed < OPP_DETECTION_MIN_INTERVAL_MS) {
+    await new Promise(resolve => setTimeout(resolve, OPP_DETECTION_MIN_INTERVAL_MS - elapsed));
+  }
+  lastOppDetectionFetchTime = Date.now();
 
   ghlCircuitBreaker.recordRequest();
   const response = await oauthAwareFetch(url, {
