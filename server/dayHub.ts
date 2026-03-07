@@ -15,7 +15,7 @@ import {
 } from "./ghlActions";
 import { type TaskWithContext } from "./taskCenter";
 import { getDb } from "./db";
-import { dailyKpiEntries, calls, teamMembers, callGrades } from "../drizzle/schema";
+import { dailyKpiEntries, calls, teamMembers, callGrades, propertyStageHistory, dispoProperties } from "../drizzle/schema";
 import { eq, and, sql, gte, lt, inArray } from "drizzle-orm";
 
 // ─── SERVER-SIDE CACHE ──────────────────────────────────
@@ -801,6 +801,19 @@ export async function getKpiSummary(
       .where(and(...baseConditions, eq(calls.callOutcome, "appointment_set")));
     const autoApts = Number(autoAptsResult?.count || 0);
 
+    // AM Direct count: AMs who set appointments (counts toward apts but NOT toward LM credit)
+    // This is informational — the apt still counts in the total, but we track AM Direct separately
+    const [amDirectAptsResult] = await db
+      .select({ count: sql<number>`COUNT(DISTINCT COALESCE(${calls.ghlContactId}, CAST(${calls.id} AS CHAR)))` })
+      .from(calls)
+      .innerJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
+      .where(and(
+        ...baseConditions,
+        eq(calls.callOutcome, "appointment_set"),
+        eq(teamMembers.teamRole, "acquisition_manager")
+      ));
+    const amDirectApts = Number(amDirectAptsResult?.count || 0);
+
     // Auto-count offers made (callOutcome = 'offer_made')
     // DEDUP: Count 1 per unique property (by ghlContactId) per day
     const [autoOffersResult] = await db
@@ -808,6 +821,72 @@ export async function getKpiSummary(
       .from(calls)
       .where(and(...baseConditions, eq(calls.callOutcome, "offer_made")));
     const autoOffers = Number(autoOffersResult?.count || 0);
+
+    // ─── CASCADING FALLBACK: GHL stage changes ───
+    // If a property moved to apt_set or offer_made via GHL webhook today,
+    // but there's no corresponding graded call, count it as a "webhook" detection.
+    let webhookApts = 0;
+    let webhookOffers = 0;
+    try {
+      // Get ghlContactIds already counted from calls (to avoid double-counting)
+      const aptCallContactIds = await db
+        .select({ ghlContactId: calls.ghlContactId })
+        .from(calls)
+        .where(and(...baseConditions, eq(calls.callOutcome, "appointment_set")))
+        .then((rows: any[]) => new Set(rows.map((r: any) => r.ghlContactId).filter(Boolean)));
+
+      const offerCallContactIds = await db
+        .select({ ghlContactId: calls.ghlContactId })
+        .from(calls)
+        .where(and(...baseConditions, eq(calls.callOutcome, "offer_made")))
+        .then((rows: any[]) => new Set(rows.map((r: any) => r.ghlContactId).filter(Boolean)));
+
+      // Find properties that changed to apt_set today via webhook but have no matching call
+      const webhookAptProps = await db
+        .select({
+          propertyId: propertyStageHistory.propertyId,
+          ghlContactId: dispoProperties.ghlContactId,
+        })
+        .from(propertyStageHistory)
+        .innerJoin(dispoProperties, eq(propertyStageHistory.propertyId, dispoProperties.id))
+        .where(and(
+          eq(propertyStageHistory.tenantId, tenantId),
+          eq(propertyStageHistory.toStatus, "apt_set"),
+          eq(propertyStageHistory.source, "webhook"),
+          gte(propertyStageHistory.changedAt, dayStartUTC),
+          lt(propertyStageHistory.changedAt, dayEndUTC)
+        ));
+
+      for (const prop of webhookAptProps) {
+        if (prop.ghlContactId && !aptCallContactIds.has(prop.ghlContactId)) {
+          webhookApts++;
+        }
+      }
+
+      // Find properties that changed to offer_made today via webhook but have no matching call
+      const webhookOfferProps = await db
+        .select({
+          propertyId: propertyStageHistory.propertyId,
+          ghlContactId: dispoProperties.ghlContactId,
+        })
+        .from(propertyStageHistory)
+        .innerJoin(dispoProperties, eq(propertyStageHistory.propertyId, dispoProperties.id))
+        .where(and(
+          eq(propertyStageHistory.tenantId, tenantId),
+          eq(propertyStageHistory.toStatus, "offer_made"),
+          eq(propertyStageHistory.source, "webhook"),
+          gte(propertyStageHistory.changedAt, dayStartUTC),
+          lt(propertyStageHistory.changedAt, dayEndUTC)
+        ));
+
+      for (const prop of webhookOfferProps) {
+        if (prop.ghlContactId && !offerCallContactIds.has(prop.ghlContactId)) {
+          webhookOffers++;
+        }
+      }
+    } catch (cascadeError) {
+      console.error("[DayHub] Cascading fallback query failed (non-fatal):", (cascadeError as any)?.message);
+    }
 
     // Manual entries (supplements for things like contracts that can't be auto-detected)
     const manual: Record<string, number> = {};
@@ -834,13 +913,18 @@ export async function getKpiSummary(
       console.error("[DayHub] Manual KPI entries query failed (non-fatal):", (manualError as any)?.message);
     }
 
-    // Use auto-counts as the primary source, add manual entries for contracts
+    // Use auto-counts as the primary source, add manual entries + webhook fallback
     return {
       calls: autoCalls + (manual["call"] || 0),
       conversations: autoConvos + (manual["conversation"] || 0),
-      appointments: autoApts + (manual["appointment"] || 0),
-      offers: autoOffers + (manual["offer"] || 0),
+      appointments: autoApts + webhookApts + (manual["appointment"] || 0),
+      offers: autoOffers + webhookOffers + (manual["offer"] || 0),
       contracts: manual["contract"] || 0, // contracts are manual-only
+      // Breakdown metadata for the UI
+      amDirectApts,
+      webhookApts,
+      webhookOffers,
+      date,
     };
   } catch (error) {
     console.error("[DayHub] getKpiSummary error:", error);
@@ -911,11 +995,14 @@ export async function getKpiLedgerItems(
       contactName: string;
       contactPhone: string;
       teamMemberName: string;
+      teamMemberRole?: string;
       timestamp: string;
       duration: number;
       grade: string | null;
       classification: string | null;
       callOutcome: string | null;
+      detectionType: "auto" | "am_direct" | "webhook";
+      propertyAddress?: string;
     }> = [];
 
     if (kpiType !== "contract") {
@@ -949,30 +1036,37 @@ export async function getKpiLedgerItems(
         .orderBy(sql`${calls.callTimestamp} DESC`)
         .limit(100);
 
-      // Resolve team member names
+      // Resolve team member names AND roles for AM Direct detection
       const memberIds = Array.from(new Set(autoRows.map(r => r.teamMemberId).filter(Boolean))) as number[];
-      const memberMap = new Map<number, string>();
+      const memberMap = new Map<number, { name: string; teamRole: string }>();
       if (memberIds.length > 0) {
         const members = await db
-          .select({ id: teamMembers.id, name: teamMembers.name })
+          .select({ id: teamMembers.id, name: teamMembers.name, teamRole: teamMembers.teamRole })
           .from(teamMembers)
           .where(inArray(teamMembers.id, memberIds));
-        members.forEach(m => memberMap.set(m.id, m.name));
+        members.forEach(m => memberMap.set(m.id, { name: m.name, teamRole: m.teamRole }));
       }
 
-      let mappedItems = autoRows.map(r => ({
-        id: r.id,
-        source: "auto" as const,
-        contactName: r.contactName || "Unknown",
-        contactPhone: r.contactPhone || "",
-        ghlContactId: r.ghlContactId || null,
-        teamMemberName: r.teamMemberId ? (memberMap.get(r.teamMemberId) || "Unknown") : "Unknown",
-        timestamp: r.callTimestamp ? new Date(r.callTimestamp).toISOString() : "",
-        duration: r.duration || 0,
-        grade: r.overallGrade || null,
-        classification: r.classification || null,
-        callOutcome: r.callOutcome || null,
-      }));
+      let mappedItems = autoRows.map(r => {
+        const member = r.teamMemberId ? memberMap.get(r.teamMemberId) : null;
+        const isAmDirect = member?.teamRole === "acquisition_manager" &&
+          (r.callOutcome === "appointment_set");
+        return {
+          id: r.id,
+          source: "auto" as const,
+          contactName: r.contactName || "Unknown",
+          contactPhone: r.contactPhone || "",
+          ghlContactId: r.ghlContactId || null,
+          teamMemberName: member?.name || "Unknown",
+          teamMemberRole: member?.teamRole || undefined,
+          timestamp: r.callTimestamp ? new Date(r.callTimestamp).toISOString() : "",
+          duration: r.duration || 0,
+          grade: r.overallGrade || null,
+          classification: r.classification || null,
+          callOutcome: r.callOutcome || null,
+          detectionType: (isAmDirect ? "am_direct" : "auto") as "auto" | "am_direct" | "webhook",
+        };
+      });
 
       // DEDUP: For appointments and offers, show only 1 entry per unique contact (property) per day
       if (kpiType === "appointment" || kpiType === "offer") {
@@ -987,6 +1081,62 @@ export async function getKpiLedgerItems(
 
       autoItems = mappedItems.map(({ ghlContactId, ...rest }) => rest);
     }
+
+    // ─── CASCADING FALLBACK: Add webhook-detected items to the ledger ───
+    // Properties that moved to apt_set or offer_made via GHL webhook today
+    // but have no corresponding graded call
+    let webhookItems: typeof autoItems = [];
+    if (kpiType === "appointment" || kpiType === "offer") {
+      try {
+        const targetStatus = kpiType === "appointment" ? "apt_set" : "offer_made";
+        const autoContactIds = new Set(autoItems.map(i => (i as any).ghlContactId || "").filter(Boolean));
+
+        const webhookProps = await db
+          .select({
+            id: propertyStageHistory.id,
+            propertyId: propertyStageHistory.propertyId,
+            changedAt: propertyStageHistory.changedAt,
+            ghlContactId: dispoProperties.ghlContactId,
+            sellerName: dispoProperties.sellerName,
+            address: dispoProperties.address,
+          })
+          .from(propertyStageHistory)
+          .innerJoin(dispoProperties, eq(propertyStageHistory.propertyId, dispoProperties.id))
+          .where(and(
+            eq(propertyStageHistory.tenantId, tenantId),
+            eq(propertyStageHistory.toStatus, targetStatus),
+            eq(propertyStageHistory.source, "webhook"),
+            gte(propertyStageHistory.changedAt, dayStartUTC),
+            lt(propertyStageHistory.changedAt, dayEndUTC)
+          ))
+          .orderBy(sql`${propertyStageHistory.changedAt} DESC`);
+
+        for (const prop of webhookProps) {
+          // Skip if already counted from a call
+          if (prop.ghlContactId && autoContactIds.has(prop.ghlContactId)) continue;
+
+          webhookItems.push({
+            id: prop.id + 1000000, // offset to avoid ID collision with calls
+            source: "auto" as const,
+            contactName: prop.sellerName || "Unknown",
+            contactPhone: "",
+            teamMemberName: "GHL Stage Change",
+            timestamp: prop.changedAt ? new Date(prop.changedAt).toISOString() : "",
+            duration: 0,
+            grade: null,
+            classification: null,
+            callOutcome: kpiType === "appointment" ? "appointment_set" : "offer_made",
+            detectionType: "webhook" as const,
+            propertyAddress: prop.address || undefined,
+          });
+        }
+      } catch (webhookError) {
+        console.error("[DayHub] Webhook fallback ledger query failed (non-fatal):", (webhookError as any)?.message);
+      }
+    }
+
+    // Merge auto + webhook items
+    autoItems = [...autoItems, ...webhookItems];
 
     // Get manual entries
     const manualRows = await db

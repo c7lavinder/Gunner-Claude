@@ -500,8 +500,9 @@ describe("KPI Dedup — source code verification", () => {
     const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
     
     expect(source).toContain("COUNT(DISTINCT COALESCE");
+    // 3 occurrences: appointments, AM Direct appointments, offers
     const distinctCount = (source.match(/COUNT\(DISTINCT COALESCE/g) || []).length;
-    expect(distinctCount).toBe(2);
+    expect(distinctCount).toBe(3);
   });
 
   it("does NOT use COUNT(DISTINCT) for calls or conversations", async () => {
@@ -548,5 +549,192 @@ describe("KPI Dedup — source code verification", () => {
     
     expect(source).toContain("`call-${item.id}`");
     expect(source).toContain("CAST(${calls.id} AS CHAR)");
+  });
+});
+
+
+// ─── AM DIRECT DETECTION ────────────────────────────────
+
+describe("AM Direct detection — code structure", () => {
+  it("joins calls with teamMembers to detect AM role", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    // getKpiSummary should join with teamMembers for AM Direct count
+    expect(source).toContain("amDirectAptsResult");
+    expect(source).toContain('eq(teamMembers.teamRole, "acquisition_manager")');
+  });
+
+  it("returns amDirectApts in the KPI summary response", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    expect(source).toContain("amDirectApts,");
+    // Should be in the return statement
+    const returnSection = source.split("// Use auto-counts as the primary source")[1];
+    expect(returnSection).toBeTruthy();
+    expect(returnSection).toContain("amDirectApts");
+  });
+
+  it("detects AM Direct in ledger items by checking teamMemberRole", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    // Ledger items should include detectionType field
+    expect(source).toContain('detectionType: "auto" | "am_direct" | "webhook"');
+    // Should check if team member is acquisition_manager for AM Direct
+    expect(source).toContain('isAmDirect');
+    expect(source).toContain('member?.teamRole === "acquisition_manager"');
+  });
+
+  it("only marks appointment_set calls as AM Direct, not offers", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    // AM Direct detection should only apply to appointment_set
+    expect(source).toContain('r.callOutcome === "appointment_set"');
+    // The isAmDirect logic should combine role check AND outcome check
+    const amDirectLogic = source.split("isAmDirect")[1]?.split(";")[0];
+    expect(amDirectLogic).toContain("acquisition_manager");
+    expect(amDirectLogic).toContain("appointment_set");
+  });
+});
+
+// ─── CASCADING FALLBACK DETECTION ───────────────────────
+
+describe("Cascading fallback — GHL stage change detection", () => {
+  it("queries propertyStageHistory for webhook-sourced stage changes", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    // Should import propertyStageHistory and dispoProperties
+    expect(source).toContain("propertyStageHistory");
+    expect(source).toContain("dispoProperties");
+    
+    // Should query for webhook source
+    expect(source).toContain('eq(propertyStageHistory.source, "webhook")');
+  });
+
+  it("avoids double-counting by checking against call-based contact IDs", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    // Should collect contact IDs from calls first
+    expect(source).toContain("aptCallContactIds");
+    expect(source).toContain("offerCallContactIds");
+    
+    // Should skip webhook items that already have a matching call
+    expect(source).toContain("!aptCallContactIds.has(prop.ghlContactId)");
+    expect(source).toContain("!offerCallContactIds.has(prop.ghlContactId)");
+  });
+
+  it("adds webhook counts to the KPI summary totals", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    // Appointments should include webhookApts
+    expect(source).toContain("autoApts + webhookApts");
+    // Offers should include webhookOffers
+    expect(source).toContain("autoOffers + webhookOffers");
+    
+    // Should return webhook counts in the response
+    expect(source).toContain("webhookApts,");
+    expect(source).toContain("webhookOffers,");
+  });
+
+  it("queries for apt_set and offer_made stage changes separately", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    expect(source).toContain('eq(propertyStageHistory.toStatus, "apt_set")');
+    expect(source).toContain('eq(propertyStageHistory.toStatus, "offer_made")');
+  });
+
+  it("adds webhook items to the ledger with detectionType webhook", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    // Ledger should include webhook items
+    expect(source).toContain("webhookItems");
+    expect(source).toContain('detectionType: "webhook"');
+    // Should show "GHL Stage Change" as the team member name
+    expect(source).toContain('"GHL Stage Change"');
+  });
+
+  it("handles cascading fallback errors gracefully (non-fatal)", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    // Should catch errors and log them without crashing
+    expect(source).toContain("Cascading fallback query failed (non-fatal)");
+    expect(source).toContain("Webhook fallback ledger query failed (non-fatal)");
+  });
+});
+
+// ─── POOL IS CLOSED FIX ─────────────────────────────────
+
+describe("Pool is closed error handling", () => {
+  it("detects Pool is closed as a transient error in OpportunityDetection", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/opportunityDetection.ts", "utf-8");
+    
+    // Should include Pool is closed in transient error detection
+    expect(source).toContain("Pool is closed");
+    // Should reset connection on Pool is closed
+    expect(source).toContain("resetDbConnection");
+  });
+
+  it("retries after resetting connection on Pool is closed", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/opportunityDetection.ts", "utf-8");
+    
+    // After detecting transient error, should reset and retry
+    // Use the second occurrence of isTransient (the if block, not the const declaration)
+    const parts = source.split("isTransient");
+    expect(parts.length).toBeGreaterThan(2); // const isTransient + if (isTransient)
+    const ifBlock = parts[2]; // after "if (isTransient)"
+    expect(ifBlock).toBeTruthy();
+    expect(ifBlock).toContain("resetDbConnection");
+    expect(ifBlock).toContain("getDb");
+    expect(ifBlock).toContain("scanTenant");
+  });
+});
+
+// ─── TRUST LEDGER UI BADGES ─────────────────────────────
+
+describe("Trust Ledger UI — detection type badges", () => {
+  it("renders AM Direct badge in amber for AM appointments", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./client/src/pages/TaskCenter.tsx", "utf-8");
+    
+    expect(source).toContain("AM Direct");
+    expect(source).toContain("bg-amber-500/20");
+    expect(source).toContain("text-amber-400");
+  });
+
+  it("renders GHL Stage badge in purple for webhook-detected items", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./client/src/pages/TaskCenter.tsx", "utf-8");
+    
+    expect(source).toContain("GHL Stage");
+    expect(source).toContain("bg-purple-500/20");
+    expect(source).toContain("text-purple-400");
+  });
+
+  it("shows AM Direct count subtitle on the Apts KPI box", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./client/src/pages/TaskCenter.tsx", "utf-8");
+    
+    expect(source).toContain("amDirectApts");
+    expect(source).toContain("AM Direct");
+  });
+
+  it("shows webhook count subtitle on Apts and Offers KPI boxes", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./client/src/pages/TaskCenter.tsx", "utf-8");
+    
+    expect(source).toContain("webhookApts");
+    expect(source).toContain("webhookOffers");
+    expect(source).toContain("via GHL");
   });
 });

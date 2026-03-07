@@ -4542,7 +4542,9 @@ export async function runOpportunityDetection(tenantId?: number): Promise<{ dete
       } catch (tenantError: any) {
         const isTransient = tenantError?.cause?.code === 'ECONNRESET'
           || tenantError?.message?.includes('ECONNRESET')
-          || tenantError?.message?.includes('Connection lost');
+          || tenantError?.message?.includes('Connection lost')
+          || tenantError?.message?.includes('Pool is closed')
+          || tenantError?.cause?.message?.includes('Pool is closed');
         if (isTransient) {
           console.warn(`[OpportunityDetection] Transient DB error for tenant ${tenant.id}, resetting connection and retrying...`);
           resetDbConnection();

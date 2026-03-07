@@ -339,6 +339,23 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
                 <span className="text-xl font-bold tabular-nums" style={{ color: c.text }}>{item.value}</span>
                 <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>/ {item.target}</span>
               </div>
+              {/* AM Direct subtitle for appointments */}
+              {item.type === "appointment" && (kpi as any).amDirectApts > 0 && (
+                <div className="text-[9px] mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
+                  <span className="text-amber-400">{(kpi as any).amDirectApts} AM Direct</span>
+                </div>
+              )}
+              {/* Webhook fallback subtitle */}
+              {item.type === "appointment" && (kpi as any).webhookApts > 0 && (
+                <div className="text-[9px]" style={{ color: "var(--g-text-tertiary)" }}>
+                  <span className="text-purple-400">{(kpi as any).webhookApts} via GHL</span>
+                </div>
+              )}
+              {item.type === "offer" && (kpi as any).webhookOffers > 0 && (
+                <div className="text-[9px] mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
+                  <span className="text-purple-400">{(kpi as any).webhookOffers} via GHL</span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -406,6 +423,8 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
                         </span>
                         {item.detectionType === "am_direct" ? (
                           <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-amber-500/20 text-amber-400 border-amber-500/30">AM Direct</Badge>
+                        ) : item.detectionType === "webhook" ? (
+                          <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-purple-500/20 text-purple-400 border-purple-500/30">GHL Stage</Badge>
                         ) : item.grade ? (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{item.grade}</Badge>
                         ) : (

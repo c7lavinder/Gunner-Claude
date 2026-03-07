@@ -4590,11 +4590,11 @@
 - [x] Admin-only access restriction
 
 ### Day Hub KPI Box Upgrades (deferred to next iteration)
-- [ ] Click-to-view detail: searchable property list with source, team member, time, detection type
-- [ ] Add/delete icons for manual adjustment
-- [ ] Detection type labels: Auto / Manual / AM Direct
-- [ ] Cascading fallback: AI call grading to GHL stage change to manual entry
-- [ ] AM Direct rule: spontaneous offer counts as apt but no LM credit
+- [x] Click-to-view detail: searchable property list with source, team member, time, detection type — already implemented
+- [x] Add/delete icons for manual adjustment — already implemented
+- [x] Detection type labels: Auto / Manual / AM Direct / GHL Stage — implemented with amber/purple badges
+- [x] Cascading fallback: AI call grading → GHL stage change → manual entry — webhook fallback queries propertyStageHistory
+- [x] AM Direct rule: spontaneous offer counts as apt but no LM credit — joins teamMembers to detect AM role
 - [x] Dedup: 1 offer/apt per property per day — COUNT(DISTINCT ghlContactId) + ledger dedup
 
 ### Deal Progress Bar Fix
