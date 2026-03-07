@@ -576,15 +576,24 @@ function mapStageToPropertyStatus(stageName: string): string | null {
 
 /**
  * Determine which milestone flags to set based on the new status.
+ * IMPORTANT: follow_up and dead statuses do NOT auto-fill all previous stages.
  */
 function getMilestoneFlags(status: string): Record<string, boolean> {
   const flags: Record<string, boolean> = {};
-  const statusOrder = ["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up"];
-  const idx = statusOrder.indexOf(status);
-  if (idx >= 1) flags.aptEverSet = true; // apt_set or beyond implies apt was set
-  if (idx >= 2) flags.offerEverMade = true;
-  if (idx >= 3) flags.everUnderContract = true;
-  if (idx >= 7) flags.everClosed = true;
+  const progressionStatuses: Record<string, number> = {
+    "apt_set": 1,
+    "offer_made": 2,
+    "under_contract": 3,
+    "marketing": 3,
+    "buyer_negotiating": 3,
+    "closing": 3,
+    "closed": 4,
+  };
+  const level = progressionStatuses[status] || 0;
+  if (level >= 1) flags.aptEverSet = true;
+  if (level >= 2) flags.offerEverMade = true;
+  if (level >= 3) flags.everUnderContract = true;
+  if (level >= 4) flags.everClosed = true;
   return flags;
 }
 
@@ -680,14 +689,21 @@ async function syncPropertyFromOpportunity(
       };
 
       // Only set milestone flags to true, never back to false
-      if (milestoneFlags.aptEverSet) updateData.aptEverSet = true;
-      if (milestoneFlags.offerEverMade) updateData.offerEverMade = true;
+      if (milestoneFlags.aptEverSet) {
+        updateData.aptEverSet = true;
+        if (!existingProp.aptSetAt) updateData.aptSetAt = new Date();
+      }
+      if (milestoneFlags.offerEverMade) {
+        updateData.offerEverMade = true;
+        if (!existingProp.offerMadeAt) updateData.offerMadeAt = new Date();
+      }
       if (milestoneFlags.everUnderContract) {
         updateData.everUnderContract = true;
         if (!existingProp.underContractAt) updateData.underContractAt = new Date();
       }
       if (milestoneFlags.everClosed) {
         updateData.everClosed = true;
+        if (!existingProp.closedAt) updateData.closedAt = new Date();
         if (!existingProp.soldAt) updateData.soldAt = new Date();
         if (!existingProp.actualCloseDate) updateData.actualCloseDate = new Date();
       }
@@ -775,6 +791,7 @@ async function syncPropertyFromOpportunity(
         }
       }
 
+      const now = new Date();
       const [inserted] = await db.insert(dispoProperties).values({
         tenantId: event.tenantId,
         address: address || "Address Pending",
@@ -788,11 +805,16 @@ async function syncPropertyFromOpportunity(
         ghlPipelineStageId: event.stageId || null,
         sellerName: sellerName || null,
         sellerPhone: sellerPhone || null,
-        stageChangedAt: new Date(),
+        stageChangedAt: now,
         aptEverSet: milestoneFlags.aptEverSet || false,
         offerEverMade: milestoneFlags.offerEverMade || false,
         everUnderContract: milestoneFlags.everUnderContract || false,
         everClosed: milestoneFlags.everClosed || false,
+        // Stage timestamps
+        ...(milestoneFlags.aptEverSet ? { aptSetAt: now } : {}),
+        ...(milestoneFlags.offerEverMade ? { offerMadeAt: now } : {}),
+        ...(milestoneFlags.everUnderContract ? { underContractAt: now } : {}),
+        ...(milestoneFlags.everClosed ? { closedAt: now } : {}),
       });
 
       // Get the inserted property ID

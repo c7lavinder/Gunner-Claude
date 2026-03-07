@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import {
   LayoutDashboard, LogOut, Users, Phone, BarChart3, BookOpen,
   Building2, Shield, AlertTriangle, Settings, Sun, Moon, Menu, X,
-  Zap, ClipboardList, Warehouse, Trophy,
+  Zap, ClipboardList, Warehouse, Trophy, Target,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, Redirect, useSearch } from "wouter";
@@ -58,6 +58,7 @@ const getMenuItems = (
 
   if (isAdmin || isSuperAdmin) {
     items.push({ icon: Warehouse, label: "Inventory", path: "/inventory" });
+    items.push({ icon: Target, label: "KPIs", path: "/kpis" });
   }
 
   items.push({ icon: BookOpen, label: "Training", path: "/training" });

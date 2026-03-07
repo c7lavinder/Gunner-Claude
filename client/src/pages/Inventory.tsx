@@ -643,7 +643,8 @@ function AddBuyerDialog({
 // ─── OVERVIEW TAB ───
 function OverviewTab({ property }: { property: any }) {
   const statusCfg = STATUS_CONFIG[property.status as PropertyStatus] || STATUS_CONFIG.new;
-  const spread = property.askingPrice && property.contractPrice ? property.askingPrice - property.contractPrice : null;
+  const spread = property.acceptedOffer && property.contractPrice ? property.acceptedOffer - property.contractPrice : (property.askingPrice && property.contractPrice ? property.askingPrice - property.contractPrice : null);
+  const spreadLabel = property.acceptedOffer ? "Spread" : "Est. Spread";
   const dom = daysOnMarket(property.createdAt);
 
   return (
@@ -654,7 +655,7 @@ function OverviewTab({ property }: { property: any }) {
           { label: "Contract", value: formatCurrency(property.contractPrice), color: "var(--g-text-primary)" },
           { label: "Asking", value: formatCurrency(property.askingPrice), color: "var(--g-accent)" },
           { label: "ARV", value: formatCurrency(property.arv), color: "#3b82f6" },
-          { label: "Spread", value: spread ? formatCurrency(spread) : "—", color: spread && spread > 0 ? "#22c55e" : "var(--g-text-tertiary)" },
+          { label: spreadLabel, value: spread ? formatCurrency(spread) : "—", color: spread && spread > 0 ? "#22c55e" : "var(--g-text-tertiary)" },
           { label: "Est. Repairs", value: formatCurrency(property.estRepairs), color: "#f97316" },
           { label: "Days on Market", value: `${dom}`, color: heatColor(dom) },
         ].map((item) => (
@@ -727,18 +728,23 @@ function OverviewTab({ property }: { property: any }) {
       {/* Milestone Progress */}
       <div className="rounded-lg p-3" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
         <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--g-text-tertiary)" }}>Deal Progress</div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1">
           {[
-            { label: "Apt Set", flag: property.aptEverSet, color: "#22c55e" },
-            { label: "Offer Made", flag: property.offerEverMade, color: "#f59e0b" },
-            { label: "Under Contract", flag: property.everUnderContract, color: "#3b82f6" },
-            { label: "Closed", flag: property.everClosed, color: "#10b981" },
-          ].map((m) => (
-            <div key={m.label} className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-full" style={{ background: m.flag ? m.color : "var(--g-border-subtle)" }} />
-              <span className="text-xs" style={{ color: m.flag ? m.color : "var(--g-text-tertiary)" }}>{m.label}</span>
-            </div>
-          ))}
+            { label: "Contacted", ts: property.contactedAt, color: "#8b5cf6" },
+            { label: "Apt Set", ts: property.aptSetAt || (property.aptEverSet ? property.updatedAt : null), color: "#22c55e" },
+            { label: "Offer Made", ts: property.offerMadeAt || (property.offerEverMade ? property.updatedAt : null), color: "#f59e0b" },
+            { label: "Under Contract", ts: property.underContractAt || (property.everUnderContract ? property.updatedAt : null), color: "#3b82f6" },
+            { label: "Closed", ts: property.closedAt || (property.everClosed ? property.updatedAt : null), color: "#10b981" },
+          ].map((m, idx, arr) => {
+            const reached = !!m.ts;
+            return (
+              <div key={m.label} className="flex items-center gap-1">
+                {idx > 0 && <div className="w-4 h-px" style={{ background: reached ? m.color : "var(--g-border-subtle)" }} />}
+                <div className="h-3 w-3 rounded-full shrink-0" style={{ background: reached ? m.color : "var(--g-border-subtle)" }} />
+                <span className="text-[10px] whitespace-nowrap" style={{ color: reached ? m.color : "var(--g-text-tertiary)" }}>{m.label}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -1588,10 +1594,10 @@ function PropertyCard({
             <div className="text-sm font-bold" style={{ color: "var(--g-text-primary)" }}>{formatCurrency(property.contractPrice)}</div>
           </div>
         )}
-        {property.askingPrice && property.contractPrice && (
+        {(property.acceptedOffer || property.askingPrice) && property.contractPrice && (
           <div className="ml-auto">
-            <div className="text-[10px] uppercase" style={{ color: "var(--g-text-tertiary)" }}>Spread</div>
-            <div className="text-sm font-bold" style={{ color: "#22c55e" }}>{formatCurrency(property.askingPrice - property.contractPrice)}</div>
+            <div className="text-[10px] uppercase" style={{ color: "var(--g-text-tertiary)" }}>{property.acceptedOffer ? "Spread" : "Est. Spread"}</div>
+            <div className="text-sm font-bold" style={{ color: "#22c55e" }}>{formatCurrency((property.acceptedOffer || property.askingPrice) - property.contractPrice)}</div>
           </div>
         )}
       </div>

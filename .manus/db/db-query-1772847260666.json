@@ -1,0 +1,46 @@
+{
+  "query": "SELECT status, COUNT(*) as cnt FROM dispo_properties WHERE tenantId = 1 GROUP BY status ORDER BY cnt DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT status, COUNT(*) as cnt FROM dispo_properties WHERE tenantId = 1 GROUP BY status ORDER BY cnt DESC;",
+  "rows": [
+    {
+      "status": "follow_up",
+      "cnt": "50"
+    },
+    {
+      "status": "lead",
+      "cnt": "36"
+    },
+    {
+      "status": "dead",
+      "cnt": "4"
+    },
+    {
+      "status": "apt_set",
+      "cnt": "1"
+    },
+    {
+      "status": "buyer_negotiating",
+      "cnt": "1"
+    },
+    {
+      "status": "closed",
+      "cnt": "1"
+    },
+    {
+      "status": "closing",
+      "cnt": "1"
+    },
+    {
+      "status": "marketing",
+      "cnt": "1"
+    },
+    {
+      "status": "under_contract",
+      "cnt": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\tcnt\nfollow_up\t50\nlead\t36\ndead\t4\napt_set\t1\nbuyer_negotiating\t1\nclosed\t1\nclosing\t1\nmarketing\t1\nunder_contract\t1\n",
+  "stderr": "",
+  "execution_time_ms": 72
+}

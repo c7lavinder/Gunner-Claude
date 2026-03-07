@@ -979,8 +979,10 @@ export type InsertLeadGenStaff = typeof leadGenStaff.$inferInsert;
  */
 export const kpiMarkets = mysqlTable("kpi_markets", {
   id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
+  zipCodes: json("zipCodes").$type<string[]>().default([]),
+  isGlobal: boolean("isGlobal").default(false).notNull(),
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -994,7 +996,7 @@ export type InsertKpiMarket = typeof kpiMarkets.$inferInsert;
  */
 export const kpiChannels = mysqlTable("kpi_channels", {
   id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   code: varchar("code", { length: 50 }).notNull(), // short code like 'cold_calls', 'sms'
   isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
@@ -1004,6 +1006,56 @@ export const kpiChannels = mysqlTable("kpi_channels", {
 
 export type KpiChannel = typeof kpiChannels.$inferSelect;
 export type InsertKpiChannel = typeof kpiChannels.$inferInsert;
+
+/**
+ * KPI Sources - configurable lead sources for campaign tracking (replaces channels for KPI page)
+ */
+export const kpiSources = mysqlTable("kpi_sources", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  type: mysqlEnum("kpi_source_type", ["outbound", "inbound"]).notNull(),
+  tracksVolume: boolean("tracksVolume").default(false).notNull(),
+  volumeLabel: varchar("volumeLabel", { length: 100 }), // e.g. "Mailers Sent", "Calls Made"
+  ghlSourceMapping: varchar("ghlSourceMapping", { length: 255 }), // maps to opportunity.source value
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type KpiSource = typeof kpiSources.$inferSelect;
+export type InsertKpiSource = typeof kpiSources.$inferInsert;
+
+/**
+ * KPI Spend - monthly marketing spend per source × market
+ */
+export const kpiSpend = mysqlTable("kpi_spend", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  sourceId: int("sourceId").references(() => kpiSources.id).notNull(),
+  marketId: int("marketId").references(() => kpiMarkets.id).notNull(),
+  month: varchar("month", { length: 7 }).notNull(), // YYYY-MM
+  amount: int("amount").default(0).notNull(), // in cents
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type KpiSpend = typeof kpiSpend.$inferSelect;
+export type InsertKpiSpend = typeof kpiSpend.$inferInsert;
+
+/**
+ * KPI Volume - monthly outbound volume per source × market
+ */
+export const kpiVolume = mysqlTable("kpi_volume", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  sourceId: int("sourceId").references(() => kpiSources.id).notNull(),
+  marketId: int("marketId").references(() => kpiMarkets.id).notNull(),
+  month: varchar("month", { length: 7 }).notNull(), // YYYY-MM
+  count: int("count").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type KpiVolume = typeof kpiVolume.$inferSelect;
+export type InsertKpiVolume = typeof kpiVolume.$inferInsert;
 
 
 // ============ SUBSCRIPTION PRICING ============
@@ -1476,9 +1528,13 @@ export const dailyKpiEntries = mysqlTable("daily_kpi_entries", {
   contactId: varchar("contactId", { length: 255 }),
   contactName: varchar("contactName", { length: 255 }),
   propertyAddress: text("propertyAddress"),
+  propertyId: int("propertyId"), // FK to dispo_properties
+  teamMemberId: int("teamMemberId"), // FK to team_members
   notes: text("notes"),
   ghlReferenceId: varchar("ghlReferenceId", { length: 255 }),
   source: mysqlEnum("kpi_source", ["auto", "manual"]).default("manual").notNull(),
+  detectionType: mysqlEnum("detectionType", ["auto", "manual", "am_direct"]).default("manual"),
+  sourceCallId: int("sourceCallId"), // the call that triggered this entry
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type DailyKpiEntry = typeof dailyKpiEntries.$inferSelect;
@@ -1528,6 +1584,7 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   assignedLmUserId: int("assignedLmUserId").references(() => users.id), // Lead Manager who sourced it
   // Offer tracking (acquisition side)
   ourOfferAmount: int("ourOfferAmount"), // in cents — what AM offered the seller
+  acceptedOffer: int("acceptedOffer"), // in cents — final accepted offer amount (for spread calc)
   offerDate: timestamp("offerDate"),
   counterOfferAmount: int("counterOfferAmount"), // in cents — seller's counter
   contractDate: timestamp("contractDate"),
@@ -1550,6 +1607,15 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }), // GHL opportunity ID for webhook linking
   ghlPipelineId: varchar("ghlPipelineId", { length: 255 }),
   ghlPipelineStageId: varchar("ghlPipelineStageId", { length: 255 }),
+  // KPI Market & Source references
+  marketId: int("marketId"), // FK to kpi_markets
+  sourceId: int("sourceId"), // FK to kpi_sources
+  // Stage timestamps (for KPI period counting)
+  contactedAt: timestamp("contactedAt"), // first time property left lead stages
+  aptSetAt: timestamp("aptSetAt"), // first time reached apt stage
+  offerMadeAt: timestamp("offerMadeAt"), // first time offer was made
+  underContractAt: timestamp("underContractAt"),
+  closedAt: timestamp("closedAt"), // Purchased/SOLD
   // Market & Extra Details
   market: varchar("market", { length: 100 }), // e.g. "Nashville", "Chattanooga"
   lotSize: varchar("lotSize", { length: 50 }), // e.g. "0.25 acres"
@@ -1560,7 +1626,6 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   projectType: mysqlEnum("projectType", ["wholesale", "novation", "creative_finance", "fix_and_flip", "buy_and_hold", "other"]),
   // Timestamps
   marketedAt: timestamp("marketedAt"), // When first blast was sent
-  underContractAt: timestamp("underContractAt"),
   soldAt: timestamp("soldAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -1756,3 +1821,4 @@ export const syncLog = mysqlTable("sync_log", {
 });
 export type SyncLog = typeof syncLog.$inferSelect;
 export type InsertSyncLog = typeof syncLog.$inferInsert;
+

@@ -477,6 +477,13 @@
       "when": 1772837680944,
       "tag": "0067_yummy_iron_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "5",
+      "when": 1772847016917,
+      "tag": "0068_fearless_zodiak",
+      "breakpoints": true
     }
   ]
 }

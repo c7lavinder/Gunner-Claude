@@ -4548,3 +4548,60 @@
 - [x] Add clickable column header sorting for all inventory table columns
 - [x] Add dropdown filter for Project Type (Wholesale, Fix & Flip, etc.)
 - [x] Add dropdown filter for Market (dynamic from existing property data)
+
+## KPI System Build (2026-03-06)
+
+### DB Schema
+- [x] Create kpi_markets table (id, tenantId, name, zipCodes JSON, isGlobal, createdAt)
+- [x] Create kpi_sources table (id, tenantId, name, type outbound/inbound, tracksVolume, volumeLabel, createdAt)
+- [x] Create kpi_spend table (id, tenantId, sourceId, marketId, month, amount, createdAt)
+- [x] Create kpi_volume table (id, tenantId, sourceId, marketId, month, count, createdAt)
+- [x] Create kpi_daily_entries table (id, tenantId, propertyId, teamMemberId, date, kpiType, detectionType, sourceCallId, createdAt)
+- [x] Add acceptedOffer field to dispo_properties
+- [x] Add marketId FK to dispo_properties
+- [x] Add sourceId FK to dispo_properties
+- [x] Add stage timestamps to dispo_properties (contactedAt, aptSetAt, offerMadeAt, underContractAt, closedAt)
+
+### Server-Side
+- [x] KPI router: CRUD for markets (admin-only)
+- [x] KPI router: CRUD for sources (admin-only)
+- [x] KPI router: spend/volume entry (admin-only)
+- [x] KPI router: funnel stats query (counts by stage, filtered by period/market/source)
+- [x] KPI router: detail table data (by source, by market, source x market pivot)
+- [x] KPI router: data quality check (count properties missing source/market)
+- [x] Market auto-tagging: parse address zip during import
+- [x] Source auto-assignment: pull opportunity.source from GHL during import
+- [x] Spread formula fix: change to Accepted Offer - Contract Price
+
+### KPI Settings Page (admin-only)
+- [x] Markets management UI (add/edit/remove, zip codes, permanent Global market)
+- [x] Sources management UI (add/edit/remove, type, volume tracking, volume label)
+- [x] Spend entry table (rows=sources, columns=markets, cells=dollar amounts, per month)
+- [x] Volume entry table (same layout, outbound sources only)
+
+### KPI Page (admin-only)
+- [x] Filter bar: Period, Market, Source dropdowns
+- [x] Scoreboard: 7 cards (Spend, Leads, Apts, Offers, Contracts, Closed, Revenue) with trends
+- [x] Funnel visual: horizontal funnel with conversion percentages, click for breakdown
+- [x] Detail table: By Source view with ROI color coding
+- [x] Detail table: By Market view
+- [x] Detail table: Source x Market pivot view
+- [x] Data quality warning banner
+- [x] Admin-only access restriction
+
+### Day Hub KPI Box Upgrades (deferred to next iteration)
+- [ ] Click-to-view detail: searchable property list with source, team member, time, detection type
+- [ ] Add/delete icons for manual adjustment
+- [ ] Detection type labels: Auto / Manual / AM Direct
+- [ ] Cascading fallback: AI call grading to GHL stage change to manual entry
+- [ ] AM Direct rule: spontaneous offer counts as apt but no LM credit
+- [ ] Dedup: 1 offer/apt per property per day
+
+### Deal Progress Bar Fix
+- [x] Add Contacted as first step in progress bar
+- [x] Fix bug: Follow Up properties should NOT auto-fill all stages
+- [x] Store stage timestamps so only actual stages are marked
+
+### Other Fixes
+- [ ] Add Accepted Offer field to property edit form
+- [x] Fix spread display to use Accepted Offer - Contract

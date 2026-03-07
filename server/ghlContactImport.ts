@@ -169,16 +169,109 @@ function isCreationStage(stageName: string): boolean {
 
 /**
  * Determine which milestone flags to set based on the new status.
+ * IMPORTANT: follow_up and dead statuses do NOT auto-fill all previous stages.
+ * Only mark stages that the property has actually passed through.
  */
-function getMilestoneFlags(status: string): Record<string, boolean> {
+export function getMilestoneFlags(status: string): Record<string, boolean> {
   const flags: Record<string, boolean> = {};
-  const statusOrder = ["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up"];
-  const idx = statusOrder.indexOf(status);
-  if (idx >= 1) flags.aptEverSet = true;
-  if (idx >= 2) flags.offerEverMade = true;
-  if (idx >= 3) flags.everUnderContract = true;
-  if (idx >= 7) flags.everClosed = true;
+  // follow_up, dead, and lead stages should NOT auto-fill milestones
+  // Only the actual pipeline progression stages auto-fill
+  const progressionStatuses: Record<string, number> = {
+    "apt_set": 1,
+    "offer_made": 2,
+    "under_contract": 3,
+    "marketing": 3, // implies under contract
+    "buyer_negotiating": 3,
+    "closing": 3,
+    "closed": 4,
+  };
+  const level = progressionStatuses[status] || 0;
+  if (level >= 1) flags.aptEverSet = true;
+  if (level >= 2) flags.offerEverMade = true;
+  if (level >= 3) flags.everUnderContract = true;
+  if (level >= 4) flags.everClosed = true;
   return flags;
+}
+
+/**
+ * Get stage timestamps based on the status.
+ * Only sets timestamps for stages the property has actually reached.
+ */
+export function getStageTimestamps(status: string): Record<string, Date> {
+  const now = new Date();
+  const timestamps: Record<string, Date> = {};
+  const progressionStatuses: Record<string, number> = {
+    "apt_set": 1,
+    "offer_made": 2,
+    "under_contract": 3,
+    "marketing": 3,
+    "buyer_negotiating": 3,
+    "closing": 3,
+    "closed": 4,
+  };
+  const level = progressionStatuses[status] || 0;
+  if (level >= 1) timestamps.aptSetAt = now;
+  if (level >= 2) timestamps.offerMadeAt = now;
+  if (level >= 3) timestamps.underContractAt = now;
+  if (level >= 4) timestamps.closedAt = now;
+  return timestamps;
+}
+
+/**
+ * Look up the KPI sourceId for a normalized source name.
+ */
+async function resolveSourceId(db: any, tenantId: number, normalizedSource: string): Promise<number | null> {
+  if (!normalizedSource || normalizedSource === "Unknown") return null;
+  try {
+    const { kpiSources } = await import("../drizzle/schema");
+    const [source] = await db.select({ id: kpiSources.id })
+      .from(kpiSources)
+      .where(and(
+        eq(kpiSources.tenantId, tenantId),
+        eq(kpiSources.isActive, true),
+      ));
+    // Try exact name match first, then ghlSourceMapping
+    const allSources = await db.select()
+      .from(kpiSources)
+      .where(and(
+        eq(kpiSources.tenantId, tenantId),
+        eq(kpiSources.isActive, true),
+      ));
+    const lowerSource = normalizedSource.toLowerCase();
+    for (const s of allSources) {
+      if (s.name.toLowerCase() === lowerSource) return s.id;
+      if (s.ghlSourceMapping && s.ghlSourceMapping.toLowerCase() === lowerSource) return s.id;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Look up the KPI marketId for a zip code.
+ */
+async function resolveMarketId(db: any, tenantId: number, zip: string): Promise<number | null> {
+  if (!zip) return null;
+  try {
+    const { kpiMarkets } = await import("../drizzle/schema");
+    const allMarkets = await db.select()
+      .from(kpiMarkets)
+      .where(and(
+        eq(kpiMarkets.tenantId, tenantId),
+        eq(kpiMarkets.isActive, "true"),
+      ));
+    for (const m of allMarkets) {
+      if (m.isGlobal) continue;
+      const zips = Array.isArray(m.zipCodes) ? m.zipCodes : [];
+      if (zips.includes(zip)) return m.id;
+    }
+    // Fall back to Global market
+    const globalMarket = allMarkets.find((m: any) => m.isGlobal);
+    return globalMarket?.id || null;
+  } catch {
+    return null;
+  }
 }
 
 // ============ BULK IMPORT ============
@@ -537,28 +630,40 @@ export async function runBulkImport(
           // Source from opportunity (not tags)
           const finalSource = opp.source ? normalizeSource(opp.source) : null;
 
-          // Milestone flags
+          // Milestone flags + stage timestamps
           const milestoneFlags = getMilestoneFlags(mappedStatus);
+          const stageTimestamps = getStageTimestamps(mappedStatus);
+
+          // Resolve KPI sourceId and marketId
+          const kpiSourceId = finalSource ? await resolveSourceId(db, tenantId, finalSource) : null;
 
           // Check if property already exists by ghlOpportunityId
           const existingPropId = existingOppIds.get(opp.id);
 
           if (existingPropId) {
             // UPDATE existing property (matched by opportunity ID)
+            const updateData: Record<string, any> = {
+              status: mappedStatus,
+              ghlContactId: opp.contactId,
+              ghlPipelineId: opp.pipelineId,
+              ghlPipelineStageId: opp.pipelineStageId,
+              leadSource: finalSource || undefined,
+              opportunitySource: opp.source || undefined,
+              stageChangedAt: new Date(),
+              ...(milestoneFlags.aptEverSet ? { aptEverSet: true } : {}),
+              ...(milestoneFlags.offerEverMade ? { offerEverMade: true } : {}),
+              ...(milestoneFlags.everUnderContract ? { everUnderContract: true } : {}),
+              ...(milestoneFlags.everClosed ? { everClosed: true } : {}),
+              // Stage timestamps (only set if not already set — don't overwrite earlier timestamps)
+              ...(stageTimestamps.aptSetAt ? { aptSetAt: sql`COALESCE(${dispoProperties.aptSetAt}, ${stageTimestamps.aptSetAt})` } : {}),
+              ...(stageTimestamps.offerMadeAt ? { offerMadeAt: sql`COALESCE(${dispoProperties.offerMadeAt}, ${stageTimestamps.offerMadeAt})` } : {}),
+              ...(stageTimestamps.underContractAt ? { underContractAt: sql`COALESCE(${dispoProperties.underContractAt}, ${stageTimestamps.underContractAt})` } : {}),
+              ...(stageTimestamps.closedAt ? { closedAt: sql`COALESCE(${dispoProperties.closedAt}, ${stageTimestamps.closedAt})` } : {}),
+            };
+            // Only set sourceId if not already set
+            if (kpiSourceId) updateData.sourceId = sql`COALESCE(${dispoProperties.sourceId}, ${kpiSourceId})`;
             await db.update(dispoProperties)
-              .set({
-                status: mappedStatus,
-                ghlContactId: opp.contactId,
-                ghlPipelineId: opp.pipelineId,
-                ghlPipelineStageId: opp.pipelineStageId,
-                leadSource: finalSource || undefined,
-                opportunitySource: opp.source || undefined,
-                stageChangedAt: new Date(),
-                ...(milestoneFlags.aptEverSet ? { aptEverSet: true } : {}),
-                ...(milestoneFlags.offerEverMade ? { offerEverMade: true } : {}),
-                ...(milestoneFlags.everUnderContract ? { everUnderContract: true } : {}),
-                ...(milestoneFlags.everClosed ? { everClosed: true } : {}),
-              })
+              .set(updateData)
               .where(eq(dispoProperties.id, existingPropId));
             progress.updated++;
           } else if (isCreationStage(opp.stageName) && !opp.isDispo) {
@@ -589,6 +694,9 @@ export async function runBulkImport(
               continue;
             }
 
+            // Resolve marketId from zip code
+            const kpiMarketId = zip ? await resolveMarketId(db, tenantId, zip) : null;
+
             // Insert new property
             const [result] = await db.insert(dispoProperties).values({
               tenantId,
@@ -610,6 +718,14 @@ export async function runBulkImport(
               offerEverMade: milestoneFlags.offerEverMade || false,
               everUnderContract: milestoneFlags.everUnderContract || false,
               everClosed: milestoneFlags.everClosed || false,
+              // KPI fields
+              sourceId: kpiSourceId || null,
+              marketId: kpiMarketId || null,
+              // Stage timestamps
+              ...(stageTimestamps.aptSetAt ? { aptSetAt: stageTimestamps.aptSetAt } : {}),
+              ...(stageTimestamps.offerMadeAt ? { offerMadeAt: stageTimestamps.offerMadeAt } : {}),
+              ...(stageTimestamps.underContractAt ? { underContractAt: stageTimestamps.underContractAt } : {}),
+              ...(stageTimestamps.closedAt ? { closedAt: stageTimestamps.closedAt } : {}),
             });
 
             // Track for duplicate detection within this batch

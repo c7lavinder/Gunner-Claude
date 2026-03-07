@@ -4187,6 +4187,262 @@ Create content that:
         await deleteKpiChannel(input.id);
         return { success: true };
       }),
+
+    // ============ KPI PAGE — SCOREBOARD & FUNNEL ============
+    getPageScoreboard: protectedProcedure
+      .input(z.object({
+        period: z.enum(["this_month", "last_month", "this_quarter", "ytd", "custom"]).default("this_month"),
+        marketId: z.number().nullable().optional(),
+        sourceId: z.number().nullable().optional(),
+        customStart: z.string().optional(),
+        customEnd: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiScoreboard } = await import("./kpiPage");
+        return getKpiScoreboard(
+          ctx.user.tenantId!,
+          input.period,
+          input.marketId,
+          input.sourceId,
+          input.customStart,
+          input.customEnd,
+        );
+      }),
+
+    getDetailBySource: protectedProcedure
+      .input(z.object({
+        period: z.enum(["this_month", "last_month", "this_quarter", "ytd", "custom"]).default("this_month"),
+        marketId: z.number().nullable().optional(),
+        customStart: z.string().optional(),
+        customEnd: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getDetailBySource } = await import("./kpiPage");
+        return getDetailBySource(ctx.user.tenantId!, input.period, input.marketId, input.customStart, input.customEnd);
+      }),
+
+    getDetailByMarket: protectedProcedure
+      .input(z.object({
+        period: z.enum(["this_month", "last_month", "this_quarter", "ytd", "custom"]).default("this_month"),
+        sourceId: z.number().nullable().optional(),
+        customStart: z.string().optional(),
+        customEnd: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getDetailByMarket } = await import("./kpiPage");
+        return getDetailByMarket(ctx.user.tenantId!, input.period, input.sourceId, input.customStart, input.customEnd);
+      }),
+
+    getSourceMarketPivot: protectedProcedure
+      .input(z.object({
+        period: z.enum(["this_month", "last_month", "this_quarter", "ytd", "custom"]).default("this_month"),
+        customStart: z.string().optional(),
+        customEnd: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getSourceMarketPivot } = await import("./kpiPage");
+        return getSourceMarketPivot(ctx.user.tenantId!, input.period, input.customStart, input.customEnd);
+      }),
+
+    getDataQuality: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getDataQuality } = await import("./kpiPage");
+        return getDataQuality(ctx.user.tenantId!);
+      }),
+
+    getFunnelPropertyList: protectedProcedure
+      .input(z.object({
+        stage: z.enum(["leads", "apts", "offers", "contracts", "closed"]),
+        period: z.enum(["this_month", "last_month", "this_quarter", "ytd", "custom"]).default("this_month"),
+        marketId: z.number().nullable().optional(),
+        sourceId: z.number().nullable().optional(),
+        customStart: z.string().optional(),
+        customEnd: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getFunnelPropertyList } = await import("./kpiPage");
+        return getFunnelPropertyList(
+          ctx.user.tenantId!,
+          input.stage,
+          input.period,
+          input.marketId,
+          input.sourceId,
+          input.customStart,
+          input.customEnd,
+        );
+      }),
+
+    // ============ KPI PAGE — SOURCES CRUD (v2) ============
+    getSources: protectedProcedure
+      .input(z.object({ activeOnly: z.boolean().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiSourcesList } = await import("./kpiPage");
+        return getKpiSourcesList(ctx.user.tenantId!, input?.activeOnly ?? true);
+      }),
+
+    createSource: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        type: z.enum(["outbound", "inbound"]),
+        tracksVolume: z.boolean().optional(),
+        volumeLabel: z.string().optional(),
+        ghlSourceMapping: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { createKpiSource } = await import("./kpiPage");
+        const id = await createKpiSource({ ...input, tenantId: ctx.user.tenantId! });
+        return { id };
+      }),
+
+    updateSource: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        type: z.enum(["outbound", "inbound"]).optional(),
+        tracksVolume: z.boolean().optional(),
+        volumeLabel: z.string().optional(),
+        ghlSourceMapping: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { updateKpiSource } = await import("./kpiPage");
+        const { id, ...data } = input;
+        await updateKpiSource(id, data);
+        return { success: true };
+      }),
+
+    deleteSource: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { deleteKpiSource } = await import("./kpiPage");
+        await deleteKpiSource(input.id);
+        return { success: true };
+      }),
+
+    // ============ KPI PAGE — MARKETS CRUD (v2 with zip codes) ============
+    getMarketsV2: protectedProcedure
+      .input(z.object({ activeOnly: z.boolean().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getKpiMarketsList } = await import("./kpiPage");
+        return getKpiMarketsList(ctx.user.tenantId!, input?.activeOnly ?? true);
+      }),
+
+    createMarketV2: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        zipCodes: z.array(z.string()).optional(),
+        isGlobal: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { createKpiMarketV2 } = await import("./kpiPage");
+        const id = await createKpiMarketV2({ ...input, tenantId: ctx.user.tenantId! });
+        return { id };
+      }),
+
+    updateMarketV2: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        zipCodes: z.array(z.string()).optional(),
+        isGlobal: z.boolean().optional(),
+        isActive: z.enum(["true", "false"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { updateKpiMarketV2 } = await import("./kpiPage");
+        const { id, ...data } = input;
+        await updateKpiMarketV2(id, data);
+        return { success: true };
+      }),
+
+    // ============ KPI PAGE — SPEND / VOLUME ============
+    upsertSpend: protectedProcedure
+      .input(z.object({
+        sourceId: z.number(),
+        marketId: z.number(),
+        month: z.string(), // YYYY-MM
+        amount: z.number(), // in cents
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { upsertSpend } = await import("./kpiPage");
+        return upsertSpend({ ...input, tenantId: ctx.user.tenantId! });
+      }),
+
+    upsertVolume: protectedProcedure
+      .input(z.object({
+        sourceId: z.number(),
+        marketId: z.number(),
+        month: z.string(),
+        count: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { upsertVolume } = await import("./kpiPage");
+        return upsertVolume({ ...input, tenantId: ctx.user.tenantId! });
+      }),
+
+    getSpendForMonth: protectedProcedure
+      .input(z.object({ month: z.string() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getSpendForMonth } = await import("./kpiPage");
+        return getSpendForMonth(ctx.user.tenantId!, input.month);
+      }),
+
+    getVolumeForMonth: protectedProcedure
+      .input(z.object({ month: z.string() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== 'admin' && ctx.user?.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+        }
+        const { getVolumeForMonth } = await import("./kpiPage");
+        return getVolumeForMonth(ctx.user.tenantId!, input.month);
+      }),
   }),
 
   // ============ TENANT MANAGEMENT (Multi-Tenancy) ============

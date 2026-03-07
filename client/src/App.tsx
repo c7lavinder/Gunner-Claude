@@ -35,6 +35,7 @@ import LeadGenDashboard from "./pages/LeadGenDashboard";
 import CoachActivityLog from "./pages/CoachActivityLog";
 import TaskCenter from "./pages/TaskCenter";
 import Inventory from "./pages/Inventory";
+import KpiPage from "./pages/KpiPage";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 import { trpc } from "@/lib/trpc";
 
@@ -80,6 +81,7 @@ function ProtectedRouter() {
       <Route path="/coach-log" component={CoachActivityLog} />
       <Route path="/tasks" component={TaskCenter} />
       <Route path="/inventory" component={Inventory} />
+      <Route path="/kpis" component={KpiPage} />
       <Route path="/calls/:id" component={CallDetail} />
       <Route path="/team">
         {isDispoManager ? <Redirect to="/tasks" /> : <TeamMembers />}
