@@ -4543,3 +4543,8 @@
 ## Inventory & Training Improvements (2026-03-06)
 - [x] Add Project Type and Market columns to inventory table view with filtering/sorting
 - [x] Set up automatic weekly training insight regeneration every Monday morning (already implemented in weeklyInsightsRefresh.ts)
+
+## Inventory Sorting & Filtering (2026-03-06)
+- [x] Add clickable column header sorting for all inventory table columns
+- [x] Add dropdown filter for Project Type (Wholesale, Fix & Flip, etc.)
+- [x] Add dropdown filter for Market (dynamic from existing property data)

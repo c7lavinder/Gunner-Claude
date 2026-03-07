@@ -1655,6 +1655,10 @@ export default function Inventory() {
   const [columnMapping, setColumnMapping] = useState<Array<{ csvColumn: string; mappedTo: string }>>([]);
   const [importResult, setImportResult] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [marketFilter, setMarketFilter] = useState<string>("all");
 
   // Role-based stage filtering
   const teamRole = user?.teamRole || "admin";
@@ -1777,16 +1781,74 @@ export default function Inventory() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const properties = data?.items || [];
+  const rawProperties = data?.items || [];
   const total = data?.total || 0;
+
+  // Extract unique types and markets for filter dropdowns
+  const uniqueTypes = useMemo(() => {
+    const types = new Set<string>();
+    rawProperties.forEach((p: any) => { if (p.projectType) types.add(p.projectType); });
+    return Array.from(types).sort();
+  }, [rawProperties]);
+
+  const uniqueMarkets = useMemo(() => {
+    const markets = new Set<string>();
+    rawProperties.forEach((p: any) => { if (p.market) markets.add(p.market); });
+    return Array.from(markets).sort();
+  }, [rawProperties]);
+
+  // Apply type and market filters
+  const filteredProperties = useMemo(() => {
+    let result = rawProperties;
+    if (typeFilter !== "all") {
+      result = result.filter((p: any) => p.projectType === typeFilter);
+    }
+    if (marketFilter !== "all") {
+      result = result.filter((p: any) => p.market === marketFilter);
+    }
+    return result;
+  }, [rawProperties, typeFilter, marketFilter]);
+
+  // Apply sorting
+  const properties = useMemo(() => {
+    if (!sortField) return filteredProperties;
+    const sorted = [...filteredProperties].sort((a: any, b: any) => {
+      let aVal: any, bVal: any;
+      switch (sortField) {
+        case "address": aVal = (a.address || "").toLowerCase(); bVal = (b.address || "").toLowerCase(); break;
+        case "status": aVal = a.status || ""; bVal = b.status || ""; break;
+        case "asking": aVal = a.askingPrice || 0; bVal = b.askingPrice || 0; break;
+        case "contract": aVal = a.contractPrice || 0; bVal = b.contractPrice || 0; break;
+        case "sends": aVal = a._activity?.sendCount || 0; bVal = b._activity?.sendCount || 0; break;
+        case "offers": aVal = a._activity?.offerCount || 0; bVal = b._activity?.offerCount || 0; break;
+        case "type": aVal = (a.projectType || "").toLowerCase(); bVal = (b.projectType || "").toLowerCase(); break;
+        case "market": aVal = (a.market || "").toLowerCase(); bVal = (b.market || "").toLowerCase(); break;
+        case "dom": aVal = daysOnMarket(a.createdAt); bVal = daysOnMarket(b.createdAt); break;
+        default: return 0;
+      }
+      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [filteredProperties, sortField, sortDir]);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDir(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: total };
-    properties.forEach((p: any) => {
+    rawProperties.forEach((p: any) => {
       counts[p.status] = (counts[p.status] || 0) + 1;
     });
     return counts;
-  }, [properties, total]);
+  }, [rawProperties, total]);
 
   return (
     <div className="h-[calc(100vh-var(--g-topnav-h,56px))] flex flex-col overflow-hidden" style={{ background: "var(--g-bg-base)" }}>
@@ -1834,6 +1896,46 @@ export default function Inventory() {
             <LayoutGrid className="h-4 w-4" style={{ color: viewMode === "card" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
           </button>
         </div>
+        {/* Type filter */}
+        {uniqueTypes.length > 0 && (
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[130px] h-8 text-xs" style={{ background: "var(--g-bg-card)", borderColor: typeFilter !== "all" ? "var(--g-accent)" : "var(--g-border-subtle)", color: "var(--g-text-primary)" }}>
+              <Filter className="h-3 w-3 mr-1" style={{ color: typeFilter !== "all" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {uniqueTypes.map(t => (
+                <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {/* Market filter */}
+        {uniqueMarkets.length > 0 && (
+          <Select value={marketFilter} onValueChange={setMarketFilter}>
+            <SelectTrigger className="w-[150px] h-8 text-xs" style={{ background: "var(--g-bg-card)", borderColor: marketFilter !== "all" ? "var(--g-accent)" : "var(--g-border-subtle)", color: "var(--g-text-primary)" }}>
+              <Globe className="h-3 w-3 mr-1" style={{ color: marketFilter !== "all" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
+              <SelectValue placeholder="Market" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Markets</SelectItem>
+              {uniqueMarkets.map(m => (
+                <SelectItem key={m} value={m}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {/* Clear filters */}
+        {(typeFilter !== "all" || marketFilter !== "all") && (
+          <button
+            onClick={() => { setTypeFilter("all"); setMarketFilter("all"); }}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors"
+            style={{ color: "var(--g-accent)", background: "var(--g-accent-soft)" }}
+          >
+            <X className="h-3 w-3" /> Clear
+          </button>
+        )}
         <div className="flex items-center gap-1.5 overflow-x-auto">
           {visibleStages.map((s) => {
             const cfg = s === "all" ? { label: "All", color: "var(--g-text-primary)", bg: "var(--g-bg-elevated)" } : STATUS_CONFIG[s];
@@ -1878,15 +1980,33 @@ export default function Inventory() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ background: "var(--g-bg-inset)" }}>
-                      <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Address</th>
-                      <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Status</th>
-                      <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Asking</th>
-                      <th className="text-right px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Contract</th>
-                      <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Sends</th>
-                      <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Offers</th>
-                      <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Type</th>
-                      <th className="text-left px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>Market</th>
-                      <th className="text-center px-3 py-2 font-semibold" style={{ color: "var(--g-text-tertiary)" }}>DOM</th>
+                      {[
+                        { key: "address", label: "Address", align: "text-left" },
+                        { key: "status", label: "Status", align: "text-left" },
+                        { key: "asking", label: "Asking", align: "text-right" },
+                        { key: "contract", label: "Contract", align: "text-right" },
+                        { key: "sends", label: "Sends", align: "text-center" },
+                        { key: "offers", label: "Offers", align: "text-center" },
+                        { key: "type", label: "Type", align: "text-left" },
+                        { key: "market", label: "Market", align: "text-left" },
+                        { key: "dom", label: "DOM", align: "text-center" },
+                      ].map(col => (
+                        <th
+                          key={col.key}
+                          className={`${col.align} px-3 py-2 font-semibold cursor-pointer select-none group`}
+                          style={{ color: sortField === col.key ? "var(--g-accent)" : "var(--g-text-tertiary)" }}
+                          onClick={() => handleSort(col.key)}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            {col.label}
+                            {sortField === col.key ? (
+                              sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                            )}
+                          </span>
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
