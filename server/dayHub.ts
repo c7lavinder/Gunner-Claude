@@ -794,15 +794,17 @@ export async function getKpiSummary(
     const autoConvos = Number(autoConvosResult?.count || 0);
 
     // Auto-count appointments set (callOutcome = 'appointment_set')
+    // DEDUP: Count 1 per unique property (by ghlContactId) per day
     const [autoAptsResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
+      .select({ count: sql<number>`COUNT(DISTINCT COALESCE(${calls.ghlContactId}, CAST(${calls.id} AS CHAR)))` })
       .from(calls)
       .where(and(...baseConditions, eq(calls.callOutcome, "appointment_set")));
     const autoApts = Number(autoAptsResult?.count || 0);
 
     // Auto-count offers made (callOutcome = 'offer_made')
+    // DEDUP: Count 1 per unique property (by ghlContactId) per day
     const [autoOffersResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
+      .select({ count: sql<number>`COUNT(DISTINCT COALESCE(${calls.ghlContactId}, CAST(${calls.id} AS CHAR)))` })
       .from(calls)
       .where(and(...baseConditions, eq(calls.callOutcome, "offer_made")));
     const autoOffers = Number(autoOffersResult?.count || 0);
@@ -933,6 +935,7 @@ export async function getKpiLedgerItems(
           id: calls.id,
           contactName: calls.contactName,
           contactPhone: calls.contactPhone,
+          ghlContactId: calls.ghlContactId,
           teamMemberId: calls.teamMemberId,
           callTimestamp: calls.callTimestamp,
           duration: calls.duration,
@@ -957,11 +960,12 @@ export async function getKpiLedgerItems(
         members.forEach(m => memberMap.set(m.id, m.name));
       }
 
-      autoItems = autoRows.map(r => ({
+      let mappedItems = autoRows.map(r => ({
         id: r.id,
         source: "auto" as const,
         contactName: r.contactName || "Unknown",
         contactPhone: r.contactPhone || "",
+        ghlContactId: r.ghlContactId || null,
         teamMemberName: r.teamMemberId ? (memberMap.get(r.teamMemberId) || "Unknown") : "Unknown",
         timestamp: r.callTimestamp ? new Date(r.callTimestamp).toISOString() : "",
         duration: r.duration || 0,
@@ -969,6 +973,19 @@ export async function getKpiLedgerItems(
         classification: r.classification || null,
         callOutcome: r.callOutcome || null,
       }));
+
+      // DEDUP: For appointments and offers, show only 1 entry per unique contact (property) per day
+      if (kpiType === "appointment" || kpiType === "offer") {
+        const seen = new Set<string>();
+        mappedItems = mappedItems.filter(item => {
+          const key = item.ghlContactId || `call-${item.id}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
+      autoItems = mappedItems.map(({ ghlContactId, ...rest }) => rest);
     }
 
     // Get manual entries

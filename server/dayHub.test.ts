@@ -490,3 +490,63 @@ describe("detectAmPmCalls — edge cases for GHL message formats", () => {
     expect(result.pmCallMade).toBe(false);
   });
 });
+
+
+// ─── KPI DEDUP LOGIC TESTS ──────────────────────────────
+
+describe("KPI Dedup — source code verification", () => {
+  it("uses COUNT(DISTINCT COALESCE) for appointment and offer counts", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    expect(source).toContain("COUNT(DISTINCT COALESCE");
+    const distinctCount = (source.match(/COUNT\(DISTINCT COALESCE/g) || []).length;
+    expect(distinctCount).toBe(2);
+  });
+
+  it("does NOT use COUNT(DISTINCT) for calls or conversations", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    const autoCallsSection = source.split("Auto-count from calls table")[1]?.split("Auto-count appointments")[0];
+    expect(autoCallsSection).toBeTruthy();
+    expect(autoCallsSection).toContain("COUNT(*)");
+    
+    const convosSection = source.split("Auto-count conversations")[1]?.split("Auto-count appointments")[0];
+    expect(convosSection).toBeTruthy();
+    expect(convosSection).toContain("COUNT(*)");
+  });
+
+  it("deduplicates ledger items for appointments by ghlContactId", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    expect(source).toContain('kpiType === "appointment" || kpiType === "offer"');
+    expect(source).toContain("const seen = new Set<string>()");
+    expect(source).toContain("item.ghlContactId");
+  });
+
+  it("includes ghlContactId in ledger query select", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    const selectSection = source.split("const autoRows = await db")[1]?.split(".from(calls)")[0];
+    expect(selectSection).toBeTruthy();
+    expect(selectSection).toContain("ghlContactId: calls.ghlContactId");
+  });
+
+  it("strips ghlContactId from final autoItems output", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    expect(source).toContain("({ ghlContactId, ...rest }) => rest");
+  });
+
+  it("falls back to call id for dedup when ghlContactId is null", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("./server/dayHub.ts", "utf-8");
+    
+    expect(source).toContain("`call-${item.id}`");
+    expect(source).toContain("CAST(${calls.id} AS CHAR)");
+  });
+});

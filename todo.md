@@ -4595,7 +4595,7 @@
 - [ ] Detection type labels: Auto / Manual / AM Direct
 - [ ] Cascading fallback: AI call grading to GHL stage change to manual entry
 - [ ] AM Direct rule: spontaneous offer counts as apt but no LM credit
-- [ ] Dedup: 1 offer/apt per property per day
+- [x] Dedup: 1 offer/apt per property per day — COUNT(DISTINCT ghlContactId) + ledger dedup
 
 ### Deal Progress Bar Fix
 - [x] Add Contacted as first step in progress bar
@@ -4603,7 +4603,7 @@
 - [x] Store stage timestamps so only actual stages are marked
 
 ### Other Fixes
-- [ ] Add Accepted Offer field to property edit form
+- [x] Add Accepted Offer field to property edit form — already implemented
 - [x] Fix spread display to use Accepted Offer - Contract
 
 ## UI Fixes & Backfill (2026-03-07)
@@ -4631,3 +4631,9 @@
 - [x] Investigate which GHL field is being used for opportunitySource — may be pulling wrong field
 - [x] Fix source mapping so backfill correctly assigns sourceId from GHL data
 - [x] Re-run source backfill after fix
+
+## Performance & Stability Fixes (2026-03-07)
+- [x] Disconnect 36 test tenants (id >= 960000) from CRM to eliminate BatchDialer 403 errors
+- [x] Eliminate Pool is closed errors caused by test tenant polling exhausting DB connections
+- [x] KPI dedup: appointments and offers now count 1 per unique contact (property) per day
+- [x] KPI ledger dedup: Trust Ledger modal shows only 1 entry per contact for apts/offers
