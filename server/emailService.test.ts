@@ -1,14 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock Resend
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: {
-      send: vi.fn().mockResolvedValue({ data: { id: "test-email-id" }, error: null }),
-    },
-  })),
-}));
-
 // Mock the notification module
 vi.mock("./_core/notification", () => ({
   notifyOwner: vi.fn().mockResolvedValue(true),
@@ -24,14 +15,12 @@ vi.mock("./db", () => ({
 
 import { 
   getOutreachTemplate, 
-  sendEmail,
   sendPasswordResetEmail,
   sendTeamInviteEmail,
   sendWelcomeEmail,
   sendChurnOutreachEmail,
   recordOutreachHistory
 } from "./emailService";
-import { notifyOwner } from "./_core/notification";
 
 describe("Email Service", () => {
   beforeEach(() => {
@@ -58,19 +47,19 @@ describe("Email Service", () => {
     });
   });
 
-  describe("sendEmail", () => {
-    it("should send password reset email via Resend", async () => {
+  describe("sendEmail — all disabled after spam attack", () => {
+    it("should return false for password reset email (sending disabled)", async () => {
       const result = await sendPasswordResetEmail(
         "test@example.com",
         "token123",
         "https://example.com"
       );
       
-      // With Resend configured, it should return true (email sent)
-      expect(result).toBe(true);
+      // All email sending is disabled — returns false
+      expect(result).toBe(false);
     });
 
-    it("should send team invite email via Resend", async () => {
+    it("should return false for team invite email (sending disabled)", async () => {
       const result = await sendTeamInviteEmail(
         "new@example.com",
         "John Doe",
@@ -79,10 +68,10 @@ describe("Email Service", () => {
         "https://example.com"
       );
       
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    it("should send welcome email via Resend", async () => {
+    it("should return false for welcome email (sending disabled)", async () => {
       const result = await sendWelcomeEmail(
         "Jane Doe",
         "jane@example.com",
@@ -90,10 +79,10 @@ describe("Email Service", () => {
         "user"
       );
       
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    it("should send churn outreach email via notifyOwner (internal notification)", async () => {
+    it("should return false for churn outreach email (sending disabled)", async () => {
       const result = await sendChurnOutreachEmail(
         "Test Tenant",
         "John",
@@ -102,66 +91,8 @@ describe("Email Service", () => {
         "2026-01-15"
       );
       
-      expect(result).toBe(true);
-      // Churn emails still go through notifyOwner
-      expect(notifyOwner).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining("URGENT"),
-          content: expect.stringContaining("two weeks"),
-        })
-      );
-    });
-  });
-
-  describe("Email Template Content", () => {
-    it("should include gentle language in 7-day template", async () => {
-      await sendChurnOutreachEmail(
-        "Test Tenant",
-        "John",
-        "john@example.com",
-        7,
-        "2026-01-20"
-      );
-      
-      expect(notifyOwner).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: expect.stringContaining("checking in"),
-        })
-      );
-    });
-
-    it("should include urgent language in 14-day template", async () => {
-      await sendChurnOutreachEmail(
-        "Test Tenant",
-        "John",
-        "john@example.com",
-        14,
-        "2026-01-15"
-      );
-      
-      expect(notifyOwner).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining("URGENT"),
-          content: expect.stringContaining("miss you"),
-        })
-      );
-    });
-
-    it("should include win-back offer in 30-day template", async () => {
-      await sendChurnOutreachEmail(
-        "Test Tenant",
-        "John",
-        "john@example.com",
-        35,
-        "2026-01-01"
-      );
-      
-      expect(notifyOwner).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining("CRITICAL"),
-          content: expect.stringContaining("FREE 30-minute strategy call"),
-        })
-      );
+      // All emails disabled including churn
+      expect(result).toBe(false);
     });
   });
 

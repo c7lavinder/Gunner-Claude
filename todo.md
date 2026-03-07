@@ -4637,3 +4637,13 @@
 - [x] Eliminate Pool is closed errors caused by test tenant polling exhausting DB connections
 - [x] KPI dedup: appointments and offers now count 1 per unique contact (property) per day
 - [x] KPI ledger dedup: Trust Ledger modal shows only 1 entry per contact for apts/offers
+
+## Test Suite Audit & Fixes (2026-03-07)
+- [x] Fix failing taskCenter phone-based inbox filtering tests (3 tests) — updated assertions to match refactored code
+- [x] Fix failing emailService tests (7 tests) — updated to reflect disabled Resend
+- [x] Fix failing loops tests (2 tests) — handle missing API key gracefully
+- [x] Fix failing resendApiKey tests (2 tests) — document intentional removal
+- [x] Fix failing batchDialerAgents test (1 test) — add abort controller timeout handling
+- [x] Fix opportunities.test.ts runDetection timeout (3 tests) — add 30s race timeout for external API calls
+- [x] Clean up test tenants (id >= 1020000) causing BatchDialer 403 errors — disconnected from CRM
+- [x] Full test suite audit: 150 files, 2695 tests — all passing

@@ -799,18 +799,20 @@ describe("Phone-based inbox filtering — frontend LeftPanel", () => {
     expect(tcSource).toContain("teamMembers: teamMembersList");
   });
 
-  it("builds rolePhoneNumbers set from team members lcPhones", () => {
-    expect(tcSource).toContain("rolePhoneNumbers");
+  it("builds rolePhoneArray from team members lcPhones", () => {
+    expect(tcSource).toContain("rolePhoneArray");
     expect(tcSource).toContain("JSON.parse(m.lcPhones)");
-    expect(tcSource).toContain("phones.add(p)");
+    expect(tcSource).toContain("phones.push");
   });
 
-  it("filters conversations by teamPhone matching rolePhoneNumbers", () => {
-    expect(tcSource).toContain("c.teamPhone && rolePhoneNumbers.has(c.teamPhone)");
+  it("filters conversations server-side by phone numbers and GHL user IDs", () => {
+    expect(tcSource).toContain("rolePhoneFilter");
+    expect(tcSource).toContain("roleGhlUserIds");
   });
 
-  it("falls back to assignedTo when teamPhone is not available", () => {
-    expect(tcSource).toContain("!c.teamPhone && c.assignedTo && roleFilteredGhlUserIds");
+  it("builds roleGhlUserIds for role-based filtering", () => {
+    expect(tcSource).toContain("roleGhlUserIds");
+    expect(tcSource).toContain("ghlIds.push(m.ghlUserId)");
   });
 
   it("admin tab shows all conversations (rolePhoneNumbers is null)", () => {
