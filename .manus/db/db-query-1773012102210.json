@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, name FROM tenants ORDER BY id LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name FROM tenants ORDER BY id LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "New Again Houses"
+    },
+    {
+      "id": "450029",
+      "name": "NAH Kitty Hawk"
+    },
+    {
+      "id": "540044",
+      "name": "Apex Property Solutions"
+    },
+    {
+      "id": "960056",
+      "name": "Pipeline Test Co"
+    },
+    {
+      "id": "960057",
+      "name": "Stage Mapping Test Co"
+    },
+    {
+      "id": "1000380",
+      "name": "Test Wholesalers LLC"
+    },
+    {
+      "id": "1000381",
+      "name": "No CRM Company"
+    },
+    {
+      "id": "1000382",
+      "name": "Bulk Test Company"
+    },
+    {
+      "id": "1000383",
+      "name": "Settings Test Co"
+    },
+    {
+      "id": "1000384",
+      "name": "CRM Config Test Co"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\n1\tNew Again Houses\n450029\tNAH Kitty Hawk\n540044\tApex Property Solutions\n960056\tPipeline Test Co\n960057\tStage Mapping Test Co\n1000380\tTest Wholesalers LLC\n1000381\tNo CRM Company\n1000382\tBulk Test Company\n1000383\tSettings Test Co\n1000384\tCRM Config Test Co\n",
+  "stderr": "",
+  "execution_time_ms": 360
+}

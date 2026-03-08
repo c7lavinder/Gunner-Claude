@@ -1,0 +1,8 @@
+{
+  "query": "SELECT * FROM tenant_playbooks LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT * FROM tenant_playbooks LIMIT 5;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'nusxfqu5xbtmz3nucr6brb.tenant_playbooks' doesn't exist"
+  ]
+}
