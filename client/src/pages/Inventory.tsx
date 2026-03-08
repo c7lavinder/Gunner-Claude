@@ -2896,6 +2896,7 @@ export default function Inventory() {
                         { key: "offers", label: "Offers", align: "text-center" },
                         { key: "showings", label: "Showings", align: "text-center" },
                         { key: "dom", label: "DOM", align: "text-center" },
+                        { key: "actions", label: "", align: "text-center" },
                       ].map(col => (
                         <th
                           key={col.key}
@@ -2969,6 +2970,18 @@ export default function Inventory() {
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <span style={{ color: heatColor(dom) }}>{dom}d</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center w-10">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(p.id); }}
+                              className="p-1.5 rounded-md transition-colors hover:bg-red-500/10"
+                              style={{ color: "var(--g-text-tertiary)" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--g-text-tertiary)"; }}
+                              title="Delete property"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </td>
                         </tr>
                       );

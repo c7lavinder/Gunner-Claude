@@ -4836,3 +4836,7 @@
 - [x] Frontend: Confirmation dialog before sending (shows buyer count)
 - [x] Frontend: Send status feedback (success/failure counts)
 - [x] Tests: Send channel filtering and eligibility tests (11 tests passing)
+
+## Inventory Delete Button
+- [x] Backend: tRPC endpoint to delete a property from inventory (already existed)
+- [x] Frontend: Delete button (trash icon) on inventory table rows with confirmation dialog
