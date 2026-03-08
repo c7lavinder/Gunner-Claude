@@ -4798,3 +4798,21 @@
 - [x] Frontend: Expandable highlight cards with direct quotes and coaching insights
 - [x] Frontend: On-demand "Generate Highlights" button for calls without highlights
 - [x] Tests: 12 unit tests for highlight extraction (validation, truncation, error handling, prompt structure)
+
+## Deal Distribution (Auto-Generate SMS, Email, PDF per Buyer Tier)
+- [x] Schema: Add buyerTier enum (priority, qualified, jv_partner, unqualified, halted) to propertyBuyerActivity
+- [x] Schema: Add dealDistributions table (generated content per property per tier)
+- [x] Schema: Add dealContentEdits table (tracks user edits for AI learning)
+- [x] Backend: AI SMS generation per tier (Priority=exclusive/urgent, Qualified=strong, JV Partner=partnership angle, Unqualified=basic)
+- [x] Backend: AI Email generation per tier (full deal details, tone varies by tier)
+- [x] Backend: PDF flyer generation (branded one-pager with property photos, financials, details)
+- [x] Backend: Edit learning — store original vs edited content so AI improves over time
+- [x] Backend: tRPC endpoints for generate, save edits, get history
+- [x] Frontend: "Deal Blast" tab on property detail page
+- [x] Frontend: Tier selection UI with checkboxes for each tier
+- [x] Frontend: Generated content preview/edit for SMS, Email, PDF per tier
+- [x] Frontend: Copy-to-clipboard for SMS and Email content
+- [x] Frontend: PDF download button
+- [x] Frontend: Edit history tracking (save edits back to learn)
+- [x] Tests: AI content generation tests (10 tests passing)
+- [x] Tests: PDF generation tests (PDF header, buffer size, unique keys)

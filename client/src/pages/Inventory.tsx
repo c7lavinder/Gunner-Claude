@@ -14,6 +14,7 @@ import {
   Lightbulb, MessageCircle, CheckSquare, Square,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
+import DealBlastTab from "@/components/DealBlastTab";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -2304,6 +2305,7 @@ function PropertyDetail({
           { key: "outreach", label: "Outreach", icon: Send },
           { key: "activity", label: "Activity", icon: Activity },
           { key: "ai", label: "AI Assistant", icon: Bot },
+          { key: "deal_blast", label: "Deal Blast", icon: Megaphone },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -2337,6 +2339,7 @@ function PropertyDetail({
         {activeTab === "outreach" && <OutreachTab property={property} propertyId={propertyId} />}
         {activeTab === "activity" && <ActivityTab propertyId={propertyId} />}
         {activeTab === "ai" && <DispoAITab propertyId={propertyId} property={property} />}
+        {activeTab === "deal_blast" && <DealBlastTab propertyId={propertyId} property={property} />}
       </div>
 
       {/* Dialogs */}

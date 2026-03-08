@@ -533,6 +533,13 @@
       "when": 1772949409959,
       "tag": "0075_bored_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "5",
+      "when": 1772964337043,
+      "tag": "0076_sparkling_marvel_apes",
+      "breakpoints": true
     }
   ]
 }

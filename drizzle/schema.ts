@@ -1769,6 +1769,7 @@ export const propertyBuyerActivity = mysqlTable("property_buyer_activity", {
   buyerPropertyTypes: text("buyerPropertyTypes"), // JSON array: ["house", "lot", "land"]
   buyerStrategy: varchar("buyerStrategy", { length: 100 }), // flip, rental, wholesale, etc.
   isVip: mysqlEnum("isVip", ["true", "false"]).default("false"),
+  buyerTier: mysqlEnum("buyerTier", ["priority", "qualified", "jv_partner", "unqualified", "halted"]).default("qualified"),
   // Activity tracking per buyer per property
   sendCount: int("sendCount").default(0).notNull(),
   lastSentAt: timestamp("lastSentAt"),
@@ -1857,4 +1858,65 @@ export const syncLog = mysqlTable("sync_log", {
 });
 export type SyncLog = typeof syncLog.$inferSelect;
 export type InsertSyncLog = typeof syncLog.$inferInsert;
+
+// ============ DEAL DISTRIBUTION (AI-generated SMS, Email, PDF per buyer tier) ============
+
+/**
+ * Deal Distributions — stores AI-generated content per property per buyer tier.
+ * Each row = one generation run for a specific property + tier combo.
+ * Content is generated, user reviews/edits, then copies to GHL for sending.
+ */
+export const dealDistributions = mysqlTable("deal_distributions", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+  // Which buyer tier this content targets
+  buyerTier: mysqlEnum("buyerTier", ["priority", "qualified", "jv_partner", "unqualified"]).notNull(),
+  // Generated content
+  smsContent: text("smsContent"), // Short SMS text
+  emailSubject: varchar("emailSubject", { length: 500 }),
+  emailBody: text("emailBody"), // Full email HTML/text
+  pdfUrl: text("pdfUrl"), // S3 URL to generated PDF flyer
+  pdfFileKey: varchar("pdfFileKey", { length: 512 }),
+  // User-edited versions (null = user accepted AI version as-is)
+  editedSmsContent: text("editedSmsContent"),
+  editedEmailSubject: varchar("editedEmailSubject", { length: 500 }),
+  editedEmailBody: text("editedEmailBody"),
+  // Status tracking
+  status: mysqlEnum("distStatus", ["draft", "reviewed", "sent"]).default("draft").notNull(),
+  // Who generated / reviewed
+  generatedByUserId: int("generatedByUserId").references(() => users.id),
+  reviewedByUserId: int("reviewedByUserId").references(() => users.id),
+  reviewedAt: timestamp("reviewedAt"),
+  sentAt: timestamp("sentAt"),
+  // Timestamps
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type DealDistribution = typeof dealDistributions.$inferSelect;
+export type InsertDealDistribution = typeof dealDistributions.$inferInsert;
+
+/**
+ * Deal Content Edits — tracks every edit the user makes to AI-generated content.
+ * Used to learn the user's voice/style over time and improve future generations.
+ * Stores diffs so we can feed "here's what you changed last time" into the LLM prompt.
+ */
+export const dealContentEdits = mysqlTable("deal_content_edits", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+  distributionId: int("distributionId").references(() => dealDistributions.id).notNull(),
+  // Which field was edited
+  contentType: mysqlEnum("contentType", ["sms", "email_subject", "email_body"]).notNull(),
+  // Original AI-generated content
+  originalContent: text("originalContent").notNull(),
+  // User's edited version
+  editedContent: text("editedContent").notNull(),
+  // The buyer tier context (so we can learn per-tier preferences)
+  buyerTier: mysqlEnum("editBuyerTier", ["priority", "qualified", "jv_partner", "unqualified"]).notNull(),
+  // Who edited
+  editedByUserId: int("editedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type DealContentEdit = typeof dealContentEdits.$inferSelect;
+export type InsertDealContentEdit = typeof dealContentEdits.$inferInsert;
 

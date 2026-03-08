@@ -8764,6 +8764,199 @@ selectedTimezone: { type: "string" },
         }
         return { sent: results.filter(r => r.success).length, failed: results.filter(r => !r.success).length, total: smsEligible.length, results };
       }),
+
+    // ─── DEAL DISTRIBUTION ───
+
+    // Generate deal content for selected tiers
+    generateDealContent: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        tiers: z.array(z.enum(["priority", "qualified", "jv_partner", "unqualified"])).min(1),
+        generatePdf: z.boolean().default(true),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getPropertyById } = await import("./inventory");
+        const property = await getPropertyById(ctx.user.tenantId, input.propertyId);
+        if (!property) throw new TRPCError({ code: "NOT_FOUND", message: "Property not found" });
+
+        const { getBrandProfile } = await import("./db");
+        const brandProfileData = await getBrandProfile(ctx.user.tenantId);
+        const tenantData = await (async () => {
+          const db = await (await import("./db")).getDb();
+          if (!db) return null;
+          const { tenants } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          const [t] = await db.select().from(tenants).where(eq(tenants.id, ctx.user!.tenantId!));
+          return t || null;
+        })();
+
+        const brand = {
+          companyName: brandProfileData?.companyName || tenantData?.name || null,
+          brandVoice: brandProfileData?.brandVoice || null,
+          tagline: brandProfileData?.tagline || null,
+          websiteUrl: brandProfileData?.websiteUrl || null,
+          logoUrl: brandProfileData?.extractedLogo || tenantData?.logoUrl || null,
+        };
+
+        const propertyData = {
+          address: property.address || "",
+          city: property.city || "",
+          state: property.state || "",
+          zip: property.zip || "",
+          propertyType: property.propertyType || "",
+          beds: property.beds,
+          baths: property.baths,
+          sqft: property.sqft,
+          yearBuilt: property.yearBuilt,
+          lotSize: property.lotSize,
+          contractPrice: property.contractPrice,
+          askingPrice: property.askingPrice,
+          dispoAskingPrice: property.dispoAskingPrice,
+          assignmentFee: property.assignmentFee,
+          arv: property.arv,
+          estRepairs: property.estRepairs,
+          occupancyStatus: property.occupancyStatus,
+          description: property.description,
+          notes: property.notes,
+          mediaLink: property.mediaLink,
+          photos: property.photos,
+          projectType: property.projectType,
+          market: property.market,
+          lockboxCode: null,
+        };
+
+        const { generateDealContent } = await import("./dealDistribution");
+        const distributions = await generateDealContent(
+          propertyData,
+          input.propertyId,
+          input.tiers,
+          brand,
+          ctx.user.tenantId,
+          ctx.user.id,
+        );
+
+        // Generate PDF if requested
+        let pdfResult = null;
+        if (input.generatePdf) {
+          try {
+            const { generateDealPdfFlyer } = await import("./dealPdfFlyer");
+            pdfResult = await generateDealPdfFlyer(propertyData, brand, ctx.user.tenantId);
+            // Update all distributions with the PDF URL
+            const db = await (await import("./db")).getDb();
+            if (db) {
+              const { dealDistributions: distTable } = await import("../drizzle/schema");
+              const { eq: eqOp } = await import("drizzle-orm");
+              for (const dist of distributions) {
+                await db.update(distTable).set({
+                  pdfUrl: pdfResult.pdfUrl,
+                  pdfFileKey: pdfResult.pdfFileKey,
+                }).where(eqOp(distTable.id, dist.id));
+              }
+            }
+          } catch (err: any) {
+            console.error("[DealDist] PDF generation failed:", err?.message);
+          }
+        }
+
+        return {
+          distributions: distributions.map(d => ({
+            ...d,
+            pdfUrl: pdfResult?.pdfUrl || d.pdfUrl,
+            pdfFileKey: pdfResult?.pdfFileKey || d.pdfFileKey,
+          })),
+          pdfUrl: pdfResult?.pdfUrl || null,
+        };
+      }),
+
+    // Get existing distributions for a property
+    getDistributions: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getPropertyDistributions } = await import("./dealDistribution");
+        return getPropertyDistributions(ctx.user.tenantId, input.propertyId);
+      }),
+
+    // Update distribution content (save user edits)
+    updateDistribution: protectedProcedure
+      .input(z.object({
+        distributionId: z.number(),
+        editedSmsContent: z.string().optional(),
+        editedEmailSubject: z.string().optional(),
+        editedEmailBody: z.string().optional(),
+        status: z.enum(["draft", "reviewed", "sent"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateDistributionContent } = await import("./dealDistribution");
+        const result = await updateDistributionContent(
+          ctx.user.tenantId,
+          input.distributionId,
+          {
+            editedSmsContent: input.editedSmsContent,
+            editedEmailSubject: input.editedEmailSubject,
+            editedEmailBody: input.editedEmailBody,
+            status: input.status,
+          },
+          ctx.user.id,
+        );
+        if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "Distribution not found" });
+        return result;
+      }),
+
+    // Regenerate content for a single tier
+    regenerateTierContent: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        tier: z.enum(["priority", "qualified", "jv_partner", "unqualified"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getPropertyById } = await import("./inventory");
+        const property = await getPropertyById(ctx.user.tenantId, input.propertyId);
+        if (!property) throw new TRPCError({ code: "NOT_FOUND", message: "Property not found" });
+
+        const { getBrandProfile } = await import("./db");
+        const brandProfileData = await getBrandProfile(ctx.user.tenantId);
+        const brand = {
+          companyName: brandProfileData?.companyName || null,
+          brandVoice: brandProfileData?.brandVoice || null,
+          tagline: brandProfileData?.tagline || null,
+          websiteUrl: brandProfileData?.websiteUrl || null,
+          logoUrl: brandProfileData?.extractedLogo || null,
+        };
+
+        const propertyData = {
+          address: property.address || "",
+          city: property.city || "",
+          state: property.state || "",
+          zip: property.zip || "",
+          propertyType: property.propertyType || "",
+          beds: property.beds,
+          baths: property.baths,
+          sqft: property.sqft,
+          yearBuilt: property.yearBuilt,
+          lotSize: property.lotSize,
+          contractPrice: property.contractPrice,
+          askingPrice: property.askingPrice,
+          dispoAskingPrice: property.dispoAskingPrice,
+          assignmentFee: property.assignmentFee,
+          arv: property.arv,
+          estRepairs: property.estRepairs,
+          occupancyStatus: property.occupancyStatus,
+          description: property.description,
+          notes: property.notes,
+          mediaLink: property.mediaLink,
+          photos: property.photos,
+          projectType: property.projectType,
+          market: property.market,
+          lockboxCode: null,
+        };
+
+        const { generateTierContent } = await import("./dealDistribution");
+        return generateTierContent(propertyData, input.tier, brand, ctx.user.tenantId);
+      }),
   }),
 });
 
