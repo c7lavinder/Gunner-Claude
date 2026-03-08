@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -1260,12 +1260,51 @@ function OutreachTab({ property, propertyId }: { property: any; propertyId: numb
 }
 
 // ─── AI DISPO ASSISTANT TAB ───
+// ─── DISPO ACTION TYPES & LABELS ───
+const DISPO_ACTION_LABELS: Record<string, string> = {
+  update_property_price: "Update Price",
+  update_property_status: "Change Status",
+  add_property_offer: "Record Offer",
+  schedule_property_showing: "Schedule Showing",
+  record_property_send: "Record Send",
+  add_property_note: "Add Note",
+};
+const DISPO_ACTION_ICONS: Record<string, typeof DollarSign> = {
+  update_property_price: DollarSign,
+  update_property_status: Activity,
+  add_property_offer: Handshake,
+  schedule_property_showing: Calendar,
+  record_property_send: Send,
+  add_property_note: StickyNote,
+};
+
+type DispoMessage = {
+  role: "user" | "assistant";
+  content: string;
+  actionCards?: Array<{
+    id: string;
+    actionType: string;
+    summary: string;
+    params: Record<string, any>;
+    status: "pending" | "confirmed" | "executing" | "executed" | "failed" | "cancelled";
+    pendingActionId?: number;
+    error?: string;
+  }>;
+};
+
 function DispoAITab({ propertyId, property }: { propertyId: number; property: any }) {
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [messages, setMessages] = useState<DispoMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isParsingIntent, setIsParsingIntent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const actionIdCounter = useRef(0);
+
+  const createPendingMutation = trpc.coachActions.createPending.useMutation();
+  const confirmMutation = trpc.coachActions.confirmAndExecute.useMutation();
+  const cancelMutation = trpc.coachActions.cancel.useMutation();
+  const utils = trpc.useUtils();
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -1277,22 +1316,189 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
 
   useEffect(() => { scrollToBottom(); }, [messages]);
 
+  // Parse intent after ACTION_REDIRECT is detected
+  const parseIntent = useCallback(async (userMessage: string) => {
+    setIsParsingIntent(true);
+    try {
+      const response = await fetch("/api/dispo-assistant/parse-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMessage,
+          propertyId,
+          history: messages.filter(m => !m.actionCards).slice(-10).map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+      if (!response.ok) throw new Error("Parse intent failed");
+      const data = await response.json();
+
+      if (data.actions && data.actions.length > 0) {
+        // Create pending actions in the database and build action cards
+        const actionCards: DispoMessage["actionCards"] = [];
+        for (const action of data.actions) {
+          try {
+            const result = await createPendingMutation.mutateAsync({
+              actionType: action.actionType,
+              requestText: action.summary,
+              payload: action.params,
+            });
+            actionCards.push({
+              id: `dispo-action-${++actionIdCounter.current}`,
+              actionType: action.actionType,
+              summary: action.summary,
+              params: action.params,
+              status: "pending",
+              pendingActionId: result.actionId,
+            });
+          } catch (err: any) {
+            console.error("[DispoAI] Failed to create pending action:", err);
+            actionCards.push({
+              id: `dispo-action-${++actionIdCounter.current}`,
+              actionType: action.actionType,
+              summary: action.summary,
+              params: action.params,
+              status: "failed",
+              error: err.message || "Failed to create action",
+            });
+          }
+        }
+
+        // Add action cards as an assistant message
+        setMessages(prev => {
+          const updated = [...prev];
+          // Replace the last assistant message (which has ACTION_REDIRECT) with action cards
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+            updated[lastIdx] = {
+              role: "assistant",
+              content: `I'll help you with that. Here ${actionCards.length === 1 ? "is the action" : "are the actions"} I've prepared:`,
+              actionCards,
+            };
+          } else {
+            updated.push({
+              role: "assistant",
+              content: `Here ${actionCards.length === 1 ? "is the action" : "are the actions"} I've prepared:`,
+              actionCards,
+            });
+          }
+          return updated;
+        });
+      } else {
+        // No actions detected, show a fallback
+        setMessages(prev => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+            updated[lastIdx] = { ...updated[lastIdx], content: "I understood you want to take an action, but I couldn't determine the specific details. Could you be more specific? For example: 'Update the asking price to $150,000' or 'Schedule a showing for John tomorrow at 2pm'." };
+          }
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error("[DispoAI] Parse intent error:", err);
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+          updated[lastIdx] = { ...updated[lastIdx], content: "Sorry, I had trouble processing that action. Please try again." };
+        }
+        return updated;
+      });
+    } finally {
+      setIsParsingIntent(false);
+    }
+  }, [propertyId, messages, createPendingMutation]);
+
+  // Confirm an action
+  const handleConfirmAction = useCallback(async (msgIdx: number, cardIdx: number) => {
+    const msg = messages[msgIdx];
+    const card = msg?.actionCards?.[cardIdx];
+    if (!card || !card.pendingActionId) return;
+
+    // Update card status to executing
+    setMessages(prev => {
+      const updated = [...prev];
+      const cards = [...(updated[msgIdx].actionCards || [])];
+      cards[cardIdx] = { ...cards[cardIdx], status: "executing" };
+      updated[msgIdx] = { ...updated[msgIdx], actionCards: cards };
+      return updated;
+    });
+
+    try {
+      const result = await confirmMutation.mutateAsync({ actionId: card.pendingActionId });
+      setMessages(prev => {
+        const updated = [...prev];
+        const cards = [...(updated[msgIdx].actionCards || [])];
+        cards[cardIdx] = {
+          ...cards[cardIdx],
+          status: result.success ? "executed" : "failed",
+          error: result.success ? undefined : (result.error || "Action failed"),
+        };
+        updated[msgIdx] = { ...updated[msgIdx], actionCards: cards };
+        return updated;
+      });
+      if (result.success) {
+        toast.success(`${DISPO_ACTION_LABELS[card.actionType] || card.actionType} completed!`);
+        // Refresh property data
+        utils.inventory.getPropertyById.invalidate({ propertyId });
+        utils.inventory.getProperties.invalidate();
+        utils.inventory.getDispoKpiSummary.invalidate();
+        utils.inventory.getActivityLog.invalidate({ propertyId });
+      } else {
+        toast.error(result.error || "Action failed");
+      }
+    } catch (err: any) {
+      setMessages(prev => {
+        const updated = [...prev];
+        const cards = [...(updated[msgIdx].actionCards || [])];
+        cards[cardIdx] = { ...cards[cardIdx], status: "failed", error: err.message || "Execution failed" };
+        updated[msgIdx] = { ...updated[msgIdx], actionCards: cards };
+        return updated;
+      });
+      toast.error(err.message || "Failed to execute action");
+    }
+  }, [messages, confirmMutation, utils, propertyId]);
+
+  // Cancel an action
+  const handleCancelAction = useCallback(async (msgIdx: number, cardIdx: number) => {
+    const msg = messages[msgIdx];
+    const card = msg?.actionCards?.[cardIdx];
+    if (!card || !card.pendingActionId) return;
+
+    try {
+      await cancelMutation.mutateAsync({ actionId: card.pendingActionId });
+      setMessages(prev => {
+        const updated = [...prev];
+        const cards = [...(updated[msgIdx].actionCards || [])];
+        cards[cardIdx] = { ...cards[cardIdx], status: "cancelled" };
+        updated[msgIdx] = { ...updated[msgIdx], actionCards: cards };
+        return updated;
+      });
+      toast.info("Action cancelled");
+    } catch (err: any) {
+      toast.error("Failed to cancel action");
+    }
+  }, [messages, cancelMutation]);
+
   const sendMessage = async (text: string) => {
-    if (!text.trim() || isStreaming) return;
-    const userMsg = { role: "user" as const, content: text.trim() };
-    const newMessages = [...messages, userMsg];
-    setMessages([...newMessages, { role: "assistant", content: "" }]);
+    if (!text.trim() || isStreaming || isParsingIntent) return;
+    const userMsg: DispoMessage = { role: "user", content: text.trim() };
+    setMessages(prev => [...prev, userMsg, { role: "assistant", content: "" }]);
     setInput("");
     setIsStreaming(true);
+
+    let fullContent = "";
+    let actionRedirectDetected = false;
+    const originalUserText = text.trim();
 
     try {
       const response = await fetch("/api/dispo-assistant/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question: text.trim(),
+          question: originalUserText,
           propertyId,
-          history: messages.slice(-10),
+          history: messages.filter(m => !m.actionCards).slice(-10).map(m => ({ role: m.role, content: m.content })),
         }),
       });
       if (!response.ok) throw new Error("Stream request failed");
@@ -1312,11 +1518,28 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
           try {
             const parsed = JSON.parse(trimmed.slice(6));
             if (parsed.type === "chunk" && parsed.content) {
+              fullContent += parsed.content;
+              // Check for ACTION_REDIRECT
+              if (fullContent.includes("[ACTION_REDIRECT]")) {
+                actionRedirectDetected = true;
+                // Update the message to show "Processing action..."
+                setMessages(prev => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last?.role === "assistant") {
+                    updated[updated.length - 1] = { ...last, content: "" };
+                  }
+                  return updated;
+                });
+                // Don't process more chunks
+                reader.cancel();
+                break;
+              }
               setMessages(prev => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
                 if (last?.role === "assistant") {
-                  updated[updated.length - 1] = { ...last, content: last.content + parsed.content };
+                  updated[updated.length - 1] = { ...last, content: fullContent };
                 }
                 return updated;
               });
@@ -1332,18 +1555,26 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
             }
           } catch { /* skip */ }
         }
+        if (actionRedirectDetected) break;
       }
     } catch (err) {
-      setMessages(prev => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last?.role === "assistant") {
-          updated[updated.length - 1] = { ...last, content: "Failed to connect. Please try again." };
-        }
-        return updated;
-      });
+      if (!actionRedirectDetected) {
+        setMessages(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.role === "assistant") {
+            updated[updated.length - 1] = { ...last, content: "Failed to connect. Please try again." };
+          }
+          return updated;
+        });
+      }
     } finally {
       setIsStreaming(false);
+    }
+
+    // If ACTION_REDIRECT was detected, parse the intent
+    if (actionRedirectDetected) {
+      await parseIntent(originalUserText);
     }
   };
 
@@ -1352,13 +1583,86 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
     "Which buyer segments should I target first?",
     "Help me craft a compelling SMS blast for this deal",
     "What should my follow-up cadence look like?",
-    "How do I handle lowball offers on this property?",
-    "What's my negotiation strategy with multiple offers?",
+    `Update the asking price to $${property?.askingPrice ? ((property.askingPrice / 100) - 5000).toLocaleString() : "150,000"}`,
+    "Add a note that I spoke with the seller today",
   ];
+
+  // Render an action card
+  const renderActionCard = (card: NonNullable<DispoMessage["actionCards"]>[0], msgIdx: number, cardIdx: number) => {
+    const IconComp = DISPO_ACTION_ICONS[card.actionType] || Zap;
+    const label = DISPO_ACTION_LABELS[card.actionType] || card.actionType;
+    const isPending = card.status === "pending";
+    const isExecuting = card.status === "executing";
+    const isExecuted = card.status === "executed";
+    const isFailed = card.status === "failed";
+    const isCancelled = card.status === "cancelled";
+
+    return (
+      <div
+        key={card.id}
+        className="rounded-lg p-3 mt-2"
+        style={{
+          background: isExecuted ? "rgba(34,197,94,0.08)" : isFailed ? "rgba(239,68,68,0.08)" : isCancelled ? "rgba(156,163,175,0.08)" : "var(--g-surface)",
+          border: `1px solid ${isExecuted ? "rgba(34,197,94,0.3)" : isFailed ? "rgba(239,68,68,0.3)" : isCancelled ? "rgba(156,163,175,0.3)" : "var(--g-border-subtle)"}`,
+        }}
+      >
+        <div className="flex items-start gap-2">
+          <div
+            className="h-7 w-7 rounded-md flex items-center justify-center shrink-0 mt-0.5"
+            style={{ background: isExecuted ? "rgba(34,197,94,0.15)" : "var(--g-accent-soft)" }}
+          >
+            {isExecuting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "var(--g-accent)" }} />
+            ) : isExecuted ? (
+              <CheckCircle2 className="h-3.5 w-3.5" style={{ color: "rgb(34,197,94)" }} />
+            ) : isFailed ? (
+              <XCircle className="h-3.5 w-3.5" style={{ color: "rgb(239,68,68)" }} />
+            ) : isCancelled ? (
+              <X className="h-3.5 w-3.5" style={{ color: "rgb(156,163,175)" }} />
+            ) : (
+              <IconComp className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium" style={{ color: "var(--g-text-primary)" }}>{label}</span>
+              {isExecuted && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(34,197,94,0.15)", color: "rgb(34,197,94)" }}>Done</span>}
+              {isFailed && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.15)", color: "rgb(239,68,68)" }}>Failed</span>}
+              {isCancelled && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(156,163,175,0.15)", color: "rgb(156,163,175)" }}>Cancelled</span>}
+              {isExecuting && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "var(--g-accent-soft)", color: "var(--g-accent)" }}>Executing...</span>}
+            </div>
+            <p className="text-xs mt-0.5" style={{ color: "var(--g-text-secondary)" }}>{card.summary}</p>
+            {card.error && <p className="text-xs mt-1" style={{ color: "rgb(239,68,68)" }}>{card.error}</p>}
+          </div>
+        </div>
+
+        {/* Confirm / Cancel buttons */}
+        {isPending && (
+          <div className="flex gap-2 mt-2 ml-9">
+            <button
+              onClick={() => handleConfirmAction(msgIdx, cardIdx)}
+              className="text-xs px-3 py-1.5 rounded-md font-medium transition-all hover:opacity-90"
+              style={{ background: "var(--g-accent)", color: "#fff" }}
+            >
+              <CheckCircle2 className="h-3 w-3 inline mr-1" />
+              Confirm
+            </button>
+            <button
+              onClick={() => handleCancelAction(msgIdx, cardIdx)}
+              className="text-xs px-3 py-1.5 rounded-md font-medium transition-all hover:opacity-90"
+              style={{ background: "var(--g-surface)", color: "var(--g-text-secondary)", border: "1px solid var(--g-border-subtle)" }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 320px)", minHeight: 400, overflow: "hidden" }}>
-      {/* Messages - self-contained scroll (Item #17 fix: typing must not scroll page) */}
+      {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pb-3" style={{ overscrollBehavior: "contain" }}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 gap-4">
@@ -1367,7 +1671,7 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
             </div>
             <div className="text-center">
               <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--g-text-primary)" }}>AI Dispo Assistant</h3>
-              <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Property-aware AI for pricing, buyer targeting, negotiation, and deal strategy</p>
+              <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Ask questions, get advice, or tell me to take action on this property</p>
             </div>
             <div className="grid grid-cols-1 gap-2 w-full max-w-sm">
               {suggestedPrompts.slice(0, 4).map((prompt, i) => (
@@ -1390,25 +1694,29 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
                   <Sparkles className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
                 </div>
               )}
-              <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-xs ${msg.role === "user" ? "" : ""}`}
-                style={msg.role === "user"
-                  ? { background: "var(--g-accent)", color: "#fff" }
-                  : { background: "var(--g-surface)", color: "var(--g-text-primary)", border: "1px solid var(--g-border-subtle)" }
-                }
-              >
-                {msg.role === "assistant" && msg.content ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:text-xs [&_li]:text-xs [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
-                    <Streamdown>{msg.content}</Streamdown>
-                  </div>
-                ) : msg.role === "assistant" && !msg.content && isStreaming ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-3 w-3 animate-spin" style={{ color: "var(--g-accent)" }} />
-                    <span style={{ color: "var(--g-text-tertiary)" }}>Thinking...</span>
-                  </div>
-                ) : (
-                  <span className="whitespace-pre-wrap">{msg.content}</span>
-                )}
+              <div className={`max-w-[85%] ${msg.role === "user" ? "" : "w-full max-w-[85%]"}`}>
+                <div
+                  className="rounded-lg px-3 py-2 text-xs"
+                  style={msg.role === "user"
+                    ? { background: "var(--g-accent)", color: "#fff" }
+                    : { background: "var(--g-surface)", color: "var(--g-text-primary)", border: "1px solid var(--g-border-subtle)" }
+                  }
+                >
+                  {msg.role === "assistant" && msg.content ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:text-xs [&_li]:text-xs [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
+                      <Streamdown>{msg.content}</Streamdown>
+                    </div>
+                  ) : msg.role === "assistant" && !msg.content && (isStreaming || isParsingIntent) ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-3 w-3 animate-spin" style={{ color: "var(--g-accent)" }} />
+                      <span style={{ color: "var(--g-text-tertiary)" }}>{isParsingIntent ? "Preparing action..." : "Thinking..."}</span>
+                    </div>
+                  ) : (
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
+                  )}
+                </div>
+                {/* Action Cards */}
+                {msg.actionCards && msg.actionCards.map((card, ci) => renderActionCard(card, i, ci))}
               </div>
             </div>
           ))
@@ -1426,18 +1734,18 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-            placeholder="Ask about pricing, buyers, negotiation..."
+            placeholder="Ask for advice or tell me to take action..."
             rows={1}
             className="flex-1 text-xs px-3 py-2 rounded-lg resize-none outline-none"
             style={{ background: "var(--g-surface)", border: "1px solid var(--g-border-subtle)", color: "var(--g-text-primary)", maxHeight: 80 }}
           />
           <button
             type="submit"
-            disabled={!input.trim() || isStreaming}
+            disabled={!input.trim() || isStreaming || isParsingIntent}
             className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-all disabled:opacity-40"
             style={{ background: "var(--g-accent)", color: "#fff" }}
           >
-            {isStreaming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {(isStreaming || isParsingIntent) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           </button>
         </form>
       </div>

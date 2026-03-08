@@ -1,12 +1,14 @@
 /**
- * AI Dispo Assistant — Streaming SSE endpoint
+ * AI Dispo Assistant — Streaming SSE endpoint + Parse Intent for actions
  * Property-aware AI chat for disposition strategy, buyer management, and deal advice
+ * Now with ACTION_REDIRECT support for executing property actions
  */
 import { Router, type Request, type Response } from "express";
 import { parse as parseCookieHeader } from "cookie";
 import { verifySessionToken, getUserById } from "./selfServeAuth";
 import { sdk } from "./_core/sdk";
 import { invokeLLMStream } from "./llmStream";
+import { invokeLLM } from "./_core/llm";
 import { getPropertyDetail } from "./inventory";
 import type { User } from "../drizzle/schema";
 
@@ -38,10 +40,13 @@ export function buildPropertyContext(detail: any): string {
   if (!detail) return "No property selected.";
 
   const lines: string[] = [];
+  lines.push(`PROPERTY ID: ${detail.id}`);
   lines.push(`PROPERTY: ${detail.address}, ${detail.city} ${detail.state} ${detail.zip || ""}`);
   lines.push(`Status: ${detail.status} | Type: ${detail.propertyType || "N/A"}`);
   if (detail.askingPrice) lines.push(`Asking Price: $${(detail.askingPrice / 100).toLocaleString()}`);
   if (detail.dispoAskingPrice) lines.push(`Dispo Asking: $${(detail.dispoAskingPrice / 100).toLocaleString()}`);
+  if (detail.contractPrice) lines.push(`Contract Price: $${(detail.contractPrice / 100).toLocaleString()}`);
+  if (detail.assignmentFee) lines.push(`Assignment Fee: $${(detail.assignmentFee / 100).toLocaleString()}`);
   if (detail.arv) lines.push(`ARV: $${(detail.arv / 100).toLocaleString()}`);
   if (detail.estRepairs) lines.push(`Est. Repairs: $${(detail.estRepairs / 100).toLocaleString()}`);
   if (detail.beds || detail.baths || detail.sqft) {
@@ -145,6 +150,8 @@ export function buildPropertyContext(detail: any): string {
   return lines.join("\n");
 }
 
+const VALID_PROPERTY_STATUSES = ["lead", "new", "apt_set", "offer_made", "under_contract", "marketing", "negotiating", "buyer_negotiating", "closing", "closed", "follow_up", "dead"];
+
 const DISPO_ASSISTANT_SYSTEM = `You are an expert Disposition Assistant for a real estate wholesaling team. You have full context on the selected property including its details, outreach history, buyer activity, offers, showings, and activity log.
 
 Your expertise covers:
@@ -159,8 +166,37 @@ Your expertise covers:
 
 Always ground your advice in the ACTUAL property data provided. Reference specific numbers, buyer names, and dates when relevant. Be direct, actionable, and specific — not generic. Think like a seasoned dispo manager who has closed hundreds of wholesale deals.
 
-When the property has been on market for a while with low interest, proactively suggest pricing adjustments or new marketing angles. When there are active offers, help with negotiation strategy. When there are no buyers yet, focus on outreach planning.`;
+When the property has been on market for a while with low interest, proactively suggest pricing adjustments or new marketing angles. When there are active offers, help with negotiation strategy. When there are no buyers yet, focus on outreach planning.
 
+## ACTION CAPABILITIES
+
+You can also EXECUTE actions on this property. When the user asks you to DO something (not just advise), output the tag [ACTION_REDIRECT] and STOP generating. The frontend will then parse the user's intent into a confirmable action.
+
+**Supported actions you can execute:**
+- **update_property_price** — Change asking price, dispo asking price, assignment fee, or contract price
+- **update_property_status** — Change the property's pipeline status (valid: ${VALID_PROPERTY_STATUSES.join(", ")})
+- **add_property_offer** — Record a new offer from a buyer (name, amount, phone, email, notes)
+- **schedule_property_showing** — Schedule a showing for a buyer (name, date, time, notes)
+- **record_property_send** — Record an outreach send (channel: sms/email/facebook/investor_base/other, group, count)
+- **add_property_note** — Add an activity note to the property log
+
+**When to use [ACTION_REDIRECT]:**
+- User says "update the price to $X" → [ACTION_REDIRECT]
+- User says "change status to marketing" → [ACTION_REDIRECT]
+- User says "add an offer from John for $150k" → [ACTION_REDIRECT]
+- User says "schedule a showing for Mike tomorrow at 2pm" → [ACTION_REDIRECT]
+- User says "record that I sent 50 SMS blasts" → [ACTION_REDIRECT]
+- User says "add a note that I spoke with the seller" → [ACTION_REDIRECT]
+
+**When NOT to use [ACTION_REDIRECT]:**
+- User asks for advice: "What should I price this at?" → Give advice normally
+- User asks a question: "How many offers do we have?" → Answer from context
+- User asks for strategy: "What's the best outreach plan?" → Provide strategy
+- User is just chatting or discussing → Respond conversationally
+
+IMPORTANT: Only output [ACTION_REDIRECT] when the user clearly wants to PERFORM an action, not when they're asking for advice or information. When you detect an action intent, output [ACTION_REDIRECT] immediately — do not include any other text before or after it.`;
+
+// ─── STREAMING ENDPOINT ───
 dispoAssistantRouter.post("/api/dispo-assistant/stream", async (req: Request, res: Response) => {
   const user = await authenticateRequest(req);
   if (!user) {
@@ -236,6 +272,135 @@ Today's date: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: 
     console.error("[DispoAssistant] Error:", error);
     res.write(`data: ${JSON.stringify({ type: "error", message: "Failed to process request" })}\n\n`);
     res.end();
+  }
+});
+
+// ─── PARSE INTENT ENDPOINT ───
+const VALID_DISPO_ACTIONS = [
+  "update_property_price", "update_property_status", "add_property_offer",
+  "schedule_property_showing", "record_property_send", "add_property_note"
+];
+
+dispoAssistantRouter.post("/api/dispo-assistant/parse-intent", async (req: Request, res: Response) => {
+  const user = await authenticateRequest(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const { message, propertyId, history } = req.body as {
+    message: string;
+    propertyId: number;
+    history?: Array<{ role: "user" | "assistant"; content: string }>;
+  };
+
+  if (!message || !propertyId) {
+    res.status(400).json({ error: "Message and propertyId are required" });
+    return;
+  }
+
+  const tenantId = user.tenantId || undefined;
+  if (!tenantId) {
+    res.status(403).json({ error: "No tenant" });
+    return;
+  }
+
+  try {
+    const detail = await getPropertyDetail(tenantId, propertyId);
+    const propertyContext = buildPropertyContext(detail);
+
+    const parsePrompt = `You are parsing a user's request into structured property actions.
+
+CURRENT PROPERTY CONTEXT:
+${propertyContext}
+
+The user said: "${message}"
+
+${history && history.length > 0 ? `Recent conversation context:\n${history.slice(-5).map(h => `${h.role}: ${h.content}`).join("\n")}` : ""}
+
+Determine what action(s) the user wants to perform. Return a JSON object with an "actions" array.
+
+IMPORTANT RULES:
+- All prices/amounts should be in CENTS (multiply dollar amounts by 100). For example, $150,000 = 15000000 cents.
+- The propertyId for this property is: ${propertyId}
+- Valid statuses: ${VALID_PROPERTY_STATUSES.join(", ")}
+- Valid send channels: sms, email, facebook, investor_base, other
+- For showingDate, use YYYY-MM-DD format
+- For showingTime, use HH:MM format (24-hour)
+- If the user mentions "today", use ${new Date().toISOString().split("T")[0]}
+- If the user mentions "tomorrow", use ${new Date(Date.now() + 86400000).toISOString().split("T")[0]}
+- Include a clear, human-readable "summary" for each action
+
+Each action in the array should have:
+- actionType: one of [${VALID_DISPO_ACTIONS.map(a => `"${a}"`).join(", ")}]
+- summary: a human-readable description of what will happen
+- params: an object with the action-specific parameters (always include propertyId: ${propertyId})
+
+Action-specific params:
+- update_property_price: { propertyId, askingPrice?, dispoAskingPrice?, assignmentFee?, contractPrice? } (all in cents)
+- update_property_status: { propertyId, newStatus }
+- add_property_offer: { propertyId, buyerName, offerAmount (cents), buyerPhone?, buyerEmail?, buyerCompany?, notes? }
+- schedule_property_showing: { propertyId, buyerName, showingDate (YYYY-MM-DD), showingTime? (HH:MM), buyerPhone?, notes? }
+- record_property_send: { propertyId, channel, buyerGroup?, recipientCount?, notes? }
+- add_property_note: { propertyId, title, noteBody }
+
+If the user's message doesn't clearly indicate an action, return { "actions": [] }.`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: parsePrompt },
+        { role: "user", content: message },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "dispo_actions",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              actions: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    actionType: { type: "string", description: "The type of action to perform" },
+                    summary: { type: "string", description: "Human-readable summary of the action" },
+                    params: {
+                      type: "object",
+                      description: "Action-specific parameters",
+                      additionalProperties: true,
+                    },
+                  },
+                  required: ["actionType", "summary", "params"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["actions"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const rawContent = response?.choices?.[0]?.message?.content;
+    if (!rawContent || typeof rawContent !== "string") {
+      res.json({ actions: [] });
+      return;
+    }
+
+    const parsed = JSON.parse(rawContent);
+    const validActions = (parsed.actions || []).filter((a: any) =>
+      a && typeof a.actionType === "string" && VALID_DISPO_ACTIONS.includes(a.actionType)
+    );
+
+    console.log(`[DispoParseIntent] User: "${message.substring(0, 100)}" → ${validActions.length} actions: ${validActions.map((a: any) => a.actionType).join(", ") || "none"}`);
+
+    res.json({ actions: validActions });
+  } catch (error: any) {
+    console.error("[DispoParseIntent] Error:", error);
+    res.status(500).json({ error: "Failed to parse intent", details: error.message });
   }
 });
 

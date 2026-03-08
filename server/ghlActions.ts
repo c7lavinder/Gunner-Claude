@@ -8,6 +8,7 @@ import { coachActionLog } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { parseCrmConfig, getTenantById, type TenantCrmConfig } from "./tenant";
 import { ghlCircuitBreaker, getCachedContactSearch, setCachedContactSearch } from "./ghlRateLimiter";
+import { updateProperty, addPropertyOffer, addPropertyShowing, addPropertySend, logPropertyActivity } from "./inventory";
 import { getValidAccessToken, handleTokenRefreshOn401 } from "./ghlOAuth";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
@@ -2072,6 +2073,129 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         console.log(`[GHLActions] Cancelling appointment: "${apptToCancel.appointmentTitle}" (${apptToCancel.appointmentId})`);
         
         result = await cancelAppointment(action.tenantId, apptToCancel.appointmentId);
+        break;
+      }
+      // ─── DISPO PROPERTY ACTIONS ───
+      case "update_property_price": {
+        const propertyId = payload.propertyId;
+        if (!propertyId) throw new Error("Missing propertyId for price update");
+        const priceUpdate: Record<string, any> = {};
+        if (payload.askingPrice) priceUpdate.askingPrice = Number(payload.askingPrice);
+        if (payload.dispoAskingPrice) priceUpdate.dispoAskingPrice = Number(payload.dispoAskingPrice);
+        if (payload.assignmentFee) priceUpdate.assignmentFee = Number(payload.assignmentFee);
+        if (payload.contractPrice) priceUpdate.contractPrice = Number(payload.contractPrice);
+        if (Object.keys(priceUpdate).length === 0) throw new Error("No price fields provided");
+        await updateProperty(action.tenantId, propertyId, priceUpdate, action.requestedBy);
+        await logPropertyActivity(action.tenantId, propertyId, {
+          eventType: "price_change",
+          title: "Price updated via AI Dispo Assistant",
+          description: Object.entries(priceUpdate).map(([k, v]) => `${k}: $${(Number(v) / 100).toLocaleString()}`).join(", "),
+          performedByUserId: action.requestedBy,
+          performedByName: action.requestedByName || undefined,
+        });
+        result = { success: true };
+        break;
+      }
+      case "update_property_status": {
+        const propertyId = payload.propertyId;
+        if (!propertyId) throw new Error("Missing propertyId for status update");
+        if (!payload.newStatus) throw new Error("Missing newStatus");
+        await updateProperty(action.tenantId, propertyId, { status: payload.newStatus }, action.requestedBy);
+        await logPropertyActivity(action.tenantId, propertyId, {
+          eventType: "status_change",
+          title: `Status changed to ${payload.newStatus.replace(/_/g, " ")}`,
+          description: `Updated via AI Dispo Assistant`,
+          performedByUserId: action.requestedBy,
+          performedByName: action.requestedByName || undefined,
+        });
+        result = { success: true };
+        break;
+      }
+      case "add_property_offer": {
+        const propertyId = payload.propertyId;
+        if (!propertyId) throw new Error("Missing propertyId for offer");
+        if (!payload.buyerName) throw new Error("Missing buyerName");
+        if (!payload.offerAmount) throw new Error("Missing offerAmount");
+        const offerResult = await addPropertyOffer(action.tenantId, {
+          propertyId,
+          buyerName: payload.buyerName,
+          buyerPhone: payload.buyerPhone || undefined,
+          buyerEmail: payload.buyerEmail || undefined,
+          buyerCompany: payload.buyerCompany || undefined,
+          offerAmount: Number(payload.offerAmount),
+          notes: payload.notes || undefined,
+        });
+        await logPropertyActivity(action.tenantId, propertyId, {
+          eventType: "offer_received",
+          title: `Offer from ${payload.buyerName}: $${(Number(payload.offerAmount) / 100).toLocaleString()}`,
+          description: `Added via AI Dispo Assistant`,
+          buyerName: payload.buyerName,
+          offerId: offerResult.id,
+          performedByUserId: action.requestedBy,
+          performedByName: action.requestedByName || undefined,
+        });
+        result = { success: true };
+        break;
+      }
+      case "schedule_property_showing": {
+        const propertyId = payload.propertyId;
+        if (!propertyId) throw new Error("Missing propertyId for showing");
+        if (!payload.buyerName) throw new Error("Missing buyerName");
+        if (!payload.showingDate) throw new Error("Missing showingDate");
+        const showingResult = await addPropertyShowing(action.tenantId, {
+          propertyId,
+          buyerName: payload.buyerName,
+          buyerPhone: payload.buyerPhone || undefined,
+          buyerCompany: payload.buyerCompany || undefined,
+          showingDate: payload.showingDate,
+          showingTime: payload.showingTime || undefined,
+          notes: payload.notes || undefined,
+        });
+        await logPropertyActivity(action.tenantId, propertyId, {
+          eventType: "showing_scheduled",
+          title: `Showing scheduled for ${payload.buyerName} on ${payload.showingDate}`,
+          description: payload.showingTime ? `Time: ${payload.showingTime}` : "Time TBD",
+          buyerName: payload.buyerName,
+          showingId: showingResult.id,
+          performedByUserId: action.requestedBy,
+          performedByName: action.requestedByName || undefined,
+        });
+        result = { success: true };
+        break;
+      }
+      case "record_property_send": {
+        const propertyId = payload.propertyId;
+        if (!propertyId) throw new Error("Missing propertyId for send");
+        if (!payload.channel) throw new Error("Missing channel");
+        const sendResult = await addPropertySend(action.tenantId, action.requestedBy, {
+          propertyId,
+          channel: payload.channel,
+          buyerGroup: payload.buyerGroup || undefined,
+          recipientCount: payload.recipientCount ? Number(payload.recipientCount) : undefined,
+          notes: payload.notes || undefined,
+        });
+        await logPropertyActivity(action.tenantId, propertyId, {
+          eventType: "send",
+          title: `Send recorded via ${payload.channel}`,
+          description: payload.buyerGroup ? `Group: ${payload.buyerGroup}` : undefined,
+          sendId: sendResult.id,
+          performedByUserId: action.requestedBy,
+          performedByName: action.requestedByName || undefined,
+        });
+        result = { success: true };
+        break;
+      }
+      case "add_property_note": {
+        const propertyId = payload.propertyId;
+        if (!propertyId) throw new Error("Missing propertyId for note");
+        await logPropertyActivity(action.tenantId, propertyId, {
+          eventType: "note_added",
+          title: payload.title || "Note from AI Dispo Assistant",
+          description: payload.noteBody || payload.description || "",
+          performedByUserId: action.requestedBy,
+          performedByName: action.requestedByName || undefined,
+        });
+        result = { success: true };
         break;
       }
       default:

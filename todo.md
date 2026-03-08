@@ -4679,3 +4679,15 @@
 - [x] #20 Remove 3-dot menu on property card, make entire card clickable (already clean)
 - [x] #21 Inventory — table view default, added Spread/Buyers/Showings columns
 - [x] #22 Inventory stage tabs filtered by role (already implemented)
+
+## Dispo AI Action Capabilities
+- [x] Add dispo action types to coachActionLog schema enum (update_property_price, update_property_status, add_property_offer, schedule_property_showing, record_property_send, add_property_note)
+- [x] Add dispo action handlers to executeAction in ghlActions.ts
+- [x] Add dispo action types to VALID_ACTION_TYPES in routers.ts (parseIntent + createPending)
+- [x] Enhance dispoAssistantStream.ts with ACTION_REDIRECT system prompt
+- [x] Add parse-intent endpoint for dispo actions (/api/dispo-assistant/parse-intent)
+- [x] Frontend DispoAITab: ACTION_REDIRECT detection during streaming
+- [x] Frontend DispoAITab: Action card rendering with confirm/cancel buttons
+- [x] Frontend DispoAITab: Action status badges (Done, Failed, Cancelled, Executing)
+- [x] Frontend DispoAITab: Property data invalidation after successful actions
+- [x] Tests: 35 tests covering schema, backend handlers, routers, stream prompt, and frontend
