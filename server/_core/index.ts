@@ -16,6 +16,7 @@ import selfServeAuthRoutes from "../selfServeAuthRoutes";
 import { runEmailSequenceJobs } from "../emailSequenceJobs";
 import { coachStreamRouter } from "../coachStream";
 import { dispoAssistantRouter } from "../dispoAssistantStream";
+import { analyticsStreamRouter } from "../analyticsStream";
 import { startBatchDialerPolling } from "../batchDialerSync";
 import { startBatchLeadsPolling } from "../batchLeadsSync";
 import { startWebhookRetryQueue } from "../webhookRetryQueue";
@@ -69,6 +70,9 @@ async function startServer() {
   
   // AI Dispo Assistant streaming endpoint
   app.use(dispoAssistantRouter);
+  
+  // AI Analytics Coach streaming endpoint
+  app.use(analyticsStreamRouter);
   
   // Seed team members on startup
   seedTeamMembers().catch(err => console.error("Failed to seed team members:", err));

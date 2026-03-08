@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Streamdown } from "streamdown";
+import { toast } from "sonner";
 import {
   Phone,
   MessageSquare,
@@ -16,6 +19,15 @@ import {
   Zap,
   ArrowUpRight,
   ArrowDownRight,
+  Sparkles,
+  Send,
+  X,
+  Loader2,
+  Brain,
+  AlertTriangle,
+  DollarSign,
+  Users,
+  ChevronUp,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -45,6 +57,294 @@ const gradeBg: Record<string, string> = {
 
 type DateRange = "today" | "week" | "month" | "ytd" | "all";
 
+/* ─── AI Analytics Coach ─── */
+type ChatMessage = { role: "user" | "assistant"; content: string };
+
+const SUGGESTED_PROMPTS = [
+  { icon: AlertTriangle, label: "What are our biggest issues right now?", category: "issues" },
+  { icon: TrendingUp, label: "How are our trends looking this month?", category: "trends" },
+  { icon: DollarSign, label: "How can we increase our ROI?", category: "roi" },
+  { icon: Users, label: "Who needs coaching attention?", category: "team" },
+  { icon: Brain, label: "What should we focus on this week?", category: "strategy" },
+  { icon: BarChart3, label: "Give me a full performance breakdown", category: "overview" },
+];
+
+function AnalyticsAICoach() {
+  const { user } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const isAdmin = user?.teamRole === "admin" || user?.isTenantAdmin === "true";
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const streamQuestion = async (question: string) => {
+    const history = messages.filter(m => m.role === "user" || m.role === "assistant");
+    setMessages(prev => [...prev, { role: "user", content: question }, { role: "assistant", content: "" }]);
+    setIsStreaming(true);
+    setInput("");
+
+    try {
+      const response = await fetch("/api/analytics/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, history: history.slice(-10) }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Request failed" }));
+        throw new Error(err.error || "Request failed");
+      }
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const data = trimmed.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === "chunk" && parsed.content) {
+              setMessages(prev => {
+                const updated = [...prev];
+                const lastMsg = updated[updated.length - 1];
+                if (lastMsg && lastMsg.role === "assistant") {
+                  updated[updated.length - 1] = { ...lastMsg, content: lastMsg.content + parsed.content };
+                }
+                return updated;
+              });
+            } else if (parsed.type === "error") {
+              toast.error("Analytics AI error: " + parsed.message);
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to get analytics insight");
+      setMessages(prev => {
+        const updated = [...prev];
+        if (updated[updated.length - 1]?.role === "assistant" && !updated[updated.length - 1]?.content) {
+          updated.pop();
+        }
+        return updated;
+      });
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
+  const handleSubmit = () => {
+    const q = input.trim();
+    if (!q || isStreaming) return;
+    streamQuestion(q);
+  };
+
+  if (!isAdmin) return null;
+
+  return (
+    <>
+      {/* Floating toggle button */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl transition-all hover:scale-105 active:scale-95"
+          style={{
+            background: "linear-gradient(135deg, #8B1A1A, #b91c1c)",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,0.15)",
+          }}
+        >
+          <Brain className="h-5 w-5" />
+          <span className="text-sm font-semibold">Analytics AI</span>
+        </button>
+      )}
+
+      {/* Chat panel */}
+      {isOpen && (
+        <div
+          className="fixed bottom-6 right-6 z-50 flex flex-col rounded-2xl shadow-2xl overflow-hidden"
+          style={{
+            width: 440,
+            maxWidth: "calc(100vw - 48px)",
+            height: 600,
+            maxHeight: "calc(100vh - 120px)",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-4 py-3 shrink-0"
+            style={{
+              background: "linear-gradient(135deg, #8B1A1A, #b91c1c)",
+              color: "#fff",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Brain className="h-5 w-5" />
+              <div>
+                <h3 className="text-sm font-bold leading-tight">Analytics AI</h3>
+                <p className="text-[10px] opacity-80">Data-driven insights for your team</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => { setMessages([]); setInput(""); }}
+                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-[10px] font-medium"
+                title="Clear conversation"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Messages area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ minHeight: 0 }}>
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+                  style={{ background: "rgba(139,26,26,0.1)" }}
+                >
+                  <Sparkles className="h-7 w-7" style={{ color: "#8B1A1A" }} />
+                </div>
+                <h4 className="text-base font-bold mb-1">Ask me anything about your data</h4>
+                <p className="text-xs text-muted-foreground mb-5">
+                  I can analyze trends, spot issues, compare team members, and suggest ways to increase ROI.
+                </p>
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  {SUGGESTED_PROMPTS.map((prompt, i) => {
+                    const Icon = prompt.icon;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => streamQuestion(prompt.label)}
+                        className="flex items-start gap-2 text-left p-2.5 rounded-xl border border-border hover:bg-muted/50 transition-all hover:border-primary/30 group"
+                      >
+                        <Icon className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" style={{ color: "#8B1A1A" }} />
+                        <span className="text-[11px] leading-tight text-muted-foreground group-hover:text-foreground transition-colors">
+                          {prompt.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <>
+                {messages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : ""
+                      }`}
+                      style={
+                        msg.role === "assistant"
+                          ? { background: "var(--muted)", color: "var(--foreground)" }
+                          : {}
+                      }
+                    >
+                      {msg.role === "assistant" ? (
+                        msg.content ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:my-1 [&_ul]:my-1 [&_li]:my-0.5 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm">
+                            <Streamdown>{msg.content}</Streamdown>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span className="text-xs">Analyzing your data...</span>
+                          </div>
+                        )
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+
+          {/* Quick follow-ups when conversation is active */}
+          {messages.length > 0 && !isStreaming && (
+            <div className="px-4 pb-2 flex flex-wrap gap-1.5 shrink-0">
+              {[
+                "Dig deeper into that",
+                "What should we do about it?",
+                "Compare to last month",
+                "Show me the numbers",
+              ].map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => streamQuestion(q)}
+                  className="text-[10px] px-2.5 py-1 rounded-full border border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Input area */}
+          <div className="p-3 shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                placeholder="Ask about trends, issues, ROI..."
+                className="flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                rows={1}
+                style={{ maxHeight: 80 }}
+              />
+              <button
+                onClick={handleSubmit}
+                disabled={!input.trim() || isStreaming}
+                className="p-2.5 rounded-xl transition-all disabled:opacity-40"
+                style={{
+                  background: input.trim() && !isStreaming ? "linear-gradient(135deg, #8B1A1A, #b91c1c)" : "var(--muted)",
+                  color: input.trim() && !isStreaming ? "#fff" : "var(--muted-foreground)",
+                }}
+              >
+                {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════
    ANALYTICS PAGE — $100M SaaS Grade
@@ -562,6 +862,9 @@ export default function Analytics() {
           </div>
         </div>
       )}
+
+      {/* AI Analytics Coach floating panel */}
+      <AnalyticsAICoach />
     </div>
   );
 }

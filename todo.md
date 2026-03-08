@@ -4724,3 +4724,11 @@
 - [x] Deep LLM quality pass: Improve Dispo AI system prompt with wholesaling expertise
 - [x] Deep LLM quality pass: Improve parseIntent prompts for better action detection accuracy
 - [ ] Deep LLM quality pass: Add thinking budget/chain-of-thought to complex LLM calls
+
+## AI Analytics Coach on KPI Page
+- [x] Backend: Analytics data aggregation endpoint (team stats, trends, call outcomes, pipeline data, conversion rates)
+- [x] Backend: AI Analytics streaming endpoint with comprehensive system prompt for KPI analysis
+- [x] Backend: System prompt covers trend analysis, issue detection, ROI guidance, and improvement recommendations
+- [x] Frontend: AI Analytics Coach chat panel on KPI/Analytics page
+- [x] Frontend: Pre-loaded context chips for common analytics questions
+- [x] Tests: Analytics AI endpoint and data aggregation tests
