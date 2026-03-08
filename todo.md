@@ -4843,3 +4843,25 @@
 
 ## Bug Fix: Delete Property Foreign Key Constraint
 - [x] Fix deleteProperty to cascade-delete all related records (dealContentEdits, dealDistributions, buyerActivity, activityLog, sends, offers, showings, stageHistory, nullify KPI entries) before deleting the property
+
+
+## Inventory Page Fixes (19 Issues)
+- [x] 1. Hide "Dead" status tab from Dispo Manager role
+- [x] 2. Remove "All" status tab entirely for all roles; enhance search to work cross-status
+- [x] 3. Markets dropdown shows only configured markets from tenant playbook (kpiMarkets)
+- [x] 4. Project Types: Flipper, Landlord, Builder, Multi Family, Turn Key (multi-select for buyer matching)
+- [x] 5. Remove count numbers from status tabs and eliminate horizontal scroll
+- [x] 6. Fix search bar — fixed-width, always visible (no expand animation)
+- [x] 7. Bulk edit: add Set Market, Set Source, Set Project Type actions
+- [x] 8. Remove invalid project type options (Wholesale, Novation, Creative Finance, Fix & Flip) everywhere
+- [x] 9. Market auto-populates from zip code (kpiMarkets zipCodes mapping)
+- [x] 10. AI Dispo Assistant tab — pin search/input bar at bottom without scrolling
+- [x] 11. Fix table column data mapping — Address column header added, values aligned correctly
+- [x] 12. Accepted Offer field auto-populates from accepted offer amount in Offers tab (updateOfferStatus)
+- [x] 13. Add "Rematch Buyers" button on Buyers tab (clears and re-runs matching)
+- [x] 14. Remove 200 buyer cap; market = hard filter; sort by project type match > tier > other factors
+- [x] 15. Add search/filter to Buyers tab (search by name, phone, etc.)
+- [x] 16. Confirmation dialogs for buyer action buttons (SMS, Email) showing to/channel info
+- [x] 17. Acquisition stages show different columns: Last Offer, Last Contacted, Last Conversation; Disposition stages show: Sends, Buyers, Offers, Showings
+- [x] 18. Market-to-zip mappings stored at kpiMarkets level (zipCodes field already exists)
+- [x] 19. CSV import with column mapping UI — added projectType, opportunitySource, acceptedOffer to mappable fields

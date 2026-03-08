@@ -1638,7 +1638,9 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   dispoAskingPrice: int("dispoAskingPrice"), // in cents — dispo-specific asking price (may differ from askingPrice)
   // Opportunity & Project Details
   opportunitySource: varchar("opportunitySource", { length: 255 }), // Source from GHL opportunity (e.g. "Cold Call", "Direct Mail")
-  projectType: mysqlEnum("projectType", ["wholesale", "novation", "creative_finance", "fix_and_flip", "buy_and_hold", "other"]),
+  projectType: varchar("projectType", { length: 255 }), // multi-select: flipper, landlord, builder, multi_family, turn_key
+  lastContactedAt: timestamp("lastContactedAt"), // auto-updated on any send action
+  lastConversationAt: timestamp("lastConversationAt"), // auto-updated on confirmed two-way exchange
   // AI Property Research (auto-fetched from Zillow, county records, etc.)
   propertyResearch: json("property_research").$type<{
     zestimate?: number;

@@ -208,7 +208,20 @@ function PropertyFormDialog({
             <div className="grid grid-cols-3 gap-2">
               <Input placeholder="City *" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
               <Input placeholder="State *" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
-              <Input placeholder="ZIP" value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} />
+              <Input placeholder="ZIP" value={form.zip} onChange={(e) => {
+                const newZip = e.target.value;
+                const update: any = { zip: newZip };
+                // Fix #9: Auto-populate market from zip code
+                if (newZip.length >= 5 && kpiMarkets) {
+                  const matchedMarket = kpiMarkets.find((m: any) => 
+                    m.zipCodes && Array.isArray(m.zipCodes) && m.zipCodes.includes(newZip)
+                  );
+                  if (matchedMarket && !form.market) {
+                    update.market = matchedMarket.name;
+                  }
+                }
+                setForm({ ...form, ...update });
+              }} />
             </div>
           </div>
           <div className="space-y-2">
@@ -217,15 +230,10 @@ function PropertyFormDialog({
               <Select value={form.propertyType} onValueChange={(v) => setForm({ ...form, propertyType: v })}>
                 <SelectTrigger><SelectValue placeholder="Property Type" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="flipper">Flipper</SelectItem>
-                  <SelectItem value="landlord">Landlord</SelectItem>
-                  <SelectItem value="builder">Builder</SelectItem>
-                  <SelectItem value="multi_family">Multi Family</SelectItem>
-                  <SelectItem value="turn_key">Turn Key</SelectItem>
-                  <SelectItem value="wholesale">Wholesale</SelectItem>
                   <SelectItem value="house">House</SelectItem>
                   <SelectItem value="lot">Lot</SelectItem>
                   <SelectItem value="land">Land</SelectItem>
+                  <SelectItem value="multi_family">Multi Family</SelectItem>
                   <SelectItem value="commercial">Commercial</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
@@ -283,7 +291,7 @@ function PropertyFormDialog({
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-tertiary)" }}>Deal Info</label>
             <div className="grid grid-cols-3 gap-2">
               <SearchableSelect
-                placeholder="Project Type"
+                placeholder="Project Type (multi-select)"
                 value={form.projectType || ""}
                 onValueChange={(v) => setForm({ ...form, projectType: v })}
                 options={[
@@ -292,12 +300,6 @@ function PropertyFormDialog({
                   { value: "builder", label: "Builder" },
                   { value: "multi_family", label: "Multi Family" },
                   { value: "turn_key", label: "Turn Key" },
-                  { value: "wholesale", label: "Wholesale" },
-                  { value: "novation", label: "Novation" },
-                  { value: "creative_finance", label: "Creative Finance" },
-                  { value: "fix_and_flip", label: "Fix & Flip" },
-                  { value: "buy_and_hold", label: "Buy & Hold" },
-                  { value: "other", label: "Other" },
                 ]}
               />
               <SearchableSelect
@@ -933,21 +935,66 @@ function BuyersTab({ propertyId }: { propertyId: number }) {
   });
   const { data: responseStats } = trpc.inventory.getBuyerResponseStats.useQuery({ propertyId });
 
+  const rematchMutation = trpc.inventory.rematchBuyers.useMutation({
+    onSuccess: (result) => {
+      utils.inventory.getBuyerActivities.invalidate({ propertyId });
+      toast.success(`Re-matched ${result.matched} buyers (cleared previous matches)`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const [buyerSearch, setBuyerSearch] = useState("");
+  const [buyerStatusFilter, setBuyerStatusFilter] = useState<string>("all");
+  const [sendConfirm, setSendConfirm] = useState<{ buyerId: number; channel: string; buyerName: string; buyerPhone: string; buyerEmail: string } | null>(null);
+
   if (isLoading) return <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>;
 
-  const buyerList = (buyers as any[]) || [];
+  const allBuyers = (buyers as any[]) || [];
+  // Apply search and status filter
+  const buyerList = allBuyers.filter((b: any) => {
+    const matchesSearch = !buyerSearch || 
+      (b.buyerName || "").toLowerCase().includes(buyerSearch.toLowerCase()) ||
+      (b.buyerPhone || "").includes(buyerSearch) ||
+      (b.buyerEmail || "").toLowerCase().includes(buyerSearch.toLowerCase()) ||
+      (b.buyerCompany || "").toLowerCase().includes(buyerSearch.toLowerCase());
+    const matchesStatus = buyerStatusFilter === "all" || b.status === buyerStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="space-y-3">
       {/* Action Bar */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" variant="outline" onClick={() => setAddBuyerOpen(true)}>
           <UserPlus className="h-3 w-3 mr-1" /> Add Buyer
         </Button>
         <Button size="sm" variant="outline" onClick={() => matchMutation.mutate({ propertyId })} disabled={matchMutation.isPending}>
           <Target className="h-3 w-3 mr-1" /> {matchMutation.isPending ? "Matching..." : "Match from GHL"}
         </Button>
+        <Button size="sm" variant="outline" onClick={() => rematchMutation.mutate({ propertyId })} disabled={rematchMutation.isPending}>
+          <RefreshCw className="h-3 w-3 mr-1" /> {rematchMutation.isPending ? "Rematching..." : "Rematch Buyers"}
+        </Button>
       </div>
+      {/* Search & Filter */}
+      {allBuyers.length > 0 && (
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
+            <Input className="pl-8 h-7 text-xs" placeholder="Search buyers..." value={buyerSearch} onChange={(e) => setBuyerSearch(e.target.value)} />
+          </div>
+          <Select value={buyerStatusFilter} onValueChange={setBuyerStatusFilter}>
+            <SelectTrigger className="w-[110px] h-7 text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              {(["matched", "sent", "interested", "offered", "passed", "accepted", "skipped"] as BuyerStatus[]).map(s => (
+                <SelectItem key={s} value={s}>{BUYER_STATUS_CONFIG[s].label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-[10px] whitespace-nowrap" style={{ color: "var(--g-text-tertiary)" }}>{buyerList.length}/{allBuyers.length}</span>
+        </div>
+      )}
 
       {/* Response Stats Bar */}
       {responseStats && responseStats.totalSent > 0 && (
@@ -1035,10 +1082,14 @@ function BuyersTab({ propertyId }: { propertyId: number }) {
               )}
               {/* Quick actions */}
               <div className="flex items-center gap-1 mt-2 pt-2" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => recordSendMutation.mutate({ buyerActivityId: buyer.id, channel: "sms" })}>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => {
+                  setSendConfirm({ buyerId: buyer.id, channel: "sms", buyerName: buyer.buyerName || "Unknown", buyerPhone: buyer.buyerPhone || "", buyerEmail: buyer.buyerEmail || "" });
+                }}>
                   <MessageSquare className="h-3 w-3 mr-1" /> SMS
                 </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => recordSendMutation.mutate({ buyerActivityId: buyer.id, channel: "email" })}>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => {
+                  setSendConfirm({ buyerId: buyer.id, channel: "email", buyerName: buyer.buyerName || "Unknown", buyerPhone: buyer.buyerPhone || "", buyerEmail: buyer.buyerEmail || "" });
+                }}>
                   <Mail className="h-3 w-3 mr-1" /> Email
                 </Button>
                 <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => {
@@ -1074,6 +1125,40 @@ function BuyersTab({ propertyId }: { propertyId: number }) {
           isSaving={addBuyerMutation.isPending}
         />
       )}
+
+      {/* Send Confirmation Dialog (Fix #16) */}
+      <Dialog open={sendConfirm !== null} onOpenChange={() => setSendConfirm(null)}>
+        <DialogContent style={{ background: "var(--g-bg-surface)" }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: "var(--g-text-primary)" }}>
+              {sendConfirm?.channel === "sms" ? "Send SMS" : "Send Email"} to {sendConfirm?.buyerName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs space-y-1" style={{ color: "var(--g-text-secondary)" }}>
+              <p><strong>To:</strong> {sendConfirm?.buyerName}</p>
+              <p><strong>{sendConfirm?.channel === "sms" ? "Phone" : "Email"}:</strong> {sendConfirm?.channel === "sms" ? (sendConfirm?.buyerPhone || "No phone") : (sendConfirm?.buyerEmail || "No email")}</p>
+            </div>
+            <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+              This will log a {sendConfirm?.channel === "sms" ? "SMS" : "email"} send to this buyer's activity record.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendConfirm(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (sendConfirm) {
+                  recordSendMutation.mutate({ buyerActivityId: sendConfirm.buyerId, channel: sendConfirm.channel as any });
+                  setSendConfirm(null);
+                }
+              }}
+              style={{ background: "var(--g-accent)", color: "#fff" }}
+            >
+              Confirm Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1903,8 +1988,8 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
         )}
       </div>
 
-      {/* Input */}
-      <div className="pt-3" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
+      {/* Input - pinned at bottom */}
+      <div className="pt-3 shrink-0" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
         <form
           onSubmit={(e) => { e.preventDefault(); sendMessage(input); }}
           className="flex gap-2 items-end"
@@ -2471,7 +2556,7 @@ export default function Inventory() {
     const role = user?.teamRole;
     if (role === "dispo_manager") return "marketing";
     if (role === "lead_manager" || role === "acquisition_manager") return "lead";
-    return "all";
+    return "lead";
   }, [user?.teamRole]);
   const [statusFilter, setStatusFilter] = useState(defaultStatus);
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
@@ -2491,17 +2576,16 @@ export default function Inventory() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
 
-  // Role-based stage filtering
+  // Role-based stage filtering (Fix #1: hide Dead from dispo; Fix #2: remove All tab)
   const teamRole = user?.teamRole || "admin";
   const visibleStages = useMemo(() => {
-    const allStages = ["all", "lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up", "dead"] as const;
     if (teamRole === "dispo_manager") {
-      return ["all", "marketing", "buyer_negotiating", "closing", "closed", "dead"] as const;
+      return ["marketing", "buyer_negotiating", "closing", "closed"] as const;
     }
     if (teamRole === "lead_manager" || teamRole === "acquisition_manager") {
-      return ["all", "lead", "apt_set", "offer_made", "under_contract", "marketing", "closing", "closed"] as const;
+      return ["lead", "apt_set", "offer_made", "under_contract", "marketing", "closing", "closed"] as const;
     }
-    return allStages;
+    return ["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up", "dead"] as const;
   }, [teamRole]);
 
   // Always fetch ALL properties (no server-side status filter) so stage counts are accurate
@@ -2606,6 +2690,9 @@ export default function Inventory() {
     { value: "description", label: "Description" },
     { value: "mediaLink", label: "Media Link" },
     { value: "leadSource", label: "Lead Source" },
+    { value: "projectType", label: "Project Type" },
+    { value: "opportunitySource", label: "Source" },
+    { value: "acceptedOffer", label: "Accepted Offer" },
   ];
 
   const deleteMutation = trpc.inventory.deleteProperty.useMutation({
@@ -2617,9 +2704,8 @@ export default function Inventory() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-
   const bulkStatusMutation = trpc.inventory.bulkUpdateStatus.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result: any) => {
       utils.inventory.getProperties.invalidate();
       toast.success(`Updated ${result.succeeded} of ${result.total} properties`);
       setSelectedIds(new Set());
@@ -2627,7 +2713,15 @@ export default function Inventory() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-
+  const bulkFieldMutation = trpc.inventory.bulkUpdateField.useMutation({
+    onSuccess: (result: any) => {
+      utils.inventory.getProperties.invalidate();
+      toast.success(`Updated ${result.succeeded} of ${result.total} properties`);
+      setSelectedIds(new Set());
+      setBulkMode(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const bulkDeleteMutation = trpc.inventory.bulkDelete.useMutation({
     onSuccess: (result) => {
       utils.inventory.getProperties.invalidate();
@@ -2674,8 +2768,8 @@ export default function Inventory() {
   // Apply status, type, and market filters (client-side for accurate stage counts)
   const filteredProperties = useMemo(() => {
     let result = rawProperties;
-    // Status filter (Item #14 fix: filter client-side so tab counts stay correct)
-    if (statusFilter && statusFilter !== "all") {
+    // When searching, skip status filter to search across all statuses
+    if (statusFilter && !search.trim()) {
       result = result.filter((p: any) => p.status === statusFilter);
     }
     if (typeFilter !== "all") {
@@ -2685,7 +2779,7 @@ export default function Inventory() {
       result = result.filter((p: any) => p.market === marketFilter);
     }
     return result;
-  }, [rawProperties, statusFilter, typeFilter, marketFilter]);
+  }, [rawProperties, statusFilter, typeFilter, marketFilter, search]);
 
   // Apply sorting
   const properties = useMemo(() => {
@@ -2726,12 +2820,12 @@ export default function Inventory() {
   };
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: total };
+    const counts: Record<string, number> = {};
     rawProperties.forEach((p: any) => {
       counts[p.status] = (counts[p.status] || 0) + 1;
     });
     return counts;
-  }, [rawProperties, total]);
+  }, [rawProperties]);
 
   return (
     <div className="h-[calc(100vh-var(--g-topnav-h,56px))] flex flex-col overflow-hidden" style={{ background: "var(--g-bg-base)" }}>
@@ -2770,11 +2864,11 @@ export default function Inventory() {
 
       {/* Filters */}
       <div className="px-5 py-3 flex items-center gap-3" style={{ borderBottom: "1px solid var(--g-border-subtle)" }}>
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative w-64 shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--g-text-tertiary)" }} />
           <Input
             className="pl-9"
-            placeholder="Search properties..."
+            placeholder="Search all properties..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -2828,11 +2922,10 @@ export default function Inventory() {
             <X className="h-3 w-3" /> Clear
           </button>
         )}
-        <div className="flex items-center gap-1 overflow-x-auto">
+        <div className="flex items-center gap-1 flex-wrap">
           {visibleStages.map((s) => {
-            const cfg = s === "all" ? { label: "All", color: "var(--g-text-primary)", bg: "var(--g-bg-elevated)" } : STATUS_CONFIG[s];
+            const cfg = STATUS_CONFIG[s];
             const isActive = statusFilter === s;
-            const count = statusCounts[s] || 0;
             return (
               <button
                 key={s}
@@ -2840,15 +2933,12 @@ export default function Inventory() {
                 className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors"
                 style={{
                   minWidth: "fit-content",
-                  background: isActive ? (s === "all" ? "var(--g-accent-soft)" : cfg.bg) : "transparent",
-                  color: isActive ? (s === "all" ? "var(--g-accent)" : cfg.color) : "var(--g-text-tertiary)",
-                  border: isActive ? `1px solid ${s === "all" ? "var(--g-accent)" : cfg.color}40` : "1px solid transparent",
+                  background: isActive ? cfg.bg : "transparent",
+                  color: isActive ? cfg.color : "var(--g-text-tertiary)",
+                  border: isActive ? `1px solid ${cfg.color}40` : "1px solid transparent",
                 }}
               >
-                <span className="inline-flex items-center gap-1">
-                  {cfg.label}
-                  {count > 0 && <span className="tabular-nums">({count})</span>}
-                </span>
+                {cfg.label}
               </button>
             );
           })}
@@ -2886,18 +2976,32 @@ export default function Inventory() {
                           </button>
                         </th>
                       )}
-                      {[
-                        { key: "status", label: "Status", align: "text-left" },
-                        { key: "asking", label: "Asking", align: "text-right" },
-                        { key: "contract", label: "Contract", align: "text-right" },
-                        { key: "spread", label: "Spread", align: "text-right" },
-                        { key: "sends", label: "Sends", align: "text-center" },
-                        { key: "buyers", label: "Buyers", align: "text-center" },
-                        { key: "offers", label: "Offers", align: "text-center" },
-                        { key: "showings", label: "Showings", align: "text-center" },
-                        { key: "dom", label: "DOM", align: "text-center" },
-                        { key: "actions", label: "", align: "text-center" },
-                      ].map(col => (
+                      {(() => {
+                        const isDispoStage = ["marketing", "buyer_negotiating", "closing", "closed"].includes(statusFilter);
+                        const baseCols = [
+                          { key: "address", label: "Address", align: "text-left" },
+                          { key: "status", label: "Status", align: "text-left" },
+                          { key: "asking", label: "Asking", align: "text-right" },
+                          { key: "contract", label: "Contract", align: "text-right" },
+                          { key: "spread", label: "Spread", align: "text-right" },
+                        ];
+                        const dispoCols = [
+                          { key: "sends", label: "Sends", align: "text-center" },
+                          { key: "buyers", label: "Buyers", align: "text-center" },
+                          { key: "offers", label: "Offers", align: "text-center" },
+                          { key: "showings", label: "Showings", align: "text-center" },
+                        ];
+                        const acqCols = [
+                          { key: "lastOffer", label: "Last Offer", align: "text-right" },
+                          { key: "lastContacted", label: "Last Contacted", align: "text-center" },
+                          { key: "lastConversation", label: "Last Conversation", align: "text-center" },
+                        ];
+                        const endCols = [
+                          { key: "dom", label: "DOM", align: "text-center" },
+                          { key: "actions", label: "", align: "text-center" },
+                        ];
+                        return [...baseCols, ...(isDispoStage ? dispoCols : acqCols), ...endCols];
+                      })().map(col => (
                         <th
                           key={col.key}
                           className={`${col.align} px-3 py-2 font-semibold cursor-pointer select-none group`}
@@ -2956,18 +3060,34 @@ export default function Inventory() {
                           <td className="px-3 py-2.5 text-right font-semibold" style={{ color: (p.acceptedOffer || p.askingPrice) && p.contractPrice ? "#22c55e" : "var(--g-text-tertiary)" }}>
                             {(p.acceptedOffer || p.askingPrice) && p.contractPrice ? formatCurrency((p.acceptedOffer || p.askingPrice) - p.contractPrice) : "—"}
                           </td>
-                          <td className="px-3 py-2.5 text-center" style={{ color: act.sendCount > 0 ? "#3b82f6" : "var(--g-text-tertiary)" }}>
-                            {act.sendCount > 0 ? act.sendCount : "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-center" style={{ color: (act.totalRecipients || 0) > 0 ? "#8b5cf6" : "var(--g-text-tertiary)" }}>
-                            {(act.totalRecipients || 0) > 0 ? act.totalRecipients : "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-center" style={{ color: act.offerCount > 0 ? "#f59e0b" : "var(--g-text-tertiary)" }}>
-                            {act.offerCount > 0 ? act.offerCount : "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-center" style={{ color: act.showingCount > 0 ? "#22c55e" : "var(--g-text-tertiary)" }}>
-                            {act.showingCount > 0 ? act.showingCount : "—"}
-                          </td>
+                          {["marketing", "buyer_negotiating", "closing", "closed"].includes(statusFilter) ? (
+                            <>
+                              <td className="px-3 py-2.5 text-center" style={{ color: act.sendCount > 0 ? "#3b82f6" : "var(--g-text-tertiary)" }}>
+                                {act.sendCount > 0 ? act.sendCount : "—"}
+                              </td>
+                              <td className="px-3 py-2.5 text-center" style={{ color: (act.totalRecipients || 0) > 0 ? "#8b5cf6" : "var(--g-text-tertiary)" }}>
+                                {(act.totalRecipients || 0) > 0 ? act.totalRecipients : "—"}
+                              </td>
+                              <td className="px-3 py-2.5 text-center" style={{ color: act.offerCount > 0 ? "#f59e0b" : "var(--g-text-tertiary)" }}>
+                                {act.offerCount > 0 ? act.offerCount : "—"}
+                              </td>
+                              <td className="px-3 py-2.5 text-center" style={{ color: act.showingCount > 0 ? "#22c55e" : "var(--g-text-tertiary)" }}>
+                                {act.showingCount > 0 ? act.showingCount : "—"}
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="px-3 py-2.5 text-right font-semibold" style={{ color: p.lastOfferAmount ? "#22c55e" : "var(--g-text-tertiary)" }}>
+                                {p.lastOfferAmount ? formatCurrency(p.lastOfferAmount) : "—"}
+                              </td>
+                              <td className="px-3 py-2.5 text-center text-[10px]" style={{ color: p.lastContactedAt ? "var(--g-text-secondary)" : "var(--g-text-tertiary)" }}>
+                                {p.lastContactedAt ? new Date(p.lastContactedAt).toLocaleDateString() : "—"}
+                              </td>
+                              <td className="px-3 py-2.5 text-center text-[10px]" style={{ color: p.lastConversationAt ? "#22c55e" : "var(--g-text-tertiary)" }}>
+                                {p.lastConversationAt ? new Date(p.lastConversationAt).toLocaleDateString() : "—"}
+                              </td>
+                            </>
+                          )}
                           <td className="px-3 py-2.5 text-center">
                             <span style={{ color: heatColor(dom) }}>{dom}d</span>
                           </td>
@@ -3215,6 +3335,66 @@ export default function Inventory() {
                   style={{ color: STATUS_CONFIG[s]?.color || "var(--g-text-primary)" }}
                 >
                   {STATUS_CONFIG[s]?.label || s}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Bulk Set Market */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="text-xs">
+                <MapPin className="h-3.5 w-3.5 mr-1" /> Set Market
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" style={{ background: "var(--g-bg-elevated)" }}>
+              {(kpiMarkets || []).map((m: any) => (
+                <DropdownMenuItem
+                  key={m.id}
+                  onClick={() => bulkFieldMutation.mutate({ propertyIds: Array.from(selectedIds), field: "market", value: m.name })}
+                >
+                  {m.name}
+                </DropdownMenuItem>
+              ))}
+              {(!kpiMarkets || kpiMarkets.length === 0) && (
+                <DropdownMenuItem disabled>No markets configured</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Bulk Set Source */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="text-xs">
+                <Tag className="h-3.5 w-3.5 mr-1" /> Set Source
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" style={{ background: "var(--g-bg-elevated)" }}>
+              {(kpiSources || []).map((s: any) => (
+                <DropdownMenuItem
+                  key={s.id}
+                  onClick={() => bulkFieldMutation.mutate({ propertyIds: Array.from(selectedIds), field: "opportunitySource", value: s.name })}
+                >
+                  {s.name}
+                </DropdownMenuItem>
+              ))}
+              {(!kpiSources || kpiSources.length === 0) && (
+                <DropdownMenuItem disabled>No sources configured</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Bulk Set Project Type */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="text-xs">
+                <Building className="h-3.5 w-3.5 mr-1" /> Set Project Type
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" style={{ background: "var(--g-bg-elevated)" }}>
+              {["flipper", "landlord", "builder", "multi_family", "turn_key"].map(pt => (
+                <DropdownMenuItem
+                  key={pt}
+                  onClick={() => bulkFieldMutation.mutate({ propertyIds: Array.from(selectedIds), field: "projectType", value: pt })}
+                >
+                  {pt.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>

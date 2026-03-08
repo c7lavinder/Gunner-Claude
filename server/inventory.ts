@@ -233,6 +233,7 @@ export async function deleteProperty(tenantId: number, propertyId: number) {
 // ─── SENDS TRACKING ───
 
 export async function addPropertySend(tenantId: number, userId: number, data: {
+  // NOTE: This function also auto-updates lastContactedAt on the property
   propertyId: number;
   channel: "sms" | "email" | "facebook" | "investor_base" | "other";
   buyerGroup?: string;
@@ -252,14 +253,17 @@ export async function addPropertySend(tenantId: number, userId: number, data: {
     sentByUserId: userId,
   });
 
-  // Update the property's marketedAt if not set (first time sending out)
+  // Update the property's marketedAt if not set (first time sending out) + always update lastContactedAt
   const [property] = await db.select({ marketedAt: dispoProperties.marketedAt, status: dispoProperties.status })
     .from(dispoProperties).where(eq(dispoProperties.id, data.propertyId));
+  const sendUpdate: any = { lastContactedAt: new Date() };
   if (property && !property.marketedAt) {
-    await db.update(dispoProperties)
-      .set({ marketedAt: new Date(), status: "marketing" } as any)
-      .where(eq(dispoProperties.id, data.propertyId));
+    sendUpdate.marketedAt = new Date();
+    sendUpdate.status = "marketing";
   }
+  await db.update(dispoProperties)
+    .set(sendUpdate)
+    .where(eq(dispoProperties.id, data.propertyId));
 
   return { id: result.insertId };
 }
@@ -333,13 +337,13 @@ export async function updateOfferStatus(tenantId: number, offerId: number, statu
     .set(updates)
     .where(and(eq(dispoPropertyOffers.id, offerId), eq(dispoPropertyOffers.tenantId, tenantId)));
 
-  // If accepted, update property status to under_contract
+  // If accepted, update property status and auto-populate acceptedOffer
   if (status === "accepted") {
-    const [offer] = await db.select({ propertyId: dispoPropertyOffers.propertyId })
+    const [offer] = await db.select({ propertyId: dispoPropertyOffers.propertyId, offerAmount: dispoPropertyOffers.offerAmount })
       .from(dispoPropertyOffers).where(eq(dispoPropertyOffers.id, offerId));
     if (offer) {
       await db.update(dispoProperties)
-        .set({ status: "under_contract", underContractAt: new Date() })
+        .set({ status: "under_contract", underContractAt: new Date(), acceptedOffer: offer.offerAmount })
         .where(eq(dispoProperties.id, offer.propertyId));
     }
   }
@@ -797,23 +801,20 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
     return { matched: 0, buyers: [] };
   }
 
-  // Query contacts that match BOTH market AND buyBoxType
-  // Also include "Nationwide" buyers, secondary market matches, and exclude Halted buyers
+  // Query contacts — market is a HARD filter (required), no cap on count
+  // Exclude Halted buyers
   const contacts = await db.select().from(contactCache)
     .where(and(
       eq(contactCache.tenantId, tenantId),
-      // Market must match (primary or secondary) OR buyer is "Nationwide"
+      // Market must match (primary or secondary) OR buyer is "Nationwide" — HARD FILTER
       sql`(
         LOWER(${contactCache.market}) = ${marketTag}
         OR LOWER(${contactCache.market}) = 'nationwide'
         OR LOWER(${contactCache.secondaryMarket}) LIKE ${`%${marketTag}%`}
       )`,
-      // Buy box type must match the property type
-      sql`LOWER(${contactCache.buyBoxType}) LIKE ${`%${propertyType}%`}`,
       // Exclude halted buyers
       sql`(${contactCache.buyerTier} IS NULL OR LOWER(${contactCache.buyerTier}) != 'halted')`,
-    ))
-    .limit(200);
+    ));
 
   // Get existing buyer activities for this property to avoid duplicates
   const existingBuyers = await db.select({ ghlContactId: propertyBuyerActivity.ghlContactId })
@@ -873,9 +874,24 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
       reasons.push(`${property.market || property.city} market`);
     }
 
-    // Buy box type match (required — all contacts already passed the SQL filter)
-    score += 25;
-    reasons.push(`${contact.buyBoxType || propertyType} buyer`);
+    // Buy box / project type match (soft filter — scored, not required)
+    const buyBox = (contact.buyBoxType || "").toLowerCase();
+    const propProjectTypes = (property.projectType || "").toLowerCase().split(",").map((s: string) => s.trim()).filter(Boolean);
+    if (buyBox && buyBox.includes(propertyType)) {
+      score += 25;
+      reasons.push(`${contact.buyBoxType} buyer (property type match)`);
+    } else if (buyBox) {
+      score += 5;
+      reasons.push(`${contact.buyBoxType} buyer`);
+    }
+    // Project type match bonus (flipper, landlord, builder, etc.)
+    if (propProjectTypes.length > 0 && buyBox) {
+      const ptMatch = propProjectTypes.some((pt: string) => buyBox.includes(pt));
+      if (ptMatch) {
+        score += 30;
+        reasons.push("Project type match");
+      }
+    }
 
     // ─── Tier scoring from GHL custom field ───
     const activity = buyerActivityMap.get(contact.ghlContactId);
@@ -960,7 +976,7 @@ export async function matchBuyersForProperty(tenantId: number, propertyId: numbe
     });
   }
 
-  // Sort by score descending — best matches first
+  // Sort by score descending — project type match > tier > other factors
   scoredBuyers.sort((a, b) => b.score - a.score);
   const newBuyers = scoredBuyers;
 
@@ -1430,6 +1446,10 @@ export async function recordBuyerResponse(tenantId: number, buyerActivityId: num
   await db.update(propertyBuyerActivity)
     .set(updateData)
     .where(eq(propertyBuyerActivity.id, buyerActivityId));
+  // Auto-update lastConversationAt on the property (two-way exchange confirmed)
+  await db.update(dispoProperties)
+    .set({ lastConversationAt: new Date() } as any)
+    .where(eq(dispoProperties.id, buyer.propertyId));
   // Log the response in the property activity timeline
   await logPropertyActivity(tenantId, buyer.propertyId, {
     eventType: "note_added",

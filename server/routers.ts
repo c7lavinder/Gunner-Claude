@@ -8266,7 +8266,7 @@ selectedTimezone: { type: "string" },
         market: z.string().optional(),
         mediaLink: z.string().optional(),
         leadSource: z.string().optional(),
-        projectType: z.enum(["wholesale", "novation", "creative_finance", "fix_and_flip", "buy_and_hold", "other"]).optional(),
+        projectType: z.string().optional(),
         opportunitySource: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -8290,6 +8290,22 @@ selectedTimezone: { type: "string" },
         const { updateProperty } = await import("./inventory");
         const results = await Promise.allSettled(
           input.propertyIds.map(id => updateProperty(ctx.user!.tenantId!, id, { status: input.status } as any, ctx.user!.id))
+        );
+        const succeeded = results.filter(r => r.status === "fulfilled").length;
+        const failed = results.filter(r => r.status === "rejected").length;
+        return { succeeded, failed, total: input.propertyIds.length };
+      }),
+    bulkUpdateField: protectedProcedure
+      .input(z.object({
+        propertyIds: z.array(z.number()).min(1).max(100),
+        field: z.enum(["market", "leadSource", "projectType", "opportunitySource"]),
+        value: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateProperty } = await import("./inventory");
+        const results = await Promise.allSettled(
+          input.propertyIds.map(id => updateProperty(ctx.user!.tenantId!, id, { [input.field]: input.value } as any, ctx.user!.id))
         );
         const succeeded = results.filter(r => r.status === "fulfilled").length;
         const failed = results.filter(r => r.status === "rejected").length;
@@ -8511,6 +8527,27 @@ selectedTimezone: { type: "string" },
         return matchBuyersForProperty(ctx.user.tenantId, input.propertyId);
       }),
 
+    rematchBuyers: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        // Clear existing matched buyers (only those with status='matched' and no sends/offers)
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (db) {
+          const { propertyBuyerActivity } = await import("../drizzle/schema");
+          const { and, eq } = await import("drizzle-orm");
+          await db.delete(propertyBuyerActivity).where(
+            and(
+              eq(propertyBuyerActivity.propertyId, input.propertyId),
+              eq(propertyBuyerActivity.tenantId, ctx.user.tenantId!),
+              eq(propertyBuyerActivity.status, "matched"),
+            )
+          );
+        }
+        const { matchBuyersForProperty } = await import("./inventory");
+        return matchBuyersForProperty(ctx.user.tenantId, input.propertyId);
+      }),
     // ─── BUYER RESPONSE TRACKING ───
     recordBuyerResponse: protectedProcedure
       .input(z.object({
