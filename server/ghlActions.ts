@@ -2221,6 +2221,16 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         result = { success: true, sent, failed, total: smsEligible.length, results };
         break;
       }
+      case "record_buyer_response": {
+        const propertyId = payload.propertyId;
+        const buyerActivityId = payload.buyerActivityId;
+        const responseNote = payload.responseNote || payload.note || "Buyer responded";
+        const newStatus = payload.newStatus;
+        if (!propertyId || !buyerActivityId) throw new Error("Missing propertyId or buyerActivityId for record_buyer_response");
+        const { recordBuyerResponse } = await import("./inventory");
+        result = await recordBuyerResponse(action.tenantId, buyerActivityId, responseNote, newStatus, action.requestedBy || undefined, action.requestedByName || undefined);
+        break;
+      }
       default:
         throw new Error(`Unknown action type: ${action.actionType}`);
     }

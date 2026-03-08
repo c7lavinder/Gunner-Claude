@@ -679,3 +679,220 @@ describe("Buyer Activity Schema", () => {
     expect(schema.propertyActivityLog.description).toBeDefined();
   });
 });
+
+// ─── Buyer Response Tracking Tests ───
+
+describe("Buyer Response Tracking - Schema", () => {
+  it("should have responseCount field on propertyBuyerActivity", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.propertyBuyerActivity.responseCount).toBeDefined();
+  });
+
+  it("should have lastResponseAt field on propertyBuyerActivity", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.propertyBuyerActivity.lastResponseAt).toBeDefined();
+  });
+
+  it("should have lastResponseNote field on propertyBuyerActivity", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.propertyBuyerActivity.lastResponseNote).toBeDefined();
+  });
+});
+
+describe("Buyer Response Tracking - Backend Functions", () => {
+  it("should export recordBuyerResponse function", async () => {
+    const mod = await import("./inventory");
+    expect(mod.recordBuyerResponse).toBeDefined();
+    expect(typeof mod.recordBuyerResponse).toBe("function");
+  });
+
+  it("should export getBuyerResponseStats function", async () => {
+    const mod = await import("./inventory");
+    expect(mod.getBuyerResponseStats).toBeDefined();
+    expect(typeof mod.getBuyerResponseStats).toBe("function");
+  });
+});
+
+describe("Buyer Response Tracking - tRPC Procedures", () => {
+  it("should have recordBuyerResponse procedure in routers.ts", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain("recordBuyerResponse:");
+  });
+
+  it("should have getBuyerResponseStats procedure in routers.ts", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain("getBuyerResponseStats:");
+  });
+});
+
+describe("Buyer Response Tracking - Dispo AI Integration", () => {
+  it("should include record_buyer_response in VALID_DISPO_ACTIONS", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/dispoAssistantStream.ts", "utf-8");
+    expect(content).toContain('"record_buyer_response"');
+  });
+
+  it("should document record_buyer_response in Dispo AI system prompt", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/dispoAssistantStream.ts", "utf-8");
+    expect(content).toContain("record_buyer_response");
+    expect(content).toContain("Record that a buyer responded");
+  });
+
+  it("should include buyer response tracking in buildPropertyContext", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/dispoAssistantStream.ts", "utf-8");
+    expect(content).toContain("RESPONSE TRACKING");
+    expect(content).toContain("responseRate");
+  });
+
+  it("should include record_buyer_response in parse-intent prompt", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/dispoAssistantStream.ts", "utf-8");
+    expect(content).toContain("record_buyer_response");
+    expect(content).toContain("buyerActivityId");
+    expect(content).toContain("responseNote");
+  });
+});
+
+describe("Buyer Response Tracking - parseIntent Integration", () => {
+  it("should include record_buyer_response in VALID_ACTION_TYPES", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain('"record_buyer_response"');
+  });
+
+  it("should document record_buyer_response action in parseIntent prompt", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain("record_buyer_response - Record that a buyer responded");
+  });
+
+  it("should include buyerActivityId and responseNote in parseIntent JSON schema", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain('buyerActivityId: { type: "number" }');
+    expect(content).toContain('responseNote: { type: "string" }');
+  });
+
+  it("should include buyerActivityId and responseNote in required array", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/routers.ts", "utf-8");
+    expect(content).toContain('"buyerActivityId"');
+    expect(content).toContain('"responseNote"');
+  });
+});
+
+describe("Buyer Response Tracking - ghlActions Integration", () => {
+  it("should handle record_buyer_response in executeAction", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/ghlActions.ts", "utf-8");
+    expect(content).toContain('case "record_buyer_response"');
+  });
+
+  it("should call recordBuyerResponse from ghlActions", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/ghlActions.ts", "utf-8");
+    expect(content).toContain("recordBuyerResponse(action.tenantId");
+  });
+
+  it("should include record_buyer_response in coachActionLog enum", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("drizzle/schema.ts", "utf-8");
+    expect(content).toContain('"record_buyer_response"');
+  });
+});
+
+describe("Buyer Response Tracking - Frontend UI", () => {
+  it("should have response tracking UI in BuyersTab", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("recordBuyerResponse");
+    expect(content).toContain("getBuyerResponseStats");
+  });
+
+  it("should have response rate display", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain("Response Rate");
+    expect(content).toContain("responseRate");
+  });
+
+  it("should have record_buyer_response in DISPO_ACTION_LABELS", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/Inventory.tsx", "utf-8");
+    expect(content).toContain('record_buyer_response: "Record Buyer Response"');
+  });
+
+  it("should have record_buyer_response label in TaskCenter", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("client/src/pages/TaskCenter.tsx", "utf-8");
+    expect(content).toContain('record_buyer_response: "Record Buyer Response"');
+  });
+});
+
+describe("Buyer Response Tracking - buildPropertyContext", () => {
+  it("should include response tracking when buyers have sends", async () => {
+    const { buildPropertyContext } = await import("./dispoAssistantStream");
+    const mockDetail = {
+      id: 1,
+      address: "123 Main St",
+      city: "Dallas",
+      state: "TX",
+      zip: "75001",
+      status: "marketing",
+      sends: [],
+      offers: [],
+      showings: [],
+      buyers: [
+        { id: 1, buyerName: "John Buyer", sendCount: 3, responseCount: 1, status: "interested", isVip: false, lastResponseAt: new Date("2026-01-15"), lastResponseNote: "Interested in the deal" },
+        { id: 2, buyerName: "Jane Investor", sendCount: 2, responseCount: 0, status: "matched", isVip: true },
+        { id: 3, buyerName: "Bob Cash", sendCount: 1, responseCount: 1, status: "offered", isVip: false, lastResponseAt: new Date("2026-01-10"), lastResponseNote: "Want to make an offer" },
+      ],
+    };
+
+    const context = buildPropertyContext(mockDetail);
+    expect(context).toContain("RESPONSE TRACKING");
+    expect(context).toContain("2/3"); // 2 responded out of 3 sent
+    expect(context).toContain("response rate");
+    expect(context).toContain("John Buyer");
+  });
+
+  it("should not include response tracking when no buyers have sends", async () => {
+    const { buildPropertyContext } = await import("./dispoAssistantStream");
+    const mockDetail = {
+      id: 1,
+      address: "456 Oak Ave",
+      city: "Houston",
+      state: "TX",
+      zip: "77001",
+      status: "new",
+      sends: [],
+      offers: [],
+      showings: [],
+      buyers: [
+        { id: 1, buyerName: "Test Buyer", sendCount: 0, responseCount: 0, status: "matched", isVip: false },
+      ],
+    };
+
+    const context = buildPropertyContext(mockDetail);
+    expect(context).not.toContain("RESPONSE TRACKING");
+  });
+});
+
+describe("Coach System Prompt Quality", () => {
+  it("should have dispo-specific coaching rules", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/coachStream.ts", "utf-8");
+    expect(content).toContain("reference specific addresses, buyer counts, response rates");
+    expect(content).toContain("proactively flag properties");
+  });
+
+  it("should instruct coach to reference actual data", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("server/coachStream.ts", "utf-8");
+    expect(content).toContain("Reference actual names, numbers, and outcomes");
+  });
+});

@@ -1384,6 +1384,81 @@ export async function importPropertiesFromCsv(
   return result;
 }
 
+// ─── BUYER RESPONSE TRACKING ───
+
+/** Record a buyer response to a property send */
+export async function recordBuyerResponse(tenantId: number, buyerActivityId: number, responseNote: string, newStatus?: string, performedByUserId?: number, performedByName?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [buyer] = await db.select().from(propertyBuyerActivity)
+    .where(and(eq(propertyBuyerActivity.id, buyerActivityId), eq(propertyBuyerActivity.tenantId, tenantId)));
+  if (!buyer) throw new Error("Buyer activity not found");
+  const updateData: Record<string, any> = {
+    responseCount: buyer.responseCount + 1,
+    lastResponseAt: new Date(),
+    lastResponseNote: responseNote,
+  };
+  // Allow explicit status override, otherwise auto-promote on first response
+  if (newStatus && ["interested", "offered", "passed", "skipped"].includes(newStatus)) {
+    updateData.status = newStatus;
+  } else if (buyer.status === "sent" || buyer.status === "matched") {
+    updateData.status = "interested";
+  }
+  await db.update(propertyBuyerActivity)
+    .set(updateData)
+    .where(eq(propertyBuyerActivity.id, buyerActivityId));
+  // Log the response in the property activity timeline
+  await logPropertyActivity(tenantId, buyer.propertyId, {
+    eventType: "note_added",
+    title: `Response from ${buyer.buyerName}: ${responseNote.substring(0, 100)}`,
+    buyerName: buyer.buyerName,
+    buyerActivityId,
+    metadata: JSON.stringify({ responseNote, newStatus: updateData.status }),
+    performedByUserId,
+    performedByName,
+  });
+  return { success: true, newStatus: updateData.status as string };
+}
+
+/** Get aggregated response stats for a property's buyers */
+export async function getBuyerResponseStats(tenantId: number, propertyId: number) {
+  const db = await getDb();
+  if (!db) return { totalBuyers: 0, totalSent: 0, totalResponded: 0, totalInterested: 0, totalOffered: 0, totalPassed: 0, responseRate: 0, buyers: [] as any[] };
+  const buyers = await db.select().from(propertyBuyerActivity)
+    .where(and(eq(propertyBuyerActivity.tenantId, tenantId), eq(propertyBuyerActivity.propertyId, propertyId)))
+    .orderBy(desc(propertyBuyerActivity.updatedAt));
+  const totalBuyers = buyers.length;
+  const totalSent = buyers.filter(b => b.sendCount > 0).length;
+  const totalResponded = buyers.filter(b => b.responseCount > 0).length;
+  const totalInterested = buyers.filter(b => ["interested", "offered", "accepted"].includes(b.status)).length;
+  const totalOffered = buyers.filter(b => ["offered", "accepted"].includes(b.status)).length;
+  const totalPassed = buyers.filter(b => b.status === "passed").length;
+  const responseRate = totalSent > 0 ? Math.round((totalResponded / totalSent) * 100) : 0;
+  return {
+    totalBuyers,
+    totalSent,
+    totalResponded,
+    totalInterested,
+    totalOffered,
+    totalPassed,
+    responseRate,
+    buyers: buyers.map(b => ({
+      id: b.id,
+      buyerName: b.buyerName,
+      buyerPhone: b.buyerPhone,
+      buyerCompany: b.buyerCompany,
+      status: b.status,
+      sendCount: b.sendCount,
+      responseCount: b.responseCount,
+      lastResponseAt: b.lastResponseAt,
+      lastResponseNote: b.lastResponseNote,
+      lastSentAt: b.lastSentAt,
+      offerCount: b.offerCount,
+      lastOfferAmount: b.lastOfferAmount,
+    })),
+  };
+}
+
 /** Generate a CSV template with all supported columns */
 export function getCsvTemplate(): string {
   const headers = [

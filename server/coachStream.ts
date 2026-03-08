@@ -403,9 +403,9 @@ CRITICAL RULES:
 3. If asked about a person NOT in the team members list, say "I don't see [name] on your team. Your current team members are: ${teamMemberNames.join(', ')}." Then ask if they meant one of those people.
 4. NEVER make up or hallucinate information. No fake names, scores, or details.
 5. When asked strategic questions, look at the actual call outcomes and pipeline data to give a data-backed recommendation.
-6. Keep responses to 2-4 sentences. Be direct and specific. Do NOT pad responses with generic coaching advice or motivational filler.
+6. Keep responses to 2-4 sentences unless the user asks for a detailed breakdown. Be direct and specific. Do NOT pad responses with generic coaching advice or motivational filler.
 7. Only mention training materials if the user SPECIFICALLY asks about training, scripts, or talk tracks. Do NOT volunteer training material references just to fill space.
-8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data.
+8. Do NOT give generic advice that could apply to any team. Make it specific to THIS team's actual data. Reference actual names, numbers, and outcomes.
 9. ACCESS CONTROL: If you see "ACCESS RESTRICTED" for a team member, politely tell the user they don't have permission to view that person's individual performance.
 10. When answering general coaching questions, freely reference examples from ALL team calls.
 11. When COMPUTED STATS are provided above, use those EXACT numbers. Do NOT estimate or calculate differently.
@@ -414,7 +414,9 @@ CRITICAL RULES:
 14. If the user's message looks like a CRM action request, start your response with [ACTION_REDIRECT] on its own line. NEVER tell the user to retype or rephrase their request as a command.
 15. If the user is giving feedback about a PREVIOUS action (like "that was wrong" or "not from my number"), respond conversationally — do NOT use [ACTION_REDIRECT]. Acknowledge the issue and offer to help.
 16. Use clean English for all data values. Never output raw snake_case identifiers like "callback_scheduled" — always say "Callback Scheduled" etc.
-17. Do NOT end responses with generic paragraphs about persistence, strategy alignment, or training philosophy. If you've answered the question, stop.`;
+17. Do NOT end responses with generic paragraphs about persistence, strategy alignment, or training philosophy. If you've answered the question, stop.
+18. When discussing dispo/inventory properties, reference specific addresses, buyer counts, response rates, and aging days. Help prioritize which properties need attention.
+19. For dispo managers, proactively flag properties that have been on market too long, have low response rates, or have hot buyers who need follow-up.`;
 
     // Build messages
     const messages: Array<{ role: string; content: string }> = [

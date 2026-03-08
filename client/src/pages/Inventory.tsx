@@ -11,7 +11,7 @@ import {
   Megaphone, UserPlus, Copy, ExternalLink, Hash, TrendingUp,
   CircleDot, Zap, Target, BarChart3, ArrowRight, RefreshCw, Upload, Download, FileUp,
   ChevronRight, Bookmark, Tag, Globe, Layers, StickyNote, Bot, Sparkles, Loader2,
-  Lightbulb,
+  Lightbulb, MessageCircle,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
@@ -906,6 +906,15 @@ function BuyersTab({ propertyId }: { propertyId: number }) {
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const recordResponseMutation = trpc.inventory.recordBuyerResponse.useMutation({
+    onSuccess: () => {
+      utils.inventory.getBuyerActivities.invalidate({ propertyId });
+      utils.inventory.getBuyerResponseStats.invalidate({ propertyId });
+      toast.success("Response recorded");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const { data: responseStats } = trpc.inventory.getBuyerResponseStats.useQuery({ propertyId });
 
   if (isLoading) return <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>;
 
@@ -922,6 +931,34 @@ function BuyersTab({ propertyId }: { propertyId: number }) {
           <Target className="h-3 w-3 mr-1" /> {matchMutation.isPending ? "Matching..." : "Match from GHL"}
         </Button>
       </div>
+
+      {/* Response Stats Bar */}
+      {responseStats && responseStats.totalSent > 0 && (
+        <div className="rounded-lg p-3" style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.08), rgba(59,130,246,0.08))", border: "1px solid rgba(99,102,241,0.15)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <BarChart3 className="h-4 w-4" style={{ color: "#6366f1" }} />
+            <span className="text-sm font-semibold" style={{ color: "var(--g-text-primary)" }}>Response Tracking</span>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            <div className="text-center">
+              <div className="text-lg font-bold" style={{ color: "#3b82f6" }}>{responseStats.totalSent}</div>
+              <div className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>Sent</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold" style={{ color: "#22c55e" }}>{responseStats.totalResponded}</div>
+              <div className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>Responded</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold" style={{ color: "#f59e0b" }}>{responseStats.totalInterested}</div>
+              <div className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>Interested</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold" style={{ color: responseStats.responseRate >= 30 ? "#22c55e" : responseStats.responseRate >= 15 ? "#f59e0b" : "#ef4444" }}>{responseStats.responseRate}%</div>
+              <div className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>Response Rate</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {buyerList.length === 0 ? (
         <div className="text-center py-8">
@@ -969,8 +1006,16 @@ function BuyersTab({ propertyId }: { propertyId: number }) {
               <div className="flex items-center gap-3 text-xs" style={{ color: "var(--g-text-tertiary)" }}>
                 <span>Sends: {buyer.sendCount || 0}</span>
                 <span>Offers: {buyer.offerCount || 0}</span>
+                {buyer.responseCount > 0 && <span className="flex items-center gap-1" style={{ color: "#22c55e" }}><MessageCircle className="h-3 w-3" /> {buyer.responseCount} response{buyer.responseCount > 1 ? "s" : ""}</span>}
                 {buyer.lastOfferAmount && <span className="font-semibold" style={{ color: "#22c55e" }}>Last Offer: {formatCurrency(buyer.lastOfferAmount)}</span>}
               </div>
+              {/* Last response note */}
+              {buyer.lastResponseNote && (
+                <div className="text-xs mt-1 p-1.5 rounded flex items-start gap-1" style={{ background: "rgba(34,197,94,0.08)", color: "#22c55e" }}>
+                  <MessageCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                  <span>{buyer.lastResponseNote.substring(0, 120)}{buyer.lastResponseNote.length > 120 ? "..." : ""}</span>
+                </div>
+              )}
               {/* Quick actions */}
               <div className="flex items-center gap-1 mt-2 pt-2" style={{ borderTop: "1px solid var(--g-border-subtle)" }}>
                 <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => recordSendMutation.mutate({ buyerActivityId: buyer.id, channel: "sms" })}>
@@ -987,6 +1032,14 @@ function BuyersTab({ propertyId }: { propertyId: number }) {
                   }
                 }}>
                   <DollarSign className="h-3 w-3 mr-1" /> Log Offer
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" style={{ color: "#22c55e" }} onClick={() => {
+                  const note = prompt("What did the buyer say?");
+                  if (note?.trim()) {
+                    recordResponseMutation.mutate({ buyerActivityId: buyer.id, responseNote: note.trim() });
+                  }
+                }}>
+                  <MessageCircle className="h-3 w-3 mr-1" /> Log Response
                 </Button>
               </div>
               {buyer.notes && <div className="text-xs mt-2 p-1.5 rounded" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>{buyer.notes}</div>}
@@ -1344,6 +1397,7 @@ const DISPO_ACTION_LABELS: Record<string, string> = {
   record_property_send: "Record Send",
   add_property_note: "Add Note",
   bulk_send_buyers: "Bulk Send to Buyers",
+  record_buyer_response: "Record Buyer Response",
   // CRM actions (available from Dispo AI too)
   send_sms: "Send SMS",
   create_task: "Create Task",
@@ -1369,6 +1423,7 @@ const DISPO_ACTION_ICONS: Record<string, typeof DollarSign> = {
   record_property_send: Send,
   add_property_note: StickyNote,
   bulk_send_buyers: Users,
+  record_buyer_response: MessageCircle,
   // CRM actions
   send_sms: MessageSquare,
   create_task: CheckCircle2,
@@ -2021,6 +2076,131 @@ function ResearchTab({ propertyId, property }: { propertyId: number; property: a
 }
 
 // ─── PROPERTY DETAIL PANEL ───
+function QuickActionsBar({ property, propertyId, setActiveTab }: { property: any; propertyId: number; setActiveTab: (tab: string) => void }) {
+  const utils = trpc.useUtils();
+  const [bulkSendOpen, setBulkSendOpen] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+  const bulkSendMutation = trpc.inventory.bulkSendToBuyers.useMutation({
+    onSuccess: (result: any) => {
+      utils.inventory.getPropertyById.invalidate({ propertyId });
+      utils.inventory.getActivityLog.invalidate({ propertyId });
+      toast.success(`Sent to ${result.sent} of ${result.total} buyers`);
+      setBulkSendOpen(false);
+      setBulkMsg("");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const matchMutation = trpc.inventory.matchBuyers.useMutation({
+    onSuccess: (result: any) => {
+      utils.inventory.getPropertyById.invalidate({ propertyId });
+      utils.inventory.getBuyerActivities.invalidate();
+      toast.success(`Matched ${result.matched} buyers`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const status = property.status as string;
+  const dom = daysOnMarket(property.createdAt);
+  const hasBuyers = (property.sends?.length || 0) > 0 || (property.offers?.length || 0) > 0;
+  const hasOffers = (property.offers?.length || 0) > 0;
+  const noPrice = !property.askingPrice;
+
+  // Build contextual actions based on property status and data
+  const actions: Array<{ label: string; icon: any; color: string; bg: string; onClick: () => void; pulse?: boolean }> = [];
+
+  // Always-useful: Match Buyers (if no buyers yet)
+  if (!hasBuyers && ["marketing", "buyer_negotiating"].includes(status)) {
+    actions.push({ label: "Match Buyers", icon: UserPlus, color: "#8b5cf6", bg: "rgba(139,92,246,0.1)", onClick: () => matchMutation.mutate({ propertyId }), pulse: true });
+  }
+
+  // Marketing stage: Send to Buyers
+  if (["marketing", "buyer_negotiating"].includes(status)) {
+    actions.push({ label: "Send to Buyers", icon: Megaphone, color: "#3b82f6", bg: "rgba(59,130,246,0.1)", onClick: () => {
+      setBulkMsg(`New deal alert! ${property.address}, ${property.city} ${property.state}. ${property.bedrooms || "?"}bd/${property.bathrooms || "?"}ba, ${property.sqft ? property.sqft.toLocaleString() + " sqft" : ""} ${property.askingPrice ? "Asking " + formatCurrency(property.askingPrice) : ""}. Reply for details!`);
+      setBulkSendOpen(true);
+    }});
+  }
+
+  // Record Offer (when negotiating or marketing)
+  if (["marketing", "buyer_negotiating", "under_contract"].includes(status)) {
+    actions.push({ label: "Record Offer", icon: DollarSign, color: "#22c55e", bg: "rgba(34,197,94,0.1)", onClick: () => setActiveTab("outreach") });
+  }
+
+  // Schedule Showing
+  if (["marketing", "buyer_negotiating"].includes(status)) {
+    actions.push({ label: "Schedule Showing", icon: Eye, color: "#f59e0b", bg: "rgba(245,158,11,0.1)", onClick: () => setActiveTab("outreach") });
+  }
+
+  // Stale property warning: suggest price update
+  if (dom > 14 && ["marketing", "buyer_negotiating"].includes(status) && !hasOffers) {
+    actions.push({ label: "Review Price", icon: TrendingUp, color: "#ef4444", bg: "rgba(239,68,68,0.1)", onClick: () => setActiveTab("ai"), pulse: true });
+  }
+
+  // No price set
+  if (noPrice && ["marketing", "buyer_negotiating", "lead", "under_contract"].includes(status)) {
+    actions.push({ label: "Set Price", icon: DollarSign, color: "#ef4444", bg: "rgba(239,68,68,0.1)", onClick: () => setActiveTab("ai"), pulse: true });
+  }
+
+  // Ask AI for help (always available)
+  actions.push({ label: "Ask AI", icon: Bot, color: "var(--g-accent)", bg: "var(--g-accent-soft)", onClick: () => setActiveTab("ai") });
+
+  if (actions.length === 0) return null;
+
+  return (
+    <>
+      <div className="px-5 py-2 flex items-center gap-2 overflow-x-auto" style={{ borderBottom: "1px solid var(--g-border-subtle)", background: "var(--g-bg-elevated)" }}>
+        <span className="text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap" style={{ color: "var(--g-text-tertiary)" }}>Quick:</span>
+        {actions.slice(0, 5).map((action, i) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={i}
+              onClick={action.onClick}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all hover:scale-105 whitespace-nowrap"
+              style={{ background: action.bg, color: action.color, border: `1px solid ${action.color}20` }}
+            >
+              {action.pulse && <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: action.color }} />}
+              <Icon className="h-3 w-3" />
+              {action.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Bulk Send Dialog */}
+      <Dialog open={bulkSendOpen} onOpenChange={setBulkSendOpen}>
+        <DialogContent style={{ background: "var(--g-bg-surface)" }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: "var(--g-text-primary)" }}>Send to All Buyers</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+              This will send an SMS to all buyers with CRM contacts linked to this property.
+            </p>
+            <Textarea
+              value={bulkMsg}
+              onChange={(e) => setBulkMsg(e.target.value)}
+              rows={4}
+              placeholder="Type your message to buyers..."
+              style={{ background: "var(--g-bg-elevated)", color: "var(--g-text-primary)", borderColor: "var(--g-border-subtle)" }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkSendOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => bulkSendMutation.mutate({ propertyId, message: bulkMsg })}
+              disabled={!bulkMsg.trim() || bulkSendMutation.isPending}
+              style={{ background: "#3b82f6", color: "white" }}
+            >
+              {bulkSendMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Sending...</> : <><Megaphone className="h-4 w-4 mr-1" /> Send to All</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function PropertyDetail({
   propertyId, onClose,
 }: {
@@ -2124,6 +2304,9 @@ function PropertyDetail({
           </button>
         ))}
       </div>
+
+      {/* Quick Actions Bar */}
+      <QuickActionsBar property={property} propertyId={propertyId} setActiveTab={setActiveTab} />
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto px-5 py-4">

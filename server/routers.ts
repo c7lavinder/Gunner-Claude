@@ -6292,6 +6292,7 @@ Available action types:
 17. schedule_property_showing - Schedule a showing for a buyer on a property
 18. record_property_send - Record an outreach send (SMS blast, email blast, etc.) for a property
 19. add_property_note - Add an activity note to a property's log
+20. record_buyer_response - Record that a buyer responded to outreach (with note and optional status change)
 
 NOTE: Property actions do NOT require a GHL contactId. They use propertyId instead. For property actions, set contactName to empty string, contactId to empty string, and needsContactSearch to false. The propertyId is passed in the params.
 
@@ -6368,6 +6369,9 @@ IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions co
 - "Schedule a showing for John at 123 Main St tomorrow at 2pm" → schedule_property_showing
 - "Record that I sent 50 SMS blasts for the Oak Street property" → record_property_send
 - "Add a note to the property that the seller called back" → add_property_note
+- "Record that John responded, he said he's interested" → record_buyer_response
+- "Mark that Mike passed on this deal" → record_buyer_response
+- "Log buyer response from Sarah - she wants to see it" → record_buyer_response
 - "Can you create summary for the last call with Jackson James and add that summary as a note?" → add_note (use the RECENT CALL DATA to write the full summary as the noteBody)
 - "Summarize the call with [Name] and save it as a note" → add_note (write the complete summary in noteBody)
 - "Write up what happened on the last call and add it to their notes" → add_note
@@ -6424,6 +6428,7 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
 - For schedule_property_showing: Set params.propertyId (required), params.buyerName, params.showingDate (YYYY-MM-DD), params.showingTime (HH:MM 24hr), and optionally params.buyerPhone, params.notes.
 - For record_property_send: Set params.propertyId (required), params.channel (sms/email/facebook/investor_base/other), and optionally params.buyerGroup, params.recipientCount, params.notes.
 - For add_property_note: Set params.propertyId (required), params.title (short title), params.noteBody (full note content).
+- For record_buyer_response: Set params.propertyId (required), params.buyerActivityId (required, the buyer's activity ID from the property's buyer list), params.responseNote (what the buyer said or a summary of their response), and optionally params.newStatus (interested/offered/passed/skipped) to update the buyer's status based on their response.
 
 CRITICAL: You have REAL call data below. You MUST use it to write specific, accurate content. Reference actual property addresses, discussion topics, outcomes, and details from the transcripts. NEVER generate vague or placeholder text like "regarding his property" or "Please provide the summary" or "Insert details here".
 ${callContext}
@@ -6509,8 +6514,10 @@ selectedTimezone: { type: "string" },
                              buyerGroup: { type: "string" },
                              channel: { type: "string" },
                              recipientCount: { type: "number" },
+                             buyerActivityId: { type: "number" },
+                             responseNote: { type: "string" },
                            },
-                           required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone", "appointmentTitle", "filterByRequestingUser", "propertyId", "askingPrice", "dispoAskingPrice", "assignmentFee", "contractPrice", "newStatus", "buyerName", "offerAmount", "buyerPhone", "buyerEmail", "buyerCompany", "showingDate", "showingTime", "buyerGroup", "channel", "recipientCount"],
+                           required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone", "appointmentTitle", "filterByRequestingUser", "propertyId", "askingPrice", "dispoAskingPrice", "assignmentFee", "contractPrice", "newStatus", "buyerName", "offerAmount", "buyerPhone", "buyerEmail", "buyerCompany", "showingDate", "showingTime", "buyerGroup", "channel", "recipientCount", "buyerActivityId", "responseNote"],
                           additionalProperties: false
                         },
                         assigneeName: { type: "string" },
@@ -6535,7 +6542,7 @@ selectedTimezone: { type: "string" },
         console.log(`[parseIntent] Call context available: ${callContext.length > 0 ? 'yes (' + callContext.length + ' chars)' : 'no'}`);
         if (content && typeof content === "string") {
           const parsed = JSON.parse(content);
-          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment", "update_property_price", "update_property_status", "add_property_offer", "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers"];
+          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment", "update_property_price", "update_property_status", "add_property_offer", "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers", "record_buyer_response"];
           // Return the actions array, or wrap legacy single-action format for backwards compatibility
           if (parsed.actions && Array.isArray(parsed.actions)) {
             // Filter out any actions with missing, empty, or invalid actionType
@@ -6586,7 +6593,7 @@ selectedTimezone: { type: "string" },
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
         // Validate actionType server-side with a friendly error
-        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment", "update_property_price", "update_property_status", "add_property_offer", "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers"];
+        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment", "update_property_price", "update_property_status", "add_property_offer", "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers", "record_buyer_response"];
         if (!input.actionType || !VALID_ACTION_TYPES.includes(input.actionType)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -8410,6 +8417,26 @@ selectedTimezone: { type: "string" },
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
         const { matchBuyersForProperty } = await import("./inventory");
         return matchBuyersForProperty(ctx.user.tenantId, input.propertyId);
+      }),
+
+    // ─── BUYER RESPONSE TRACKING ───
+    recordBuyerResponse: protectedProcedure
+      .input(z.object({
+        buyerActivityId: z.number(),
+        responseNote: z.string().min(1),
+        newStatus: z.enum(["interested", "offered", "passed", "skipped"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { recordBuyerResponse } = await import("./inventory");
+        return recordBuyerResponse(ctx.user.tenantId, input.buyerActivityId, input.responseNote, input.newStatus, ctx.user.id, ctx.user.name || undefined);
+      }),
+    getBuyerResponseStats: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getBuyerResponseStats } = await import("./inventory");
+        return getBuyerResponseStats(ctx.user.tenantId, input.propertyId);
       }),
 
     // ─── ACTIVITY LOG ───

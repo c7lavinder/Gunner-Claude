@@ -2969,6 +2969,7 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   add_property_offer: "Record Offer", schedule_property_showing: "Schedule Showing",
   record_property_send: "Record Send", add_property_note: "Add Property Note",
   bulk_send_buyers: "Bulk Send to Buyers",
+  record_buyer_response: "Record Buyer Response",
 };
 
 const ACTION_ICONS: Record<string, string> = {
@@ -2981,6 +2982,7 @@ const ACTION_ICONS: Record<string, string> = {
   add_property_offer: "\u{1F91D}", schedule_property_showing: "\u{1F4C5}",
   record_property_send: "\u{1F4E8}", add_property_note: "\u{1F4CB}",
   bulk_send_buyers: "\u{1F4E3}",
+  record_buyer_response: "\u{1F4AC}",
 };
 
 function DayHubCoach() {

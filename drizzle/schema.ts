@@ -1280,7 +1280,8 @@ export const coachActionLog = mysqlTable("coach_action_log", {
     "add_to_workflow", "remove_from_workflow", "update_task", "check_off_task", "create_appointment",
     "update_appointment", "cancel_appointment",
     "update_property_price", "update_property_status", "add_property_offer",
-    "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers"
+    "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers",
+    "record_buyer_response"
   ]).notNull(),
   requestText: text("requestText").notNull(),
   targetContactId: varchar("targetContactId", { length: 255 }),
@@ -1772,6 +1773,10 @@ export const propertyBuyerActivity = mysqlTable("property_buyer_activity", {
   offerCount: int("offerCount").default(0).notNull(),
   lastOfferAmount: int("lastOfferAmount"), // in cents
   lastOfferAt: timestamp("lastOfferAt"),
+  // Response tracking
+  responseCount: int("responseCount").default(0).notNull(),
+  lastResponseAt: timestamp("lastResponseAt"),
+  lastResponseNote: text("lastResponseNote"),
   // Status for this buyer on this property
   status: mysqlEnum("buyerStatus", ["matched", "sent", "interested", "offered", "passed", "accepted", "skipped"]).default("matched").notNull(),
   notes: text("notes"),

@@ -4715,3 +4715,12 @@
 - [x] Frontend: AISuggestionsWidget in property Overview tab with priority-colored cards
 - [x] Frontend: bulk_send_buyers labels and icons in DispoAITab and TaskCenter
 - [x] Tests: 70 tests covering all features including bulk send and AI suggestions
+## Quick Actions Bar & Buyer Response Tracking
+- [ ] Frontend: Quick Actions bar on property detail view (one-click execute top AI suggestions)
+- [ ] Frontend: Quick action buttons for common operations (Update Price, Send to Buyers, Change Status)
+- [x] Backend: Buyer response tracking after bulk sends (track replies, opens, engagement)
+- [x] Frontend: Buyer response indicators in Dispo AI and Buyers tab
+- [x] Deep LLM quality pass: Improve AI Coach system prompt with better reasoning and context
+- [x] Deep LLM quality pass: Improve Dispo AI system prompt with wholesaling expertise
+- [x] Deep LLM quality pass: Improve parseIntent prompts for better action detection accuracy
+- [ ] Deep LLM quality pass: Add thinking budget/chain-of-thought to complex LLM calls

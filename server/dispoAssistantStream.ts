@@ -93,7 +93,7 @@ export function buildPropertyContext(detail: any): string {
     lines.push(`\nSHOWINGS: None scheduled`);
   }
 
-  // Buyers summary
+  // Buyers summary with response tracking
   if (detail.buyers?.length > 0) {
     lines.push(`\nBUYERS MATCHED: ${detail.buyers.length} total`);
     const vipBuyers = detail.buyers.filter((b: any) => b.isVip);
@@ -103,10 +103,34 @@ export function buildPropertyContext(detail: any): string {
       statusCounts[b.status] = (statusCounts[b.status] || 0) + 1;
     }
     lines.push(`Status breakdown: ${Object.entries(statusCounts).map(([k, v]) => `${k}: ${v}`).join(", ")}`);
+
+    // Response tracking stats
+    const totalSent = detail.buyers.filter((b: any) => b.sendCount > 0).length;
+    const totalResponded = detail.buyers.filter((b: any) => b.responseCount > 0).length;
+    const responseRate = totalSent > 0 ? Math.round((totalResponded / totalSent) * 100) : 0;
+    if (totalSent > 0) {
+      lines.push(`\nRESPONSE TRACKING: ${totalResponded}/${totalSent} buyers responded (${responseRate}% response rate)`);
+      const noResponse = detail.buyers.filter((b: any) => b.sendCount > 0 && b.responseCount === 0);
+      if (noResponse.length > 0) {
+        lines.push(`No response yet from: ${noResponse.slice(0, 10).map((b: any) => b.buyerName).join(", ")}${noResponse.length > 10 ? ` (+${noResponse.length - 10} more)` : ""}`);
+      }
+      const recentResponders = detail.buyers
+        .filter((b: any) => b.lastResponseAt)
+        .sort((a: any, b: any) => new Date(b.lastResponseAt).getTime() - new Date(a.lastResponseAt).getTime())
+        .slice(0, 5);
+      if (recentResponders.length > 0) {
+        lines.push(`Recent responses:`);
+        for (const b of recentResponders) {
+          lines.push(`  - ${b.buyerName}: "${(b.lastResponseNote || 'No note').substring(0, 80)}" (${new Date(b.lastResponseAt).toLocaleDateString()})`);
+        }
+      }
+    }
+
     // List buyers with contact info for CRM actions
     lines.push(`\nBUYER DETAILS (for CRM actions):`);
     for (const b of detail.buyers.slice(0, 20)) {
-      lines.push(`  - ${b.buyerName}${b.phone ? ` | Phone: ${b.phone}` : ""}${b.email ? ` | Email: ${b.email}` : ""}${b.company ? ` | Company: ${b.company}` : ""} | Status: ${b.status}${b.isVip ? " [VIP]" : ""}${b.ghlContactId ? ` | GHL ID: ${b.ghlContactId}` : ""}`);
+      const responseInfo = b.responseCount > 0 ? ` | Responses: ${b.responseCount}` : "";
+      lines.push(`  - ${b.buyerName}${b.buyerPhone ? ` | Phone: ${b.buyerPhone}` : ""}${b.buyerEmail ? ` | Email: ${b.buyerEmail}` : ""}${b.buyerCompany ? ` | Company: ${b.buyerCompany}` : ""} | Status: ${b.status}${b.isVip === "true" ? " [VIP]" : ""}${responseInfo}${b.ghlContactId ? ` | GHL ID: ${b.ghlContactId}` : ""}`);
     }
   } else {
     lines.push(`\nBUYERS: None matched yet`);
@@ -187,6 +211,7 @@ You can EXECUTE actions on this property AND on buyer contacts in the CRM. When 
 - **record_property_send** — Record an outreach send (channel: sms/email/facebook/investor_base/other, group, count)
 - **add_property_note** — Add an activity note to the property log
 - **bulk_send_buyers** — Send a message to ALL interested buyers for this property at once
+- **record_buyer_response** — Record that a buyer responded (with note and optional status change)
 
 **CRM/Buyer actions you can execute:**
 - **send_sms** — Send a text message to a buyer or contact in GHL
@@ -209,6 +234,8 @@ You can EXECUTE actions on this property AND on buyer contacts in the CRM. When 
 - "Add a note to Mike's CRM record" → [ACTION_REDIRECT]
 - "Tag John as hot-buyer" → [ACTION_REDIRECT]
 - "Schedule an appointment with the buyer for Friday" → [ACTION_REDIRECT]
+- "Mark that John responded, he said he's interested" → [ACTION_REDIRECT]
+- "Record that Mike passed on this deal" → [ACTION_REDIRECT]
 
 **When NOT to use [ACTION_REDIRECT]:**
 - User asks for advice: "What should I price this at?" → Give advice normally
@@ -348,7 +375,7 @@ ${userInstructionContext ? `\n${userInstructionContext}` : ""}`;
 const VALID_DISPO_ACTIONS = [
   "update_property_price", "update_property_status", "add_property_offer",
   "schedule_property_showing", "record_property_send", "add_property_note",
-  "bulk_send_buyers",
+  "bulk_send_buyers", "record_buyer_response",
   // CRM actions for buyer outreach
   "send_sms", "create_task", "add_note_contact", "add_tag", "remove_tag",
   "create_appointment"
@@ -411,6 +438,7 @@ You can parse TWO TYPES of actions:
 - **record_property_send**: Record outreach. Params: { propertyId, channel (sms/email/facebook/investor_base/other), buyerGroup?, recipientCount?, notes? }
 - **add_property_note**: Add note. Params: { propertyId, title, noteBody }
 - **bulk_send_buyers**: Send message to ALL interested buyers. Params: { propertyId, message }
+- **record_buyer_response**: Record a buyer's response. Params: { propertyId, buyerActivityId (from BUYER DETAILS), responseNote, newStatus? (interested/offered/passed/skipped) }
 ## CRM ACTIONS (interact with buyer contacts in GHL):
 - **send_sms**: Text a buyer. Params: { message } — set contactName to the buyer's name from the BUYER DETAILS above
 - **create_task**: Create follow-up task. Params: { title, description?, dueDate? (YYYY-MM-DD) } — set contactName to buyer

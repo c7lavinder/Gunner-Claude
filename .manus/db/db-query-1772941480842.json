@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE coach_action_log MODIFY COLUMN actionType ENUM('add_note', 'add_note_contact', 'add_note_opportunity', 'change_pipeline_stage', 'send_sms', 'create_task', 'add_tag', 'remove_tag', 'update_field', 'add_to_workflow', 'remove_from_workflow', 'update_task', 'check_off_task', 'create_appointment', 'update_appointment', 'cancel_appointment', 'update_property_price', 'update_property_status', 'add_property_offer', 'schedule_property_showing', 'record_property_send', 'add_property_note', 'bulk_send_buyers', 'record_buyer_response') NOT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE coach_action_log MODIFY COLUMN actionType ENUM('add_note', 'add_note_contact', 'add_note_opportunity', 'change_pipeline_stage', 'send_sms', 'create_task', 'add_tag', 'remove_tag', 'update_field', 'add_to_workflow', 'remove_from_workflow', 'update_task', 'check_off_task', 'create_appointment', 'update_appointment', 'cancel_appointment', 'update_property_price', 'update_property_status', 'add_property_offer', 'schedule_property_showing', 'record_property_send', 'add_property_note', 'bulk_send_buyers', 'record_buyer_response') NOT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 614
+}
