@@ -360,3 +360,106 @@ describe("AI Coach property action awareness", () => {
     expect(taskCenter).toContain('"Add Property Note"');
   });
 });
+
+describe("Bulk Send to Buyers", () => {
+  const schema = readFileSync(join(__dirname, "..", "drizzle", "schema.ts"), "utf-8");
+  const ghlActions = readFileSync(join(SERVER_DIR, "ghlActions.ts"), "utf-8");
+  const routers = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  const stream = readFileSync(join(SERVER_DIR, "dispoAssistantStream.ts"), "utf-8");
+  const inventory = readFileSync(join(CLIENT_DIR, "pages", "Inventory.tsx"), "utf-8");
+  const taskCenter = readFileSync(join(CLIENT_DIR, "pages", "TaskCenter.tsx"), "utf-8");
+
+  it("should include bulk_send_buyers in schema enum", () => {
+    expect(schema).toContain('"bulk_send_buyers"');
+  });
+
+  it("should handle bulk_send_buyers in executeAction", () => {
+    expect(ghlActions).toContain('case "bulk_send_buyers"');
+  });
+
+  it("should include bulk_send_buyers in VALID_ACTION_TYPES", () => {
+    expect(routers).toContain('"bulk_send_buyers"');
+  });
+
+  it("should have bulkSendToBuyers tRPC procedure", () => {
+    expect(routers).toContain("bulkSendToBuyers:");
+  });
+
+  it("should include bulk_send_buyers in VALID_DISPO_ACTIONS", () => {
+    expect(stream).toContain('"bulk_send_buyers"');
+  });
+
+  it("should document bulk_send_buyers in Dispo AI system prompt", () => {
+    expect(stream).toContain("bulk_send_buyers");
+    expect(stream).toContain("Send message to ALL interested buyers");
+  });
+
+  it("should have bulk_send_buyers label in DispoAITab", () => {
+    expect(inventory).toContain('bulk_send_buyers: "Bulk Send to Buyers"');
+  });
+
+  it("should have bulk_send_buyers label in TaskCenter", () => {
+    expect(taskCenter).toContain('bulk_send_buyers: "Bulk Send to Buyers"');
+  });
+
+  it("should have bulk_send_buyers icon in DispoAITab", () => {
+    expect(inventory).toContain("bulk_send_buyers: Users");
+  });
+});
+
+describe("AI Suggestions Widget", () => {
+  const routers = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  const inventory = readFileSync(join(CLIENT_DIR, "pages", "Inventory.tsx"), "utf-8");
+
+  it("should have getPropertySuggestions tRPC procedure", () => {
+    expect(routers).toContain("getPropertySuggestions:");
+  });
+
+  it("should use LLM for generating suggestions", () => {
+    const suggestionsSection = routers.substring(
+      routers.indexOf("getPropertySuggestions:"),
+      routers.indexOf("bulkSendToBuyers:")
+    );
+    expect(suggestionsSection).toContain("invokeLLM");
+    expect(suggestionsSection).toContain("json_schema");
+  });
+
+  it("should analyze property data for suggestions", () => {
+    const suggestionsSection = routers.substring(
+      routers.indexOf("getPropertySuggestions:"),
+      routers.indexOf("bulkSendToBuyers:")
+    );
+    expect(suggestionsSection).toContain("Days on Market");
+    expect(suggestionsSection).toContain("Offers:");
+    expect(suggestionsSection).toContain("Showings:");
+    expect(suggestionsSection).toContain("Interested Buyers:");
+  });
+
+  it("should return suggestions with title, description, priority, and actionType", () => {
+    const suggestionsSection = routers.substring(
+      routers.indexOf("getPropertySuggestions:"),
+      routers.indexOf("bulkSendToBuyers:")
+    );
+    expect(suggestionsSection).toContain('"title"');
+    expect(suggestionsSection).toContain('"description"');
+    expect(suggestionsSection).toContain('"priority"');
+    expect(suggestionsSection).toContain('"actionType"');
+  });
+
+  it("should render AISuggestionsWidget in OverviewTab", () => {
+    expect(inventory).toContain("AISuggestionsWidget");
+    expect(inventory).toContain("getPropertySuggestions");
+  });
+
+  it("should show priority-colored suggestion cards", () => {
+    expect(inventory).toContain("priorityColors");
+    expect(inventory).toContain("rgba(239,68,68,0.1)"); // high priority
+    expect(inventory).toContain("rgba(234,179,8,0.1)"); // medium priority
+    expect(inventory).toContain("rgba(59,130,246,0.1)"); // low priority
+  });
+
+  it("should have a refresh button for suggestions", () => {
+    expect(inventory).toContain("refetch");
+    expect(inventory).toContain("Analyzing property...");
+  });
+});

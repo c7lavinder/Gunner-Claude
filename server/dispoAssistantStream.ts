@@ -186,6 +186,7 @@ You can EXECUTE actions on this property AND on buyer contacts in the CRM. When 
 - **schedule_property_showing** — Schedule a showing for a buyer (name, date, time, notes)
 - **record_property_send** — Record an outreach send (channel: sms/email/facebook/investor_base/other, group, count)
 - **add_property_note** — Add an activity note to the property log
+- **bulk_send_buyers** — Send a message to ALL interested buyers for this property at once
 
 **CRM/Buyer actions you can execute:**
 - **send_sms** — Send a text message to a buyer or contact in GHL
@@ -347,6 +348,7 @@ ${userInstructionContext ? `\n${userInstructionContext}` : ""}`;
 const VALID_DISPO_ACTIONS = [
   "update_property_price", "update_property_status", "add_property_offer",
   "schedule_property_showing", "record_property_send", "add_property_note",
+  "bulk_send_buyers",
   // CRM actions for buyer outreach
   "send_sms", "create_task", "add_note_contact", "add_tag", "remove_tag",
   "create_appointment"
@@ -408,7 +410,7 @@ You can parse TWO TYPES of actions:
 - **schedule_property_showing**: Schedule showing. Params: { propertyId, buyerName, showingDate (YYYY-MM-DD), showingTime? (HH:MM), buyerPhone?, notes? }
 - **record_property_send**: Record outreach. Params: { propertyId, channel (sms/email/facebook/investor_base/other), buyerGroup?, recipientCount?, notes? }
 - **add_property_note**: Add note. Params: { propertyId, title, noteBody }
-
+- **bulk_send_buyers**: Send message to ALL interested buyers. Params: { propertyId, message }
 ## CRM ACTIONS (interact with buyer contacts in GHL):
 - **send_sms**: Text a buyer. Params: { message } — set contactName to the buyer's name from the BUYER DETAILS above
 - **create_task**: Create follow-up task. Params: { title, description?, dueDate? (YYYY-MM-DD) } — set contactName to buyer

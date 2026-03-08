@@ -2198,6 +2198,29 @@ export async function executeAction(actionId: number): Promise<{ success: boolea
         result = { success: true };
         break;
       }
+      case "bulk_send_buyers": {
+        const propertyId = payload.propertyId;
+        if (!propertyId) throw new Error("Missing propertyId for bulk send");
+        const message = payload.message || payload.smsBody;
+        if (!message) throw new Error("Missing message for bulk send");
+        const { getBuyerActivities } = await import("./inventory");
+        const buyers = await getBuyerActivities(action.tenantId, propertyId);
+        const smsEligible = (buyers || []).filter((b: any) => b.ghlContactId);
+        if (smsEligible.length === 0) throw new Error("No buyers with CRM contact IDs found");
+        const results: Array<{ buyerName: string; success: boolean; error?: string }> = [];
+        for (const buyer of smsEligible) {
+          try {
+            await sendSms(action.tenantId, buyer.ghlContactId!, message);
+            results.push({ buyerName: buyer.buyerName || "Unknown", success: true });
+          } catch (e: any) {
+            results.push({ buyerName: buyer.buyerName || "Unknown", success: false, error: e.message });
+          }
+        }
+        const sent = results.filter(r => r.success).length;
+        const failed = results.filter(r => !r.success).length;
+        result = { success: true, sent, failed, total: smsEligible.length, results };
+        break;
+      }
       default:
         throw new Error(`Unknown action type: ${action.actionType}`);
     }

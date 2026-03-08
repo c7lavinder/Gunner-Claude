@@ -1280,7 +1280,7 @@ export const coachActionLog = mysqlTable("coach_action_log", {
     "add_to_workflow", "remove_from_workflow", "update_task", "check_off_task", "create_appointment",
     "update_appointment", "cancel_appointment",
     "update_property_price", "update_property_status", "add_property_offer",
-    "schedule_property_showing", "record_property_send", "add_property_note"
+    "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers"
   ]).notNull(),
   requestText: text("requestText").notNull(),
   targetContactId: varchar("targetContactId", { length: 255 }),

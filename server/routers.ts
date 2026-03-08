@@ -6535,7 +6535,7 @@ selectedTimezone: { type: "string" },
         console.log(`[parseIntent] Call context available: ${callContext.length > 0 ? 'yes (' + callContext.length + ' chars)' : 'no'}`);
         if (content && typeof content === "string") {
           const parsed = JSON.parse(content);
-          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment", "update_property_price", "update_property_status", "add_property_offer", "schedule_property_showing", "record_property_send", "add_property_note"];
+          const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment", "update_property_price", "update_property_status", "add_property_offer", "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers"];
           // Return the actions array, or wrap legacy single-action format for backwards compatibility
           if (parsed.actions && Array.isArray(parsed.actions)) {
             // Filter out any actions with missing, empty, or invalid actionType
@@ -6586,7 +6586,7 @@ selectedTimezone: { type: "string" },
         if (!tenantId) throw new TRPCError({ code: "FORBIDDEN" });
 
         // Validate actionType server-side with a friendly error
-        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment", "update_property_price", "update_property_status", "add_property_offer", "schedule_property_showing", "record_property_send", "add_property_note"];
+        const VALID_ACTION_TYPES = ["add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage", "send_sms", "create_task", "add_tag", "remove_tag", "update_field", "update_task", "check_off_task", "add_to_workflow", "remove_from_workflow", "create_appointment", "update_appointment", "cancel_appointment", "update_property_price", "update_property_status", "add_property_offer", "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers"];
         if (!input.actionType || !VALID_ACTION_TYPES.includes(input.actionType)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -8552,6 +8552,98 @@ selectedTimezone: { type: "string" },
         const { researchAndSaveProperty } = await import("./propertyResearch");
         const result = await researchAndSaveProperty(ctx.user.tenantId, input.propertyId);
         return { success: Object.keys(result).length > 0, research: result };
+      }),
+
+    // AI-powered property suggestions
+    getPropertySuggestions: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getPropertyDetail, getBuyerActivities } = await import("./inventory");
+        const property = await getPropertyDetail(ctx.user.tenantId, input.propertyId);
+        if (!property) throw new TRPCError({ code: "NOT_FOUND", message: "Property not found" });
+        const buyers = await getBuyerActivities(ctx.user.tenantId, input.propertyId);
+        const dom = property.createdAt ? Math.floor((Date.now() - new Date(property.createdAt).getTime()) / 86400000) : 0;
+        const propertyContext = [
+          `Address: ${property.address || "Unknown"}`,
+          `Status: ${property.status || "new"}`,
+          `Contract Price: ${property.contractPrice || "Not set"}`,
+          `Asking Price: ${property.askingPrice || "Not set"}`,
+          `ARV: ${property.arv || "Not set"}`,
+          `Days on Market: ${dom}`,
+          `Offers: ${property.offers?.length || 0}`,
+          `Showings: ${property.showings?.length || 0}`,
+          `Sends: ${property.sends?.length || 0}`,
+          `Interested Buyers: ${buyers?.length || 0}`,
+          `Accepted Offer: ${property.acceptedOffer || "None"}`,
+          `Rehab Budget: ${(property as any).rehabBudget || "Not set"}`,
+        ].join("\n");
+        const { invokeLLM } = await import("./_core/llm");
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: `You are a real estate wholesaling disposition expert. Analyze this property and generate 2-4 actionable next-step suggestions. Each suggestion should have: title (short action), description (why and how), priority (high/medium/low), and actionType (one of: update_property_price, update_property_status, add_property_offer, schedule_property_showing, record_property_send, add_property_note, bulk_send_buyers, or "none" for advice-only). Return JSON array.` },
+            { role: "user", content: `Property data:\n${propertyContext}` },
+          ],
+          response_format: {
+            type: "json_schema" as const,
+            json_schema: {
+              name: "property_suggestions",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  suggestions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        description: { type: "string" },
+                        priority: { type: "string", enum: ["high", "medium", "low"] },
+                        actionType: { type: "string" },
+                      },
+                      required: ["title", "description", "priority", "actionType"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["suggestions"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const content = response.choices?.[0]?.message?.content;
+        if (content && typeof content === "string") {
+          const parsed = JSON.parse(content);
+          return { suggestions: parsed.suggestions || [] };
+        }
+        return { suggestions: [] };
+      }),
+
+    // Bulk send property to all interested buyers
+    bulkSendToBuyers: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        message: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getBuyerActivities } = await import("./inventory");
+        const { sendSms } = await import("./ghlActions");
+        const buyers = await getBuyerActivities(ctx.user.tenantId, input.propertyId);
+        const smsEligible = (buyers || []).filter((b: any) => b.ghlContactId);
+        if (smsEligible.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "No buyers with CRM contact IDs found" });
+        const results: Array<{ buyerName: string; success: boolean; error?: string }> = [];
+        for (const buyer of smsEligible) {
+          try {
+            await sendSms(ctx.user.tenantId, buyer.ghlContactId!, input.message);
+            results.push({ buyerName: buyer.buyerName || "Unknown", success: true });
+          } catch (e: any) {
+            results.push({ buyerName: buyer.buyerName || "Unknown", success: false, error: e.message });
+          }
+        }
+        return { sent: results.filter(r => r.success).length, failed: results.filter(r => !r.success).length, total: smsEligible.length, results };
       }),
   }),
 });

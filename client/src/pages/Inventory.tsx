@@ -11,6 +11,7 @@ import {
   Megaphone, UserPlus, Copy, ExternalLink, Hash, TrendingUp,
   CircleDot, Zap, Target, BarChart3, ArrowRight, RefreshCw, Upload, Download, FileUp,
   ChevronRight, Bookmark, Tag, Globe, Layers, StickyNote, Bot, Sparkles, Loader2,
+  Lightbulb,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
@@ -780,6 +781,79 @@ function OverviewTab({ property }: { property: any }) {
           })}
         </div>
       </div>
+      {/* AI Suggestions */}
+      <AISuggestionsWidget propertyId={property.id} />
+    </div>
+  );
+}
+
+// ─── AI SUGGESTIONS WIDGET ───
+function AISuggestionsWidget({ propertyId }: { propertyId: number }) {
+  const { data, isLoading, refetch, isFetching } = trpc.inventory.getPropertySuggestions.useQuery(
+    { propertyId },
+    { staleTime: 300000, refetchOnWindowFocus: false }
+  );
+
+  const priorityColors: Record<string, { bg: string; text: string; border: string }> = {
+    high: { bg: "rgba(239,68,68,0.1)", text: "#ef4444", border: "rgba(239,68,68,0.25)" },
+    medium: { bg: "rgba(234,179,8,0.1)", text: "#eab308", border: "rgba(234,179,8,0.25)" },
+    low: { bg: "rgba(59,130,246,0.1)", text: "#3b82f6", border: "rgba(59,130,246,0.25)" },
+  };
+
+  const actionIcons: Record<string, typeof Lightbulb> = {
+    update_property_price: DollarSign,
+    update_property_status: Activity,
+    add_property_offer: Handshake,
+    schedule_property_showing: Calendar,
+    record_property_send: Send,
+    add_property_note: StickyNote,
+    bulk_send_buyers: Users,
+  };
+
+  return (
+    <div className="rounded-lg p-3" style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Lightbulb className="h-4 w-4" style={{ color: "var(--g-accent)" }} />
+          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--g-text-secondary)" }}>AI Suggestions</span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          <RefreshCw className={`h-3 w-3 ${isFetching ? "animate-spin" : ""}`} style={{ color: "var(--g-text-tertiary)" }} />
+        </Button>
+      </div>
+      {isLoading || isFetching ? (
+        <div className="flex items-center gap-2 py-3">
+          <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--g-accent)" }} />
+          <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Analyzing property...</span>
+        </div>
+      ) : data?.suggestions && data.suggestions.length > 0 ? (
+        <div className="space-y-2">
+          {data.suggestions.map((s: any, i: number) => {
+            const colors = priorityColors[s.priority] || priorityColors.low;
+            const Icon = actionIcons[s.actionType] || Lightbulb;
+            return (
+              <div key={i} className="rounded-md p-2.5 flex gap-2.5" style={{ background: colors.bg, border: `1px solid ${colors.border}` }}>
+                <Icon className="h-4 w-4 shrink-0 mt-0.5" style={{ color: colors.text }} />
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold" style={{ color: "var(--g-text-primary)" }}>{s.title}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: "var(--g-text-secondary)" }}>{s.description}</div>
+                </div>
+                <Badge variant="outline" className="shrink-0 self-start text-[9px] px-1.5 py-0" style={{ color: colors.text, borderColor: colors.border }}>
+                  {s.priority}
+                </Badge>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-xs py-2" style={{ color: "var(--g-text-tertiary)" }}>No suggestions available</div>
+      )}
     </div>
   );
 }
@@ -1269,6 +1343,7 @@ const DISPO_ACTION_LABELS: Record<string, string> = {
   schedule_property_showing: "Schedule Showing",
   record_property_send: "Record Send",
   add_property_note: "Add Note",
+  bulk_send_buyers: "Bulk Send to Buyers",
   // CRM actions (available from Dispo AI too)
   send_sms: "Send SMS",
   create_task: "Create Task",
@@ -1293,6 +1368,7 @@ const DISPO_ACTION_ICONS: Record<string, typeof DollarSign> = {
   schedule_property_showing: Calendar,
   record_property_send: Send,
   add_property_note: StickyNote,
+  bulk_send_buyers: Users,
   // CRM actions
   send_sms: MessageSquare,
   create_task: CheckCircle2,

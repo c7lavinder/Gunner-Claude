@@ -4707,3 +4707,11 @@
 - [x] Add property action awareness to AI Coach streaming system prompt (coachStream.ts)
 - [x] Add property action labels and icons to TaskCenter (Update Property Price, Change Property Status, etc.)
 - [x] Tests: 54 tests covering all enhancements (CRM actions, memory, preferences, Coach property awareness)
+## AI Suggestions Widget & Bulk Actions
+- [x] Backend: getPropertySuggestions tRPC procedure with LLM analysis of property data
+- [x] Backend: bulkSendToBuyers tRPC procedure with buyer filtering and batch SMS
+- [x] Backend: bulk_send_buyers action type in schema, ghlActions, VALID_ACTION_TYPES
+- [x] Backend: bulk_send_buyers in Dispo AI system prompt and parse-intent
+- [x] Frontend: AISuggestionsWidget in property Overview tab with priority-colored cards
+- [x] Frontend: bulk_send_buyers labels and icons in DispoAITab and TaskCenter
+- [x] Tests: 70 tests covering all features including bulk send and AI suggestions
