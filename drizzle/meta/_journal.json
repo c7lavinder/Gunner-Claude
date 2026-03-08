@@ -526,6 +526,13 @@
       "when": 1772941463116,
       "tag": "0074_pink_blazing_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "5",
+      "when": 1772949409959,
+      "tag": "0075_bored_wendigo",
+      "breakpoints": true
     }
   ]
 }

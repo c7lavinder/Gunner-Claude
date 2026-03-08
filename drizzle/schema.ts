@@ -292,6 +292,9 @@ export const callGrades = mysqlTable("call_grades", {
   objectionHandling: json("objectionHandling"), // Array of {objection, context, suggestedResponses[]}
   // Summary
   summary: text("summary"),
+  // AI-generated call highlights - key moments with timestamps
+  // Array of {type, label, timestampSeconds, quote, insight, importance}
+  highlights: json("highlights"),
   // Which rubric was used (legacy)
   rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager", "lead_generator", "follow_up", "seller_callback", "admin_callback", "dispo_manager"]).notNull(),
   // Custom rubric reference

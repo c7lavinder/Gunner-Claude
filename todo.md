@@ -4786,3 +4786,15 @@
 ### High-ROI Enhancements
 - [x] Keyboard shortcuts (Ctrl+1-5 navigate pages, Ctrl+K search)
 - [x] Batch operations on inventory (multi-select, bulk status change, bulk delete)
+
+## Call Recording Highlights — March 8, 2026
+- [x] Database: highlights JSON column on callGrades table (type, label, timestampSeconds, quote, insight, importance)
+- [x] Backend: AI highlight extraction from transcripts during grading pipeline (Step 11)
+- [x] Backend: tRPC endpoint to generate highlights on-demand for existing graded calls
+- [x] Backend: Segments preservation from Whisper transcription for accurate timestamps
+- [x] Frontend: WaveformPlayer ref-based seekTo for highlight timestamp jumping
+- [x] Frontend: Clickable highlight list on Call Detail Transcript tab with jump-to-timestamp
+- [x] Frontend: Highlight type badges with color-coded icons (15 types: objection, appointment, price, rapport, closing, red flag, etc.)
+- [x] Frontend: Expandable highlight cards with direct quotes and coaching insights
+- [x] Frontend: On-demand "Generate Highlights" button for calls without highlights
+- [x] Tests: 12 unit tests for highlight extraction (validation, truncation, error handling, prompt structure)

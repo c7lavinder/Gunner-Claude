@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import WaveSurfer from "wavesurfer.js";
 import { Play, Pause, Volume2, VolumeX, SkipBack, SkipForward } from "lucide-react";
 
@@ -7,7 +7,16 @@ interface WaveformPlayerProps {
   duration?: number; // in seconds, from the call metadata
 }
 
-export default function WaveformPlayer({ url, duration: callDuration }: WaveformPlayerProps) {
+export interface WaveformPlayerRef {
+  seekTo: (seconds: number) => void;
+  play: () => void;
+  pause: () => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+}
+
+const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
+  function WaveformPlayer({ url, duration: callDuration }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -18,6 +27,29 @@ export default function WaveformPlayer({ url, duration: callDuration }: Waveform
   const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
+
+  // Expose imperative methods via ref
+  useImperativeHandle(ref, () => ({
+    seekTo: (seconds: number) => {
+      if (!wavesurferRef.current || !isReady) return;
+      const dur = wavesurferRef.current.getDuration();
+      if (dur > 0) {
+        wavesurferRef.current.seekTo(Math.max(0, Math.min(seconds / dur, 1)));
+      }
+    },
+    play: () => {
+      wavesurferRef.current?.play();
+    },
+    pause: () => {
+      wavesurferRef.current?.pause();
+    },
+    getCurrentTime: () => {
+      return wavesurferRef.current?.getCurrentTime() || 0;
+    },
+    getDuration: () => {
+      return wavesurferRef.current?.getDuration() || 0;
+    },
+  }), [isReady]);
 
   useEffect(() => {
     if (!containerRef.current || !url) return;
@@ -219,4 +251,6 @@ export default function WaveformPlayer({ url, duration: callDuration }: Waveform
       </div>
     </div>
   );
-}
+});
+
+export default WaveformPlayer;

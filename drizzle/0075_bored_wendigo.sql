@@ -1,0 +1,1 @@
+ALTER TABLE `call_grades` ADD `highlights` json;

@@ -844,7 +844,19 @@ CRITICAL RULE: "callback_scheduled" should almost NEVER be used for calls where 
 
 import { transcribeAudio } from "./_core/voiceTranscription";
 
-export async function transcribeCallRecording(recordingUrl: string): Promise<{ text: string; durationSeconds?: number }> {
+export interface TranscriptionSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface TranscriptionResult {
+  text: string;
+  durationSeconds?: number;
+  segments?: TranscriptionSegment[];
+}
+
+export async function transcribeCallRecording(recordingUrl: string): Promise<TranscriptionResult> {
   try {
     const result = await transcribeAudio({
       audioUrl: recordingUrl,
@@ -857,16 +869,23 @@ export async function transcribeCallRecording(recordingUrl: string): Promise<{ t
       throw new Error(result.error + (result.details ? `: ${result.details}` : ''));
     }
 
-    // Extract duration from Whisper segments if available
+    // Extract duration and preserve segments for highlight extraction
     let durationSeconds: number | undefined;
+    let segments: TranscriptionSegment[] | undefined;
     if (result.segments && result.segments.length > 0) {
       const lastSegment = result.segments[result.segments.length - 1];
       if (lastSegment.end) {
         durationSeconds = Math.round(lastSegment.end);
       }
+      // Preserve segments with timestamps for call highlights
+      segments = result.segments.map((s: any) => ({
+        start: s.start,
+        end: s.end,
+        text: s.text,
+      }));
     }
 
-    return { text: result.text, durationSeconds };
+    return { text: result.text, durationSeconds, segments };
   } catch (error) {
     console.error("[Transcription] Error transcribing call:", error);
     throw error;
@@ -1500,6 +1519,26 @@ export async function processCall(callId: number): Promise<void> {
           // Don't block grading if webhook fails
         }
 
+        // Generate highlights for admin calls too
+        try {
+          const { generateAndStoreHighlights } = await import("./callHighlights");
+          await generateAndStoreHighlights(
+            callId,
+            transcript,
+            transcriptionResult.segments,
+            "admin_callback",
+            {
+              overallGrade: gradeResult.overallGrade,
+              overallScore: gradeResult.overallScore.toString(),
+              strengths: gradeResult.strengths,
+              improvements: gradeResult.improvements,
+              redFlags: gradeResult.redFlags,
+            }
+          );
+        } catch (highlightsError) {
+          console.error(`[ProcessCall] Failed to generate highlights for admin call ${callId}:`, highlightsError);
+        }
+
         return;
       }
       
@@ -1724,6 +1763,28 @@ export async function processCall(callId: number): Promise<void> {
     } catch (nextStepsError) {
       console.error(`[ProcessCall] Failed to generate next steps for call ${callId}:`, nextStepsError);
       // Don't fail the whole process if next steps generation fails
+    }
+
+    // Step 11: Generate call highlights (key moments with timestamps)
+    try {
+      const { generateAndStoreHighlights } = await import("./callHighlights");
+      await generateAndStoreHighlights(
+        callId,
+        transcript,
+        transcriptionResult.segments,
+        callType,
+        {
+          overallGrade: gradeResult.overallGrade,
+          overallScore: gradeResult.overallScore.toString(),
+          strengths: gradeResult.strengths,
+          improvements: gradeResult.improvements,
+          redFlags: gradeResult.redFlags,
+        }
+      );
+      console.log(`[ProcessCall] Highlights generated for call ${callId}`);
+    } catch (highlightsError) {
+      console.error(`[ProcessCall] Failed to generate highlights for call ${callId}:`, highlightsError);
+      // Don't fail the whole process if highlights generation fails
     }
 
     console.log(`[ProcessCall] Successfully processed call ${callId}`);

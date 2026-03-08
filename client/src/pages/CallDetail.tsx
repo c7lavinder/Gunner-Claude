@@ -29,7 +29,9 @@ import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import NextStepsTab from "@/components/NextStepsTab";
 import WaveformPlayer from "@/components/WaveformPlayer";
-import { Zap } from "lucide-react";
+import type { WaveformPlayerRef } from "@/components/WaveformPlayer";
+import CallHighlights from "@/components/CallHighlights";
+import { Zap, Sparkles } from "lucide-react";
 import { useDemo } from "@/hooks/useDemo";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 
@@ -167,6 +169,7 @@ export default function CallDetail() {
     correctBehavior: "",
   });
   const [detailTab, setDetailTab] = useState("coaching");
+  const waveformRef = useRef<WaveformPlayerRef>(null);
 
   const { data: call, isLoading: callLoading } = trpc.calls.getById.useQuery(
     { id: callId },
@@ -726,8 +729,23 @@ export default function CallDetail() {
                     <h3 className="text-xs uppercase tracking-widest font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--g-text-tertiary)" }}>
                       <Play className="h-3.5 w-3.5" /> Call Recording
                     </h3>
-                    <WaveformPlayer url={call.recordingUrl} duration={call.duration || undefined} />
+                    <WaveformPlayer ref={waveformRef} url={call.recordingUrl} duration={call.duration || undefined} />
                   </div>
+                )}
+
+                {/* ─── Call Highlights ─── */}
+                {grade && (
+                  <CallHighlights
+                    callId={callId}
+                    highlights={grade.highlights as any[] | null}
+                    hasRecording={!!call.recordingUrl}
+                    onSeek={(seconds) => {
+                      if (waveformRef.current) {
+                        waveformRef.current.seekTo(seconds);
+                        waveformRef.current.play();
+                      }
+                    }}
+                  />
                 )}
 
                 <div

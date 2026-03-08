@@ -727,6 +727,50 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // Generate highlights for an existing graded call (on-demand)
+    generateHighlights: protectedProcedure
+      .input(z.object({ callId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const call = await getCallById(input.callId);
+        if (!call) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Call not found" });
+        }
+        const grade = await getCallGradeByCallId(input.callId);
+        if (!grade) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Call has not been graded yet" });
+        }
+
+        // If highlights already exist, return them
+        if (grade.highlights && Array.isArray(grade.highlights) && (grade.highlights as any[]).length > 0) {
+          return { highlights: grade.highlights, cached: true };
+        }
+
+        // Get transcript (handle archived calls)
+        const { getCallTranscript } = await import("./archival");
+        const transcript = await getCallTranscript(input.callId);
+        if (!transcript) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No transcript available for this call" });
+        }
+
+        // Generate highlights
+        const { generateAndStoreHighlights } = await import("./callHighlights");
+        const highlights = await generateAndStoreHighlights(
+          input.callId,
+          transcript,
+          undefined, // segments not available for on-demand generation
+          call.callType || undefined,
+          {
+            overallGrade: grade.overallGrade || undefined,
+            overallScore: grade.overallScore || undefined,
+            strengths: (grade.strengths as string[] | null) || undefined,
+            improvements: (grade.improvements as string[] | null) || undefined,
+            redFlags: (grade.redFlags as string[] | null) || undefined,
+          }
+        );
+
+        return { highlights, cached: false };
+      }),
+
     // List stuck/queued calls for admin UI
     listStuck: protectedProcedure
       .query(async ({ ctx }) => {

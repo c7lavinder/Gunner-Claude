@@ -1,0 +1,18 @@
+{
+  "query": "SHOW COLUMNS FROM call_grades WHERE Field = 'highlights';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SHOW COLUMNS FROM call_grades WHERE Field = 'highlights';",
+  "rows": [
+    {
+      "Field": "highlights",
+      "Type": "json",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nhighlights\tjson\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 358
+}
