@@ -4868,3 +4868,6 @@
 
 ## Inventory Header Redesign
 - [x] Move status tabs to their own line below search/filters with visual appeal
+
+## Markets Dropdown Fix
+- [x] Markets dropdown populates from KPI Markets (tenant playbook) instead of property data

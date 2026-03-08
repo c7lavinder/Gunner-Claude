@@ -2765,10 +2765,15 @@ export default function Inventory() {
   }, [rawProperties]);
 
   const uniqueMarkets = useMemo(() => {
+    // Populate from KPI Markets (tenant playbook), not from property data
+    if (kpiMarkets && kpiMarkets.length > 0) {
+      return kpiMarkets.map((m: any) => m.name).filter(Boolean).sort();
+    }
+    // Fallback to property data if no KPI markets configured
     const markets = new Set<string>();
     rawProperties.forEach((p: any) => { if (p.market) markets.add(p.market); });
     return Array.from(markets).sort();
-  }, [rawProperties]);
+  }, [kpiMarkets, rawProperties]);
 
   // Apply status, type, and market filters (client-side for accurate stage counts)
   const filteredProperties = useMemo(() => {
