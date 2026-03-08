@@ -4840,3 +4840,6 @@
 ## Inventory Delete Button
 - [x] Backend: tRPC endpoint to delete a property from inventory (already existed)
 - [x] Frontend: Delete button (trash icon) on inventory table rows with confirmation dialog
+
+## Bug Fix: Delete Property Foreign Key Constraint
+- [x] Fix deleteProperty to cascade-delete all related records (dealContentEdits, dealDistributions, buyerActivity, activityLog, sends, offers, showings, stageHistory, nullify KPI entries) before deleting the property

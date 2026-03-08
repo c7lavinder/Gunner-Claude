@@ -10,6 +10,9 @@ import {
   dispoPropertyShowings,
   dispoDailyKpis,
   propertyStageHistory,
+  dealDistributions,
+  dealContentEdits,
+  dailyKpiEntries,
   type InsertDispoProperty,
   type InsertDispoPropertySend,
   type InsertDispoPropertyOffer,
@@ -197,10 +200,30 @@ export async function deleteProperty(tenantId: number, propertyId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Delete related records first
+  // Delete related records first (order matters for FK constraints)
+  // 1. Deal content edits (references dealDistributions)
+  const distributions = await db.select({ id: dealDistributions.id })
+    .from(dealDistributions)
+    .where(eq(dealDistributions.propertyId, propertyId));
+  if (distributions.length > 0) {
+    const distIds = distributions.map(d => d.id);
+    await db.delete(dealContentEdits).where(inArray(dealContentEdits.distributionId, distIds));
+  }
+  // 2. Deal distributions
+  await db.delete(dealDistributions).where(eq(dealDistributions.propertyId, propertyId));
+  // 3. Buyer activity
+  await db.delete(propertyBuyerActivity).where(eq(propertyBuyerActivity.propertyId, propertyId));
+  // 4. Activity log
+  await db.delete(propertyActivityLog).where(eq(propertyActivityLog.propertyId, propertyId));
+  // 5. Sends, offers, showings
   await db.delete(dispoPropertySends).where(eq(dispoPropertySends.propertyId, propertyId));
   await db.delete(dispoPropertyOffers).where(eq(dispoPropertyOffers.propertyId, propertyId));
   await db.delete(dispoPropertyShowings).where(eq(dispoPropertyShowings.propertyId, propertyId));
+  // 6. Stage history
+  await db.delete(propertyStageHistory).where(eq(propertyStageHistory.propertyId, propertyId));
+  // 7. Nullify KPI entries that reference this property (nullable FK, don't delete)
+  await db.update(dailyKpiEntries).set({ propertyId: null }).where(eq(dailyKpiEntries.propertyId, propertyId));
+  // 8. Finally delete the property itself
   await db.delete(dispoProperties)
     .where(and(eq(dispoProperties.id, propertyId), eq(dispoProperties.tenantId, tenantId)));
 
