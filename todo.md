@@ -4732,3 +4732,20 @@
 - [x] Frontend: AI Analytics Coach chat panel on KPI/Analytics page
 - [x] Frontend: Pre-loaded context chips for common analytics questions
 - [x] Tests: Analytics AI endpoint and data aggregation tests
+
+## Enterprise LLM Overhaul — 8-Figure Company Grade
+- [x] AI Coach: Enhanced context with conversion funnel data, pipeline velocity, and revenue impact
+- [x] AI Coach: Smarter stats engine with computed benchmarks and anomaly detection
+- [x] AI Coach: Better coaching methodology — specific scripts, role-play scenarios, objection handling
+- [x] AI Coach: Memory-aware responses that reference previous coaching sessions
+- [x] Dispo AI: Deeper property intelligence with market comparables and pricing strategy
+- [x] Dispo AI: Buyer analytics with engagement scoring and response pattern analysis
+- [x] Dispo AI: Deal strategy recommendations based on property aging and buyer interest
+- [x] Analytics AI: Executive-grade analysis with revenue modeling and forecasting
+- [x] Analytics AI: Predictive insights — flag at-risk deals, declining performers, pipeline gaps
+- [x] Analytics AI: Automated issue prioritization ranked by revenue impact
+- [x] parseIntent: Precision action detection with confidence scoring
+- [x] parseIntent: Better multi-action parsing and disambiguation
+- [x] Shared intelligence layer: Platform knowledge base and industry playbooks across all LLMs
+- [x] Increase thinking budget for complex analysis queries
+- [x] Tests for all enhanced LLM features

@@ -21,7 +21,7 @@ export async function invokeLLMStream(
     messages,
     stream: true,
     max_tokens: 32768,
-    thinking: { budget_tokens: 128 },
+    thinking: { budget_tokens: 2048 },
   };
 
   try {

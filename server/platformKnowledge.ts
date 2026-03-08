@@ -157,6 +157,8 @@ The AI Coach (that's me!) can help with:
 • Explaining how any Gunner feature works (badges, XP, grading, signals, etc.)
 • Providing data-driven recommendations based on actual call outcomes and pipeline data
 • Referencing training materials uploaded by your team
+• Identifying missed opportunities from call transcripts and pipeline data
+• Generating call summaries and CRM notes from transcripts
 
 **CRM Actions — I can directly execute these in your GoHighLevel CRM:**
 • Add a note to any contact (e.g., "Add a note to John Smith: called back, interested in selling")
@@ -165,8 +167,21 @@ The AI Coach (that's me!) can help with:
 • Create a follow-up task (e.g., "Create a task to call back John Smith tomorrow")
 • Add or remove tags on a contact (e.g., "Tag John Smith as hot-lead")
 • Update a custom field on a contact (e.g., "Update John Smith's property address to 123 Main St")
+• Add/remove contacts to/from GHL workflows (e.g., "Add John to the follow-up workflow")
+• Create, update, or cancel calendar appointments (e.g., "Schedule a walkthrough with John for Tuesday at 2pm")
 
 To use CRM actions, just type what you want to do naturally. I'll show you a preview card so you can review and edit before confirming. You can request multiple actions in one message (e.g., "Add a note to Jose, then move him to pending apt, then create a task for follow-up").
+
+--- DISPOSITION / INVENTORY ---
+
+• Inventory (/inventory) — [Admin/Dispo Manager] Manage your property pipeline. Add properties, track status through the deal lifecycle, manage buyer lists, record offers, schedule showings, and track assignment fees.
+• Dispo AI — Each property has an AI assistant that knows the property's full context: asking price, ARV, rehab estimates, buyer activity, offers, and response rates. It can execute dispo actions (update prices, change status, record offers, send to buyers, record responses).
+• Buyer Response Tracking — After sending properties to buyers, track who responded, what they said, and their interest level. Response rates are calculated per property and visible in the Buyers tab.
+• Property Pipeline Statuses: lead → new → apt_set → offer_made → under_contract → marketing → negotiating → buyer_negotiating → closing → closed (also: follow_up, dead)
+
+--- ANALYTICS AI ---
+
+• Analytics AI (/analytics) — [Admin only] A floating AI chat panel on the Analytics page. Has full visibility into multi-period call stats, team member performance, conversion funnels, pipeline data, and weekly trends. Ask it questions like "What are our biggest issues?" or "How can we increase ROI?" and it will give data-backed answers with specific numbers and revenue impact calculations.
 
 --- HOW CALLS GET INTO THE SYSTEM ---
 
@@ -178,6 +193,14 @@ Calls come in automatically from GoHighLevel (GHL) via:
 --- ARCHIVAL ---
 
 Calls older than 14 days are automatically archived. Archived calls have their transcripts moved to cloud storage to keep the system fast. Archived calls are still used for AI training and coaching insights.
+
+--- TASK CENTER ---
+
+• Task Center (/tasks) — Central hub for managing all pending AI Coach actions. When the AI Coach creates an action (note, SMS, task, stage change, etc.), it appears here as a pending card that you can review, edit, and confirm before execution. Shows action history and status.
+
+--- DAY HUB ---
+
+• Day Hub (/day-hub) — Your daily priority dashboard. Shows today's KPI targets, overdue tasks, upcoming follow-ups, and daily metrics. Designed to be the first thing you check each morning.
 `;
 
 // ============ SECURITY GUARDRAILS ============
