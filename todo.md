@@ -4865,3 +4865,6 @@
 - [x] 17. Acquisition stages show different columns: Last Offer, Last Contacted, Last Conversation; Disposition stages show: Sends, Buyers, Offers, Showings
 - [x] 18. Market-to-zip mappings stored at kpiMarkets level (zipCodes field already exists)
 - [x] 19. CSV import with column mapping UI — added projectType, opportunitySource, acceptedOffer to mappable fields
+
+## Inventory Header Redesign
+- [x] Move status tabs to their own line below search/filters with visual appeal

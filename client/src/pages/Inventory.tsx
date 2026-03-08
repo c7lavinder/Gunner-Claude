@@ -2867,7 +2867,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Search & Filters Row */}
       <div className="px-5 py-3 flex items-center gap-3" style={{ borderBottom: "1px solid var(--g-border-subtle)" }}>
         <div className="relative w-64 shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--g-text-tertiary)" }} />
@@ -2927,23 +2927,62 @@ export default function Inventory() {
             <X className="h-3 w-3" /> Clear
           </button>
         )}
-        <div className="flex items-center gap-1 flex-wrap">
-          {visibleStages.map((s) => {
+      </div>
+
+      {/* Status Pipeline Tabs */}
+      <div className="px-5 py-2" style={{ background: "var(--g-bg-elevated)", borderBottom: "1px solid var(--g-border-subtle)" }}>
+        <div className="flex items-center gap-1">
+          {visibleStages.map((s, idx) => {
             const cfg = STATUS_CONFIG[s];
             const isActive = statusFilter === s;
+            const count = (data?.items || []).filter((p: any) => p.status === s).length;
             return (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors"
+                className="group relative flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200"
                 style={{
-                  minWidth: "fit-content",
                   background: isActive ? cfg.bg : "transparent",
                   color: isActive ? cfg.color : "var(--g-text-tertiary)",
-                  border: isActive ? `1px solid ${cfg.color}40` : "1px solid transparent",
+                  boxShadow: isActive ? `0 0 0 1px ${cfg.color}30, 0 1px 3px ${cfg.color}15` : "none",
                 }}
               >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0 transition-transform duration-200"
+                  style={{
+                    background: isActive ? cfg.color : "var(--g-text-tertiary)",
+                    opacity: isActive ? 1 : 0.4,
+                    transform: isActive ? "scale(1.2)" : "scale(1)",
+                  }}
+                />
                 {cfg.label}
+                {count > 0 && (
+                  <span
+                    className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none"
+                    style={{
+                      background: isActive ? `${cfg.color}20` : "var(--g-bg-inset)",
+                      color: isActive ? cfg.color : "var(--g-text-tertiary)",
+                    }}
+                  >
+                    {count}
+                  </span>
+                )}
+                {/* Active indicator line */}
+                {isActive && (
+                  <span
+                    className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full"
+                    style={{ background: cfg.color }}
+                  />
+                )}
+                {/* Connector arrow between stages */}
+                {idx < visibleStages.length - 1 && (
+                  <span
+                    className="absolute -right-1 top-1/2 -translate-y-1/2 text-[10px] pointer-events-none"
+                    style={{ color: "var(--g-text-tertiary)", opacity: 0.3 }}
+                  >
+                    ›
+                  </span>
+                )}
               </button>
             );
           })}
