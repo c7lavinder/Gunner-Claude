@@ -67,7 +67,21 @@ export function registerOAuthRoutes(app: Express) {
       }
 
       // ─── SIGNUP LOCKDOWN: Only allow existing users to log in ───
-      const existingUser = await db.getUserByOpenId(userInfo.openId);
+      let existingUser = await db.getUserByOpenId(userInfo.openId);
+      // Fallback: check by email if openId doesn't match (e.g. user signed up via Google, now logging in via Manus OAuth)
+      if (!existingUser && userInfo.email) {
+        const { getDb } = await import("../db");
+        const { users } = await import("../../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const dbConn = await getDb();
+        if (dbConn) {
+          const [emailUser] = await dbConn.select().from(users).where(eq(users.email, userInfo.email)).limit(1);
+          if (emailUser) {
+            existingUser = emailUser;
+            console.log(`[OAuth] Found existing user by email fallback: ${userInfo.email}`);
+          }
+        }
+      }
       if (!existingUser) {
         // NEW USER — block signup entirely
         console.warn(`[OAuth] BLOCKED new signup attempt: ${userInfo.email || userInfo.openId} from IP ${clientIp}`);
@@ -76,8 +90,12 @@ export function registerOAuthRoutes(app: Express) {
       }
       // ─── END SIGNUP LOCKDOWN ───
 
+      // Use the existing user's openId for upsert (not the OAuth provider's openId)
+      // This ensures the session token matches the DB record
+      const effectiveOpenId = existingUser.openId || userInfo.openId;
+
       const user = await db.upsertUser({
-        openId: userInfo.openId,
+        openId: effectiveOpenId,
         name: userInfo.name || null,
         email: userInfo.email ?? null,
         loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
@@ -98,7 +116,7 @@ export function registerOAuthRoutes(app: Express) {
         }
       }
 
-      const sessionToken = await sdk.createSessionToken(userInfo.openId, {
+      const sessionToken = await sdk.createSessionToken(effectiveOpenId, {
         name: userInfo.name || "",
         expiresInMs: ONE_YEAR_MS,
       });

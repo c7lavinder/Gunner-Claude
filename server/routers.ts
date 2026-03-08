@@ -8212,6 +8212,8 @@ selectedTimezone: { type: "string" },
         assignmentFee: z.number().optional(),
         mediaLink: z.string().optional(),
         leadSource: z.string().optional(),
+        projectType: z.string().optional(),
+        opportunitySource: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });

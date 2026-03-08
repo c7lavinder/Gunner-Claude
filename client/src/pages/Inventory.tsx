@@ -1926,7 +1926,7 @@ function DispoAITab({ propertyId, property }: { propertyId: number; property: an
   };
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 320px)", minHeight: 400, overflow: "hidden" }}>
+    <div className="flex flex-col h-full" style={{ minHeight: 400, overflow: "hidden" }}>
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pb-3" style={{ overscrollBehavior: "contain" }}>
         {messages.length === 0 ? (
@@ -2410,22 +2410,27 @@ function PropertyDetail({
       {/* Quick Actions Bar */}
       <QuickActionsBar property={property} propertyId={propertyId} setActiveTab={setActiveTab} />
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
-        {activeTab === "overview" && (
-          <div className="space-y-6">
-            <OverviewTab property={property} />
-            <div style={{ borderTop: "1px solid var(--g-border-subtle)", paddingTop: 16 }}>
-              <ResearchTab propertyId={propertyId} property={property} />
+      {/* Scrollable Content - AI tab renders outside scroll wrapper for pinned input */}
+      {activeTab === "ai" ? (
+        <div className="flex-1 overflow-hidden px-5 py-4">
+          <DispoAITab propertyId={propertyId} property={property} />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              <OverviewTab property={property} />
+              <div style={{ borderTop: "1px solid var(--g-border-subtle)", paddingTop: 16 }}>
+                <ResearchTab propertyId={propertyId} property={property} />
+              </div>
             </div>
-          </div>
-        )}
-        {activeTab === "buyers" && <BuyersTab propertyId={propertyId} />}
-        {activeTab === "outreach" && <OutreachTab property={property} propertyId={propertyId} />}
-        {activeTab === "activity" && <ActivityTab propertyId={propertyId} />}
-        {activeTab === "ai" && <DispoAITab propertyId={propertyId} property={property} />}
-        {activeTab === "deal_blast" && <DealBlastTab propertyId={propertyId} property={property} />}
-      </div>
+          )}
+          {activeTab === "buyers" && <BuyersTab propertyId={propertyId} />}
+          {activeTab === "outreach" && <OutreachTab property={property} propertyId={propertyId} />}
+          {activeTab === "activity" && <ActivityTab propertyId={propertyId} />}
+          {activeTab === "deal_blast" && <DealBlastTab propertyId={propertyId} property={property} />}
+        </div>
+      )}
 
       {/* Dialogs */}
       {editOpen && (
@@ -3077,8 +3082,8 @@ export default function Inventory() {
                             </>
                           ) : (
                             <>
-                              <td className="px-3 py-2.5 text-right font-semibold" style={{ color: p.lastOfferAmount ? "#22c55e" : "var(--g-text-tertiary)" }}>
-                                {p.lastOfferAmount ? formatCurrency(p.lastOfferAmount) : "—"}
+                              <td className="px-3 py-2.5 text-right font-semibold" style={{ color: (p as any)._activity?.highestOffer ? "#22c55e" : "var(--g-text-tertiary)" }}>
+                                {(p as any)._activity?.highestOffer ? formatCurrency((p as any)._activity.highestOffer) : "—"}
                               </td>
                               <td className="px-3 py-2.5 text-center text-[10px]" style={{ color: p.lastContactedAt ? "var(--g-text-secondary)" : "var(--g-text-tertiary)" }}>
                                 {p.lastContactedAt ? new Date(p.lastContactedAt).toLocaleDateString() : "—"}
