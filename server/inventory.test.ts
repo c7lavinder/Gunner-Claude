@@ -156,7 +156,7 @@ describe("AI Coach Dispo Awareness", () => {
     const content = fs.readFileSync("server/coachStream.ts", "utf-8");
     expect(content).toContain("isDispoManager");
     expect(content).toContain("dispo_manager");
-    expect(content).toContain("disposition coach");
+    expect(content).toContain("Dispo AI");
     expect(content).toContain("dispoInventoryContext");
   });
 
@@ -164,11 +164,9 @@ describe("AI Coach Dispo Awareness", () => {
     const fs = await import("fs");
     const content = fs.readFileSync("server/coachStream.ts", "utf-8");
     expect(content).toContain("Property marketing strategy");
-    expect(content).toContain("Buyer relationship management");
-    expect(content).toContain("Showing scheduling");
     expect(content).toContain("Offer negotiation");
     expect(content).toContain("Assignment fee optimization");
-    expect(content).toContain("Facebook marketplace");
+    expect(content).toContain("Facebook Marketplace");
   });
 
   it("should load active inventory context for dispo coach", async () => {

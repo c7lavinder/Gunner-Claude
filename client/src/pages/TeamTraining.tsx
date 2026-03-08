@@ -276,8 +276,8 @@ function TrainingItemCard({
         {callIds.length > 0 && (
           <div className="flex items-center gap-1.5 mt-1 mb-2">
             <span className="text-xs text-muted-foreground">Evidence:</span>
-            {callIds.slice(0, 3).map((callId) => (
-              <a key={callId} href={`/calls/${callId}`} className="text-xs text-purple-600 hover:text-purple-800 underline" onClick={(e) => e.stopPropagation()}>Call #{callId}</a>
+            {callIds.slice(0, 3).map((callId, idx) => (
+              <a key={callId} href={`/calls/${callId}`} className="text-xs text-purple-600 hover:text-purple-800 underline" onClick={(e) => e.stopPropagation()}>Call {idx + 1}</a>
             ))}
             {callIds.length > 3 && <span className="text-xs text-muted-foreground">+{callIds.length - 3} more</span>}
           </div>
@@ -296,6 +296,7 @@ function TrainingItemCard({
           className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
           onClick={() => completeMutation.mutate({ id: item.id })}
           disabled={completeMutation.isPending}
+          title="Mark as completed"
         >
           <Check className="h-4 w-4" />
         </Button>
@@ -305,6 +306,7 @@ function TrainingItemCard({
           className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
           onClick={() => deleteMutation.mutate({ id: item.id })}
           disabled={deleteMutation.isPending}
+          title="Delete training item"
         >
           <Trash2 className="h-4 w-4" />
         </Button>

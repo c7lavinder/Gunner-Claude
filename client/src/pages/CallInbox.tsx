@@ -38,7 +38,8 @@ import {
   ClipboardList,
   MoreVertical,
   Users,
-  Archive
+  Archive,
+  Minus
 } from "lucide-react";
 import { Link, useSearch, useLocation, useRoute } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -429,6 +430,7 @@ function AICoachQA() {
   const { guardAction: guardDemoAction, isDemo } = useDemo();
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [contactSearchResults, setContactSearchResults] = useState<Array<{id: string; name: string; phone?: string; email?: string}>>([]);
   const [pendingAction, setPendingAction] = useState<{intent: any; message: string; remainingActions?: any[]; batchIndex?: number; batchTotal?: number} | null>(null);
@@ -1096,21 +1098,28 @@ function AICoachQA() {
   };
 
   return (
-    <div className="obs-panel h-[650px] flex flex-col border-2 overflow-hidden">
-      <div className="pb-2 flex-shrink-0 px-3 pt-3" style={{marginBottom: 16}}>
+    <div className={`obs-panel ${isCollapsed ? '' : 'h-[650px]'} flex flex-col border-2 overflow-hidden transition-all duration-300`}>
+      <div className="pb-2 flex-shrink-0 px-3 pt-3" style={{marginBottom: isCollapsed ? 0 : 16}}>
         <div className="flex items-center justify-between">
-          <h3 className="obs-section-title flex items-center gap-2 text-base">
+          <h3 className="obs-section-title flex items-center gap-2 text-base cursor-pointer" onClick={() => setIsCollapsed(!isCollapsed)}>
             <Bot className="h-4 w-4 text-primary" />
             AI Coach
+            <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
           </h3>
-          {conversation.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={clearConversation} className="h-7 text-xs">
-              Clear
+          <div className="flex items-center gap-1">
+            {conversation.length > 0 && !isCollapsed && (
+              <Button variant="ghost" size="sm" onClick={clearConversation} className="h-7 text-xs">
+                Clear
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsCollapsed(!isCollapsed)}>
+              {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
             </Button>
-          )}
+          </div>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-0.5">{currentUser?.teamRole === 'lead_generator' ? 'Cold calling tips, lead notes & CRM commands' : 'Ask questions or give CRM commands'}</p>
+        {!isCollapsed && <p className="text-[10px] text-muted-foreground mt-0.5">{currentUser?.teamRole === 'lead_generator' ? 'Cold calling tips, lead notes & CRM commands' : 'Ask questions or give CRM commands'}</p>}
       </div>
+      {isCollapsed ? null : (
       <div className="flex-1 flex flex-col overflow-hidden px-3 pb-3 pt-0">
         <div className="flex-1 overflow-y-auto">
           {conversation.length === 0 ? (
@@ -1142,15 +1151,22 @@ function AICoachQA() {
                   </button>
                 ))}
                 <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mt-2">Actions</p>
-                {(currentUser?.teamRole === 'lead_generator' ? [
-                  'Add note to John Smith: "Interested in selling, motivated"',
-                  'Create task: Follow up with interested seller tomorrow',
-                  'Add note to Jane Doe: "Not interested, remove from list"',
-                ] : [
-                  'Add note to John Smith: "Called back, interested"',
-                  "Create task: Follow up with seller tomorrow",
-                  'Send SMS to Jane Doe: "Are you still interested in selling?"',
-                ]).map((prompt, i) => (
+                {(() => {
+                  const recentNames = (contactSearchResults?.length > 0 
+                    ? contactSearchResults.map((c: any) => c.name)
+                    : []).filter(Boolean);
+                  const name1 = recentNames[0] || "recent contact";
+                  const name2 = recentNames[1] || recentNames[0] || "recent contact";
+                  return currentUser?.teamRole === 'lead_generator' ? [
+                    `Add note to ${name1}: "Interested in selling, motivated"`,
+                    'Create task: Follow up with interested seller tomorrow',
+                    `Add note to ${name2}: "Not interested, remove from list"`,
+                  ] : [
+                    `Add note to ${name1}: "Called back, interested"`,
+                    "Create task: Follow up with seller tomorrow",
+                    `Send SMS to ${name2}: "Are you still interested in selling?"`,
+                  ];
+                })().map((prompt, i) => (
                   <button
                     key={`action-${i}`}
                     onClick={() => {
@@ -1513,6 +1529,7 @@ function AICoachQA() {
           </Button>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -1660,7 +1677,7 @@ function ManualUploadDialog({ onSuccess }: { onSuccess: () => void }) {
             <div className="space-y-2">
               <Label>Contact Name</Label>
               <Input
-                placeholder="John Smith"
+                placeholder="Contact name"
                 value={contactName}
                 onChange={(e) => setContactName(e.target.value)}
               />
@@ -2137,6 +2154,9 @@ export default function CallInbox() {
   // Date range options
   const dateRangeOptions = [
     { value: "1d", label: "Today" },
+    { value: "7d", label: "Last 7 Days" },
+    { value: "30d", label: "This Month" },
+    { value: "90d", label: "Last 90 Days" },
     { value: "all", label: "All Time" },
   ];
 

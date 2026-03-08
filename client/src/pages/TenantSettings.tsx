@@ -658,6 +658,54 @@ export default function TenantSettings() {
             </div>
           </div>
 
+          {/* Quick Stats */}
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title">Account Overview</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Quick snapshot of your organization</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="rounded-xl p-4" style={{ background: 'var(--g-bg-inset)', border: '1px solid var(--g-border-subtle)' }}>
+                <div className="text-2xl font-bold" style={{ color: 'var(--g-text-primary)' }}>{teamMembers?.length || 0}</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--g-text-tertiary)' }}>Team Members</div>
+              </div>
+              <div className="rounded-xl p-4" style={{ background: 'var(--g-bg-inset)', border: '1px solid var(--g-border-subtle)' }}>
+                <div className="text-2xl font-bold" style={{ color: 'var(--g-text-primary)' }}>{teamMembers?.filter((m: any) => m.teamRole === 'admin').length || 0}</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--g-text-tertiary)' }}>Admins</div>
+              </div>
+              <div className="rounded-xl p-4" style={{ background: 'var(--g-bg-inset)', border: '1px solid var(--g-border-subtle)' }}>
+                <div className="text-2xl font-bold" style={{ color: 'var(--g-text-primary)' }}>{teamMembers?.filter((m: any) => m.teamRole === 'acquisition_manager').length || 0}</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--g-text-tertiary)' }}>Acq. Managers</div>
+              </div>
+              <div className="rounded-xl p-4" style={{ background: 'var(--g-bg-inset)', border: '1px solid var(--g-border-subtle)' }}>
+                <div className="text-2xl font-bold" style={{ color: 'var(--g-text-primary)' }}>{teamMembers?.filter((m: any) => m.teamRole === 'lead_manager' || m.teamRole === 'lead_generator').length || 0}</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--g-text-tertiary)' }}>Lead Team</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Keyboard Shortcuts Reference */}
+          <div className="obs-panel">
+            <div style={{marginBottom: 16}}>
+              <h3 className="obs-section-title">Keyboard Shortcuts</h3>
+              <p style={{fontSize: 13, color: "var(--obs-text-tertiary)", marginTop: 4}}>Navigate faster with keyboard shortcuts</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                { keys: 'Ctrl + 1', action: 'Go to Day Hub' },
+                { keys: 'Ctrl + 2', action: 'Go to Calls' },
+                { keys: 'Ctrl + 3', action: 'Go to Inventory' },
+                { keys: 'Ctrl + 4', action: 'Go to Analytics' },
+                { keys: 'Ctrl + 5', action: 'Go to Team' },
+                { keys: 'Ctrl + K', action: 'Quick Search' },
+              ].map(({ keys, action }) => (
+                <div key={keys} className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ background: 'var(--g-bg-inset)' }}>
+                  <span className="text-sm" style={{ color: 'var(--g-text-secondary)' }}>{action}</span>
+                  <kbd className="text-xs px-2 py-1 rounded" style={{ background: 'var(--g-bg-card)', border: '1px solid var(--g-border-subtle)', color: 'var(--g-text-tertiary)', fontFamily: 'monospace' }}>{keys}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
 
         </div>)}
 
@@ -1666,16 +1714,38 @@ export default function TenantSettings() {
                           <p className="text-xs text-green-600 dark:text-green-400">Location: {crmIntegrations.ghl.locationId}</p>
                         )}
                       </div>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          disconnectOAuthMutation.mutate();
-                        }}
-                        disabled={disconnectOAuthMutation.isPending}
-                      >
-                        <Unlink className="h-4 w-4 mr-1" /> Disconnect OAuth
-                      </Button>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={disconnectOAuthMutation.isPending}
+                          >
+                            <Unlink className="h-4 w-4 mr-1" /> Disconnect OAuth
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Disconnect GoHighLevel?</DialogTitle>
+                            <DialogDescription>
+                              This will disconnect your GHL integration. Call syncing, webhook events, and all CRM features will stop working immediately. You can reconnect later but may need to reconfigure webhooks.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="flex justify-end gap-2 mt-4">
+                            <DialogTrigger asChild>
+                              <Button variant="outline">Cancel</Button>
+                            </DialogTrigger>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                onClick={() => disconnectOAuthMutation.mutate()}
+                              >
+                                Yes, Disconnect
+                              </Button>
+                            </DialogTrigger>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                     </div>
                   )}
 

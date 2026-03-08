@@ -4749,3 +4749,40 @@
 - [x] Shared intelligence layer: Platform knowledge base and industry playbooks across all LLMs
 - [x] Increase thinking budget for complex analysis queries
 - [x] Tests for all enhanced LLM features
+
+## Full Audit Fix — March 7, 2026
+
+### Critical Issues
+- [x] Fix empty states: replace loading animation with clear "no data" messages on Calls and Day Hub
+- [x] Mask seller phone numbers on property detail (show last 4 digits only)
+- [x] Add confirmation dialog to "Disconnect OAuth" button with type-to-confirm
+- [x] Add more date filter options to Calls page (Last 7 Days, This Week, This Month, Last 30 Days)
+
+### UI/UX Polish
+- [x] Dynamic quick action names (use real contact names, not "John Smith" placeholders)
+- [x] Fix inventory 0-value display (show dash for untracked vs 0 for actually zero)
+- [x] Add underperformer alerts on Team page (visual badge for sub-50% scores)
+- [x] Make AI Coach panel collapsible on Calls page
+- [x] Fix Address Pending display with warning indicator
+- [x] Add sorting indicators on inventory columns (already existed)
+- [x] Fix admin showing Level 1 Rookie — show Admin star badge instead
+- [x] Make grade distribution bar larger and more readable on Team page
+- [x] Fix evidence links to show Call 1/2/3 instead of internal IDs
+- [x] Add tooltips to training card check marks
+- [x] Fix card height inconsistency in Materials tab (no separate tab exists)
+- [x] Add dark overlay behind property detail panel on mobile
+- [x] Show No prior data when KPI previous period is 0
+- [x] Fix back button on Call Detail to be larger with text label
+- [x] Separate Dispo Manager from call-volume rankings on Team page (already uses XP-based ranking, not call volume)
+
+### Simplify Overcomplicated Flows
+- [x] Merge property detail tabs from 6 to 5 (Research into Overview)
+- [x] Fill in Settings General tab with Account Overview stats and Keyboard Shortcuts reference
+
+### Code Health
+- [x] Replace empty catch blocks with proper error logging
+- [x] Add per-page error boundaries
+
+### High-ROI Enhancements
+- [x] Keyboard shortcuts (Ctrl+1-5 navigate pages, Ctrl+K search)
+- [x] Batch operations on inventory (multi-select, bulk status change, bulk delete)

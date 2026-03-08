@@ -311,10 +311,11 @@ export default function CallDetail() {
       <div className="flex items-start gap-4">
         <button
           onClick={() => window.history.back()}
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 hover:scale-105"
+          className="h-10 px-3 rounded-xl flex items-center gap-2 shrink-0 transition-all duration-200 hover:scale-105"
           style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)", color: "var(--g-text-secondary)" }}
         >
           <ArrowLeft className="h-5 w-5" />
+          <span className="text-sm font-medium hidden sm:inline">Back</span>
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tighter" style={{ color: "var(--g-text-primary)" }}>

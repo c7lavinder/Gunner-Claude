@@ -11,7 +11,7 @@ import {
   Megaphone, UserPlus, Copy, ExternalLink, Hash, TrendingUp,
   CircleDot, Zap, Target, BarChart3, ArrowRight, RefreshCw, Upload, Download, FileUp,
   ChevronRight, Bookmark, Tag, Globe, Layers, StickyNote, Bot, Sparkles, Loader2,
-  Lightbulb, MessageCircle,
+  Lightbulb, MessageCircle, CheckSquare, Square,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
@@ -713,7 +713,23 @@ function OverviewTab({ property }: { property: any }) {
           <div className="mt-2 text-sm">
             <span style={{ color: "var(--g-text-tertiary)" }}>Seller:</span>{" "}
             <span style={{ color: "var(--g-text-primary)" }}>{property.sellerName}</span>
-            {property.sellerPhone && <span style={{ color: "var(--g-text-secondary)" }}> ({property.sellerPhone})</span>}
+            {property.sellerPhone && (() => {
+              const phone = property.sellerPhone;
+              const masked = phone.length > 4 ? "•••-•••-" + phone.slice(-4) : phone;
+              return (
+                <span 
+                  style={{ color: "var(--g-text-secondary)", cursor: "pointer" }} 
+                  title="Click to reveal"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const el = e.currentTarget;
+                    el.textContent = el.textContent?.includes("•") ? ` (${phone})` : ` (${masked})`;
+                  }}
+                >
+                  {` (${masked})`}
+                </span>
+              );
+            })()}
           </div>
         )}
         {property.lockboxCode && (
@@ -2288,7 +2304,6 @@ function PropertyDetail({
           { key: "outreach", label: "Outreach", icon: Send },
           { key: "activity", label: "Activity", icon: Activity },
           { key: "ai", label: "AI Assistant", icon: Bot },
-          { key: "research", label: "Research", icon: Globe },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -2310,12 +2325,18 @@ function PropertyDetail({
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {activeTab === "overview" && <OverviewTab property={property} />}
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            <OverviewTab property={property} />
+            <div style={{ borderTop: "1px solid var(--g-border-subtle)", paddingTop: 16 }}>
+              <ResearchTab propertyId={propertyId} property={property} />
+            </div>
+          </div>
+        )}
         {activeTab === "buyers" && <BuyersTab propertyId={propertyId} />}
         {activeTab === "outreach" && <OutreachTab property={property} propertyId={propertyId} />}
         {activeTab === "activity" && <ActivityTab propertyId={propertyId} />}
         {activeTab === "ai" && <DispoAITab propertyId={propertyId} property={property} />}
-        {activeTab === "research" && <ResearchTab propertyId={propertyId} property={property} />}
       </div>
 
       {/* Dialogs */}
@@ -2372,9 +2393,11 @@ function PropertyCard({
       </div>
 
       {/* Address */}
-      <h3 className="text-sm font-bold mb-0.5 truncate" style={{ color: "var(--g-text-primary)" }}>{property.address}</h3>
+      <h3 className="text-sm font-bold mb-0.5 truncate" style={{ color: "var(--g-text-primary)" }}>
+        {property.address || <span style={{ color: '#f59e0b', fontStyle: 'italic' }}>Address Pending</span>}
+      </h3>
       <p className="text-xs mb-3 truncate" style={{ color: "var(--g-text-secondary)" }}>
-        {property.city}, {property.state} {property.zip}
+        {property.city || property.state ? `${property.city || '?'}, ${property.state || '?'} ${property.zip || ''}` : <span style={{ color: '#f59e0b' }}>Location missing</span>}
       </p>
 
       {/* Price Row */}
@@ -2404,25 +2427,25 @@ function PropertyCard({
         <div className="flex items-center gap-1" title="Sends">
           <Send className="h-3 w-3" style={{ color: activity.sendCount > 0 ? "#3b82f6" : "var(--g-text-tertiary)" }} />
           <span className="text-xs font-medium" style={{ color: activity.sendCount > 0 ? "#3b82f6" : "var(--g-text-tertiary)" }}>
-            {activity.sendCount || 0}
+            {activity.sendCount > 0 ? activity.sendCount : "—"}
           </span>
         </div>
         <div className="flex items-center gap-1" title={`${activity.totalRecipients || 0} total recipients`}>
           <Users className="h-3 w-3" style={{ color: activity.totalRecipients > 0 ? "#8b5cf6" : "var(--g-text-tertiary)" }} />
           <span className="text-xs font-medium" style={{ color: activity.totalRecipients > 0 ? "#8b5cf6" : "var(--g-text-tertiary)" }}>
-            {activity.totalRecipients || 0}
+            {activity.totalRecipients > 0 ? activity.totalRecipients : "—"}
           </span>
         </div>
         <div className="flex items-center gap-1" title="Offers">
           <DollarSign className="h-3 w-3" style={{ color: activity.offerCount > 0 ? "#f59e0b" : "var(--g-text-tertiary)" }} />
           <span className="text-xs font-medium" style={{ color: activity.offerCount > 0 ? "#f59e0b" : "var(--g-text-tertiary)" }}>
-            {activity.offerCount || 0}
+            {activity.offerCount > 0 ? activity.offerCount : "—"}
           </span>
         </div>
         <div className="flex items-center gap-1" title="Showings">
           <Eye className="h-3 w-3" style={{ color: activity.showingCount > 0 ? "#22c55e" : "var(--g-text-tertiary)" }} />
           <span className="text-xs font-medium" style={{ color: activity.showingCount > 0 ? "#22c55e" : "var(--g-text-tertiary)" }}>
-            {activity.showingCount || 0}
+            {activity.showingCount > 0 ? activity.showingCount : "—"}
           </span>
         </div>
         {activity.highestOffer > 0 && (
@@ -2462,6 +2485,8 @@ export default function Inventory() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [marketFilter, setMarketFilter] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
 
   // Role-based stage filtering
   const teamRole = user?.teamRole || "admin";
@@ -2590,6 +2615,43 @@ export default function Inventory() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const bulkStatusMutation = trpc.inventory.bulkUpdateStatus.useMutation({
+    onSuccess: (result) => {
+      utils.inventory.getProperties.invalidate();
+      toast.success(`Updated ${result.succeeded} of ${result.total} properties`);
+      setSelectedIds(new Set());
+      setBulkMode(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const bulkDeleteMutation = trpc.inventory.bulkDelete.useMutation({
+    onSuccess: (result) => {
+      utils.inventory.getProperties.invalidate();
+      toast.success(`Deleted ${result.succeeded} of ${result.total} properties`);
+      setSelectedIds(new Set());
+      setBulkMode(false);
+      setSelectedPropertyId(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === properties.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(properties.map((p: any) => p.id)));
+    }
+  };
+
   const rawProperties = data?.items || [];
   const total = data?.total || 0;
 
@@ -2682,6 +2744,15 @@ export default function Inventory() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); }}
+            size="sm"
+            variant={bulkMode ? "default" : "outline"}
+            className="text-xs"
+            style={bulkMode ? { background: "var(--g-accent)", color: "#fff" } : {}}
+          >
+            <CheckSquare className="h-3.5 w-3.5 mr-1" /> {bulkMode ? "Exit Bulk" : "Bulk Edit"}
+          </Button>
           <Button onClick={handleDownloadTemplate} size="sm" variant="outline" className="text-xs">
             <Download className="h-3.5 w-3.5 mr-1" /> Template
           </Button>
@@ -2784,7 +2855,7 @@ export default function Inventory() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Property List */}
-        <div className={`${selectedPropertyId ? "w-1/2 border-r" : "w-full"} overflow-y-auto p-4 transition-all duration-300`} style={{ borderColor: "var(--g-border-subtle)" }}>
+        <div className={`${selectedPropertyId ? "hidden md:block md:w-1/2 border-r" : "w-full"} overflow-y-auto p-4 transition-all duration-300`} style={{ borderColor: "var(--g-border-subtle)" }}>
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
@@ -2803,8 +2874,16 @@ export default function Inventory() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ background: "var(--g-bg-inset)" }}>
+                      {bulkMode && (
+                        <th className="px-3 py-2 w-8">
+                          <button onClick={toggleSelectAll} className="flex items-center justify-center">
+                            {selectedIds.size === properties.length && properties.length > 0
+                              ? <CheckSquare className="h-4 w-4" style={{ color: "var(--g-accent)" }} />
+                              : <Square className="h-4 w-4" style={{ color: "var(--g-text-tertiary)" }} />}
+                          </button>
+                        </th>
+                      )}
                       {[
-                        { key: "address", label: "Address", align: "text-left" },
                         { key: "status", label: "Status", align: "text-left" },
                         { key: "asking", label: "Asking", align: "text-right" },
                         { key: "contract", label: "Contract", align: "text-right" },
@@ -2841,15 +2920,22 @@ export default function Inventory() {
                       return (
                         <tr
                           key={p.id}
-                          onClick={() => setSelectedPropertyId(p.id)}
+                          onClick={() => bulkMode ? toggleSelect(p.id) : setSelectedPropertyId(p.id)}
                           className="cursor-pointer transition-colors"
                           style={{
-                            background: selectedPropertyId === p.id ? "var(--g-accent-soft)" : "var(--g-bg-card)",
+                            background: selectedIds.has(p.id) ? "var(--g-accent-soft)" : selectedPropertyId === p.id ? "var(--g-accent-soft)" : "var(--g-bg-card)",
                             borderBottom: "1px solid var(--g-border-subtle)",
                           }}
-                          onMouseEnter={(e) => { if (selectedPropertyId !== p.id) e.currentTarget.style.background = "var(--g-bg-card-hover)"; }}
-                          onMouseLeave={(e) => { if (selectedPropertyId !== p.id) e.currentTarget.style.background = "var(--g-bg-card)"; }}
+                          onMouseEnter={(e) => { if (!selectedIds.has(p.id) && selectedPropertyId !== p.id) e.currentTarget.style.background = "var(--g-bg-card-hover)"; }}
+                          onMouseLeave={(e) => { if (!selectedIds.has(p.id) && selectedPropertyId !== p.id) e.currentTarget.style.background = "var(--g-bg-card)"; }}
                         >
+                          {bulkMode && (
+                            <td className="px-3 py-2.5 w-8">
+                              {selectedIds.has(p.id)
+                                ? <CheckSquare className="h-4 w-4" style={{ color: "var(--g-accent)" }} />
+                                : <Square className="h-4 w-4" style={{ color: "var(--g-text-tertiary)" }} />}
+                            </td>
+                          )}
                           <td className="px-3 py-2.5">
                             <div className="font-semibold truncate max-w-[200px]" style={{ color: "var(--g-text-primary)" }}>{p.address}</div>
                             <div className="text-[10px] truncate" style={{ color: "var(--g-text-tertiary)" }}>{p.city}, {p.state} {p.zip}</div>
@@ -2867,16 +2953,16 @@ export default function Inventory() {
                             {(p.acceptedOffer || p.askingPrice) && p.contractPrice ? formatCurrency((p.acceptedOffer || p.askingPrice) - p.contractPrice) : "—"}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: act.sendCount > 0 ? "#3b82f6" : "var(--g-text-tertiary)" }}>
-                            {act.sendCount || 0}
+                            {act.sendCount > 0 ? act.sendCount : "—"}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: (act.totalRecipients || 0) > 0 ? "#8b5cf6" : "var(--g-text-tertiary)" }}>
-                            {act.totalRecipients || 0}
+                            {(act.totalRecipients || 0) > 0 ? act.totalRecipients : "—"}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: act.offerCount > 0 ? "#f59e0b" : "var(--g-text-tertiary)" }}>
-                            {act.offerCount || 0}
+                            {act.offerCount > 0 ? act.offerCount : "—"}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: act.showingCount > 0 ? "#22c55e" : "var(--g-text-tertiary)" }}>
-                            {act.showingCount || 0}
+                            {act.showingCount > 0 ? act.showingCount : "—"}
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <span style={{ color: heatColor(dom) }}>{dom}d</span>
@@ -2904,13 +2990,21 @@ export default function Inventory() {
 
         {/* Detail Panel */}
         {selectedPropertyId && (
-          <div className="w-1/2 overflow-hidden" style={{ background: "var(--g-bg-surface)" }}>
-            <PropertyDetail
-              key={selectedPropertyId}
-              propertyId={selectedPropertyId}
-              onClose={() => setSelectedPropertyId(null)}
+          <>
+            {/* Dark overlay on mobile */}
+            <div 
+              className="fixed inset-0 z-30 md:hidden" 
+              style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
+              onClick={() => setSelectedPropertyId(null)}
             />
-          </div>
+            <div className="w-full md:w-1/2 overflow-hidden fixed md:static inset-0 z-40 md:z-auto" style={{ background: "var(--g-bg-surface)" }}>
+              <PropertyDetail
+                key={selectedPropertyId}
+                propertyId={selectedPropertyId}
+                onClose={() => setSelectedPropertyId(null)}
+              />
+            </div>
+          </>
         )}
       </div>
 
@@ -3080,6 +3174,61 @@ export default function Inventory() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Action Bar */}
+      {bulkMode && selectedIds.size > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl"
+          style={{ background: "var(--g-bg-elevated)", border: "1px solid var(--g-border-subtle)" }}
+        >
+          <span className="text-sm font-semibold" style={{ color: "var(--g-text-primary)" }}>
+            {selectedIds.size} selected
+          </span>
+          <div className="h-5 w-px" style={{ background: "var(--g-border-subtle)" }} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="text-xs">
+                <ArrowRight className="h-3.5 w-3.5 mr-1" /> Move to Stage
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" style={{ background: "var(--g-bg-elevated)" }}>
+              {(["lead", "apt_set", "offer_made", "under_contract", "marketing", "buyer_negotiating", "closing", "closed", "follow_up", "dead"] as const).map(s => (
+                <DropdownMenuItem
+                  key={s}
+                  onClick={() => bulkStatusMutation.mutate({ propertyIds: Array.from(selectedIds), status: s })}
+                  style={{ color: STATUS_CONFIG[s]?.color || "var(--g-text-primary)" }}
+                >
+                  {STATUS_CONFIG[s]?.label || s}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="text-xs"
+            onClick={() => {
+              if (confirm(`Delete ${selectedIds.size} properties? This cannot be undone.`)) {
+                bulkDeleteMutation.mutate({ propertyIds: Array.from(selectedIds) });
+              }
+            }}
+            disabled={bulkDeleteMutation.isPending}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs"
+            onClick={() => { setSelectedIds(new Set()); }}
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Clear
+          </Button>
+          {(bulkStatusMutation.isPending || bulkDeleteMutation.isPending) && (
+            <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--g-accent)" }} />
+          )}
+        </div>
+      )}
 
       {/* Delete Confirmation */}
       <Dialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>

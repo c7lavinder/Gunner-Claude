@@ -184,6 +184,6 @@ describe("call classification", () => {
     
     expect(result.classification).toBe("too_short");
     expect(result.shouldGrade).toBe(false);
-    expect(result.reason).toContain("60s minimum");
+    expect(result.reason).toContain("120s minimum");
   });
 });

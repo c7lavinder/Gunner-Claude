@@ -1172,12 +1172,12 @@
   }
   .obs-grade-bar {
     display: flex;
-    height: 6px;
-    border-radius: 4px;
+    height: 10px;
+    border-radius: 5px;
     overflow: hidden;
     gap: 1px;
   }
-  .obs-grade-seg { min-width: 3px; transition: width 0.6s ease; }
+  .obs-grade-seg { min-width: 4px; transition: width 0.6s ease; }
   .obs-grade-seg.a { background: var(--g-grade-a); }
   .obs-grade-seg.b { background: var(--g-grade-b); }
   .obs-grade-seg.c { background: var(--g-grade-c); }
@@ -1193,13 +1193,13 @@
   .obs-grade-legend span {
     display: flex;
     align-items: center;
-    gap: 3px;
-    font-size: 10px;
+    gap: 4px;
+    font-size: 11px;
     color: var(--g-text-tertiary);
   }
   .obs-grade-legend .dot {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     display: inline-block;
   }

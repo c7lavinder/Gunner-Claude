@@ -8236,6 +8236,35 @@ selectedTimezone: { type: "string" },
           ...(repairEstimate !== undefined ? { estRepairs: repairEstimate } : {}),
         } as any, ctx.user.id);
       }),
+    bulkUpdateStatus: protectedProcedure
+      .input(z.object({
+        propertyIds: z.array(z.number()).min(1).max(100),
+        status: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateProperty } = await import("./inventory");
+        const results = await Promise.allSettled(
+          input.propertyIds.map(id => updateProperty(ctx.user!.tenantId!, id, { status: input.status } as any, ctx.user!.id))
+        );
+        const succeeded = results.filter(r => r.status === "fulfilled").length;
+        const failed = results.filter(r => r.status === "rejected").length;
+        return { succeeded, failed, total: input.propertyIds.length };
+      }),
+    bulkDelete: protectedProcedure
+      .input(z.object({
+        propertyIds: z.array(z.number()).min(1).max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { deleteProperty } = await import("./inventory");
+        const results = await Promise.allSettled(
+          input.propertyIds.map(id => deleteProperty(ctx.user!.tenantId!, id))
+        );
+        const succeeded = results.filter(r => r.status === "fulfilled").length;
+        const failed = results.filter(r => r.status === "rejected").length;
+        return { succeeded, failed, total: input.propertyIds.length };
+      }),
     deleteProperty: protectedProcedure
       .input(z.object({ propertyId: z.number() }))
       .mutation(async ({ ctx, input }) => {

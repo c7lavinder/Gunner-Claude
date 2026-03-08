@@ -21,6 +21,7 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { useImpersonation } from "./ImpersonationBanner";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 // ─── NAV ITEMS ────────────────────────────────────────
 const getMenuItems = (
@@ -69,6 +70,7 @@ const getMenuItems = (
 
 // ─── MAIN LAYOUT ──────────────────────────────────────
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  useKeyboardShortcuts();
   const { loading, user } = useAuth();
   const [location] = useLocation();
   const searchString = useSearch();

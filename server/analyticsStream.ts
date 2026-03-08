@@ -31,7 +31,9 @@ async function authenticateRequest(req: Request): Promise<User | null> {
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('[AnalyticsAI] Auth error:', err instanceof Error ? err.message : err);
+  }
   return null;
 }
 
@@ -69,7 +71,9 @@ async function buildAnalyticsContext(user: User): Promise<string> {
         getDispoKpiSummary(tenantId, today),
         getProperties(tenantId, { limit: 200 }),
       ]);
-    } catch { /* best effort */ }
+    } catch (err) {
+      console.error('[AnalyticsAI] Dispo data error:', err instanceof Error ? err.message : err);
+    }
   }
 
   // Fetch recent graded calls for qualitative context
@@ -80,7 +84,9 @@ async function buildAnalyticsContext(user: User): Promise<string> {
       .filter((c: any) => c.status === "completed" && c.overallScore != null)
       .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 30);
-  } catch { /* best effort */ }
+  } catch (err) {
+    console.error('[AnalyticsAI] Recent calls error:', err instanceof Error ? err.message : err);
+  }
 
   const lines: string[] = [];
 

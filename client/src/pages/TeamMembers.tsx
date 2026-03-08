@@ -119,6 +119,10 @@ function CharacterCard({
 
   const rankBadgeType = rank === 1 ? "gold" : rank === 2 ? "silver" : rank === 3 ? "bronze" : null;
   const rankEmoji = rank === 1 ? "👑" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+  
+  // Underperformer detection: avg score below 50% with at least 5 graded calls
+  const isUnderperforming = avgScore !== undefined && avgScore < 50 && totalGraded >= 5;
+  const needsAttention = avgScore !== undefined && avgScore < 65 && avgScore >= 50 && totalGraded >= 5;
 
   const initials = member.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?';
 
@@ -171,7 +175,15 @@ function CharacterCard({
             
             {/* Name, role, badges */}
             <div className="obs-roster-info">
-              <div className="obs-roster-name">{member.name}</div>
+              <div className="obs-roster-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {member.name}
+                {isUnderperforming && (
+                  <span title="Underperforming — avg score below 50%" style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(239,68,68,0.15)', color: '#ef4444', fontWeight: 600, letterSpacing: '0.02em' }}>NEEDS COACHING</span>
+                )}
+                {needsAttention && (
+                  <span title="Below target — avg score below 65%" style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', fontWeight: 600, letterSpacing: '0.02em' }}>WATCH</span>
+                )}
+              </div>
               <div className={`obs-roster-role-badge ${roleClass}`}>
                 {t.role(member.teamRole)}
               </div>
@@ -193,11 +205,20 @@ function CharacterCard({
             
             {/* Level display */}
             <div className="obs-level-display">
-              <div className="obs-level-number">{level}</div>
-              <div className="obs-level-label">LVL</div>
-              <div className="obs-level-title">{title}</div>
-              {hotStreak > 0 && (
-                <div className="obs-streak-badge">🔥 {hotStreak}</div>
+              {member.teamRole === 'admin' ? (
+                <>
+                  <div className="obs-level-number" style={{ fontSize: 14 }}>⭐</div>
+                  <div className="obs-level-title" style={{ fontWeight: 700 }}>Admin</div>
+                </>
+              ) : (
+                <>
+                  <div className="obs-level-number">{level}</div>
+                  <div className="obs-level-label">LVL</div>
+                  <div className="obs-level-title">{title}</div>
+                  {hotStreak > 0 && (
+                    <div className="obs-streak-badge">🔥 {hotStreak}</div>
+                  )}
+                </>
               )}
             </div>
           </div>

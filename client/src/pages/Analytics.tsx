@@ -427,12 +427,14 @@ export default function Analytics() {
                 <div key={i} className="obs-stat-card">
                   <div className="flex items-center justify-between mb-2">
                     <div className="stat-icon-wrap"><Icon className="h-4 w-4" /></div>
-                    {showChange && (
+                    {showChange ? (
                       <span className={`change-badge ${d >= 0 ? 'change-up' : 'change-down'}`}>
                         {d >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                         {Math.abs(d)}%
                       </span>
-                    )}
+                    ) : kpi.prev == null && dateRange !== 'all' ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ color: 'var(--g-text-tertiary)', background: 'var(--g-bg-inset)' }}>No prior data</span>
+                    ) : null}
                   </div>
                   <div className="stat-value">
                     {Math.round(kpi.value).toLocaleString()}{(kpi as any).suffix || ""}

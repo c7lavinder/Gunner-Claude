@@ -250,8 +250,8 @@ function TeamItemCard({ item, onComplete, onDelete, showPriority = true, isAdmin
         {callIds.length > 0 && (
           <div className="flex items-center gap-1 mt-1">
             <span className="text-[10px] text-muted-foreground">Evidence:</span>
-            {callIds.slice(0, 3).map((callId) => (
-              <a key={callId} href={`/calls/${callId}`} className="text-[10px] text-purple-600 hover:text-purple-800 underline" onClick={(e) => e.stopPropagation()}>Call #{callId}</a>
+            {callIds.slice(0, 3).map((callId, idx) => (
+              <a key={callId} href={`/calls/${callId}`} className="text-[10px] text-purple-600 hover:text-purple-800 underline" onClick={(e) => e.stopPropagation()}>Call {idx + 1}</a>
             ))}
             {callIds.length > 3 && <span className="text-[10px] text-muted-foreground">+{callIds.length - 3} more</span>}
           </div>
@@ -259,8 +259,8 @@ function TeamItemCard({ item, onComplete, onDelete, showPriority = true, isAdmin
       </div>
       {isAdmin && (
         <div className="flex items-center gap-0.5 shrink-0">
-          <Button size="icon" variant="ghost" className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => completeMutation.mutate({ id: item.id })} disabled={completeMutation.isPending}><Check className="h-3.5 w-3.5" /></Button>
-          <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => deleteMutation.mutate({ id: item.id })} disabled={deleteMutation.isPending}><Trash2 className="h-3.5 w-3.5" /></Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => completeMutation.mutate({ id: item.id })} disabled={completeMutation.isPending} title="Mark as completed"><Check className="h-3.5 w-3.5" /></Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => deleteMutation.mutate({ id: item.id })} disabled={deleteMutation.isPending} title="Delete training item"><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>
       )}
     </div>
