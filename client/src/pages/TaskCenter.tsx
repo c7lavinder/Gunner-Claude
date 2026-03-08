@@ -2965,6 +2965,9 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   add_tag: "Add Tag", remove_tag: "Remove Tag", update_field: "Update Field", update_task: "Update Task",
   add_to_workflow: "Add to Workflow", remove_from_workflow: "Remove from Workflow",
   create_appointment: "Create Appointment", update_appointment: "Update Appointment", cancel_appointment: "Cancel Appointment",
+  update_property_price: "Update Property Price", update_property_status: "Change Property Status",
+  add_property_offer: "Record Offer", schedule_property_showing: "Schedule Showing",
+  record_property_send: "Record Send", add_property_note: "Add Property Note",
 };
 
 const ACTION_ICONS: Record<string, string> = {
@@ -2973,6 +2976,9 @@ const ACTION_ICONS: Record<string, string> = {
   add_tag: "\u{1F3F7}\uFE0F", remove_tag: "\u{1F3F7}\uFE0F", update_field: "\u270F\uFE0F",
   update_task: "\u{1F504}", add_to_workflow: "\u26A1", remove_from_workflow: "\u{1F6AB}",
   create_appointment: "\u{1F4C5}", update_appointment: "\u{1F504}", cancel_appointment: "\u274C",
+  update_property_price: "\u{1F4B0}", update_property_status: "\u{1F3E0}",
+  add_property_offer: "\u{1F91D}", schedule_property_showing: "\u{1F4C5}",
+  record_property_send: "\u{1F4E8}", add_property_note: "\u{1F4CB}",
 };
 
 function DayHubCoach() {

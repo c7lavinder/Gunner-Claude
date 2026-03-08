@@ -12,6 +12,9 @@ const CLIENT_DIR = join(__dirname, "..", "client", "src");
  * 3. Backend: routers.ts has dispo action types in VALID_ACTION_TYPES
  * 4. Frontend: Inventory.tsx has action card rendering and confirm/cancel flow
  * 5. Schema: coachActionLog has dispo action types in the enum
+ * 6. Dispo AI has CRM actions (send_sms, create_task, etc.)
+ * 7. Dispo AI has conversation memory, coaching preferences, user instructions
+ * 8. AI Coach has property action awareness
  */
 
 describe("Dispo action types in schema", () => {
@@ -146,17 +149,86 @@ describe("DispoAssistantStream with ACTION_REDIRECT", () => {
   });
 });
 
+describe("Dispo AI CRM action support", () => {
+  const stream = readFileSync(join(SERVER_DIR, "dispoAssistantStream.ts"), "utf-8");
+
+  it("should support CRM actions in VALID_DISPO_ACTIONS", () => {
+    expect(stream).toContain('"send_sms"');
+    expect(stream).toContain('"create_task"');
+    expect(stream).toContain('"add_note_contact"');
+    expect(stream).toContain('"add_tag"');
+    expect(stream).toContain('"remove_tag"');
+  });
+
+  it("should document CRM actions in the system prompt", () => {
+    expect(stream).toContain("Send a text message to a buyer");
+    expect(stream).toContain("Create a follow-up task for a buyer");
+  });
+
+  it("should document CRM actions in the parse-intent prompt", () => {
+    expect(stream).toContain("send_sms");
+    expect(stream).toContain("create_task");
+    expect(stream).toContain("add_note_contact");
+  });
+
+  it("should document CRM action params in parse-intent prompt", () => {
+    // CRM action params are documented in the prompt text (params is additionalProperties:true)
+    expect(stream).toContain("Params: { message }");
+    expect(stream).toContain("dueDate");
+    expect(stream).toContain("tags (comma-separated)");
+  });
+});
+
+describe("Dispo AI conversation memory", () => {
+  const stream = readFileSync(join(SERVER_DIR, "dispoAssistantStream.ts"), "utf-8");
+
+  it("should load conversation memory from coachMessages", () => {
+    expect(stream).toContain("buildCoachMemoryContext");
+    expect(stream).toContain("conversationMemory");
+  });
+
+  it("should save exchanges to coachMessages", () => {
+    expect(stream).toContain("saveCoachExchange");
+  });
+});
+
+describe("Dispo AI coaching preferences and user instructions", () => {
+  const stream = readFileSync(join(SERVER_DIR, "dispoAssistantStream.ts"), "utf-8");
+
+  it("should load coaching preferences", () => {
+    expect(stream).toContain("buildPreferenceContext");
+  });
+
+  it("should load user instructions", () => {
+    expect(stream).toContain("buildInstructionContext");
+  });
+});
+
 describe("Frontend DispoAITab action support", () => {
   const inventory = readFileSync(join(CLIENT_DIR, "pages", "Inventory.tsx"), "utf-8");
 
-  it("should define DISPO_ACTION_LABELS", () => {
+  it("should define DISPO_ACTION_LABELS for property actions", () => {
     expect(inventory).toContain("DISPO_ACTION_LABELS");
     expect(inventory).toContain('"Update Price"');
     expect(inventory).toContain('"Change Status"');
     expect(inventory).toContain('"Record Offer"');
     expect(inventory).toContain('"Schedule Showing"');
     expect(inventory).toContain('"Record Send"');
-    expect(inventory).toContain('"Add Note"');
+  });
+
+  it("should define DISPO_ACTION_LABELS for CRM actions", () => {
+    expect(inventory).toContain('"Send SMS"');
+    expect(inventory).toContain('"Create Task"');
+    expect(inventory).toContain('"Add CRM Note"');
+    expect(inventory).toContain('"Add Tag"');
+    expect(inventory).toContain('"Remove Tag"');
+    expect(inventory).toContain('"Create Appointment"');
+  });
+
+  it("should define DISPO_ACTION_ICONS for CRM actions", () => {
+    expect(inventory).toContain("send_sms: MessageSquare");
+    expect(inventory).toContain("create_task: CheckCircle2");
+    expect(inventory).toContain("add_note: FileText");
   });
 
   it("should define DispoMessage type with actionCards", () => {
@@ -209,5 +281,82 @@ describe("Frontend DispoAITab action support", () => {
 
   it("should show 'Preparing action...' during intent parsing", () => {
     expect(inventory).toContain("Preparing action...");
+  });
+});
+
+describe("AI Coach property action awareness", () => {
+  const routers = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  const coachStream = readFileSync(join(SERVER_DIR, "coachStream.ts"), "utf-8");
+
+  it("should document property action types in parseIntent prompt", () => {
+    expect(routers).toContain("PROPERTY/DISPO ACTIONS");
+    expect(routers).toContain("update_property_price - Update a property");
+    expect(routers).toContain("update_property_status - Change a property");
+    expect(routers).toContain("add_property_offer - Record a new offer");
+    expect(routers).toContain("schedule_property_showing - Schedule a showing");
+    expect(routers).toContain("record_property_send - Record an outreach");
+    expect(routers).toContain("add_property_note - Add an activity note");
+  });
+
+  it("should include property action examples in parseIntent prompt", () => {
+    expect(routers).toContain("Update the asking price");
+    expect(routers).toContain("Change the property status");
+    expect(routers).toContain("Add an offer from Mike");
+    expect(routers).toContain("Schedule a showing for John");
+    expect(routers).toContain("Record that I sent");
+    expect(routers).toContain("Add a note to the property");
+  });
+
+  it("should include property params in parseIntent JSON schema", () => {
+    expect(routers).toContain('propertyId: { type: "number" }');
+    expect(routers).toContain('askingPrice: { type: "number" }');
+    expect(routers).toContain('dispoAskingPrice: { type: "number" }');
+    expect(routers).toContain('offerAmount: { type: "number" }');
+    expect(routers).toContain('newStatus: { type: "string" }');
+    expect(routers).toContain('buyerName: { type: "string" }');
+    expect(routers).toContain('showingDate: { type: "string" }');
+    expect(routers).toContain('channel: { type: "string" }');
+  });
+
+  it("should include property params in required array", () => {
+    expect(routers).toContain('"propertyId"');
+    expect(routers).toContain('"askingPrice"');
+    expect(routers).toContain('"newStatus"');
+    expect(routers).toContain('"buyerName"');
+    expect(routers).toContain('"offerAmount"');
+  });
+
+  it("should document property action param formats in parseIntent", () => {
+    expect(routers).toContain("all in CENTS");
+    expect(routers).toContain("params.propertyId (required");
+    expect(routers).toContain("params.newStatus");
+  });
+
+  it("should tell AI Coach it can execute property actions in stream prompt", () => {
+    expect(coachStream).toContain("PROPERTY/DISPO actions");
+    expect(coachStream).toContain("Update property pricing");
+    expect(coachStream).toContain("Change property pipeline status");
+    expect(coachStream).toContain("Record offers from buyers");
+    expect(coachStream).toContain("Schedule property showings");
+    expect(coachStream).toContain("Record outreach sends");
+    expect(coachStream).toContain("Add activity notes to properties");
+  });
+
+  it("should include property actions in ACTION_REDIRECT trigger list", () => {
+    expect(coachStream).toContain("CRM or property");
+  });
+
+  it("should not claim it cannot update properties", () => {
+    expect(coachStream).toContain("property management access");
+  });
+
+  it("should have property action labels in TaskCenter", () => {
+    const taskCenter = readFileSync(join(CLIENT_DIR, "pages", "TaskCenter.tsx"), "utf-8");
+    expect(taskCenter).toContain('"Update Property Price"');
+    expect(taskCenter).toContain('"Change Property Status"');
+    expect(taskCenter).toContain('"Record Offer"');
+    expect(taskCenter).toContain('"Schedule Showing"');
+    expect(taskCenter).toContain('"Record Send"');
+    expect(taskCenter).toContain('"Add Property Note"');
   });
 });

@@ -6285,6 +6285,16 @@ Available action types:
 12. update_appointment - Reschedule or update an existing appointment (change date/time, title, notes)
 13. cancel_appointment - Cancel an existing appointment for a contact
 
+--- PROPERTY/DISPO ACTIONS (for disposition management) ---
+14. update_property_price - Update a property's asking price, dispo asking price, assignment fee, or contract price
+15. update_property_status - Change a property's pipeline status (valid: lead, new, apt_set, offer_made, under_contract, marketing, negotiating, buyer_negotiating, closing, closed, follow_up, dead)
+16. add_property_offer - Record a new offer from a buyer on a property
+17. schedule_property_showing - Schedule a showing for a buyer on a property
+18. record_property_send - Record an outreach send (SMS blast, email blast, etc.) for a property
+19. add_property_note - Add an activity note to a property's log
+
+NOTE: Property actions do NOT require a GHL contactId. They use propertyId instead. For property actions, set contactName to empty string, contactId to empty string, and needsContactSearch to false. The propertyId is passed in the params.
+
 MULTI-ACTION SUPPORT: A user may request MULTIPLE actions in a single message (e.g., "Add a note to Jose Ruiz, then create a task for 3 months from now, then move it to the 4 month stage"). You MUST detect ALL actions and return each one as a separate item in the "actions" array. Parse each action independently with its own contactName, params, and summary.
 
 CRITICAL — ONLY PARSE THE CURRENT MESSAGE: You will see conversation history messages for context. ONLY parse the LAST user message (the current request) for new actions. Previous user messages in the history have ALREADY been processed and executed — do NOT re-detect or re-create actions from them. The history is provided ONLY so you can understand context for follow-ups like "do it again" or to extract contact names. If the current message says "move the task for Rose Hill to 5 weeks", return ONLY the Rose Hill action — do NOT also return actions from earlier messages in the history.
@@ -6352,6 +6362,12 @@ IMPORTANT — DETECT CONVERSATIONAL ACTION REQUESTS: Users may phrase actions co
 - "Cancel the appointment with John" → cancel_appointment
 - "Remove the meeting with Jane from the calendar" → cancel_appointment
 - "Cancel John's walkthrough" → cancel_appointment
+- "Update the asking price on 123 Main St to $150k" → update_property_price
+- "Change the property status to marketing" → update_property_status
+- "Add an offer from Mike for $140k on property 42" → add_property_offer
+- "Schedule a showing for John at 123 Main St tomorrow at 2pm" → schedule_property_showing
+- "Record that I sent 50 SMS blasts for the Oak Street property" → record_property_send
+- "Add a note to the property that the seller called back" → add_property_note
 - "Can you create summary for the last call with Jackson James and add that summary as a note?" → add_note (use the RECENT CALL DATA to write the full summary as the noteBody)
 - "Summarize the call with [Name] and save it as a note" → add_note (write the complete summary in noteBody)
 - "Write up what happened on the last call and add it to their notes" → add_note
@@ -6402,6 +6418,12 @@ IMPORTANT: For actions that involve writing content, you MUST generate the FULL 
 - For create_appointment: Set params.title to a descriptive appointment title (e.g. "Property Walkthrough - 123 Main St" or "Follow-up Meeting with John"). Set params.startTime to the appointment date/time in ISO 8601 format (YYYY-MM-DDTHH:mm:ssZ). Today is ${new Date().toISOString().split('T')[0]}. If the user says "next Tuesday at 2pm", calculate the actual date. If no time is specified, default to 10:00 AM. Set params.endTime to the end time (default 1 hour after start). Set params.calendarName to the calendar name if the user specifies one (e.g. "appointments calendar", "walkthrough calendar"). If no calendar is specified, leave it empty and the system will use the default calendar. Set params.notes to any additional details about the appointment. Set params.selectedTimezone to the user's timezone if mentioned (default: America/Chicago).
 - For update_appointment: Set params.title to the appointment title or keyword to find the right appointment (e.g. "walkthrough", "meeting"). If the user doesn't specify which appointment, leave title empty and the system will find the next upcoming one. Set params.startTime to the NEW date/time in ISO 8601 format if rescheduling. Today is ${new Date().toISOString().split('T')[0]}. If the user says "move to Friday at 2pm", calculate the actual date. Set params.endTime if the duration changes. Set params.notes if updating notes. Set params.appointmentTitle if renaming the appointment (different from params.title which is used for matching).
 - For cancel_appointment: Set params.title to the appointment title or keyword to find the right appointment (e.g. "walkthrough", "meeting", "follow-up"). If the user doesn't specify which appointment, leave title empty and the system will find the next upcoming one. The system will set the appointment status to "cancelled" in GHL.
+- For update_property_price: Set params.propertyId (required, integer). Set params.askingPrice, params.dispoAskingPrice, params.assignmentFee, or params.contractPrice as needed (all in CENTS — $150,000 = 15000000). Only include the fields the user wants to change.
+- For update_property_status: Set params.propertyId (required, integer) and params.newStatus (one of: lead, new, apt_set, offer_made, under_contract, marketing, negotiating, buyer_negotiating, closing, closed, follow_up, dead).
+- For add_property_offer: Set params.propertyId (required), params.buyerName, params.offerAmount (in CENTS), and optionally params.buyerPhone, params.buyerEmail, params.buyerCompany, params.notes.
+- For schedule_property_showing: Set params.propertyId (required), params.buyerName, params.showingDate (YYYY-MM-DD), params.showingTime (HH:MM 24hr), and optionally params.buyerPhone, params.notes.
+- For record_property_send: Set params.propertyId (required), params.channel (sms/email/facebook/investor_base/other), and optionally params.buyerGroup, params.recipientCount, params.notes.
+- For add_property_note: Set params.propertyId (required), params.title (short title), params.noteBody (full note content).
 
 CRITICAL: You have REAL call data below. You MUST use it to write specific, accurate content. Reference actual property addresses, discussion topics, outcomes, and details from the transcripts. NEVER generate vague or placeholder text like "regarding his property" or "Please provide the summary" or "Insert details here".
 ${callContext}
@@ -6471,8 +6493,24 @@ ${instructionContext}`
 selectedTimezone: { type: "string" },
                              appointmentTitle: { type: "string" },
                              filterByRequestingUser: { type: "boolean" },
+                             propertyId: { type: "number" },
+                             askingPrice: { type: "number" },
+                             dispoAskingPrice: { type: "number" },
+                             assignmentFee: { type: "number" },
+                             contractPrice: { type: "number" },
+                             newStatus: { type: "string" },
+                             buyerName: { type: "string" },
+                             offerAmount: { type: "number" },
+                             buyerPhone: { type: "string" },
+                             buyerEmail: { type: "string" },
+                             buyerCompany: { type: "string" },
+                             showingDate: { type: "string" },
+                             showingTime: { type: "string" },
+                             buyerGroup: { type: "string" },
+                             channel: { type: "string" },
+                             recipientCount: { type: "number" },
                            },
-                           required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone", "appointmentTitle", "filterByRequestingUser"],
+                           required: ["noteBody", "message", "title", "description", "dueDate", "tags", "stageName", "pipelineName", "fieldKey", "fieldValue", "opportunityId", "pipelineId", "stageId", "workflowName", "taskStatus", "calendarName", "calendarId", "startTime", "endTime", "notes", "selectedTimezone", "appointmentTitle", "filterByRequestingUser", "propertyId", "askingPrice", "dispoAskingPrice", "assignmentFee", "contractPrice", "newStatus", "buyerName", "offerAmount", "buyerPhone", "buyerEmail", "buyerCompany", "showingDate", "showingTime", "buyerGroup", "channel", "recipientCount"],
                           additionalProperties: false
                         },
                         assigneeName: { type: "string" },

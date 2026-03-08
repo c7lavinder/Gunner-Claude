@@ -4691,3 +4691,19 @@
 - [x] Frontend DispoAITab: Action status badges (Done, Failed, Cancelled, Executing)
 - [x] Frontend DispoAITab: Property data invalidation after successful actions
 - [x] Tests: 35 tests covering schema, backend handlers, routers, stream prompt, and frontend
+
+## Dispo AI CRM Actions & Enhanced Intelligence
+- [x] Add CRM actions to Dispo AI (send_sms, create_task, add_note_contact, add_tag, remove_tag)
+- [x] Document CRM actions in Dispo AI system prompt with examples
+- [x] Add CRM action params to parse-intent endpoint JSON schema
+- [x] Add CRM action labels and icons to DispoAITab frontend (MessageSquare, CheckCircle2, FileText, Tag, etc.)
+- [x] Add conversation memory to Dispo AI (buildCoachMemoryContext, saveCoachExchange)
+- [x] Add coaching preferences to Dispo AI (buildPreferenceContext for sms_style, note_style)
+- [x] Add user instructions context to Dispo AI (buildInstructionContext)
+
+## AI Coach Property Action Awareness
+- [x] Document 6 property action types in AI Coach parseIntent prompt with examples
+- [x] Add property-specific params to parseIntent JSON schema (propertyId, askingPrice, offerAmount, etc.)
+- [x] Add property action awareness to AI Coach streaming system prompt (coachStream.ts)
+- [x] Add property action labels and icons to TaskCenter (Update Property Price, Change Property Status, etc.)
+- [x] Tests: 54 tests covering all enhancements (CRM actions, memory, preferences, Coach property awareness)

@@ -1262,20 +1262,52 @@ function OutreachTab({ property, propertyId }: { property: any; propertyId: numb
 // ─── AI DISPO ASSISTANT TAB ───
 // ─── DISPO ACTION TYPES & LABELS ───
 const DISPO_ACTION_LABELS: Record<string, string> = {
+  // Property actions
   update_property_price: "Update Price",
   update_property_status: "Change Status",
   add_property_offer: "Record Offer",
   schedule_property_showing: "Schedule Showing",
   record_property_send: "Record Send",
   add_property_note: "Add Note",
+  // CRM actions (available from Dispo AI too)
+  send_sms: "Send SMS",
+  create_task: "Create Task",
+  add_note: "Add CRM Note",
+  add_note_contact: "Add CRM Note",
+  add_tag: "Add Tag",
+  remove_tag: "Remove Tag",
+  change_pipeline_stage: "Change Stage",
+  create_appointment: "Create Appointment",
+  update_appointment: "Update Appointment",
+  cancel_appointment: "Cancel Appointment",
+  add_to_workflow: "Add to Workflow",
+  remove_from_workflow: "Remove from Workflow",
+  update_task: "Update Task",
+  update_field: "Update Field",
 };
 const DISPO_ACTION_ICONS: Record<string, typeof DollarSign> = {
+  // Property actions
   update_property_price: DollarSign,
   update_property_status: Activity,
   add_property_offer: Handshake,
   schedule_property_showing: Calendar,
   record_property_send: Send,
   add_property_note: StickyNote,
+  // CRM actions
+  send_sms: MessageSquare,
+  create_task: CheckCircle2,
+  add_note: FileText,
+  add_note_contact: FileText,
+  add_tag: Tag,
+  remove_tag: Tag,
+  change_pipeline_stage: RefreshCw,
+  create_appointment: Calendar,
+  update_appointment: Calendar,
+  cancel_appointment: XCircle,
+  add_to_workflow: Zap,
+  remove_from_workflow: XCircle,
+  update_task: RefreshCw,
+  update_field: Edit,
 };
 
 type DispoMessage = {

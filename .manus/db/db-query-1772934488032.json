@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, name, email, openId FROM users LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, email, openId FROM users LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Corey Lavinder",
+      "email": "corey@newagainhouses.com",
+      "openId": "google_112815946311339322655"
+    },
+    {
+      "id": "90493",
+      "name": "Kyle Barks",
+      "email": "kbarks@newagainhouses.com",
+      "openId": "google_107943346754160946840"
+    },
+    {
+      "id": "180239",
+      "name": "Xhaka Lavinder",
+      "email": "xhakalavinder@gmail.com",
+      "openId": "google_117947228541506296918"
+    },
+    {
+      "id": "180249",
+      "name": "Daniel Lozano",
+      "email": "alvarez.lozano@hotmail.com",
+      "openId": "google_102548071968977930576"
+    },
+    {
+      "id": "390001",
+      "name": "Christian Segura",
+      "email": "c.segura9393@gmail.com",
+      "openId": "ckPGDc7pgVKbuzbcD2LE3v"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\topenId\n1\tCorey Lavinder\tcorey@newagainhouses.com\tgoogle_112815946311339322655\n90493\tKyle Barks\tkbarks@newagainhouses.com\tgoogle_107943346754160946840\n180239\tXhaka Lavinder\txhakalavinder@gmail.com\tgoogle_117947228541506296918\n180249\tDaniel Lozano\talvarez.lozano@hotmail.com\tgoogle_102548071968977930576\n390001\tChristian Segura\tc.segura9393@gmail.com\tckPGDc7pgVKbuzbcD2LE3v\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}
