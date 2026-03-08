@@ -4816,3 +4816,23 @@
 - [x] Frontend: Edit history tracking (save edits back to learn)
 - [x] Tests: AI content generation tests (10 tests passing)
 - [x] Tests: PDF generation tests (PDF header, buffer size, unique keys)
+
+## Auto-Match Buyers to Tiers
+- [x] Backend: Auto-tier scoring algorithm (Priority >= 45pts, Qualified >= 20pts, Unqualified < 20pts)
+- [x] Backend: GHL CRM tier override (explicit human decision takes priority)
+- [x] Backend: Cross-property activity aggregation for scoring
+- [x] Backend: tRPC endpoint to run auto-tier assignment for a property's buyers
+- [x] Frontend: "Auto-Assign Tiers" button on Deal Blast tab with buyer count display
+- [x] Frontend: Buyer counts per tier shown on tier selection cards
+- [x] Tests: determineTier scoring logic tests (20 tests passing)
+
+## One-Click GHL Send (SMS + Email)
+- [x] Backend: GHL SMS send integration from Deal Blast (via existing sendSms)
+- [x] Backend: GHL Email send integration from Deal Blast (via conversations API)
+- [x] Backend: Send tracking per buyer with activity logging
+- [x] Backend: Rate limiting (200ms delay between sends)
+- [x] Backend: tRPC endpoint for sendDealBlast
+- [x] Frontend: Send SMS / Send Email / Send Both buttons per tier
+- [x] Frontend: Confirmation dialog before sending (shows buyer count)
+- [x] Frontend: Send status feedback (success/failure counts)
+- [x] Tests: Send channel filtering and eligibility tests (11 tests passing)

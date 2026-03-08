@@ -8957,6 +8957,44 @@ selectedTimezone: { type: "string" },
         const { generateTierContent } = await import("./dealDistribution");
         return generateTierContent(propertyData, input.tier, brand, ctx.user.tenantId);
       }),
+
+    // ─── Auto-Assign Buyer Tiers ───
+    autoAssignTiers: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { autoAssignTiersForProperty } = await import("./buyerAutoTier");
+        return autoAssignTiersForProperty(ctx.user.tenantId, input.propertyId);
+      }),
+
+    // ─── Get Buyer Counts by Tier ───
+    getBuyerCountsByTier: protectedProcedure
+      .input(z.object({ propertyId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { getBuyerCountsByTier } = await import("./dealBlastSend");
+        return getBuyerCountsByTier(ctx.user.tenantId, input.propertyId);
+      }),
+
+    // ─── Send Deal Blast via GHL ───
+    sendDealBlast: protectedProcedure
+      .input(z.object({
+        propertyId: z.number(),
+        distributionId: z.number(),
+        channel: z.enum(["sms", "email", "both"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { sendDealBlast } = await import("./dealBlastSend");
+        return sendDealBlast(
+          ctx.user.tenantId,
+          input.propertyId,
+          input.distributionId,
+          input.channel,
+          ctx.user.id,
+          ctx.user.name || "Unknown",
+        );
+      }),
   }),
 });
 
