@@ -19,6 +19,7 @@ import {
   type InsertDispoPropertyShowing,
 } from "../drizzle/schema";
 import { eq, and, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
+import { resolveSourceId, resolveMarketId, normalizeSource } from "./ghlContactImport";
 
 // ─── DISPO KPI TARGETS ───
 export const DISPO_TARGETS = {
@@ -150,9 +151,25 @@ export async function createProperty(tenantId: number, userId: number, data: Omi
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  // Auto-resolve sourceId from opportunitySource/leadSource text if not already set
+  let resolvedSourceId = (data as any).sourceId || null;
+  if (!resolvedSourceId) {
+    const rawSource = (data as any).opportunitySource || (data as any).leadSource;
+    if (rawSource) {
+      resolvedSourceId = await resolveSourceId(db, tenantId, normalizeSource(rawSource));
+    }
+  }
+  // Auto-resolve marketId from zip code if not already set
+  let resolvedMarketId = (data as any).marketId || null;
+  if (!resolvedMarketId && (data as any).zip) {
+    resolvedMarketId = await resolveMarketId(db, tenantId, (data as any).zip);
+  }
+
   const [result] = await db.insert(dispoProperties).values({
     ...data,
     tenantId,
+    sourceId: resolvedSourceId,
+    marketId: resolvedMarketId,
   });
 
   return { id: result.insertId };
@@ -198,6 +215,30 @@ export async function updateProperty(tenantId: number, propertyId: number, data:
         if (!updateData.soldAt) updateData.soldAt = new Date();
       }
     }
+  }
+
+  // Auto-resolve sourceId when opportunitySource or leadSource text changes
+  if (updateData.opportunitySource || updateData.leadSource) {
+    const rawSource = updateData.opportunitySource || updateData.leadSource;
+    const resolved = await resolveSourceId(db, tenantId, normalizeSource(rawSource));
+    if (resolved) updateData.sourceId = resolved;
+  }
+  // Auto-resolve marketId when zip changes
+  if (updateData.zip) {
+    const resolved = await resolveMarketId(db, tenantId, updateData.zip);
+    if (resolved) updateData.marketId = resolved;
+  }
+  // Auto-resolve marketId when market text changes (match by name)
+  if (updateData.market && !updateData.marketId) {
+    try {
+      const { kpiMarkets } = await import("../drizzle/schema");
+      const allMarkets = await db.select().from(kpiMarkets).where(and(
+        eq(kpiMarkets.tenantId, tenantId),
+        eq(kpiMarkets.isActive, "true"),
+      ));
+      const match = allMarkets.find((m: any) => m.name.toLowerCase() === updateData.market.toLowerCase());
+      if (match) updateData.marketId = match.id;
+    } catch { /* best effort */ }
   }
 
   await db.update(dispoProperties)

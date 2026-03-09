@@ -2765,27 +2765,21 @@ export default function Inventory() {
   const total = data?.total || 0;
 
   // Extract unique types and markets for filter dropdowns
-  const uniqueSources = useMemo(() => {
-    // Populate from KPI Sources (tenant playbook), not from property data
+  // Build source options with ID for FK-based filtering (aligns with KPI page)
+  const sourceOptions = useMemo(() => {
     if (kpiSources && kpiSources.length > 0) {
-      return kpiSources.map((s: any) => s.name).filter(Boolean).sort();
+      return kpiSources.map((s: any) => ({ id: String(s.id), name: s.name })).sort((a: any, b: any) => a.name.localeCompare(b.name));
     }
-    // Fallback to property data if no KPI sources configured
-    const sources = new Set<string>();
-    rawProperties.forEach((p: any) => { if (p.leadSource) sources.add(p.leadSource); });
-    return Array.from(sources).sort();
-  }, [kpiSources, rawProperties]);
+    return [];
+  }, [kpiSources]);
 
-  const uniqueMarkets = useMemo(() => {
-    // Populate from KPI Markets (tenant playbook), not from property data
+  // Build market options with ID for FK-based filtering (aligns with KPI page)
+  const marketOptions = useMemo(() => {
     if (kpiMarkets && kpiMarkets.length > 0) {
-      return kpiMarkets.map((m: any) => m.name).filter(Boolean).sort();
+      return kpiMarkets.map((m: any) => ({ id: String(m.id), name: m.name })).sort((a: any, b: any) => a.name.localeCompare(b.name));
     }
-    // Fallback to property data if no KPI markets configured
-    const markets = new Set<string>();
-    rawProperties.forEach((p: any) => { if (p.market) markets.add(p.market); });
-    return Array.from(markets).sort();
-  }, [kpiMarkets, rawProperties]);
+    return [];
+  }, [kpiMarkets]);
 
   // Apply status, type, and market filters (client-side for accurate stage counts)
   const filteredProperties = useMemo(() => {
@@ -2795,10 +2789,14 @@ export default function Inventory() {
       result = result.filter((p: any) => p.status === statusFilter);
     }
     if (sourceFilter !== "all") {
-      result = result.filter((p: any) => p.leadSource === sourceFilter || p.opportunitySource === sourceFilter);
+      // Filter by sourceId FK (same field KPI page uses) for accurate alignment
+      const sourceIdNum = Number(sourceFilter);
+      result = result.filter((p: any) => p.sourceId === sourceIdNum);
     }
     if (marketFilter !== "all") {
-      result = result.filter((p: any) => p.market === marketFilter);
+      // Filter by marketId FK (same field KPI page uses) for accurate alignment
+      const marketIdNum = Number(marketFilter);
+      result = result.filter((p: any) => p.marketId === marketIdNum);
     }
     return result;
   }, [rawProperties, statusFilter, sourceFilter, marketFilter, debouncedSearch]);
@@ -2841,13 +2839,23 @@ export default function Inventory() {
     }
   };
 
+  // Stage counts respect source/market filters so tab numbers align with KPI when filtered
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    rawProperties.forEach((p: any) => {
+    let base = rawProperties;
+    if (sourceFilter !== "all") {
+      const sourceIdNum = Number(sourceFilter);
+      base = base.filter((p: any) => p.sourceId === sourceIdNum);
+    }
+    if (marketFilter !== "all") {
+      const marketIdNum = Number(marketFilter);
+      base = base.filter((p: any) => p.marketId === marketIdNum);
+    }
+    base.forEach((p: any) => {
       counts[p.status] = (counts[p.status] || 0) + 1;
     });
     return counts;
-  }, [rawProperties]);
+  }, [rawProperties, sourceFilter, marketFilter]);
 
   return (
     <div className="h-[calc(100vh-var(--g-topnav-h,56px))] flex flex-col overflow-hidden" style={{ background: "var(--g-bg-base)" }}>
@@ -2858,9 +2866,12 @@ export default function Inventory() {
             <Package className="h-5 w-5 inline mr-2" style={{ color: "var(--g-accent)" }} />
             Dispo Command Center
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
-            {total} {total === 1 ? "property" : "properties"} in inventory
-          </p>
+           <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
+             {sourceFilter !== "all" || marketFilter !== "all" 
+               ? `${Object.values(statusCounts).reduce((a: number, b: number) => a + b, 0)} of ${total} properties (filtered)`
+               : `${total} ${total === 1 ? "property" : "properties"} in inventory`
+             }
+           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -2912,13 +2923,13 @@ export default function Inventory() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Sources</SelectItem>
-            {uniqueSources.map(s => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
+             {sourceOptions.map((s: any) => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         {/* Market filter */}
-        {uniqueMarkets.length > 0 && (
+        {marketOptions.length > 0 && (
           <Select value={marketFilter} onValueChange={setMarketFilter}>
             <SelectTrigger className="w-[150px] h-8 text-xs" style={{ background: "var(--g-bg-card)", borderColor: marketFilter !== "all" ? "var(--g-accent)" : "var(--g-border-subtle)", color: "var(--g-text-primary)" }}>
               <Globe className="h-3 w-3 mr-1" style={{ color: marketFilter !== "all" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
@@ -2926,8 +2937,8 @@ export default function Inventory() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Markets</SelectItem>
-              {uniqueMarkets.map(m => (
-                <SelectItem key={m} value={m}>{m}</SelectItem>
+               {marketOptions.map((m: any) => (
+                <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -2950,7 +2961,7 @@ export default function Inventory() {
           {visibleStages.map((s, idx) => {
             const cfg = STATUS_CONFIG[s];
             const isActive = statusFilter === s;
-            const count = (data?.items || []).filter((p: any) => p.status === s).length;
+            const count = statusCounts[s] || 0;
             return (
               <button
                 key={s}

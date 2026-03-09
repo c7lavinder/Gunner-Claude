@@ -4877,3 +4877,11 @@
 
 ## Enhanced Search
 - [x] Search matches city, state, zip code, partial address, and other property fields (not just full address)
+
+## Inventory / KPI Data Alignment
+- [x] Audit inventory and KPI queries to ensure they pull from the same data source
+- [x] Fix any discrepancies so inventory is the single source of truth for KPI numbers
+- [x] Source/Market filters use FK IDs (sourceId, marketId) matching KPI queries
+- [x] Tab counts update when source/market filters are applied
+- [x] Auto-resolve sourceId/marketId on property create/update
+- [x] Header shows filtered count vs total when filters active
