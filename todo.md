@@ -4874,3 +4874,6 @@
 
 ## Source Filter Change
 - [x] Change 'All Types' filter to 'All Sources' filter pulling from KPI Sources (tenant playbook)
+
+## Enhanced Search
+- [x] Search matches city, state, zip code, partial address, and other property fields (not just full address)

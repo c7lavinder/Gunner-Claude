@@ -2556,6 +2556,13 @@ export default function Inventory() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(value), 300);
+  };
   // Role-based default filter: dispo sees marketing, LM/AM see lead, admin sees all
   const defaultStatus = useMemo(() => {
     const role = user?.teamRole;
@@ -2596,7 +2603,7 @@ export default function Inventory() {
   // Always fetch ALL properties (no server-side status filter) so stage counts are accurate
   // Client-side filtering handles the status tab selection (Item #14 fix)
   const { data, isLoading } = trpc.inventory.getProperties.useQuery(
-    { search: search || undefined, limit: 500 },
+    { search: debouncedSearch || undefined, limit: 500 },
     { refetchInterval: 60000 }
   );
 
@@ -2784,7 +2791,7 @@ export default function Inventory() {
   const filteredProperties = useMemo(() => {
     let result = rawProperties;
     // When searching, skip status filter to search across all statuses
-    if (statusFilter && !search.trim()) {
+    if (statusFilter && !debouncedSearch.trim()) {
       result = result.filter((p: any) => p.status === statusFilter);
     }
     if (sourceFilter !== "all") {
@@ -2794,7 +2801,7 @@ export default function Inventory() {
       result = result.filter((p: any) => p.market === marketFilter);
     }
     return result;
-  }, [rawProperties, statusFilter, sourceFilter, marketFilter, search]);
+  }, [rawProperties, statusFilter, sourceFilter, marketFilter, debouncedSearch]);
 
   // Apply sorting
   const properties = useMemo(() => {
@@ -2883,9 +2890,9 @@ export default function Inventory() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--g-text-tertiary)" }} />
           <Input
             className="pl-9"
-            placeholder="Search all properties..."
+            placeholder="Search by address, city, state, zip, market, seller..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
         {/* View mode toggle */}

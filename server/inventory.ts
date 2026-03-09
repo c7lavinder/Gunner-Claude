@@ -46,7 +46,18 @@ export async function getProperties(tenantId: number, filters?: {
   }
   if (filters?.search) {
     const s = `%${filters.search}%`;
-    conditions.push(sql`(${dispoProperties.address} LIKE ${s} OR ${dispoProperties.city} LIKE ${s} OR ${dispoProperties.sellerName} LIKE ${s})`);
+    conditions.push(sql`(
+      ${dispoProperties.address} LIKE ${s}
+      OR ${dispoProperties.city} LIKE ${s}
+      OR ${dispoProperties.state} LIKE ${s}
+      OR ${dispoProperties.zip} LIKE ${s}
+      OR ${dispoProperties.market} LIKE ${s}
+      OR ${dispoProperties.sellerName} LIKE ${s}
+      OR ${dispoProperties.sellerPhone} LIKE ${s}
+      OR ${dispoProperties.leadSource} LIKE ${s}
+      OR ${dispoProperties.opportunitySource} LIKE ${s}
+      OR ${dispoProperties.projectType} LIKE ${s}
+    )`);
   }
 
   const where = and(...conditions);
