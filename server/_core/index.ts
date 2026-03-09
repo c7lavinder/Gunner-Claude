@@ -1,4 +1,14 @@
 import "dotenv/config";
+import * as Sentry from "@sentry/node";
+
+// Initialize Sentry before anything else
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV ?? "development",
+  // Capture 100% of transactions in production; tune down if volume is high
+  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+});
+
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -86,6 +96,9 @@ async function startServer() {
       createContext,
     })
   );
+  // Sentry error handler — must be after all routes, before other error handlers
+  Sentry.setupExpressErrorHandler(app);
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

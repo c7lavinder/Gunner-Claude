@@ -1,4 +1,11 @@
 import { ENV } from "./env";
+import { Client as LangSmithClient } from "langsmith";
+import { randomUUID } from "crypto";
+
+// LangSmith client — only active when LANGCHAIN_TRACING_V2=true and LANGCHAIN_API_KEY set
+const lsEnabled =
+  process.env.LANGCHAIN_TRACING_V2 === "true" && !!process.env.LANGCHAIN_API_KEY;
+const lsClient = lsEnabled ? new LangSmithClient() : null;
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -276,6 +283,24 @@ function isRetryableError(status: number): boolean {
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
+  // LangSmith: create a run to trace this LLM call
+  const runId = randomUUID();
+  const runStartTime = Date.now();
+  if (lsClient) {
+    try {
+      await lsClient.createRun({
+        id: runId,
+        name: "invokeLLM",
+        run_type: "llm",
+        project_name: process.env.LANGCHAIN_PROJECT ?? "gunner",
+        inputs: { messages: params.messages },
+        start_time: runStartTime,
+      });
+    } catch {
+      // Non-blocking: tracing failure must never break the app
+    }
+  }
+
   const {
     messages,
     tools,
@@ -357,6 +382,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         }
       }
 
+      // LangSmith: end run on success
+      if (lsClient) {
+        try {
+          await lsClient.updateRun(runId, {
+            outputs: { choices: result.choices },
+            end_time: Date.now(),
+          });
+        } catch {
+          // Non-blocking
+        }
+      }
+
       return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -365,6 +402,17 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         console.warn(`[LLM] Attempt ${attempt + 1}/${MAX_RETRIES + 1} threw error: ${lastError.message}, retrying in ${RETRY_DELAYS[attempt]}ms...`);
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
         continue;
+      }
+      // LangSmith: end run on error
+      if (lsClient) {
+        try {
+          await lsClient.updateRun(runId, {
+            error: lastError.message,
+            end_time: Date.now(),
+          });
+        } catch {
+          // Non-blocking
+        }
       }
       throw lastError;
     }

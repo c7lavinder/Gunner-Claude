@@ -4,6 +4,7 @@ import { eq, and, sql } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import jwt from "jsonwebtoken";
+import { trackUserLogin } from "./_core/analytics";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const SALT_ROUNDS = 12;
@@ -166,6 +167,8 @@ export async function signInWithEmail(params: {
 
   // Create session token
   const token = createSessionToken(user.id, user.tenantId);
+
+  trackUserLogin({ userId: user.id, email, method: "email", tenantId: user.tenantId ?? undefined });
 
   return {
     success: true,

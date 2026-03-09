@@ -3,6 +3,7 @@ import { users, tenants, pendingInvitations, subscriptionPlans } from "../drizzl
 import { eq, and, desc, sql } from "drizzle-orm";
 import * as crypto from "crypto";
 import { createSessionToken, getUserWithTenant } from "./selfServeAuth";
+import { trackUserLogin } from "./_core/analytics";
 import { ENV } from "./_core/env";
 
 // Google OAuth configuration - use getter functions to ensure ENV is loaded
@@ -157,6 +158,8 @@ export async function signInWithGoogle(params: {
       const userWithTenant = await getUserWithTenant(existingUser.id);
       const needsOnboarding = userWithTenant?.tenant?.onboardingCompleted !== 'true';
 
+      trackUserLogin({ userId: existingUser.id, email, method: "google", tenantId: existingUser.tenantId ?? undefined });
+
       return {
         success: true,
         token,
@@ -197,6 +200,8 @@ export async function signInWithGoogle(params: {
       
       const userWithTenant = await getUserWithTenant(emailUser.id);
       const needsOnboarding = userWithTenant?.tenant?.onboardingCompleted !== 'true';
+
+      trackUserLogin({ userId: emailUser.id, email, method: "google", tenantId: emailUser.tenantId ?? undefined });
 
       return {
         success: true,
@@ -273,6 +278,8 @@ export async function signInWithGoogle(params: {
         // Get tenant info for onboarding check
         const [tenant] = await db.select().from(tenants).where(eq(tenants.id, invitation.tenantId));
         const needsOnboarding = tenant?.onboardingCompleted !== 'true';
+
+        trackUserLogin({ userId: newUser.id, email, method: "google", tenantId: invitation.tenantId });
 
         return {
           success: true,
@@ -392,6 +399,8 @@ export async function completeGoogleSignup(params: {
     }).returning({ id: users.id });
 
     const token = createSessionToken(user.id, tenant.id);
+
+    trackUserLogin({ userId: user.id, email, method: "google", tenantId: tenant.id });
 
     return { success: true, userId: user.id, tenantId: tenant.id, token };
   } catch (error) {
