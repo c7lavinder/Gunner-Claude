@@ -2576,7 +2576,7 @@ export default function Inventory() {
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [marketFilter, setMarketFilter] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
@@ -2758,11 +2758,16 @@ export default function Inventory() {
   const total = data?.total || 0;
 
   // Extract unique types and markets for filter dropdowns
-  const uniqueTypes = useMemo(() => {
-    const types = new Set<string>();
-    rawProperties.forEach((p: any) => { if (p.projectType) types.add(p.projectType); });
-    return Array.from(types).sort();
-  }, [rawProperties]);
+  const uniqueSources = useMemo(() => {
+    // Populate from KPI Sources (tenant playbook), not from property data
+    if (kpiSources && kpiSources.length > 0) {
+      return kpiSources.map((s: any) => s.name).filter(Boolean).sort();
+    }
+    // Fallback to property data if no KPI sources configured
+    const sources = new Set<string>();
+    rawProperties.forEach((p: any) => { if (p.leadSource) sources.add(p.leadSource); });
+    return Array.from(sources).sort();
+  }, [kpiSources, rawProperties]);
 
   const uniqueMarkets = useMemo(() => {
     // Populate from KPI Markets (tenant playbook), not from property data
@@ -2782,14 +2787,14 @@ export default function Inventory() {
     if (statusFilter && !search.trim()) {
       result = result.filter((p: any) => p.status === statusFilter);
     }
-    if (typeFilter !== "all") {
-      result = result.filter((p: any) => p.projectType === typeFilter);
+    if (sourceFilter !== "all") {
+      result = result.filter((p: any) => p.leadSource === sourceFilter || p.opportunitySource === sourceFilter);
     }
     if (marketFilter !== "all") {
       result = result.filter((p: any) => p.market === marketFilter);
     }
     return result;
-  }, [rawProperties, statusFilter, typeFilter, marketFilter, search]);
+  }, [rawProperties, statusFilter, sourceFilter, marketFilter, search]);
 
   // Apply sorting
   const properties = useMemo(() => {
@@ -2892,21 +2897,19 @@ export default function Inventory() {
             <LayoutGrid className="h-4 w-4" style={{ color: viewMode === "card" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
           </button>
         </div>
-        {/* Type filter */}
-        {uniqueTypes.length > 0 && (
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[130px] h-8 text-xs" style={{ background: "var(--g-bg-card)", borderColor: typeFilter !== "all" ? "var(--g-accent)" : "var(--g-border-subtle)", color: "var(--g-text-primary)" }}>
-              <Filter className="h-3 w-3 mr-1" style={{ color: typeFilter !== "all" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              {uniqueTypes.map(t => (
-                <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        {/* Source filter */}
+        <Select value={sourceFilter} onValueChange={setSourceFilter}>
+          <SelectTrigger className="w-[140px] h-8 text-xs" style={{ background: "var(--g-bg-card)", borderColor: sourceFilter !== "all" ? "var(--g-accent)" : "var(--g-border-subtle)", color: "var(--g-text-primary)" }}>
+            <Filter className="h-3 w-3 mr-1" style={{ color: sourceFilter !== "all" ? "var(--g-accent)" : "var(--g-text-tertiary)" }} />
+            <SelectValue placeholder="Source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sources</SelectItem>
+            {uniqueSources.map(s => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {/* Market filter */}
         {uniqueMarkets.length > 0 && (
           <Select value={marketFilter} onValueChange={setMarketFilter}>
@@ -2923,9 +2926,9 @@ export default function Inventory() {
           </Select>
         )}
         {/* Clear filters */}
-        {(typeFilter !== "all" || marketFilter !== "all") && (
+        {(sourceFilter !== "all" || marketFilter !== "all") && (
           <button
-            onClick={() => { setTypeFilter("all"); setMarketFilter("all"); }}
+            onClick={() => { setSourceFilter("all"); setMarketFilter("all"); }}
             className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors"
             style={{ color: "var(--g-accent)", background: "var(--g-accent-soft)" }}
           >

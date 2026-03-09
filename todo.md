@@ -4871,3 +4871,6 @@
 
 ## Markets Dropdown Fix
 - [x] Markets dropdown populates from KPI Markets (tenant playbook) instead of property data
+
+## Source Filter Change
+- [x] Change 'All Types' filter to 'All Sources' filter pulling from KPI Sources (tenant playbook)
