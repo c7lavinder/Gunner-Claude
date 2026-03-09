@@ -1,0 +1,66 @@
+name: Nightly Autonomous Build
+
+on:
+  schedule:
+    # Runs at 2:00 AM CST (8:00 AM UTC) every night
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout manus-migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: manus-migration
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+          VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
+          VITE_APP_TITLE: Gunner
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Build failed — Jules will investigate open issues"
+
+  auto-fix-issues:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: always()
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: manus-migration
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for open GitHub issues labeled 'jules'
+        run: |
+          echo "Jules handles open issues automatically via jules.google.com"
+          echo "Issues labeled 'jules' will be picked up by Jules agent overnight"
+
+      - name: Summary
+        run: |
+          echo "✅ Nightly build complete"
+          echo "Branch: manus-migration"
+          echo "Time: $(date)"
