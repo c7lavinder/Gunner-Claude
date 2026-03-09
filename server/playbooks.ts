@@ -60,7 +60,7 @@ export async function seedPlaybookForTenant(
         criteria: JSON.stringify(rubric.criteria),
         redFlags: JSON.stringify(rubric.redFlags),
         isActive: "true",
-      }).$returningId();
+      }).returning({ id: tenantRubrics.id });
       rubricIdMap[rubric.callType] = result.id;
     }
 
@@ -346,7 +346,7 @@ export async function addTenantRole(
     rubricId: role.rubricId || null,
     isActive: "true",
     sortOrder: maxSort + 1,
-  }).$returningId();
+  }).returning({ id: tenantRoles.id });
 
   return { success: true, roleId: result.id };
 }
@@ -369,7 +369,7 @@ export async function addTenantRubric(
     criteria: rubric.criteria,
     redFlags: rubric.redFlags || null,
     isActive: "true",
-  }).$returningId();
+  }).returning({ id: tenantRubrics.id });
 
   return { success: true, rubricId: result.id };
 }
@@ -396,7 +396,7 @@ export async function addTenantCallType(
     rubricId: callType.rubricId || null,
     isActive: "true",
     sortOrder: maxSort + 1,
-  }).$returningId();
+  }).returning({ id: tenantCallTypes.id });
 
   return { success: true, callTypeId: result.id };
 }

@@ -712,9 +712,9 @@ export async function addDailyKpiEntry(
     propertyAddress: data?.propertyAddress || null,
     notes: data?.notes || null,
     source: "manual",
-  });
+  }).returning({ id: dailyKpiEntries.id });
 
-  return { id: (entry as any).insertId, success: true };
+  return { id: entry.id, success: true };
 }
 
 export async function deleteDailyKpiEntry(

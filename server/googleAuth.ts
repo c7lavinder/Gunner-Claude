@@ -252,7 +252,7 @@ export async function signInWithGoogle(params: {
           teamRole: invitation.teamRole,
           isTenantAdmin: invitation.role === 'admin' ? 'true' : 'false',
           profilePicture: picture,
-        }).$returningId();
+        }).returning({ id: users.id });
 
         console.log('[GoogleAuth] User created with ID:', newUser.id);
 
@@ -375,7 +375,7 @@ export async function completeGoogleSignup(params: {
       onboardingStep: 2, // Start at step 2 since company name is already provided during signup
       onboardingCompleted: 'false',
       settings: JSON.stringify({ maxCallsPerMonth: limits.maxCallsPerMonth, selectedPlan: planId }),
-    }).$returningId();
+    }).returning({ id: tenants.id });
 
     // Create user
     const [user] = await db.insert(users).values({
@@ -389,7 +389,7 @@ export async function completeGoogleSignup(params: {
       teamRole: 'admin',
       isTenantAdmin: 'true',
       profilePicture: picture,
-    }).$returningId();
+    }).returning({ id: users.id });
 
     const token = createSessionToken(user.id, tenant.id);
 

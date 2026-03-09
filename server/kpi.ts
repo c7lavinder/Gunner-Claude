@@ -43,8 +43,8 @@ export async function createKpiPeriod(data: {
   const db = await getDb();
   if (!db) return null;
   
-  const [result] = await db.insert(kpiPeriods).values(data);
-  return result.insertId;
+  const [result] = await db.insert(kpiPeriods).values(data).returning({ id: kpiPeriods.id });
+  return result.id;
 }
 
 // ============ TEAM MEMBER KPIs ============
@@ -110,8 +110,8 @@ export async function upsertTeamMemberKpi(data: {
       metric1Label: labels.metric1,
       metric2Label: labels.metric2,
       metric3Label: labels.metric3,
-    });
-    return result.insertId;
+    }).returning({ id: teamMemberKpis.id });
+    return result.id;
   }
 }
 
@@ -187,8 +187,8 @@ export async function upsertCampaignKpi(data: {
       .where(eq(campaignKpis.id, existing.id));
     return existing.id;
   } else {
-    const [result] = await db.insert(campaignKpis).values(data);
-    return result.insertId;
+    const [result] = await db.insert(campaignKpis).values(data).returning({ id: campaignKpis.id });
+    return result.id;
   }
 }
 
@@ -236,8 +236,8 @@ export async function createKpiDeal(data: {
   const db = await getDb();
   if (!db) return null;
   
-  const [result] = await db.insert(kpiDeals).values(data);
-  return result.insertId;
+  const [result] = await db.insert(kpiDeals).values(data).returning({ id: kpiDeals.id });
+  return result.id;
 }
 
 export async function updateKpiDeal(id: number, data: Partial<{
@@ -357,8 +357,8 @@ export async function upsertKpiGoal(data: {
   const db = await getDb();
   if (!db) return null;
   
-  const [result] = await db.insert(kpiGoals).values(data);
-  return result.insertId;
+  const [result] = await db.insert(kpiGoals).values(data).returning({ id: kpiGoals.id });
+  return result.id;
 }
 
 
@@ -387,8 +387,8 @@ export async function createLeadGenStaff(data: {
     name: data.name,
     roleType: data.roleType,
     isActive: "true",
-  });
-  return result.insertId;
+  }).returning({ id: leadGenStaff.id });
+  return result.id;
 }
 
 export async function updateLeadGenStaff(id: number, data: {
@@ -428,8 +428,8 @@ export async function createKpiMarket(name: string, tenantId: number) {
   const db = await getDb();
   if (!db) return null;
   
-  const [result] = await db.insert(kpiMarkets).values({ name, isActive: "true", tenantId });
-  return result.insertId;
+  const [result] = await db.insert(kpiMarkets).values({ name, isActive: "true", tenantId }).returning({ id: kpiMarkets.id });
+  return result.id;
 }
 
 export async function updateKpiMarket(id: number, data: { name?: string; isActive?: "true" | "false" }) {
@@ -464,8 +464,8 @@ export async function createKpiChannel(name: string, code: string, tenantId: num
   const db = await getDb();
   if (!db) return null;
   
-  const [result] = await db.insert(kpiChannels).values({ name, code, isActive: "true", tenantId });
-  return result.insertId;
+  const [result] = await db.insert(kpiChannels).values({ name, code, isActive: "true", tenantId }).returning({ id: kpiChannels.id });
+  return result.id;
 }
 
 export async function updateKpiChannel(id: number, data: { name?: string; code?: string; isActive?: "true" | "false" }) {

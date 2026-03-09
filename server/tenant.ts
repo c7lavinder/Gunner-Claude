@@ -487,7 +487,7 @@ export async function createTenant(data: {
       stripeSubscriptionId: data.stripeSubscriptionId,
       trialEndsAt: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000),
     })
-    .$returningId();
+    .returning({ id: tenants.id });
 
   return getTenantById(newTenant.id);
 }
@@ -529,7 +529,7 @@ export async function setupTenant(data: {
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       onboardingCompleted: 'true',
     })
-    .$returningId();
+    .returning({ id: tenants.id });
 
   const tenantId = newTenant.id;
 
@@ -663,7 +663,7 @@ export async function bulkAddTeamMembers(
       teamRole: member.teamRole,
       tenantId,
       isActive: 'true',
-    }).$returningId();
+    }).returning({ id: teamMembers.id });
 
     created.push({ id: result.id, name: member.name, teamRole: member.teamRole });
   }

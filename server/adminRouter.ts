@@ -408,9 +408,9 @@ export const adminRouter = router({
         isPopular: input.isPopular ? "true" : "false",
         isActive: input.isActive ? "true" : "false",
         sortOrder: input.sortOrder,
-      });
+      }).returning({ id: subscriptionPlans.id });
 
-      return { success: true, planId: result.insertId };
+      return { success: true, planId: result.id };
     }),
 
   // Update an existing subscription plan

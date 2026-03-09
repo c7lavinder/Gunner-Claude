@@ -830,10 +830,10 @@ async function syncPropertyFromOpportunity(
         ...(milestoneFlags.offerEverMade ? { offerMadeAt: now } : {}),
         ...(milestoneFlags.everUnderContract ? { underContractAt: now } : {}),
         ...(milestoneFlags.everClosed ? { closedAt: now } : {}),
-      });
+      }).returning({ id: dispoProperties.id });
 
       // Get the inserted property ID
-      const insertId = inserted?.insertId || inserted?.id;
+      const insertId = inserted?.id;
       if (insertId) {
         // Log initial stage in history
         await db.insert(propertyStageHistory).values({

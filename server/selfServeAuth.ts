@@ -105,7 +105,7 @@ export async function signUpWithEmail(params: {
       onboardingStep: 1,
       onboardingCompleted: 'false',
       settings: JSON.stringify({ maxCallsPerMonth: limits.maxCallsPerMonth, selectedPlan: planId }),
-    }).$returningId();
+    }).returning({ id: tenants.id });
 
     // Create user
     const [user] = await db.insert(users).values({
@@ -119,7 +119,7 @@ export async function signUpWithEmail(params: {
       role: 'admin',
       teamRole: 'admin',
       isTenantAdmin: 'true',
-    }).$returningId();
+    }).returning({ id: users.id });
 
     return { success: true, userId: user.id, tenantId: tenant.id };
   } catch (error) {

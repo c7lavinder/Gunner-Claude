@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, decimal, boolean, uniqueIndex } from "drizzle-orm/mysql-core";
+import { integer, pgTable, text, timestamp, varchar, jsonb, decimal, boolean, serial, uniqueIndex } from "drizzle-orm/pg-core";
 
 // ============ MULTI-TENANCY SYSTEM ============
 
@@ -6,8 +6,8 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, decimal, bo
  * Tenants table - each company/customer is a tenant
  * This is the core of the white-label SaaS platform
  */
-export const tenants = mysqlTable("tenants", {
-  id: int("id").autoincrement().primaryKey(),
+export const tenants = pgTable("tenants", {
+  id: serial("id").primaryKey(),
   // Company info
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(), // URL-friendly identifier
@@ -16,22 +16,22 @@ export const tenants = mysqlTable("tenants", {
   stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
   stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
   // Subscription tier: starter, growth, scale
-  subscriptionTier: mysqlEnum("subscriptionTier", ["trial", "starter", "growth", "scale"]).default("trial"),
-  subscriptionStatus: mysqlEnum("subscriptionStatus", ["active", "past_due", "canceled", "paused"]).default("active"),
+  subscriptionTier: text("subscriptionTier").default("trial"),
+  subscriptionStatus: text("subscriptionStatus").default("active"),
   // Trial info
   trialEndsAt: timestamp("trialEndsAt"),
   // User limits based on tier
-  maxUsers: int("maxUsers").default(3), // Starter: 3, Growth: 10, Scale: unlimited (999)
+  maxUsers: integer("maxUsers").default(3), // Starter: 3, Growth: 10, Scale: unlimited (999)
   // CRM integration
-  crmType: mysqlEnum("crmType", ["ghl", "hubspot", "salesforce", "close", "pipedrive", "none"]).default("none"),
-  crmConnected: mysqlEnum("crmConnected", ["true", "false"]).default("false"),
+  crmType: text("crmType").default("none"),
+  crmConnected: text("crmConnected").default("false"),
   crmConfig: text("crmConfig"), // JSON config for CRM connection
   // Branding (Phase 2)
   logoUrl: text("logoUrl"),
   primaryColor: varchar("primaryColor", { length: 20 }),
   // Onboarding progress
-  onboardingStep: int("onboardingStep").default(1),
-  onboardingCompleted: mysqlEnum("onboardingCompleted", ["true", "false"]).default("false"),
+  onboardingStep: integer("onboardingStep").default(1),
+  onboardingCompleted: text("onboardingCompleted").default("false"),
   // Settings
   settings: text("settings"), // JSON for tenant-specific settings
   // CRM sync timestamps
@@ -39,12 +39,12 @@ export const tenants = mysqlTable("tenants", {
   lastBatchDialerSync: timestamp("lastBatchDialerSync"),
   lastBatchLeadsSync: timestamp("lastBatchLeadsSync"),
   // Webhook status
-  webhookActive: mysqlEnum("webhookActive", ["true", "false"]).default("false"),
+  webhookActive: text("webhookActive").default("false"),
   lastWebhookAt: timestamp("lastWebhookAt"),
-  contactCacheImported: mysqlEnum("contactCacheImported", ["true", "false"]).default("false"),
+  contactCacheImported: text("contactCacheImported").default("false"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type Tenant = typeof tenants.$inferSelect;
@@ -55,22 +55,22 @@ export type InsertTenant = typeof tenants.$inferInsert;
  * Extended with team role for call coaching platform.
  * Now includes tenantId for multi-tenancy.
  */
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy (nullable: users created before tenant assignment)
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id), // Multi-tenancy (nullable: users created before tenant assignment)
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   passwordHash: varchar("passwordHash", { length: 255 }), // For email/password auth
-  emailVerified: mysqlEnum("emailVerified", ["true", "false"]).default("false"), // Email verification status
-  loginMethod: varchar("loginMethod", { length: 64 }), // 'manus_oauth' or 'email_password'
-  role: mysqlEnum("role", ["user", "admin", "super_admin"]).default("user").notNull(), // Added super_admin for platform owner
+  emailVerified: text("emailVerified").default("false"), // Email verification status
+  loginMethod: varchar("loginMethod", { length: 64 }), // 'google' or 'email_password'
+  role: text("role").default("user").notNull(), // user, admin, super_admin
   // Team role for call coaching (consolidated - this is the single source of truth for roles)
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).default("lead_manager"),
+  teamRole: text("teamRole").default("lead_manager"),
   // Is this user a tenant admin?
-  isTenantAdmin: mysqlEnum("isTenantAdmin", ["true", "false"]).default("false"),
+  isTenantAdmin: text("isTenantAdmin").default("false"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   profilePicture: text("profilePicture"), // S3 URL for profile picture
 });
@@ -81,9 +81,9 @@ export type InsertUser = typeof users.$inferInsert;
 /**
  * Password reset tokens for email/password auth
  */
-export const passwordResetTokens = mysqlTable("password_reset_tokens", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").references(() => users.id).notNull(),
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
   expiresAt: timestamp("expiresAt").notNull(),
   usedAt: timestamp("usedAt"),
@@ -96,9 +96,9 @@ export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 /**
  * Email verification tokens for new user signup
  */
-export const emailVerificationTokens = mysqlTable("email_verification_tokens", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").references(() => users.id).notNull(),
+export const emailVerificationTokens = pgTable("email_verification_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
   expiresAt: timestamp("expiresAt").notNull(),
   usedAt: timestamp("usedAt"),
@@ -113,18 +113,18 @@ export type InsertEmailVerificationToken = typeof emailVerificationTokens.$infer
  * These are mapped to users when they log in
  * Now includes tenantId for multi-tenancy.
  */
-export const teamMembers = mysqlTable("team_members", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const teamMembers = pgTable("team_members", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   name: varchar("name", { length: 255 }).notNull(),
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).notNull(),
-  userId: int("userId").references(() => users.id),
+  teamRole: text("teamRole").notNull(),
+  userId: integer("userId").references(() => users.id),
   ghlUserId: varchar("ghlUserId", { length: 255 }), // GoHighLevel user ID for matching
   lcPhone: varchar("lcPhone", { length: 20 }), // LC phone number from GHL (e.g. +16157688784)
-  lcPhones: text("lcPhones"), // JSON array of all LC phone numbers for this team member (e.g. ["+19312885429", "+12565215239"])
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  lcPhones: text("lcPhones"), // JSON array of all LC phone numbers for this team member
+  isActive: text("isActive").default("true"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type TeamMember = typeof teamMembers.$inferSelect;
@@ -133,16 +133,16 @@ export type InsertTeamMember = typeof teamMembers.$inferInsert;
 /**
  * Team Assignments - maps Lead Managers to their Acquisition Manager supervisor
  */
-export const teamAssignments = mysqlTable("team_assignments", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const teamAssignments = pgTable("team_assignments", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // The Lead Manager being assigned
-  leadManagerId: int("leadManagerId").references(() => teamMembers.id).notNull(),
+  leadManagerId: integer("leadManagerId").references(() => teamMembers.id).notNull(),
   // The Acquisition Manager they report to
-  acquisitionManagerId: int("acquisitionManagerId").references(() => teamMembers.id).notNull(),
+  acquisitionManagerId: integer("acquisitionManagerId").references(() => teamMembers.id).notNull(),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type TeamAssignment = typeof teamAssignments.$inferSelect;
@@ -152,18 +152,18 @@ export type InsertTeamAssignment = typeof teamAssignments.$inferInsert;
  * Tenant Roles - custom roles defined by each tenant
  * Replaces hardcoded LM/AM roles
  */
-export const tenantRoles = mysqlTable("tenant_roles", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const tenantRoles = pgTable("tenant_roles", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 100 }).notNull(), // e.g., "SDR", "AE", "Closer"
   code: varchar("code", { length: 50 }).notNull(), // e.g., "sdr", "ae", "closer"
   description: text("description"),
   // Which grading rubric to use
-  rubricId: int("rubricId"), // References tenant_rubrics.id
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
-  sortOrder: int("sortOrder").default(0),
+  rubricId: integer("rubricId"), // References tenant_rubrics.id
+  isActive: text("isActive").default("true"),
+  sortOrder: integer("sortOrder").default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type TenantRole = typeof tenantRoles.$inferSelect;
@@ -172,9 +172,9 @@ export type InsertTenantRole = typeof tenantRoles.$inferInsert;
 /**
  * Tenant Rubrics - custom grading rubrics per tenant
  */
-export const tenantRubrics = mysqlTable("tenant_rubrics", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const tenantRubrics = pgTable("tenant_rubrics", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   // Maps to grading call type: qualification, offer, cold_call, follow_up, seller_callback, admin_callback
@@ -183,9 +183,9 @@ export const tenantRubrics = mysqlTable("tenant_rubrics", {
   criteria: text("criteria").notNull(),
   // Red flags as JSON array: ["flag1", "flag2"]
   redFlags: text("redFlags"),
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  isActive: text("isActive").default("true"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type TenantRubric = typeof tenantRubrics.$inferSelect;
@@ -194,18 +194,18 @@ export type InsertTenantRubric = typeof tenantRubrics.$inferInsert;
 /**
  * Tenant Call Types - custom call type classifications per tenant
  */
-export const tenantCallTypes = mysqlTable("tenant_call_types", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const tenantCallTypes = pgTable("tenant_call_types", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 100 }).notNull(), // e.g., "Discovery", "Demo", "Closing"
   code: varchar("code", { length: 50 }).notNull(),
   description: text("description"),
   // Which rubric to use for this call type
-  rubricId: int("rubricId").references(() => tenantRubrics.id),
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
-  sortOrder: int("sortOrder").default(0),
+  rubricId: integer("rubricId").references(() => tenantRubrics.id),
+  isActive: text("isActive").default("true"),
+  sortOrder: integer("sortOrder").default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type TenantCallType = typeof tenantCallTypes.$inferSelect;
@@ -215,17 +215,18 @@ export type InsertTenantCallType = typeof tenantCallTypes.$inferInsert;
  * Calls table - stores incoming calls from CRM webhook
  * Now includes tenantId for multi-tenancy.
  */
-export const calls = mysqlTable("calls", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy  // Call source - where the call data came from
-  callSource: mysqlEnum("callSource", ["ghl", "batchdialer"]).default("ghl"),
-  // GHL webhook data (kept for backwards compatibility, works with any CRM)
+export const calls = pgTable("calls", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  // Call source - where the call data came from
+  callSource: text("callSource").default("ghl"),
+  // GHL webhook data
   ghlCallId: varchar("ghlCallId", { length: 255 }).unique(),
   ghlContactId: varchar("ghlContactId", { length: 255 }),
   ghlLocationId: varchar("ghlLocationId", { length: 255 }),
   // BatchDialer data
-  batchDialerCallId: int("batchDialerCallId").unique(),
-  batchDialerCampaignId: int("batchDialerCampaignId"),
+  batchDialerCallId: integer("batchDialerCallId").unique(),
+  batchDialerCampaignId: integer("batchDialerCampaignId"),
   batchDialerCampaignName: varchar("batchDialerCampaignName", { length: 255 }),
   batchDialerAgentName: varchar("batchDialerAgentName", { length: 255 }),
   // Call metadata
@@ -234,37 +235,37 @@ export const calls = mysqlTable("calls", {
   propertyAddress: text("propertyAddress"),
   // Recording info
   recordingUrl: text("recordingUrl"),
-  duration: int("duration"), // in seconds
-  callDirection: mysqlEnum("callDirection", ["inbound", "outbound"]).default("outbound"),
+  duration: integer("duration"), // in seconds
+  callDirection: text("callDirection").default("outbound"),
   // Team member who handled the call
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
-  // Call type - now references tenant_call_types for custom types
-  callType: mysqlEnum("callType", ["cold_call", "qualification", "follow_up", "offer", "seller_callback", "admin_callback", "dispo_buyer_pitch"]).default("qualification"),
-  tenantCallTypeId: int("tenantCallTypeId").references(() => tenantCallTypes.id), // Custom call type
+  // Call type
+  callType: text("callType").default("qualification"),
+  tenantCallTypeId: integer("tenantCallTypeId").references(() => tenantCallTypes.id), // Custom call type
   // How the call type was determined
-  callTypeSource: mysqlEnum("callTypeSource", ["ai_suggested", "manual", "auto"]).default("ai_suggested"),
-  // Call outcome - what was achieved on this call
-  callOutcome: mysqlEnum("callOutcome", ["none", "appointment_set", "offer_made", "offer_rejected", "callback_scheduled", "interested", "left_vm", "no_answer", "not_interested", "dead"]).default("none"),
-  // Secondary tag: whether a follow-up/callback was scheduled, independent of primary outcome
-  followUpScheduled: mysqlEnum("followUpScheduled", ["true", "false"]).default("false"),
-  // Call classification - determines if call should be graded
-  classification: mysqlEnum("classification", ["pending", "conversation", "voicemail", "no_answer", "callback_request", "wrong_number", "too_short", "admin_call", "limit_reached"]).default("pending"),
+  callTypeSource: text("callTypeSource").default("ai_suggested"),
+  // Call outcome
+  callOutcome: text("callOutcome").default("none"),
+  // Secondary tag: whether a follow-up/callback was scheduled
+  followUpScheduled: text("followUpScheduled").default("false"),
+  // Call classification
+  classification: text("classification").default("pending"),
   classificationReason: text("classificationReason"), // AI explanation for classification
   // Processing status
-  status: mysqlEnum("status", ["pending", "transcribing", "classifying", "grading", "completed", "skipped", "failed", "dismissed"]).default("pending"),
+  status: text("status").default("pending"),
   // Transcript
   transcript: text("transcript"),
   transcriptUrl: text("transcriptUrl"), // S3 URL for archived transcripts
   // BatchLeads property enrichment data (JSON)
   batchLeadsEnrichment: text("batchLeadsEnrichment"),
   // Archival
-  isArchived: mysqlEnum("isArchived", ["true", "false"]).default("false"),
+  isArchived: text("isArchived").default("false"),
   archivedAt: timestamp("archivedAt"),
   // Timestamps
   callTimestamp: timestamp("callTimestamp"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type Call = typeof calls.$inferSelect;
@@ -273,32 +274,31 @@ export type InsertCall = typeof calls.$inferInsert;
 /**
  * Call grades table - stores AI-generated grades for each call
  */
-export const callGrades = mysqlTable("call_grades", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  callId: int("callId").references(() => calls.id).notNull(),
+export const callGrades = pgTable("call_grades", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  callId: integer("callId").references(() => calls.id).notNull(),
   // Overall score
   overallScore: decimal("overallScore", { precision: 5, scale: 2 }),
-  overallGrade: mysqlEnum("overallGrade", ["A", "B", "C", "D", "F"]),
+  overallGrade: text("overallGrade"),
   // Individual criteria scores (stored as JSON for flexibility)
-  criteriaScores: json("criteriaScores"),
+  criteriaScores: jsonb("criteriaScores"),
   // Coaching feedback
-  strengths: json("strengths"), // Array of strings
-  improvements: json("improvements"), // Array of strings
-  coachingTips: json("coachingTips"), // Array of specific coaching tips
+  strengths: jsonb("strengths"), // Array of strings
+  improvements: jsonb("improvements"), // Array of strings
+  coachingTips: jsonb("coachingTips"), // Array of specific coaching tips
   // Red flags identified
-  redFlags: json("redFlags"), // Array of strings
-  // Objection handling - identified objections and suggested responses
-  objectionHandling: json("objectionHandling"), // Array of {objection, context, suggestedResponses[]}
+  redFlags: jsonb("redFlags"), // Array of strings
+  // Objection handling
+  objectionHandling: jsonb("objectionHandling"), // Array of {objection, context, suggestedResponses[]}
   // Summary
   summary: text("summary"),
-  // AI-generated call highlights - key moments with timestamps
-  // Array of {type, label, timestampSeconds, quote, insight, importance}
-  highlights: json("highlights"),
+  // AI-generated call highlights
+  highlights: jsonb("highlights"),
   // Which rubric was used (legacy)
-  rubricType: mysqlEnum("rubricType", ["lead_manager", "acquisition_manager", "lead_generator", "follow_up", "seller_callback", "admin_callback", "dispo_manager"]).notNull(),
+  rubricType: text("rubricType").notNull(),
   // Custom rubric reference
-  tenantRubricId: int("tenantRubricId").references(() => tenantRubrics.id),
+  tenantRubricId: integer("tenantRubricId").references(() => tenantRubrics.id),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -309,24 +309,24 @@ export type InsertCallGrade = typeof callGrades.$inferInsert;
 /**
  * Webhook retry queue - stores failed Gunner Engine webhooks for automatic retry
  */
-export const webhookRetryQueue = mysqlTable("webhook_retry_queue", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  callId: int("callId").references(() => calls.id).notNull(),
+export const webhookRetryQueue = pgTable("webhook_retry_queue", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  callId: integer("callId").references(() => calls.id).notNull(),
   // Webhook payload (JSON)
   payload: text("payload").notNull(),
   // Retry tracking
-  attemptCount: int("attemptCount").default(0).notNull(),
-  maxAttempts: int("maxAttempts").default(5).notNull(),
+  attemptCount: integer("attemptCount").default(0).notNull(),
+  maxAttempts: integer("maxAttempts").default(5).notNull(),
   lastAttemptAt: timestamp("lastAttemptAt"),
   nextRetryAt: timestamp("nextRetryAt").notNull(),
   // Status: pending, delivered, failed
-  status: mysqlEnum("status", ["pending", "delivered", "failed"]).default("pending").notNull(),
+  status: text("status").default("pending").notNull(),
   // Last error message
   lastError: text("lastError"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type WebhookRetryQueue = typeof webhookRetryQueue.$inferSelect;
@@ -335,27 +335,27 @@ export type InsertWebhookRetryQueue = typeof webhookRetryQueue.$inferInsert;
 /**
  * Performance metrics - aggregated stats for leaderboard
  */
-export const performanceMetrics = mysqlTable("performance_metrics", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+export const performanceMetrics = pgTable("performance_metrics", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id).notNull(),
   // Time period
-  periodType: mysqlEnum("periodType", ["daily", "weekly", "monthly", "all_time"]).notNull(),
+  periodType: text("periodType").notNull(),
   periodStart: timestamp("periodStart").notNull(),
   periodEnd: timestamp("periodEnd").notNull(),
   // Metrics
-  totalCalls: int("totalCalls").default(0),
+  totalCalls: integer("totalCalls").default(0),
   averageScore: decimal("averageScore", { precision: 5, scale: 2 }),
-  aGradeCount: int("aGradeCount").default(0),
-  bGradeCount: int("bGradeCount").default(0),
-  cGradeCount: int("cGradeCount").default(0),
-  dGradeCount: int("dGradeCount").default(0),
-  fGradeCount: int("fGradeCount").default(0),
+  aGradeCount: integer("aGradeCount").default(0),
+  bGradeCount: integer("bGradeCount").default(0),
+  cGradeCount: integer("cGradeCount").default(0),
+  dGradeCount: integer("dGradeCount").default(0),
+  fGradeCount: integer("fGradeCount").default(0),
   // Improvement tracking
   scoreChange: decimal("scoreChange", { precision: 5, scale: 2 }), // vs previous period
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type PerformanceMetric = typeof performanceMetrics.$inferSelect;
@@ -365,9 +365,9 @@ export type InsertPerformanceMetric = typeof performanceMetrics.$inferInsert;
 /**
  * Training materials - uploaded documents that influence grading criteria
  */
-export const trainingMaterials = mysqlTable("training_materials", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const trainingMaterials = pgTable("training_materials", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // Material info
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
@@ -378,22 +378,15 @@ export const trainingMaterials = mysqlTable("training_materials", {
   fileUrl: text("fileUrl"),
   fileType: varchar("fileType", { length: 50 }), // pdf, docx, txt, etc.
   // Category for organization
-  category: mysqlEnum("category", [
-    "script",
-    "objection_handling", 
-    "methodology",
-    "best_practices",
-    "examples",
-    "other"
-  ]).default("other"),
-  // Which role this applies to (legacy - use tenantRoleId for custom roles)
-  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).default("all"),
-  tenantRoleId: int("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
+  category: text("category").default("other"),
+  // Which role this applies to
+  applicableTo: text("applicableTo").default("all"),
+  tenantRoleId: integer("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
   // Status
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  isActive: text("isActive").default("true"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type TrainingMaterial = typeof trainingMaterials.$inferSelect;
@@ -402,41 +395,33 @@ export type InsertTrainingMaterial = typeof trainingMaterials.$inferInsert;
 /**
  * AI Feedback - corrections and feedback on AI grading to improve future scoring
  */
-export const aiFeedback = mysqlTable("ai_feedback", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const aiFeedback = pgTable("ai_feedback", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // Link to the call/grade being corrected
-  callId: int("callId").references(() => calls.id),
-  callGradeId: int("callGradeId").references(() => callGrades.id),
+  callId: integer("callId").references(() => calls.id),
+  callGradeId: integer("callGradeId").references(() => callGrades.id),
   // Who provided the feedback
-  userId: int("userId").references(() => users.id),
+  userId: integer("userId").references(() => users.id),
   // Feedback type
-  feedbackType: mysqlEnum("feedbackType", [
-    "score_too_high",
-    "score_too_low", 
-    "wrong_criteria",
-    "missed_issue",
-    "incorrect_feedback",
-    "general_correction",
-    "praise"
-  ]).notNull(),
+  feedbackType: text("feedbackType").notNull(),
   // The specific criteria being corrected (if applicable)
   criteriaName: varchar("criteriaName", { length: 255 }),
   // Original values
   originalScore: decimal("originalScore", { precision: 5, scale: 2 }),
-  originalGrade: mysqlEnum("originalGrade", ["A", "B", "C", "D", "F"]),
+  originalGrade: text("originalGrade"),
   // Suggested corrections
   suggestedScore: decimal("suggestedScore", { precision: 5, scale: 2 }),
-  suggestedGrade: mysqlEnum("suggestedGrade", ["A", "B", "C", "D", "F"]),
+  suggestedGrade: text("suggestedGrade"),
   // Detailed feedback explanation
   explanation: text("explanation").notNull(),
   // What the AI should have noticed or done differently
   correctBehavior: text("correctBehavior"),
   // Status - whether this feedback has been incorporated
-  status: mysqlEnum("status", ["pending", "reviewed", "incorporated", "dismissed"]).default("pending"),
+  status: text("status").default("pending"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type AIFeedback = typeof aiFeedback.$inferSelect;
@@ -445,24 +430,24 @@ export type InsertAIFeedback = typeof aiFeedback.$inferInsert;
 /**
  * Grading rules - custom rules that override or supplement default rubrics
  */
-export const gradingRules = mysqlTable("grading_rules", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const gradingRules = pgTable("grading_rules", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // Rule info
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   // The rule itself - natural language instruction for the AI
   ruleText: text("ruleText").notNull(),
   // Priority (higher = more important)
-  priority: int("priority").default(0),
-  // Which rubric this applies to (legacy)
-  applicableTo: mysqlEnum("applicableTo", ["all", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).default("all"),
-  tenantRoleId: int("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
+  priority: integer("priority").default(0),
+  // Which rubric this applies to
+  applicableTo: text("applicableTo").default("all"),
+  tenantRoleId: integer("tenantRoleId").references(() => tenantRoles.id), // Custom role reference
   // Status
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  isActive: text("isActive").default("true"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type GradingRule = typeof gradingRules.$inferSelect;
@@ -471,45 +456,39 @@ export type InsertGradingRule = typeof gradingRules.$inferInsert;
 
 /**
  * Team Training Items - tracks ongoing team development items
- * Used for weekly team calls and ongoing coaching
  */
-export const teamTrainingItems = mysqlTable("team_training_items", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const teamTrainingItems = pgTable("team_training_items", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // Item type
-  itemType: mysqlEnum("itemType", [
-    "skill",           // Long-term skills being developed
-    "issue",           // Urgent issues/incompetencies to address
-    "win",             // Small wins to celebrate
-    "agenda"           // Weekly team call agenda items
-  ]).notNull(),
+  itemType: text("itemType").notNull(),
   // Content
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   // For skills: what we're working toward
   targetBehavior: text("targetBehavior"),
   // For issues: what went wrong and how to fix it
-  callReference: int("callReference").references(() => calls.id), // Link to specific call if applicable
+  callReference: integer("callReference").references(() => calls.id), // Link to specific call if applicable
   // For agenda items: order in the meeting
-  sortOrder: int("sortOrder").default(0),
+  sortOrder: integer("sortOrder").default(0),
   // Priority level
-  priority: mysqlEnum("priority", ["low", "medium", "high", "urgent"]).default("medium"),
+  priority: text("priority").default("medium"),
   // Who this applies to (null = whole team)
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   // Which role this insight applies to
-  teamRole: mysqlEnum("teamRole", ["lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]),
+  teamRole: text("teamRole"),
   // Status
-  status: mysqlEnum("status", ["active", "in_progress", "completed", "archived"]).default("active"),
+  status: text("status").default("active"),
   // AI generation tracking
-  isAiGenerated: mysqlEnum("isAiGenerated", ["true", "false"]).default("false"),
+  isAiGenerated: text("isAiGenerated").default("false"),
   sourceCallIds: text("sourceCallIds"), // JSON array of call IDs that informed this insight
   // For agenda items: which meeting date
   meetingDate: timestamp("meetingDate"),
   // Timestamps
   completedAt: timestamp("completedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type TeamTrainingItem = typeof teamTrainingItems.$inferSelect;
@@ -519,35 +498,26 @@ export type InsertTeamTrainingItem = typeof teamTrainingItems.$inferInsert;
 /**
  * Brand Assets - stores branding files, logos, style guides
  */
-export const brandAssets = mysqlTable("brand_assets", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const brandAssets = pgTable("brand_assets", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // Asset info
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   // Asset type
-  assetType: mysqlEnum("assetType", [
-    "logo",
-    "color_palette",
-    "font",
-    "style_guide",
-    "image",
-    "video",
-    "document",
-    "other"
-  ]).notNull(),
+  assetType: text("assetType").notNull(),
   // File storage
   fileUrl: text("fileUrl"),
   fileKey: varchar("fileKey", { length: 512 }),
   mimeType: varchar("mimeType", { length: 128 }),
-  fileSize: int("fileSize"),
+  fileSize: integer("fileSize"),
   // Metadata (JSON for flexible storage)
-  metadata: text("metadata"), // e.g., { colors: ["#fff", "#000"], fonts: ["Arial"] }
+  metadata: text("metadata"),
   // Status
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  isActive: text("isActive").default("true"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type BrandAsset = typeof brandAssets.$inferSelect;
@@ -556,21 +526,13 @@ export type InsertBrandAsset = typeof brandAssets.$inferInsert;
 /**
  * Social Media Posts - stores all social media content
  */
-export const socialPosts = mysqlTable("social_posts", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const socialPosts = pgTable("social_posts", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // Content type - brand or creator
-  contentType: mysqlEnum("contentType", ["brand", "creator"]).notNull(),
+  contentType: text("contentType").notNull(),
   // Platform
-  platform: mysqlEnum("platform", [
-    "blog",
-    "meta_facebook",
-    "meta_instagram",
-    "google_business",
-    "x_twitter",
-    "linkedin",
-    "other"
-  ]).notNull(),
+  platform: text("platform").notNull(),
   // Post content
   title: varchar("title", { length: 500 }),
   content: text("content").notNull(),
@@ -583,24 +545,19 @@ export const socialPosts = mysqlTable("social_posts", {
   hashtags: text("hashtags"),
   mentions: text("mentions"),
   // Scheduling
-  status: mysqlEnum("status", [
-    "draft",
-    "scheduled",
-    "published",
-    "failed"
-  ]).default("draft"),
+  status: text("status").default("draft"),
   scheduledAt: timestamp("scheduledAt"),
   publishedAt: timestamp("publishedAt"),
   // External post ID (if published)
   externalPostId: varchar("externalPostId", { length: 255 }),
   // AI generation tracking
-  isAiGenerated: mysqlEnum("isAiGenerated", ["true", "false"]).default("false"),
+  isAiGenerated: text("isAiGenerated").default("false"),
   aiPrompt: text("aiPrompt"), // The prompt used to generate this content
   // Author
-  createdBy: int("createdBy").references(() => users.id),
+  createdBy: integer("createdBy").references(() => users.id),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type SocialPost = typeof socialPosts.$inferSelect;
@@ -609,35 +566,25 @@ export type InsertSocialPost = typeof socialPosts.$inferInsert;
 /**
  * Content Ideas - stores content ideas for creators
  */
-export const contentIdeas = mysqlTable("content_ideas", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const contentIdeas = pgTable("content_ideas", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // Idea content
   title: varchar("title", { length: 500 }).notNull(),
   description: text("description"),
   // Category/topic
   category: varchar("category", { length: 255 }),
   // Target platform
-  targetPlatform: mysqlEnum("targetPlatform", [
-    "x_twitter",
-    "blog",
-    "meta",
-    "any"
-  ]).default("any"),
+  targetPlatform: text("targetPlatform").default("any"),
   // Status
-  status: mysqlEnum("status", [
-    "new",
-    "in_progress",
-    "used",
-    "archived"
-  ]).default("new"),
+  status: text("status").default("new"),
   // Link to post if used
-  usedInPostId: int("usedInPostId").references(() => socialPosts.id),
+  usedInPostId: integer("usedInPostId").references(() => socialPosts.id),
   // AI generation tracking
-  isAiGenerated: mysqlEnum("isAiGenerated", ["true", "false"]).default("false"),
+  isAiGenerated: text("isAiGenerated").default("false"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type ContentIdea = typeof contentIdeas.$inferSelect;
@@ -647,9 +594,9 @@ export type InsertContentIdea = typeof contentIdeas.$inferInsert;
 /**
  * Brand Profile - stores company brand identity and settings
  */
-export const brandProfile = mysqlTable("brand_profile", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const brandProfile = pgTable("brand_profile", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   // Website and branding
   websiteUrl: varchar("websiteUrl", { length: 500 }),
   extractedColors: text("extractedColors"), // JSON array of colors extracted from website
@@ -673,7 +620,7 @@ export const brandProfile = mysqlTable("brand_profile", {
   googleBusinessUrl: varchar("googleBusinessUrl", { length: 500 }),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type BrandProfile = typeof brandProfile.$inferSelect;
@@ -684,18 +631,17 @@ export type InsertBrandProfile = typeof brandProfile.$inferInsert;
 
 /**
  * Badge definitions - stores all available badges
- * Now tenant-scoped for custom badges per company
  */
-export const badges = mysqlTable("badges", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id), // Multi-tenancy (null = platform default)
+export const badges = pgTable("badges", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id), // Multi-tenancy (null = platform default)
   code: varchar("code", { length: 50 }).notNull(), // e.g., "on_fire", "script_starter"
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   icon: varchar("icon", { length: 10 }), // Emoji icon
-  category: mysqlEnum("category", ["universal", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).notNull(),
-  tier: mysqlEnum("tier", ["bronze", "silver", "gold"]).notNull(),
-  target: int("target").notNull(), // Target count to earn this badge tier
+  category: text("category").notNull(),
+  tier: text("tier").notNull(),
+  target: integer("target").notNull(), // Target count to earn this badge tier
   criteriaType: varchar("criteriaType", { length: 50 }).notNull(), // Type of criteria
   criteriaConfig: text("criteriaConfig"), // JSON config for criteria
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -707,16 +653,16 @@ export type InsertBadge = typeof badges.$inferInsert;
 /**
  * User badges - tracks which badges users have earned
  */
-export const userBadges = mysqlTable("user_badges", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
-  badgeId: int("badgeId").references(() => badges.id).notNull(),
+export const userBadges = pgTable("user_badges", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id).notNull(),
+  badgeId: integer("badgeId").references(() => badges.id).notNull(),
   badgeCode: varchar("badgeCode", { length: 64 }).notNull(),
-  progress: int("progress").default(0),
+  progress: integer("progress").default(0),
   earnedAt: timestamp("earnedAt").defaultNow().notNull(),
-  triggerCallId: int("triggerCallId").references(() => calls.id),
-  isViewed: mysqlEnum("isViewed", ["true", "false"]).default("false"),
+  triggerCallId: integer("triggerCallId").references(() => calls.id),
+  isViewed: text("isViewed").default("false"),
 });
 
 export type UserBadge = typeof userBadges.$inferSelect;
@@ -725,15 +671,15 @@ export type InsertUserBadge = typeof userBadges.$inferInsert;
 /**
  * Badge progress - tracks progress toward badges
  */
-export const badgeProgress = mysqlTable("badge_progress", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+export const badgeProgress = pgTable("badge_progress", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id).notNull(),
   badgeCode: varchar("badgeCode", { length: 64 }).notNull(),
-  currentCount: int("currentCount").default(0),
-  currentStreak: int("currentStreak").default(0),
+  currentCount: integer("currentCount").default(0),
+  currentStreak: integer("currentStreak").default(0),
   weekStart: timestamp("weekStart"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type BadgeProgress = typeof badgeProgress.$inferSelect;
@@ -742,19 +688,19 @@ export type InsertBadgeProgress = typeof badgeProgress.$inferInsert;
 /**
  * User streaks - tracks hot streaks and consistency streaks
  */
-export const userStreaks = mysqlTable("user_streaks", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
+export const userStreaks = pgTable("user_streaks", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id).notNull(),
   // Hot streak (consecutive C+ grades)
-  hotStreakCurrent: int("hotStreakCurrent").default(0).notNull(),
-  hotStreakBest: int("hotStreakBest").default(0).notNull(),
-  hotStreakLastCallId: int("hotStreakLastCallId"),
+  hotStreakCurrent: integer("hotStreakCurrent").default(0).notNull(),
+  hotStreakBest: integer("hotStreakBest").default(0).notNull(),
+  hotStreakLastCallId: integer("hotStreakLastCallId"),
   // Consistency streak (days with graded calls)
-  consistencyStreakCurrent: int("consistencyStreakCurrent").default(0).notNull(),
-  consistencyStreakBest: int("consistencyStreakBest").default(0).notNull(),
+  consistencyStreakCurrent: integer("consistencyStreakCurrent").default(0).notNull(),
+  consistencyStreakBest: integer("consistencyStreakBest").default(0).notNull(),
   consistencyLastDate: varchar("consistencyLastDate", { length: 10 }), // YYYY-MM-DD format
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type UserStreak = typeof userStreaks.$inferSelect;
@@ -763,12 +709,12 @@ export type InsertUserStreak = typeof userStreaks.$inferInsert;
 /**
  * User XP - tracks total XP and level
  */
-export const userXp = mysqlTable("user_xp", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
-  totalXp: int("totalXp").default(0).notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const userXp = pgTable("user_xp", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id).notNull(),
+  totalXp: integer("totalXp").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type UserXp = typeof userXp.$inferSelect;
@@ -777,13 +723,13 @@ export type InsertUserXp = typeof userXp.$inferInsert;
 /**
  * XP transactions - history of XP earned
  */
-export const xpTransactions = mysqlTable("xp_transactions", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
-  amount: int("amount").notNull(),
+export const xpTransactions = pgTable("xp_transactions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id).notNull(),
+  amount: integer("amount").notNull(),
   reason: varchar("reason", { length: 100 }).notNull(),
-  callId: int("callId").references(() => calls.id),
+  callId: integer("callId").references(() => calls.id),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -793,14 +739,14 @@ export type InsertXpTransaction = typeof xpTransactions.$inferInsert;
 /**
  * Deals - tracks closed deals from GHL opportunities for Closer badge
  */
-export const deals = mysqlTable("deals", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const deals = pgTable("deals", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }).notNull().unique(),
   ghlContactId: varchar("ghlContactId", { length: 255 }),
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
-  callId: int("callId").references(() => calls.id), // The offer call that led to this deal
-  dealValue: int("dealValue"), // Optional: deal amount in cents
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id),
+  callId: integer("callId").references(() => calls.id), // The offer call that led to this deal
+  dealValue: integer("dealValue"), // Optional: deal amount in cents
   closedAt: timestamp("closedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -810,14 +756,13 @@ export type InsertDeal = typeof deals.$inferInsert;
 
 /**
  * Reward views - tracks which calls have been viewed for XP rewards
- * Prevents double-awarding XP when viewing the same call multiple times
  */
-export const rewardViews = mysqlTable("reward_views", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
-  callId: int("callId").references(() => calls.id).notNull(),
-  xpAwarded: int("xpAwarded").default(0).notNull(),
+export const rewardViews = pgTable("reward_views", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id).notNull(),
+  callId: integer("callId").references(() => calls.id).notNull(),
+  xpAwarded: integer("xpAwarded").default(0).notNull(),
   viewedAt: timestamp("viewedAt").defaultNow().notNull(),
 });
 
@@ -830,10 +775,10 @@ export type InsertRewardView = typeof rewardViews.$inferInsert;
 /**
  * KPI Periods - tracks weekly/monthly periods for KPI data entry
  */
-export const kpiPeriods = mysqlTable("kpi_periods", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  periodType: mysqlEnum("periodType", ["daily", "weekly", "monthly"]).notNull(),
+export const kpiPeriods = pgTable("kpi_periods", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  periodType: text("periodType").notNull(),
   periodStart: timestamp("periodStart").notNull(),
   periodEnd: timestamp("periodEnd").notNull(),
   periodLabel: varchar("periodLabel", { length: 50 }).notNull(), // e.g., "Week 5 2026", "January 2026"
@@ -846,26 +791,26 @@ export type InsertKpiPeriod = typeof kpiPeriods.$inferInsert;
 /**
  * Team Member KPIs - tracks the 3 key metrics per team member per period
  */
-export const teamMemberKpis = mysqlTable("team_member_kpis", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id).notNull(),
-  periodId: int("periodId").references(() => kpiPeriods.id).notNull(),
+export const teamMemberKpis = pgTable("team_member_kpis", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id).notNull(),
+  periodId: integer("periodId").references(() => kpiPeriods.id).notNull(),
   // Role type determines which metrics are used
-  roleType: mysqlEnum("roleType", ["am", "lm", "lg_cold_caller", "lg_sms"]).notNull(),
-  // Metric 1 (calls for AM/LM, time for LG CC, sms sent for LG SMS)
-  metric1: int("metric1").default(0).notNull(),
+  roleType: text("roleType").notNull(),
+  // Metric 1
+  metric1: integer("metric1").default(0).notNull(),
   metric1Label: varchar("metric1Label", { length: 50 }).default("Metric 1"),
-  // Metric 2 (offers for AM, conversations for LM/LG CC, responses for LG SMS)
-  metric2: int("metric2").default(0).notNull(),
+  // Metric 2
+  metric2: integer("metric2").default(0).notNull(),
   metric2Label: varchar("metric2Label", { length: 50 }).default("Metric 2"),
-  // Metric 3 (contracts for AM, appointments for LM, leads for LG)
-  metric3: int("metric3").default(0).notNull(),
+  // Metric 3
+  metric3: integer("metric3").default(0).notNull(),
   metric3Label: varchar("metric3Label", { length: 50 }).default("Metric 3"),
   // Notes
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type TeamMemberKpi = typeof teamMemberKpis.$inferSelect;
@@ -874,25 +819,25 @@ export type InsertTeamMemberKpi = typeof teamMemberKpis.$inferInsert;
 /**
  * Campaign KPIs - tracks lead gen channel performance
  */
-export const campaignKpis = mysqlTable("campaign_kpis", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  periodId: int("periodId").references(() => kpiPeriods.id).notNull(),
+export const campaignKpis = pgTable("campaign_kpis", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  periodId: integer("periodId").references(() => kpiPeriods.id).notNull(),
   market: varchar("market", { length: 100 }).default("global").notNull(),
   channel: varchar("channel", { length: 100 }).notNull(),
   // Metrics
-  spent: int("spent").default(0).notNull(), // in cents
-  volume: int("volume").default(0).notNull(), // # sent (calls, sms, postcards, etc.)
-  contacts: int("contacts").default(0).notNull(), // # answered/responded (for answer rate/response rate)
-  leads: int("leads").default(0).notNull(),
-  offers: int("offers").default(0).notNull(),
-  contracts: int("contracts").default(0).notNull(),
-  dealsCount: int("dealsCount").default(0).notNull(),
-  revenue: int("revenue").default(0).notNull(), // in cents
+  spent: integer("spent").default(0).notNull(), // in cents
+  volume: integer("volume").default(0).notNull(),
+  contacts: integer("contacts").default(0).notNull(),
+  leads: integer("leads").default(0).notNull(),
+  offers: integer("offers").default(0).notNull(),
+  contracts: integer("contracts").default(0).notNull(),
+  dealsCount: integer("dealsCount").default(0).notNull(),
+  revenue: integer("revenue").default(0).notNull(), // in cents
   // Notes
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type CampaignKpi = typeof campaignKpis.$inferSelect;
@@ -901,33 +846,33 @@ export type InsertCampaignKpi = typeof campaignKpis.$inferInsert;
 /**
  * KPI Deals - tracks individual deals locked up
  */
-export const kpiDeals = mysqlTable("kpi_deals", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  periodId: int("periodId").references(() => kpiPeriods.id),
+export const kpiDeals = pgTable("kpi_deals", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  periodId: integer("periodId").references(() => kpiPeriods.id),
   // Deal info
   propertyAddress: text("propertyAddress").notNull(),
-  // Status: For Sale, Assigned, Funded (dynamic per-tenant)
+  // Status
   inventoryStatus: varchar("inventoryStatus", { length: 50 }).default("for_sale"),
-  // Location: dynamic per-tenant market areas
+  // Location
   location: varchar("location", { length: 100 }),
   // Lead source
   leadSource: varchar("leadSource", { length: 100 }),
-  // Team members: dynamic per-tenant (stored as lowercase name)
+  // Team members
   lmName: varchar("lmName", { length: 100 }),
   amName: varchar("amName", { length: 100 }),
   dmName: varchar("dmName", { length: 100 }),
   // Deal financials
-  revenue: int("revenue").default(0), // in cents
-  assignmentFee: int("assignmentFee").default(0), // in cents
-  profit: int("profit").default(0), // in cents (calculated as revenue - costs)
+  revenue: integer("revenue").default(0), // in cents
+  assignmentFee: integer("assignmentFee").default(0), // in cents
+  profit: integer("profit").default(0), // in cents
   // Dates
   contractDate: timestamp("contractDate"),
   closingDate: timestamp("closingDate"),
   // Notes
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type KpiDeal = typeof kpiDeals.$inferSelect;
@@ -936,21 +881,21 @@ export type InsertKpiDeal = typeof kpiDeals.$inferInsert;
 /**
  * KPI Goals - tracks goals for campaigns and team members
  */
-export const kpiGoals = mysqlTable("kpi_goals", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  periodId: int("periodId").references(() => kpiPeriods.id),
+export const kpiGoals = pgTable("kpi_goals", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+  periodId: integer("periodId").references(() => kpiPeriods.id),
   // Goal type
-  goalType: mysqlEnum("goalType", ["campaign", "team_member"]).notNull(),
+  goalType: text("goalType").notNull(),
   // For campaign goals
   channel: varchar("channel", { length: 100 }),
   // For team member goals
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id),
   // Goal metrics
-  metricName: varchar("metricName", { length: 100 }).notNull(), // e.g., "leads", "deals", "revenue"
-  targetValue: int("targetValue").notNull(),
+  metricName: varchar("metricName", { length: 100 }).notNull(),
+  targetValue: integer("targetValue").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type KpiGoal = typeof kpiGoals.$inferSelect;
@@ -959,18 +904,17 @@ export type InsertKpiGoal = typeof kpiGoals.$inferInsert;
 
 /**
  * Lead Gen Staff - tracks lead gen team members who don't need app access
- * Used for KPI tracking only (Cold Callers, SMS team)
  */
-export const leadGenStaff = mysqlTable("lead_gen_staff", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
+export const leadGenStaff = pgTable("lead_gen_staff", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
   name: varchar("name", { length: 255 }).notNull(),
-  roleType: mysqlEnum("roleType", ["lg_cold_caller", "lg_sms", "am", "lm"]).notNull(),
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
+  roleType: text("roleType").notNull(),
+  isActive: text("isActive").default("true").notNull(),
   startDate: timestamp("startDate").defaultNow(),
   endDate: timestamp("endDate"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type LeadGenStaff = typeof leadGenStaff.$inferSelect;
@@ -980,15 +924,15 @@ export type InsertLeadGenStaff = typeof leadGenStaff.$inferInsert;
 /**
  * KPI Markets - configurable markets for campaign tracking
  */
-export const kpiMarkets = mysqlTable("kpi_markets", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const kpiMarkets = pgTable("kpi_markets", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  zipCodes: json("zipCodes").$type<string[]>().default([]),
+  zipCodes: jsonb("zipCodes").$type<string[]>().default([]),
   isGlobal: boolean("isGlobal").default(false).notNull(),
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
+  isActive: text("isActive").default("true").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type KpiMarket = typeof kpiMarkets.$inferSelect;
@@ -997,33 +941,33 @@ export type InsertKpiMarket = typeof kpiMarkets.$inferInsert;
 /**
  * KPI Channels - configurable lead gen channels for campaign tracking
  */
-export const kpiChannels = mysqlTable("kpi_channels", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const kpiChannels = pgTable("kpi_channels", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   code: varchar("code", { length: 50 }).notNull(), // short code like 'cold_calls', 'sms'
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true").notNull(),
+  isActive: text("isActive").default("true").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type KpiChannel = typeof kpiChannels.$inferSelect;
 export type InsertKpiChannel = typeof kpiChannels.$inferInsert;
 
 /**
- * KPI Sources - configurable lead sources for campaign tracking (replaces channels for KPI page)
+ * KPI Sources - configurable lead sources for campaign tracking
  */
-export const kpiSources = mysqlTable("kpi_sources", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const kpiSources = pgTable("kpi_sources", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   name: varchar("name", { length: 100 }).notNull(),
-  type: mysqlEnum("kpi_source_type", ["outbound", "inbound"]).notNull(),
+  type: text("kpi_source_type").notNull(),
   tracksVolume: boolean("tracksVolume").default(false).notNull(),
   volumeLabel: varchar("volumeLabel", { length: 100 }), // e.g. "Mailers Sent", "Calls Made"
   ghlSourceMapping: varchar("ghlSourceMapping", { length: 255 }), // maps to opportunity.source value
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type KpiSource = typeof kpiSources.$inferSelect;
 export type InsertKpiSource = typeof kpiSources.$inferInsert;
@@ -1031,15 +975,15 @@ export type InsertKpiSource = typeof kpiSources.$inferInsert;
 /**
  * KPI Spend - monthly marketing spend per source × market
  */
-export const kpiSpend = mysqlTable("kpi_spend", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  sourceId: int("sourceId").references(() => kpiSources.id).notNull(),
-  marketId: int("marketId").references(() => kpiMarkets.id).notNull(),
+export const kpiSpend = pgTable("kpi_spend", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  sourceId: integer("sourceId").references(() => kpiSources.id).notNull(),
+  marketId: integer("marketId").references(() => kpiMarkets.id).notNull(),
   month: varchar("month", { length: 7 }).notNull(), // YYYY-MM
-  amount: int("amount").default(0).notNull(), // in cents
+  amount: integer("amount").default(0).notNull(), // in cents
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type KpiSpend = typeof kpiSpend.$inferSelect;
 export type InsertKpiSpend = typeof kpiSpend.$inferInsert;
@@ -1047,15 +991,15 @@ export type InsertKpiSpend = typeof kpiSpend.$inferInsert;
 /**
  * KPI Volume - monthly outbound volume per source × market
  */
-export const kpiVolume = mysqlTable("kpi_volume", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  sourceId: int("sourceId").references(() => kpiSources.id).notNull(),
-  marketId: int("marketId").references(() => kpiMarkets.id).notNull(),
+export const kpiVolume = pgTable("kpi_volume", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  sourceId: integer("sourceId").references(() => kpiSources.id).notNull(),
+  marketId: integer("marketId").references(() => kpiMarkets.id).notNull(),
   month: varchar("month", { length: 7 }).notNull(), // YYYY-MM
-  count: int("count").default(0).notNull(),
+  count: integer("count").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type KpiVolume = typeof kpiVolume.$inferSelect;
 export type InsertKpiVolume = typeof kpiVolume.$inferInsert;
@@ -1066,32 +1010,32 @@ export type InsertKpiVolume = typeof kpiVolume.$inferInsert;
 /**
  * Subscription Plans - defines available pricing tiers
  */
-export const subscriptionPlans = mysqlTable("subscription_plans", {
-  id: int("id").autoincrement().primaryKey(),
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(), // "Starter", "Growth", "Scale"
   code: varchar("code", { length: 50 }).notNull().unique(), // "starter", "growth", "scale"
   description: text("description"),
   // Pricing
-  priceMonthly: int("priceMonthly").notNull(), // in cents (e.g., 19900 = $199)
-  priceYearly: int("priceYearly"), // in cents (optional annual discount)
+  priceMonthly: integer("priceMonthly").notNull(), // in cents (e.g., 19900 = $199)
+  priceYearly: integer("priceYearly"), // in cents (optional annual discount)
   // Trial configuration
-  trialDays: int("trialDays").notNull().default(14),
+  trialDays: integer("trialDays").notNull().default(14),
   // Stripe Price IDs
   stripePriceIdMonthly: varchar("stripePriceIdMonthly", { length: 255 }),
   stripePriceIdYearly: varchar("stripePriceIdYearly", { length: 255 }),
   // Limits
-  maxUsers: int("maxUsers").notNull(), // 3, 10, 999 (unlimited)
-  maxCallsPerMonth: int("maxCallsPerMonth").notNull().default(500), // -1 for unlimited
-  maxCrmIntegrations: int("maxCrmIntegrations").default(1),
+  maxUsers: integer("maxUsers").notNull(), // 3, 10, 999 (unlimited)
+  maxCallsPerMonth: integer("maxCallsPerMonth").notNull().default(500), // -1 for unlimited
+  maxCrmIntegrations: integer("maxCrmIntegrations").default(1),
   // Features (JSON array of feature codes)
   features: text("features"),
   // Display options
-  isPopular: mysqlEnum("isPopular", ["true", "false"]).default("false"),
+  isPopular: text("isPopular").default("false"),
   // Status
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
-  sortOrder: int("sortOrder").default(0),
+  isActive: text("isActive").default("true"),
+  sortOrder: integer("sortOrder").default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
@@ -1102,25 +1046,24 @@ export type InsertSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
 
 /**
  * Pending Invitations - stores invitations for users who haven't signed up yet
- * When a user signs in with a matching email, they're automatically added to the tenant
  */
-export const pendingInvitations = mysqlTable("pending_invitations", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const pendingInvitations = pgTable("pending_invitations", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   email: varchar("email", { length: 320 }).notNull(),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  teamRole: mysqlEnum("teamRole", ["admin", "lead_manager", "acquisition_manager", "lead_generator", "dispo_manager"]).default("lead_manager").notNull(),
+  role: text("role").default("user").notNull(),
+  teamRole: text("teamRole").default("lead_manager").notNull(),
   // Invitation metadata
-  invitedBy: int("invitedBy").references(() => users.id),
+  invitedBy: integer("invitedBy").references(() => users.id),
   inviteToken: varchar("inviteToken", { length: 64 }), // For email invite links
   expiresAt: timestamp("expiresAt"), // Optional expiration
   // Status
-  status: mysqlEnum("status", ["pending", "accepted", "expired", "revoked"]).default("pending").notNull(),
+  status: text("status").default("pending").notNull(),
   acceptedAt: timestamp("acceptedAt"),
-  acceptedByUserId: int("acceptedByUserId").references(() => users.id),
+  acceptedByUserId: integer("acceptedByUserId").references(() => users.id),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type PendingInvitation = typeof pendingInvitations.$inferSelect;
@@ -1131,27 +1074,26 @@ export type InsertPendingInvitation = typeof pendingInvitations.$inferInsert;
 
 /**
  * Outreach History - tracks churn prevention emails sent to tenants
- * Used to prevent duplicate outreach and measure effectiveness
  */
-export const outreachHistory = mysqlTable("outreach_history", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const outreachHistory = pgTable("outreach_history", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   // Email template used
-  templateType: mysqlEnum("templateType", ["7_day", "14_day", "30_day", "custom"]).notNull(),
+  templateType: text("templateType").notNull(),
   // Recipient info
   recipientEmail: varchar("recipientEmail", { length: 320 }).notNull(),
   recipientName: varchar("recipientName", { length: 255 }),
   // Context at time of sending
-  daysInactive: int("daysInactive").notNull(),
+  daysInactive: integer("daysInactive").notNull(),
   lastActivityDate: timestamp("lastActivityDate"),
   // Who sent it
-  sentByUserId: int("sentByUserId").references(() => users.id),
+  sentByUserId: integer("sentByUserId").references(() => users.id),
   sentByName: varchar("sentByName", { length: 255 }),
   // Response tracking
-  emailOpened: mysqlEnum("emailOpened", ["true", "false"]).default("false"),
+  emailOpened: text("emailOpened").default("false"),
   openedAt: timestamp("openedAt"),
   // Re-engagement tracking
-  tenantReactivated: mysqlEnum("tenantReactivated", ["true", "false"]).default("false"),
+  tenantReactivated: text("tenantReactivated").default("false"),
   reactivatedAt: timestamp("reactivatedAt"),
   // Notes
   notes: text("notes"),
@@ -1166,19 +1108,13 @@ export type InsertOutreachHistory = typeof outreachHistory.$inferInsert;
 /**
  * API Usage Tracking - tracks API calls per tenant for rate limiting and analytics
  */
-export const apiUsage = mysqlTable("api_usage", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const apiUsage = pgTable("api_usage", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   // Usage category
-  category: mysqlEnum("category", [
-    "ai_chat",           // AI coach chat requests
-    "ai_insights",       // AI-generated insights
-    "content_generation", // Social media content generation
-    "grading",           // Call grading operations
-    "api_calls",         // General API calls
-  ]).notNull(),
+  category: text("category").notNull(),
   // Usage count for this period
-  count: int("count").default(0).notNull(),
+  count: integer("count").default(0).notNull(),
   // Period tracking (hourly buckets)
   periodStart: timestamp("periodStart").notNull(),
   periodEnd: timestamp("periodEnd").notNull(),
@@ -1192,14 +1128,13 @@ export type InsertApiUsage = typeof apiUsage.$inferInsert;
 
 /**
  * Platform Settings - global settings managed by super admin
- * Includes default trial days and other platform-wide configurations
  */
-export const platformSettings = mysqlTable("platform_settings", {
-  id: int("id").autoincrement().primaryKey(),
+export const platformSettings = pgTable("platform_settings", {
+  id: serial("id").primaryKey(),
   key: varchar("key", { length: 100 }).notNull().unique(),
   value: text("value").notNull(),
   description: text("description"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type PlatformSetting = typeof platformSettings.$inferSelect;
@@ -1208,16 +1143,15 @@ export type InsertPlatformSetting = typeof platformSettings.$inferInsert;
 
 /**
  * Email Sent Tracking - tracks which automated emails have been sent to users
- * Prevents duplicate emails and provides audit trail
  */
-export const emailsSent = mysqlTable("emails_sent", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").references(() => users.id).notNull(),
+export const emailsSent = pgTable("emails_sent", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull(),
   emailId: varchar("emailId", { length: 100 }).notNull(), // e.g., "day1_first_call", "day7_week_recap"
   sentAt: timestamp("sentAt").defaultNow().notNull(),
   // Optional metadata
   loopsEventId: varchar("loopsEventId", { length: 255 }), // Response from Loops API
-  status: mysqlEnum("status", ["sent", "failed", "bounced"]).default("sent"),
+  status: text("status").default("sent"),
 });
 
 export type EmailSent = typeof emailsSent.$inferSelect;
@@ -1226,11 +1160,10 @@ export type InsertEmailSent = typeof emailsSent.$inferInsert;
 
 /**
  * Opportunities - AI-detected leads that need attention
- * Three tiers: missed (red), warning (yellow), possible (green)
  */
-export const opportunities = mysqlTable("opportunities", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const opportunities = pgTable("opportunities", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   contactName: varchar("contactName", { length: 255 }),
   contactPhone: varchar("contactPhone", { length: 50 }),
   propertyAddress: text("propertyAddress"),
@@ -1240,27 +1173,27 @@ export const opportunities = mysqlTable("opportunities", {
   ghlPipelineStageId: varchar("ghlPipelineStageId", { length: 255 }),
   ghlPipelineStageName: varchar("ghlPipelineStageName", { length: 255 }),
   // Detection
-  tier: mysqlEnum("tier", ["missed", "warning", "possible"]).notNull(),
-  priorityScore: int("priorityScore").notNull().default(0),
-  triggerRules: json("triggerRules").$type<string[]>().notNull(),
+  tier: text("tier").notNull(),
+  priorityScore: integer("priorityScore").notNull().default(0),
+  triggerRules: jsonb("triggerRules").$type<string[]>().notNull(),
   reason: text("reason").notNull(),
   suggestion: text("suggestion").notNull(),
-  detectionSource: mysqlEnum("detectionSource", ["pipeline", "conversation", "transcript", "hybrid", "call_grade", "system"]).notNull().default("pipeline"),
-  relatedCallId: int("relatedCallId").references(() => calls.id),
-  teamMemberId: int("teamMemberId").references(() => teamMembers.id),
+  detectionSource: text("detectionSource").notNull().default("pipeline"),
+  relatedCallId: integer("relatedCallId").references(() => calls.id),
+  teamMemberId: integer("teamMemberId").references(() => teamMembers.id),
   teamMemberName: varchar("teamMemberName", { length: 255 }),
   assignedTo: varchar("assignedTo", { length: 255 }),
-  status: mysqlEnum("status", ["active", "handled", "dismissed"]).notNull().default("active"),
-  dismissReason: mysqlEnum("dismissReason", ["false_positive", "not_a_deal", "already_handled", "duplicate", "other"]),
+  status: text("status").notNull().default("active"),
+  dismissReason: text("dismissReason"),
   dismissNote: text("dismissNote"),
-  resolvedBy: int("resolvedBy").references(() => users.id),
+  resolvedBy: integer("resolvedBy").references(() => users.id),
   resolvedAt: timestamp("resolvedAt"),
-  // Specific missed items (phrases, questions, techniques the rep should have used)
-  missedItems: json("missedItems").$type<string[]>(),
+  // Specific missed items
+  missedItems: jsonb("missedItems").$type<string[]>(),
   // Price data extracted from transcripts
-  ourOffer: int("ourOffer"),
-  sellerAsk: int("sellerAsk"),
-  priceGap: int("priceGap"),
+  ourOffer: integer("ourOffer"),
+  sellerAsk: integer("sellerAsk"),
+  priceGap: integer("priceGap"),
   lastActivityAt: timestamp("lastActivityAt"),
   lastStageChangeAt: timestamp("lastStageChangeAt"),
   flaggedAt: timestamp("flaggedAt").defaultNow().notNull(),
@@ -1272,28 +1205,20 @@ export type InsertOpportunity = typeof opportunities.$inferInsert;
 /**
  * Coach Action Log - audit trail for AI Coach GHL actions
  */
-export const coachActionLog = mysqlTable("coach_action_log", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  requestedBy: int("requestedBy").references(() => users.id).notNull(),
+export const coachActionLog = pgTable("coach_action_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  requestedBy: integer("requestedBy").references(() => users.id).notNull(),
   requestedByName: varchar("requestedByName", { length: 255 }),
-  actionType: mysqlEnum("actionType", [
-    "add_note", "add_note_contact", "add_note_opportunity", "change_pipeline_stage",
-    "send_sms", "create_task", "add_tag", "remove_tag", "update_field",
-    "add_to_workflow", "remove_from_workflow", "update_task", "check_off_task", "create_appointment",
-    "update_appointment", "cancel_appointment",
-    "update_property_price", "update_property_status", "add_property_offer",
-    "schedule_property_showing", "record_property_send", "add_property_note", "bulk_send_buyers",
-    "record_buyer_response"
-  ]).notNull(),
+  actionType: text("actionType").notNull(),
   requestText: text("requestText").notNull(),
   targetContactId: varchar("targetContactId", { length: 255 }),
   targetContactName: varchar("targetContactName", { length: 255 }),
   targetOpportunityId: varchar("targetOpportunityId", { length: 255 }),
-  payload: json("payload"),
-  status: mysqlEnum("status", ["pending", "confirmed", "executed", "failed", "cancelled"]).notNull().default("pending"),
+  payload: jsonb("payload"),
+  status: text("status").notNull().default("pending"),
   error: text("error"),
-  resultMeta: json("resultMeta"), // Stores execution metadata (e.g., SMS messageId, sender info)
+  resultMeta: jsonb("resultMeta"), // Stores execution metadata
   confirmedAt: timestamp("confirmedAt"),
   executedAt: timestamp("executedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1303,75 +1228,59 @@ export type InsertCoachActionLog = typeof coachActionLog.$inferInsert;
 
 /**
  * Coach Action Edits - captures before/after for every confirmed action.
- * "before" = the AI-generated draft, "after" = what the user actually sent.
- * wasEdited=false means the user accepted as-is (positive signal).
  */
-export const coachActionEdits = mysqlTable("coach_action_edits", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  userId: int("userId").references(() => users.id).notNull(),
-  actionLogId: int("actionLogId").references(() => coachActionLog.id).notNull(),
+export const coachActionEdits = pgTable("coach_action_edits", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  userId: integer("userId").references(() => users.id).notNull(),
+  actionLogId: integer("actionLogId").references(() => coachActionLog.id).notNull(),
   // What kind of content this is
-  category: mysqlEnum("category", [
-    "sms",       // SMS message text
-    "note",      // Contact/opportunity note body
-    "task",      // Task title + description
-  ]).notNull(),
+  category: text("category").notNull(),
   // The AI-generated draft
   draftContent: text("draftContent").notNull(),
-  // What the user actually confirmed (may be identical to draft)
+  // What the user actually confirmed
   finalContent: text("finalContent").notNull(),
   // Did the user change anything?
-  wasEdited: mysqlEnum("wasEdited", ["true", "false"]).default("false").notNull(),
+  wasEdited: text("wasEdited").default("false").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type CoachActionEdit = typeof coachActionEdits.$inferSelect;
 export type InsertCoachActionEdit = typeof coachActionEdits.$inferInsert;
 
 /**
- * AI Coach Preferences - per-user (or per-tenant team-wide) style profiles.
- * Built by aggregating coach_action_edits patterns.
- * One row per user+category. userId=NULL means team-wide default.
+ * AI Coach Preferences - per-user style profiles.
  */
-export const aiCoachPreferences = mysqlTable("ai_coach_preferences", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const aiCoachPreferences = pgTable("ai_coach_preferences", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   // NULL userId = team-wide default profile
-  userId: int("userId").references(() => users.id),
+  userId: integer("userId").references(() => users.id),
   // Category of preference (one row per category per user)
-  category: mysqlEnum("pref_category", [
-    "sms_style",         // How they write SMS messages
-    "note_style",        // How they write contact/opportunity notes
-    "task_style",        // How they name and describe tasks
-  ]).notNull(),
+  category: text("pref_category").notNull(),
   // LLM-generated summary of the user's style
-  // e.g. "Prefers shorter SMS. Always removes exclamation marks. Adds property address to task titles."
   styleSummary: text("styleSummary").notNull(),
   // JSON array of up to 5 recent final-content examples for few-shot prompting
   recentExamples: text("recentExamples"),
   // How many edits contributed to this preference
-  sampleCount: int("sampleCount").default(0).notNull(),
+  sampleCount: integer("sampleCount").default(0).notNull(),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type AiCoachPreference = typeof aiCoachPreferences.$inferSelect;
 export type InsertAiCoachPreference = typeof aiCoachPreferences.$inferInsert;
 
 /**
  * AI Coach Messages - persists Q&A exchanges for conversation memory.
- * The UI always starts fresh, but the coach uses recent past messages
- * as context to provide better coaching continuity.
- * Each row is one message (user question or assistant answer).
  */
-export const coachMessages = mysqlTable("coach_messages", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  userId: int("userId").references(() => users.id).notNull(),
+export const coachMessages = pgTable("coach_messages", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  userId: integer("userId").references(() => users.id).notNull(),
   // "user" for questions, "assistant" for answers
-  role: mysqlEnum("coach_msg_role", ["user", "assistant"]).notNull(),
+  role: text("coach_msg_role").notNull(),
   content: text("content").notNull(),
-  // Optional: link messages in the same exchange (question + answer share same exchangeId)
+  // Optional: link messages in the same exchange
   exchangeId: varchar("exchangeId", { length: 36 }).notNull(),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1381,24 +1290,18 @@ export type InsertCoachMessage = typeof coachMessages.$inferInsert;
 
 /**
  * User Instructions - Persistent explicit preferences/instructions from users.
- * When a user tells the AI Coach something like "always use sales process pipeline"
- * or "reply in bullet points" or "use professional tone", it's stored here permanently
- * and injected into every AI Coach prompt for that user.
- * 
- * These are per-user (not per-tenant) and persist across sessions/logins forever.
- * Users can view, update, or delete their instructions.
  */
-export const userInstructions = mysqlTable("user_instructions", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").references(() => users.id).notNull(),
+export const userInstructions = pgTable("user_instructions", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull(),
   // The raw instruction text as the user stated it
   instruction: text("instruction").notNull(),
-  // Category for grouping/display: general, pipeline, tone, format, assignment, etc.
+  // Category for grouping/display
   category: varchar("category", { length: 50 }).notNull().default("general"),
   // Whether this instruction is currently active
   isActive: varchar("isActive", { length: 5 }).notNull().default("true"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type UserInstruction = typeof userInstructions.$inferSelect;
 export type InsertUserInstruction = typeof userInstructions.$inferInsert;
@@ -1408,24 +1311,22 @@ export type InsertUserInstruction = typeof userInstructions.$inferInsert;
 
 /**
  * Stores AI-generated next steps for each graded call.
- * Auto-generated after grading completes so they're ready when the user opens the call.
- * Each row is one suggested action.
  */
-export const callNextSteps = mysqlTable("call_next_steps", {
-  id: int("id").autoincrement().primaryKey(),
-  callId: int("callId").references(() => calls.id).notNull(),
-  tenantId: int("tenantId").references(() => tenants.id),
+export const callNextSteps = pgTable("call_next_steps", {
+  id: serial("id").primaryKey(),
+  callId: integer("callId").references(() => calls.id).notNull(),
+  tenantId: integer("tenantId").references(() => tenants.id),
   // Action details
   actionType: varchar("actionType", { length: 50 }).notNull(),
   reason: text("reason").notNull(),
   suggested: varchar("suggested", { length: 5 }).notNull().default("true"),
-  payload: json("payload").$type<Record<string, any>>().notNull(),
+  payload: jsonb("payload").$type<Record<string, any>>().notNull(),
   // Status tracking
-  status: mysqlEnum("status", ["pending", "pushed", "skipped", "failed"]).default("pending"),
+  status: text("status").default("pending"),
   result: text("result"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type CallNextStep = typeof callNextSteps.$inferSelect;
 export type InsertCallNextStep = typeof callNextSteps.$inferInsert;
@@ -1435,20 +1336,19 @@ export type InsertCallNextStep = typeof callNextSteps.$inferInsert;
 
 /**
  * Tracks all incoming webhook events for health monitoring.
- * Used to show webhook status (active/inactive), events/hour, and last event received.
  */
-export const webhookEvents = mysqlTable("webhook_events", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id),
+export const webhookEvents = pgTable("webhook_events", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id),
   // Source CRM provider
-  provider: varchar("provider", { length: 50 }).notNull(), // 'ghl', 'hubspot', etc.
+  provider: varchar("provider", { length: 50 }).notNull(),
   // GHL location ID for routing
   locationId: varchar("locationId", { length: 255 }),
   // Event details
-  eventType: varchar("eventType", { length: 100 }).notNull(), // e.g., 'InboundMessage', 'OpportunityCreate'
-  eventId: varchar("eventId", { length: 255 }), // External event ID for dedup
+  eventType: varchar("eventType", { length: 100 }).notNull(),
+  eventId: varchar("eventId", { length: 255 }),
   // Processing result
-  status: mysqlEnum("status", ["received", "processed", "skipped", "failed"]).default("received").notNull(),
+  status: text("status").default("received").notNull(),
   errorMessage: text("errorMessage"),
   // Timing
   processedAt: timestamp("processedAt"),
@@ -1461,37 +1361,35 @@ export type InsertWebhookEvent = typeof webhookEvents.$inferInsert;
 
 /**
  * Local cache of CRM contacts to reduce API calls.
- * Populated via webhooks (ContactCreate/ContactUpdate) and initial sync.
- * Used by searchContacts to avoid GHL API calls for known contacts.
  */
-export const contactCache = mysqlTable("contact_cache", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const contactCache = pgTable("contact_cache", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   // CRM identifiers
   ghlContactId: varchar("ghlContactId", { length: 255 }).notNull(),
   ghlLocationId: varchar("ghlLocationId", { length: 255 }),
-  // Contact info (minimal — full details fetched on demand from GHL)
-  name: varchar("name", { length: 512 }), // Full name for search/display
-  phone: varchar("phone", { length: 50 }), // For quick search and call matching
-  // Pipeline & classification data (from GHL opportunities + tags)
-  currentStage: varchar("currentStage", { length: 100 }), // e.g. "New Lead", "Under Contract", "Closed"
-  source: varchar("source", { length: 100 }), // Normalized lead source e.g. "PropertyLeads", "BatchDialer"
-  market: varchar("market", { length: 100 }), // e.g. "Nashville", "Chattanooga"
-  buyBoxType: varchar("buyBoxType", { length: 100 }), // e.g. "House", "Lot", "Land", "Multifamily"
-  ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }), // Link to the opportunity in the pipeline
-  // Buyer-specific fields (from GHL custom fields)
-  buyerTier: varchar("buyerTier", { length: 50 }), // Priority, Qualified, JV Partner, Unqualified, Halted
-  responseSpeed: varchar("responseSpeed", { length: 50 }), // Lightning, Same Day, Slow, Ghost
-  verifiedFunding: varchar("verifiedFunding", { length: 10 }), // true/false
-  hasPurchasedBefore: varchar("hasPurchasedBefore", { length: 10 }), // true/false
-  secondaryMarket: varchar("secondaryMarket", { length: 255 }), // Backup market text field
-  buyerNotes: text("buyerNotes"), // Buyer notes from GHL
-  lastContactDate: timestamp("lastContactDate"), // Last contact date from GHL
-  email: varchar("email", { length: 255 }), // Buyer email for display
+  // Contact info
+  name: varchar("name", { length: 512 }),
+  phone: varchar("phone", { length: 50 }),
+  // Pipeline & classification data
+  currentStage: varchar("currentStage", { length: 100 }),
+  source: varchar("source", { length: 100 }),
+  market: varchar("market", { length: 100 }),
+  buyBoxType: varchar("buyBoxType", { length: 100 }),
+  ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }),
+  // Buyer-specific fields
+  buyerTier: varchar("buyerTier", { length: 50 }),
+  responseSpeed: varchar("responseSpeed", { length: 50 }),
+  verifiedFunding: varchar("verifiedFunding", { length: 10 }),
+  hasPurchasedBefore: varchar("hasPurchasedBefore", { length: 10 }),
+  secondaryMarket: varchar("secondaryMarket", { length: 255 }),
+  buyerNotes: text("buyerNotes"),
+  lastContactDate: timestamp("lastContactDate"),
+  email: varchar("email", { length: 255 }),
   // Sync metadata
   lastSyncedAt: timestamp("lastSyncedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type ContactCacheEntry = typeof contactCache.$inferSelect;
 export type InsertContactCacheEntry = typeof contactCache.$inferInsert;
@@ -1500,15 +1398,10 @@ export type InsertContactCacheEntry = typeof contactCache.$inferInsert;
 
 /**
  * Stores OAuth 2.0 tokens for GHL Marketplace App integration.
- * Each tenant gets one token set per GHL location (sub-account).
- * Tokens are automatically refreshed before expiry.
- * 
- * This replaces the manual API key model for tenants using the Marketplace app.
- * Tenants using legacy API keys continue to work via crmConfig.ghlApiKey.
  */
-export const ghlOAuthTokens = mysqlTable("ghl_oauth_tokens", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const ghlOAuthTokens = pgTable("ghl_oauth_tokens", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   // GHL identifiers from token response
   locationId: varchar("locationId", { length: 255 }).notNull(),
   companyId: varchar("companyId", { length: 255 }),
@@ -1517,16 +1410,16 @@ export const ghlOAuthTokens = mysqlTable("ghl_oauth_tokens", {
   accessToken: text("accessToken").notNull(),
   refreshToken: text("refreshToken").notNull(),
   // Token metadata
-  expiresAt: timestamp("expiresAt").notNull(), // When the access token expires
-  scopes: text("scopes"), // Space-separated list of granted scopes
-  userType: varchar("userType", { length: 50 }).default("Location"), // 'Location' or 'Company'
+  expiresAt: timestamp("expiresAt").notNull(),
+  scopes: text("scopes"),
+  userType: varchar("userType", { length: 50 }).default("Location"),
   // Status
-  isActive: mysqlEnum("isActive", ["true", "false"]).default("true"),
+  isActive: text("isActive").default("true"),
   lastRefreshedAt: timestamp("lastRefreshedAt"),
-  lastError: text("lastError"), // Last refresh error message for debugging
+  lastError: text("lastError"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type GhlOAuthToken = typeof ghlOAuthTokens.$inferSelect;
 export type InsertGhlOAuthToken = typeof ghlOAuthTokens.$inferInsert;
@@ -1534,22 +1427,22 @@ export type InsertGhlOAuthToken = typeof ghlOAuthTokens.$inferInsert;
 
 // ============ DAILY KPI ENTRIES (Manual tracking for Day Hub) ============
 
-export const dailyKpiEntries = mysqlTable("daily_kpi_entries", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
-  userId: int("userId").notNull(),
+export const dailyKpiEntries = pgTable("daily_kpi_entries", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").notNull(),
+  userId: integer("userId").notNull(),
   date: varchar("entryDate", { length: 10 }).notNull(), // YYYY-MM-DD (column is entryDate in DB)
-  kpiType: mysqlEnum("kpiType", ["call", "conversation", "appointment", "offer", "contract"]).notNull(),
+  kpiType: text("kpiType").notNull(),
   contactId: varchar("contactId", { length: 255 }),
   contactName: varchar("contactName", { length: 255 }),
   propertyAddress: text("propertyAddress"),
-  propertyId: int("propertyId"), // FK to dispo_properties
-  teamMemberId: int("teamMemberId"), // FK to team_members
+  propertyId: integer("propertyId"), // FK to dispo_properties
+  teamMemberId: integer("teamMemberId"), // FK to team_members
   notes: text("notes"),
   ghlReferenceId: varchar("ghlReferenceId", { length: 255 }),
-  source: mysqlEnum("kpi_source", ["auto", "manual"]).default("manual").notNull(),
-  detectionType: mysqlEnum("detectionType", ["auto", "manual", "am_direct"]).default("manual"),
-  sourceCallId: int("sourceCallId"), // the call that triggered this entry
+  source: text("kpi_source").default("manual").notNull(),
+  detectionType: text("detectionType").default("manual"),
+  sourceCallId: integer("sourceCallId"), // the call that triggered this entry
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type DailyKpiEntry = typeof dailyKpiEntries.$inferSelect;
@@ -1557,92 +1450,91 @@ export type InsertDailyKpiEntry = typeof dailyKpiEntries.$inferInsert;
 
 
 // ============ PROPERTIES (Full Pipeline Inventory) ============
-export const dispoProperties = mysqlTable("dispo_properties", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
+export const dispoProperties = pgTable("dispo_properties", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
   // Property Details
   address: varchar("address", { length: 500 }).notNull(),
   city: varchar("city", { length: 100 }).notNull(),
   state: varchar("state", { length: 50 }).notNull(),
   zip: varchar("zip", { length: 20 }).notNull(),
-  propertyType: mysqlEnum("propertyType", ["house", "lot", "land", "multi_family", "commercial", "other", "flipper", "landlord", "builder", "turn_key", "wholesale"]).default("house").notNull(),
-  beds: int("beds"),
+  propertyType: text("propertyType").default("house").notNull(),
+  beds: integer("beds"),
   baths: varchar("baths", { length: 10 }), // e.g. "2.5"
-  sqft: int("sqft"),
-  yearBuilt: int("yearBuilt"),
+  sqft: integer("sqft"),
+  yearBuilt: integer("yearBuilt"),
   // Financials
-  contractPrice: int("contractPrice"), // in cents
-  askingPrice: int("askingPrice"), // in cents — what we're asking buyers
-  assignmentFee: int("assignmentFee"), // in cents — target assignment fee
-  arv: int("arv"), // in cents — after repair value
-  estRepairs: int("estRepairs"), // in cents — estimated repairs
+  contractPrice: integer("contractPrice"), // in cents
+  askingPrice: integer("askingPrice"), // in cents
+  assignmentFee: integer("assignmentFee"), // in cents
+  arv: integer("arv"), // in cents — after repair value
+  estRepairs: integer("estRepairs"), // in cents — estimated repairs
   // Access & Status
   lockboxCode: varchar("lockboxCode", { length: 50 }),
-  occupancyStatus: mysqlEnum("occupancyStatus", ["vacant", "occupied", "tenant", "unknown"]).default("unknown"),
-  // Deal Pipeline Status — expanded to cover full funnel
-  // Stages: lead → apt_set → offer_made → under_contract → marketing → buyer_negotiating → closing → closed → follow_up → dead
+  occupancyStatus: text("occupancyStatus").default("unknown"),
+  // Deal Pipeline Status
   status: varchar("status", { length: 50 }).default("lead").notNull(),
   // Media & Notes
-  mediaLink: text("mediaLink"), // Google Drive or other link to photos/video
-  description: text("description"), // Property description / notes
-  notes: text("notes"), // Internal notes (e.g. "Seller is sensitive")
+  mediaLink: text("mediaLink"),
+  description: text("description"),
+  notes: text("notes"),
   // Tracking
-  addedByUserId: int("addedByUserId").references(() => users.id),
-  assignedToUserId: int("assignedToUserId").references(() => users.id), // Dispo manager assigned
-  ghlContactId: varchar("ghlContactId", { length: 255 }), // Link to GHL contact (seller)
+  addedByUserId: integer("addedByUserId").references(() => users.id),
+  assignedToUserId: integer("assignedToUserId").references(() => users.id),
+  ghlContactId: varchar("ghlContactId", { length: 255 }),
   sellerName: varchar("sellerName", { length: 255 }),
   sellerPhone: varchar("sellerPhone", { length: 50 }),
   // Acquisition-stage fields
-  leadSource: varchar("leadSource", { length: 100 }), // direct_mail, cold_call, driving_for_dollars, referral, ppc, seo
-  leadSourceDetail: varchar("leadSourceDetail", { length: 255 }), // specific campaign name or list name
-  assignedAmUserId: int("assignedAmUserId").references(() => users.id), // Acquisition Manager working this deal
-  assignedLmUserId: int("assignedLmUserId").references(() => users.id), // Lead Manager who sourced it
-  // Offer tracking (acquisition side)
-  ourOfferAmount: int("ourOfferAmount"), // in cents — what AM offered the seller
-  acceptedOffer: int("acceptedOffer"), // in cents — final accepted offer amount (for spread calc)
+  leadSource: varchar("leadSource", { length: 100 }),
+  leadSourceDetail: varchar("leadSourceDetail", { length: 255 }),
+  assignedAmUserId: integer("assignedAmUserId").references(() => users.id),
+  assignedLmUserId: integer("assignedLmUserId").references(() => users.id),
+  // Offer tracking
+  ourOfferAmount: integer("ourOfferAmount"), // in cents
+  acceptedOffer: integer("acceptedOffer"), // in cents
   offerDate: timestamp("offerDate"),
-  counterOfferAmount: int("counterOfferAmount"), // in cents — seller's counter
+  counterOfferAmount: integer("counterOfferAmount"), // in cents
   contractDate: timestamp("contractDate"),
   // Closing details
-  closingDate: timestamp("closingDate"), // scheduled closing date
-  actualCloseDate: timestamp("actualCloseDate"), // actual close date
-  assignmentAmount: int("assignmentAmount"), // in cents — actual assignment fee received
-  buyerGhlContactId: varchar("buyerGhlContactId", { length: 255 }), // GHL contact ID of the buyer
+  closingDate: timestamp("closingDate"),
+  actualCloseDate: timestamp("actualCloseDate"),
+  assignmentAmount: integer("assignmentAmount"), // in cents
+  buyerGhlContactId: varchar("buyerGhlContactId", { length: 255 }),
   buyerName: varchar("buyerName", { length: 255 }),
   buyerCompany: varchar("buyerCompany", { length: 255 }),
-  expectedCloseDate: timestamp("expectedCloseDate"), // enables "Closing This Week" widget
+  expectedCloseDate: timestamp("expectedCloseDate"),
   // Pipeline metadata
-  stageChangedAt: timestamp("stageChangedAt"), // last time status changed
-  // Milestone flags — set to TRUE when property hits that stage, NEVER reset to FALSE
+  stageChangedAt: timestamp("stageChangedAt"),
+  // Milestone flags
   aptEverSet: boolean("aptEverSet").default(false),
   offerEverMade: boolean("offerEverMade").default(false),
   everUnderContract: boolean("everUnderContract").default(false),
   everClosed: boolean("everClosed").default(false),
   // GHL Opportunity tracking
-  ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }), // GHL opportunity ID for webhook linking
+  ghlOpportunityId: varchar("ghlOpportunityId", { length: 255 }),
   ghlPipelineId: varchar("ghlPipelineId", { length: 255 }),
   ghlPipelineStageId: varchar("ghlPipelineStageId", { length: 255 }),
   // KPI Market & Source references
-  marketId: int("marketId"), // FK to kpi_markets
-  sourceId: int("sourceId"), // FK to kpi_sources
-  // Stage timestamps (for KPI period counting)
-  contactedAt: timestamp("contactedAt"), // first time property left lead stages
-  aptSetAt: timestamp("aptSetAt"), // first time reached apt stage
-  offerMadeAt: timestamp("offerMadeAt"), // first time offer was made
+  marketId: integer("marketId"),
+  sourceId: integer("sourceId"),
+  // Stage timestamps
+  contactedAt: timestamp("contactedAt"),
+  aptSetAt: timestamp("aptSetAt"),
+  offerMadeAt: timestamp("offerMadeAt"),
   underContractAt: timestamp("underContractAt"),
-  closedAt: timestamp("closedAt"), // Purchased/SOLD
+  closedAt: timestamp("closedAt"),
   // Market & Extra Details
-  market: varchar("market", { length: 100 }), // e.g. "Nashville", "Chattanooga"
-  lotSize: varchar("lotSize", { length: 50 }), // e.g. "0.25 acres"
+  market: varchar("market", { length: 100 }),
+  lotSize: varchar("lotSize", { length: 50 }),
   photos: text("photos"), // JSON array of photo URLs
-  dispoAskingPrice: int("dispoAskingPrice"), // in cents — dispo-specific asking price (may differ from askingPrice)
+  dispoAskingPrice: integer("dispoAskingPrice"), // in cents
   // Opportunity & Project Details
-  opportunitySource: varchar("opportunitySource", { length: 255 }), // Source from GHL opportunity (e.g. "Cold Call", "Direct Mail")
-  projectType: varchar("projectType", { length: 255 }), // multi-select: flipper, landlord, builder, multi_family, turn_key
-  lastContactedAt: timestamp("lastContactedAt"), // auto-updated on any send action
-  lastConversationAt: timestamp("lastConversationAt"), // auto-updated on confirmed two-way exchange
-  // AI Property Research (auto-fetched from Zillow, county records, etc.)
-  propertyResearch: json("property_research").$type<{
+  opportunitySource: varchar("opportunitySource", { length: 255 }),
+  projectType: varchar("projectType", { length: 255 }),
+  lastContactedAt: timestamp("lastContactedAt"),
+  lastConversationAt: timestamp("lastConversationAt"),
+  // AI Property Research
+  propertyResearch: jsonb("property_research").$type<{
     zestimate?: number;
     taxAssessment?: number;
     taxAmount?: number;
@@ -1659,10 +1551,10 @@ export const dispoProperties = mysqlTable("dispo_properties", {
   }>(),
   researchUpdatedAt: timestamp("research_updated_at"),
   // Timestamps
-  marketedAt: timestamp("marketedAt"), // When first blast was sent
+  marketedAt: timestamp("marketedAt"),
   soldAt: timestamp("soldAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ([
   uniqueIndex("uniq_tenant_address").on(table.tenantId, table.address),
 ]));
@@ -1674,14 +1566,14 @@ export type Property = DispoProperty;
 export type InsertProperty = InsertDispoProperty;
 
 // ============ PROPERTY STAGE HISTORY (Track all stage transitions) ============
-export const propertyStageHistory = mysqlTable("property_stage_history", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+export const propertyStageHistory = pgTable("property_stage_history", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  propertyId: integer("propertyId").references(() => dispoProperties.id).notNull(),
   fromStatus: varchar("fromStatus", { length: 50 }), // null for initial creation
   toStatus: varchar("toStatus", { length: 50 }).notNull(),
-  changedByUserId: int("changedByUserId").references(() => users.id),
-  source: varchar("source", { length: 50 }).default("manual"), // manual, webhook, system
+  changedByUserId: integer("changedByUserId").references(() => users.id),
+  source: varchar("source", { length: 50 }).default("manual"),
   notes: text("notes"),
   changedAt: timestamp("changedAt").defaultNow().notNull(),
 });
@@ -1689,16 +1581,16 @@ export type PropertyStageHistory = typeof propertyStageHistory.$inferSelect;
 export type InsertPropertyStageHistory = typeof propertyStageHistory.$inferInsert;
 
 // ============ DISPO PROPERTY SENDS (Tracking blasts/sends per property) ============
-export const dispoPropertySends = mysqlTable("dispo_property_sends", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+export const dispoPropertySends = pgTable("dispo_property_sends", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  propertyId: integer("propertyId").references(() => dispoProperties.id).notNull(),
   // Send details
-  channel: mysqlEnum("channel", ["sms", "email", "facebook", "investor_base", "other"]).notNull(),
-  buyerGroup: varchar("buyerGroup", { length: 255 }), // e.g. "Nashville Buyers", "Chattanooga Buyers"
-  recipientCount: int("recipientCount").default(0), // How many buyers received it
+  channel: text("channel").notNull(),
+  buyerGroup: varchar("buyerGroup", { length: 255 }),
+  recipientCount: integer("recipientCount").default(0),
   notes: text("notes"),
-  sentByUserId: int("sentByUserId").references(() => users.id),
+  sentByUserId: integer("sentByUserId").references(() => users.id),
   sentAt: timestamp("sentAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -1706,34 +1598,34 @@ export type DispoPropertySend = typeof dispoPropertySends.$inferSelect;
 export type InsertDispoPropertySend = typeof dispoPropertySends.$inferInsert;
 
 // ============ DISPO PROPERTY OFFERS (Buyer offers on properties) ============
-export const dispoPropertyOffers = mysqlTable("dispo_property_offers", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+export const dispoPropertyOffers = pgTable("dispo_property_offers", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  propertyId: integer("propertyId").references(() => dispoProperties.id).notNull(),
   // Buyer info
   buyerName: varchar("buyerName", { length: 255 }).notNull(),
   buyerPhone: varchar("buyerPhone", { length: 50 }),
   buyerEmail: varchar("buyerEmail", { length: 255 }),
   buyerCompany: varchar("buyerCompany", { length: 255 }),
-  ghlContactId: varchar("ghlContactId", { length: 255 }), // Link to GHL buyer contact
+  ghlContactId: varchar("ghlContactId", { length: 255 }),
   // Offer details
-  offerAmount: int("offerAmount").notNull(), // in cents
-  status: mysqlEnum("status", ["pending", "accepted", "rejected", "countered", "expired"]).default("pending").notNull(),
+  offerAmount: integer("offerAmount").notNull(), // in cents
+  status: text("status").default("pending").notNull(),
   notes: text("notes"),
   // Timestamps
   offeredAt: timestamp("offeredAt").defaultNow().notNull(),
   respondedAt: timestamp("respondedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type DispoPropertyOffer = typeof dispoPropertyOffers.$inferSelect;
 export type InsertDispoPropertyOffer = typeof dispoPropertyOffers.$inferInsert;
 
 // ============ DISPO PROPERTY SHOWINGS (Showing appointments) ============
-export const dispoPropertyShowings = mysqlTable("dispo_property_showings", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+export const dispoPropertyShowings = pgTable("dispo_property_showings", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  propertyId: integer("propertyId").references(() => dispoProperties.id).notNull(),
   // Buyer info
   buyerName: varchar("buyerName", { length: 255 }).notNull(),
   buyerPhone: varchar("buyerPhone", { length: 50 }),
@@ -1742,81 +1634,76 @@ export const dispoPropertyShowings = mysqlTable("dispo_property_showings", {
   // Showing details
   showingDate: varchar("showingDate", { length: 10 }).notNull(), // YYYY-MM-DD
   showingTime: varchar("showingTime", { length: 10 }), // HH:MM (24h)
-  status: mysqlEnum("status", ["scheduled", "completed", "cancelled", "no_show"]).default("scheduled").notNull(),
-  feedback: text("feedback"), // Buyer feedback after showing
-  interestLevel: mysqlEnum("interestLevel", ["hot", "warm", "cold", "none"]),
+  status: text("status").default("scheduled").notNull(),
+  feedback: text("feedback"),
+  interestLevel: text("interestLevel"),
   notes: text("notes"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type DispoPropertyShowing = typeof dispoPropertyShowings.$inferSelect;
 export type InsertDispoPropertyShowing = typeof dispoPropertyShowings.$inferInsert;
 
-// ============ PROPERTY BUYER ACTIVITY (Buyer matching, sends, offers per buyer per property) ============
-export const propertyBuyerActivity = mysqlTable("property_buyer_activity", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
-  // Buyer info (from GHL contact or manual)
+// ============ PROPERTY BUYER ACTIVITY ============
+export const propertyBuyerActivity = pgTable("property_buyer_activity", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  propertyId: integer("propertyId").references(() => dispoProperties.id).notNull(),
+  // Buyer info
   buyerName: varchar("buyerName", { length: 255 }).notNull(),
   buyerPhone: varchar("buyerPhone", { length: 50 }),
   buyerEmail: varchar("buyerEmail", { length: 255 }),
   buyerCompany: varchar("buyerCompany", { length: 255 }),
   ghlContactId: varchar("ghlContactId", { length: 255 }),
-  // Buyer preferences (from GHL custom fields or manual)
-  buyerMarkets: text("buyerMarkets"), // JSON array of markets buyer is interested in
-  buyerBudgetMin: int("buyerBudgetMin"), // in cents
-  buyerBudgetMax: int("buyerBudgetMax"), // in cents
-  buyerPropertyTypes: text("buyerPropertyTypes"), // JSON array: ["house", "lot", "land"]
-  buyerStrategy: varchar("buyerStrategy", { length: 100 }), // flip, rental, wholesale, etc.
-  isVip: mysqlEnum("isVip", ["true", "false"]).default("false"),
-  buyerTier: mysqlEnum("buyerTier", ["priority", "qualified", "jv_partner", "unqualified", "halted"]).default("qualified"),
+  // Buyer preferences
+  buyerMarkets: text("buyerMarkets"), // JSON array of markets
+  buyerBudgetMin: integer("buyerBudgetMin"), // in cents
+  buyerBudgetMax: integer("buyerBudgetMax"), // in cents
+  buyerPropertyTypes: text("buyerPropertyTypes"), // JSON array
+  buyerStrategy: varchar("buyerStrategy", { length: 100 }),
+  isVip: text("isVip").default("false"),
+  buyerTier: text("buyerTier").default("qualified"),
   // Activity tracking per buyer per property
-  sendCount: int("sendCount").default(0).notNull(),
+  sendCount: integer("sendCount").default(0).notNull(),
   lastSentAt: timestamp("lastSentAt"),
-  lastSentChannel: varchar("lastSentChannel", { length: 50 }), // sms, email, etc.
-  offerCount: int("offerCount").default(0).notNull(),
-  lastOfferAmount: int("lastOfferAmount"), // in cents
+  lastSentChannel: varchar("lastSentChannel", { length: 50 }),
+  offerCount: integer("offerCount").default(0).notNull(),
+  lastOfferAmount: integer("lastOfferAmount"), // in cents
   lastOfferAt: timestamp("lastOfferAt"),
   // Response tracking
-  responseCount: int("responseCount").default(0).notNull(),
+  responseCount: integer("responseCount").default(0).notNull(),
   lastResponseAt: timestamp("lastResponseAt"),
   lastResponseNote: text("lastResponseNote"),
   // Status for this buyer on this property
-  status: mysqlEnum("buyerStatus", ["matched", "sent", "interested", "offered", "passed", "accepted", "skipped"]).default("matched").notNull(),
+  status: text("buyerStatus").default("matched").notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type PropertyBuyerActivity = typeof propertyBuyerActivity.$inferSelect;
 export type InsertPropertyBuyerActivity = typeof propertyBuyerActivity.$inferInsert;
 
 // ============ PROPERTY ACTIVITY LOG (Chronological event history per property) ============
-export const propertyActivityLog = mysqlTable("property_activity_log", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+export const propertyActivityLog = pgTable("property_activity_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  propertyId: integer("propertyId").references(() => dispoProperties.id).notNull(),
   // Event type
-  eventType: mysqlEnum("eventType", [
-    "created", "status_change", "price_change", "send", "offer_received",
-    "offer_accepted", "offer_rejected", "showing_scheduled", "showing_completed",
-    "buyer_matched", "note_added", "call_linked", "document_generated",
-    "closing_scheduled", "closed", "field_updated"
-  ]).notNull(),
+  eventType: text("eventType").notNull(),
   // Event details
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   // Optional references
   buyerName: varchar("buyerName", { length: 255 }),
-  buyerActivityId: int("buyerActivityId"),
-  offerId: int("offerId"),
-  showingId: int("showingId"),
-  sendId: int("sendId"),
-  callId: int("callId"),
+  buyerActivityId: integer("buyerActivityId"),
+  offerId: integer("offerId"),
+  showingId: integer("showingId"),
+  sendId: integer("sendId"),
+  callId: integer("callId"),
   // Metadata
   metadata: text("metadata"), // JSON for extra event-specific data
-  performedByUserId: int("performedByUserId").references(() => users.id),
+  performedByUserId: integer("performedByUserId").references(() => users.id),
   performedByName: varchar("performedByName", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -1824,34 +1711,34 @@ export type PropertyActivityLog = typeof propertyActivityLog.$inferSelect;
 export type InsertPropertyActivityLog = typeof propertyActivityLog.$inferInsert;
 
 // ============ DISPO DAILY KPI ENTRIES (Dispo-specific manual KPIs) ============
-export const dispoDailyKpis = mysqlTable("dispo_daily_kpis", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  userId: int("userId").notNull(),
+export const dispoDailyKpis = pgTable("dispo_daily_kpis", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  userId: integer("userId").notNull(),
   date: varchar("entryDate", { length: 10 }).notNull(), // YYYY-MM-DD
-  kpiType: mysqlEnum("kpiType", ["properties_sent", "showings_scheduled", "offers_received", "deals_assigned", "contracts_closed"]).notNull(),
-  value: int("value").default(1).notNull(),
-  propertyId: int("propertyId").references(() => dispoProperties.id),
+  kpiType: text("kpiType").notNull(),
+  value: integer("value").default(1).notNull(),
+  propertyId: integer("propertyId").references(() => dispoProperties.id),
   notes: text("notes"),
-  source: mysqlEnum("kpi_source", ["auto", "manual"]).default("manual").notNull(),
+  source: text("kpi_source").default("manual").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type DispoDailyKpi = typeof dispoDailyKpis.$inferSelect;
 export type InsertDispoDailyKpi = typeof dispoDailyKpis.$inferInsert;
 
 // ─── SYNC LOG (audit trail for GHL polling) ───
-export const syncLog = mysqlTable("sync_log", {
-  id: int("id").primaryKey().autoincrement(),
-  tenantId: int("tenantId").notNull(),
-  syncType: mysqlEnum("syncType", ["ghl_property_poll", "ghl_property_import", "ghl_call_poll", "batchdialer_poll", "batchleads_poll", "webhook"]).notNull(),
-  syncStatus: mysqlEnum("syncStatus", ["started", "completed", "failed"]).notNull(),
-  totalProcessed: int("totalProcessed").default(0),
-  imported: int("imported").default(0),
-  updated: int("updated").default(0),
-  skipped: int("skipped").default(0),
-  errors: int("errors").default(0),
+export const syncLog = pgTable("sync_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").notNull(),
+  syncType: text("syncType").notNull(),
+  syncStatus: text("syncStatus").notNull(),
+  totalProcessed: integer("totalProcessed").default(0),
+  imported: integer("imported").default(0),
+  updated: integer("updated").default(0),
+  skipped: integer("skipped").default(0),
+  errors: integer("errors").default(0),
   errorMessages: text("errorMessages"),
-  durationMs: int("durationMs"),
+  durationMs: integer("durationMs"),
   triggeredBy: varchar("triggeredBy", { length: 50 }),
   notes: text("notes"),
   startedAt: timestamp("startedAt"),
@@ -1861,64 +1748,59 @@ export const syncLog = mysqlTable("sync_log", {
 export type SyncLog = typeof syncLog.$inferSelect;
 export type InsertSyncLog = typeof syncLog.$inferInsert;
 
-// ============ DEAL DISTRIBUTION (AI-generated SMS, Email, PDF per buyer tier) ============
+// ============ DEAL DISTRIBUTION ============
 
 /**
  * Deal Distributions — stores AI-generated content per property per buyer tier.
- * Each row = one generation run for a specific property + tier combo.
- * Content is generated, user reviews/edits, then copies to GHL for sending.
  */
-export const dealDistributions = mysqlTable("deal_distributions", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  propertyId: int("propertyId").references(() => dispoProperties.id).notNull(),
+export const dealDistributions = pgTable("deal_distributions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  propertyId: integer("propertyId").references(() => dispoProperties.id).notNull(),
   // Which buyer tier this content targets
-  buyerTier: mysqlEnum("buyerTier", ["priority", "qualified", "jv_partner", "unqualified"]).notNull(),
+  buyerTier: text("buyerTier").notNull(),
   // Generated content
-  smsContent: text("smsContent"), // Short SMS text
+  smsContent: text("smsContent"),
   emailSubject: varchar("emailSubject", { length: 500 }),
-  emailBody: text("emailBody"), // Full email HTML/text
-  pdfUrl: text("pdfUrl"), // S3 URL to generated PDF flyer
+  emailBody: text("emailBody"),
+  pdfUrl: text("pdfUrl"),
   pdfFileKey: varchar("pdfFileKey", { length: 512 }),
-  // User-edited versions (null = user accepted AI version as-is)
+  // User-edited versions
   editedSmsContent: text("editedSmsContent"),
   editedEmailSubject: varchar("editedEmailSubject", { length: 500 }),
   editedEmailBody: text("editedEmailBody"),
   // Status tracking
-  status: mysqlEnum("distStatus", ["draft", "reviewed", "sent"]).default("draft").notNull(),
+  status: text("distStatus").default("draft").notNull(),
   // Who generated / reviewed
-  generatedByUserId: int("generatedByUserId").references(() => users.id),
-  reviewedByUserId: int("reviewedByUserId").references(() => users.id),
+  generatedByUserId: integer("generatedByUserId").references(() => users.id),
+  reviewedByUserId: integer("reviewedByUserId").references(() => users.id),
   reviewedAt: timestamp("reviewedAt"),
   sentAt: timestamp("sentAt"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type DealDistribution = typeof dealDistributions.$inferSelect;
 export type InsertDealDistribution = typeof dealDistributions.$inferInsert;
 
 /**
  * Deal Content Edits — tracks every edit the user makes to AI-generated content.
- * Used to learn the user's voice/style over time and improve future generations.
- * Stores diffs so we can feed "here's what you changed last time" into the LLM prompt.
  */
-export const dealContentEdits = mysqlTable("deal_content_edits", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").references(() => tenants.id).notNull(),
-  distributionId: int("distributionId").references(() => dealDistributions.id).notNull(),
+export const dealContentEdits = pgTable("deal_content_edits", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  distributionId: integer("distributionId").references(() => dealDistributions.id).notNull(),
   // Which field was edited
-  contentType: mysqlEnum("contentType", ["sms", "email_subject", "email_body"]).notNull(),
+  contentType: text("contentType").notNull(),
   // Original AI-generated content
   originalContent: text("originalContent").notNull(),
   // User's edited version
   editedContent: text("editedContent").notNull(),
-  // The buyer tier context (so we can learn per-tier preferences)
-  buyerTier: mysqlEnum("editBuyerTier", ["priority", "qualified", "jv_partner", "unqualified"]).notNull(),
+  // The buyer tier context
+  buyerTier: text("editBuyerTier").notNull(),
   // Who edited
-  editedByUserId: int("editedByUserId").references(() => users.id),
+  editedByUserId: integer("editedByUserId").references(() => users.id),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type DealContentEdit = typeof dealContentEdits.$inferSelect;
 export type InsertDealContentEdit = typeof dealContentEdits.$inferInsert;
-

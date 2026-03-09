@@ -752,14 +752,14 @@ export async function runBulkImport(
               ...(stageTimestamps.offerMadeAt ? { offerMadeAt: stageTimestamps.offerMadeAt } : {}),
               ...(stageTimestamps.underContractAt ? { underContractAt: stageTimestamps.underContractAt } : {}),
               ...(stageTimestamps.closedAt ? { closedAt: stageTimestamps.closedAt } : {}),
-            });
+            }).returning({ id: dispoProperties.id });
 
             // Track for duplicate detection within this batch
             existingAddresses.add(address.toLowerCase().trim());
-            if (opp.id) existingOppIds.set(opp.id, result.insertId);
+            if (opp.id) existingOppIds.set(opp.id, result.id);
 
             // Log initial stage in history
-            const insertId = result?.insertId;
+            const insertId = result?.id;
             if (insertId) {
               await db.insert(propertyStageHistory).values({
                 tenantId,

@@ -590,8 +590,8 @@ export async function createKpiSource(data: {
     volumeLabel: data.volumeLabel || null,
     ghlSourceMapping: data.ghlSourceMapping || null,
     isActive: true,
-  });
-  return result.insertId;
+  }).returning({ id: kpiSources.id });
+  return result.id;
 }
 
 export async function updateKpiSource(id: number, data: {
@@ -644,8 +644,8 @@ export async function createKpiMarketV2(data: {
     zipCodes: data.zipCodes || [],
     isGlobal: data.isGlobal ?? false,
     isActive: "true",
-  });
-  return result.insertId;
+  }).returning({ id: kpiMarkets.id });
+  return result.id;
 }
 
 export async function updateKpiMarketV2(id: number, data: {
@@ -684,8 +684,8 @@ export async function upsertSpend(data: {
     await db.update(kpiSpend).set({ amount: data.amount }).where(eq(kpiSpend.id, existing.id));
     return existing.id;
   } else {
-    const [result] = await db.insert(kpiSpend).values(data);
-    return result.insertId;
+    const [result] = await db.insert(kpiSpend).values(data).returning({ id: kpiSpend.id });
+    return result.id;
   }
 }
 
@@ -710,8 +710,8 @@ export async function upsertVolume(data: {
     await db.update(kpiVolume).set({ count: data.count }).where(eq(kpiVolume.id, existing.id));
     return existing.id;
   } else {
-    const [result] = await db.insert(kpiVolume).values(data);
-    return result.insertId;
+    const [result] = await db.insert(kpiVolume).values(data).returning({ id: kpiVolume.id });
+    return result.id;
   }
 }
 

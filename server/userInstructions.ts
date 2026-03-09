@@ -163,8 +163,8 @@ export async function saveInstruction(
     userId,
     instruction,
     category,
-  });
-  return { id: result.insertId, isUpdate: false };
+  }).returning({ id: userInstructions.id });
+  return { id: result.id, isUpdate: false };
 }
 
 /**
@@ -193,7 +193,7 @@ export async function deleteInstruction(userId: number, instructionId: number) {
   const db = await getDb();
   if (!db) return false;
 
-  const [result] = await db.update(userInstructions)
+  await db.update(userInstructions)
     .set({ isActive: "false" })
     .where(
       and(

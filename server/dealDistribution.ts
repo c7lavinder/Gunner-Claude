@@ -370,10 +370,10 @@ export async function generateDealContent(
       emailSubject: content.emailSubject,
       emailBody: content.emailBody,
       generatedByUserId: userId,
-    });
+    }).returning({ id: dealDistributions.id });
     
     const [saved] = await db.select().from(dealDistributions)
-      .where(eq(dealDistributions.id, result.insertId));
+      .where(eq(dealDistributions.id, result.id));
     
     if (saved) results.push(saved);
   }

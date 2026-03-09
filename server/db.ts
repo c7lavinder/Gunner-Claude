@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, lte, sql, inArray, isNotNull, or, isNull } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { 
   InsertUser, users, calls, callGrades, teamMembers, performanceMetrics, 
   InsertCall, InsertCallGrade, InsertTeamMember, Call, CallGrade, TeamMember,
@@ -19,22 +19,19 @@ import {
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
-let _pool: mysql.Pool | null = null;
+let _pool: Pool | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      // S17: Use connection pool instead of single connection
-      _pool = mysql.createPool({
-        uri: process.env.DATABASE_URL,
-        connectionLimit: 15,
-        waitForConnections: true,
-        queueLimit: 0, // unlimited queue (connections wait instead of failing)
-        enableKeepAlive: true,
-        keepAliveInitialDelay: 30000,
+      _pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: 15,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
       });
       _db = drizzle(_pool);
-      console.log("[Database] Connection pool created (limit: 10)");
+      console.log("[Database] Connection pool created (limit: 15)");
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -44,13 +41,13 @@ export async function getDb() {
 }
 
 /**
- * Reset the DB connection pool - call this on ECONNRESET or similar errors
+ * Reset the DB connection pool - call this on connection errors
  * so the next getDb() creates a fresh connection.
  */
 export function resetDbConnection() {
   console.warn("[Database] Resetting connection pool due to connection error");
   if (_pool) {
-    try { _pool.end(() => {}); } catch (_) { /* ignore */ }
+    try { _pool.end(); } catch (_) { /* ignore */ }
     _pool = null;
   }
   _db = null;
@@ -148,7 +145,8 @@ export async function upsertUser(user: InsertUser): Promise<{ id: number; openId
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
       set: updateSet,
     });
     
@@ -276,10 +274,8 @@ export async function createCall(call: InsertCall): Promise<Call | null> {
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(calls).values(call);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(calls).where(eq(calls.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(calls).values(call).returning();
+  return created || null;
 }
 
 export async function getCallById(id: number): Promise<Call | null> {
@@ -398,10 +394,8 @@ export async function createCallGrade(grade: InsertCallGrade): Promise<CallGrade
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(callGrades).values(grade);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(callGrades).where(eq(callGrades.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(callGrades).values(grade).returning();
+  return created || null;
 }
 
 export async function getCallGradeByCallId(callId: number): Promise<CallGrade | null> {
@@ -1193,10 +1187,8 @@ export async function createTrainingMaterial(material: InsertTrainingMaterial): 
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(trainingMaterials).values(material);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(trainingMaterials).where(eq(trainingMaterials.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(trainingMaterials).values(material).returning();
+  return created || null;
 }
 
 export async function getTrainingMaterials(options?: {
@@ -1260,10 +1252,8 @@ export async function createAIFeedback(feedback: InsertAIFeedback): Promise<AIFe
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(aiFeedback).values(feedback);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(aiFeedback).where(eq(aiFeedback.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(aiFeedback).values(feedback).returning();
+  return created || null;
 }
 
 export async function getAIFeedback(options?: {
@@ -1333,10 +1323,8 @@ export async function createGradingRule(rule: InsertGradingRule): Promise<Gradin
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(gradingRules).values(rule);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(gradingRules).where(eq(gradingRules.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(gradingRules).values(rule).returning();
+  return created || null;
 }
 
 export async function getGradingRules(options?: {
@@ -1443,10 +1431,8 @@ export async function createTeamTrainingItem(item: InsertTeamTrainingItem): Prom
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(teamTrainingItems).values(item);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(teamTrainingItems).where(eq(teamTrainingItems.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(teamTrainingItems).values(item).returning();
+  return created || null;
 }
 
 export async function getTeamTrainingItems(options?: {
@@ -1601,10 +1587,8 @@ export async function createBrandAsset(asset: InsertBrandAsset): Promise<BrandAs
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(brandAssets).values(asset);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(brandAssets).where(eq(brandAssets.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(brandAssets).values(asset).returning();
+  return created || null;
 }
 
 export async function getBrandAssets(options?: {
@@ -1665,10 +1649,8 @@ export async function createSocialPost(post: InsertSocialPost): Promise<SocialPo
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(socialPosts).values(post);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(socialPosts).where(eq(socialPosts.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(socialPosts).values(post).returning();
+  return created || null;
 }
 
 export async function getSocialPosts(options?: {
@@ -1771,10 +1753,8 @@ export async function createContentIdea(idea: InsertContentIdea): Promise<Conten
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db.insert(contentIdeas).values(idea);
-  const insertId = result[0].insertId;
-  const created = await db.select().from(contentIdeas).where(eq(contentIdeas.id, insertId)).limit(1);
-  return created[0] || null;
+  const [created] = await db.insert(contentIdeas).values(idea).returning();
+  return created || null;
 }
 
 export async function getContentIdeas(options?: {
@@ -1859,10 +1839,8 @@ export async function upsertBrandProfile(profile: Partial<InsertBrandProfile>): 
     return await getBrandProfile();
   } else {
     // Create new profile
-    const result = await db.insert(brandProfile).values(profile as InsertBrandProfile);
-    const insertId = result[0].insertId;
-    const created = await db.select().from(brandProfile).where(eq(brandProfile.id, insertId)).limit(1);
-    return created[0] || null;
+    const [created] = await db.insert(brandProfile).values(profile as InsertBrandProfile).returning();
+    return created || null;
   }
 }
 
@@ -2665,8 +2643,7 @@ When the user references something discussed before, use this memory to provide 
 /**
  * Get AM/PM outbound call status for a list of contacts today.
  * Uses the local calls table instead of GHL API for reliability and speed.
- * Uses raw SQL with CONVERT_TZ to avoid mysql2 timezone interpretation issues.
- * (mysql2 reads TIMESTAMP as local time, but DB stores in UTC — causes offset errors)
+ * Uses PostgreSQL AT TIME ZONE syntax for Central Time conversion.
  * Returns a map of contactId -> { amCallMade, pmCallMade }
  */
 export async function getAmPmCallStatusForContacts(
@@ -2680,25 +2657,22 @@ export async function getAmPmCallStatusForContacts(
   if (!db) return result;
 
   try {
-    // Use SQL-level timezone conversion to avoid JS Date timezone issues.
-    // MySQL stores callTimestamp in UTC. We convert to Central time in SQL
-    // and compare against midnight/noon Central — all in SQL, no JS Date shifting.
-    // CONVERT_TZ handles CST/CDT automatically via the named timezone.
+    // Use SQL-level timezone conversion (PostgreSQL AT TIME ZONE).
+    // callTimestamp is stored as UTC. We convert to Central time using AT TIME ZONE.
     const todayCalls = await db.execute(
       sql`SELECT
-            ghlContactId,
-            HOUR(CONVERT_TZ(callTimestamp, '+00:00', '-06:00')) as call_hour
+            "ghlContactId",
+            EXTRACT(HOUR FROM ("callTimestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago')) AS call_hour
           FROM calls
-          WHERE tenantId = ${tenantId}
-            AND callDirection = 'outbound'
-            AND ghlContactId IS NOT NULL
-            AND ghlContactId IN (${sql.join(contactIds.map(id => sql`${id}`), sql`, `)})
-            AND DATE(CONVERT_TZ(callTimestamp, '+00:00', '-06:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-06:00'))`
+          WHERE "tenantId" = ${tenantId}
+            AND "callDirection" = 'outbound'
+            AND "ghlContactId" IS NOT NULL
+            AND "ghlContactId" IN (${sql.join(contactIds.map(id => sql`${id}`), sql`, `)})
+            AND ("callTimestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago')::date = CURRENT_DATE`
     );
 
-    // todayCalls is an array of { ghlContactId, call_hour }
-    const rows = (todayCalls as any)?.[0] || todayCalls;
-    const callRows = Array.isArray(rows) ? rows : [];
+    // In drizzle-orm/node-postgres, db.execute returns { rows: [...] }
+    const callRows = Array.isArray((todayCalls as any).rows) ? (todayCalls as any).rows : [];
 
     for (const row of callRows) {
       const contactId = row.ghlContactId as string;

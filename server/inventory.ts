@@ -165,14 +165,14 @@ export async function createProperty(tenantId: number, userId: number, data: Omi
     resolvedMarketId = await resolveMarketId(db, tenantId, (data as any).zip);
   }
 
-  const [result] = await db.insert(dispoProperties).values({
+  const [inserted] = await db.insert(dispoProperties).values({
     ...data,
     tenantId,
     sourceId: resolvedSourceId,
     marketId: resolvedMarketId,
-  });
+  }).returning({ id: dispoProperties.id });
 
-  return { id: result.insertId };
+  return { id: inserted.id };
 }
 
 export async function updateProperty(tenantId: number, propertyId: number, data: Partial<InsertDispoProperty>, userId?: number) {
@@ -303,7 +303,7 @@ export async function addPropertySend(tenantId: number, userId: number, data: {
     recipientCount: data.recipientCount || 0,
     notes: data.notes || null,
     sentByUserId: userId,
-  });
+  }).returning({ id: dispoPropertySends.id });
 
   // Update the property's marketedAt if not set (first time sending out) + always update lastContactedAt
   const [property] = await db.select({ marketedAt: dispoProperties.marketedAt, status: dispoProperties.status })
@@ -317,7 +317,7 @@ export async function addPropertySend(tenantId: number, userId: number, data: {
     .set(sendUpdate)
     .where(eq(dispoProperties.id, data.propertyId));
 
-  return { id: result.insertId };
+  return { id: result.id };
 }
 
 export async function getPropertySends(tenantId: number, propertyId: number) {
@@ -364,7 +364,7 @@ export async function addPropertyOffer(tenantId: number, data: {
     ghlContactId: data.ghlContactId || null,
     offerAmount: data.offerAmount,
     notes: data.notes || null,
-  });
+  }).returning({ id: dispoPropertyOffers.id });
 
   // Auto-update property status to negotiating if first offer
   const [property] = await db.select({ status: dispoProperties.status })
@@ -375,7 +375,7 @@ export async function addPropertyOffer(tenantId: number, data: {
       .where(eq(dispoProperties.id, data.propertyId));
   }
 
-  return { id: result.insertId };
+  return { id: result.id };
 }
 
 export async function updateOfferStatus(tenantId: number, offerId: number, status: "pending" | "accepted" | "rejected" | "countered" | "expired", notes?: string) {
@@ -438,9 +438,9 @@ export async function addPropertyShowing(tenantId: number, data: {
     showingDate: data.showingDate,
     showingTime: data.showingTime || null,
     notes: data.notes || null,
-  });
+  }).returning({ id: dispoPropertyShowings.id });
 
-  return { id: result.insertId };
+  return { id: result.id };
 }
 
 export async function updateShowing(tenantId: number, showingId: number, data: {
@@ -697,7 +697,7 @@ export async function addBuyerActivity(tenantId: number, data: {
     buyerStrategy: data.buyerStrategy || null,
     isVip: data.isVip ? "true" : "false",
     notes: data.notes || null,
-  });
+  }).returning({ id: propertyBuyerActivity.id });
 
   // Log the buyer match
   await logPropertyActivity(tenantId, data.propertyId, {
@@ -705,12 +705,12 @@ export async function addBuyerActivity(tenantId: number, data: {
     title: `Buyer matched: ${data.buyerName}`,
     description: data.buyerCompany ? `${data.buyerName} (${data.buyerCompany})` : data.buyerName,
     buyerName: data.buyerName,
-    buyerActivityId: result.insertId,
+    buyerActivityId: result.id,
     performedByUserId,
     performedByName,
   });
 
-  return { id: result.insertId };
+  return { id: result.id };
 }
 
 export async function updateBuyerActivity(tenantId: number, buyerActivityId: number, data: {

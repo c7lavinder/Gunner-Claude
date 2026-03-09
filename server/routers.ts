@@ -2952,15 +2952,15 @@ Keep it brief and actionable.`;
         const { tenantRubrics } = await import("../drizzle/schema");
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-        const result = await db.insert(tenantRubrics).values({
+        const [result] = await db.insert(tenantRubrics).values({
           tenantId: ctx.user.tenantId,
           name: input.name,
           description: input.description || null,
           callType: input.callType || null,
           criteria: input.criteria,
           redFlags: input.redFlags || null,
-        });
-        return { id: result[0].insertId };
+        }).returning({ id: tenantRubrics.id });
+        return { id: result.id };
       }),
 
     updateTenantRubric: protectedProcedure
@@ -7463,16 +7463,17 @@ selectedTimezone: { type: "string" },
           const { getDb: getDatabase } = await import("./db");
           const database = await getDatabase();
           if (database) {
-            // Get all outbound calls from DB for this contact today
+            // Get all outbound calls from DB for this contact today (PostgreSQL syntax)
             const dbCalls = await database.execute(
-              sql`SELECT id, callDirection, duration, callTimestamp, teamMemberName, status, contactPhone
+              sql`SELECT id, "callDirection", duration, "callTimestamp", "teamMemberName", status, "contactPhone"
                   FROM calls
-                  WHERE tenantId = ${ctx.user.tenantId}
-                    AND ghlContactId = ${input.contactId}
-                    AND DATE(CONVERT_TZ(callTimestamp, '+00:00', '-06:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-06:00'))
-                  ORDER BY callTimestamp ASC`
+                  WHERE "tenantId" = ${ctx.user.tenantId}
+                    AND "ghlContactId" = ${input.contactId}
+                    AND ("callTimestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago')::date = CURRENT_DATE
+                  ORDER BY "callTimestamp" ASC`
             );
-            const callRows = Array.isArray((dbCalls as any)?.[0]) ? (dbCalls as any)[0] : Array.isArray(dbCalls) ? dbCalls : [];
+            // In drizzle/node-postgres, execute returns { rows: [...] }
+            const callRows = Array.isArray((dbCalls as any).rows) ? (dbCalls as any).rows : [];
 
             if (callRows.length > 0) {
               // Count outbound calls from DB

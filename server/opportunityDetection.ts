@@ -4459,7 +4459,7 @@ async function isAlreadyFlagged(
           eq(opportunities.tenantId, tenantId),
           eq(opportunities.teamMemberId, teamMemberId),
           sql`JSON_CONTAINS(${opportunities.triggerRules}, ${JSON.stringify(triggerRule)})`,
-          sql`(${opportunities.status} = 'active' OR (${opportunities.status} IN ('handled', 'dismissed') AND ${opportunities.resolvedAt} > DATE_SUB(NOW(), INTERVAL 7 DAY)))`
+          sql`(${opportunities.status} = 'active' OR (${opportunities.status} IN ('handled', 'dismissed') AND ${opportunities.resolvedAt} > NOW() - INTERVAL '7 days'))`
         )
       )
       .limit(1);
@@ -4478,7 +4478,7 @@ async function isAlreadyFlagged(
         eq(opportunities.ghlContactId, ghlContactId),
         sql`JSON_CONTAINS(${opportunities.triggerRules}, ${JSON.stringify(triggerRule)})`,
         // Don't re-flag if active, or handled/dismissed in last 30 days
-        sql`(${opportunities.status} = 'active' OR (${opportunities.status} IN ('handled', 'dismissed') AND ${opportunities.resolvedAt} > DATE_SUB(NOW(), INTERVAL 30 DAY)))`
+        sql`(${opportunities.status} = 'active' OR (${opportunities.status} IN ('handled', 'dismissed') AND ${opportunities.resolvedAt} > NOW() - INTERVAL '30 days'))`
       )
     )
     .limit(1);
@@ -4497,7 +4497,7 @@ async function isAlreadyFlagged(
         eq(opportunities.ghlContactId, ghlContactId),
         eq(opportunities.status, "dismissed"),
         sql`${opportunities.dismissReason} IN ('not_a_deal', 'false_positive')`,
-        sql`${opportunities.resolvedAt} > DATE_SUB(NOW(), INTERVAL 60 DAY)`
+        sql`${opportunities.resolvedAt} > NOW() - INTERVAL '60 days'`
       )
     )
     .limit(1);

@@ -70,7 +70,7 @@ async function setupTestActionLogs() {
       actionType: "send_sms",
       requestText: `test-pref-${Date.now()}-${i}`,
       status: "executed",
-    }).$returningId();
+    }).returning({ id: coachActionLog.id });
     testActionLogIds.push(result.id);
   }
 }
@@ -90,7 +90,7 @@ async function cleanupTestData() {
 
     // Delete test preferences created in last 5 minutes with low sample counts
     await db.execute(
-      sql`DELETE FROM ai_coach_preferences WHERE userId = ${TEST_USER_ID} AND sampleCount <= 10 AND createdAt > DATE_SUB(NOW(), INTERVAL 5 MINUTE)`
+      sql`DELETE FROM ai_coach_preferences WHERE "userId" = ${TEST_USER_ID} AND "sampleCount" <= 10 AND "createdAt" > NOW() - INTERVAL '5 minutes'`
     );
   } catch (e) {
     console.error("Cleanup error:", e);

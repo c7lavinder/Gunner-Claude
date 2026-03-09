@@ -1638,9 +1638,9 @@ export async function createActionLog(params: {
     targetOpportunityId: params.targetOpportunityId,
     payload: params.payload,
     status: "pending",
-  });
+  }).returning({ id: coachActionLog.id });
 
-  return (result as any).insertId;
+  return result.id;
 }
 
 export async function confirmAction(actionId: number): Promise<void> {
