@@ -1,0 +1,33 @@
+name: PR Quality Check
+
+on:
+  pull_request:
+    branches: [manus-migration, main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          VITE_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+          VITE_TURNSTILE_SITE_KEY: 0x0000000000000000000000
+          VITE_APP_TITLE: Gunner
