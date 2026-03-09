@@ -4,6 +4,8 @@ on:
   schedule:
     # Runs at 2:00 AM CST (8:00 AM UTC) every night
     - cron: '0 8 * * *'
+  push:
+    branches: [manus-migration]
   workflow_dispatch: # Allow manual trigger
 
 jobs:
