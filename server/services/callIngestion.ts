@@ -3,7 +3,7 @@ import { transcribeAudio } from "../_core/llm";
 import { uploadFile } from "../_core/storage";
 import { createCrmAdapter } from "../crm";
 import { gradeCall } from "./grading";
-import { calls, tenants } from "../../drizzle/schema";
+import { calls, tenants, dispoProperties, tenantPlaybooks } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
 const BUCKET = "gunner-recordings";
@@ -82,10 +82,86 @@ export async function ingestCallsForTenant(tenantId: number) {
   return { processed, skipped, errors };
 }
 
+function mapGhlStageToStatus(stageId: string, stageMappings?: Record<string, string>): string {
+  if (stageMappings?.[stageId]) return stageMappings[stageId]!;
+  const lower = stageId.toLowerCase();
+  if (lower.includes("new") || lower.includes("lead")) return "new_lead";
+  if (lower.includes("contact") || lower.includes("reached")) return "contacted";
+  if (lower.includes("appt") || lower.includes("appointment") || lower.includes("sched")) return "apt_set";
+  if (lower.includes("offer") || lower.includes("negotiat")) return "offer_made";
+  if (lower.includes("contract") || lower.includes("accept")) return "under_contract";
+  if (lower.includes("close") || lower.includes("won") || lower.includes("sold")) return "closed";
+  if (lower.includes("dead") || lower.includes("lost") || lower.includes("disqualified")) return "dead";
+  return "new_lead";
+}
+
+export async function ingestOpportunitiesForTenant(tenantId: number): Promise<{ upserted: number; skipped: number; errors: number }> {
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  if (!tenant?.crmConfig || tenant.crmType === "none") return { upserted: 0, skipped: 0, errors: 0 };
+
+  const config = normalizeCrmConfig(JSON.parse(tenant.crmConfig) as Record<string, unknown>);
+  const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
+
+  // Load tenant playbook for stage mappings
+  const [playbook] = await db.select().from(tenantPlaybooks).where(eq(tenantPlaybooks.tenantId, tenantId)).limit(1);
+  const stageMappings = (playbook?.algorithmOverrides as Record<string, unknown> | null)?.stageMappings as Record<string, string> | undefined;
+
+  const opportunities = await adapter.getOpportunities();
+  let upserted = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const opp of opportunities) {
+    try {
+      if (!opp.contactId) { skipped++; continue; }
+
+      const [existing] = await db
+        .select({ id: dispoProperties.id })
+        .from(dispoProperties)
+        .where(and(eq(dispoProperties.tenantId, tenantId), eq(dispoProperties.ghlOpportunityId, opp.id)))
+        .limit(1);
+
+      const status = mapGhlStageToStatus(opp.stageId, stageMappings);
+
+      if (existing) {
+        await db.update(dispoProperties).set({
+          status,
+          ghlPipelineStageId: opp.stageId,
+          stageChangedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(dispoProperties.id, existing.id));
+      } else {
+        await db.insert(dispoProperties).values({
+          tenantId,
+          address: opp.name || "Unknown",
+          city: "",
+          state: "",
+          zip: "",
+          ghlContactId: opp.contactId,
+          ghlOpportunityId: opp.id,
+          ghlPipelineId: opp.pipelineId,
+          ghlPipelineStageId: opp.stageId,
+          status,
+          contractPrice: opp.value ? opp.value * 100 : null,
+          stageChangedAt: new Date(),
+        });
+      }
+      upserted++;
+    } catch (e) {
+      errors++;
+      console.error(`[opp-ingest] tenant ${tenantId} opp ${opp.id}:`, e);
+    }
+  }
+
+  return { upserted, skipped, errors };
+}
+
 export function startPolling(intervalMinutes: number) {
   console.log(`[ingest] Polling started every ${intervalMinutes} minutes`);
+
+  // Call ingestion — every intervalMinutes
   setInterval(async () => {
-    console.log("[ingest] Cycle started");
+    console.log("[ingest] Call cycle started");
     const active = await db.select().from(tenants).where(eq(tenants.crmConnected, "true"));
     for (const t of active) {
       try {
@@ -95,6 +171,23 @@ export function startPolling(intervalMinutes: number) {
         console.error(`[ingest] Tenant ${t.id} failed:`, e);
       }
     }
-    console.log("[ingest] Cycle ended");
+    console.log("[ingest] Call cycle ended");
   }, intervalMinutes * 60 * 1000);
+
+  // Opportunity ingestion — every 10 minutes
+  setInterval(async () => {
+    console.log("[opp-ingest] Cycle started");
+    const active = await db.select().from(tenants).where(eq(tenants.crmConnected, "true"));
+    for (const t of active) {
+      try {
+        const result = await ingestOpportunitiesForTenant(t.id);
+        if (result.upserted > 0 || result.errors > 0) {
+          console.log(`[opp-ingest] Tenant ${t.id}: upserted=${result.upserted} skipped=${result.skipped} errors=${result.errors}`);
+        }
+      } catch (e) {
+        console.error(`[opp-ingest] Tenant ${t.id} failed:`, e);
+      }
+    }
+    console.log("[opp-ingest] Cycle ended");
+  }, 10 * 60 * 1000);
 }

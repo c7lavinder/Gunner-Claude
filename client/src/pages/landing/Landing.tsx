@@ -28,6 +28,7 @@ export function Landing() {
         <div className="hidden md:flex items-center gap-1">
           <a href="#features" className="obs-topnav-tab">Features</a>
           <a href="#industries" className="obs-topnav-tab">Industries</a>
+          <a href="#pricing" className="obs-topnav-tab">Pricing</a>
           <a href="#how-it-works" className="obs-topnav-tab">How It Works</a>
         </div>
         <div className="flex items-center gap-3">
@@ -154,6 +155,112 @@ export function Landing() {
                   <h3 className="font-semibold text-lg mb-2">{title}</h3>
                   <p className="text-sm text-[var(--g-text-secondary)]">{desc}</p>
                 </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="py-24 px-6 border-t border-[var(--g-border-subtle)]">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-3xl font-bold text-center mb-4">Simple, Transparent Pricing</h2>
+            <p className="text-center text-[var(--g-text-secondary)] mb-16 max-w-xl mx-auto">Start free. Upgrade when you're ready. No surprise fees.</p>
+            <div className="grid gap-8 md:grid-cols-3">
+              {[
+                {
+                  name: "Starter",
+                  price: "Free",
+                  period: "",
+                  desc: "For small teams getting started with AI coaching",
+                  features: ["Up to 3 team members", "50 call grades/month", "Basic scorecards", "1 industry playbook", "Email support"],
+                  cta: "Start Free",
+                  highlight: false,
+                },
+                {
+                  name: "Pro",
+                  price: "$99",
+                  period: "/mo",
+                  desc: "For growing teams that want full power",
+                  features: ["Unlimited team members", "Unlimited call grades", "Full AI coaching & roleplay", "All industry playbooks", "GHL OAuth integration", "Leaderboards & badges", "Priority support"],
+                  cta: "Start Free Trial",
+                  highlight: true,
+                },
+                {
+                  name: "Enterprise",
+                  price: "Custom",
+                  period: "",
+                  desc: "For large teams with custom needs",
+                  features: ["Everything in Pro", "Custom rubrics & grading", "Dedicated account manager", "API access", "SSO / SAML", "Custom integrations", "SLA guarantee"],
+                  cta: "Contact Sales",
+                  highlight: false,
+                },
+              ].map((plan) => (
+                <Card key={plan.name} className={`relative border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] ${plan.highlight ? "ring-2 ring-[var(--g-accent)]" : ""}`}>
+                  {plan.highlight && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-xs font-semibold" style={{ background: "var(--g-accent)", color: "white" }}>
+                      Most Popular
+                    </div>
+                  )}
+                  <CardContent className="pt-8 pb-6 space-y-6">
+                    <div>
+                      <h3 className="font-semibold text-lg">{plan.name}</h3>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-3xl font-bold" style={{ color: plan.highlight ? "var(--g-accent-text)" : "var(--g-text-primary)" }}>{plan.price}</span>
+                        {plan.period && <span className="text-sm text-[var(--g-text-tertiary)]">{plan.period}</span>}
+                      </div>
+                      <p className="text-sm text-[var(--g-text-secondary)] mt-2">{plan.desc}</p>
+                    </div>
+                    <ul className="space-y-2.5">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-sm text-[var(--g-text-secondary)]">
+                          <CheckCircle2 className="size-4 shrink-0 mt-0.5" style={{ color: "var(--g-accent-text)" }} />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    <Link href="/signup">
+                      <Button className="w-full" variant={plan.highlight ? "default" : "outline"}>{plan.cta}</Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="testimonials" className="py-24 px-6 border-t border-[var(--g-border-subtle)] bg-[var(--g-bg-surface)]">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-3xl font-bold text-center mb-4">Teams Love Gunner</h2>
+            <p className="text-center text-[var(--g-text-secondary)] mb-16">Hear from sales teams already using Gunner to crush their numbers.</p>
+            <div className="grid gap-6 md:grid-cols-3">
+              {[
+                {
+                  quote: "We went from zero call accountability to grading every single call. Our team's average score went from 62% to 84% in 6 weeks.",
+                  name: "Corey L.",
+                  role: "Owner, New Again Houses",
+                  industry: "RE Wholesaling",
+                },
+                {
+                  quote: "The AI roleplay feature is a game-changer for onboarding new reps. They come in already knowing how to handle the top 5 objections.",
+                  name: "Sarah M.",
+                  role: "Sales Manager",
+                  industry: "Solar Sales",
+                },
+                {
+                  quote: "Gunner replaced 3 tools for us — call tracking, coaching, and team gamification. The leaderboard alone drives 20% more daily activity.",
+                  name: "Jason R.",
+                  role: "VP of Sales",
+                  industry: "Insurance",
+                },
+              ].map((t) => (
+                <Card key={t.name} className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
+                  <CardContent className="pt-6 space-y-4">
+                    <p className="text-sm text-[var(--g-text-secondary)] italic leading-relaxed">"{t.quote}"</p>
+                    <div>
+                      <p className="font-medium text-sm">{t.name}</p>
+                      <p className="text-xs text-[var(--g-text-tertiary)]">{t.role} · {t.industry}</p>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           </div>

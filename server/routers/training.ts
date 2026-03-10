@@ -130,26 +130,57 @@ export const trainingRouter = router({
     };
   }),
 
+  getPersonas: protectedProcedure.query(async ({ ctx }) => {
+    const tenantPb = await getTenantPlaybook(ctx.user.tenantId);
+    const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+    return industryPb?.roleplayPersonas ?? [];
+  }),
+
+  getCategories: protectedProcedure.query(async ({ ctx }) => {
+    const tenantPb = await getTenantPlaybook(ctx.user.tenantId);
+    const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+    return industryPb?.trainingCategories ?? [];
+  }),
+
+  getGradingPhilosophy: protectedProcedure.query(async ({ ctx }) => {
+    const tenantPb = await getTenantPlaybook(ctx.user.tenantId);
+    const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+    return industryPb?.gradingPhilosophy ?? null;
+  }),
+
   startRoleplay: protectedProcedure
-    .input(z.object({ scenario: z.string() }))
+    .input(z.object({ scenario: z.string(), personaId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const tenantPb = await getTenantPlaybook(ctx.user.tenantId);
       const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
       const userPb = await getUserPlaybook(ctx.user.userId, ctx.user.tenantId);
       const terms = resolveTerminology(industryPb, tenantPb);
 
+      const persona = input.personaId
+        ? industryPb?.roleplayPersonas?.find((p) => p.id === input.personaId)
+        : null;
+
       const industryContext = industryPb
-        ? `Industry: ${industryPb.name}. Use industry-specific terminology: "${terms.contact}" for contacts, "${terms.asset}" for assets, "${terms.deal}" for deals.`
+        ? `Industry: ${industryPb.name}. Use terminology: "${terms.contact}" for contacts, "${terms.asset}" for assets, "${terms.deal}" for deals.`
         : "";
+
+      const personaContext = persona
+        ? `You are playing "${persona.name}": ${persona.description}. Personality: ${persona.personality}. Scenario: ${persona.scenario}. Difficulty: ${persona.difficulty}. Use these objections when appropriate: ${persona.objections.join("; ")}.`
+        : "";
+
       const userContext = userPb?.growthAreas?.length
         ? `Focus on these growth areas: ${userPb.growthAreas.join(", ")}.`
+        : "";
+
+      const gradingContext = industryPb?.gradingPhilosophy
+        ? `Grading philosophy: ${industryPb.gradingPhilosophy.overview}`
         : "";
 
       const response = await chatCompletion({
         messages: [
           {
             role: "system",
-            content: `You are a roleplay coach. The user wants to practice: "${input.scenario}". Start by playing the prospect/customer. Be realistic and engaging. Keep responses concise (2-4 sentences). ${industryContext} ${userContext}`.trim(),
+            content: `You are a roleplay coach. ${personaContext || `The user wants to practice: "${input.scenario}". Start by playing the prospect/customer.`} Be realistic and engaging. Keep responses concise (2-4 sentences). ${industryContext} ${userContext} ${gradingContext}`.trim(),
           },
           {
             role: "user",

@@ -119,5 +119,13 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
+  // Add new columns to industry_playbooks (safe to re-run)
+  await db.execute(sql`
+    ALTER TABLE "industry_playbooks"
+    ADD COLUMN IF NOT EXISTS "roleplayPersonas" jsonb,
+    ADD COLUMN IF NOT EXISTS "trainingCategories" jsonb,
+    ADD COLUMN IF NOT EXISTS "gradingPhilosophy" jsonb
+  `);
+
   console.log("[migrations] Startup migrations complete.");
 }

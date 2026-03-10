@@ -14,6 +14,9 @@ import type {
   StageDef,
   CallTypeDef,
   AlgorithmConfig,
+  RoleplayPersona,
+  TrainingCategory,
+  GradingPhilosophy,
 } from "../../shared/types";
 
 export const SOFTWARE_PLAYBOOK = {
@@ -124,6 +127,9 @@ export async function getIndustryPlaybook(
       buyerMatch: {},
       taskSort: {},
     }),
+    roleplayPersonas: parseJsonField<RoleplayPersona[]>(row.roleplayPersonas, []),
+    trainingCategories: parseJsonField<TrainingCategory[]>(row.trainingCategories, []),
+    gradingPhilosophy: parseJsonField<GradingPhilosophy | undefined>(row.gradingPhilosophy, undefined),
   };
 }
 

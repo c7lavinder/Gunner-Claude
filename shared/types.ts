@@ -58,6 +58,32 @@ export interface AlgorithmConfig {
   taskSort: Record<string, unknown>;
 }
 
+export interface RoleplayPersona {
+  id: string;
+  name: string;
+  description: string;
+  role: string; // which user role this persona is designed for
+  difficulty: "beginner" | "intermediate" | "advanced";
+  personality: string;
+  scenario: string;
+  objections: string[];
+}
+
+export interface TrainingCategory {
+  code: string;
+  name: string;
+  description: string;
+  role?: string; // optional: only relevant for this role
+  order: number;
+}
+
+export interface GradingPhilosophy {
+  overview: string;
+  criticalFailurePolicy: string;
+  talkRatioGuidance: string;
+  roleSpecific: Record<string, string>;
+}
+
 export interface IndustryPlaybook {
   code: string;
   name: string;
@@ -69,6 +95,9 @@ export interface IndustryPlaybook {
   outcomeTypes: string[];
   kpiFunnelStages: string[];
   algorithmDefaults: AlgorithmConfig;
+  roleplayPersonas?: RoleplayPersona[];
+  trainingCategories?: TrainingCategory[];
+  gradingPhilosophy?: GradingPhilosophy;
 }
 
 export interface TenantPlaybook {

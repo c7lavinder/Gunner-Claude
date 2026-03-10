@@ -39,6 +39,37 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   }
 }
 
+function SyncHealthDisplay() {
+  const { data: health } = trpc.settings.getSyncHealth.useQuery();
+  if (!health) return null;
+  if (!health.connected && !health.oauthActive) return null;
+
+  return (
+    <div className="p-3 rounded-lg space-y-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+      <p className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>Sync Health</p>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="flex items-center gap-1.5">
+          {health.connected ? <Check className="size-3" style={{ color: "var(--g-grade-a)" }} /> : <X className="size-3" style={{ color: "var(--g-grade-f)" }} />}
+          <span style={{ color: "var(--g-text-secondary)" }}>CRM Connected</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {health.oauthActive ? <Check className="size-3" style={{ color: "var(--g-grade-a)" }} /> : <X className="size-3" style={{ color: "var(--g-grade-f)" }} />}
+          <span style={{ color: "var(--g-text-secondary)" }}>OAuth Active</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {health.webhooksRegistered ? <Check className="size-3" style={{ color: "var(--g-grade-a)" }} /> : <X className="size-3" style={{ color: "var(--g-grade-f)" }} />}
+          <span style={{ color: "var(--g-text-secondary)" }}>Webhooks</span>
+        </div>
+        {health.lastSync && (
+          <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+            Last sync: {new Date(health.lastSync).toLocaleDateString()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Settings() {
   const { roles } = useTenantConfig();
   const { data: workspace, isLoading } = trpc.settings.getWorkspace.useQuery();
@@ -173,18 +204,31 @@ export function Settings() {
               </CardContent>
             </Card>
           </TabsContent>
-          <TabsContent value="crm" className="mt-0">
+          <TabsContent value="crm" className="mt-0 space-y-4">
             <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-              <CardHeader><CardTitle>CRM</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Connect via OAuth (Recommended)</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>CRM type</Label>
-                  <div className="flex gap-2 flex-wrap">
-                    <Badge variant="default" className="cursor-default">GHL</Badge>
-                    <Badge variant="secondary" className="opacity-60 cursor-default">HubSpot (Soon)</Badge>
-                    <Badge variant="secondary" className="opacity-60 cursor-default">Salesforce (Soon)</Badge>
-                  </div>
-                </div>
+                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+                  Connect your GoHighLevel account with one click. This automatically sets up API access and webhook notifications.
+                </p>
+                <Button
+                  onClick={() => {
+                    const redirectUri = `${window.location.origin}/settings?tab=crm&ghl_callback=1`;
+                    window.location.href = `/api/trpc/settings.getGhlOAuthUrl?input=${encodeURIComponent(JSON.stringify({ redirectUri }))}`;
+                  }}
+                >
+                  <Link2 className="size-4 mr-2" />
+                  Connect GoHighLevel
+                </Button>
+                <SyncHealthDisplay />
+              </CardContent>
+            </Card>
+            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
+              <CardHeader><CardTitle>Manual API Key</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>
+                  Or connect manually using your GHL API key and location ID.
+                </p>
                 <div className="space-y-2">
                   <Label>API Key</Label>
                   <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={crmConfig.apiKey ? "••••••••••••••••" : ""} className="bg-[var(--g-bg-surface)]" />

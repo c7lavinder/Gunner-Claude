@@ -1,4 +1,4 @@
-import type { IndustryPlaybook, RoleDef, StageDef, CallTypeDef, RubricDef, AlgorithmConfig } from "../../shared/types";
+import type { IndustryPlaybook, RoleDef, StageDef, CallTypeDef, RubricDef, AlgorithmConfig, RoleplayPersona, TrainingCategory, GradingPhilosophy } from "../../shared/types";
 
 const ROLES: RoleDef[] = [
   { code: "acquisitions", name: "Acquisitions Manager", description: "Negotiates deals with sellers, runs comps, makes offers", color: "#6366f1" },
@@ -199,6 +199,94 @@ const ALGORITHM_DEFAULTS: AlgorithmConfig = {
   },
 };
 
+const ROLEPLAY_PERSONAS: RoleplayPersona[] = [
+  {
+    id: "re-motivated-seller",
+    name: "Motivated Mary",
+    description: "A distressed seller who inherited a property and needs to sell fast due to tax liens",
+    role: "acquisitions",
+    difficulty: "beginner",
+    personality: "Anxious but cooperative. Willing to sell below market if you can close quickly.",
+    scenario: "Inherited property with $12K in back taxes. Lives out of state. Just wants it gone.",
+    objections: ["I need to talk to my siblings first", "Can you do a little more?", "How fast can you actually close?"],
+  },
+  {
+    id: "re-skeptical-seller",
+    name: "Skeptical Steve",
+    description: "A seller who's been burned by wholesalers before and doesn't trust investors",
+    role: "acquisitions",
+    difficulty: "intermediate",
+    personality: "Guarded and confrontational. Tests your knowledge. Had a bad experience with a previous investor who never closed.",
+    scenario: "Owner-occupied property, behind on mortgage. Wary of investors. Asking retail price.",
+    objections: ["Last guy who said that never closed", "Why should I sell to you for less than market?", "I can just list it with an agent", "Are you even going to buy it or just assign it?"],
+  },
+  {
+    id: "re-analytical-seller",
+    name: "Analytical Amy",
+    description: "A highly informed seller who knows ARV, comps, and market conditions",
+    role: "acquisitions",
+    difficulty: "advanced",
+    personality: "Calm, numbers-driven, has done homework. Won't accept lowball offers without data.",
+    scenario: "Divorce situation, nice property, knows the comps. Wants top dollar but needs speed.",
+    objections: ["The Zillow estimate is $X", "I know my property is worth more than that", "Show me the comparable sales", "What's your assignment fee going to be?"],
+  },
+  {
+    id: "re-tire-kicker-seller",
+    name: "Tire-Kicker Tom",
+    description: "A seller with no real motivation who is just exploring options",
+    role: "lead_manager",
+    difficulty: "intermediate",
+    personality: "Friendly but noncommittal. Says 'maybe' to everything. No urgency.",
+    scenario: "Property is paid off, no financial pressure. Just curious what investors would pay.",
+    objections: ["I'm not in any rush", "I'm just seeing what my options are", "I might just keep renting it out", "Let me think about it"],
+  },
+  {
+    id: "re-cash-buyer-new",
+    name: "New Buyer Nick",
+    description: "A new cash buyer looking for their first deal, lots of questions",
+    role: "dispositions",
+    difficulty: "beginner",
+    personality: "Eager but cautious. Asks lots of questions about the process and numbers.",
+    scenario: "Has $80K liquid. Wants to flip. Never bought from a wholesaler before.",
+    objections: ["How do I know the ARV is accurate?", "What if the repairs cost more?", "Can I see it first?", "What's an assignment fee?"],
+  },
+  {
+    id: "re-cash-buyer-exp",
+    name: "Experienced Eddie",
+    description: "A seasoned investor who buys 5+ deals per month, very demanding",
+    role: "dispositions",
+    difficulty: "advanced",
+    personality: "Blunt, efficient, numbers-only. Will walk if the deal doesn't pencil. Values your time and his.",
+    scenario: "Buys 5-10 properties/month. Has own crew. Only wants deals at 70% ARV minus repairs.",
+    objections: ["These numbers don't work at that price", "I need it at 65%", "Your last deal had inflated ARV", "I can get this direct for less"],
+  },
+];
+
+const TRAINING_CATEGORIES: TrainingCategory[] = [
+  { code: "cold-calling", name: "Cold Calling Mastery", description: "Techniques for effective first-contact seller outreach", order: 0 },
+  { code: "negotiation", name: "Negotiation Skills", description: "How to negotiate win-win deals with sellers and buyers", order: 1 },
+  { code: "objection-handling", name: "Objection Handling", description: "Frameworks for overcoming common seller and buyer objections", order: 2 },
+  { code: "rapport-building", name: "Rapport Building", description: "Building trust and connection on calls", order: 3 },
+  { code: "deal-analysis", name: "Deal Analysis", description: "Running comps, estimating repairs, calculating MAO", role: "acquisitions", order: 4 },
+  { code: "dispo-pitching", name: "Dispo Pitching", description: "How to present deals to cash buyers effectively", role: "dispositions", order: 5 },
+  { code: "follow-up", name: "Follow-Up Systems", description: "Consistent follow-up strategies for nurturing leads", order: 6 },
+  { code: "closing", name: "Closing Techniques", description: "Getting the contract signed or the assignment accepted", order: 7 },
+  { code: "crm-workflow", name: "CRM & Workflow", description: "Using GHL and Gunner effectively for pipeline management", order: 8 },
+  { code: "mindset", name: "Mindset & Motivation", description: "Staying sharp, handling rejection, maintaining energy", order: 9 },
+];
+
+const GRADING_PHILOSOPHY: GradingPhilosophy = {
+  overview: "Grading in RE wholesaling prioritizes rapport and discovery over hard closes. A great call uncovers motivation, builds trust, and advances the deal — even if no offer is made. We grade on process, not outcome.",
+  criticalFailurePolicy: "Any critical failure (e.g., making an offer without discovering motivation, being rude) results in an automatic cap of 50% on the call score, regardless of other criteria scores.",
+  talkRatioGuidance: "The seller should be talking 55-70% of the time on acquisition calls. If the rep is talking more than 50%, they're pitching, not discovering. Dispo calls can be 45-55% rep talk since you're presenting a deal.",
+  roleSpecific: {
+    acquisitions: "Focus on depth of motivation discovery, quality of rapport, and whether the rep advanced the deal toward an offer or appointment. Penalize for presenting numbers too early.",
+    lead_manager: "Efficiency matters. Can they qualify or disqualify in under 5 minutes? Do they capture key data (name, address, motivation, timeline)? Do they route warm leads correctly?",
+    dispositions: "Grade on deal presentation clarity, number accuracy, urgency creation, and buyer commitment. The best dispo reps match deals to the right buyers, not just blast to everyone.",
+    tc: "Transaction coordinators are graded on communication clarity, timeline accuracy, and proactive updates. They should never let a deal stall without the team knowing why.",
+  },
+};
+
 export const RE_WHOLESALING_PLAYBOOK: IndustryPlaybook = {
   code: "re-wholesaling",
   name: "Real Estate Wholesaling",
@@ -236,4 +324,7 @@ export const RE_WHOLESALING_PLAYBOOK: IndustryPlaybook = {
     "Deals Closed",
   ],
   algorithmDefaults: ALGORITHM_DEFAULTS,
+  roleplayPersonas: ROLEPLAY_PERSONAS,
+  trainingCategories: TRAINING_CATEGORIES,
+  gradingPhilosophy: GRADING_PHILOSOPHY,
 };

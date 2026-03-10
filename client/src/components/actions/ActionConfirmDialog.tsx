@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { ActionType, ActionResult } from "@shared/types";
-import { CheckIcon, Loader2Icon, PencilIcon, XIcon } from "lucide-react";
+import { CheckIcon, Loader2Icon, PencilIcon, XIcon, User } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { SearchableDropdown, type DropdownOption } from "@/components/ui/SearchableDropdown";
 
 const TYPE_COLORS: Record<ActionType, string> = {
   sms: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
@@ -37,17 +38,25 @@ function formatContent(type: ActionType, payload: Record<string, unknown>): stri
   return JSON.stringify(payload);
 }
 
+export interface SenderOption {
+  id: string;
+  name: string;
+  phone?: string;
+}
+
 export interface ActionConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   action: {
     type: ActionType;
-    from: { name: string; phone?: string };
+    from: { name: string; phone?: string; userId?: number };
     to: { name: string; phone?: string; contactId?: string };
     payload: Record<string, unknown>;
   };
   onConfirm: () => void;
   onEdit?: (edited: Record<string, unknown>) => void;
+  onSenderChange?: (sender: SenderOption) => void;
+  senders?: SenderOption[];
   isExecuting?: boolean;
   result?: ActionResult | null;
 }
@@ -58,6 +67,8 @@ export function ActionConfirmDialog({
   action,
   onConfirm,
   onEdit,
+  onSenderChange,
+  senders,
   isExecuting = false,
   result,
 }: ActionConfirmDialogProps) {
@@ -94,7 +105,29 @@ export function ActionConfirmDialog({
         {state === "PREVIEW" && (
           <div className="space-y-4">
             <div className="grid gap-2 text-sm">
-              <div><span className="text-muted-foreground">From:</span> {action.from.name}{isSms && action.from.phone && ` — ${action.from.phone}`}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground shrink-0">From:</span>
+                {senders && senders.length > 1 && onSenderChange ? (
+                  <SearchableDropdown
+                    className="flex-1"
+                    options={senders.map((s): DropdownOption => ({
+                      value: s.id,
+                      label: s.name,
+                      sublabel: s.phone,
+                      icon: <User className="size-3" />,
+                    }))}
+                    value={String(action.from.userId ?? senders[0]?.id ?? "")}
+                    onChange={(v) => {
+                      const sender = senders.find((s) => s.id === v);
+                      if (sender) onSenderChange(sender);
+                    }}
+                    placeholder="Choose sender"
+                    searchPlaceholder="Search team members..."
+                  />
+                ) : (
+                  <span>{action.from.name}{isSms && action.from.phone && ` — ${action.from.phone}`}</span>
+                )}
+              </div>
               <div><span className="text-muted-foreground">To:</span> {action.to.name}{isSms && action.to.phone && ` — ${action.to.phone}`}</div>
             </div>
             <div className="space-y-2">

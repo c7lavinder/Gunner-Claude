@@ -11,6 +11,7 @@ import {
 } from "../../drizzle/schema";
 import { createCrmAdapter } from "../crm";
 import { createCheckoutSession, createPortalSession, getPlans } from "../services/stripe";
+import { getGhlOAuthUrl, exchangeGhlCode, saveGhlTokens, registerGhlWebhooks, getGhlSyncHealth } from "../services/ghlOAuth";
 
 const updateWorkspaceInput = z.object({
   name: z.string().optional(),
@@ -211,4 +212,33 @@ export const settingsRouter = router({
       if (!tenantId) throw new TRPCError({ code: "BAD_REQUEST", message: "No workspace" });
       return createPortalSession(tenantId, input.returnUrl);
     }),
+
+  getGhlOAuthUrl: protectedProcedure
+    .input(z.object({ redirectUri: z.string() }))
+    .query(({ ctx, input }) => {
+      const url = getGhlOAuthUrl(ctx.user.tenantId, input.redirectUri);
+      return { url };
+    }),
+
+  completeGhlOAuth: protectedProcedure
+    .input(z.object({ code: z.string(), redirectUri: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const tokens = await exchangeGhlCode(input.code, input.redirectUri);
+      await saveGhlTokens(
+        ctx.user.tenantId,
+        tokens.locationId,
+        tokens.access_token,
+        tokens.refresh_token,
+        tokens.expires_in
+      );
+      // Register webhooks after OAuth
+      const appUrl = process.env.RAILWAY_STATIC_URL || "https://gunner-app-production.up.railway.app";
+      const webhookUrl = `${appUrl}/api/webhooks/ghl`;
+      await registerGhlWebhooks(tokens.locationId, tokens.access_token, webhookUrl);
+      return { success: true, locationId: tokens.locationId };
+    }),
+
+  getSyncHealth: protectedProcedure.query(async ({ ctx }) => {
+    return getGhlSyncHealth(ctx.user.tenantId);
+  }),
 });

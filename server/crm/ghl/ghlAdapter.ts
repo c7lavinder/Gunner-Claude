@@ -387,7 +387,20 @@ export class GhlAdapter implements CrmAdapter {
     contactId: string,
     workflowId: string
   ): Promise<ActionResult> {
-    return this.actionResult(false, "Remove from workflow not yet implemented");
+    try {
+      await ghlFetch(`/contacts/${contactId}/workflow/${workflowId}`, {
+        method: "DELETE",
+        token: this.token,
+        body: {},
+      });
+      return this.actionResult(true, "Removed from workflow");
+    } catch (e) {
+      return this.actionResult(
+        false,
+        "Failed to remove from workflow",
+        e instanceof Error ? e.message : String(e)
+      );
+    }
   }
 
   async testConnection(): Promise<{ connected: boolean; error?: string }> {

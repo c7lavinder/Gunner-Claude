@@ -48,6 +48,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:px-4 focus:py-2 focus:bg-[var(--g-accent)] focus:text-white focus:rounded-md focus:m-2">
+        Skip to main content
+      </a>
       <div
         className="flex min-h-svh w-full"
         style={{
@@ -60,7 +63,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           style={{ borderColor: "var(--g-border-subtle)" }}
         >
           <SidebarHeader className="p-4">
-            <Link href="/" className="font-semibold text-lg">
+            <Link href="/" className="font-semibold text-lg" aria-label="Gunner home">
               Gunner
             </Link>
           </SidebarHeader>
@@ -115,9 +118,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </header>
           <main
+            id="main-content"
             key={location}
             className="flex-1 p-6 g-page-enter"
             style={{ background: "var(--g-bg-base)" }}
+            role="main"
           >
             {children}
           </main>

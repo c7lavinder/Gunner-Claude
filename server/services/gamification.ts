@@ -9,6 +9,7 @@ import {
   callGrades,
   calls,
   teamMembers,
+  dispoProperties,
 } from "../../drizzle/schema";
 import { eq, and, sql, or, isNull } from "drizzle-orm";
 
@@ -140,3 +141,122 @@ export function getLevel(xp: number): { level: number; title: string; xp: number
   }
   return { level, title: titles[level - 1] ?? "Rookie", xp, nextLevelXp: level < thresholds.length ? thresholds[level] : null };
 }
+
+/**
+ * Award XP + badges when a deal closes. Called by opportunity stage change handlers.
+ */
+export async function processDealClosedGamification(
+  tenantId: number,
+  teamMemberId: number,
+  propertyId: number
+): Promise<{ xpAwarded: number; newBadges: string[] }> {
+  const xpAmount = 100; // Closing a deal is a major achievement
+  const newBadges: string[] = [];
+
+  const [existingXp] = await db.select().from(userXp).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
+  if (existingXp) {
+    await db.update(userXp).set({ totalXp: existingXp.totalXp + xpAmount, updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
+  } else {
+    await db.insert(userXp).values({ tenantId, teamMemberId, totalXp: xpAmount });
+  }
+  await db.insert(xpTransactions).values({ tenantId, teamMemberId, amount: xpAmount, reason: `Deal closed (property #${propertyId})` });
+
+  const earnedSet = new Set(
+    (await db.select({ badgeCode: userBadges.badgeCode }).from(userBadges).where(and(eq(userBadges.teamMemberId, teamMemberId), eq(userBadges.tenantId, tenantId)))).map((b) => b.badgeCode)
+  );
+
+  const [{ count: closedDeals }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(dispoProperties)
+    .where(and(eq(dispoProperties.tenantId, tenantId), eq(dispoProperties.assignedToUserId, teamMemberId), eq(dispoProperties.status, "closed")));
+
+  const closerChecks: Array<[string, boolean]> = [
+    ["first_close", closedDeals >= 1],
+    ["closer_5", closedDeals >= 5],
+    ["closer_10", closedDeals >= 10],
+    ["closer_25", closedDeals >= 25],
+    ["closer_50", closedDeals >= 50],
+    ["closer_100", closedDeals >= 100],
+  ];
+
+  for (const [code, met] of closerChecks) {
+    if (!met || earnedSet.has(code)) continue;
+    const [badge] = await db.select().from(badges).where(and(eq(badges.code, code), or(eq(badges.tenantId, tenantId), isNull(badges.tenantId))));
+    const badgeId = badge?.id ?? (await db.insert(badges).values({
+      tenantId: null,
+      code,
+      name: code.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+      description: `Close ${code.split("_")[1] ?? 1} deal(s)`,
+      icon: "🏆",
+      category: "closer",
+      tier: closedDeals >= 50 ? "gold" : closedDeals >= 10 ? "silver" : "bronze",
+      target: closedDeals,
+      criteriaType: "deals_closed",
+    }).returning({ id: badges.id }))[0]!.id;
+    await db.insert(userBadges).values({ tenantId, teamMemberId, badgeId, badgeCode: code });
+    newBadges.push(code);
+    earnedSet.add(code);
+  }
+
+  // Award badge XP
+  if (newBadges.length > 0) {
+    const badgeXp = newBadges.length * SOFTWARE_PLAYBOOK.xpRewards.badgeEarned;
+    if (existingXp) {
+      await db.update(userXp).set({ totalXp: (existingXp.totalXp + xpAmount + badgeXp), updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
+    }
+    await db.insert(xpTransactions).values({ tenantId, teamMemberId, amount: badgeXp, reason: `Badge(s) earned: ${newBadges.join(", ")}` });
+  }
+
+  return { xpAwarded: xpAmount + (newBadges.length * SOFTWARE_PLAYBOOK.xpRewards.badgeEarned), newBadges };
+}
+
+/**
+ * Award improvement XP when a user's grade trend shifts upward.
+ */
+export async function processImprovementXp(
+  tenantId: number,
+  teamMemberId: number,
+  currentScore: number,
+  previousAvg: number
+): Promise<number> {
+  if (currentScore <= previousAvg || previousAvg === 0) return 0;
+
+  const improvementDelta = currentScore - previousAvg;
+  const xpBonus = improvementDelta >= 15
+    ? SOFTWARE_PLAYBOOK.xpRewards.improvement * 2
+    : SOFTWARE_PLAYBOOK.xpRewards.improvement;
+
+  const [existingXp] = await db.select().from(userXp).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
+  if (existingXp) {
+    await db.update(userXp).set({ totalXp: existingXp.totalXp + xpBonus, updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
+  } else {
+    await db.insert(userXp).values({ tenantId, teamMemberId, totalXp: xpBonus });
+  }
+  await db.insert(xpTransactions).values({ tenantId, teamMemberId, amount: xpBonus, reason: `Improvement: +${improvementDelta.toFixed(0)}% above avg` });
+
+  return xpBonus;
+}
+
+/**
+ * Default badge definitions. Seeded at startup or via playbook config.
+ */
+export const DEFAULT_BADGE_DEFINITIONS = [
+  { code: "first_call", name: "First Call", description: "Complete your first graded call", icon: "📞", category: "milestone", tier: "bronze", target: 1, criteriaType: "calls_graded" },
+  { code: "first_90", name: "Sharpshooter", description: "Score 90% or higher on a call", icon: "🎯", category: "achievement", tier: "silver", target: 1, criteriaType: "score_threshold" },
+  { code: "perfect_100", name: "Perfect Call", description: "Score a perfect 100%", icon: "💯", category: "achievement", tier: "gold", target: 1, criteriaType: "score_threshold" },
+  { code: "hot_streak_3", name: "On Fire", description: "3 calls in a row scoring 70%+", icon: "🔥", category: "streak", tier: "bronze", target: 3, criteriaType: "hot_streak" },
+  { code: "hot_streak_5", name: "Blazing", description: "5 calls in a row scoring 70%+", icon: "🔥", category: "streak", tier: "silver", target: 5, criteriaType: "hot_streak" },
+  { code: "hot_streak_10", name: "Unstoppable", description: "10 calls in a row scoring 70%+", icon: "🔥", category: "streak", tier: "gold", target: 10, criteriaType: "hot_streak" },
+  { code: "consistency_7", name: "Weekly Warrior", description: "7-day consistency streak", icon: "📅", category: "streak", tier: "bronze", target: 7, criteriaType: "consistency_streak" },
+  { code: "consistency_14", name: "Reliable", description: "14-day consistency streak", icon: "📅", category: "streak", tier: "silver", target: 14, criteriaType: "consistency_streak" },
+  { code: "consistency_30", name: "Iron Discipline", description: "30-day consistency streak", icon: "📅", category: "streak", tier: "gold", target: 30, criteriaType: "consistency_streak" },
+  { code: "calls_10", name: "Getting Started", description: "Complete 10 graded calls", icon: "📊", category: "milestone", tier: "bronze", target: 10, criteriaType: "calls_graded" },
+  { code: "calls_50", name: "Experienced", description: "Complete 50 graded calls", icon: "📊", category: "milestone", tier: "silver", target: 50, criteriaType: "calls_graded" },
+  { code: "calls_100", name: "Centurion", description: "Complete 100 graded calls", icon: "📊", category: "milestone", tier: "gold", target: 100, criteriaType: "calls_graded" },
+  { code: "calls_500", name: "Call Legend", description: "Complete 500 graded calls", icon: "📊", category: "milestone", tier: "platinum", target: 500, criteriaType: "calls_graded" },
+  { code: "first_close", name: "First Close", description: "Close your first deal", icon: "🏆", category: "closer", tier: "bronze", target: 1, criteriaType: "deals_closed" },
+  { code: "closer_5", name: "Deal Maker", description: "Close 5 deals", icon: "🏆", category: "closer", tier: "silver", target: 5, criteriaType: "deals_closed" },
+  { code: "closer_10", name: "Big League", description: "Close 10 deals", icon: "🏆", category: "closer", tier: "gold", target: 10, criteriaType: "deals_closed" },
+  { code: "closer_25", name: "Top Producer", description: "Close 25 deals", icon: "🏆", category: "closer", tier: "platinum", target: 25, criteriaType: "deals_closed" },
+  { code: "improvement", name: "Rising Star", description: "Score higher than your average", icon: "📈", category: "improvement", tier: "bronze", target: 1, criteriaType: "improvement" },
+] as const;
