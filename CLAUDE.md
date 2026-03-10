@@ -91,3 +91,17 @@ No manual deploy steps needed.
 - **Fix an API bug:** Edit server/routers.ts or the relevant server/*.ts file
 - **Add a DB column:** Edit drizzle/schema.ts → run db:generate → db:migrate
 - **Check DB:** Query via Railway Postgres (ask Xhaka for connection details)
+
+## Available Skills (use these)
+- `.claude/skills/fix-bug.md` — step-by-step bug fixing workflow
+- `.claude/skills/add-feature.md` — plan + build new features
+- `.claude/skills/review-code.md` — code review before pushing
+- `.claude/skills/deploy-check.md` — pre-deploy checklist
+
+## Plan Mode — Required for Complex Work
+For anything that touches more than 2 files OR involves DB schema changes:
+1. Switch to Plan Mode first (bottom-left in Cursor)
+2. Describe what you want
+3. Review the plan
+4. Then switch to build mode and execute
+This saves hours of rework. Never skip planning for complex builds.
