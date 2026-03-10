@@ -8,6 +8,7 @@ import { createContext } from "./context";
 import { appRouter } from "../routers";
 import { webhookRouter } from "../middleware/webhook";
 import { startPolling } from "../services/callIngestion";
+import { startDailyDigestJob } from "../services/notifications";
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.listen(ENV.port, "0.0.0.0", () => {
   console.log(`Gunner v2 running on port ${ENV.port}`);
   if (ENV.isProduction) {
     startPolling(5);
+    startDailyDigestJob();
   }
 });
 

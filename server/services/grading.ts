@@ -2,6 +2,8 @@ import { db } from "../_core/db";
 import { chatCompletion } from "../_core/llm";
 import { calls, callGrades, tenantRubrics } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { sendGradeAlert } from "./notifications";
+import { processCallGamification } from "./gamification";
 
 const DEFAULT_RUBRICS: Record<string, Array<{ name: string; maxPoints: number; description: string }>> = {
   qualification: [
@@ -82,6 +84,18 @@ export async function gradeCall(callId: number, tenantId: number) {
     .returning();
 
   await db.update(calls).set({ status: "graded", updatedAt: new Date() }).where(eq(calls.id, callId));
+
+  try {
+    await processCallGamification(callId, tenantId);
+  } catch {
+    // Gamification failure shouldn't block grading
+  }
+
+  try {
+    await sendGradeAlert(callId, tenantId);
+  } catch {
+    // Email failure shouldn't block grading
+  }
 
   return grade;
 }

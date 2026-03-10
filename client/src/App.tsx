@@ -16,6 +16,7 @@ import { Settings } from "@/pages/Settings";
 import { Playbook } from "@/pages/Playbook";
 import { Profile } from "@/pages/Profile";
 import { IndustryLanding } from "@/pages/landing/IndustryLanding";
+import { Onboarding } from "@/pages/Onboarding";
 
 export function App() {
   return (
@@ -26,6 +27,11 @@ export function App() {
         <Route path="/signup" component={Signup} />
         <Route path="/auth/google/callback" component={GoogleAuthCallback} />
         <Route path="/industries/:industry" component={IndustryLanding} />
+        <Route path="/onboarding">
+          <AuthGuard>
+            <Onboarding />
+          </AuthGuard>
+        </Route>
         <Route path="/:rest*">
           <AuthGuard>
             <DashboardLayout>

@@ -14,7 +14,10 @@ const updateWorkspaceInput = z.object({
   name: z.string().optional(),
   crmType: z.string().optional(),
   crmConfig: z.string().optional(),
+  crmConnected: z.string().optional(),
   settings: z.string().optional(),
+  onboardingStep: z.number().optional(),
+  onboardingCompleted: z.string().optional(),
 });
 
 function normalizeCrmConfig(
@@ -61,7 +64,10 @@ export const settingsRouter = router({
       if (input.name !== undefined) updates.name = input.name;
       if (input.crmType !== undefined) updates.crmType = input.crmType;
       if (input.crmConfig !== undefined) updates.crmConfig = input.crmConfig;
+      if (input.crmConnected !== undefined) updates.crmConnected = input.crmConnected;
       if (input.settings !== undefined) updates.settings = input.settings;
+      if (input.onboardingStep !== undefined) updates.onboardingStep = input.onboardingStep;
+      if (input.onboardingCompleted !== undefined) updates.onboardingCompleted = input.onboardingCompleted;
       if (Object.keys(updates).length === 0) {
         const [t] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
         return t!;
