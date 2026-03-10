@@ -212,6 +212,7 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
   const [addName, setAddName] = useState("");
   const [addAddress, setAddAddress] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [editEntry, setEditEntry] = useState<{ id: number; contactName: string; propertyAddress: string; notes: string } | null>(null);
 
   // Fetch ALL ledger items (auto-detected + manual) when modal is open
   const { data: ledgerData, isLoading: ledgerLoading } = trpc.taskCenter.getKpiLedgerItems.useQuery(
@@ -236,6 +237,15 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
       utils.taskCenter.getKpiLedgerItems.invalidate();
       utils.taskCenter.getKpiSummary.invalidate();
       setDeleteConfirmId(null);
+    },
+  });
+
+  const updateKpiMutation = trpc.taskCenter.updateKpiEntry.useMutation({
+    onSuccess: () => {
+      toast.success("Entry updated");
+      utils.taskCenter.getKpiLedgerItems.invalidate();
+      utils.taskCenter.getKpiSummary.invalidate();
+      setEditEntry(null);
     },
   });
 
@@ -340,159 +350,168 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
                 <span className="text-xl font-bold tabular-nums" style={{ color: c.text }}>{item.value}</span>
                 <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>/ {item.target}</span>
               </div>
-              {/* AM Direct subtitle for appointments */}
-              {item.type === "appointment" && (kpi as any).amDirectApts > 0 && (
-                <div className="text-[9px] mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
-                  <span className="text-amber-400">{(kpi as any).amDirectApts} AM Direct</span>
-                </div>
-              )}
-              {/* Webhook fallback subtitle */}
-              {item.type === "appointment" && (kpi as any).webhookApts > 0 && (
-                <div className="text-[9px]" style={{ color: "var(--g-text-tertiary)" }}>
-                  <span className="text-purple-400">{(kpi as any).webhookApts} via GHL</span>
-                </div>
-              )}
-              {item.type === "offer" && (kpi as any).webhookOffers > 0 && (
-                <div className="text-[9px] mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>
-                  <span className="text-purple-400">{(kpi as any).webhookOffers} via GHL</span>
-                </div>
-              )}
+              {/* Source indicator for stage-history KPIs */}
             </div>
           );
         })}
       </div>
 
       {/* Trust Ledger Modal */}
-      <Dialog open={ledgerOpen} onOpenChange={setLedgerOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span>{ledgerLabel} Ledger</span>
-              <Badge variant="outline" className="text-xs">{kpi.date}</Badge>
-            </DialogTitle>
+      <Dialog open={ledgerOpen} onOpenChange={(open) => { setLedgerOpen(open); if (!open) setLedgerSearch(""); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <span>{ledgerLabel} Ledger</span>
+                <Badge variant="outline" className="text-xs">{kpi.date}</Badge>
+              </DialogTitle>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAddModalOpen(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add
+              </Button>
+            </div>
             <DialogDescription>All {ledgerLabel.toLowerCase()} counted toward today's KPI total.</DialogDescription>
           </DialogHeader>
 
           {/* Search */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: "var(--g-text-tertiary)" }} />
             <Input
-              placeholder="Search entries..."
+              placeholder="Search by name, address, or team member..."
               value={ledgerSearch}
               onChange={(e) => setLedgerSearch(e.target.value)}
               className="pl-9 h-8 text-sm"
             />
           </div>
 
-          <div className="space-y-4">
-            {/* Auto-detected items */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-secondary)" }}>Auto-Detected</span>
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ledgerData?.autoItems?.length || 0}</Badge>
-              </div>
-              <ScrollArea className="max-h-[250px]">
+          <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+            <div className="space-y-4 pb-2">
+              {/* Auto-detected items */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-secondary)" }}>Auto-Detected</span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ledgerData?.autoItems?.length || 0}</Badge>
+                </div>
                 {ledgerLoading ? (
                   <div className="space-y-2">
-                    {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
+                    {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded" />)}
                   </div>
                 ) : !ledgerData?.autoItems || ledgerData.autoItems.length === 0 ? (
-                  <div className="text-center py-4" style={{ color: "var(--g-text-tertiary)" }}>
-                    <p className="text-xs">No auto-detected {ledgerLabel.toLowerCase()} today.</p>
+                  <div className="text-center py-4 rounded-md" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                    <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>No auto-detected {ledgerLabel.toLowerCase()} today.</p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {ledgerData.autoItems.filter((item: any) => {
                       if (!ledgerSearch) return true;
                       const s = ledgerSearch.toLowerCase();
                       return (item.contactName || "").toLowerCase().includes(s) || (item.teamMemberName || "").toLowerCase().includes(s) || (item.propertyAddress || "").toLowerCase().includes(s);
                     }).map((item: any) => (
-                      <div key={`auto-${item.id}`} className="flex items-center gap-3 rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-                        <span className="text-xs tabular-nums shrink-0 w-16" style={{ color: "var(--g-text-tertiary)" }}>
-                          {item.timestamp ? new Date(item.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" }) : "--"}
-                        </span>
-                        <span className="text-sm font-medium truncate flex-1" style={{ color: "var(--g-text-primary)" }}>
-                          {item.contactName}
-                          {item.propertyAddress && <span className="text-xs ml-1" style={{ color: "var(--g-text-tertiary)" }}>({item.propertyAddress})</span>}
-                        </span>
-                        <span className="text-xs truncate max-w-[120px]" style={{ color: "var(--g-text-secondary)" }}>
-                          {item.teamMemberName}
-                          {item.teamMemberRole && <span className="text-[10px] ml-0.5" style={{ color: "var(--g-text-tertiary)" }}>({item.teamMemberRole === "lead_gen" ? "LG" : item.teamMemberRole === "lead_manager" ? "LM" : item.teamMemberRole === "acq_manager" ? "AM" : ""})</span>}
-                        </span>
-                        <span className="text-xs tabular-nums shrink-0" style={{ color: "var(--g-text-tertiary)" }}>
-                          {item.duration ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}` : "0:00"}
-                        </span>
-                        {item.detectionType === "am_direct" ? (
-                          <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-amber-500/20 text-amber-400 border-amber-500/30">AM Direct</Badge>
-                        ) : item.detectionType === "webhook" ? (
-                          <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-purple-500/20 text-purple-400 border-purple-500/30">GHL Stage</Badge>
-                        ) : item.grade ? (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{item.grade}</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 opacity-60">Auto</Badge>
-                        )}
+                      <div key={`auto-${item.id}`} className="rounded-lg px-3 py-2.5" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs tabular-nums shrink-0 w-16" style={{ color: "var(--g-text-tertiary)" }}>
+                            {item.timestamp ? new Date(item.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" }) : "--"}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium truncate block" style={{ color: "var(--g-text-primary)" }}>
+                              {item.contactName}
+                            </span>
+                            {item.propertyAddress && (
+                              <span className="text-[11px] truncate block" style={{ color: "var(--g-text-tertiary)" }}>
+                                <MapPin className="inline h-3 w-3 mr-0.5 -mt-px" />{item.propertyAddress}
+                              </span>
+                            )}
+                          </div>
+                          {item.duration > 0 && (
+                            <span className="text-xs tabular-nums shrink-0" style={{ color: "var(--g-text-tertiary)" }}>
+                              {Math.floor(item.duration / 60)}:{String(item.duration % 60).padStart(2, '0')}
+                            </span>
+                          )}
+                          {item.detectionType === "webhook" ? (
+                            <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-purple-500/20 text-purple-400 border-purple-500/30">GHL</Badge>
+                          ) : item.detectionType === "app_manual" ? (
+                            <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-cyan-500/20 text-cyan-400 border-cyan-500/30">App</Badge>
+                          ) : item.grade ? (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{item.grade}</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 opacity-60">Auto</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1 ml-[76px]">
+                          <span className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>
+                            by {item.teamMemberName}
+                            {item.teamMemberRole && ` (${item.teamMemberRole === "lead_manager" ? "LM" : item.teamMemberRole === "acquisition_manager" ? "AM" : item.teamMemberRole === "dispo_manager" ? "Dispo" : ""})`}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
-              </ScrollArea>
-            </div>
-
-            {/* Manual entries */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-secondary)" }}>Manual Entries</span>
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ledgerData?.manualItems?.length || 0}</Badge>
               </div>
-              <ScrollArea className="max-h-[150px]">
+
+              {/* Manual entries */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--g-text-secondary)" }}>Manual Entries</span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ledgerData?.manualItems?.length || 0}</Badge>
+                </div>
                 {!ledgerData?.manualItems || ledgerData.manualItems.length === 0 ? (
-                  <div className="text-center py-3" style={{ color: "var(--g-text-tertiary)" }}>
-                    <p className="text-xs">No manual entries.</p>
+                  <div className="text-center py-3 rounded-md" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                    <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>No manual entries.</p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {ledgerData.manualItems.filter((entry: any) => {
                       if (!ledgerSearch) return true;
                       const s = ledgerSearch.toLowerCase();
-                      return (entry.contactName || "").toLowerCase().includes(s) || (entry.propertyAddress || "").toLowerCase().includes(s);
+                      return (entry.contactName || "").toLowerCase().includes(s) || (entry.propertyAddress || "").toLowerCase().includes(s) || (entry.addedByName || "").toLowerCase().includes(s);
                     }).map((entry: any) => (
-                      <div key={`manual-${entry.id}`} className="flex items-center justify-between rounded-md px-3 py-2" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs tabular-nums" style={{ color: "var(--g-text-tertiary)" }}>
-                              {entry.createdAt ? new Date(entry.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" }) : "--"}
-                            </span>
-                            <Badge className="text-[10px] px-1.5 py-0 bg-blue-500/20 text-blue-400 border-blue-500/30">Manual</Badge>
-                            <span className="text-sm font-medium truncate" style={{ color: "var(--g-text-primary)" }}>
+                      <div key={`manual-${entry.id}`} className="rounded-lg px-3 py-2.5" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs tabular-nums shrink-0 w-16" style={{ color: "var(--g-text-tertiary)" }}>
+                            {entry.createdAt ? new Date(entry.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Chicago" }) : "--"}
+                          </span>
+                          <Badge className="text-[10px] px-1.5 py-0 bg-blue-500/20 text-blue-400 border-blue-500/30 shrink-0">Manual</Badge>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium truncate block" style={{ color: "var(--g-text-primary)" }}>
                               {entry.contactName || "Manual Entry"}
                             </span>
+                            {entry.propertyAddress && (
+                              <span className="text-[11px] truncate block" style={{ color: "var(--g-text-tertiary)" }}>
+                                <MapPin className="inline h-3 w-3 mr-0.5 -mt-px" />{entry.propertyAddress}
+                              </span>
+                            )}
                           </div>
-                          {entry.propertyAddress && (
-                            <p className="text-xs truncate mt-0.5" style={{ color: "var(--g-text-secondary)" }}>
-                              <MapPin className="inline h-3 w-3 mr-1" />{entry.propertyAddress}
-                            </p>
-                          )}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => setEditEntry({ id: entry.id, contactName: entry.contactName || "", propertyAddress: entry.propertyAddress || "", notes: entry.notes || "" })}
+                            >
+                              <Pencil className="h-3 w-3" style={{ color: "var(--g-text-tertiary)" }} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => setDeleteConfirmId(entry.id)}
+                            >
+                              <Trash2 className="h-3 w-3" style={{ color: "var(--g-accent)" }} />
+                            </Button>
+                          </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 shrink-0"
-                          onClick={() => setDeleteConfirmId(entry.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" style={{ color: "var(--g-accent)" }} />
-                        </Button>
+                        <div className="flex items-center gap-1 mt-1 ml-[76px]">
+                          <span className="text-[10px]" style={{ color: "var(--g-text-tertiary)" }}>
+                            added by {entry.addedByName} {entry.createdAt ? `\u00b7 ${timeAgo(entry.createdAt)}` : ""}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
-              </ScrollArea>
+              </div>
             </div>
-
-            {/* Add button */}
-            <Button variant="outline" size="sm" className="w-full" onClick={() => setAddModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Add Manual Entry
-            </Button>
-          </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
@@ -528,6 +547,49 @@ function KpiBar({ roleTab, teamMembers }: { roleTab: RoleTab; teamMembers?: Team
               disabled={addKpiMutation.isPending}
             >
               {addKpiMutation.isPending ? "Adding..." : "Confirm Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Entry Modal */}
+      <Dialog open={editEntry !== null} onOpenChange={(open) => !open && setEditEntry(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Entry</DialogTitle>
+            <DialogDescription>Update this manual entry's details.</DialogDescription>
+          </DialogHeader>
+          {editEntry && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-name">Lead Name</Label>
+                <Input id="edit-name" value={editEntry.contactName} onChange={(e) => setEditEntry({ ...editEntry, contactName: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-address">Property Address</Label>
+                <Input id="edit-address" value={editEntry.propertyAddress} onChange={(e) => setEditEntry({ ...editEntry, propertyAddress: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Input id="edit-notes" value={editEntry.notes} onChange={(e) => setEditEntry({ ...editEntry, notes: e.target.value })} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditEntry(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editEntry) return;
+                updateKpiMutation.mutate({
+                  entryId: editEntry.id,
+                  contactName: editEntry.contactName,
+                  propertyAddress: editEntry.propertyAddress,
+                  notes: editEntry.notes,
+                });
+              }}
+              disabled={updateKpiMutation.isPending}
+            >
+              {updateKpiMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

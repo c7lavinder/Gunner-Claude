@@ -8093,6 +8093,24 @@ selectedTimezone: { type: "string" },
         return await deleteDailyKpiEntry(ctx.user.tenantId, ctx.user.id, input.entryId);
       }),
 
+    // Update a manual KPI entry
+    updateKpiEntry: protectedProcedure
+      .input(z.object({
+        entryId: z.number(),
+        contactName: z.string().optional(),
+        propertyAddress: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "No tenant" });
+        const { updateDailyKpiEntry } = await import("./dayHub");
+        return await updateDailyKpiEntry(ctx.user.tenantId, ctx.user.id, input.entryId, {
+          contactName: input.contactName,
+          propertyAddress: input.propertyAddress,
+          notes: input.notes,
+        });
+      }),
+
     // Dismiss conversation (mark as read in GHL)
     dismissConversation: protectedProcedure
       .input(z.object({ conversationId: z.string() }))

@@ -15,8 +15,8 @@ import {
 } from "./ghlActions";
 import { type TaskWithContext } from "./taskCenter";
 import { getDb } from "./db";
-import { dailyKpiEntries, calls, teamMembers, callGrades, propertyStageHistory, dispoProperties } from "../drizzle/schema";
-import { eq, and, sql, gte, lt, inArray } from "drizzle-orm";
+import { dailyKpiEntries, calls, teamMembers, callGrades, propertyStageHistory, dispoProperties, users } from "../drizzle/schema";
+import { eq, and, sql, gte, lt, inArray, or, isNull } from "drizzle-orm";
 
 // ─── SERVER-SIDE CACHE ──────────────────────────────────
 
@@ -738,14 +738,41 @@ export async function deleteDailyKpiEntry(
   return { success: true };
 }
 
+export async function updateDailyKpiEntry(
+  tenantId: number,
+  userId: number,
+  entryId: number,
+  data: { contactName?: string; propertyAddress?: string; notes?: string }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updates: Record<string, any> = {};
+  if (data.contactName !== undefined) updates.contactName = data.contactName || null;
+  if (data.propertyAddress !== undefined) updates.propertyAddress = data.propertyAddress || null;
+  if (data.notes !== undefined) updates.notes = data.notes || null;
+
+  if (Object.keys(updates).length === 0) return { success: true };
+
+  await db
+    .update(dailyKpiEntries)
+    .set(updates)
+    .where(
+      and(
+        eq(dailyKpiEntries.id, entryId),
+        eq(dailyKpiEntries.tenantId, tenantId),
+        eq(dailyKpiEntries.userId, userId)
+      )
+    );
+
+  return { success: true };
+}
+
 /**
  * Get KPI summary counts for a user on a given date.
- * Auto-counts from real call data + supplements with manual entries.
- * - calls: total calls in calls table for this tenant today
- * - conversations: calls classified as "conversation" today
- * - appointments: calls with callOutcome = "appointment_set" today
- * - offers: calls with callOutcome = "offer_made" today
- * - contracts: manual entries only (no auto-detection available)
+ * - calls/conversations: from calls table
+ * - appointments/offers/contracts: from property_stage_history (matches Inventory)
+ * - manual daily_kpi_entries supplement both categories
  */
 export async function getKpiSummary(
   tenantId: number,
@@ -758,232 +785,160 @@ export async function getKpiSummary(
   if (!db) return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
 
   try {
-    // Parse date string to get start/end of day in Central time
     const [year, month, day] = date.split("-").map(Number);
-    // Create date range for the given date in CT (UTC-6)
-    const dayStartUTC = new Date(Date.UTC(year, month - 1, day, 6, 0, 0)); // midnight CT = 6am UTC
-    const dayEndUTC = new Date(Date.UTC(year, month - 1, day + 1, 6, 0, 0)); // next midnight CT
+    const dayStartUTC = new Date(Date.UTC(year, month - 1, day, 6, 0, 0));
+    const dayEndUTC = new Date(Date.UTC(year, month - 1, day + 1, 6, 0, 0));
 
-    // Build base conditions — always filter by tenant + date range
-    const baseConditions = [
-      eq(calls.tenantId, tenantId),
-      gte(calls.callTimestamp, dayStartUTC),
-      lt(calls.callTimestamp, dayEndUTC),
-    ];
-
-    // Role-based filtering: when admin selects a role tab, filter by ALL team members in that role
     const roleToTeamRole: Record<string, string> = {
       lm: "lead_manager",
       am: "acquisition_manager",
       dispo: "dispo_manager",
     };
 
-    // For AM tab: calls/convos filter by AM team members, but offers/contracts show ALL sources
-    // because AMs work on leads sourced by LMs — they attend appointments set by LMs.
-    let amRoleMemberIds: number[] | null = null;
+    let roleUserIds: number[] | null = null;
+    let roleMemberIds: number[] | null = null;
 
     if (roleTab && roleTab !== "admin" && roleToTeamRole[roleTab]) {
-      // Get all team member IDs for this role
       const roleMembers = await db
-        .select({ id: teamMembers.id })
+        .select({ id: teamMembers.id, mappedUserId: teamMembers.userId })
         .from(teamMembers)
-        .where(
-          and(
-            eq(teamMembers.tenantId, tenantId),
-            eq(teamMembers.teamRole, roleToTeamRole[roleTab] as any),
-            eq(teamMembers.isActive, "true")
-          )
-        );
-      const roleMemberIds = roleMembers.map(m => m.id);
+        .where(and(
+          eq(teamMembers.tenantId, tenantId),
+          eq(teamMembers.teamRole, roleToTeamRole[roleTab] as any),
+          eq(teamMembers.isActive, "true")
+        ));
+      roleMemberIds = roleMembers.map(m => m.id);
+      roleUserIds = roleMembers.map(m => m.mappedUserId).filter((id): id is number => id !== null);
 
-      if (roleTab === "am") {
-        // AM tab: only filter calls/convos by AM members; offers/contracts are tenant-wide
-        amRoleMemberIds = roleMemberIds;
-        if (roleMemberIds.length > 0) {
-          baseConditions.push(inArray(calls.teamMemberId, roleMemberIds));
-        }
-        // Don't return zeros for AM — offers/contracts come from all sources
-      } else {
-        if (roleMemberIds.length > 0) {
-          baseConditions.push(inArray(calls.teamMemberId, roleMemberIds));
-        } else {
-          // No members in this role — return zeros
-          return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
-        }
+      if (roleMemberIds.length === 0) {
+        return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
       }
-    } else if (teamMemberId && roleTab !== "admin") {
-      // Non-admin user viewing their own stats
-      baseConditions.push(eq(calls.teamMemberId, teamMemberId));
     }
 
-    // Auto-count from calls table — every single dial today
-    console.log(`[DayHub KPI] Query params: tenantId=${tenantId}, date=${date}, teamMemberId=${teamMemberId}, roleTab=${roleTab}`);
-    console.log(`[DayHub KPI] Date range: ${dayStartUTC.toISOString()} to ${dayEndUTC.toISOString()}`);
-    const [autoCallsResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(calls)
-      .where(and(...baseConditions));
-    const autoCalls = Number(autoCallsResult?.count || 0);
-    console.log(`[DayHub KPI] Auto calls: ${autoCalls}`);
-
-    // Auto-count conversations (classification = 'conversation')
-    const [autoConvosResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(calls)
-      .where(and(...baseConditions, eq(calls.classification, "conversation")));
-    const autoConvos = Number(autoConvosResult?.count || 0);
-
-    // Auto-count appointments set (callOutcome = 'appointment_set')
-    // DEDUP: Count 1 per unique property (by ghlContactId) per day
-    // For AM tab: use tenant-wide conditions (not filtered by AM members) for apts/offers/contracts
-    const aptOfferConditions = roleTab === "am" ? [
+    // ─── CALLS & CONVERSATIONS (from calls table) ───
+    const callConds = [
       eq(calls.tenantId, tenantId),
       gte(calls.callTimestamp, dayStartUTC),
       lt(calls.callTimestamp, dayEndUTC),
-    ] : baseConditions;
+    ];
 
-    const [autoAptsResult] = await db
-      .select({ count: sql<number>`COUNT(DISTINCT COALESCE(${calls.ghlContactId}, CAST(${calls.id} AS CHAR)))` })
-      .from(calls)
-      .where(and(...aptOfferConditions, eq(calls.callOutcome, "appointment_set")));
-    const autoApts = Number(autoAptsResult?.count || 0);
-
-    // AM Direct count: AMs who set appointments (counts toward apts but NOT toward LM credit)
-    // This is informational — the apt still counts in the total, but we track AM Direct separately
-    const [amDirectAptsResult] = await db
-      .select({ count: sql<number>`COUNT(DISTINCT COALESCE(${calls.ghlContactId}, CAST(${calls.id} AS CHAR)))` })
-      .from(calls)
-      .innerJoin(teamMembers, eq(calls.teamMemberId, teamMembers.id))
-      .where(and(
-        ...aptOfferConditions,
-        eq(calls.callOutcome, "appointment_set"),
-        eq(teamMembers.teamRole, "acquisition_manager")
-      ));
-    const amDirectApts = Number(amDirectAptsResult?.count || 0);
-
-    // Auto-count offers made (callOutcome = 'offer_made')
-    // DEDUP: Count 1 per unique property (by ghlContactId) per day
-    // For AM tab: use tenant-wide conditions so AMs see all offers, not just their own
-    const [autoOffersResult] = await db
-      .select({ count: sql<number>`COUNT(DISTINCT COALESCE(${calls.ghlContactId}, CAST(${calls.id} AS CHAR)))` })
-      .from(calls)
-      .where(and(...aptOfferConditions, eq(calls.callOutcome, "offer_made")));
-    const autoOffers = Number(autoOffersResult?.count || 0);
-
-    // ─── CASCADING FALLBACK: GHL stage changes ───
-    // If a property moved to apt_set or offer_made via GHL webhook today,
-    // but there's no corresponding graded call, count it as a "webhook" detection.
-    let webhookApts = 0;
-    let webhookOffers = 0;
-    try {
-      // Get ghlContactIds already counted from calls (to avoid double-counting)
-      const aptCallContactIds = await db
-        .select({ ghlContactId: calls.ghlContactId })
-        .from(calls)
-        .where(and(...baseConditions, eq(calls.callOutcome, "appointment_set")))
-        .then((rows: any[]) => new Set(rows.map((r: any) => r.ghlContactId).filter(Boolean)));
-
-      const offerCallContactIds = await db
-        .select({ ghlContactId: calls.ghlContactId })
-        .from(calls)
-        .where(and(...baseConditions, eq(calls.callOutcome, "offer_made")))
-        .then((rows: any[]) => new Set(rows.map((r: any) => r.ghlContactId).filter(Boolean)));
-
-      // Find properties that changed to apt_set today via webhook but have no matching call
-      const webhookAptProps = await db
-        .select({
-          propertyId: propertyStageHistory.propertyId,
-          ghlContactId: dispoProperties.ghlContactId,
-        })
-        .from(propertyStageHistory)
-        .innerJoin(dispoProperties, eq(propertyStageHistory.propertyId, dispoProperties.id))
-        .where(and(
-          eq(propertyStageHistory.tenantId, tenantId),
-          eq(propertyStageHistory.toStatus, "apt_set"),
-          eq(propertyStageHistory.source, "webhook"),
-          gte(propertyStageHistory.changedAt, dayStartUTC),
-          lt(propertyStageHistory.changedAt, dayEndUTC)
-        ));
-
-      for (const prop of webhookAptProps) {
-        if (prop.ghlContactId && !aptCallContactIds.has(prop.ghlContactId)) {
-          webhookApts++;
-        }
-      }
-
-      // Find properties that changed to offer_made today via webhook but have no matching call
-      const webhookOfferProps = await db
-        .select({
-          propertyId: propertyStageHistory.propertyId,
-          ghlContactId: dispoProperties.ghlContactId,
-        })
-        .from(propertyStageHistory)
-        .innerJoin(dispoProperties, eq(propertyStageHistory.propertyId, dispoProperties.id))
-        .where(and(
-          eq(propertyStageHistory.tenantId, tenantId),
-          eq(propertyStageHistory.toStatus, "offer_made"),
-          eq(propertyStageHistory.source, "webhook"),
-          gte(propertyStageHistory.changedAt, dayStartUTC),
-          lt(propertyStageHistory.changedAt, dayEndUTC)
-        ));
-
-      for (const prop of webhookOfferProps) {
-        if (prop.ghlContactId && !offerCallContactIds.has(prop.ghlContactId)) {
-          webhookOffers++;
-        }
-      }
-    } catch (cascadeError) {
-      console.error("[DayHub] Cascading fallback query failed (non-fatal):", (cascadeError as any)?.message);
+    if (roleMemberIds && roleMemberIds.length > 0) {
+      callConds.push(inArray(calls.teamMemberId, roleMemberIds));
+    } else if (teamMemberId && roleTab !== "admin") {
+      callConds.push(eq(calls.teamMemberId, teamMemberId));
     }
 
-    // Manual entries (supplements for things like contracts that can't be auto-detected)
+    const [callsResult] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(calls)
+      .where(and(...callConds));
+    const autoCalls = Number(callsResult?.count || 0);
+
+    const [convosResult] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(calls)
+      .where(and(...callConds, eq(calls.classification, "conversation")));
+    const autoConvos = Number(convosResult?.count || 0);
+
+    // ─── APPOINTMENTS / OFFERS / CONTRACTS (property_stage_history — single source of truth) ───
+    const stageBase = [
+      eq(propertyStageHistory.tenantId, tenantId),
+      gte(propertyStageHistory.changedAt, dayStartUTC),
+      lt(propertyStageHistory.changedAt, dayEndUTC),
+    ];
+
+    const countStage = async (toStatus: string): Promise<number> => {
+      const conds = [...stageBase, eq(propertyStageHistory.toStatus, toStatus)];
+
+      if (roleTab === "admin" || !roleTab) {
+        const [r] = await db!
+          .select({ count: sql<number>`COUNT(DISTINCT ${propertyStageHistory.propertyId})` })
+          .from(propertyStageHistory)
+          .where(and(...conds));
+        return Number(r?.count || 0);
+      }
+
+      if (roleUserIds && roleUserIds.length > 0) {
+        const assignedCol = roleTab === "am"
+          ? dispoProperties.assignedAmUserId
+          : dispoProperties.assignedLmUserId;
+
+        const [r] = await db!
+          .select({ count: sql<number>`COUNT(DISTINCT ${propertyStageHistory.propertyId})` })
+          .from(propertyStageHistory)
+          .innerJoin(dispoProperties, eq(propertyStageHistory.propertyId, dispoProperties.id))
+          .where(and(
+            ...conds,
+            or(
+              inArray(propertyStageHistory.changedByUserId, roleUserIds),
+              and(isNull(propertyStageHistory.changedByUserId), inArray(assignedCol, roleUserIds))
+            )
+          ));
+        return Number(r?.count || 0);
+      }
+
+      // Individual user viewing own stats
+      const [r] = await db!
+        .select({ count: sql<number>`COUNT(DISTINCT ${propertyStageHistory.propertyId})` })
+        .from(propertyStageHistory)
+        .where(and(...conds, eq(propertyStageHistory.changedByUserId, userId)));
+      return Number(r?.count || 0);
+    };
+
+    const stageApts = await countStage("apt_set");
+    const stageOffers = await countStage("offer_made");
+    const stageContracts = await countStage("under_contract");
+
+    // ─── MANUAL ENTRIES (scoped by role) ───
     const manual: Record<string, number> = {};
     try {
+      const manualConds: any[] = [
+        eq(dailyKpiEntries.tenantId, tenantId),
+        eq(dailyKpiEntries.date, date),
+      ];
+
+      if (roleTab === "admin") {
+        // admin sees all manual entries for the tenant
+      } else if (roleUserIds && roleUserIds.length > 0) {
+        manualConds.push(inArray(dailyKpiEntries.userId, roleUserIds));
+      } else {
+        manualConds.push(eq(dailyKpiEntries.userId, userId));
+      }
+
       const manualEntries = await db
         .select({
           kpiType: dailyKpiEntries.kpiType,
           count: sql<number>`COUNT(*)`,
         })
         .from(dailyKpiEntries)
-        .where(
-          and(
-            eq(dailyKpiEntries.tenantId, tenantId),
-            eq(dailyKpiEntries.userId, userId),
-            eq(dailyKpiEntries.date, date)
-          )
-        )
+        .where(and(...manualConds))
         .groupBy(dailyKpiEntries.kpiType);
 
       for (const row of manualEntries) {
         manual[row.kpiType] = Number(row.count);
       }
     } catch (manualError) {
-      console.error("[DayHub] Manual KPI entries query failed (non-fatal):", (manualError as any)?.message);
+      console.error("[DayHub] Manual KPI query failed:", (manualError as any)?.message);
     }
 
-    // Use auto-counts as the primary source, add manual entries + webhook fallback
     return {
       calls: autoCalls + (manual["call"] || 0),
       conversations: autoConvos + (manual["conversation"] || 0),
-      appointments: autoApts + webhookApts + (manual["appointment"] || 0),
-      offers: autoOffers + webhookOffers + (manual["offer"] || 0),
-      contracts: manual["contract"] || 0, // contracts are manual-only
-      // Breakdown metadata for the UI
-      amDirectApts,
-      webhookApts,
-      webhookOffers,
+      appointments: stageApts + (manual["appointment"] || 0),
+      offers: stageOffers + (manual["offer"] || 0),
+      contracts: stageContracts + (manual["contract"] || 0),
       date,
     };
   } catch (error) {
     console.error("[DayHub] getKpiSummary error:", error);
-    console.error("[DayHub] getKpiSummary error stack:", (error as any)?.stack);
     return { calls: 0, conversations: 0, appointments: 0, offers: 0, contracts: 0 };
   }
 }
 
 /**
  * Get all individual items counted toward a KPI for the ledger popup.
- * Returns both auto-detected items (from calls table) and manual entries.
+ * Returns auto-detected items (calls or stage transitions) plus manual entries,
+ * with attribution info (who completed, when).
  */
 export async function getKpiLedgerItems(
   tenantId: number,
@@ -1001,42 +956,30 @@ export async function getKpiLedgerItems(
     const dayStartUTC = new Date(Date.UTC(year, month - 1, day, 6, 0, 0));
     const dayEndUTC = new Date(Date.UTC(year, month - 1, day + 1, 6, 0, 0));
 
-    // Build base conditions for calls query
-    const baseConditions = [
-      eq(calls.tenantId, tenantId),
-      gte(calls.callTimestamp, dayStartUTC),
-      lt(calls.callTimestamp, dayEndUTC),
-    ];
-
-    // Role-based filtering
     const roleToTeamRole: Record<string, string> = {
       lm: "lead_manager",
       am: "acquisition_manager",
       dispo: "dispo_manager",
     };
 
+    let roleUserIds: number[] | null = null;
+    let roleMemberIds: number[] | null = null;
+
     if (roleTab && roleTab !== "admin" && roleToTeamRole[roleTab]) {
       const roleMembers = await db
-        .select({ id: teamMembers.id })
+        .select({ id: teamMembers.id, mappedUserId: teamMembers.userId })
         .from(teamMembers)
-        .where(
-          and(
-            eq(teamMembers.tenantId, tenantId),
-            eq(teamMembers.teamRole, roleToTeamRole[roleTab] as any),
-            eq(teamMembers.isActive, "true")
-          )
-        );
-      const roleMemberIds = roleMembers.map(m => m.id);
-      if (roleMemberIds.length > 0) {
-        baseConditions.push(inArray(calls.teamMemberId, roleMemberIds));
-      } else {
-        return { autoItems: [], manualItems: [] };
-      }
-    } else if (teamMemberId && roleTab !== "admin") {
-      baseConditions.push(eq(calls.teamMemberId, teamMemberId));
+        .where(and(
+          eq(teamMembers.tenantId, tenantId),
+          eq(teamMembers.teamRole, roleToTeamRole[roleTab] as any),
+          eq(teamMembers.isActive, "true")
+        ));
+      roleMemberIds = roleMembers.map(m => m.id);
+      roleUserIds = roleMembers.map(m => m.mappedUserId).filter((id): id is number => id !== null);
+      if (roleMemberIds.length === 0) return { autoItems: [], manualItems: [] };
     }
 
-    // Get auto-detected items from calls table
+    // ─── AUTO ITEMS ───
     let autoItems: Array<{
       id: number;
       source: "auto";
@@ -1049,28 +992,33 @@ export async function getKpiLedgerItems(
       grade: string | null;
       classification: string | null;
       callOutcome: string | null;
-      detectionType: "auto" | "am_direct" | "webhook";
+      detectionType: "auto" | "am_direct" | "webhook" | "app_manual";
       propertyAddress?: string;
     }> = [];
 
-    if (kpiType !== "contract") {
-      // Build KPI-specific conditions
-      const kpiConditions = [...baseConditions];
-      if (kpiType === "conversation") {
-        kpiConditions.push(eq(calls.classification, "conversation"));
-      } else if (kpiType === "appointment") {
-        kpiConditions.push(eq(calls.callOutcome, "appointment_set"));
-      } else if (kpiType === "offer") {
-        kpiConditions.push(eq(calls.callOutcome, "offer_made"));
-      }
-      // For "call" type, no additional filter — all calls count
+    if (kpiType === "call" || kpiType === "conversation") {
+      // Calls & conversations from calls table
+      const callConds = [
+        eq(calls.tenantId, tenantId),
+        gte(calls.callTimestamp, dayStartUTC),
+        lt(calls.callTimestamp, dayEndUTC),
+      ];
 
-      const autoRows = await db
+      if (roleMemberIds && roleMemberIds.length > 0) {
+        callConds.push(inArray(calls.teamMemberId, roleMemberIds));
+      } else if (teamMemberId && roleTab !== "admin") {
+        callConds.push(eq(calls.teamMemberId, teamMemberId));
+      }
+
+      if (kpiType === "conversation") {
+        callConds.push(eq(calls.classification, "conversation"));
+      }
+
+      const callRows = await db
         .select({
           id: calls.id,
           contactName: calls.contactName,
           contactPhone: calls.contactPhone,
-          ghlContactId: calls.ghlContactId,
           teamMemberId: calls.teamMemberId,
           callTimestamp: calls.callTimestamp,
           duration: calls.duration,
@@ -1080,12 +1028,11 @@ export async function getKpiLedgerItems(
         })
         .from(calls)
         .leftJoin(callGrades, eq(calls.id, callGrades.callId))
-        .where(and(...kpiConditions))
+        .where(and(...callConds))
         .orderBy(sql`${calls.callTimestamp} DESC`)
-        .limit(100);
+        .limit(200);
 
-      // Resolve team member names AND roles for AM Direct detection
-      const memberIds = Array.from(new Set(autoRows.map(r => r.teamMemberId).filter(Boolean))) as number[];
+      const memberIds = Array.from(new Set(callRows.map(r => r.teamMemberId).filter(Boolean))) as number[];
       const memberMap = new Map<number, { name: string; teamRole: string }>();
       if (memberIds.length > 0) {
         const members = await db
@@ -1095,16 +1042,13 @@ export async function getKpiLedgerItems(
         members.forEach(m => memberMap.set(m.id, { name: m.name, teamRole: m.teamRole }));
       }
 
-      let mappedItems = autoRows.map(r => {
+      autoItems = callRows.map(r => {
         const member = r.teamMemberId ? memberMap.get(r.teamMemberId) : null;
-        const isAmDirect = member?.teamRole === "acquisition_manager" &&
-          (r.callOutcome === "appointment_set");
         return {
           id: r.id,
           source: "auto" as const,
           contactName: r.contactName || "Unknown",
           contactPhone: r.contactPhone || "",
-          ghlContactId: r.ghlContactId || null,
           teamMemberName: member?.name || "Unknown",
           teamMemberRole: member?.teamRole || undefined,
           timestamp: r.callTimestamp ? new Date(r.callTimestamp).toISOString() : "",
@@ -1112,92 +1056,109 @@ export async function getKpiLedgerItems(
           grade: r.overallGrade || null,
           classification: r.classification || null,
           callOutcome: r.callOutcome || null,
-          detectionType: (isAmDirect ? "am_direct" : "auto") as "auto" | "am_direct" | "webhook",
+          detectionType: "auto" as const,
         };
       });
+    } else {
+      // Apts / Offers / Contracts from property_stage_history
+      const statusMap: Record<string, string> = {
+        appointment: "apt_set",
+        offer: "offer_made",
+        contract: "under_contract",
+      };
+      const targetStatus = statusMap[kpiType];
 
-      // DEDUP: For appointments and offers, show only 1 entry per unique contact (property) per day
-      if (kpiType === "appointment" || kpiType === "offer") {
-        const seen = new Set<string>();
-        mappedItems = mappedItems.filter(item => {
-          const key = item.ghlContactId || `call-${item.id}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
+      const stageConds: any[] = [
+        eq(propertyStageHistory.tenantId, tenantId),
+        eq(propertyStageHistory.toStatus, targetStatus),
+        gte(propertyStageHistory.changedAt, dayStartUTC),
+        lt(propertyStageHistory.changedAt, dayEndUTC),
+      ];
+
+      if (roleTab !== "admin" && roleTab && roleUserIds && roleUserIds.length > 0) {
+        const assignedCol = roleTab === "am"
+          ? dispoProperties.assignedAmUserId
+          : dispoProperties.assignedLmUserId;
+        stageConds.push(
+          or(
+            inArray(propertyStageHistory.changedByUserId, roleUserIds),
+            and(isNull(propertyStageHistory.changedByUserId), inArray(assignedCol, roleUserIds))
+          )
+        );
+      } else if (roleTab !== "admin" && !roleUserIds) {
+        stageConds.push(eq(propertyStageHistory.changedByUserId, userId));
+      }
+
+      const stageRows = await db
+        .select({
+          id: propertyStageHistory.id,
+          propertyId: propertyStageHistory.propertyId,
+          changedAt: propertyStageHistory.changedAt,
+          stageSource: propertyStageHistory.source,
+          address: dispoProperties.address,
+          sellerName: dispoProperties.sellerName,
+          sellerPhone: dispoProperties.sellerPhone,
+          changedByName: users.name,
+        })
+        .from(propertyStageHistory)
+        .innerJoin(dispoProperties, eq(propertyStageHistory.propertyId, dispoProperties.id))
+        .leftJoin(users, eq(propertyStageHistory.changedByUserId, users.id))
+        .where(and(...stageConds))
+        .orderBy(sql`${propertyStageHistory.changedAt} DESC`)
+        .limit(200);
+
+      // Dedup by propertyId (keep most recent)
+      const seen = new Set<number>();
+      autoItems = stageRows
+        .filter(r => {
+          if (seen.has(r.propertyId)) return false;
+          seen.add(r.propertyId);
           return true;
-        });
-      }
-
-      autoItems = mappedItems.map(({ ghlContactId, ...rest }) => rest);
+        })
+        .map(r => ({
+          id: r.id,
+          source: "auto" as const,
+          contactName: r.sellerName || "Unknown",
+          contactPhone: r.sellerPhone || "",
+          teamMemberName: r.changedByName || (r.stageSource === "webhook" ? "GHL Webhook" : "System"),
+          timestamp: r.changedAt ? new Date(r.changedAt).toISOString() : "",
+          duration: 0,
+          grade: null,
+          classification: null,
+          callOutcome: targetStatus,
+          detectionType: (r.stageSource === "webhook" ? "webhook" : r.stageSource === "manual" ? "app_manual" : "auto") as any,
+          propertyAddress: r.address || undefined,
+        }));
     }
 
-    // ─── CASCADING FALLBACK: Add webhook-detected items to the ledger ───
-    // Properties that moved to apt_set or offer_made via GHL webhook today
-    // but have no corresponding graded call
-    let webhookItems: typeof autoItems = [];
-    if (kpiType === "appointment" || kpiType === "offer") {
-      try {
-        const targetStatus = kpiType === "appointment" ? "apt_set" : "offer_made";
-        const autoContactIds = new Set(autoItems.map(i => (i as any).ghlContactId || "").filter(Boolean));
+    // ─── MANUAL ENTRIES (scoped by role, with attribution) ───
+    const manualConds: any[] = [
+      eq(dailyKpiEntries.tenantId, tenantId),
+      eq(dailyKpiEntries.date, date),
+      eq(dailyKpiEntries.kpiType, kpiType),
+    ];
 
-        const webhookProps = await db
-          .select({
-            id: propertyStageHistory.id,
-            propertyId: propertyStageHistory.propertyId,
-            changedAt: propertyStageHistory.changedAt,
-            ghlContactId: dispoProperties.ghlContactId,
-            sellerName: dispoProperties.sellerName,
-            address: dispoProperties.address,
-          })
-          .from(propertyStageHistory)
-          .innerJoin(dispoProperties, eq(propertyStageHistory.propertyId, dispoProperties.id))
-          .where(and(
-            eq(propertyStageHistory.tenantId, tenantId),
-            eq(propertyStageHistory.toStatus, targetStatus),
-            eq(propertyStageHistory.source, "webhook"),
-            gte(propertyStageHistory.changedAt, dayStartUTC),
-            lt(propertyStageHistory.changedAt, dayEndUTC)
-          ))
-          .orderBy(sql`${propertyStageHistory.changedAt} DESC`);
-
-        for (const prop of webhookProps) {
-          // Skip if already counted from a call
-          if (prop.ghlContactId && autoContactIds.has(prop.ghlContactId)) continue;
-
-          webhookItems.push({
-            id: prop.id + 1000000, // offset to avoid ID collision with calls
-            source: "auto" as const,
-            contactName: prop.sellerName || "Unknown",
-            contactPhone: "",
-            teamMemberName: "GHL Stage Change",
-            timestamp: prop.changedAt ? new Date(prop.changedAt).toISOString() : "",
-            duration: 0,
-            grade: null,
-            classification: null,
-            callOutcome: kpiType === "appointment" ? "appointment_set" : "offer_made",
-            detectionType: "webhook" as const,
-            propertyAddress: prop.address || undefined,
-          });
-        }
-      } catch (webhookError) {
-        console.error("[DayHub] Webhook fallback ledger query failed (non-fatal):", (webhookError as any)?.message);
-      }
+    if (roleTab === "admin") {
+      // admin sees all
+    } else if (roleUserIds && roleUserIds.length > 0) {
+      manualConds.push(inArray(dailyKpiEntries.userId, roleUserIds));
+    } else {
+      manualConds.push(eq(dailyKpiEntries.userId, userId));
     }
 
-    // Merge auto + webhook items
-    autoItems = [...autoItems, ...webhookItems];
-
-    // Get manual entries
     const manualRows = await db
-      .select()
+      .select({
+        id: dailyKpiEntries.id,
+        contactName: dailyKpiEntries.contactName,
+        propertyAddress: dailyKpiEntries.propertyAddress,
+        notes: dailyKpiEntries.notes,
+        createdAt: dailyKpiEntries.createdAt,
+        addedByName: users.name,
+      })
       .from(dailyKpiEntries)
-      .where(
-        and(
-          eq(dailyKpiEntries.tenantId, tenantId),
-          eq(dailyKpiEntries.userId, userId),
-          eq(dailyKpiEntries.date, date),
-          eq(dailyKpiEntries.kpiType, kpiType)
-        )
-      );
+      .leftJoin(users, eq(dailyKpiEntries.userId, users.id))
+      .where(and(...manualConds))
+      .orderBy(sql`${dailyKpiEntries.createdAt} DESC`);
 
     const manualItems = manualRows.map(r => ({
       id: r.id,
@@ -1206,6 +1167,7 @@ export async function getKpiLedgerItems(
       propertyAddress: r.propertyAddress || "",
       notes: r.notes || "",
       createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : "",
+      addedByName: r.addedByName || "Unknown",
     }));
 
     return { autoItems, manualItems };
