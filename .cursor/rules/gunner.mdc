@@ -33,13 +33,20 @@ Never use raw process.env in business logic. Never hardcode keys.
 
 ## Key Files
 - server/_core/env.ts — all environment variables
-- server/routers.ts — all API endpoints
+- server/routers/ — all API endpoints (split into 12 router files)
 - drizzle/schema.ts — database schema (source of truth)
 - server/_core/llm.ts — AI/LLM calls (OpenAI)
-- server/_core/voiceTranscription.ts — Whisper transcription
-- server/storage.ts — Supabase file storage
-- server/emailService.ts — Resend email sending
-- server/ghlService.ts — GHL CRM sync
+- server/services/grading.ts — AI call grading pipeline
+- server/_core/storage.ts — Supabase file storage
+- server/_core/email.ts — Resend email sending
+- server/crm/ghl/ghlAdapter.ts — GHL CRM adapter
+
+## Living Documents — Keep Updated
+After completing meaningful work, update the relevant docs:
+- SAAS-LIFECYCLE.md — Update the affected stage (status %, gaps, priority). Add a row to the Change Log.
+- BUILD-STATUS.md — Move items from "What Remains" to "Completed Work" when done.
+- CLAUDE.md — Update if directory structure, key files, or stack changes.
+These docs are read by every AI agent. Stale docs = wasted work.
 
 ## Owner
 Corey Lavinder — non-technical. Explain changes in plain English.

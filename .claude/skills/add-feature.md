@@ -9,6 +9,7 @@ description: Plan and build a new feature for Gunner
 1. Read `CLAUDE.md` first — understand the stack and 4-layer playbook architecture
 2. Read `BUILD-STATUS.md` — check if this feature already exists or is partially built
 3. Read `REBUILD-PLAN.md` — check if the feature is specified there (follow the spec)
+4. Read `SAAS-LIFECYCLE.md` — identify which SaaS stage this feature advances
 4. **PLAN FIRST** — before writing any code, output a plan:
    - What files will be created or modified?
    - What DB schema changes are needed (if any)?
@@ -33,6 +34,11 @@ description: Plan and build a new feature for Gunner
 - **New reusable components:** Add to `client/src/components/`
 - **New hooks:** Add to `client/src/hooks/`
 - **Shared types:** Add to `shared/types.ts`
+
+## After Building
+- Update `BUILD-STATUS.md` — move completed items, add new ones
+- Update `SAAS-LIFECYCLE.md` — update the stage %, gaps, and change log
+- These docs guide all future AI agents. Keep them accurate.
 
 ## Rules
 - Always multi-tenant: never hardcode tenantId

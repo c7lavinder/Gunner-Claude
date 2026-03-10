@@ -247,6 +247,7 @@ Health check: `GET /health` returns `{"status":"ok"}`
 
 1. **`REBUILD-PLAN.md`** — The full specification. Every architecture decision, page spec, algorithm, trigger, and playbook mapping.
 2. **`BUILD-STATUS.md`** — Exactly what's been built and what remains. Read this to avoid re-building existing features.
+3. **`SAAS-LIFECYCLE.md`** — The 16-stage SaaS lifecycle map. Strategic north star for product decisions. **Update this when completing work that advances any stage.**
 
 ## Owner
 
