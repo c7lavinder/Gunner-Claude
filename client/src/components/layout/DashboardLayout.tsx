@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { AiCoach } from "../AiCoach";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
 import {
@@ -15,6 +16,7 @@ import {
   Moon,
   Sun,
   LogOut,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +31,18 @@ import {
   SidebarProvider,
   SidebarInset,
 } from "@/components/ui/sidebar";
+const ROUTE_LABELS: Record<string, string> = {
+  "/today": "Today",
+  "/calls": "Calls",
+  "/inventory": "Inventory",
+  "/kpis": "KPIs",
+  "/team": "Team",
+  "/training": "Training",
+  "/playbook": "Playbook",
+  "/settings": "Settings",
+  "/profile": "Profile",
+};
+
 const NAV_ITEMS = [
   { path: "/today", label: "Today", icon: CalendarDays },
   { path: "/calls", label: "Calls", icon: Phone },
@@ -45,6 +59,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
+
+  // Breadcrumb segments: split location path, generate labels
+  const segments = location.split("/").filter(Boolean);
+  const breadcrumbs = segments.map((seg, idx) => {
+    const path = "/" + segments.slice(0, idx + 1).join("/");
+    const label = ROUTE_LABELS[path] ?? (seg.charAt(0).toUpperCase() + seg.slice(1));
+    return { label, path, isLast: idx === segments.length - 1 };
+  });
 
   return (
     <SidebarProvider>
@@ -102,6 +124,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <kbd className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded" style={{ background: "var(--g-bg-surface)", color: "var(--g-text-tertiary)", border: "1px solid var(--g-border-subtle)" }}>
               ⌘K
             </kbd>
+            <NotificationBell />
             <Button
               variant="ghost"
               size="icon"
@@ -117,6 +140,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <span className="sr-only">Log out</span>
             </Button>
           </header>
+          {breadcrumbs.length > 0 && (
+            <nav
+              aria-label="Breadcrumb"
+              className="flex items-center gap-1 px-6 py-2 text-sm border-b"
+              style={{ borderColor: "var(--g-border-subtle)", background: "var(--g-bg-surface)" }}
+            >
+              <Link href="/today" className="text-[var(--g-text-tertiary)] hover:text-[var(--g-text-secondary)]">Home</Link>
+              {breadcrumbs.map((crumb) => (
+                <span key={crumb.path} className="flex items-center gap-1">
+                  <ChevronRight className="size-3 text-[var(--g-text-tertiary)]" />
+                  {crumb.isLast ? (
+                    <span style={{ color: "var(--g-text-primary)" }}>{crumb.label}</span>
+                  ) : (
+                    <Link href={crumb.path} className="text-[var(--g-text-tertiary)] hover:text-[var(--g-text-secondary)]">{crumb.label}</Link>
+                  )}
+                </span>
+              ))}
+            </nav>
+          )}
           <main
             id="main-content"
             key={location}

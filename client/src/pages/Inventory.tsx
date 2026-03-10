@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { useAction } from "@/hooks/useActions";
@@ -184,10 +185,13 @@ export function Inventory() {
 
         <TabsContent value={activeStage} className="mt-4">
           {isLoading ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="g-shimmer h-[140px] rounded-lg" />
-              ))}
+            <div className="space-y-4 p-4 md:p-6">
+              <Skeleton className="h-8 w-48" />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-32 rounded-xl" />
+                ))}
+              </div>
             </div>
           ) : sorted.length === 0 ? (
             <p className="text-sm py-8 text-center" style={{ color: "var(--g-text-tertiary)" }}>

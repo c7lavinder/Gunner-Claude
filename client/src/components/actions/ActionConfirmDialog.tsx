@@ -74,11 +74,22 @@ export function ActionConfirmDialog({
 }: ActionConfirmDialogProps) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(formatContent(action.type, action.payload));
+  // Optimistic: flip to sending immediately on confirm click, before parent state updates
+  const [optimisticSending, setOptimisticSending] = useState(false);
   useEffect(() => {
     setEditValue(formatContent(action.type, action.payload));
   }, [action.type, action.payload]);
+  // Reset optimistic state when the dialog closes or result arrives
+  useEffect(() => {
+    if (!open || result) setOptimisticSending(false);
+  }, [open, result]);
 
-  const state = result ? "RESULT" : isExecuting ? "EXECUTING" : "PREVIEW";
+  const handleConfirm = () => {
+    setOptimisticSending(true);
+    onConfirm();
+  };
+
+  const state = result ? "RESULT" : (isExecuting || optimisticSending) ? "EXECUTING" : "PREVIEW";
   const content = editing ? editValue : formatContent(action.type, action.payload);
   const isSms = action.type === "sms";
 
@@ -166,7 +177,7 @@ export function ActionConfirmDialog({
           </div>
         )}
         <DialogFooter>
-          {state === "PREVIEW" && (<><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={onConfirm} disabled={editing}>Confirm</Button></>)}
+          {state === "PREVIEW" && (<><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={handleConfirm} disabled={editing}>Confirm</Button></>)}
           {state === "EXECUTING" && <Button disabled><Loader2Icon className="size-4 animate-spin" /> Sending...</Button>}
           {state === "RESULT" && (<>{!result?.success && <Button variant="outline" onClick={onConfirm}>Retry</Button>}<Button onClick={() => onOpenChange(false)}>Close</Button></>)}
         </DialogFooter>

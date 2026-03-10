@@ -67,7 +67,7 @@ export function Today() {
   if (isLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col gap-4 p-4 md:p-6">
-        <div className="g-shimmer h-8 w-48 rounded-lg" />
+        <Skeleton className="h-8 w-48 rounded-lg" />
         <div className="grid gap-4 lg:grid-cols-[55%_45%]">
           <Skeleton className="h-[400px] rounded-xl" />
           <div className="space-y-4"><Skeleton className="h-32 rounded-xl" /><Skeleton className="h-32 rounded-xl" /><Skeleton className="h-32 rounded-xl" /></div>

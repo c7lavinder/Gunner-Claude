@@ -12,6 +12,7 @@ import {
   dispoProperties,
 } from "../../drizzle/schema";
 import { eq, and, sql, or, isNull, ne, gte } from "drizzle-orm";
+import { createNotification } from "../routers/notifications";
 
 function scoreToGrade(score: number): string {
   if (score >= 90) return "A";
@@ -162,6 +163,19 @@ export async function processCallGamification(
     await db.insert(userBadges).values({ tenantId, teamMemberId, badgeId, badgeCode: code, triggerCallId: callId });
     newBadges.push(code);
     earnedSet.add(code);
+    // Notify user if they have a linked user account
+    if (member.userId) {
+      const badgeName = badge?.name ?? code.replace(/_/g, " ");
+      await createNotification({
+        tenantId,
+        userId: member.userId,
+        type: "badge_earned",
+        title: `Badge Earned: ${badgeName}`,
+        body: `You unlocked the "${badgeName}" badge!`,
+        entityType: "badge",
+        entityId: code,
+      }).catch(() => {/* non-fatal */});
+    }
   }
   return { xpAwarded: totalXp, newBadges, streak: { hot: hotCurrent, consistency: consistencyCurrent } };
 }
@@ -216,6 +230,9 @@ export async function processDealClosedGamification(
     ["closer_100", closedDeals >= 100],
   ];
 
+  // Fetch team member to get linked userId for notifications
+  const [dealMember] = await db.select().from(teamMembers).where(and(eq(teamMembers.id, teamMemberId), eq(teamMembers.tenantId, tenantId)));
+
   for (const [code, met] of closerChecks) {
     if (!met || earnedSet.has(code)) continue;
     const [badge] = await db.select().from(badges).where(and(eq(badges.code, code), or(eq(badges.tenantId, tenantId), isNull(badges.tenantId))));
@@ -233,6 +250,19 @@ export async function processDealClosedGamification(
     await db.insert(userBadges).values({ tenantId, teamMemberId, badgeId, badgeCode: code });
     newBadges.push(code);
     earnedSet.add(code);
+    // Notify user if they have a linked user account
+    if (dealMember?.userId) {
+      const badgeName = badge?.name ?? code.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+      await createNotification({
+        tenantId,
+        userId: dealMember.userId,
+        type: "badge_earned",
+        title: `Badge Earned: ${badgeName}`,
+        body: `You unlocked the "${badgeName}" badge!`,
+        entityType: "badge",
+        entityId: code,
+      }).catch(() => {/* non-fatal */});
+    }
   }
 
   // Award badge XP

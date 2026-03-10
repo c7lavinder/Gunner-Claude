@@ -11,6 +11,7 @@ import { actionsRouter } from "./actions";
 import { authRouter } from "./auth";
 import { settingsRouter } from "./settings";
 import { todayRouter } from "./today";
+import { notificationsRouter } from "./notifications";
 
 export const appRouter = router({
   calls: callsRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   auth: authRouter,
   settings: settingsRouter,
   today: todayRouter,
+  notifications: notificationsRouter,
 });
 
 export type AppRouter = typeof appRouter;

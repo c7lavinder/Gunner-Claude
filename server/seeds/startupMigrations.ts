@@ -165,5 +165,20 @@ export async function runStartupMigrations(): Promise<void> {
     ADD COLUMN IF NOT EXISTS "lockedUntil" timestamp
   `);
 
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "notifications" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer NOT NULL REFERENCES "tenants"("id"),
+      "userId" integer NOT NULL REFERENCES "users"("id"),
+      "type" text NOT NULL,
+      "title" text NOT NULL,
+      "body" text,
+      "entityType" text,
+      "entityId" text,
+      "isRead" text DEFAULT 'false',
+      "createdAt" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+
   console.log("[migrations] Startup migrations complete.");
 }

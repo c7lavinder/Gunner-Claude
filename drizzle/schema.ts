@@ -1972,3 +1972,22 @@ export const userVoiceProfiles = pgTable("user_voice_profiles", {
   metadata: jsonb("metadata"),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
+
+/**
+ * Notifications — in-app notifications for users (badges earned, call graded, digests, etc.)
+ */
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  userId: integer("userId").references(() => users.id).notNull(),
+  type: text("type").notNull(), // e.g. "badge_earned", "call_graded", "weekly_digest"
+  title: text("title").notNull(),
+  body: text("body"),
+  entityType: text("entityType"), // e.g. "call", "badge"
+  entityId: text("entityId"),
+  isRead: text("isRead").default("false"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;

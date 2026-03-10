@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Collapsible,
   CollapsibleContent,
@@ -144,9 +145,10 @@ export function CallInbox() {
         </TabsList>
         <TabsContent value={tab} className="mt-4">
           {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="g-shimmer h-[72px] rounded-lg" />
+            <div className="space-y-3 p-4 md:p-6">
+              <Skeleton className="h-8 w-48" />
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full rounded-lg" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
