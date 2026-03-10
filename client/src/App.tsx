@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Landing } from "@/pages/landing/Landing";
 import { Login } from "@/pages/Login";
+import { GoogleAuthCallback } from "@/pages/GoogleAuthCallback";
 import { Today } from "@/pages/Today";
 import { CallInbox } from "@/pages/CallInbox";
 import { Inventory } from "@/pages/Inventory";
@@ -27,6 +28,9 @@ export function App() {
         </Route>
         <Route path="/login">
           <Login />
+        </Route>
+        <Route path="/auth/google/callback">
+          <GoogleAuthCallback />
         </Route>
         <Route path="/today">
           <AuthWrapper>

@@ -13,7 +13,7 @@ export interface SessionUser {
   role: string;
 }
 
-export async function createContext({ req }: CreateExpressContextOptions) {
+export async function createContext({ req, res }: CreateExpressContextOptions) {
   const token =
     req.cookies?.auth_token ??
     req.headers.authorization?.replace("Bearer ", "");
@@ -36,7 +36,7 @@ export async function createContext({ req }: CreateExpressContextOptions) {
     }
   }
 
-  return { db, user };
+  return { db, user, req, res };
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;

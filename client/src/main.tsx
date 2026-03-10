@@ -6,6 +6,7 @@ import { trpc } from "./lib/trpc";
 import superjson from "superjson";
 import { ThemeProvider } from "next-themes";
 import { App } from "./App";
+import { AuthProvider } from "./hooks/useAuth";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -17,6 +18,9 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
+      fetch(url, options) {
+        return fetch(url, { ...options, credentials: "include" });
+      },
     }),
   ],
 });
@@ -26,7 +30,9 @@ createRoot(document.getElementById("root")!).render(
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          <App />
+          <AuthProvider>
+            <App />
+          </AuthProvider>
         </QueryClientProvider>
       </trpc.Provider>
     </ThemeProvider>
