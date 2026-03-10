@@ -1,12 +1,9 @@
-// ⛔ Resend import removed — all email sending permanently disabled
-// import { Resend } from 'resend';
+import { Resend } from 'resend';
 import { notifyOwner } from "./_core/notification";
 import { getDb } from "./db";
 import { outreachHistory } from "../drizzle/schema";
 
-// ⛔ RESEND COMPLETELY DISABLED — No client initialization, no API calls possible
-// const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const resend = null;
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // Email sender configuration — configurable via env var
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Gunner <noreply@getgunner.ai>';
@@ -626,32 +623,51 @@ P.S. - We truly believe Gunner can help your team close more deals. Let us prove
  */
 export async function sendEmail(options: EmailOptions & { fromEmail?: string }): Promise<boolean> {
   const { subject, html, text } = generateEmailContent(options.type, options.data);
-  
-  // ⛔ ALL emails disabled including churn notifications
-  // const isChurnEmail = options.type.startsWith('churn_');
-  
-  // ⛔ ALL EMAIL SENDING DISABLED — Resend client is null, no fallback to owner notifications
-  // This prevents flooding the owner's inbox with [EMAIL FAILED] notifications
-  console.log(`[EmailService] ⛔ Email sending disabled. Would have sent "${subject}" to ${options.to}`);
-  return false;
+  const from = options.fromEmail || FROM_EMAIL;
+
+  if (!resend) {
+    console.log(`[EmailService] No RESEND_API_KEY set — skipping email "${subject}" to ${options.to}`);
+    return false;
+  }
+
+  try {
+    const result = await resend.emails.send({
+      from,
+      to: options.to,
+      subject,
+      html,
+      text,
+    });
+    if (result.error) {
+      console.error(`[EmailService] Failed to send "${subject}" to ${options.to}:`, result.error);
+      return false;
+    }
+    console.log(`[EmailService] ✅ Sent "${subject}" to ${options.to} (id: ${result.data?.id})`);
+    return true;
+  } catch (err) {
+    console.error(`[EmailService] Exception sending email to ${options.to}:`, err);
+    return false;
+  }
 }
 
 /**
  * Send password reset email
- * ⛔ DISABLED — all email sending blocked
  */
 export async function sendPasswordResetEmail(
   email: string,
   resetToken: string,
   baseUrl: string
 ): Promise<boolean> {
-  console.log(`[EmailService] ⛔ Password reset email BLOCKED for ${email}`);
-  return false;
+  const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
+  return sendEmail({
+    to: email,
+    type: "password_reset",
+    data: { email, resetLink }
+  });
 }
 
 /**
  * Send email verification email
- * ⛔ DISABLED — all email sending blocked
  */
 export async function sendEmailVerificationEmail(
   email: string,
@@ -660,8 +676,12 @@ export async function sendEmailVerificationEmail(
   verificationToken: string,
   baseUrl: string
 ): Promise<boolean> {
-  console.log(`[EmailService] ⛔ Verification email BLOCKED for ${email}`);
-  return false;
+  const verificationLink = `${baseUrl}/verify-email?token=${verificationToken}`;
+  return sendEmail({
+    to: email,
+    type: "email_verification",
+    data: { email, name, companyName, verificationLink }
+  });
 }
 
 /**
