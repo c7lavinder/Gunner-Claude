@@ -345,6 +345,9 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     font-family: 'Satoshi', 'Inter', system-ui, -apple-system, sans-serif;
     background: var(--g-bg-base);

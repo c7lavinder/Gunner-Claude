@@ -1,5 +1,6 @@
 import { Route, Switch, Redirect } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthGuard } from "@/components/layout/AuthGuard";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Landing } from "@/pages/landing/Landing";
 import { Login } from "@/pages/Login";
@@ -15,73 +16,33 @@ import { Playbook } from "@/pages/Playbook";
 import { Profile } from "@/pages/Profile";
 import { IndustryLanding } from "@/pages/landing/IndustryLanding";
 
-function AuthWrapper({ children }: { children: React.ReactNode }) {
-  return <DashboardLayout>{children}</DashboardLayout>;
-}
-
 export function App() {
   return (
     <>
       <Switch>
-        <Route path="/">
-          <Landing />
-        </Route>
-        <Route path="/login">
-          <Login />
-        </Route>
-        <Route path="/auth/google/callback">
-          <GoogleAuthCallback />
-        </Route>
-        <Route path="/today">
-          <AuthWrapper>
-            <Today />
-          </AuthWrapper>
-        </Route>
-        <Route path="/calls">
-          <AuthWrapper>
-            <CallInbox />
-          </AuthWrapper>
-        </Route>
-        <Route path="/inventory">
-          <AuthWrapper>
-            <Inventory />
-          </AuthWrapper>
-        </Route>
-        <Route path="/kpis">
-          <AuthWrapper>
-            <KpiPage />
-          </AuthWrapper>
-        </Route>
-        <Route path="/team">
-          <AuthWrapper>
-            <Team />
-          </AuthWrapper>
-        </Route>
-        <Route path="/training">
-          <AuthWrapper>
-            <Training />
-          </AuthWrapper>
-        </Route>
-        <Route path="/settings">
-          <AuthWrapper>
-            <Settings />
-          </AuthWrapper>
-        </Route>
-        <Route path="/playbook">
-          <AuthWrapper>
-            <Playbook />
-          </AuthWrapper>
-        </Route>
-        <Route path="/profile">
-          <AuthWrapper>
-            <Profile />
-          </AuthWrapper>
-        </Route>
-        <Route path="/industries/:industry">
-          <IndustryLanding />
-        </Route>
-        <Route>
-          <Redirect to="/" />
+        <Route path="/" component={Landing} />
+        <Route path="/login" component={Login} />
+        <Route path="/auth/google/callback" component={GoogleAuthCallback} />
+        <Route path="/industries/:industry" component={IndustryLanding} />
+        <Route path="/:rest*">
+          <AuthGuard>
+            <DashboardLayout>
+              <Switch>
+                <Route path="/today" component={Today} />
+                <Route path="/calls" component={CallInbox} />
+                <Route path="/inventory" component={Inventory} />
+                <Route path="/kpis" component={KpiPage} />
+                <Route path="/team" component={Team} />
+                <Route path="/training" component={Training} />
+                <Route path="/settings" component={Settings} />
+                <Route path="/playbook" component={Playbook} />
+                <Route path="/profile" component={Profile} />
+                <Route>
+                  <Redirect to="/today" />
+                </Route>
+              </Switch>
+            </DashboardLayout>
+          </AuthGuard>
         </Route>
       </Switch>
       <Toaster />
