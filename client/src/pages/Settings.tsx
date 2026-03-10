@@ -47,6 +47,7 @@ export function Settings() {
   const testQuery = trpc.settings.testCrmConnection.useQuery(undefined, { enabled: false });
   const inviteMutation = trpc.settings.inviteTeamMember.useMutation();
   const removeMutation = trpc.settings.removeTeamMember.useMutation();
+  const updateRoleMutation = trpc.settings.updateMemberRole.useMutation();
   const utils = trpc.useUtils();
 
   const tenant = workspace?.tenant;
@@ -227,9 +228,18 @@ export function Settings() {
                   ) : (
                     team.map((m) => (
                       <div key={m.id} className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ background: "var(--g-bg-surface)" }}>
-                        <div>
+                        <div className="flex items-center gap-2">
                           <span className="font-medium" style={{ color: "var(--g-text-primary)" }}>{m.name}</span>
-                          <Badge variant="secondary" className="ml-2 text-xs">{m.teamRole}</Badge>
+                          <Select value={m.teamRole ?? "member"} onValueChange={(v) => {
+                            updateRoleMutation.mutate({ id: m.id, teamRole: v }, { onSuccess: () => void utils.settings.getWorkspace.invalidate() });
+                          }}>
+                            <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="manager">Manager</SelectItem>
+                              <SelectItem value="member">Member</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                         <Button variant="ghost" size="icon" onClick={() => removeMember(m.id)} disabled={removeMutation.isPending}><Trash2 className="size-4" style={{ color: "var(--g-text-tertiary)" }} /></Button>
                       </div>

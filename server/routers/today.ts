@@ -76,6 +76,27 @@ export const todayRouter = router({
     };
   }),
 
+  completeTask: protectedProcedure
+    .input(z.object({ id: z.number(), completed: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const tid = ctx.user!.tenantId;
+      const uid = ctx.user!.userId;
+      const [existing] = await db.select().from(dailyKpiEntries)
+        .where(and(eq(dailyKpiEntries.id, input.id), eq(dailyKpiEntries.tenantId, tid), eq(dailyKpiEntries.userId, uid)))
+        .limit(1);
+      if (!existing) return null;
+      const notes = existing.notes ?? "";
+      const newNotes = input.completed
+        ? (notes.startsWith("[DONE] ") ? notes : `[DONE] ${notes}`)
+        : notes.replace(/^\[DONE\] /, "");
+      const [row] = await db
+        .update(dailyKpiEntries)
+        .set({ notes: newNotes })
+        .where(eq(dailyKpiEntries.id, input.id))
+        .returning();
+      return row ?? null;
+    }),
+
   getStats: protectedProcedure.query(async ({ ctx }) => {
     const tid = ctx.user!.tenantId;
     const uid = ctx.user!.userId;

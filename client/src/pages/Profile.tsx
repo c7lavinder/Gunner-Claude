@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Pencil, Flame, Phone, Mic } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 
@@ -28,6 +29,7 @@ export function Profile() {
   const { user } = useAuth();
   const { data: members } = trpc.team.list.useQuery();
   const { data: progress } = trpc.training.getUserProgress.useQuery();
+  const { data: userPlaybook } = trpc.playbook.getUser.useQuery();
   const saveInstruction = trpc.ai.saveInstruction.useMutation();
   const updateProfile = trpc.auth.updateProfile.useMutation();
   const utils = trpc.useUtils();
@@ -38,6 +40,13 @@ export function Profile() {
   const [defaultGreeting, setDefaultGreeting] = useState("");
   const [voiceConsent, setVoiceConsent] = useState(false);
   const [saving, setSaving] = useState(false);
+  const updateUserPlaybook = trpc.playbook.updateUserPlaybook.useMutation();
+
+  useEffect(() => {
+    if (userPlaybook) {
+      setVoiceConsent((userPlaybook as { voiceConsentGiven?: string }).voiceConsentGiven === "true");
+    }
+  }, [userPlaybook]);
 
   useEffect(() => {
     if (user?.name && !editing) setName(user.name);
@@ -153,13 +162,16 @@ export function Profile() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 rounded-lg" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-            <p className="text-sm font-medium" style={{ color: "var(--g-text-secondary)" }}>Voice Samples Collected: 0/10</p>
-            <div className="h-2 rounded-full mt-2 overflow-hidden" style={{ background: "var(--g-stat-bar-bg)" }}><div className="h-full rounded-full w-0" style={{ background: "var(--g-accent)" }} /></div>
+            <p className="text-sm font-medium" style={{ color: "var(--g-text-secondary)" }}>Voice Samples Collected: {(userPlaybook as { voiceSampleCount?: number } | undefined)?.voiceSampleCount ?? 0}/10</p>
+            <div className="h-2 rounded-full mt-2 overflow-hidden" style={{ background: "var(--g-stat-bar-bg)" }}><div className="h-full rounded-full" style={{ background: "var(--g-accent)", width: `${Math.min(100, ((userPlaybook as { voiceSampleCount?: number } | undefined)?.voiceSampleCount ?? 0) * 10)}%` }} /></div>
           </div>
-          <Button variant="outline"><Phone className="size-4" />Record Sample</Button>
+          <Button variant="outline" disabled={!voiceConsent} onClick={() => toast("Voice recording coming soon — your consent is saved.")}><Phone className="size-4" />Record Sample</Button>
           <div className="flex items-center justify-between pt-2">
             <Label htmlFor="voice-consent" className="text-sm" style={{ color: "var(--g-text-secondary)" }}>I consent to voice sample collection</Label>
-            <Switch id="voice-consent" checked={voiceConsent} onCheckedChange={setVoiceConsent} />
+            <Switch id="voice-consent" checked={voiceConsent} onCheckedChange={(v) => {
+              setVoiceConsent(v);
+              updateUserPlaybook.mutate({ voiceConsentGiven: v ? "true" : "false" });
+            }} />
           </div>
         </CardContent>
       </Card>

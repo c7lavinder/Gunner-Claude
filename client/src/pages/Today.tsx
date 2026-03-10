@@ -26,6 +26,8 @@ export function Today() {
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [callTarget, setCallTarget] = useState<{ name: string; phone: string; ghlContactId?: string } | null>(null);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
+  const completeTask = trpc.today.completeTask.useMutation();
+  const todayUtils = trpc.useUtils();
 
   const searchTerm = search.trim() || undefined;
   const { data: convos, isLoading: convosLoading } = trpc.today.getConversations.useQuery({
@@ -59,7 +61,7 @@ export function Today() {
   const confirmCallBack = () => {
     if (!callTarget) return;
     const contactId = callTarget.ghlContactId ?? callTarget.phone;
-    executeAction("workflow", contactId, { action: "call_back", phone: callTarget.phone });
+    executeAction("sms", contactId, { message: `Hi ${callTarget.name}, I saw I missed your call. When's a good time to connect?`, toPhone: callTarget.phone });
   };
 
   if (isLoading) {
@@ -226,8 +228,11 @@ export function Today() {
             <CardContent className="py-0 pb-3 space-y-1">
               {!taskData?.tasks?.length ? <p className="py-4 px-3 text-sm text-[var(--g-text-tertiary)]">No tasks</p> : (
                 taskData.tasks.map((t) => <div key={t.id} className={cn("flex items-center gap-2 py-2 px-3 rounded-lg text-sm", completedTasks.has(t.id) && "opacity-50 line-through")}>
-                  <Checkbox checked={completedTasks.has(t.id)} onCheckedChange={(v) =>
-                    setCompletedTasks((s) => v ? new Set(Array.from(s).concat(t.id)) : new Set(Array.from(s).filter((x) => x !== t.id)))}
+                  <Checkbox checked={completedTasks.has(t.id)} onCheckedChange={(v) => {
+                    const done = !!v;
+                    setCompletedTasks((s) => done ? new Set(Array.from(s).concat(t.id)) : new Set(Array.from(s).filter((x) => x !== t.id)));
+                    completeTask.mutate({ id: Number(t.id), completed: done }, { onSuccess: () => void todayUtils.today.getTasks.invalidate() });
+                  }}
                   />
                   <div className="flex-1 min-w-0"><p className="truncate">{t.title}</p>{t.contact && <p className="text-xs text-[var(--g-text-tertiary)]">{t.contact}</p>}</div>
                 </div>)

@@ -152,6 +152,26 @@ export const settingsRouter = router({
       return member;
     }),
 
+  updateMemberRole: protectedProcedure
+    .input(z.object({ id: z.number(), teamRole: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user.tenantId;
+      const [updated] = await db
+        .update(teamMembers)
+        .set({ teamRole: input.teamRole, updatedAt: new Date() })
+        .where(
+          and(
+            eq(teamMembers.id, input.id),
+            eq(teamMembers.tenantId, tenantId)
+          )
+        )
+        .returning();
+      if (!updated) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found" });
+      }
+      return updated;
+    }),
+
   removeTeamMember: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {

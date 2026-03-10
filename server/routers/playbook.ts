@@ -7,6 +7,7 @@ import {
   tenantRoles,
   tenantCallTypes,
   tenantRubrics,
+  tenantPlaybooks,
   industryPlaybooks as industryPlaybooksTable,
   userPlaybooks,
 } from "../../drizzle/schema";
@@ -79,20 +80,35 @@ export const playbookRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [tenant] = await db
-        .select()
-        .from(tenants)
-        .where(eq(tenants.id, ctx.user.tenantId));
-      if (!tenant) return null;
-      const settings = (tenant.settings ? JSON.parse(tenant.settings) : {}) as Record<string, unknown>;
-      if (input.terminology !== undefined) settings.terminology = input.terminology;
-      if (input.algorithmOverrides !== undefined) settings.algorithmOverrides = input.algorithmOverrides;
-      const [updated] = await db
-        .update(tenants)
-        .set({ settings: JSON.stringify(settings), updatedAt: new Date() })
-        .where(eq(tenants.id, ctx.user.tenantId))
+      const tenantId = ctx.user.tenantId;
+      const updates: Record<string, unknown> = { updatedAt: new Date() };
+      if (input.terminology !== undefined) {
+        try { updates.terminology = JSON.parse(input.terminology); } catch { updates.terminology = null; }
+      }
+      if (input.algorithmOverrides !== undefined) {
+        try { updates.algorithmOverrides = JSON.parse(input.algorithmOverrides); } catch { updates.algorithmOverrides = null; }
+      }
+
+      const [existing] = await db
+        .select({ id: tenantPlaybooks.id })
+        .from(tenantPlaybooks)
+        .where(eq(tenantPlaybooks.tenantId, tenantId))
+        .limit(1);
+
+      if (existing) {
+        const [updated] = await db
+          .update(tenantPlaybooks)
+          .set(updates as typeof tenantPlaybooks.$inferInsert)
+          .where(eq(tenantPlaybooks.id, existing.id))
+          .returning();
+        return updated ?? null;
+      }
+      const insertValues = { ...updates, tenantId } as typeof tenantPlaybooks.$inferInsert;
+      const [inserted] = await db
+        .insert(tenantPlaybooks)
+        .values(insertValues)
         .returning();
-      return updated ?? null;
+      return inserted ?? null;
     }),
 
   upsertRole: protectedProcedure
@@ -206,6 +222,31 @@ export const playbookRouter = router({
         })
         .returning();
       return inserted ?? null;
+    }),
+
+  updateUserPlaybook: protectedProcedure
+    .input(
+      z.object({
+        voiceConsentGiven: z.string().optional(),
+        role: z.string().optional(),
+        strengths: z.string().optional(),
+        growthAreas: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.user.userId;
+      const tenantId = ctx.user.tenantId;
+      const updates: Record<string, unknown> = { updatedAt: new Date() };
+      if (input.voiceConsentGiven !== undefined) updates.voiceConsentGiven = input.voiceConsentGiven;
+      if (input.role !== undefined) updates.role = input.role;
+      if (input.strengths !== undefined) updates.strengths = JSON.parse(input.strengths);
+      if (input.growthAreas !== undefined) updates.growthAreas = JSON.parse(input.growthAreas);
+      const [updated] = await db
+        .update(userPlaybooks)
+        .set(updates as typeof userPlaybooks.$inferInsert)
+        .where(and(eq(userPlaybooks.userId, userId), eq(userPlaybooks.tenantId, tenantId)))
+        .returning();
+      return updated ?? null;
     }),
 
   getRoles: protectedProcedure.query(async ({ ctx }) => {
