@@ -156,6 +156,9 @@ export const authRouter = router({
   googleAuthUrl: publicProcedure
     .input(z.object({ redirectUri: z.string().url() }))
     .query(({ input }) => {
+      if (!ENV.googleClientId || !ENV.googleClientSecret) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Google OAuth is not configured on this server." });
+      }
       const params = new URLSearchParams({
         client_id: ENV.googleClientId,
         redirect_uri: input.redirectUri,
@@ -170,6 +173,9 @@ export const authRouter = router({
   googleCallback: publicProcedure
     .input(z.object({ code: z.string().min(1), redirectUri: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
+      if (!ENV.googleClientId || !ENV.googleClientSecret) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Google OAuth is not configured on this server." });
+      }
       const { email, name, picture, googleId } = await authService.exchangeGoogleCode(
         input.code,
         input.redirectUri

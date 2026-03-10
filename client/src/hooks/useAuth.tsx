@@ -49,11 +49,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: meQuery.data.role,
         tenantId: meQuery.data.tenantId,
       });
-    } else {
+      setIsLoading(false);
+    } else if (!meQuery.error || meQuery.error.data?.code === "UNAUTHORIZED") {
+      // Only clear the user for UNAUTHORIZED errors (not logged in).
+      // Transient errors (network, 500s) keep the current auth state to avoid
+      // bouncing authenticated users back to the login screen.
       setUser(null);
+      setIsLoading(false);
+    } else {
+      // Non-auth server/network error — stop the loading spinner but keep
+      // current user state so an authenticated user isn't logged out.
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [meQuery.isLoading, meQuery.data]);
+  }, [meQuery.isLoading, meQuery.data, meQuery.error]);
 
   const loginMutation = trpc.auth.login.useMutation();
   const signupMutation = trpc.auth.signup.useMutation();

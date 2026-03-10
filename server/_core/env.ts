@@ -21,8 +21,8 @@ export const ENV = {
   stripeSecretKey: optional("STRIPE_SECRET_KEY"),
   stripeWebhookSecret: optional("STRIPE_WEBHOOK_SECRET"),
 
-  googleClientId: optional("GOOGLE_CLIENT_ID"),
-  googleClientSecret: optional("GOOGLE_CLIENT_SECRET"),
+  googleClientId: required("GOOGLE_CLIENT_ID"),
+  googleClientSecret: required("GOOGLE_CLIENT_SECRET"),
 
   ghlClientId: optional("GHL_CLIENT_ID"),
   ghlClientSecret: optional("GHL_CLIENT_SECRET"),
