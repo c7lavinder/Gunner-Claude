@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine, Star, Play, Plus, FileText } from "lucide-react";
+import { ActionConfirmDialog } from "@/components/actions/ActionConfirmDialog";
+import { useAction } from "@/hooks/useActions";
 import { trpc } from "@/lib/trpc";
 
 function formatDuration(sec: number | null) {
@@ -50,6 +52,11 @@ export function CallInbox() {
   const [tab, setTab] = useState("all");
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [dateRange, setDateRange] = useState("7");
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [actionTarget, setActionTarget] = useState<{ name: string; contactId: string } | null>(null);
+  const { executeAction, isExecuting, result, reset } = useAction();
 
   const statusFilter =
     tab === "graded" ? "graded" : tab === "needs-review" ? "pending" : undefined;
@@ -110,11 +117,17 @@ export function CallInbox() {
           className="h-8 w-48 text-sm"
         />
         <div className="flex gap-2">
-          <select className="h-8 rounded-md border px-2 text-xs" style={{ borderColor: "var(--g-border-subtle)", background: "var(--g-bg-surface)" }}>
-            <option>Last 7 days</option>
-          </select>
-          <select className="h-8 rounded-md border px-2 text-xs" style={{ borderColor: "var(--g-border-subtle)", background: "var(--g-bg-surface)" }}>
-            <option>All status</option>
+          <select
+            className="h-8 rounded-md border px-2 text-xs"
+            style={{ borderColor: "var(--g-border-subtle)", background: "var(--g-bg-surface)" }}
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
+          >
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="all">All time</option>
           </select>
         </div>
       </div>
@@ -215,11 +228,30 @@ export function CallInbox() {
                                 </div>
                               </div>
                               <div className="flex gap-2">
-                                <Button variant="outline" size="sm">
-                                  <Play className="size-3.5 mr-1" /> Listen
+                                {callDetail?.recordingUrl && (
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a href={callDetail.recordingUrl} target="_blank" rel="noopener noreferrer">
+                                      <Play className="size-3.5 mr-1" /> Listen
+                                    </a>
+                                  </Button>
+                                )}
+                                {!callDetail?.recordingUrl && (
+                                  <Button variant="outline" size="sm" disabled>
+                                    <Play className="size-3.5 mr-1" /> No Recording
+                                  </Button>
+                                )}
+                                <Button variant="outline" size="sm" onClick={() => {
+                                  setActionTarget({ name: call.contactName ?? "Unknown", contactId: call.ghlContactId ?? String(call.id) });
+                                  setTaskDialogOpen(true);
+                                }}>
+                                  <Plus className="size-3.5 mr-1" /> Task
                                 </Button>
-                                <Button variant="outline" size="sm"><Plus className="size-3.5 mr-1" /> Task</Button>
-                                <Button variant="outline" size="sm"><FileText className="size-3.5 mr-1" /> Note</Button>
+                                <Button variant="outline" size="sm" onClick={() => {
+                                  setActionTarget({ name: call.contactName ?? "Unknown", contactId: call.ghlContactId ?? String(call.id) });
+                                  setNoteDialogOpen(true);
+                                }}>
+                                  <FileText className="size-3.5 mr-1" /> Note
+                                </Button>
                               </div>
                             </div>
                             {(grade.redFlags as string[])?.length > 0 && (
@@ -258,7 +290,17 @@ export function CallInbox() {
                         <Card className="mt-2" style={{ background: "var(--g-bg-surface)", borderColor: "var(--g-border-subtle)" }}>
                           <CardContent className="p-4">
                             <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Not yet graded.</p>
-                            <Button variant="outline" size="sm" className="mt-2"><Play className="size-3.5 mr-1" /> Listen</Button>
+                            {callDetail?.recordingUrl ? (
+                              <Button variant="outline" size="sm" className="mt-2" asChild>
+                                <a href={callDetail.recordingUrl} target="_blank" rel="noopener noreferrer">
+                                  <Play className="size-3.5 mr-1" /> Listen
+                                </a>
+                              </Button>
+                            ) : (
+                              <Button variant="outline" size="sm" className="mt-2" disabled>
+                                <Play className="size-3.5 mr-1" /> No Recording
+                              </Button>
+                            )}
                           </CardContent>
                         </Card>
                       )}
@@ -293,6 +335,27 @@ export function CallInbox() {
           )}
         </TabsContent>
       </Tabs>
+
+      {actionTarget && (
+        <>
+          <ActionConfirmDialog
+            open={taskDialogOpen}
+            onOpenChange={(o) => { setTaskDialogOpen(o); if (!o) { setActionTarget(null); reset(); } }}
+            action={{ type: "task", from: { name: "You" }, to: { name: actionTarget.name }, payload: {} }}
+            onConfirm={() => executeAction("task", actionTarget.contactId, { title: `Follow up with ${actionTarget.name}` })}
+            isExecuting={isExecuting}
+            result={result}
+          />
+          <ActionConfirmDialog
+            open={noteDialogOpen}
+            onOpenChange={(o) => { setNoteDialogOpen(o); if (!o) { setActionTarget(null); reset(); } }}
+            action={{ type: "note", from: { name: "You" }, to: { name: actionTarget.name }, payload: {} }}
+            onConfirm={() => executeAction("note", actionTarget.contactId, { body: `Call review note for ${actionTarget.name}` })}
+            isExecuting={isExecuting}
+            result={result}
+          />
+        </>
+      )}
     </div>
   );
 }

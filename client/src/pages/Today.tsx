@@ -137,9 +137,17 @@ export function Today() {
                 {selectedConvData ? (
                   <>
                     <ScrollArea className="flex-1 p-4">
-                      <p className="text-sm text-[var(--g-text-tertiary)]">
-                        Connect your CRM to see messages
-                      </p>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="font-medium text-sm text-[var(--g-text-primary)]">{selectedConvData.name}</p>
+                          <p className="text-xs text-[var(--g-text-tertiary)]">{selectedConvData.phone}</p>
+                        </div>
+                        {selectedConvData.lastContactDate && (
+                          <p className="text-xs text-[var(--g-text-tertiary)]">
+                            Last contact: {new Date(selectedConvData.lastContactDate).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
                     </ScrollArea>
                     <div className="p-3 border-t border-[var(--g-border-subtle)] flex gap-2">
                       <Input

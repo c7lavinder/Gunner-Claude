@@ -268,7 +268,22 @@ export function Settings() {
                   <p className="font-semibold" style={{ color: "var(--g-accent-text)" }}>Pro Plan</p>
                   <p className="text-2xl font-bold mt-1" style={{ color: "var(--g-text-primary)" }}>$99/mo</p>
                   <p className="mt-2 text-sm" style={{ color: "var(--g-text-secondary)" }}>Unlimited calls · AI grading · Team leaderboard · GHL sync</p>
-                  <Button className="mt-4" variant="outline">Manage Subscription</Button>
+                  <Button
+                    className="mt-4"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const result = await utils.client.settings.manageBilling.mutate({
+                          returnUrl: window.location.href,
+                        });
+                        if (result?.url) window.location.href = result.url;
+                      } catch {
+                        window.alert("Billing portal is not configured yet.");
+                      }
+                    }}
+                  >
+                    Manage Subscription
+                  </Button>
                 </div>
                 <div>
                   <p className="text-sm font-medium mb-2" style={{ color: "var(--g-text-secondary)" }}>Usage this month</p>

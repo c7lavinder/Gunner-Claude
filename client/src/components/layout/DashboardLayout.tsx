@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { AiCoach } from "../AiCoach";
+import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
 import {
   CalendarDays,
@@ -9,8 +10,11 @@ import {
   Users,
   GraduationCap,
   Settings as SettingsIcon,
+  BookOpen,
+  UserCircle,
   Moon,
   Sun,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,12 +36,15 @@ const NAV_ITEMS = [
   { path: "/kpis", label: "KPIs", icon: BarChart3 },
   { path: "/team", label: "Team", icon: Users },
   { path: "/training", label: "Training", icon: GraduationCap },
+  { path: "/playbook", label: "Playbook", icon: BookOpen },
   { path: "/settings", label: "Settings", icon: SettingsIcon },
+  { path: "/profile", label: "Profile", icon: UserCircle },
 ] as const;
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { theme, setTheme } = useTheme();
+  const { user, logout } = useAuth();
 
   return (
     <SidebarProvider>
@@ -84,6 +91,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               borderColor: "var(--g-border-subtle)",
             }}
           >
+            {user && (
+              <span className="text-sm mr-auto" style={{ color: "var(--g-text-secondary)" }}>
+                {user.name || user.email}
+              </span>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -93,6 +105,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               <span className="sr-only">Toggle theme</span>
+            </Button>
+            <Button variant="ghost" size="icon" onClick={logout} className="rounded-lg">
+              <LogOut className="size-4" />
+              <span className="sr-only">Log out</span>
             </Button>
           </header>
           <main

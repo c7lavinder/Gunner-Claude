@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { GraduationCap, TrendingUp, TrendingDown, Shield, Target, Zap, BookOpen, Lock, Award } from "lucide-react";
+import { GraduationCap, TrendingUp, TrendingDown, Shield, Target, Zap, BookOpen, Lock, Award, X, MessageSquare } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const MATERIAL_ICONS: Record<string, typeof Shield> = {
@@ -46,6 +48,10 @@ function formatRelative(date: Date | string): string {
 export function Training() {
   const { data: materials, isLoading: materialsLoading } = trpc.training.getMaterials.useQuery();
   const { data: progress, isLoading: progressLoading } = trpc.training.getUserProgress.useQuery();
+  const [selectedMaterial, setSelectedMaterial] = useState<{ id: number; title: string; content: string | null; description: string | null } | null>(null);
+  const [coachingOpen, setCoachingOpen] = useState(false);
+  const roleplayMutation = trpc.training.startRoleplay.useMutation();
+  const [roleplayResponse, setRoleplayResponse] = useState<string | null>(null);
 
   const isLoading = materialsLoading || progressLoading;
   const avgGrade100 = Math.round((progress?.avgGrade ?? 0) * 25);
@@ -135,7 +141,21 @@ export function Training() {
               </div>
             )}
           </div>
-          <Button className="mt-4" size="lg">Start Coaching Session</Button>
+          <Button
+            className="mt-4"
+            size="lg"
+            onClick={() => {
+              setCoachingOpen(true);
+              roleplayMutation.mutate(
+                { scenario: "general_coaching" },
+                { onSuccess: (data) => setRoleplayResponse(data) }
+              );
+            }}
+            disabled={roleplayMutation.isPending}
+          >
+            <MessageSquare className="size-4 mr-2" />
+            {roleplayMutation.isPending ? "Starting..." : "Start Coaching Session"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -186,7 +206,14 @@ export function Training() {
                         <div className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>{m.description ?? ""}</div>
                       </div>
                     </div>
-                    <Button variant={unlocked ? "default" : "secondary"} size="sm" disabled={!unlocked}>{unlocked ? "Read" : "Locked"}</Button>
+                    <Button
+                      variant={unlocked ? "default" : "secondary"}
+                      size="sm"
+                      disabled={!unlocked}
+                      onClick={() => unlocked && setSelectedMaterial({ id: m.id, title: m.title, content: m.content, description: m.description })}
+                    >
+                      {unlocked ? "Read" : "Locked"}
+                    </Button>
                   </CardContent>
                 </Card>
               );
@@ -212,6 +239,53 @@ export function Training() {
           </div>
         </CardContent>
       </Card>
+
+      {selectedMaterial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setSelectedMaterial(null)}>
+          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col m-4" style={{ background: "var(--g-bg-card)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
+              <h3 className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{selectedMaterial.title}</h3>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedMaterial(null)}><X className="size-4" /></Button>
+            </div>
+            <ScrollArea className="flex-1 p-4">
+              <div className="prose prose-sm max-w-none" style={{ color: "var(--g-text-secondary)" }}>
+                {selectedMaterial.content ? (
+                  <div className="whitespace-pre-wrap">{selectedMaterial.content}</div>
+                ) : (
+                  <p>{selectedMaterial.description || "No content available for this material yet."}</p>
+                )}
+              </div>
+            </ScrollArea>
+          </Card>
+        </div>
+      )}
+
+      {coachingOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setCoachingOpen(false); setRoleplayResponse(null); }}>
+          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col m-4" style={{ background: "var(--g-bg-card)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
+              <h3 className="font-semibold" style={{ color: "var(--g-text-primary)" }}>Coaching Session</h3>
+              <Button variant="ghost" size="icon" onClick={() => { setCoachingOpen(false); setRoleplayResponse(null); }}><X className="size-4" /></Button>
+            </div>
+            <ScrollArea className="flex-1 p-4">
+              {roleplayMutation.isPending && (
+                <div className="flex items-center gap-2 text-sm" style={{ color: "var(--g-text-tertiary)" }}>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary" />
+                  Your AI coach is preparing...
+                </div>
+              )}
+              {roleplayResponse && (
+                <div className="text-sm whitespace-pre-wrap" style={{ color: "var(--g-text-secondary)" }}>
+                  {roleplayResponse}
+                </div>
+              )}
+              {roleplayMutation.isError && (
+                <p className="text-sm text-red-400">{roleplayMutation.error.message}</p>
+              )}
+            </ScrollArea>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

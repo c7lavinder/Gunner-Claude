@@ -29,6 +29,8 @@ export function Profile() {
   const { data: members } = trpc.team.list.useQuery();
   const { data: progress } = trpc.training.getUserProgress.useQuery();
   const saveInstruction = trpc.ai.saveInstruction.useMutation();
+  const updateProfile = trpc.auth.updateProfile.useMutation();
+  const utils = trpc.useUtils();
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name ?? "");
@@ -50,7 +52,10 @@ export function Profile() {
   const avgGradePct = Math.round(avgGradeNum * 25);
   const streak = progress?.streak ?? 0;
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    if (!name.trim()) return;
+    await updateProfile.mutateAsync({ name: name.trim() });
+    await utils.auth.me.invalidate();
     setEditing(false);
   };
 
@@ -82,7 +87,9 @@ export function Profile() {
             <Badge variant="secondary">{role}</Badge>
             {editing ? (
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveProfile}>Save</Button>
+                <Button size="sm" onClick={handleSaveProfile} disabled={updateProfile.isPending}>
+                  {updateProfile.isPending ? "Saving..." : "Save"}
+                </Button>
                 <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setName(user?.name ?? ""); }}>Cancel</Button>
               </div>
             ) : (

@@ -245,6 +245,19 @@ export const authRouter = router({
       };
     }),
 
+  updateProfile: protectedProcedure
+    .input(z.object({ name: z.string().min(1).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const updates: Partial<Record<string, unknown>> = {};
+      if (input.name) updates.name = input.name;
+      if (Object.keys(updates).length === 0) return { success: true };
+      await db
+        .update(users)
+        .set(updates as typeof users.$inferInsert)
+        .where(eq(users.id, ctx.user!.userId));
+      return { success: true };
+    }),
+
   logout: publicProcedure.mutation(({ ctx }) => {
     ctx.res.clearCookie("auth_token", { path: "/" });
     return { success: true };
