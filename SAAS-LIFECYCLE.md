@@ -57,31 +57,130 @@
 
 ## 4. Design (IN PROGRESS — 80%)
 
-- **Wireframes:** N/A -- built directly in code.
-- **UI Design:** Tailwind + shadcn/ui component library. Modern dark-friendly design.
-- **UX Flows:** Onboarding flow, call review flow, AI coach chat.
-- **Prototype:** Live app serves as the prototype.
-- **Design System:** 50+ reusable UI components in client/src/components/ui/.
+### Design Standards (from REBUILD-PLAN Section 17)
 
-**Gaps:** No Figma source of truth. Design decisions live in code only.
+The bar: Linear, Notion, Stripe, Vercel -- companies that treat UI as a competitive advantage.
+
+**Principles:** Firm (no wobbly buttons), Precise (pixel-perfect alignment), Quiet (let content breathe), Fast (every interaction <100ms), Dense where it matters (data pages maximize info density).
+
+**Typography:** Satoshi (primary), Inter (labels), JetBrains Mono (code/numbers), Orbitron (gamification). Strict 5-size scale. Line heights: body 1.5, headings 1.2, dense data 1.3.
+
+**Color:** Dark mode primary. Gunner red (#c41e3a) for primary actions. Grade colors: A=emerald, B=blue, C=amber, D=orange, F=red. 10-shade neutral scale.
+
+**Spacing:** 4px base unit. All spacing is multiples of 4 (4, 8, 12, 16, 24, 32, 48, 64).
+
+**Motion:** Page transitions 200ms ease-out (no bounce/spring). Micro-interactions 150ms ease. Skeleton shimmer for loading (<1s). Confetti only for badge/level up.
+
+**Anti-patterns (banned):** `window.prompt()` / `window.confirm()`, toast-only feedback for actions, inline `style={}` props, arbitrary z-index (use 10/20/30/40/50 scale), CSS `!important`, spinners for <1s loads, layout shift on data load.
+
+### What's Built
+
+- **UI Design:** Tailwind + shadcn/ui (54 components). Modern dark-friendly design.
+- **UX Flows:** Onboarding (4-step), call review, AI coach chat, inventory pipeline, action confirmation.
+- **Prototype:** Live app serves as the prototype.
+- **Design System:** 54 reusable UI components in client/src/components/ui/. Button variants (default, destructive, outline, ghost, link). Card, Table, Form patterns established.
+
+**Gaps:** No Figma source of truth. Dark mode audit needed (grep for raw colors). Light mode not polished. Some pages still use spinners instead of skeleton. Layout shifts on some data loads.
 
 ---
 
 ## 5. Development (BUILT — 90%)
 
-- **Frontend:** 15 pages, 50+ shadcn/Radix UI components, TanStack Query + tRPC client, Framer Motion animations, Recharts dashboards, command palette (cmdk), canvas-confetti for badge unlocks, wavesurfer.js for audio playback. Key pages: Today Hub, Call Inbox, Inventory Pipeline, KPIs, Team, Training, Playbook, Settings, AI Coach, Profile.
-- **Backend:** 13 tRPC routers (auth, calls, team, settings, inventory, today, KPIs, gamification, training, AI, playbook, actions). Express middleware for auth, rate limiting, webhooks (GHL + Stripe). Scheduled jobs: daily digest (8am), weekly report, 5-min GHL call polling, 10-min opportunity sync.
-- **APIs:** tRPC for internal API. REST endpoints for Stripe webhooks, GHL webhooks, AI streaming, health check.
-- **Database:** 68+ tables with 79 migrations. Covers: multi-tenancy, auth, calls/grades, gamification, KPIs, properties/pipeline, playbooks, AI coach, subscriptions, contact cache, sync logs, voice profiles.
-- **Authentication:** Google OAuth (primary) + email/password + bcrypt. JWT cookies via jose. Turnstile bot protection (env-ready).
-- **Integrations:** GoHighLevel, OpenAI (Whisper + GPT-4o), Supabase Storage, Stripe, Resend, Google OAuth.
-- **AI Development Workforce:** 20 Claude agents (8 engineering, 4 product, 8 testing) + 4 codified skills + Jules + CodeRabbit.
+### Core Architecture: Four-Playbook System
 
-**Gaps:** No real-time features (WebSockets). No mobile app. Some dead/unused tables in schema.
+The foundational design pattern -- everything flows through 4 playbook layers:
+
+1. **Software Playbook** -- Universal rules (action types, grade scale, XP, levels, CRM adapter interface, security rules, algorithm frameworks). Owned by Gunner.
+2. **Industry Playbook** -- Industry-specific (rubrics, roles, call types, stages, terminology, roleplay personas, grading philosophy, benchmarks). Stored in DB, seeded from server/seeds/.
+3. **Tenant Playbook** -- Company-specific (CRM connection, stage mappings, markets, lead sources, algorithm overrides, rubric tweaks, KPI targets). Editable via UI + AI.
+4. **User Playbook** -- Per-person intelligence (strengths, growth areas, grade trend, communication style, instructions, voice profile). Auto-updated after grading.
+
+Resolution order: User > Tenant > Industry > Software (most specific wins). This creates switching cost -- leaving Gunner means losing all accumulated intelligence.
+
+### Build Phases (from REBUILD-PLAN.md)
+
+| Phase | Status | What |
+|-------|--------|------|
+| Phase 0: Security + Cleanup | Mostly done | Remove hardcoded secrets, fix 9 IDOR endpoints, delete dead pages, login rate limiting |
+| Phase 1: Software Playbook + Restructure | Done | Router split (12 files), CRM adapter, algorithms, playbook data model, useTenantConfig, ActionConfirmDialog, unified AI, event tracking |
+| Phase 2: Industry Playbook (RE Wholesaling) | Done | 7 rubrics, 6 call types, 4 roles, 10 outcomes, pipeline stages, terminology, grading philosophy |
+| Phase 3: Tenant Playbook (NAH Config) | Partial | CRM connection done. Markets, lead sources, KPI targets, algorithm overrides still needed |
+| Phase 4: User Playbook + Intelligence | Early | User profile auto-updates done. Coaching memory, action patterns, proactive suggestions, voice collection still needed |
+| Phase 5: Landing + Premium Polish | Partial | Landing exists. Empowerment messaging, signup re-enable, 5 industry pages, dark mode audit, gamification fixes still needed |
+
+### Pages
+
+- **7 core pages:** /today (Day Hub), /calls (Call Inbox), /inventory (Pipeline), /kpis (KPI Dashboard), /team (Team + Gamification), /training (Training Hub), /settings (Configuration)
+- **Supporting:** /, /login, /pricing, /profile, /admin, /playbook
+- **To delete/consolidate (from REBUILD-PLAN Section 4):** Home (858 lines), LeadGenDashboard, ComponentShowcase, GradingRules, Feedback. Methodology/TeamTraining → /training. Leaderboard → /team. Analytics → /kpis. Opportunities → /inventory. CoachActivityLog → /calls. TeamManagement/TenantSetup → /settings.
+
+### Unified AI Service
+
+One AI everywhere -- same voice, memory, personality across all pages. Single endpoint: `POST /api/ai/stream`. Server assembles context from all 4 playbooks. One conversation thread across all pages. AI versions: V1 (reactive, current) → V2 (proactive, next) → V3 (autonomous, future).
+
+### Sorting Algorithms
+
+Three algorithms with CONFIG OBJECTS at top of file (tune config, not logic):
+- **Inventory Sort** -- 4-tier urgency: Needs Attention > New > Active Working > Contacted Today
+- **Buyer Match** -- Market hard filter + 5-signal score (project type 35pts, buyer tier 30pts, response speed 20pts, verified funding 10pts, past purchase 5pts)
+- **Task Sort** -- Role-specific: Lead Manager (15-min new lead rule), Acquisition Manager (revenue-weighted), Dispo Manager (buyer responses + deal deadlines)
+
+### Universal Action System
+
+Every CRM action goes through `ActionConfirmDialog` -- Preview (FROM/TO/WHAT) → Execute → Result. No exceptions. Banned: `window.prompt()`, toast-only feedback, silent actions. Applies to: SMS, Note, Task, Appointment, Stage Change, Workflow, Tag, Field Update, Bulk SMS.
+
+### Inventory as Core
+
+Pipeline command center, not a property list. Asset-focused (not contact-focused). Stage tabs from Tenant Playbook (no hardcoded stage names). Property Detail Panel: Overview, Buyers, Outreach, Activity, AI Assistant, Deal Blast. Every action writes back to CRM.
+
+### What's Built
+
+- **Frontend:** 15 pages, 50+ shadcn/Radix UI components, TanStack Query + tRPC, Framer Motion, Recharts, cmdk, canvas-confetti, wavesurfer.js.
+- **Backend:** 13 tRPC routers (split from 9,059-line monolith). Express middleware. Scheduled jobs: daily digest, weekly report, 5-min call polling, 10-min opportunity sync.
+- **APIs:** tRPC internal + REST for Stripe webhooks, GHL webhooks, AI streaming, health check.
+- **Database:** 68+ tables, 79 migrations. Multi-tenancy, calls/grades, gamification, KPIs, pipeline, playbooks, AI coach, subscriptions, voice profiles.
+- **Authentication:** Google OAuth + email/password + bcrypt + JWT (jose) + Turnstile (env-ready).
+- **Integrations:** GoHighLevel (polling + webhooks + OAuth + adapter pattern), OpenAI, Supabase Storage, Stripe, Resend, Google OAuth.
+- **AI Workforce:** 20 Claude agents + 4 skills + Jules + CodeRabbit.
+
+### Remaining Gaps
+
+- Phase 0: 9 IDOR endpoints need tenant checks, login lockout after 10 fails, webhook signature verification
+- Phase 3: NAH markets/zip codes, lead sources, KPI targets, algorithm overrides not configured
+- Phase 4: Coaching memory distillation, action pattern analysis, proactive suggestions, voice sample extraction, consent toggle
+- Phase 5: Empowerment messaging, signup re-enable, 5 industry landing pages, dark mode audit, gamification fixes
+- Dead pages not yet deleted. No real-time features (WebSockets). No mobile app.
 
 ---
 
 ## 6. Infrastructure (BUILT — 85%)
+
+### CRM Sync Architecture (Triple-Layer)
+
+1. **Webhooks (real-time):** GHL pushes events → server/middleware/webhook.ts processes with eventId dedup (DB-based, survives deploys) + retry queue (1m, 5m, 15m, 1h, max 4 attempts). Handles: Calls, Opportunities, Contacts, Tasks, Appointments.
+2. **Polling (safety net):** Calls every 5 min, opportunities every 10 min, contacts every 30 min, tasks every 5 min, appointments every 15 min. Smart polling: reduced frequency when webhooks healthy.
+3. **Reconciliation (catch-all):** Daily 2 AM compare Gunner vs CRM for last 48h. Weekly full pipeline reconciliation. Auto-import missed data.
+
+Credential priority: OAuth Access Token → API Key fallback → Alert + Degrade Gracefully (grading/training still work when CRM disconnected).
+
+### Trigger Map (from REBUILD-PLAN Section 11)
+
+Every trigger follows the rule: ONE input → ONE action → ONE result → ONE failure → ONE recovery. **No silent failures.** If it worked, user KNOWS. If it failed, user KNOWS and can fix it.
+
+- **Data in (CRM → Gunner):** New call recording, new opportunity, stage change, contact update, SMS, task, appointment
+- **Data out (Gunner → CRM):** Send SMS, Add Note, Create Task, Complete Task, Change Stage, Create Appointment, Add/Remove Tag, Update Field, Deal Blast
+- **Internal triggers:** Call graded (→ grade + XP + alert), inline edit, KPI entry, roleplay complete, AI suggestion, weekly digest (Monday 6 AM), daily reconciliation (2 AM)
+
+### Critical Security Fixes (from REBUILD-PLAN Section 12)
+
+| # | Issue | Severity | Status |
+|---|-------|----------|--------|
+| 1 | Hardcoded Supabase service key fallback in storage.ts | CRITICAL | Needs fix |
+| 2 | JWT secret defaults to "dev-secret" in context.ts | CRITICAL | Needs fix |
+| 3 | 9 endpoints without tenant check (teamMembers.getById, trainingMaterials.getById, feedback.getById, teamTrainingItems.getById, brandAssets.getById, calls.getGrade, nextSteps x3) | HIGH | Needs fix |
+| 4 | Login rate limiting with account lockout after 10 fails | MEDIUM | Needs fix |
+
+### Cloud + DevOps
 
 - **Cloud Hosting:** Railway (Nixpacks, auto-deploy, health checks at /health with 300s timeout, auto-restart with 3 retries). Railway billing active.
 - **DevOps:** Git push = deploy (zero-step). Drizzle migrations via npm run db:push. 14 utility scripts for tenant management, badge evaluation, sync triggers, Stripe setup.
@@ -90,34 +189,65 @@
   - Sentry -- Active on backend + frontend. 10% trace sampling in prod. Error replay enabled.
   - PostHog -- posthog-node installed, custom trackEvent() writes to user_events table.
   - LangSmith -- AI observability via env vars. Auto-traces OpenAI calls.
-- **AI Code Quality Pipeline:** Cursor + Claude, CLAUDE.md, REBUILD-PLAN.md, 20 agents, 4 skills, Jules, CodeRabbit, .cursor/rules/gunner.mdc.
-- **Security:** Helmet, express-rate-limit, JWT auth (jose), bcrypt, Turnstile (env-ready), webhook signature verification.
+- **AI Code Quality Pipeline:** Cursor + Claude, CLAUDE.md, REBUILD-PLAN.md, SAAS-LIFECYCLE.md, 20 agents, 4 skills, Jules, CodeRabbit, .cursor/rules/gunner.mdc.
+- **Security (built):** Helmet, express-rate-limit, JWT auth (jose), bcrypt, Turnstile (env-ready).
 
-**Gaps:** No staging environment. No uptime monitoring (Pingdom/Better Uptime). No automated DB backups beyond Railway built-in. PostHog frontend SDK not wired.
+### Internal Tools to Build (from REBUILD-PLAN Section 20)
+
+- Playbook Seeder CLI (`npm run playbook:seed wholesaling`)
+- Migration Health Check (verify all endpoints have tenantId enforcement)
+- Sync Health Monitor (webhook/polling/reconciliation dashboard)
+- AI Cost Tracker (OpenAI spend per tenant per day)
+- Playbook Diff Tool (show what changed between versions)
+
+**Gaps:** 4 critical security fixes still open. No staging environment. No uptime monitoring (Pingdom/Better Uptime). No automated DB backups beyond Railway built-in. PostHog frontend SDK not wired. No webhook signature verification for GHL.
 
 ---
 
 ## 7. Testing (AGENT-POWERED — 15%)
 
-- **Unit Testing:** Vitest configured, no test files written yet.
+- **Unit Testing:** Vitest configured, no test files written yet. Need: @testing-library/react for frontend.
 - **Integration Testing:** None automated. Manual testing via live NAH tenant.
+- **E2E Testing:** None. Need: Playwright for full user journey tests (login → grade → action → verify).
 - **Bug Fixing:** Sentry alerts + CodeRabbit PR reviews + Jules autonomous fixing + 8 testing Claude agents.
 - **Performance Testing:** Performance Benchmarker agent available, no benchmarks run.
 - **Beta Testing:** NAH (tenant 1) live with 3,263+ calls. Kitty Hawk onboarding next.
+- **Second Tenant Test (from REBUILD-PLAN):** After rebuild, onboarding a second RE wholesaling tenant should take <30 min and require ZERO code changes. Onboarding a solar company should require ZERO code changes -- just creating a solar industry playbook.
 
-**Gaps:** Zero automated test coverage. Agent testing is reactive, not CI-integrated. Priority: grading pipeline tests, auth flow tests, webhook handler tests.
+**Gaps:** Zero automated test coverage. Agent testing is reactive, not CI-integrated. Priority: grading pipeline tests, auth flow tests, webhook handler tests. Need Migration Health Check script that verifies all endpoints have tenantId enforcement.
 
 ---
 
 ## 8. Launch (IN PROGRESS — 50%)
 
-- **Landing Page:** Live with industry-specific pages. Deployed on Railway.
+### Landing Page Strategy (from REBUILD-PLAN Section 15)
+
+**Messaging shift:** "Stop Babysitting Your Sales Reps" → "Empower Your Team to Perform at Their Best." Frame around empowerment, not distrust.
+
+**Landing page sections (11):** Nav (Sign In + Get Started), Hero (3-pillar), Problem, How It Works, Features (tabs), Social Proof (from DB), Pricing (from DB), Integrations (CRM-agnostic), FAQ (from config), Final CTA, Footer.
+
+**5 industry landing pages:**
+1. RE Wholesaling at /industries/wholesaling (FIRST -- "Built by a Wholesaler" story goes HERE)
+2. Solar Sales at /industries/solar
+3. Insurance at /industries/insurance
+4. SaaS Sales at /industries/saas
+5. Home Services at /industries/home-services
+
+Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects, no JSX).
+
+**Auth on landing:** Sign In + Get Started in nav. Google OAuth prominent. Email+password signup must be re-enabled.
+
+**Rules:** Zero hardcoded tenant/industry content. Testimonials from DB. Pricing from DB. FAQ from config.
+
+### Current State
+
+- **Landing Page:** Live with industry template. Deployed on Railway.
 - **Product Hunt:** Not launched yet.
 - **Beta Users:** NAH (tenant 1) is live with 3,263 calls.
 - **Early Adopters:** Kitty Hawk (450029) onboarding. Apex (540044) demo.
 - **Public Release:** Not yet. Domain getgunner.ai reserved but DNS not flipped to Railway.
 
-**Gaps:** No Product Hunt launch planned. No public marketing site separate from app. DNS still pointing elsewhere.
+**Gaps:** Empowerment messaging not implemented. Email+password signup blocked. Only 1 industry config (wholesaling), need 4 more. Testimonials/FAQ hardcoded. DNS not flipped.
 
 ---
 
@@ -184,13 +314,30 @@
 
 ## 14. Retention (PARTIALLY BUILT — 40%)
 
+### Gamification System (from REBUILD-PLAN Section 16)
+
+**What works:** 28 badges (5 categories, 3 tiers: Bronze/Silver/Gold), XP system (10 base + grade bonus), 25 levels (0→350K XP), hot streaks + consistency streaks, confetti on badge unlock.
+
+**What's broken/missing:**
+- Consistency King badge (consistency_days) -- no process exists
+- Volume badges (weekly_volume: Volume Dialer, Cold Call Warrior, Deal Machine) -- not implemented
+- Closer badge (deals criteria) -- not implemented
+- Improvement XP (+20 for 2+ letter grade jump) -- defined but never awarded
+- Dispo Manager badge icons missing
+- Gamification leaderboard missing full team member data (names/avatars broken in XP mode)
+- Badge evaluation only runs on call view, not on grade completion
+
+**Enhancements planned:** Daily/weekly challenges, badge rarity visuals (glow effects), XP history timeline, streak freeze, custom tenant badges, team challenges.
+
+### Current State
+
 - **User Onboarding:** 4-step flow (welcome -> CRM -> team -> done).
 - **Email Automation:** Daily digest, grade alerts via Resend. Loops env-ready but not fully implemented.
 - **Customer Support:** None built. No in-app chat, no help center.
-- **Feature Adoption:** Gamification (badges, streaks, XP, leaderboards). AI Coach for in-app coaching.
+- **Feature Adoption:** Gamification drives rep engagement. AI Coach provides in-app coaching.
 - **Churn Reduction:** outreach_history table exists. Weekly digest job running.
 
-**Gaps:** No help center. No in-app NPS survey. Loops drip sequences not implemented. No churn prediction.
+**Gaps:** 4 broken badge criteria. Improvement XP not awarded. No help center. No in-app NPS. Loops drip not implemented. No churn prediction.
 
 ---
 
@@ -239,14 +386,39 @@
 
 ---
 
+## Architecture Rules (from REBUILD-PLAN Section 23)
+
+1. **Nothing hardcoded. Ever.** Labels from playbooks (`useTenantConfig`), not hardcoded strings. No `if (role === 'acquisition_manager')` -- use playbook role references.
+2. **Algorithm config at top of file.** To tune: change config, not logic. One line, one file.
+3. **One component, used everywhere.** ActionConfirmDialog for all actions. SearchableDropdown for all pickers. useTenantConfig for all labels. /api/ai/stream for all AI. Fix once → fixed everywhere.
+4. **CRM write-back contract.** Every Gunner action that changes data → writes to CRM (task, note, SMS, stage change, appointment, tag, field).
+5. **Easily updatable.** AI agents can find and update any weight, label, or behavior by changing one config value in one file.
+
+---
+
+## Premium Enhancement List (from REBUILD-PLAN Section 21)
+
+44 enhancements for premium parity, grouped:
+
+- **UI/UX (10):** Command palette wiring, keyboard shortcuts, page transitions, empty states, error boundaries, responsive tables, dark mode audit, skeleton consistency, notification system, breadcrumbs
+- **Data (5):** Real-time updates (WebSocket/SSE), advanced full-text search, CSV/PDF export, complete audit log, funnel charts + heat maps + sparklines
+- **AI (5):** Proactive suggestions, call summary auto-generation, AI training content, sentiment analysis, competitive intelligence
+- **Gamification (8):** Fix 4 broken badges, improvement XP, daily/weekly challenges, badge rarity visuals, achievement notifications, XP history, custom badges, team challenges
+- **Actions (5):** Bulk selection with warning, action history per contact, 5-second undo, SMS/note templates, visual workflow builder (future)
+- **Performance (6):** CDN for static assets, query optimization + indexes, bundle code-splitting, API response caching (5-min TTL), health check, graceful CRM degradation
+- **Security (5):** SOC 2 readiness, RBAC (admin/manager/member), API key management, session management + "sign out everywhere", 2FA for admins
+
+---
+
 ## Recommended Execution Order (Next 90 Days)
 
 1. **Acquisition + Distribution** -- Get found. GHL Marketplace listing, SEO blog, community presence.
 2. **Launch** -- Flip DNS to Railway. Plan a Product Hunt launch.
 3. **Conversion** -- Pricing page, explicit free trial, upgrade prompts.
-4. **Retention** -- Finish Loops drip emails, add in-app help/support.
+4. **Retention** -- Finish Loops drip emails, add in-app help/support. Fix 4 broken gamification badges.
 5. **Revenue** -- Annual plans, upsell prompts at tier limits.
 6. **Testing** -- Core pipeline tests (grading, auth, webhooks) before scaling.
+7. **Security** -- Fix 4 critical security items from Phase 0 before onboarding more tenants.
 
 ---
 
