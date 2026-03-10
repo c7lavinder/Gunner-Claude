@@ -24,9 +24,8 @@ const req = createRequire('/tmp/gunner-pg-helper/package.json');
 const { Client } = req('pg');
 const dotenv = req('dotenv');
 
-// Try loading .env from project roots
-dotenv.config({ path: '/Users/coreylavinder/MANUS-GUNNER-V1/.env' });
-dotenv.config({ path: '/Users/coreylavinder/MANUS-GUNNER-V1/MANUS-GUNNER-V1/.env' });
+// Try loading .env from project root
+dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
 
 const KEEP_TENANT_IDS = [1, 450029];
 const KEEP_TENANT_SLUGS = ['demo-apex'];

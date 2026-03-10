@@ -623,7 +623,7 @@
 - [x] Build login page (/login) with email/password
 - [x] Implement password hashing with bcrypt
 - [x] Add JWT session management for email/password users
-- [x] Keep Manus OAuth as internal-only option (existing auth flow)
+- [x] Keep platform OAuth as internal-only option (existing auth flow)
 
 ### Signup Flow
 - [x] Signup form → Plan selection → Stripe checkout → Onboarding
@@ -2089,13 +2089,13 @@
 - [x] Add pipelineMappings support to TenantCrmConfig for multi-pipeline stage mapping storage
 - [x] Support dual roles via isTenantAdmin flag: user keeps teamRole=acquisition_manager for call grading + isTenantAdmin=true for admin access
 - [x] Add email invite section to Team Members step during tenant creation — enter emails so members/admin get signup invites
-- [x] Build email/password authentication for external customers (independent of Manus OAuth) — already existed
+- [x] Build email/password authentication for external customers (independent of platform OAuth) — already existed
 - [x] Create login page at getgunner.ai (email + password) — already existed at /login
 - [x] Create registration page with invite token support — already existed at /signup
 - [x] Create forgot password / reset password flow — already existed
 - [x] Auto-associate new users with their tenant and team member record by email — pending invitations system handles this
 - [x] Build invite email system: admin sends invite during tenant creation, user receives link to set up account
-- [x] Ensure Manus OAuth still works for platform owner (Corey) alongside email/password auth — context.ts falls through to Manus OAuth
+- [x] Ensure platform OAuth still works for platform owner (Corey) alongside email/password auth — context.ts falls through to platform OAuth
 - [x] Set up Zac Chrisman as admin for his tenant (team_members id=300037, tenantId=450029)
 - [x] Fix View as Tenant impersonation: context.ts now reads session cookie for JWT impersonation tokens and overrides tenantId
 - [x] Add "Signals" checkbox to plan features editor in SuperAdmin
@@ -2528,9 +2528,9 @@
 - [x] Fix all 3-day trial references to 14-day across Signup, Paywall, Landing, Pricing pages
 - [x] Write tests for all changes (15 branding audit tests passing)
 
-## Remove Manus branding from user-facing website
-- [x] Remove all manuscdn logo URLs from 8 frontend files — replaced with CloudFront S3 URLs
-- [x] Remove 'Login with Manus' text from ManusDialog
+## Remove legacy branding from user-facing website
+- [x] Remove all legacy CDN logo URLs from 8 frontend files — replaced with CloudFront S3 URLs
+- [x] Remove legacy login dialog text
 - [x] Upload logos to S3 for neutral domain (d2xsxph8kpxj0f.cloudfront.net)
 
 ## Onboarding UX: Auto-fetch GHL Stages + Webhook Setup Card
@@ -2740,7 +2740,7 @@
 - [x] Add connectionStatusEnvFallback.test.ts with 8 tests covering env fallback logic
 
 ## Bug: Platform Admin Page Shows Blank Tenants List
-- [x] Root cause: isPlatformOwner only checked OWNER_OPEN_ID env var (Manus OAuth ID), but Corey's openId is now Google OAuth
+- [x] Root cause: isPlatformOwner only checked OWNER_OPEN_ID env var (legacy OAuth ID), but Corey's openId is now Google OAuth
 - [x] Added hasPlatformAccess() function that checks both role === 'super_admin' AND isPlatformOwner(openId)
 - [x] Updated all 30 tenant router procedures in routers.ts to use hasPlatformAccess
 - [x] Removed hardcoded openId check in SuperAdmin.tsx frontend, now uses role-based check
@@ -3536,7 +3536,7 @@
 - [x] SKIPPED - User prefers light theme, keeping current light dashboard design
 
 ## Session Persistence (Feb 28, 2026)
-- [x] Session cookies already persist 30 days (self-serve) / 1 year (Manus OAuth) - no change needed
+- [x] Session cookies already persist 30 days (self-serve) / 1 year (platform OAuth) - no change needed
 - [x] Real issue: authenticated users were seeing landing page instead of dashboard - fixed with auto-redirect
 
 ## Auto-redirect Authenticated Users (Feb 28, 2026)
@@ -3710,7 +3710,7 @@
 - [x] AI Coach system prompt using tenant-configured role names instead of hardcoded
 - [x] Call type detection via tenant-configured types in grading engine
 - [ ] Analytics/leaderboard queries using dynamic outcome names
-- [x] Configure GHL Marketplace redirect URL for Manus-hosted domain
+- [x] Configure GHL Marketplace redirect URL for Railway-hosted domain
 - [x] Verify GHL OAuth install flow end-to-end
 - [x] Improve getgunner.ai landing page conversion (social proof, demo video embed, clearer CTA)
 - [x] Draft 5 LinkedIn posts for Corey to review and post manually
@@ -4481,7 +4481,7 @@
 - [x] ghlOAuth.test.ts: Fix redirect URI to /setup/oauth/callback (57/57 pass)
 - [x] ghlCircuitBreaker.test.ts: Fix requestsInWindow assertion (shared timestamps not cleared on reset) (23/23 pass)
 - [x] missedItems.test.ts: Update heading assertions to tier-based labels (all pass)
-- [x] brandingAudit.test.ts: Replace manuscdn URLs with CDN URLs in Landing.tsx (all pass)
+- [x] brandingAudit.test.ts: Replace legacy CDN URLs with new CDN URLs in Landing.tsx (all pass)
 - [x] onboardingAuditFixes.test.ts: Fix owner check to use OWNER_OPEN_ID instead of tenantId===1 (all pass)
 - [x] workflowTracking.test.ts: Fix empty state text assertion (all pass)
 

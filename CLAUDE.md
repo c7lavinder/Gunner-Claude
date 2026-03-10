@@ -23,11 +23,11 @@ Gunner (getgunner.ai) is a multi-tenant AI-powered sales call coaching platform.
 - **Payments:** Stripe
 - **Security:** Helmet headers, express-rate-limit, JWT auth
 - **Linting:** ESLint + typescript-eslint + eslint-config-prettier
-- **Deployment:** Railway (auto-deploys on push to manus-migration branch)
+- **Deployment:** Railway (auto-deploys on push to active branch)
 
 ## Active Branch
 
-**Always work on `manus-migration` branch. Never touch `main`.**
+**Always work on the active deploy branch. Never touch `main`.**
 
 ## Four-Playbook Architecture
 
@@ -228,7 +228,7 @@ Three layers of data synchronization:
 
 ## Rules
 
-1. Never commit to `main` — only `manus-migration`
+1. Never commit to `main` — only the active deploy branch
 2. Never hardcode credentials — always use `ENV` from `server/_core/env.ts`
 3. Never hardcode tenant IDs — always multi-tenant safe
 4. Run `npx tsc --noEmit` before pushing — must be 0 errors
@@ -239,7 +239,7 @@ Three layers of data synchronization:
 
 ## Deploy
 
-Push to `manus-migration` → Railway auto-deploys → live in ~3 minutes.
+Push to the active deploy branch → Railway auto-deploys → live in ~3 minutes.
 Staging URL: https://gunner-app-production.up.railway.app
 Health check: `GET /health` returns `{"status":"ok"}`
 

@@ -1,5 +1,5 @@
 // Trigger manual BatchDialer sync via tRPC endpoint
-const API_URL = "https://3000-iuckmproyov1k7g9dwzd0-21ab7468.us1.manus.computer/api/trpc/calls.syncBatchDialer";
+const API_URL = "https://gunner-app-production.up.railway.app/api/trpc/calls.syncBatchDialer";
 
 console.log("Triggering BatchDialer sync...");
 

@@ -6,9 +6,9 @@
 
 ## 1. Architecture Overview
 
-Gunner is a **multi-tenant SaaS platform** for real estate wholesaling teams. It combines AI-powered call coaching, KPI tracking, deal management, and property disposition into one application. The stack is React 19 + Tailwind 4 + Express 4 + tRPC 11 with MySQL (TiDB), hosted on Manus at **getgunner.ai**.
+Gunner is a **multi-tenant SaaS platform** for real estate wholesaling teams. It combines AI-powered call coaching, KPI tracking, deal management, and property disposition into one application. The stack is React 19 + Tailwind 4 + Express 4 + tRPC 11 with PostgreSQL, hosted on Railway at **getgunner.ai**.
 
-Tenants sign in via `getgunner.ai` (never through `manus`). Each tenant has their own team members, playbook configuration (roles, rubrics, call types), markets, sources, and properties. Nothing is hardcoded to a specific tenant.
+Tenants sign in via `getgunner.ai`. Each tenant has their own team members, playbook configuration (roles, rubrics, call types), markets, sources, and properties. Nothing is hardcoded to a specific tenant.
 
 ---
 
@@ -348,7 +348,7 @@ The `contact_cache` table stores buyer data synced from GHL, including `buyBoxTy
 
 4. **lastOfferAmount is on propertyBuyerActivity, not dispoProperties:** The frontend table uses `_activity.highestOffer` from the enriched getProperties response.
 
-5. **OAuth email fallback:** Users who signed up via Google OAuth have a `google_*` openId. When they log in via Manus OAuth, the system falls back to email matching. The session token uses the existing DB user's openId, not the Manus OAuth openId.
+5. **OAuth email fallback:** Users who signed up via Google OAuth have a `google_*` openId. When they log in via a different OAuth provider, the system falls back to email matching. The session token uses the existing DB user's openId, not the new OAuth openId.
 
 6. **Buyer market matching:** "Nationwide" buyers match all markets. Other buyers must match the property's market in either their `market` or `secondaryMarket` field.
 

@@ -19,7 +19,7 @@ description: Diagnose and fix a bug in the Gunner codebase
 4. Make the minimal surgical fix — don't refactor unrelated code
 5. Run `npx tsc --noEmit` — must show 0 errors before committing
 6. Commit with message: `fix: <short description>`
-7. Push to `manus-migration` branch
+7. Push to the active deploy branch
 8. Confirm Railway deploy triggered (auto-deploys in ~3 min)
 
 ## Key Router → Service Mapping

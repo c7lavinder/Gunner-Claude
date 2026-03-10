@@ -1,7 +1,7 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
 > Last updated: March 10, 2026
-> Last deploy: commit `9758055` on `manus-migration` — Railway live
+> Last deploy: commit `9758055` — Railway live
 > Type check: `npx tsc --noEmit` — 0 errors
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
@@ -156,4 +156,4 @@ These are "premium parity" features — not blockers but important for quality:
 3. Build it following the patterns already established in the codebase
 4. Run `npx tsc --noEmit` — must be 0 errors
 5. Commit with prefix: `feat:` / `fix:` / `refactor:`
-6. Push to `manus-migration` — Railway auto-deploys
+6. Push to deploy branch — Railway auto-deploys

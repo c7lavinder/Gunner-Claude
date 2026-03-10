@@ -9,10 +9,10 @@ description: Pre-deploy checklist — run before every push to ensure clean depl
 
 1. **TypeScript** — `npx tsc --noEmit` → must be 0 errors
 2. **Build** — `npm run build` → must succeed
-3. **Branch check** — `git branch --show-current` → must be `manus-migration`, never `main`
+3. **Branch check** — `git branch --show-current` → must be the active deploy branch, never `main`
 4. **Diff review** — `git diff HEAD` → scan for accidental debug code, console.logs, hardcoded values
 5. **Commit** — meaningful message: `fix:`, `feat:`, `docs:`, `refactor:`
-6. **Push** — `git push origin manus-migration`
+6. **Push** — `git push origin HEAD`
 7. **Confirm deploy** — Railway auto-deploys in ~3 min; staging URL: https://gunner-app-production.up.railway.app
 
 ## If Build Fails

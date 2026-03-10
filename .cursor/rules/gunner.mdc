@@ -7,14 +7,14 @@ alwaysApply: true
 # Gunner — Cursor Rules
 
 ## Branch
-Always work on `manus-migration`. Never commit to `main`.
+Always work on the active deploy branch. Never commit to `main`.
 
 ## Stack
 - Frontend: React + TypeScript + Vite (client/src/)
 - Backend: Node.js + Express + tRPC (server/)
 - DB: PostgreSQL + Drizzle ORM — schema in drizzle/schema.ts
 - Storage: Supabase Storage (gunner-recordings bucket)
-- Deploy: Railway — auto-deploys on push to manus-migration
+- Deploy: Railway — auto-deploys on push to active branch
 
 ## Active Tenants
 - ID=1: New Again Houses (primary, live)
@@ -29,7 +29,7 @@ Never use raw process.env in business logic. Never hardcode keys.
 ## Before Every Push
 1. `npx tsc --noEmit` → must be 0 errors
 2. Commit with prefix: fix: / feat: / docs: / refactor:
-3. Push to manus-migration only
+3. Push to the active deploy branch only
 
 ## Key Files
 - server/_core/env.ts — all environment variables

@@ -21,7 +21,7 @@ description: Plan and build a new feature for Gunner
 7. If schema changes: edit `drizzle/schema.ts` + add DDL to `server/seeds/startupMigrations.ts`
 8. Run `npx tsc --noEmit` — 0 errors required
 9. Commit: `feat: <description>`
-10. Push to `manus-migration`
+10. Push to the active deploy branch
 
 ## Where Things Go
 - **New API endpoints:** Add to the appropriate router in `server/routers/` (calls.ts, inventory.ts, team.ts, etc.)
