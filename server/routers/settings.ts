@@ -1,6 +1,146 @@
+import { z } from "zod";
+import { eq, and } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
+import { db } from "../_core/db";
+import {
+  tenants,
+  teamMembers,
+  pendingInvitations,
+} from "../../drizzle/schema";
+import { createCrmAdapter } from "../crm";
+
+const updateWorkspaceInput = z.object({
+  name: z.string().optional(),
+  crmType: z.string().optional(),
+  crmConfig: z.string().optional(),
+  settings: z.string().optional(),
+});
+
+function normalizeCrmConfig(
+  raw: Record<string, unknown>
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === "string") out[k] = v;
+    else if (typeof v === "number" || typeof v === "boolean")
+      out[String(k)] = String(v);
+  }
+  if (out.ghlApiKey && !out.apiKey) out.apiKey = out.ghlApiKey;
+  if (out.ghlLocationId && !out.locationId) out.locationId = out.ghlLocationId;
+  return out;
+}
 
 export const settingsRouter = router({
-  getWorkspace: protectedProcedure.query(() => ({ todo: "implement" })),
-  updateWorkspace: protectedProcedure.mutation(() => ({ todo: "implement" })),
+  getWorkspace: protectedProcedure.query(async ({ ctx }) => {
+    const tenantId = ctx.user.tenantId;
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+    if (!tenant) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Tenant not found" });
+    }
+    const members = await db
+      .select()
+      .from(teamMembers)
+      .where(
+        and(
+          eq(teamMembers.tenantId, tenantId),
+          eq(teamMembers.isActive, "true")
+        )
+      );
+    return { tenant, teamMembers: members };
+  }),
+
+  updateWorkspace: protectedProcedure
+    .input(updateWorkspaceInput)
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user.tenantId;
+      const updates: Record<string, unknown> = {};
+      if (input.name !== undefined) updates.name = input.name;
+      if (input.crmType !== undefined) updates.crmType = input.crmType;
+      if (input.crmConfig !== undefined) updates.crmConfig = input.crmConfig;
+      if (input.settings !== undefined) updates.settings = input.settings;
+      if (Object.keys(updates).length === 0) {
+        const [t] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+        return t!;
+      }
+      const [updated] = await db
+        .update(tenants)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(tenants.id, tenantId))
+        .returning();
+      if (!updated) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Tenant not found" });
+      }
+      return updated;
+    }),
+
+  testCrmConnection: protectedProcedure.query(async ({ ctx }) => {
+    const tenantId = ctx.user.tenantId;
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+    if (!tenant?.crmConfig || tenant.crmType === "none") {
+      return { connected: false, error: "No CRM configured" };
+    }
+    const config = normalizeCrmConfig(
+      JSON.parse(tenant.crmConfig) as Record<string, unknown>
+    );
+    const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
+    return adapter.testConnection();
+  }),
+
+  inviteTeamMember: protectedProcedure
+    .input(
+      z.object({
+        name: z.string(),
+        email: z.string().email(),
+        teamRole: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user.tenantId;
+      const [member] = await db
+        .insert(teamMembers)
+        .values({
+          tenantId,
+          name: input.name,
+          teamRole: input.teamRole,
+          userId: null,
+          isActive: "true",
+        })
+        .returning();
+      if (!member) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.insert(pendingInvitations).values({
+        tenantId,
+        email: input.email,
+        teamRole: input.teamRole,
+        invitedBy: ctx.user.userId,
+        status: "pending",
+      });
+      return member;
+    }),
+
+  removeTeamMember: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user.tenantId;
+      const [updated] = await db
+        .update(teamMembers)
+        .set({ isActive: "false", updatedAt: new Date() })
+        .where(
+          and(
+            eq(teamMembers.id, input.id),
+            eq(teamMembers.tenantId, tenantId)
+          )
+        )
+        .returning();
+      if (!updated) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found" });
+      }
+      return updated;
+    }),
 });

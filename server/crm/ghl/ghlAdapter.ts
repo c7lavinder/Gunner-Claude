@@ -47,20 +47,47 @@ export class GhlAdapter implements CrmAdapter {
     return this.accessToken ?? this.apiKey;
   }
 
-  private notImplemented(): ActionResult {
-    return {
-      success: false,
-      message: "Not yet implemented",
-      timestamp: new Date().toISOString(),
-    };
+  private actionResult(success: boolean, message: string, error?: string): ActionResult {
+    return { success, message, timestamp: new Date().toISOString(), error };
   }
 
   async getContact(contactId: string): Promise<CrmContact | null> {
-    throw new Error("Not yet implemented");
+    try {
+      const data = (await ghlFetch(`/contacts/${contactId}`, { token: this.token })) as Record<string, unknown>;
+      const c = (data.contact ?? data) as Record<string, unknown>;
+      return {
+        id: String(c.id ?? contactId),
+        name: String(c.name ?? ((c.firstName ?? "") + " " + (c.lastName ?? "")).trim()).trim() || "Unknown",
+        email: c.email ? String(c.email) : undefined,
+        phone: c.phone ? String(c.phone) : undefined,
+        tags: Array.isArray(c.tags) ? (c.tags as string[]) : undefined,
+        customFields: typeof c.customFields === "object" ? (c.customFields as Record<string, unknown>) : undefined,
+      };
+    } catch (e) {
+      return null;
+    }
   }
 
   async searchContacts(query: string, limit?: number): Promise<CrmContact[]> {
-    throw new Error("Not yet implemented");
+    try {
+      const params = new URLSearchParams({
+        query,
+        limit: String(limit ?? 10),
+        locationId: this.locationId,
+      });
+      const data = (await ghlFetch(`/contacts/search?${params}`, { token: this.token })) as { contacts?: Array<Record<string, unknown>> };
+      const list = data.contacts ?? [];
+      return list.map((c) => ({
+        id: String(c.id ?? ""),
+        name: String(c.name ?? ((c.firstName ?? "") + " " + (c.lastName ?? "")).trim()).trim() || "Unknown",
+        email: c.email ? String(c.email) : undefined,
+        phone: c.phone ? String(c.phone) : undefined,
+        tags: Array.isArray(c.tags) ? (c.tags as string[]) : undefined,
+        customFields: typeof c.customFields === "object" ? (c.customFields as Record<string, unknown>) : undefined,
+      }));
+    } catch (e) {
+      return [];
+    }
   }
 
   async getOpportunity(opportunityId: string): Promise<CrmOpportunity | null> {
@@ -119,26 +146,77 @@ export class GhlAdapter implements CrmAdapter {
     message: string,
     fromUserId?: string
   ): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch("/conversations/messages", {
+        method: "POST",
+        token: this.token,
+        body: { type: "SMS", contactId, message },
+      });
+      return this.actionResult(true, "SMS sent");
+    } catch (e) {
+      return this.actionResult(false, "Failed to send SMS", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async addNote(contactId: string, body: string): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch(`/contacts/${contactId}/notes`, {
+        method: "POST",
+        token: this.token,
+        body: { body },
+      });
+      return this.actionResult(true, "Note added");
+    } catch (e) {
+      return this.actionResult(false, "Failed to add note", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async createTask(task: Omit<CrmTask, "id" | "completed">): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      if (!task.contactId) return this.actionResult(false, "Contact ID required");
+      await ghlFetch(`/contacts/${task.contactId}/tasks`, {
+        method: "POST",
+        token: this.token,
+        body: {
+          title: task.title,
+          body: task.description,
+          dueDate: task.dueDate,
+          assignedTo: task.assignedTo,
+        },
+      });
+      return this.actionResult(true, "Task created");
+    } catch (e) {
+      return this.actionResult(false, "Failed to create task", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async completeTask(taskId: string): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch(`/contacts/tasks/${taskId}/completed`, {
+        method: "PUT",
+        token: this.token,
+        body: { completed: true },
+      });
+      return this.actionResult(true, "Task completed");
+    } catch (e) {
+      return this.actionResult(false, "Failed to complete task", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async updateOpportunityStage(
     opportunityId: string,
     stageId: string
   ): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch(`/opportunities/${opportunityId}`, {
+        method: "PUT",
+        token: this.token,
+        body: { stageId },
+      });
+      return this.actionResult(true, "Opportunity stage updated");
+    } catch (e) {
+      return this.actionResult(false, "Failed to update opportunity stage", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async createAppointment(params: {
@@ -147,15 +225,48 @@ export class GhlAdapter implements CrmAdapter {
     startTime: string;
     assignedTo?: string;
   }): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch("/calendars/events/appointments", {
+        method: "POST",
+        token: this.token,
+        body: {
+          contactId: params.contactId,
+          title: params.title,
+          startTime: params.startTime,
+          assignedUserId: params.assignedTo,
+          calendarId: "primary",
+        },
+      });
+      return this.actionResult(true, "Appointment created");
+    } catch (e) {
+      return this.actionResult(false, "Failed to create appointment", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async addTag(contactId: string, tag: string): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch(`/contacts/${contactId}/tags`, {
+        method: "POST",
+        token: this.token,
+        body: { tags: [tag] },
+      });
+      return this.actionResult(true, "Tag added");
+    } catch (e) {
+      return this.actionResult(false, "Failed to add tag", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async removeTag(contactId: string, tag: string): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch(`/contacts/${contactId}/tags`, {
+        method: "DELETE",
+        token: this.token,
+        body: { tags: [tag] },
+      });
+      return this.actionResult(true, "Tag removed");
+    } catch (e) {
+      return this.actionResult(false, "Failed to remove tag", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async updateContactField(
@@ -163,18 +274,36 @@ export class GhlAdapter implements CrmAdapter {
     field: string,
     value: unknown
   ): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch(`/contacts/${contactId}`, {
+        method: "PUT",
+        token: this.token,
+        body: { [field]: value },
+      });
+      return this.actionResult(true, "Contact field updated");
+    } catch (e) {
+      return this.actionResult(false, "Failed to update contact field", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async addToWorkflow(contactId: string, workflowId: string): Promise<ActionResult> {
-    return this.notImplemented();
+    try {
+      await ghlFetch(`/contacts/${contactId}/workflow/${workflowId}`, {
+        method: "POST",
+        token: this.token,
+        body: {},
+      });
+      return this.actionResult(true, "Added to workflow");
+    } catch (e) {
+      return this.actionResult(false, "Failed to add to workflow", e instanceof Error ? e.message : String(e));
+    }
   }
 
   async removeFromWorkflow(
     contactId: string,
     workflowId: string
   ): Promise<ActionResult> {
-    return this.notImplemented();
+    return this.actionResult(false, "Remove from workflow not yet implemented");
   }
 
   async testConnection(): Promise<{ connected: boolean; error?: string }> {

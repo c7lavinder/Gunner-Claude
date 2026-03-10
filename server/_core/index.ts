@@ -6,6 +6,7 @@ import path from "node:path";
 import { ENV } from "./env";
 import { createContext } from "./context";
 import { appRouter } from "../routers";
+import { startPolling } from "../services/callIngestion";
 
 const app = express();
 
@@ -31,6 +32,9 @@ if (ENV.isProduction) {
 
 app.listen(ENV.port, "0.0.0.0", () => {
   console.log(`Gunner v2 running on port ${ENV.port}`);
+  if (ENV.isProduction) {
+    startPolling(5);
+  }
 });
 
 export type AppRouter = typeof appRouter;
