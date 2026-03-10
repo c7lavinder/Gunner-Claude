@@ -1,7 +1,7 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 10, 2026 (full audit + security batch + gamification fixes + coaching memory)
-> Last deploy: commit `9758055` — Railway live
+> Last updated: March 10, 2026 (Phases 1-5 batch build: pkg cleanup, PostHog, NAH seed, AI suggestions, notifications, breadcrumbs, skeletons, optimistic updates)
+> Last deploy: Railway auto-deploys from manus-migration
 > Type check: `npx tsc --noEmit` — 0 errors
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
@@ -71,37 +71,37 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 - [x] **Dead pages deleted** — Home, LeadGenDashboard, ComponentShowcase, GradingRules, Feedback are gone. Pages directory only contains the 7 core pages + auth pages. Verified in full audit.
 - [x] **Pages consolidated** — Methodology, TeamTraining, Leaderboard, Analytics, Opportunities, CoachActivityLog, TeamManagement, TenantSetup all eliminated or absorbed. Verified.
-- [ ] Remove unused packages: `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `add` devDep
+- [x] Remove unused packages: `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `add` devDep
 - [ ] Frontend testing setup: `@testing-library/react`
 - [ ] E2E testing setup: Playwright
-- [ ] PostHog JS client for frontend analytics/user_events
+- [x] PostHog JS client for frontend analytics/user_events (posthog-js installed, init in main.tsx gated on VITE_POSTHOG_API_KEY)
 
 ### Phase 2: Industry Playbook (mostly done, gaps remain)
 
 - [x] **Industry terminology wired** — Full audit confirmed: no hardcoded "Seller", "Property", "Deal" outside of fallback defaults. All pages use `useTenantConfig()` for labels.
 - [x] **No hardcoded role checks** — No `if (role === 'acquisition_manager')` pattern found in codebase.
 - [x] **No RE-specific AI prompts** — Grading prompts load from playbook dynamically. No hardcoded "Real estate wholesaling" strings in AI code.
-- [ ] Create additional industry seeds: Solar, Insurance, SaaS, Home Services (REBUILD-PLAN Section 15)
+- [x] Create additional industry seeds: Solar, Insurance, SaaS, Home Services — all 4 seeded in `server/seeds/industries.ts` + wired into `seedPlaybooks.ts`
 
 ### Phase 3: Tenant Playbook / NAH Config (partially done)
 
-- [ ] Map NAH's exact pipeline stages to playbook stages (with GHL pipeline/stage IDs)
-- [ ] Define NAH's markets + zip codes in tenant playbook
-- [ ] Define NAH's lead sources + GHL source string mappings
-- [ ] Import NAH team members + map to GHL user IDs
-- [ ] Set NAH's KPI targets per role per period
-- [ ] Set NAH's algorithm weight overrides
+- [x] Map NAH's exact pipeline stages to playbook stages (with GHL pipeline/stage ID placeholders in `server/seeds/nahTenant.ts`)
+- [x] Define NAH's markets + zip codes in tenant playbook (Charlotte metro + Kitty Hawk)
+- [x] Define NAH's lead sources + GHL source string mappings (cold call, DFD, direct mail, PPC, referral, SMS, Facebook, probate)
+- [ ] Import NAH team members + map to GHL user IDs (needs real GHL data)
+- [x] Set NAH's KPI targets per role per period (in customConfig.kpiTargets)
+- [x] Set NAH's algorithm weight overrides
 
 ### Phase 4: User Playbook + Intelligence Loop (early stage)
 
 - [x] **Coaching memory distillation** — Weekly job (Monday 7am) that reads AI coaching conversations, calls GPT-4o to extract strengths + growth areas + grade trend, and updates `user_playbooks`. Wired into `startScheduledJobs`.
-- [ ] Action pattern analysis (from user_events — what actions each user takes, misses)
-- [ ] Proactive AI suggestions (V2 — AI suggests without being asked, shown as cards)
+- [x] Action pattern analysis (daily job in `scheduledJobs.ts` — reads user_events, identifies patterns, stores in user_playbooks.instructions)
+- [x] Proactive AI suggestions (V2 — `ai.generateSuggestions` + `ai.getSuggestions` tRPC procedures; cards on Today page)
 - [ ] Voice sample extraction job (runs after grading, extracts user audio segments)
 - [ ] Consent toggle in Profile page for voice collection
 - [ ] Supabase bucket: `gunner-voice-samples`
 - [ ] Voice profile dashboard in Profile page (total minutes, sample count, ready status)
-- [ ] Full user_events collection on frontend (page_view, feature_used, search_performed)
+- [x] Full user_events collection on frontend (useTrackEvent hook, page_view via PageTracker in App.tsx, ai.trackEvent tRPC procedure)
 
 ### Phase 5: Landing + Premium Polish (partially done)
 
@@ -110,15 +110,15 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] **Gamification fixes** — 4 broken items fixed: (1) Improvement XP now awarded in `processCallGamification` when score beats avg by 5+ pts. (2) Improvement badge check fixed to use score-vs-average logic. (3) Weekly volume badges added (Volume Dialer/Cold Call Warrior/Deal Machine). (4) All badges evaluated on every graded call.
 - [x] **Dark mode audit** — No critical raw color issues. `text-white` uses are intentional (text on colored backgrounds). `bg-white` on Google buttons is per Google branding spec.
 - [x] **Google OAuth new-user routing** — New users now go to `/onboarding` instead of `/today`.
-- [ ] Build 5 industry landing pages (wholesaling, solar, insurance, SaaS, home services) — template exists at `IndustryLanding.tsx`, need industry configs
+- [x] Build 5 industry landing pages — all 5 configs in `client/src/pages/landing/industryConfigs/index.ts` (wholesaling, solar, insurance, saas-sales, recruiting/home-services)
 - [ ] Testimonials from DB (currently hardcoded)
 - [ ] FAQ section on landing (from config/DB)
 - [ ] Integrations section ("Works with your CRM" — CRM-agnostic icons)
-- [ ] Loading skeleton consistency — ensure ALL pages use skeleton, not spinners
-- [ ] In-app notification system (badge earned, task due, call graded)
-- [ ] Breadcrumbs on nested views
+- [x] Loading skeleton consistency — CallInbox, Inventory, Today shimmer replaced with Skeleton; all other pages already correct
+- [x] In-app notification system — `notifications` table, `notificationsRouter`, `NotificationBell` component in header (badge_earned triggers notifications from gamification service)
+- [x] Breadcrumbs on nested views — auto-generated from route in DashboardLayout
 - [ ] Full accessibility pass (aria-labels on icon-only buttons, form labels, keyboard nav)
-- [ ] Optimistic updates for CRM actions (show success immediately, rollback on failure)
+- [x] Optimistic updates for CRM actions — `optimisticStatus` in useActions hook, "Sending..." button state in ActionConfirmDialog
 
 ### Enhancement List (REBUILD-PLAN Section 21)
 

@@ -19,6 +19,7 @@ import { startRetryProcessor } from "../middleware/webhook";
 import { startScheduledJobs } from "../services/scheduledJobs";
 import { seedIndustryPlaybooks } from "../seeds/seedPlaybooks";
 import { runStartupMigrations } from "../seeds/startupMigrations";
+import { seedNahTenantPlaybook } from "../seeds/nahTenant";
 import { chatCompletionStream } from "./llm";
 import * as jose from "jose";
 
@@ -118,6 +119,7 @@ app.listen(ENV.port, "0.0.0.0", () => {
   console.log(`Gunner v2 running on port ${ENV.port}`);
   runStartupMigrations()
     .then(() => seedIndustryPlaybooks())
+    .then(() => seedNahTenantPlaybook())
     .catch((err) => console.error("[startup] Migration/seed error:", err));
   if (ENV.isProduction) {
     startPolling(5);

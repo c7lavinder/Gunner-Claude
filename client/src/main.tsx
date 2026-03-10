@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import * as Sentry from "@sentry/react";
+import posthog from "posthog-js";
 import { trpc } from "./lib/trpc";
 import superjson from "superjson";
 import { ThemeProvider } from "next-themes";
@@ -18,6 +19,15 @@ if (SENTRY_DSN) {
     tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 1.0,
+  });
+}
+
+const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_API_KEY as string | undefined;
+if (POSTHOG_KEY) {
+  posthog.init(POSTHOG_KEY, {
+    api_host: "https://app.posthog.com",
+    capture_pageview: false, // we'll do manual page_view tracking
+    autocapture: false,
   });
 }
 
