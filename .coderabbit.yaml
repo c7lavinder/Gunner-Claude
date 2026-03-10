@@ -1,0 +1,80 @@
+language: en-US
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_instructions:
+    - path: "server/routers/**"
+      instructions: |
+        Every protectedProcedure must scope queries by ctx.user.tenantId.
+        No endpoint should return data from another tenant.
+        Router files should be under 500 lines.
+
+    - path: "server/services/**"
+      instructions: |
+        Services contain pure business logic. No Express req/res here.
+        No hardcoded tenant IDs, industry terms, or role names.
+
+    - path: "server/crm/**"
+      instructions: |
+        CRM code must go through the CrmAdapter interface.
+        Never call GHL APIs directly outside of server/crm/ghl/.
+        No hardcoded GHL pipeline IDs or location IDs.
+
+    - path: "server/algorithms/**"
+      instructions: |
+        Every algorithm must have a CONFIG object at the top of its file.
+        Config values come from playbooks, not hardcoded.
+        To tune: change the config, not the logic.
+
+    - path: "client/src/pages/**"
+      instructions: |
+        No hardcoded labels. Use useTenantConfig() for all terminology.
+        No hardcoded stage names, role names, or industry terms.
+        Use shadcn components from @/components/ui/.
+
+    - path: "client/src/components/**"
+      instructions: |
+        All actions must go through ActionConfirmDialog.
+        No window.prompt() or window.confirm().
+        No toast-only feedback for actions.
+
+    - path: "server/_core/env.ts"
+      instructions: |
+        Critical secrets (JWT_SECRET, DATABASE_URL, OPENAI_API_KEY) must
+        throw on startup if missing. No fallback values for secrets.
+
+    - path: "drizzle/schema.ts"
+      instructions: |
+        This is the source of truth for the database.
+        Every table must have tenantId for multi-tenant isolation.
+        Remind to run db:generate and db:migrate after changes.
+
+    - path: "shared/**"
+      instructions: |
+        Shared types are used by both frontend and backend.
+        Keep types generic — no GHL-specific or industry-specific types here.
+
+chat:
+  auto_reply: true
+
+tone_instructions: |
+  Be direct and technical. The owner is non-technical so flag anything
+  that could break production, lose data, or expose secrets with high urgency.
+  Focus on: tenant isolation, no hardcoded values, playbook architecture,
+  security, and CRM agnosticism.
+
+knowledge_base:
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
