@@ -5,6 +5,12 @@ import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
 import { coachMessages, userInstructions } from "../../drizzle/schema";
 import { chatCompletion } from "../_core/llm";
+import {
+  getIndustryPlaybook,
+  getTenantPlaybook,
+  getUserPlaybook,
+  resolveTerminology,
+} from "../services/playbooks";
 
 const chatInput = z.object({
   message: z.string(),
@@ -45,13 +51,28 @@ export const aiRouter = router({
         ? `User preferences:\n${instructions.map((i) => `- ${i.instruction}`).join("\n")}`
         : "";
 
+    const tenantPb = await getTenantPlaybook(tenantId);
+    const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+    const userPb = await getUserPlaybook(userId, tenantId);
+    const terms = resolveTerminology(industryPb, tenantPb);
+
+    const playbookContext = [
+      industryPb ? `Industry: ${industryPb.name}` : null,
+      terms ? `Terminology: ${terms.contact}/${terms.contactPlural}, ${terms.asset}/${terms.assetPlural}, ${terms.deal}/${terms.dealPlural}` : null,
+      userPb?.role ? `User role: ${userPb.role}` : null,
+      userPb?.strengths?.length ? `User strengths: ${userPb.strengths.join(", ")}` : null,
+      userPb?.growthAreas?.length ? `Growth areas: ${userPb.growthAreas.join(", ")}` : null,
+      userPb?.gradeTrend ? `Grade trend: ${userPb.gradeTrend}` : null,
+    ].filter(Boolean).join("\n");
+
     const systemPrompt = `You are the Gunner AI Coach — a consistent, persistent AI assistant.
-You help ${ctx.user.name ?? "User"} (${ctx.user.role}) improve their sales performance.
+You help ${ctx.user.name ?? "User"} (${ctx.user.role}) improve their performance.
 You have access to their call grades, KPIs, and team context.
+${playbookContext}
 Current page: ${input.page}
 ${input.pageContext ? `Page context: ${JSON.stringify(input.pageContext)}` : ""}
 ${userInstructionsText}
-Be direct, actionable, and encouraging. Never be generic.`;
+Use the correct terminology for this team's industry. Be direct, actionable, and encouraging. Never be generic.`;
 
     const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
       { role: "system", content: systemPrompt },

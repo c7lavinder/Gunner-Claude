@@ -98,6 +98,39 @@ export const inventoryRouter = router({
     return rows.map((r) => ({ stage: r.stage ?? "", count: r.count }));
   }),
 
+  create: protectedProcedure
+    .input(
+      z.object({
+        address: z.string().min(1),
+        city: z.string().optional().default(""),
+        state: z.string().optional().default(""),
+        zip: z.string().optional().default(""),
+        sellerName: z.string().optional(),
+        sellerPhone: z.string().optional(),
+        status: z.string().optional().default("new_lead"),
+        leadSource: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user!.tenantId;
+      const [property] = await db
+        .insert(dispoProperties)
+        .values({
+          tenantId,
+          address: input.address,
+          city: input.city,
+          state: input.state,
+          zip: input.zip,
+          sellerName: input.sellerName ?? null,
+          sellerPhone: input.sellerPhone ?? null,
+          status: input.status,
+          leadSource: input.leadSource ?? null,
+          stageChangedAt: new Date(),
+        })
+        .returning();
+      return property!;
+    }),
+
   updateStage: protectedProcedure
     .input(z.object({ propertyId: z.number(), newStage: z.string() }))
     .mutation(async ({ ctx, input }) => {

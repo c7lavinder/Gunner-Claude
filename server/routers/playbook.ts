@@ -8,6 +8,7 @@ import {
   tenantCallTypes,
   tenantRubrics,
   industryPlaybooks as industryPlaybooksTable,
+  userPlaybooks,
 } from "../../drizzle/schema";
 import {
   SOFTWARE_PLAYBOOK,
@@ -42,9 +43,23 @@ export const playbookRouter = router({
     getTenantPlaybook(ctx.user.tenantId)
   ),
 
-  getUser: protectedProcedure.query(async ({ ctx }) =>
-    getUserPlaybook(ctx.user.userId, ctx.user.tenantId)
-  ),
+  getUser: protectedProcedure.query(async ({ ctx }) => {
+    const existing = await getUserPlaybook(ctx.user.userId, ctx.user.tenantId);
+    if (existing) return existing;
+    const [created] = await db
+      .insert(userPlaybooks)
+      .values({
+        userId: ctx.user.userId,
+        tenantId: ctx.user.tenantId,
+        role: "member",
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (created) {
+      return getUserPlaybook(ctx.user.userId, ctx.user.tenantId);
+    }
+    return getUserPlaybook(ctx.user.userId, ctx.user.tenantId);
+  }),
 
   listIndustries: publicProcedure.query(async () => {
     const rows = await db

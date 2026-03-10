@@ -79,6 +79,12 @@ export function Inventory() {
   const [detailItem, setDetailItem] = useState<PropertyItem | null>(null);
   const [actionDialog, setActionDialog] = useState<{ open: boolean; type: ActionType; item: { id: number; address: string; sellerName: string | null; sellerPhone: string | null; ghlContactId: string | null }; payload: Record<string, unknown> } | null>(null);
   const [stageChangeDialog, setStageChangeDialog] = useState<{ open: boolean; item: { id: number; address: string; status: string }; newStage: string } | null>(null);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newAddress, setNewAddress] = useState("");
+  const [newCity, setNewCity] = useState("");
+  const [newState, setNewState] = useState("");
+  const [newSellerName, setNewSellerName] = useState("");
+  const [newSellerPhone, setNewSellerPhone] = useState("");
   const { executeAction, isExecuting, result, reset } = useAction();
 
   useEffect(() => {
@@ -96,9 +102,17 @@ export function Inventory() {
   const utils = trpc.useUtils();
   const updateStageMutation = trpc.inventory.updateStage.useMutation({
     onSuccess: () => {
-      utils.inventory.list.invalidate();
-      utils.inventory.getStageCounts.invalidate();
+      void utils.inventory.list.invalidate();
+      void utils.inventory.getStageCounts.invalidate();
       setStageChangeDialog(null);
+    },
+  });
+  const createMutation = trpc.inventory.create.useMutation({
+    onSuccess: () => {
+      void utils.inventory.list.invalidate();
+      void utils.inventory.getStageCounts.invalidate();
+      setAddDialogOpen(false);
+      setNewAddress(""); setNewCity(""); setNewState(""); setNewSellerName(""); setNewSellerPhone("");
     },
   });
 
@@ -156,7 +170,7 @@ export function Inventory() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4" style={{ color: "var(--g-text-tertiary)" }} />
             <Input placeholder="Search by address or seller..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <Button><Plus className="size-4" /> Add {assetSingular}</Button>
+          <Button onClick={() => setAddDialogOpen(true)}><Plus className="size-4" /> Add {assetSingular}</Button>
         </div>
       </div>
 
@@ -290,6 +304,30 @@ export function Inventory() {
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add {assetSingular}</DialogTitle></DialogHeader>
+          <div className="grid gap-3 py-2">
+            <Input placeholder="Address *" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="City" value={newCity} onChange={(e) => setNewCity(e.target.value)} />
+              <Input placeholder="State" value={newState} onChange={(e) => setNewState(e.target.value)} />
+            </div>
+            <Input placeholder="Seller name" value={newSellerName} onChange={(e) => setNewSellerName(e.target.value)} />
+            <Input placeholder="Seller phone" value={newSellerPhone} onChange={(e) => setNewSellerPhone(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!newAddress.trim() || createMutation.isPending}
+              onClick={() => createMutation.mutate({ address: newAddress.trim(), city: newCity.trim(), state: newState.trim(), sellerName: newSellerName.trim() || undefined, sellerPhone: newSellerPhone.trim() || undefined })}
+            >
+              {createMutation.isPending ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

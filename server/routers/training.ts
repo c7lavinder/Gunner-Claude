@@ -11,6 +11,12 @@ import {
   userStreaks,
 } from "../../drizzle/schema";
 import { chatCompletion } from "../_core/llm";
+import {
+  getIndustryPlaybook,
+  getTenantPlaybook,
+  getUserPlaybook,
+  resolveTerminology,
+} from "../services/playbooks";
 
 const gradeToNum = (g: string | null): number => {
   if (!g) return 0;
@@ -127,11 +133,23 @@ export const trainingRouter = router({
   startRoleplay: protectedProcedure
     .input(z.object({ scenario: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const tenantPb = await getTenantPlaybook(ctx.user.tenantId);
+      const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+      const userPb = await getUserPlaybook(ctx.user.userId, ctx.user.tenantId);
+      const terms = resolveTerminology(industryPb, tenantPb);
+
+      const industryContext = industryPb
+        ? `Industry: ${industryPb.name}. Use industry-specific terminology: "${terms.contact}" for contacts, "${terms.asset}" for assets, "${terms.deal}" for deals.`
+        : "";
+      const userContext = userPb?.growthAreas?.length
+        ? `Focus on these growth areas: ${userPb.growthAreas.join(", ")}.`
+        : "";
+
       const response = await chatCompletion({
         messages: [
           {
             role: "system",
-            content: `You are a sales roleplay coach. The user wants to practice: "${input.scenario}". Start the roleplay by playing the prospect/customer. Be realistic and engaging. Keep responses concise (2-4 sentences).`,
+            content: `You are a roleplay coach. The user wants to practice: "${input.scenario}". Start by playing the prospect/customer. Be realistic and engaging. Keep responses concise (2-4 sentences). ${industryContext} ${userContext}`.trim(),
           },
           {
             role: "user",

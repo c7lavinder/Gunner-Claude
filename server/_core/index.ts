@@ -14,6 +14,7 @@ import { startPolling } from "../services/callIngestion";
 import { startDailyDigestJob } from "../services/notifications";
 import { startEventFlusher } from "../services/eventTracking";
 import { seedIndustryPlaybooks } from "../seeds/seedPlaybooks";
+import { runStartupMigrations } from "../seeds/startupMigrations";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -68,9 +69,9 @@ if (ENV.isProduction) {
 
 app.listen(ENV.port, "0.0.0.0", () => {
   console.log(`Gunner v2 running on port ${ENV.port}`);
-  seedIndustryPlaybooks().catch((err) =>
-    console.error("[seed] Failed to seed industry playbooks:", err)
-  );
+  runStartupMigrations()
+    .then(() => seedIndustryPlaybooks())
+    .catch((err) => console.error("[startup] Migration/seed error:", err));
   if (ENV.isProduction) {
     startPolling(5);
     startDailyDigestJob();
