@@ -1,124 +1,59 @@
+import { initTRPC, TRPCError } from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
-import type { User } from "../../drizzle/schema";
-import { sdk } from "./sdk";
-import { verifySessionToken, getUserById } from "../selfServeAuth";
-import { parse as parseCookieHeader } from "cookie";
-import jwt from "jsonwebtoken";
+import * as jose from "jose";
+import superjson from "superjson";
+import { ENV } from "./env";
+import { db } from "./db";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
-
-export type TrpcContext = {
-  req: CreateExpressContextOptions["req"];
-  res: CreateExpressContextOptions["res"];
-  user: User | null;
-};
-
-function parseCookies(cookieHeader: string | undefined): Map<string, string> {
-  if (!cookieHeader) {
-    return new Map<string, string>();
-  }
-  const parsed = parseCookieHeader(cookieHeader);
-  return new Map(Object.entries(parsed));
+export interface SessionUser {
+  userId: number;
+  tenantId: number;
+  email: string;
+  name: string;
+  role: string;
 }
 
-export async function createContext(
-  opts: CreateExpressContextOptions
-): Promise<TrpcContext> {
-  let user: User | null = null;
+export async function createContext({ req }: CreateExpressContextOptions) {
+  const token =
+    req.cookies?.auth_token ??
+    req.headers.authorization?.replace("Bearer ", "");
 
-  // Check for impersonation header (admin viewing as another team member)
-  const impersonationHeader = opts.req.headers['x-impersonate-user-id'] as string | undefined;
+  let user: SessionUser | null = null;
 
-  const cookies = parseCookies(opts.req.headers.cookie);
-
-  // 1. Check for JWT session cookie (used by super admin impersonation)
-  const sessionToken = cookies.get('session');
-  if (sessionToken) {
+  if (token) {
     try {
-      const decoded = jwt.verify(sessionToken, JWT_SECRET) as any;
-      if (decoded && decoded.userId) {
-        const dbUser = await getUserById(decoded.userId);
-        if (dbUser) {
-          if (decoded.type === 'impersonation' && decoded.tenantId) {
-            // Super admin impersonation: override the user's tenantId with the impersonated tenant
-            user = {
-              ...dbUser,
-              tenantId: decoded.tenantId,
-              // @ts-ignore - custom property for tracking impersonation
-              _isImpersonating: true,
-              // @ts-ignore
-              _impersonatedTenantName: decoded.impersonatedTenantName,
-              // @ts-ignore
-              _originalTenantId: decoded.originalTenantId,
-            };
-          } else {
-            user = dbUser;
-          }
-        }
-      }
+      const secret = new TextEncoder().encode(ENV.jwtSecret);
+      const { payload } = await jose.jwtVerify(token, secret);
+      user = {
+        userId: payload.userId as number,
+        tenantId: payload.tenantId as number,
+        email: payload.email as string,
+        name: payload.name as string,
+        role: payload.role as string,
+      };
     } catch {
-      // Session token invalid or expired, continue to other auth methods
+      // Invalid token — user stays null
     }
   }
 
-  // 2. Try self-serve auth (auth_token cookie) - for email/password and Google OAuth users
-  if (!user) {
-    try {
-      const authToken = cookies.get('auth_token');
-      if (authToken) {
-        const decoded = verifySessionToken(authToken);
-        if (decoded && decoded.userId) {
-          const selfServeUser = await getUserById(decoded.userId);
-          if (selfServeUser) {
-            user = selfServeUser;
-          }
-        }
-      }
-    } catch {
-      // Self-serve auth failed, will try Manus OAuth next
-    }
-  }
-
-  // 3. If self-serve auth didn't work, try Manus OAuth (app_session_id cookie)
-  if (!user) {
-    try {
-      user = await sdk.authenticateRequest(opts.req);
-    } catch {
-      // Authentication is optional for public procedures.
-      user = null;
-    }
-  }
-
-  // Handle admin impersonation header - admin can impersonate users within the same tenant
-  // Skip if already impersonating via session cookie (super admin tenant impersonation)
-  const isAlreadyImpersonating = (user as any)?._isImpersonating;
-  if (user && !isAlreadyImpersonating && (user.role === 'super_admin' || user.role === 'admin') && impersonationHeader) {
-    try {
-      const targetUserId = parseInt(impersonationHeader, 10);
-      if (!isNaN(targetUserId)) {
-        const impersonatedUser = await getUserById(targetUserId);
-        if (impersonatedUser) {
-          // Admin can only impersonate users within the same tenant
-          if (user.role === 'admin' && impersonatedUser.tenantId !== user.tenantId) {
-            console.warn(`[Impersonation] Admin ${user.id} tried to impersonate user ${targetUserId} from a different tenant`);
-          } else {
-            user = {
-              ...impersonatedUser,
-              // @ts-ignore - adding custom property for impersonation tracking
-              _originalAdminId: user.id,
-            };
-          }
-        }
-      }
-    } catch (error) {
-      // Impersonation failed, continue with original user
-      console.error('[Impersonation] Failed to impersonate user:', error);
-    }
-  }
-
-  return {
-    req: opts.req,
-    res: opts.res,
-    user,
-  };
+  return { db, user };
 }
+
+export type Context = Awaited<ReturnType<typeof createContext>>;
+
+const t = initTRPC.context<Context>().create({
+  transformer: superjson,
+});
+
+export const router = t.router;
+export const publicProcedure = t.procedure;
+export const middleware = t.middleware;
+
+const isAuthed = middleware(({ ctx, next }) => {
+  if (!ctx.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Not authenticated" });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+export const protectedProcedure = t.procedure.use(isAuthed);

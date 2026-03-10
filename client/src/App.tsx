@@ -1,177 +1,86 @@
+import { Route, Switch, Redirect } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
-import { Route, Switch, Redirect, useLocation } from "wouter";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import DashboardLayout from "./components/DashboardLayout";
-import { LoadingScreen } from "./components/LoadingScreen";
-import Home from "./pages/Home";
-import CallInbox from "./pages/CallInbox";
-import CallDetail from "./pages/CallDetail";
-import TeamMembers from "./pages/TeamMembers";
-import Analytics from "./pages/Analytics";
-import Training from "./pages/Training";
-import SocialMedia from "./pages/SocialMedia";
-import TeamManagement from "./pages/TeamManagement";
-import Profile from "./pages/Profile";
-import Onboarding from "./pages/Onboarding";
-import Pricing from "./pages/Pricing";
-import SuperAdmin from "./pages/SuperAdmin";
-import TenantSettings from "./pages/TenantSettings";
-import AdminDashboard from "./pages/AdminDashboard";
-import TenantSetup from "./pages/TenantSetup";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import VerifyEmail from "./pages/VerifyEmail";
-import VerificationPending from "./pages/VerificationPending";
-import Paywall from "./pages/Paywall";
-import TermsOfService from "./pages/TermsOfService";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import LeadGenDashboard from "./pages/LeadGenDashboard";
-import CoachActivityLog from "./pages/CoachActivityLog";
-import TaskCenter from "./pages/TaskCenter";
-import Inventory from "./pages/Inventory";
-import KpiPage from "./pages/KpiPage";
-import { ImpersonationBanner } from "./components/ImpersonationBanner";
-import { trpc } from "@/lib/trpc";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Landing } from "@/pages/landing/Landing";
+import { Login } from "@/pages/Login";
+import { Today } from "@/pages/Today";
+import { CallInbox } from "@/pages/CallInbox";
+import { Inventory } from "@/pages/Inventory";
+import { KpiPage } from "@/pages/KpiPage";
+import { Team } from "@/pages/Team";
+import { Training } from "@/pages/Training";
+import { Settings } from "@/pages/Settings";
+import { Playbook } from "@/pages/Playbook";
+import { Profile } from "@/pages/Profile";
+import { IndustryLanding } from "@/pages/landing/IndustryLanding";
 
-// Public routes that don't need DashboardLayout
-// Root (/) is now the landing page for unauthenticated users
-const PUBLIC_ROUTES = ['/', '/landing', '/login', '/signup', '/forgot-password', '/reset-password', '/verify-email', '/verification-pending', '/terms', '/privacy'];
-
-function PublicRouter() {
-  return (
-    <Switch>
-      <Route path="/" component={Landing} />
-      {/* Redirect /landing to / for backwards compatibility */}
-      <Route path="/landing">
-        <Redirect to="/" />
-      </Route>
-      <Route path="/login" component={Login} />
-      <Route path="/signup" component={Signup} />
-      <Route path="/forgot-password" component={ForgotPassword} />
-      <Route path="/reset-password" component={ResetPassword} />
-      <Route path="/verify-email" component={VerifyEmail} />
-      <Route path="/verification-pending" component={VerificationPending} />
-      <Route path="/terms" component={TermsOfService} />
-      <Route path="/privacy" component={PrivacyPolicy} />
-      <Route component={NotFound} />
-    </Switch>
-  );
+function AuthWrapper({ children }: { children: React.ReactNode }) {
+  return <DashboardLayout>{children}</DashboardLayout>;
 }
 
-function ProtectedRouter() {
-  const { data: meData } = trpc.auth.me.useQuery();
-  const isDispoManager = (meData as any)?.teamRole === 'dispo_manager';
-
+export function App() {
   return (
-    <Switch>
-      <Route path="/day-hub" component={TaskCenter} />
-      <Route path="/dashboard">
-        <Redirect to="/tasks" />
-      </Route>
-      <Route path="/lead-gen-dashboard">
-        <Redirect to="/tasks" />
-      </Route>
-      <Route path="/calls" component={CallInbox} />
-      <Route path="/coach-log" component={CoachActivityLog} />
-      <Route path="/tasks" component={TaskCenter} />
-      <Route path="/inventory" component={Inventory} />
-      <Route path="/kpis" component={KpiPage} />
-      <Route path="/calls/:id" component={CallDetail} />
-      <Route path="/team">
-        {isDispoManager ? <Redirect to="/tasks" /> : <TeamMembers />}
-      </Route>
-      <Route path="/analytics" component={Analytics} />
-      <Route path="/training">
-        {isDispoManager ? <Redirect to="/tasks" /> : <Training />}
-      </Route>
-      <Route path="/social" component={SocialMedia} />
-      <Route path="/team-management" component={TeamManagement} />
-      <Route path="/profile" component={Profile} />
-      <Route path="/onboarding" component={Onboarding} />
-      <Route path="/pricing" component={Pricing} />
-      <Route path="/paywall" component={Paywall} />
-      <Route path="/admin" component={SuperAdmin} />
-      <Route path="/admin/tenant-setup" component={TenantSetup} />
-      <Route path="/admin-dashboard" component={AdminDashboard} />
-      <Route path="/settings" component={TenantSettings} />
-      <Route path="/leaderboard">
-        <Redirect to="/team" />
-      </Route>
-      {/* Redirects for removed/consolidated pages */}
-      <Route path="/feedback">
-        <Redirect to="/calls" />
-      </Route>
-      <Route path="/methodology">
-        <Redirect to="/training" />
-      </Route>
-      <Route path="/rules">
-        <Redirect to="/training" />
-      </Route>
-      
-      <Route path="/team-training">
-        <Redirect to="/training" />
-      </Route>
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <Switch>
+        <Route path="/">
+          <Landing />
+        </Route>
+        <Route path="/login">
+          <Login />
+        </Route>
+        <Route path="/today">
+          <AuthWrapper>
+            <Today />
+          </AuthWrapper>
+        </Route>
+        <Route path="/calls">
+          <AuthWrapper>
+            <CallInbox />
+          </AuthWrapper>
+        </Route>
+        <Route path="/inventory">
+          <AuthWrapper>
+            <Inventory />
+          </AuthWrapper>
+        </Route>
+        <Route path="/kpis">
+          <AuthWrapper>
+            <KpiPage />
+          </AuthWrapper>
+        </Route>
+        <Route path="/team">
+          <AuthWrapper>
+            <Team />
+          </AuthWrapper>
+        </Route>
+        <Route path="/training">
+          <AuthWrapper>
+            <Training />
+          </AuthWrapper>
+        </Route>
+        <Route path="/settings">
+          <AuthWrapper>
+            <Settings />
+          </AuthWrapper>
+        </Route>
+        <Route path="/playbook">
+          <AuthWrapper>
+            <Playbook />
+          </AuthWrapper>
+        </Route>
+        <Route path="/profile">
+          <AuthWrapper>
+            <Profile />
+          </AuthWrapper>
+        </Route>
+        <Route path="/industries/:industry">
+          <IndustryLanding />
+        </Route>
+        <Route>
+          <Redirect to="/" />
+        </Route>
+      </Switch>
+      <Toaster />
+    </>
   );
 }
-
-function AppContent() {
-  const [location] = useLocation();
-  
-  // Check auth status for smart redirects
-  const { data: user, isLoading: authLoading } = trpc.auth.me.useQuery(undefined, {
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-  
-  // Check if current route is a public route (exact match for root, prefix for others)
-  const isPublicRoute = location === '/' || 
-    PUBLIC_ROUTES.slice(1).some(route => location.startsWith(route));
-  
-  // Redirect authenticated users away from landing/login/signup to dashboard
-  const AUTH_REDIRECT_ROUTES = ['/', '/landing', '/login', '/signup'];
-  const shouldRedirect = !authLoading && user && AUTH_REDIRECT_ROUTES.includes(location);
-  
-  if (shouldRedirect) {
-    // Use useEffect-safe redirect via window.location for immediate navigation
-    if (typeof window !== 'undefined') {
-      window.location.replace('/tasks');
-    }
-    return null;
-  }
-  
-  if (isPublicRoute) {
-    return <PublicRouter />;
-  }
-  
-  return (
-    <DashboardLayout>
-      <ProtectedRouter />
-    </DashboardLayout>
-  );
-}
-
-function App() {
-  return (
-    <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark" switchable>
-        <TooltipProvider>
-          <Toaster />
-          <LoadingScreen />
-          <ImpersonationBanner />
-          <AppContent />
-        </TooltipProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  );
-}
-
-export default App;

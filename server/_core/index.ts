@@ -1,152 +1,36 @@
 import "dotenv/config";
-import * as Sentry from "@sentry/node";
+import express from "express";
+import cookieParser from "cookie-parser";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import path from "node:path";
+import { ENV } from "./env";
+import { createContext } from "./context";
+import { appRouter } from "../routers";
 
-// Initialize Sentry before anything else
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.NODE_ENV ?? "development",
-  // Capture 100% of transactions in production; tune down if volume is high
-  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+const app = express();
+
+app.use(express.json({ limit: "10mb" }));
+app.use(cookieParser());
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-import express from "express";
-import { createServer } from "http";
-import net from "net";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
-import { createGHLWebhookRouter } from "../webhook";
-import { seedTeamMembers } from "../db";
-import { startPolling } from "../ghlService";
-import { initializeBadges } from "../gamification";
-import { handleStripeWebhook } from "../stripe/webhook";
-import selfServeAuthRoutes from "../selfServeAuthRoutes";
-import { runEmailSequenceJobs } from "../emailSequenceJobs";
-import { coachStreamRouter } from "../coachStream";
-import { dispoAssistantRouter } from "../dispoAssistantStream";
-import { analyticsStreamRouter } from "../analyticsStream";
-import { startBatchDialerPolling } from "../batchDialerSync";
-import { startBatchLeadsPolling } from "../batchLeadsSync";
-import { startWebhookRetryQueue } from "../webhookRetryQueue";
-import { startWeeklyInsightsRefresh } from "../weeklyInsightsRefresh";
-import { createGHLOAuthRouter } from "../ghlOAuthRoutes";
+app.use(
+  "/api/trpc",
+  createExpressMiddleware({ router: appRouter, createContext })
+);
 
-function isPortAvailable(port: number): Promise<boolean> {
-  return new Promise(resolve => {
-    const server = net.createServer();
-    server.listen(port, () => {
-      server.close(() => resolve(true));
-    });
-    server.on("error", () => resolve(false));
+if (ENV.isProduction) {
+  const publicDir = path.resolve(import.meta.dirname, "../../dist/public");
+  app.use(express.static(publicDir));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(publicDir, "index.html"));
   });
 }
 
-async function findAvailablePort(startPort: number = 3000): Promise<number> {
-  for (let port = startPort; port < startPort + 20; port++) {
-    if (await isPortAvailable(port)) {
-      return port;
-    }
-  }
-  throw new Error(`No available port found starting from ${startPort}`);
-}
+app.listen(ENV.port, "0.0.0.0", () => {
+  console.log(`Gunner v2 running on port ${ENV.port}`);
+});
 
-async function startServer() {
-  const app = express();
-  const server = createServer(app);
-  
-  // Stripe webhook endpoint - MUST be before express.json() middleware for signature verification
-  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
-  
-  // GHL webhook endpoint - MUST be before express.json() for signature verification
-  // Uses express.raw() internally to capture raw body for RSA signature verification
-  app.use(createGHLWebhookRouter());
-  
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // Manus OAuth routes removed — using self-serve Google OAuth and email/password instead
-  
-  // GHL OAuth install/callback routes
-  app.use(createGHLOAuthRouter());
-
-  // Self-serve auth routes (email/password)
-  app.use("/api/auth", selfServeAuthRoutes);
-
-  // AI Coach streaming endpoint
-  app.use(coachStreamRouter);
-  
-  // AI Dispo Assistant streaming endpoint
-  app.use(dispoAssistantRouter);
-  
-  // AI Analytics Coach streaming endpoint
-  app.use(analyticsStreamRouter);
-  
-  // Seed team members on startup
-  seedTeamMembers().catch(err => console.error("Failed to seed team members:", err));
-  
-  // Initialize gamification badges
-  initializeBadges().catch(err => console.error("Failed to initialize badges:", err));
-  // tRPC API
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
-  // Sentry error handler — must be after all routes, before other error handlers
-  Sentry.setupExpressErrorHandler(app);
-
-  // development mode uses Vite, production mode uses static files
-  if (process.env.NODE_ENV === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
-
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
-  }
-
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
-    
-    // Start GHL automatic polling every 5 minutes
-    // Delay start to let server fully initialize
-    setTimeout(() => {
-      startPolling(5);
-    }, 10000);
-    
-    // Start BatchDialer automatic polling every 2 minutes
-    setTimeout(() => {
-      startBatchDialerPolling();
-    }, 15000);
-    
-    // Start BatchLeads enrichment polling every 60 minutes
-    setTimeout(() => {
-      startBatchLeadsPolling();
-    }, 20000);
-    
-    // Start webhook retry queue processing every 5 minutes
-    setTimeout(() => {
-      startWebhookRetryQueue();
-    }, 25000);
-    
-    // Start weekly insights refresh - checks every hour, runs Monday 6AM CT
-    setTimeout(() => {
-      startWeeklyInsightsRefresh();
-    }, 30000);
-    
-    // Start email sequence job - runs every hour
-    // Initial run after 35 seconds, then every hour
-    // ⛔ EMAIL SEQUENCE SCHEDULER DISABLED — spam attack mitigation
-    console.log('[EmailSequence] ⛔ DISABLED — email sequence scheduler is turned off');
-  });
-}
-
-startServer().catch(console.error);
+export type AppRouter = typeof appRouter;
