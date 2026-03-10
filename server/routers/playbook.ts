@@ -7,6 +7,7 @@ import {
   tenantRoles,
   tenantCallTypes,
   tenantRubrics,
+  industryPlaybooks as industryPlaybooksTable,
 } from "../../drizzle/schema";
 import {
   SOFTWARE_PLAYBOOK,
@@ -21,9 +22,9 @@ import {
 } from "../services/playbooks";
 
 export const playbookRouter = router({
-  getConfig: protectedProcedure.query(({ ctx }) => {
-    const tenant = getTenantPlaybook(ctx.user.tenantId);
-    const industry = getIndustryPlaybook(tenant?.industryCode ?? "default");
+  getConfig: protectedProcedure.query(async ({ ctx }) => {
+    const tenant = await getTenantPlaybook(ctx.user.tenantId);
+    const industry = await getIndustryPlaybook(tenant?.industryCode ?? "default");
     return {
       terminology: resolveTerminology(industry, tenant),
       roles: resolveRoles(industry, tenant),
@@ -35,15 +36,23 @@ export const playbookRouter = router({
 
   getIndustry: publicProcedure
     .input(z.object({ code: z.string() }))
-    .query(({ input }) => getIndustryPlaybook(input.code)),
+    .query(async ({ input }) => getIndustryPlaybook(input.code)),
 
-  getTenant: protectedProcedure.query(({ ctx }) =>
+  getTenant: protectedProcedure.query(async ({ ctx }) =>
     getTenantPlaybook(ctx.user.tenantId)
   ),
 
-  getUser: protectedProcedure.query(({ ctx }) =>
+  getUser: protectedProcedure.query(async ({ ctx }) =>
     getUserPlaybook(ctx.user.userId, ctx.user.tenantId)
   ),
+
+  listIndustries: publicProcedure.query(async () => {
+    const rows = await db
+      .select({ code: industryPlaybooksTable.code, name: industryPlaybooksTable.name })
+      .from(industryPlaybooksTable)
+      .where(eq(industryPlaybooksTable.isActive, "true"));
+    return rows;
+  }),
 
   getSoftware: publicProcedure.query(() => SOFTWARE_PLAYBOOK),
 

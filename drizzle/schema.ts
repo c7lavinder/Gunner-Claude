@@ -1804,3 +1804,69 @@ export const dealContentEdits = pgTable("deal_content_edits", {
 });
 export type DealContentEdit = typeof dealContentEdits.$inferSelect;
 export type InsertDealContentEdit = typeof dealContentEdits.$inferInsert;
+
+// ============ PLAYBOOK SYSTEM ============
+
+/**
+ * Industry Playbooks — one per vertical (e.g. "re-wholesaling", "solar", "insurance").
+ * Provides default terminology, roles, stages, call types, rubrics, KPI funnel, algorithm configs.
+ */
+export const industryPlaybooks = pgTable("industry_playbooks", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 100 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  terminology: jsonb("terminology"),
+  roles: jsonb("roles"),
+  stages: jsonb("stages"),
+  callTypes: jsonb("callTypes"),
+  rubrics: jsonb("rubrics"),
+  outcomeTypes: jsonb("outcomeTypes"),
+  kpiFunnelStages: jsonb("kpiFunnelStages"),
+  algorithmDefaults: jsonb("algorithmDefaults"),
+  isActive: text("isActive").default("true"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type IndustryPlaybookRow = typeof industryPlaybooks.$inferSelect;
+
+/**
+ * Tenant Playbooks — per-company overrides on top of the industry defaults.
+ * Stores market areas, lead sources, stage mappings, algorithm weight overrides, terminology tweaks.
+ */
+export const tenantPlaybooks = pgTable("tenant_playbooks", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull().unique(),
+  industryCode: varchar("industryCode", { length: 100 }),
+  roles: jsonb("roles"),
+  stages: jsonb("stages"),
+  markets: jsonb("markets"),
+  leadSources: jsonb("leadSources"),
+  algorithmOverrides: jsonb("algorithmOverrides"),
+  terminology: jsonb("terminology"),
+  customConfig: jsonb("customConfig"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type TenantPlaybookRow = typeof tenantPlaybooks.$inferSelect;
+
+/**
+ * User Playbooks — per-user coaching profile.
+ * Stores strengths, growth areas, communication preferences, AI instructions, voice consent.
+ */
+export const userPlaybooks = pgTable("user_playbooks", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").references(() => users.id).notNull().unique(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  role: varchar("role", { length: 100 }),
+  strengths: jsonb("strengths"),
+  growthAreas: jsonb("growthAreas"),
+  gradeTrend: varchar("gradeTrend", { length: 50 }),
+  communicationStyle: jsonb("communicationStyle"),
+  instructions: jsonb("instructions"),
+  voiceConsentGiven: text("voiceConsentGiven").default("false"),
+  voiceSampleCount: integer("voiceSampleCount").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type UserPlaybookRow = typeof userPlaybooks.$inferSelect;
