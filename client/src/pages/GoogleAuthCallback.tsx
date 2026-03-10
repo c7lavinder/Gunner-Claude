@@ -6,13 +6,11 @@ export function GoogleAuthCallback() {
   const [, setLocation] = useLocation();
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
-  const utils = trpc.useUtils();
   const called = useRef(false);
 
   const callbackMutation = trpc.auth.googleCallback.useMutation({
-    onSuccess: async () => {
-      await utils.auth.me.invalidate();
-      setLocation("/today");
+    onSuccess: () => {
+      window.location.href = "/today";
     },
     onError: () => setLocation("/login"),
   });
