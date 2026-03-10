@@ -1961,16 +1961,18 @@ export default function CallInbox() {
 
   // Compute date range
   const dateFilter = useMemo(() => {
-    const now = new Date();
     let startDate: string | undefined;
     if (dateRange === "1d") {
-      const d = new Date(now); d.setDate(d.getDate() - 1); startDate = d.toISOString();
+      // "Today" = midnight America/Chicago, not rolling 24h UTC
+      const now = new Date();
+      const chicagoMidnight = new Date(now.toLocaleDateString("en-US", { timeZone: "America/Chicago" }));
+      startDate = chicagoMidnight.toISOString();
     } else if (dateRange === "7d") {
-      const d = new Date(now); d.setDate(d.getDate() - 7); startDate = d.toISOString();
+      const d = new Date(); d.setDate(d.getDate() - 7); startDate = d.toISOString();
     } else if (dateRange === "30d") {
-      const d = new Date(now); d.setDate(d.getDate() - 30); startDate = d.toISOString();
+      const d = new Date(); d.setDate(d.getDate() - 30); startDate = d.toISOString();
     } else if (dateRange === "90d") {
-      const d = new Date(now); d.setDate(d.getDate() - 90); startDate = d.toISOString();
+      const d = new Date(); d.setDate(d.getDate() - 90); startDate = d.toISOString();
     }
     // "all" = no date filter
     return { startDate };
