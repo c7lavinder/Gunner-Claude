@@ -3,6 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { ENV } from "./env";
 import { createContext } from "./context";
 import { appRouter } from "../routers";
@@ -11,6 +12,8 @@ import { stripeWebhookRouter } from "../middleware/stripeWebhook";
 import { startPolling } from "../services/callIngestion";
 import { startDailyDigestJob } from "../services/notifications";
 import { startEventFlusher } from "../services/eventTracking";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
@@ -30,7 +33,7 @@ app.use(
 );
 
 if (ENV.isProduction) {
-  const publicDir = path.resolve(import.meta.dirname, "../../dist/public");
+  const publicDir = path.resolve(__dirname, "../public");
   app.use(express.static(publicDir));
   app.get("*", (_req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
