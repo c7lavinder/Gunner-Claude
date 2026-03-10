@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { AiCoach } from "../AiCoach";
 import { useTheme } from "next-themes";
 import {
   CalendarDays,
@@ -100,6 +101,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           >
             {children}
           </main>
+          <AiCoach page={location} />
         </SidebarInset>
       </div>
     </SidebarProvider>

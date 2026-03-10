@@ -14,42 +14,25 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine, Star, Play, Plus, FileText } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
-interface MockCall {
-  id: string;
-  contactName: string;
-  callerName: string;
-  callType: string;
-  direction: "inbound" | "outbound";
-  duration: number;
-  timestamp: string;
-  starred: boolean;
-  grade: number | null;
-  scorecard?: {
-    criteria: Array<{ name: string; earned: number; max: number }>;
-    talkRatio: number;
-    talkRatioTarget: { min: number; max: number };
-    criticalFailures: string[];
-    coachInsights: string[];
-  };
-}
-
-const crit = (arr: [string, number, number][]) => arr.map(([name, earned, max]) => ({ name, earned, max }));
-const MOCK_CALLS: MockCall[] = [
-  { id: "1", contactName: "Sarah Mitchell", callerName: "Jake Thompson", callType: "Qualification", direction: "outbound", duration: 342, timestamp: "2 hours ago", starred: true, grade: 92, scorecard: { criteria: crit([["Opening & rapport",9,10],["Discovery questions",8,10],["Objection handling",10,10],["Closing attempt",7,10]]), talkRatio: 42, talkRatioTarget: { min: 35, max: 55 }, criticalFailures: [], coachInsights: ["Strong rapport building","Excellent objection handling","Consider shorter discovery"] } },
-  { id: "2", contactName: "Marcus Chen", callerName: "Emma Rodriguez", callType: "Cold Call", direction: "outbound", duration: 128, timestamp: "5 hours ago", starred: false, grade: 58, scorecard: { criteria: crit([["Opening & rapport",4,10],["Discovery questions",3,10],["Objection handling",5,10],["Closing attempt",2,10]]), talkRatio: 72, talkRatioTarget: { min: 35, max: 55 }, criticalFailures: ["Did not qualify budget","Missed closing opportunity"], coachInsights: ["Talk ratio too high","Rushed discovery","Add value statements"] } },
-  { id: "3", contactName: "David Park", callerName: "Jake Thompson", callType: "Follow-up", direction: "inbound", duration: 456, timestamp: "Yesterday", starred: false, grade: 78, scorecard: { criteria: crit([["Opening & rapport",8,10],["Discovery questions",7,10],["Objection handling",6,10],["Closing attempt",8,10]]), talkRatio: 48, talkRatioTarget: { min: 35, max: 55 }, criticalFailures: [], coachInsights: ["Good recap","Objection handling could be sharper"] } },
-  { id: "4", contactName: "Lisa Wong", callerName: "Emma Rodriguez", callType: "Appointment", direction: "inbound", duration: 89, timestamp: "Yesterday", starred: true, grade: null },
-  { id: "5", contactName: "James Foster", callerName: "Jake Thompson", callType: "Offer", direction: "outbound", duration: 521, timestamp: "2 days ago", starred: false, grade: 85, scorecard: { criteria: crit([["Opening & rapport",9,10],["Discovery questions",8,10],["Objection handling",8,10],["Closing attempt",7,10]]), talkRatio: 38, talkRatioTarget: { min: 35, max: 55 }, criticalFailures: [], coachInsights: ["Strong offer presentation","Good social proof"] } },
-  { id: "6", contactName: "Rachel Green", callerName: "Emma Rodriguez", callType: "Not Interested", direction: "outbound", duration: 67, timestamp: "2 days ago", starred: false, grade: null },
-  { id: "7", contactName: "Tom Bradley", callerName: "Jake Thompson", callType: "Qualification", direction: "inbound", duration: 234, timestamp: "3 days ago", starred: false, grade: 65, scorecard: { criteria: crit([["Opening & rapport",6,10],["Discovery questions",5,10],["Objection handling",7,10],["Closing attempt",6,10]]), talkRatio: 58, talkRatioTarget: { min: 35, max: 55 }, criticalFailures: ["Interrupted prospect"], coachInsights: ["Work on active listening"] } },
-  { id: "8", contactName: "Nina Patel", callerName: "Emma Rodriguez", callType: "Cold Call", direction: "outbound", duration: 198, timestamp: "3 days ago", starred: true, grade: 88, scorecard: { criteria: crit([["Opening & rapport",9,10],["Discovery questions",8,10],["Objection handling",9,10],["Closing attempt",7,10]]), talkRatio: 44, talkRatioTarget: { min: 35, max: 55 }, criticalFailures: [], coachInsights: ["Excellent cold opener","Natural transition"] } },
-];
-
-function formatDuration(sec: number) {
+function formatDuration(sec: number | null) {
+  if (sec == null) return "—";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function formatRelativeTime(ts: Date | string | null) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const now = Date.now();
+  const diff = now - d.getTime();
+  if (diff < 60_000) return "Just now";
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} min ago`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} hours ago`;
+  if (diff < 604800_000) return `${Math.floor(diff / 86400_000)} days ago`;
+  return d.toLocaleDateString();
 }
 
 function gradeColor(grade: number | null) {
@@ -62,26 +45,42 @@ function gradeColor(grade: number | null) {
 
 export function CallInbox() {
   const [search, setSearch] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [starred, setStarred] = useState<Set<string>>(
-    () => new Set(MOCK_CALLS.filter((c) => c.starred).map((c) => c.id))
-  );
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [starred, setStarred] = useState<Set<number>>(new Set());
   const [tab, setTab] = useState("all");
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
+  const statusFilter =
+    tab === "graded" ? "graded" : tab === "needs-review" ? "pending" : undefined;
+
+  const { data: callsData, isLoading } = trpc.calls.list.useQuery({
+    page: currentPage,
+    limit: 25,
+    status: statusFilter,
+  });
+  const { data: stats } = trpc.calls.getStats.useQuery();
+  const { data: callDetail } = trpc.calls.getById.useQuery(
+    { id: expandedId! },
+    { enabled: !!expandedId }
+  );
+
+  const items = callsData?.items ?? [];
   const filtered = useMemo(() => {
-    let list = MOCK_CALLS.filter((c) => {
-      const q = search.toLowerCase();
-      if (q && !c.contactName.toLowerCase().includes(q) && !c.callerName.toLowerCase().includes(q)) return false;
-      if (tab === "needs-review" && c.grade !== null) return false;
-      if (tab === "graded" && c.grade === null) return false;
-      if (tab === "starred" && !starred.has(c.id)) return false;
-      return true;
-    });
+    let list = items;
+    const q = search.toLowerCase().trim();
+    if (q) {
+      list = list.filter(
+        (c) =>
+          (c.contactName?.toLowerCase().includes(q)) ||
+          (c.teamMemberName?.toLowerCase().includes(q))
+      );
+    }
+    if (tab === "starred") list = list.filter((c) => starred.has(c.id));
     return list;
-  }, [search, tab, starred]);
+  }, [items, search, tab, starred]);
 
-  const toggleStar = (id: string, e: React.MouseEvent) => {
+  const toggleStar = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setStarred((s) => {
       const next = new Set(s);
@@ -90,6 +89,13 @@ export function CallInbox() {
       return next;
     });
   };
+
+  const total = callsData?.total ?? 0;
+  const limit = callsData?.limit ?? 25;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const grade = callDetail?.grade;
+  const criteriaScores = (grade?.criteriaScores as Array<{ name: string; earned: number; max: number }>) ?? [];
+  const coachInsights = (grade?.improvements as string[]) ?? (grade?.strengths as string[]) ?? [];
 
   return (
     <div className="space-y-4">
@@ -113,166 +119,178 @@ export function CallInbox() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(v) => { setTab(v); setCurrentPage(1); }}>
         <TabsList className="h-8">
-          <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+          <TabsTrigger value="all" className="text-xs">All {stats ? `(${stats.total})` : ""}</TabsTrigger>
           <TabsTrigger value="needs-review" className="text-xs">Needs Review</TabsTrigger>
-          <TabsTrigger value="graded" className="text-xs">Graded</TabsTrigger>
+          <TabsTrigger value="graded" className="text-xs">Graded {stats ? `(${stats.graded})` : ""}</TabsTrigger>
           <TabsTrigger value="starred" className="text-xs">Starred</TabsTrigger>
         </TabsList>
         <TabsContent value={tab} className="mt-4">
-          <ScrollArea className="h-[calc(100vh-220px)]">
-            <div className="space-y-2 pr-4">
-              {filtered.map((call) => (
-                <div key={call.id}>
-                  <Card
-                    className={cn(
-                      "cursor-pointer transition-all hover:shadow-md",
-                      expandedId === call.id && "ring-2 ring-[var(--g-accent)]"
-                    )}
-                    style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}
-                    onClick={() => setExpandedId(expandedId === call.id ? null : call.id)}
-                  >
-                    <CardContent className="p-4 py-3">
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
-                              {call.contactName}
-                            </span>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                              {call.callType}
-                            </Badge>
-                          </div>
-                          <p className="text-xs mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
-                            {call.callerName} · {call.timestamp}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-sm tabular-nums" style={{ color: "var(--g-text-secondary)" }}>
-                            {formatDuration(call.duration)}
-                          </span>
-                          {call.direction === "inbound" ? (
-                            <ArrowDownToLine className="size-4" style={{ color: "var(--g-text-tertiary)" }} />
-                          ) : (
-                            <ArrowUpFromLine className="size-4" style={{ color: "var(--g-text-tertiary)" }} />
-                          )}
-                          <div
-                            className={cn(
-                              "size-10 rounded-full flex items-center justify-center font-mono font-bold text-sm text-white shrink-0",
-                              gradeColor(call.grade)
-                            )}
-                          >
-                            {call.grade !== null ? call.grade : "—"}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={(e) => toggleStar(call.id, e)}
-                            className="shrink-0"
-                          >
-                            <Star
-                              className={cn("size-4", starred.has(call.id) && "fill-amber-400 text-amber-500")}
-                            />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {expandedId === call.id && call.scorecard && (
-                    <Card className="mt-2" style={{ background: "var(--g-bg-surface)", borderColor: "var(--g-border-subtle)" }}>
-                      <CardContent className="p-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className={cn("size-12 rounded-full flex items-center justify-center font-mono font-bold text-lg text-white", gradeColor(call.grade))}>
-                              {call.grade}
-                            </div>
-                            <div>
-                              <p className="font-semibold" style={{ color: "var(--g-text-primary)" }}>Scorecard</p>
-                              <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
-                                Talk ratio: {call.scorecard.talkRatio}% (target {call.scorecard.talkRatioTarget.min}–{call.scorecard.talkRatioTarget.max}%)
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm">
-                              <Play className="size-3.5 mr-1" /> Listen
-                            </Button>
-                            <Button variant="outline" size="sm"><Plus className="size-3.5 mr-1" /> Task</Button>
-                            <Button variant="outline" size="sm"><FileText className="size-3.5 mr-1" /> Note</Button>
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Talk ratio</p>
-                          <div className="h-2 rounded-full overflow-hidden relative" style={{ background: "var(--g-stat-bar-bg)" }}>
-                            <div
-                              className="absolute inset-y-0 rounded-full opacity-30"
-                              style={{
-                                left: `${call.scorecard.talkRatioTarget.min}%`,
-                                width: `${call.scorecard.talkRatioTarget.max - call.scorecard.talkRatioTarget.min}%`,
-                                background: "var(--g-grade-a)",
-                              }}
-                            />
-                            <div
-                              className="h-full rounded-full bg-[var(--g-accent)] relative z-10"
-                              style={{ width: `${call.scorecard.talkRatio}%` }}
-                            />
-                          </div>
-                        </div>
-                        {call.scorecard.criticalFailures.length > 0 && (
-                          <div className="text-sm text-red-600 dark:text-red-400">
-                            <span className="font-medium">Critical: </span>
-                            {call.scorecard.criticalFailures.join("; ")}
-                          </div>
-                        )}
-                        <div className="space-y-2">
-                          {call.scorecard.criteria.map((c) => (
-                            <div key={c.name}>
-                              <div className="flex justify-between text-xs mb-1">
-                                <span style={{ color: "var(--g-text-secondary)" }}>{c.name}</span>
-                                <span style={{ color: "var(--g-text-tertiary)" }}>{c.earned}/{c.max}</span>
-                              </div>
-                              <Progress value={(c.earned / c.max) * 100} className="h-1.5" />
-                            </div>
-                          ))}
-                        </div>
-                        <Separator />
-                        <div>
-                          <p className="text-xs font-medium mb-2" style={{ color: "var(--g-text-secondary)" }}>Coach insights</p>
-                          <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: "var(--g-text-secondary)" }}>
-                            {call.scorecard.coachInsights.map((i, idx) => (
-                              <li key={idx}>{i}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <Collapsible open={transcriptOpen} onOpenChange={setTranscriptOpen}>
-                          <CollapsibleTrigger className="flex items-center gap-1 text-sm" style={{ color: "var(--g-accent-text)" }}>
-                            {transcriptOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                            Transcript
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <p className="mt-2 text-sm p-3 rounded-md" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>
-                              [Transcript placeholder — mock data]
-                            </p>
-                          </CollapsibleContent>
-                        </Collapsible>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {expandedId === call.id && !call.scorecard && (
-                    <Card className="mt-2" style={{ background: "var(--g-bg-surface)", borderColor: "var(--g-border-subtle)" }}>
-                      <CardContent className="p-4">
-                        <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Not yet graded.</p>
-                        <Button variant="outline" size="sm" className="mt-2"><Play className="size-3.5 mr-1" /> Listen</Button>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="g-shimmer h-[72px] rounded-lg" />
               ))}
             </div>
-          </ScrollArea>
+          ) : filtered.length === 0 ? (
+            <p className="text-sm py-8 text-center" style={{ color: "var(--g-text-tertiary)" }}>
+              No calls yet
+            </p>
+          ) : (
+            <ScrollArea className="h-[calc(100vh-220px)]">
+              <div className="space-y-2 pr-4">
+                {filtered.map((call) => {
+                  const score = call.overallScore ?? null;
+                  return (
+                    <div key={call.id}>
+                      <Card
+                        className={cn(
+                          "cursor-pointer transition-all hover:shadow-md",
+                          expandedId === call.id && "ring-2 ring-[var(--g-accent)]"
+                        )}
+                        style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}
+                        onClick={() => setExpandedId(expandedId === call.id ? null : call.id)}
+                      >
+                        <CardContent className="p-4 py-3">
+                          <div className="flex items-center gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
+                                  {call.contactName ?? "Unknown"}
+                                </span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  {call.callType ?? "—"}
+                                </Badge>
+                              </div>
+                              <p className="text-xs mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
+                                {call.teamMemberName ?? "—"} · {formatRelativeTime(call.callTimestamp)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="text-sm tabular-nums" style={{ color: "var(--g-text-secondary)" }}>
+                                {formatDuration(call.duration)}
+                              </span>
+                              {(call.callDirection ?? "").toLowerCase() === "inbound" ? (
+                                <ArrowDownToLine className="size-4" style={{ color: "var(--g-text-tertiary)" }} />
+                              ) : (
+                                <ArrowUpFromLine className="size-4" style={{ color: "var(--g-text-tertiary)" }} />
+                              )}
+                              <div
+                                className={cn(
+                                  "size-10 rounded-full flex items-center justify-center font-mono font-bold text-sm text-white shrink-0",
+                                  gradeColor(score)
+                                )}
+                              >
+                                {score !== null ? Math.round(score) : "—"}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={(e) => toggleStar(call.id, e)}
+                                className="shrink-0"
+                              >
+                                <Star
+                                  className={cn("size-4", starred.has(call.id) && "fill-amber-400 text-amber-500")}
+                                />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {expandedId === call.id && grade && (
+                        <Card className="mt-2" style={{ background: "var(--g-bg-surface)", borderColor: "var(--g-border-subtle)" }}>
+                          <CardContent className="p-4 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className={cn("size-12 rounded-full flex items-center justify-center font-mono font-bold text-lg text-white", gradeColor(grade.overallScore ? Number(grade.overallScore) : null))}>
+                                  {grade.overallScore ? Math.round(Number(grade.overallScore)) : "—"}
+                                </div>
+                                <div>
+                                  <p className="font-semibold" style={{ color: "var(--g-text-primary)" }}>Scorecard</p>
+                                  {grade.summary && (
+                                    <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>{grade.summary}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button variant="outline" size="sm">
+                                  <Play className="size-3.5 mr-1" /> Listen
+                                </Button>
+                                <Button variant="outline" size="sm"><Plus className="size-3.5 mr-1" /> Task</Button>
+                                <Button variant="outline" size="sm"><FileText className="size-3.5 mr-1" /> Note</Button>
+                              </div>
+                            </div>
+                            {(grade.redFlags as string[])?.length > 0 && (
+                              <div className="text-sm text-red-600 dark:text-red-400"><span className="font-medium">Critical: </span>{(grade.redFlags as string[]).join("; ")}</div>
+                            )}
+                            {criteriaScores.length > 0 && (
+                              <div className="space-y-2">{criteriaScores.map((c) => (
+                                <div key={c.name}>
+                                  <div className="flex justify-between text-xs mb-1"><span style={{ color: "var(--g-text-secondary)" }}>{c.name}</span><span style={{ color: "var(--g-text-tertiary)" }}>{c.earned}/{c.max}</span></div>
+                                  <Progress value={(c.earned / c.max) * 100} className="h-1.5" />
+                                </div>
+                              ))}</div>
+                            )}
+                            <Separator />
+                            {coachInsights.length > 0 && (
+                              <div><p className="text-xs font-medium mb-2" style={{ color: "var(--g-text-secondary)" }}>Coach insights</p>
+                                <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: "var(--g-text-secondary)" }}>{coachInsights.map((i, idx) => <li key={idx}>{i}</li>)}</ul>
+                              </div>
+                            )}
+                            <Collapsible open={transcriptOpen} onOpenChange={setTranscriptOpen}>
+                              <CollapsibleTrigger className="flex items-center gap-1 text-sm" style={{ color: "var(--g-accent-text)" }}>
+                                {transcriptOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                                Transcript
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <p className="mt-2 text-sm p-3 rounded-md" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>
+                                  {callDetail?.transcript || "No transcript available"}
+                                </p>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {expandedId === call.id && !grade && (
+                        <Card className="mt-2" style={{ background: "var(--g-bg-surface)", borderColor: "var(--g-border-subtle)" }}>
+                          <CardContent className="p-4">
+                            <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Not yet graded.</p>
+                            <Button variant="outline" size="sm" className="mt-2"><Play className="size-3.5 mr-1" /> Listen</Button>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          )}
+          {totalPages > 1 && !isLoading && filtered.length > 0 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                Previous
+              </Button>
+              <span className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

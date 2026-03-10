@@ -3,26 +3,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { GraduationCap, TrendingUp, Shield, Target, Zap, BookOpen, Lock, Award } from "lucide-react";
+import { GraduationCap, TrendingUp, TrendingDown, Shield, Target, Zap, BookOpen, Lock, Award } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
-const RECENT_CALLS = [
-  { id: "1", contact: "Sarah Mitchell", date: "2 hours ago", grade: 92, summary: "Strong rapport and objection handling." },
-  { id: "2", contact: "Marcus Chen", date: "5 hours ago", grade: 58, summary: "Talk ratio too high, rushed discovery." },
-  { id: "3", contact: "David Park", date: "Yesterday", grade: 78, summary: "Good recap, objection handling could improve." },
-  { id: "4", contact: "James Foster", date: "2 days ago", grade: 85, summary: "Strong offer presentation." },
-  { id: "5", contact: "Nina Patel", date: "3 days ago", grade: 88, summary: "Excellent cold opener." },
-];
-
-const MATERIALS = [
-  { id: "1", title: "Overcoming Objections", desc: "Handle objections with confidence.", icon: Shield, unlocked: true },
-  { id: "2", title: "Tonality Mastery", desc: "Voice tone and pacing techniques.", icon: Target, unlocked: true },
-  { id: "3", title: "Speed to Lead", desc: "Respond faster, win more.", icon: Zap, unlocked: true },
-  { id: "4", title: "Closing Techniques", desc: "Seal the deal effectively.", icon: Award, unlocked: true },
-  { id: "5", title: "Active Listening", desc: "Listen to understand, not to reply.", icon: BookOpen, unlocked: false },
-];
-
-const GRADE_BARS = [82, 78, 85, 88, 82, 79, 84, 86, 82, 85];
+const MATERIAL_ICONS: Record<string, typeof Shield> = {
+  objections: Shield,
+  tonality: Target,
+  speed: Zap,
+  closing: Award,
+  listening: BookOpen,
+};
 
 function gradeClass(grade: number) {
   if (grade >= 90) return "bg-[var(--g-grade-a)]";
@@ -31,7 +23,68 @@ function gradeClass(grade: number) {
   return "bg-[var(--g-grade-f)]";
 }
 
+function letterToScore(letter: string | null): number {
+  if (!letter) return 0;
+  const m: Record<string, number> = { A: 92, B: 82, C: 72, D: 62, F: 42 };
+  return m[letter.toUpperCase()] ?? 0;
+}
+
+function formatRelative(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(d);
+}
+
 export function Training() {
+  const { data: materials, isLoading: materialsLoading } = trpc.training.getMaterials.useQuery();
+  const { data: progress, isLoading: progressLoading } = trpc.training.getUserProgress.useQuery();
+
+  const isLoading = materialsLoading || progressLoading;
+  const avgGrade100 = Math.round((progress?.avgGrade ?? 0) * 25);
+  const recentCalls = progress?.recentCalls ?? [];
+  const gradeBars = recentCalls.slice(0, 10).map((r) => letterToScore(r.grade));
+  const xp = progress?.xp ?? 0;
+  const level = progress?.level ?? 1;
+  const xpForNext = 500;
+  const xpInLevel = xp % xpForNext;
+  const progressPct = (xpInLevel / xpForNext) * 100;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
+          <GraduationCap className="size-6" style={{ color: "var(--g-accent-text)" }} />
+          Training
+        </h1>
+        <Card className="overflow-hidden" style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+          <CardContent className="p-6">
+            <Skeleton className="h-6 w-32 mb-4" />
+            <div className="flex gap-4">
+              <Skeleton className="h-16 w-16 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-6 w-20" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
@@ -44,38 +97,43 @@ export function Training() {
           <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--g-text-primary)" }}>Your AI Coach</h2>
           <div className="flex flex-wrap gap-6 items-start">
             <div className="flex items-center gap-3">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold font-mono text-white" style={{ background: "var(--g-grade-b)" }}>82</div>
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold font-mono text-white"
+                style={{
+                  background: avgGrade100 >= 90 ? "var(--g-grade-a)" : avgGrade100 >= 75 ? "var(--g-grade-b)" : avgGrade100 >= 60 ? "var(--g-grade-c)" : "var(--g-grade-f)",
+                }}
+              >
+                {avgGrade100}
+              </div>
               <div>
                 <div className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Grade average</div>
-                <Badge className="mt-1 gap-1" style={{ background: "var(--g-up-bg)", color: "var(--g-up)", border: "none" }}>
-                  <TrendingUp className="size-3" /> Improving
+                <Badge
+                  className="mt-1 gap-1"
+                  style={{
+                    background: progress?.trend === "up" ? "var(--g-up-bg)" : progress?.trend === "down" ? "var(--g-down-bg)" : "var(--g-bg-inset)",
+                    color: progress?.trend === "up" ? "var(--g-up)" : progress?.trend === "down" ? "var(--g-down)" : "var(--g-text-tertiary)",
+                    border: "none",
+                  }}
+                >
+                  {progress?.trend === "up" ? <TrendingUp className="size-3" /> : progress?.trend === "down" ? <TrendingDown className="size-3" /> : null}
+                  {progress?.trend === "up" ? "Improving" : progress?.trend === "down" ? "Declining" : "Stable"}
                 </Badge>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              {GRADE_BARS.map((v, i) => (
-                <div
-                  key={i}
-                  className="w-2 rounded-sm"
-                  style={{
-                    height: 24 + (v / 100) * 20,
-                    background: v >= 90 ? "var(--g-grade-a)" : v >= 75 ? "var(--g-grade-b)" : v >= 60 ? "var(--g-grade-c)" : "var(--g-grade-f)",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-4">
-            <span className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>Key strengths:</span>
-            {["Rapport building", "Objection handling", "Discovery"].map((s) => (
-              <Badge key={s} variant="secondary" className="text-xs" style={{ background: "var(--g-grade-a-bg)", color: "var(--g-grade-a)", border: "none" }}>{s}</Badge>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <span className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>Growth areas:</span>
-            {["Talk ratio", "Closing speed", "Active listening"].map((s) => (
-              <Badge key={s} variant="secondary" className="text-xs" style={{ background: "var(--g-grade-c-bg)", color: "var(--g-grade-c)", border: "none" }}>{s}</Badge>
-            ))}
+            {gradeBars.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                {gradeBars.map((v, i) => (
+                  <div
+                    key={i}
+                    className="w-2 rounded-sm"
+                    style={{
+                      height: 24 + (v / 100) * 20,
+                      background: v >= 90 ? "var(--g-grade-a)" : v >= 75 ? "var(--g-grade-b)" : v >= 60 ? "var(--g-grade-c)" : "var(--g-grade-f)",
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
           <Button className="mt-4" size="lg">Start Coaching Session</Button>
         </CardContent>
@@ -83,55 +141,75 @@ export function Training() {
 
       <div>
         <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--g-text-secondary)" }}>Recent Calls to Review</h2>
-        <div className="space-y-2 overflow-x-auto">
-          {RECENT_CALLS.map((call) => (
-            <Link key={call.id} href={`/calls?call=${call.id}`}>
-              <Card className="flex items-center gap-4 p-4 cursor-pointer transition hover:border-[var(--g-border-medium)]" style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
-                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold font-mono text-white shrink-0", gradeClass(call.grade))}>{call.grade}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium truncate" style={{ color: "var(--g-text-primary)" }}>{call.contact}</div>
-                  <div className="text-xs truncate" style={{ color: "var(--g-text-tertiary)" }}>{call.summary}</div>
-                </div>
-                <div className="text-xs shrink-0" style={{ color: "var(--g-text-tertiary)" }}>{call.date}</div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        {recentCalls.length === 0 ? (
+          <p className="text-sm py-4" style={{ color: "var(--g-text-tertiary)" }}>No graded calls yet.</p>
+        ) : (
+          <div className="space-y-2 overflow-x-auto">
+            {recentCalls.map(({ call, grade }) => (
+              <Link key={call.id} href={`/calls?call=${call.id}`}>
+                <Card className="flex items-center gap-4 p-4 cursor-pointer transition hover:border-[var(--g-border-medium)]" style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold font-mono text-white shrink-0", gradeClass(letterToScore(grade)))}>
+                    {letterToScore(grade)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate" style={{ color: "var(--g-text-primary)" }}>{call.contactName ?? "Unknown"}</div>
+                    <div className="text-xs truncate" style={{ color: "var(--g-text-tertiary)" }}>Graded</div>
+                  </div>
+                  <div className="text-xs shrink-0" style={{ color: "var(--g-text-tertiary)" }}>
+                    {formatRelative(call.callTimestamp ?? call.createdAt)}
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>
         <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--g-text-secondary)" }}>Training Material</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {MATERIALS.map((m) => (
-            <Card key={m.id} className={cn(!m.unlocked && "opacity-70")} style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
-              <CardContent className="p-4 flex flex-col gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: m.unlocked ? "var(--g-accent-soft)" : "var(--g-bg-inset)" }}>
-                    {m.unlocked ? <m.icon className="size-5" style={{ color: "var(--g-accent-text)" }} /> : <Lock className="size-5" style={{ color: "var(--g-text-tertiary)" }} />}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-medium" style={{ color: "var(--g-text-primary)" }}>{m.title}</div>
-                    <div className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>{m.desc}</div>
-                  </div>
-                </div>
-                <Button variant={m.unlocked ? "default" : "secondary"} size="sm" disabled={!m.unlocked}>{m.unlocked ? "Read" : "Locked"}</Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {!materials?.length ? (
+          <p className="text-sm py-4" style={{ color: "var(--g-text-tertiary)" }}>No materials yet.</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {materials.map((m) => {
+              const unlocked = true;
+              const Icon = MATERIAL_ICONS[m.category ?? ""] ?? BookOpen;
+              return (
+                <Card key={m.id} className={cn(!unlocked && "opacity-70")} style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+                  <CardContent className="p-4 flex flex-col gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: unlocked ? "var(--g-accent-soft)" : "var(--g-bg-inset)" }}>
+                        {unlocked ? <Icon className="size-5" style={{ color: "var(--g-accent-text)" }} /> : <Lock className="size-5" style={{ color: "var(--g-text-tertiary)" }} />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium" style={{ color: "var(--g-text-primary)" }}>{m.title}</div>
+                        <div className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>{m.description ?? ""}</div>
+                      </div>
+                    </div>
+                    <Button variant={unlocked ? "default" : "secondary"} size="sm" disabled={!unlocked}>{unlocked ? "Read" : "Locked"}</Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <Card style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
         <CardContent className="p-6">
           <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--g-text-primary)" }}>Your Journey</h2>
           <div className="flex items-center gap-4 mb-4">
-            <Badge className="text-lg px-4 py-1" style={{ background: "var(--g-accent-soft)", color: "var(--g-accent-text)", border: "none" }}>Level 7</Badge>
+            <Badge className="text-lg px-4 py-1" style={{ background: "var(--g-accent-soft)", color: "var(--g-accent-text)", border: "none" }}>
+              Level {level}
+            </Badge>
             <div className="flex-1">
-              <div className="text-xs mb-1" style={{ color: "var(--g-text-tertiary)" }}>XP to Level 8</div>
-              <Progress value={68} className="h-2" />
+              <div className="text-xs mb-1" style={{ color: "var(--g-text-tertiary)" }}>XP to Level {level + 1}</div>
+              <Progress value={progressPct} className="h-2" />
             </div>
           </div>
-          <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Milestones: First 10 calls graded, 5 A+ calls, Speed to Lead mastery</div>
+          <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+            {xp} XP total · {progress?.streak ?? 0} day streak
+          </div>
         </CardContent>
       </Card>
     </div>

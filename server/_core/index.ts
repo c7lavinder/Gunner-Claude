@@ -6,6 +6,7 @@ import path from "node:path";
 import { ENV } from "./env";
 import { createContext } from "./context";
 import { appRouter } from "../routers";
+import { webhookRouter } from "../middleware/webhook";
 import { startPolling } from "../services/callIngestion";
 
 const app = express();
@@ -16,6 +17,8 @@ app.use(cookieParser());
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+app.use("/api/webhooks", webhookRouter);
 
 app.use(
   "/api/trpc",
