@@ -5,6 +5,7 @@ import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
 import { tenants } from "../../drizzle/schema";
 import { createCrmAdapter } from "../crm";
+import { trackEvent } from "../services/eventTracking";
 
 const ACTION_TYPES: ActionType[] = [
   "sms",
@@ -33,25 +34,40 @@ function mockSuccess(): ActionResult {
 
 export const actionsRouter = router({
   execute: protectedProcedure.input(actionInput).mutation(async ({ ctx, input }) => {
+    let result: ActionResult;
+
     if (!ACTION_TYPES.includes(input.type as ActionType)) {
-      return {
+      result = {
         success: false,
         message: "Invalid action type",
         timestamp: new Date().toISOString(),
         error: "Invalid action type",
       } satisfies ActionResult;
+      trackEvent({
+        tenantId: ctx.user.tenantId,
+        userId: ctx.user.userId,
+        eventType: `action.${input.type}`,
+        page: "action",
+        metadata: { contactId: input.contactId, success: result.success },
+      });
+      return result;
     }
-
-    // TODO: log action attempt to user_events
 
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, ctx.user.tenantId));
     if (!tenant?.crmConfig || tenant.crmType === "none") {
-      return mockSuccess();
+      result = mockSuccess();
+      trackEvent({
+        tenantId: ctx.user.tenantId,
+        userId: ctx.user.userId,
+        eventType: `action.${input.type}`,
+        page: "action",
+        metadata: { contactId: input.contactId, success: result.success },
+      });
+      return result;
     }
 
     const config = tenant.crmConfig ? (JSON.parse(tenant.crmConfig) as Record<string, string>) : {};
     const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
-
     const contactId = input.contactId;
     const payload = input.payload;
     const fromUserId = String(ctx.user.userId);
@@ -59,52 +75,66 @@ export const actionsRouter = router({
     try {
       switch (input.type) {
         case "sms":
-          return await adapter.sendSms(
-            contactId,
-            String(payload.message ?? ""),
-            fromUserId
-          );
+          result = await adapter.sendSms(contactId, String(payload.message ?? ""), fromUserId);
+          break;
         case "note":
-          return await adapter.addNote(contactId, String(payload.body ?? ""));
+          result = await adapter.addNote(contactId, String(payload.body ?? ""));
+          break;
         case "task":
-          return await adapter.createTask({
+          result = await adapter.createTask({
             title: String(payload.title ?? ""),
             description: payload.description ? String(payload.description) : undefined,
             contactId,
             assignedTo: payload.assignedTo ? String(payload.assignedTo) : undefined,
             dueDate: payload.dueDate ? String(payload.dueDate) : undefined,
           });
+          break;
         case "appointment":
-          return await adapter.createAppointment({
+          result = await adapter.createAppointment({
             contactId,
             title: String(payload.title ?? ""),
             startTime: String(payload.startTime ?? ""),
             assignedTo: payload.assignedTo ? String(payload.assignedTo) : undefined,
           });
+          break;
         case "stage_change":
-          return await adapter.updateOpportunityStage(
+          result = await adapter.updateOpportunityStage(
             String(payload.opportunityId ?? ""),
             String(payload.stageId ?? "")
           );
+          break;
         case "tag":
-          return await adapter.addTag(contactId, String(payload.tag ?? ""));
+          result = await adapter.addTag(contactId, String(payload.tag ?? ""));
+          break;
         case "field_update":
-          return await adapter.updateContactField(
+          result = await adapter.updateContactField(
             contactId,
             String(payload.field ?? ""),
             payload.value
           );
+          break;
         case "workflow":
-          return await adapter.addToWorkflow(
-            contactId,
-            String(payload.workflowId ?? "")
-          );
+          result = await adapter.addToWorkflow(contactId, String(payload.workflowId ?? ""));
+          break;
         default:
-          return mockSuccess();
+          result = mockSuccess();
       }
     } catch {
-      return mockSuccess();
+      result = mockSuccess();
     }
+
+    try {
+      trackEvent({
+        tenantId: ctx.user.tenantId,
+        userId: ctx.user.userId,
+        eventType: `action.${input.type}`,
+        page: "action",
+        metadata: { contactId: input.contactId, success: result.success },
+      });
+    } catch {
+      /* never block */
+    }
+    return result;
   }),
 
   preview: protectedProcedure.input(actionInput).query(async ({ input }) => {

@@ -9,6 +9,7 @@ import {
   pendingInvitations,
 } from "../../drizzle/schema";
 import { createCrmAdapter } from "../crm";
+import { createCheckoutSession, createPortalSession, getPlans } from "../services/stripe";
 
 const updateWorkspaceInput = z.object({
   name: z.string().optional(),
@@ -148,5 +149,25 @@ export const settingsRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found" });
       }
       return updated;
+    }),
+
+  getPlans: protectedProcedure.query(async () => {
+    return getPlans();
+  }),
+
+  createCheckout: protectedProcedure
+    .input(z.object({ planCode: z.string(), successUrl: z.string(), cancelUrl: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user.tenantId;
+      if (!tenantId) throw new TRPCError({ code: "BAD_REQUEST", message: "No workspace" });
+      return createCheckoutSession(tenantId, input.planCode, input.successUrl, input.cancelUrl);
+    }),
+
+  manageBilling: protectedProcedure
+    .input(z.object({ returnUrl: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user.tenantId;
+      if (!tenantId) throw new TRPCError({ code: "BAD_REQUEST", message: "No workspace" });
+      return createPortalSession(tenantId, input.returnUrl);
     }),
 });

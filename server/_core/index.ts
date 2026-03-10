@@ -7,11 +7,14 @@ import { ENV } from "./env";
 import { createContext } from "./context";
 import { appRouter } from "../routers";
 import { webhookRouter } from "../middleware/webhook";
+import { stripeWebhookRouter } from "../middleware/stripeWebhook";
 import { startPolling } from "../services/callIngestion";
 import { startDailyDigestJob } from "../services/notifications";
+import { startEventFlusher } from "../services/eventTracking";
 
 const app = express();
 
+app.use("/api/stripe/webhook", stripeWebhookRouter);
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
@@ -39,6 +42,7 @@ app.listen(ENV.port, "0.0.0.0", () => {
   if (ENV.isProduction) {
     startPolling(5);
     startDailyDigestJob();
+    startEventFlusher();
   }
 });
 
