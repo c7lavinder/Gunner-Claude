@@ -17,7 +17,7 @@ import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 
 export function Today() {
-  const { isLoading } = useTenantConfig();
+  const { t, isLoading } = useTenantConfig();
   const { executeAction, isExecuting, result, reset } = useAction();
   const [search, setSearch] = useState("");
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export function Today() {
       {stats && (
         <div className="flex gap-4 text-sm text-[var(--g-text-secondary)]">
           <span>{stats.callsToday} calls today</span>
-          <span>{stats.propertyCount} properties</span>
+          <span>{stats.propertyCount} {t?.assetPlural?.toLowerCase() ?? "properties"}</span>
           <span>{stats.tasksToday} tasks</span>
         </div>
       )}

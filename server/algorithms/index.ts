@@ -1,9 +1,8 @@
-export { sortInventory, INVENTORY_SORT_CONFIG, type InventoryItem } from "./inventorySort";
-export {
-  matchBuyers,
-  BUYER_MATCH_CONFIG,
-  type Buyer,
-  type Property,
-  type BuyerMatchResult,
-} from "./buyerMatch";
-export { sortTasks, TASK_SORT_CONFIG, type Task } from "./taskSort";
+export { inventorySort, DEFAULT_INVENTORY_SORT_CONFIG } from "./inventorySort";
+export type { InventorySortConfig, SortableProperty } from "./inventorySort";
+
+export { matchBuyers, DEFAULT_BUYER_MATCH_CONFIG } from "./buyerMatch";
+export type { BuyerMatchConfig, SortableBuyer, PropertyForMatch, ScoredBuyer } from "./buyerMatch";
+
+export { taskSort, DEFAULT_TASK_SORT_CONFIG } from "./taskSort";
+export type { TaskSortConfig, SortableTask } from "./taskSort";

@@ -2066,6 +2066,15 @@
     animation: g-float 4s ease-in-out infinite;
   }
 
+  /* Page transition */
+  @keyframes pageEnter {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .g-page-enter {
+    animation: pageEnter 200ms ease-out;
+  }
+
   /* Gradient border effect */
   .g-gradient-border {
     position: relative;

@@ -8,6 +8,7 @@ import {
   propertyActivityLog,
   propertyStageHistory,
 } from "../../drizzle/schema";
+import { inventorySort } from "../algorithms";
 
 export const inventoryRouter = router({
   list: protectedProcedure
@@ -35,13 +36,15 @@ export const inventoryRouter = router({
         .from(dispoProperties)
         .where(and(...conditions));
 
-      const items = await db
+      const rawItems = await db
         .select()
         .from(dispoProperties)
         .where(and(...conditions))
         .orderBy(desc(dispoProperties.createdAt))
         .limit(input.limit)
         .offset(offset);
+
+      const items = inventorySort(rawItems);
 
       return {
         items,

@@ -63,5 +63,61 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "user_events" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer NOT NULL REFERENCES "tenants"("id"),
+      "userId" integer NOT NULL REFERENCES "users"("id"),
+      "eventType" text NOT NULL,
+      "page" text,
+      "entityType" text,
+      "entityId" text,
+      "metadata" jsonb,
+      "source" text DEFAULT 'user',
+      "suggestionId" integer,
+      "createdAt" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "ai_suggestions" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer NOT NULL REFERENCES "tenants"("id"),
+      "userId" integer NOT NULL REFERENCES "users"("id"),
+      "suggestionType" text NOT NULL,
+      "content" text NOT NULL,
+      "reasoning" text,
+      "confidence" varchar(10),
+      "context" jsonb,
+      "page" text,
+      "status" text DEFAULT 'shown',
+      "userReaction" jsonb,
+      "timeToReact" integer,
+      "outcome" jsonb,
+      "outcomeScore" varchar(10),
+      "createdAt" timestamp DEFAULT now() NOT NULL,
+      "reactedAt" timestamp,
+      "outcomeAt" timestamp
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "playbook_insights" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "playbookLevel" text NOT NULL,
+      "tenantId" integer,
+      "userId" integer,
+      "industryCode" text,
+      "insightType" text NOT NULL,
+      "category" text,
+      "content" jsonb,
+      "confidence" varchar(10),
+      "dataPoints" integer DEFAULT 0,
+      "validUntil" timestamp,
+      "createdAt" timestamp DEFAULT now() NOT NULL,
+      "updatedAt" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+
   console.log("[migrations] Startup migrations complete.");
 }

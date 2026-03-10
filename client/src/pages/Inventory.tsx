@@ -168,7 +168,7 @@ export function Inventory() {
         <div className="flex flex-1 max-w-md gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4" style={{ color: "var(--g-text-tertiary)" }} />
-            <Input placeholder="Search by address or seller..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder={`Search ${assetLabel.toLowerCase()}...`} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Button onClick={() => setAddDialogOpen(true)}><Plus className="size-4" /> Add {assetSingular}</Button>
         </div>
@@ -191,7 +191,7 @@ export function Inventory() {
             </div>
           ) : sorted.length === 0 ? (
             <p className="text-sm py-8 text-center" style={{ color: "var(--g-text-tertiary)" }}>
-              No properties yet
+              No {assetLabel.toLowerCase()} yet
             </p>
           ) : (
             <ScrollArea className="h-[calc(100vh-280px)]">
@@ -257,7 +257,7 @@ export function Inventory() {
                 <Separator />
                 <div className="space-y-2 text-sm">
                   <p><span style={{ color: "var(--g-text-tertiary)" }}>Lead source:</span> {detailItem.leadSource ?? "—"}</p>
-                  <p><span style={{ color: "var(--g-text-tertiary)" }}>Seller:</span> {detailItem.sellerName ?? "—"} {detailItem.sellerPhone ?? ""}</p>
+                  <p><span style={{ color: "var(--g-text-tertiary)" }}>{t.contact}:</span> {detailItem.sellerName ?? "—"} {detailItem.sellerPhone ?? ""}</p>
                   <p><span style={{ color: "var(--g-text-tertiary)" }}>Days in stage:</span> {daysInStage(detailItem.stageChangedAt)}</p>
                 </div>
                 <Separator />
@@ -279,7 +279,7 @@ export function Inventory() {
           action={{
             type: actionDialog.type,
             from: { name: "You", phone: "" },
-            to: { name: actionDialog.item.sellerName ?? "Contact", phone: actionDialog.item.sellerPhone ?? undefined },
+            to: { name: actionDialog.item.sellerName ?? t.contact, phone: actionDialog.item.sellerPhone ?? undefined },
             payload: actionDialog.payload,
           }}
           onConfirm={handleConfirm}
@@ -314,8 +314,8 @@ export function Inventory() {
               <Input placeholder="City" value={newCity} onChange={(e) => setNewCity(e.target.value)} />
               <Input placeholder="State" value={newState} onChange={(e) => setNewState(e.target.value)} />
             </div>
-            <Input placeholder="Seller name" value={newSellerName} onChange={(e) => setNewSellerName(e.target.value)} />
-            <Input placeholder="Seller phone" value={newSellerPhone} onChange={(e) => setNewSellerPhone(e.target.value)} />
+            <Input placeholder={`${t.contact} name`} value={newSellerName} onChange={(e) => setNewSellerName(e.target.value)} />
+            <Input placeholder={`${t.contact} phone`} value={newSellerPhone} onChange={(e) => setNewSellerPhone(e.target.value)} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>

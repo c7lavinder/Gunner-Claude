@@ -1,120 +1,111 @@
-export const TASK_SORT_CONFIG = {
+/**
+ * Task Sort — role-specific task prioritization.
+ *
+ * Each role has a different tier ordering. Tasks are sorted into tiers
+ * first, then within each tier by urgency/date.
+ *
+ * Config values come from Tenant Playbook → Industry Playbook → defaults below.
+ */
+
+export interface TaskSortConfig {
+  lead_manager: RoleTaskConfig;
+  acquisition_manager: RoleTaskConfig;
+  dispo_manager: RoleTaskConfig;
+}
+
+interface RoleTaskConfig {
+  newLeadUrgencyMinutes: number;
+  newLeadAlertMinutes: number;
+  revenueWeightedStages: string[];
+  closingDayWarning: number;
+  tiers: string[];
+}
+
+export const DEFAULT_TASK_SORT_CONFIG: TaskSortConfig = {
   lead_manager: {
     newLeadUrgencyMinutes: 15,
     newLeadAlertMinutes: 60,
-    tiers: ["new_lead", "inbound", "callback", "overdue", "regular"] as const,
+    revenueWeightedStages: [],
+    closingDayWarning: 7,
+    tiers: ["new_lead", "inbound", "callback", "overdue", "regular"],
   },
   acquisition_manager: {
+    newLeadUrgencyMinutes: 30,
+    newLeadAlertMinutes: 120,
     revenueWeightedStages: ["offer", "under_contract"],
-    tiers: ["inbound", "appointment", "follow_up_revenue", "overdue", "regular"] as const,
+    closingDayWarning: 7,
+    tiers: ["inbound", "appointment", "follow_up_revenue", "overdue", "regular"],
   },
   dispo_manager: {
+    newLeadUrgencyMinutes: 60,
+    newLeadAlertMinutes: 240,
     revenueWeightedStages: ["under_contract", "closing"],
     closingDayWarning: 7,
-    tiers: ["buyer_response", "time_sensitive", "no_contact", "regular"] as const,
+    tiers: ["buyer_response", "time_sensitive", "no_contact", "regular"],
   },
 };
 
-export interface Task {
-  id: string;
+export interface SortableTask {
+  id: string | number;
   title: string;
-  dueDate?: string;
-  assignedTo?: string;
-  contactId?: string;
+  dueDate?: Date | string | null;
+  isOverdue?: boolean;
   isNewLead?: boolean;
-  leadCreatedAt?: Date;
-  hasInboundMessage?: boolean;
-  hasMissedCall?: boolean;
+  isInbound?: boolean;
   isCallback?: boolean;
-  hasAppointmentToday?: boolean;
+  isAppointment?: boolean;
+  isBuyerResponse?: boolean;
+  isTimeSensitive?: boolean;
+  hasNoContact?: boolean;
   dealValue?: number;
-  stageCode?: string;
-  hasBuyerResponse?: boolean;
-  daysSinceLastContact?: number;
-  completed: boolean;
+  createdAt?: Date | string | null;
+  stage?: string | null;
 }
 
-type RoleKey = keyof typeof TASK_SORT_CONFIG;
-
-function getTierIndex(tier: string, tiers: readonly string[]): number {
-  const i = tiers.indexOf(tier);
-  return i >= 0 ? i : tiers.length;
-}
-
-function getLeadManagerTier(task: Task, cfg: (typeof TASK_SORT_CONFIG)["lead_manager"]): string {
-  if (task.isNewLead && task.leadCreatedAt) {
-    const mins = (Date.now() - task.leadCreatedAt.getTime()) / (1000 * 60);
-    if (mins < cfg.newLeadUrgencyMinutes) return "new_lead";
+function tierIndex(task: SortableTask, tiers: string[]): number {
+  for (let i = 0; i < tiers.length; i++) {
+    const tier = tiers[i];
+    switch (tier) {
+      case "new_lead": if (task.isNewLead) return i; break;
+      case "inbound": if (task.isInbound) return i; break;
+      case "callback": if (task.isCallback) return i; break;
+      case "appointment": if (task.isAppointment) return i; break;
+      case "buyer_response": if (task.isBuyerResponse) return i; break;
+      case "time_sensitive": if (task.isTimeSensitive) return i; break;
+      case "no_contact": if (task.hasNoContact) return i; break;
+      case "overdue": if (task.isOverdue) return i; break;
+      case "follow_up_revenue": if (task.stage && task.dealValue) return i; break;
+      case "regular": return i;
+    }
   }
-  if (task.hasInboundMessage || task.hasMissedCall) return "inbound";
-  if (task.isCallback) return "callback";
-  if (task.dueDate && new Date(task.dueDate) < new Date()) return "overdue";
-  return "regular";
+  return tiers.length;
 }
 
-function getAcquisitionManagerTier(
-  task: Task,
-  cfg: (typeof TASK_SORT_CONFIG)["acquisition_manager"]
-): string {
-  if (task.hasInboundMessage || task.hasMissedCall) return "inbound";
-  if (task.hasAppointmentToday) return "appointment";
-  if (
-    task.stageCode &&
-    cfg.revenueWeightedStages.includes(task.stageCode as (typeof cfg.revenueWeightedStages)[number])
-  )
-    return "follow_up_revenue";
-  if (task.dueDate && new Date(task.dueDate) < new Date()) return "overdue";
-  return "regular";
-}
-
-function getDispoManagerTier(
-  task: Task,
-  cfg: (typeof TASK_SORT_CONFIG)["dispo_manager"]
-): string {
-  if (task.hasBuyerResponse) return "buyer_response";
-  if (
-    task.stageCode &&
-    cfg.revenueWeightedStages.includes(task.stageCode as (typeof cfg.revenueWeightedStages)[number])
-  )
-    return "time_sensitive";
-  if ((task.daysSinceLastContact ?? 0) >= (cfg.closingDayWarning ?? 7)) return "no_contact";
-  return "regular";
-}
-
-export function sortTasks(
-  tasks: Task[],
+export function taskSort<T extends SortableTask>(
+  tasks: T[],
   role: string,
-  config?: Partial<typeof TASK_SORT_CONFIG>
-): Task[] {
-  const cfg = {
-    lead_manager: { ...TASK_SORT_CONFIG.lead_manager, ...config?.lead_manager },
-    acquisition_manager: {
-      ...TASK_SORT_CONFIG.acquisition_manager,
-      ...config?.acquisition_manager,
-    },
-    dispo_manager: { ...TASK_SORT_CONFIG.dispo_manager, ...config?.dispo_manager },
-  };
-  const roleCfg = cfg[role as RoleKey] ?? cfg.lead_manager;
-  const active = tasks.filter((t) => !t.completed);
-  return active.sort((a, b) => {
-    const tierA =
-      role === "acquisition_manager"
-        ? getAcquisitionManagerTier(a, roleCfg as (typeof cfg)["acquisition_manager"])
-        : role === "dispo_manager"
-          ? getDispoManagerTier(a, roleCfg as (typeof cfg)["dispo_manager"])
-          : getLeadManagerTier(a, roleCfg as (typeof cfg)["lead_manager"]);
-    const tierB =
-      role === "acquisition_manager"
-        ? getAcquisitionManagerTier(b, roleCfg as (typeof cfg)["acquisition_manager"])
-        : role === "dispo_manager"
-          ? getDispoManagerTier(b, roleCfg as (typeof cfg)["dispo_manager"])
-          : getLeadManagerTier(b, roleCfg as (typeof cfg)["lead_manager"]);
-    const idxA = getTierIndex(tierA, roleCfg.tiers);
-    const idxB = getTierIndex(tierB, roleCfg.tiers);
-    if (idxA !== idxB) return idxA - idxB;
-    const dueA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
-    const dueB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
-    if (dueA !== dueB) return dueA - dueB;
-    return (b.dealValue ?? 0) - (a.dealValue ?? 0);
+  config: Partial<TaskSortConfig> = {}
+): T[] {
+  const c = { ...DEFAULT_TASK_SORT_CONFIG, ...config };
+  const roleKey = role.replace(/[\s-]+/g, "_").toLowerCase() as keyof TaskSortConfig;
+  const roleConfig = c[roleKey] ?? c.lead_manager;
+  const tiers = roleConfig.tiers;
+
+  return [...tasks].sort((a, b) => {
+    const aTier = tierIndex(a, tiers);
+    const bTier = tierIndex(b, tiers);
+    if (aTier !== bTier) return aTier - bTier;
+
+    // Within same tier: revenue-weighted stages sort by deal value desc
+    if (roleConfig.revenueWeightedStages.length > 0) {
+      const aRevenue = a.stage && roleConfig.revenueWeightedStages.includes(a.stage) ? (a.dealValue ?? 0) : 0;
+      const bRevenue = b.stage && roleConfig.revenueWeightedStages.includes(b.stage) ? (b.dealValue ?? 0) : 0;
+      if (aRevenue !== bRevenue) return bRevenue - aRevenue;
+    }
+
+    // Fallback: due date ascending (most urgent first)
+    const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+    const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+    return aDue - bDue;
   });
 }

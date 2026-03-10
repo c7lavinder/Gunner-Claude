@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine, Star, Play, Plus, FileText } from "lucide-react";
 import { ActionConfirmDialog } from "@/components/actions/ActionConfirmDialog";
 import { useAction } from "@/hooks/useActions";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { trpc } from "@/lib/trpc";
 
 function formatDuration(sec: number | null) {
@@ -46,6 +47,7 @@ function gradeColor(grade: number | null) {
 }
 
 export function CallInbox() {
+  const { t } = useTenantConfig();
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<number>>(new Set());
@@ -111,7 +113,7 @@ export function CallInbox() {
           Calls
         </h1>
         <Input
-          placeholder="Search contact or caller..."
+          placeholder={`Search ${t.contact.toLowerCase()} or caller...`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="h-8 w-48 text-sm"

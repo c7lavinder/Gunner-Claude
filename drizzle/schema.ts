@@ -1870,3 +1870,67 @@ export const userPlaybooks = pgTable("user_playbooks", {
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 export type UserPlaybookRow = typeof userPlaybooks.$inferSelect;
+
+// ============ AI INTELLIGENCE LOOP ============
+
+/**
+ * User Events — every meaningful user action for AI learning.
+ * Start collecting NOW so intelligence jobs have data when implemented.
+ */
+export const userEvents = pgTable("user_events", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  userId: integer("userId").references(() => users.id).notNull(),
+  eventType: text("eventType").notNull(),
+  page: text("page"),
+  entityType: text("entityType"),
+  entityId: text("entityId"),
+  metadata: jsonb("metadata"),
+  source: text("source").default("user"),
+  suggestionId: integer("suggestionId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type UserEventRow = typeof userEvents.$inferSelect;
+
+/**
+ * AI Suggestions — tracks every suggestion lifecycle for feedback loop.
+ */
+export const aiSuggestions = pgTable("ai_suggestions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  userId: integer("userId").references(() => users.id).notNull(),
+  suggestionType: text("suggestionType").notNull(),
+  content: text("content").notNull(),
+  reasoning: text("reasoning"),
+  confidence: varchar("confidence", { length: 10 }),
+  context: jsonb("context"),
+  page: text("page"),
+  status: text("status").default("shown"),
+  userReaction: jsonb("userReaction"),
+  timeToReact: integer("timeToReact"),
+  outcome: jsonb("outcome"),
+  outcomeScore: varchar("outcomeScore", { length: 10 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  reactedAt: timestamp("reactedAt"),
+  outcomeAt: timestamp("outcomeAt"),
+});
+export type AiSuggestionRow = typeof aiSuggestions.$inferSelect;
+
+/**
+ * Playbook Insights — learned knowledge at every playbook level.
+ */
+export const playbookInsights = pgTable("playbook_insights", {
+  id: serial("id").primaryKey(),
+  playbookLevel: text("playbookLevel").notNull(),
+  tenantId: integer("tenantId"),
+  userId: integer("userId"),
+  industryCode: text("industryCode"),
+  insightType: text("insightType").notNull(),
+  category: text("category"),
+  content: jsonb("content"),
+  confidence: varchar("confidence", { length: 10 }),
+  dataPoints: integer("dataPoints").default(0),
+  validUntil: timestamp("validUntil"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});

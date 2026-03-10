@@ -96,6 +96,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 {user.name || user.email}
               </span>
             )}
+            <kbd className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded" style={{ background: "var(--g-bg-surface)", color: "var(--g-text-tertiary)", border: "1px solid var(--g-border-subtle)" }}>
+              ⌘K
+            </kbd>
             <Button
               variant="ghost"
               size="icon"
@@ -112,7 +115,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </header>
           <main
-            className="flex-1 p-6"
+            key={location}
+            className="flex-1 p-6 g-page-enter"
             style={{ background: "var(--g-bg-base)" }}
           >
             {children}

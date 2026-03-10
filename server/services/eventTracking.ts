@@ -1,5 +1,5 @@
 import { db } from "../_core/db";
-import { coachActionLog } from "../../drizzle/schema";
+import { coachActionLog, userEvents } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 
 type BufferedEvent = {
@@ -7,7 +7,10 @@ type BufferedEvent = {
   userId: number;
   eventType: string;
   page: string;
+  entityType?: string;
+  entityId?: string;
   metadata?: Record<string, unknown>;
+  source?: string;
 };
 
 const buffer: BufferedEvent[] = [];
@@ -19,20 +22,36 @@ export function trackEvent(params: {
   userId: number;
   eventType: string;
   page: string;
+  entityType?: string;
+  entityId?: string;
   metadata?: Record<string, unknown>;
+  source?: string;
 }): void {
   if (!ENV.isProduction) {
     console.log("[event]", params.eventType, params.page, params.metadata);
-    return;
   }
   buffer.push(params);
-  if (buffer.length >= FLUSH_THRESHOLD) flushEvents();
+  if (buffer.length >= FLUSH_THRESHOLD) void flushEvents();
 }
 
 export async function flushEvents(): Promise<void> {
   if (buffer.length === 0) return;
   const batch = buffer.splice(0, buffer.length);
   try {
+    // Write to new user_events table
+    await db.insert(userEvents).values(
+      batch.map((e) => ({
+        tenantId: e.tenantId,
+        userId: e.userId,
+        eventType: e.eventType,
+        page: e.page,
+        entityType: e.entityType ?? null,
+        entityId: e.entityId ?? null,
+        metadata: e.metadata ?? null,
+        source: e.source ?? "user",
+      }))
+    );
+    // Also write to legacy coachActionLog for backwards compatibility
     await db.insert(coachActionLog).values(
       batch.map((e) => ({
         tenantId: e.tenantId,

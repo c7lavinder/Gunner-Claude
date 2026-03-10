@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Route, Switch, Redirect } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { CommandPalette } from "@/components/CommandPalette";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Landing } from "@/pages/landing/Landing";
@@ -69,6 +70,7 @@ export function App() {
         </Switch>
       </Suspense>
       <Toaster />
+      <CommandPalette />
     </ErrorBoundary>
   );
 }
