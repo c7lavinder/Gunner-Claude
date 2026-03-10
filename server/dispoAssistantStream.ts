@@ -7,7 +7,6 @@
 import { Router, type Request, type Response } from "express";
 import { parse as parseCookieHeader } from "cookie";
 import { verifySessionToken, getUserById } from "./selfServeAuth";
-import { sdk } from "./_core/sdk";
 import { invokeLLMStream } from "./llmStream";
 import { invokeLLM } from "./_core/llm";
 import { getPropertyDetail } from "./inventory";
@@ -31,11 +30,7 @@ async function authenticateRequest(req: Request): Promise<User | null> {
       }
     }
   } catch { /* fall through */ }
-  try {
-    return await sdk.authenticateRequest(req);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export function buildPropertyContext(detail: any): string {

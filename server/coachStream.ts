@@ -1,7 +1,6 @@
 import { Request, Response, Router } from "express";
 import { parse as parseCookieHeader } from "cookie";
 import { verifySessionToken, getUserById } from "./selfServeAuth";
-import { sdk } from "./_core/sdk";
 import { invokeLLMStream } from "./llmStream";
 import {
   getTeamMembers,
@@ -36,12 +35,7 @@ async function authenticateRequest(req: Request): Promise<User | null> {
     }
   } catch { /* fall through */ }
 
-  // Try Manus OAuth
-  try {
-    return await sdk.authenticateRequest(req);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 coachStreamRouter.post("/api/coach/stream", async (req: Request, res: Response) => {
