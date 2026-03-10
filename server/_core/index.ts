@@ -33,7 +33,7 @@ app.use(
 );
 
 if (ENV.isProduction) {
-  const publicDir = path.resolve(__dirname, "../public");
+  const publicDir = path.resolve(__dirname, "public");
   app.use(express.static(publicDir));
   app.get("*", (_req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
