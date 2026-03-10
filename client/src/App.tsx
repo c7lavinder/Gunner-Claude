@@ -4,6 +4,7 @@ import { AuthGuard } from "@/components/layout/AuthGuard";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Landing } from "@/pages/landing/Landing";
 import { Login } from "@/pages/Login";
+import { Signup } from "@/pages/Signup";
 import { GoogleAuthCallback } from "@/pages/GoogleAuthCallback";
 import { Today } from "@/pages/Today";
 import { CallInbox } from "@/pages/CallInbox";
@@ -22,6 +23,7 @@ export function App() {
       <Switch>
         <Route path="/" component={Landing} />
         <Route path="/login" component={Login} />
+        <Route path="/signup" component={Signup} />
         <Route path="/auth/google/callback" component={GoogleAuthCallback} />
         <Route path="/industries/:industry" component={IndustryLanding} />
         <Route path="/:rest*">

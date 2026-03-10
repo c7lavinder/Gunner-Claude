@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Pencil, Flame, Phone, Mic } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-
-const MOCK = { name: "Alex Rivera", email: "alex@company.com", role: "Lead Manager", callsGraded: 47, avgGrade: 84, streak: 12, smsTone: "professional", defaultGreeting: "Hi, this is Alex from New Again Houses." };
+import { trpc } from "@/lib/trpc";
 
 function gradeColor(grade: number) {
   if (grade >= 90) return "var(--g-grade-a)";
@@ -27,32 +26,64 @@ function gradeColor(grade: number) {
 
 export function Profile() {
   const { user } = useAuth();
+  const { data: members } = trpc.team.list.useQuery();
+  const { data: progress } = trpc.training.getUserProgress.useQuery();
+  const saveInstruction = trpc.ai.saveInstruction.useMutation();
+
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(MOCK.name);
-  const [smsTone, setSmsTone] = useState(MOCK.smsTone);
-  const [defaultGreeting, setDefaultGreeting] = useState(MOCK.defaultGreeting);
+  const [name, setName] = useState(user?.name ?? "");
+  const [smsTone, setSmsTone] = useState("professional");
+  const [defaultGreeting, setDefaultGreeting] = useState("");
   const [voiceConsent, setVoiceConsent] = useState(false);
-  const displayName = user?.name ?? name;
-  const displayEmail = user?.email ?? MOCK.email;
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (user?.name && !editing) setName(user.name);
+  }, [user?.name, editing]);
+
+  const displayName = editing ? name : (user?.name ?? name);
+  const displayEmail = user?.email ?? "";
+  const myMember = members?.find((m) => m.userId === user?.id);
+  const role = myMember?.teamRole ?? user?.role ?? "user";
+  const callsGraded = progress?.recentCalls?.length ?? 0;
+  const avgGradeNum = progress?.avgGrade ?? 0;
+  const avgGradePct = Math.round(avgGradeNum * 25);
+  const streak = progress?.streak ?? 0;
+
+  const handleSaveProfile = () => {
+    setEditing(false);
+  };
+
+  const handleSavePreferences = async () => {
+    setSaving(true);
+    try {
+      await saveInstruction.mutateAsync({
+        instruction: `SMS tone: ${smsTone}. Default greeting: ${defaultGreeting || "(none)"}`,
+        category: "preferences",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center gap-6">
         <div className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold text-white shrink-0" style={{ background: "linear-gradient(135deg, var(--g-accent), #5a1018)" }}>
-          {(displayName || "U").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+          {(displayName || "U").toString().split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
             {editing ? (
               <Input value={name} onChange={(e) => setName(e.target.value)} className="max-w-[200px] bg-[var(--g-bg-surface)]" />
             ) : (
-              <h1 className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{name}</h1>
+              <h1 className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{displayName || "User"}</h1>
             )}
-            <Badge variant="secondary">{MOCK.role}</Badge>
+            <Badge variant="secondary">{role}</Badge>
             {editing ? (
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => setEditing(false)}>Save</Button>
-                <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setName(MOCK.name); }}>Cancel</Button>
+                <Button size="sm" onClick={handleSaveProfile}>Save</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setName(user?.name ?? ""); }}>Cancel</Button>
               </div>
             ) : (
               <Button size="sm" variant="outline" onClick={() => setEditing(true)}><Pencil className="size-4" />Edit Profile</Button>
@@ -66,19 +97,19 @@ export function Profile() {
         <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
             <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Calls Graded</p>
-            <p className="text-3xl font-bold mt-1" style={{ color: "var(--g-text-primary)" }}>{MOCK.callsGraded}</p>
+            <p className="text-3xl font-bold mt-1" style={{ color: "var(--g-text-primary)" }}>{callsGraded}</p>
           </CardContent>
         </Card>
         <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
             <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Average Grade</p>
-            <p className="text-3xl font-bold mt-1" style={{ color: gradeColor(MOCK.avgGrade) }}>{MOCK.avgGrade}</p>
+            <p className="text-3xl font-bold mt-1" style={{ color: gradeColor(avgGradePct) }}>{avgGradePct}</p>
           </CardContent>
         </Card>
         <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
             <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Current Streak</p>
-            <p className="text-3xl font-bold mt-1 flex items-center gap-1" style={{ color: "var(--g-streak)" }}><Flame className="size-6" />{MOCK.streak} days</p>
+            <p className="text-3xl font-bold mt-1 flex items-center gap-1" style={{ color: "var(--g-streak)" }}><Flame className="size-6" />{streak} days</p>
           </CardContent>
         </Card>
       </div>
@@ -101,7 +132,7 @@ export function Profile() {
             <Label>Default greeting</Label>
             <Input value={defaultGreeting} onChange={(e) => setDefaultGreeting(e.target.value)} className="bg-[var(--g-bg-surface)]" placeholder="Your typical call opener" />
           </div>
-          <Button>Save</Button>
+          <Button onClick={handleSavePreferences} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
         </CardContent>
       </Card>
 

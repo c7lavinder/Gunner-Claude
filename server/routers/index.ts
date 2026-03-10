@@ -10,6 +10,7 @@ import { playbookRouter } from "./playbook";
 import { actionsRouter } from "./actions";
 import { authRouter } from "./auth";
 import { settingsRouter } from "./settings";
+import { todayRouter } from "./today";
 
 export const appRouter = router({
   calls: callsRouter,
@@ -23,6 +24,7 @@ export const appRouter = router({
   actions: actionsRouter,
   auth: authRouter,
   settings: settingsRouter,
+  today: todayRouter,
 });
 
 export type AppRouter = typeof appRouter;
