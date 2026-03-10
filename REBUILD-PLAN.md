@@ -22,8 +22,15 @@
 12. [Security](#12-security)
 13. [Settings & Playbook Editor](#13-settings--playbook-editor)
 14. [Existing Features to Preserve](#14-existing-features-to-preserve)
-15. [Build Phases](#15-build-phases)
-16. [Architecture Rules](#16-architecture-rules)
+15. [Landing Pages](#15-landing-pages)
+16. [Gamification System](#16-gamification-system)
+17. [Design Standards](#17-design-standards)
+18. [Tech Stack Confirmation](#18-tech-stack-confirmation)
+19. [Codebase Organization](#19-codebase-organization)
+20. [Tools, APIs & Services Needed](#20-tools-apis--services-needed)
+21. [Enhancement List — Premium Parity](#21-enhancement-list--premium-parity)
+22. [Build Phases](#22-build-phases)
+23. [Architecture Rules](#23-architecture-rules)
 
 ---
 
@@ -941,7 +948,670 @@ These features are well-built and must survive the rebuild. They migrate into pl
 
 ---
 
-## 15. Build Phases
+## 15. Landing Pages
+
+### Core Landing Page (getgunner.ai)
+
+**The Message: Empowering, Not Babysitting.**
+
+Current copy says "Stop Babysitting Your Sales Reps." That frames the product negatively — around distrust. The rebuild reframes everything around EMPOWERMENT.
+
+**New messaging direction:**
+
+| Old (Remove) | New (Replace With) |
+|---|---|
+| "Stop Babysitting Your Sales Reps" | "Empower Your Team to Perform at Their Best" |
+| "Babysitting reps instead of scaling" | "Micromanaging instead of scaling" |
+| "Ready to Stop Babysitting and Start Scaling?" | "Ready to Empower Your Team and Scale?" |
+| "Built for Real Estate Wholesalers" | REMOVE — industry-agnostic |
+| "Built by a Wholesaler, for Wholesalers" | MOVE to RE industry page only |
+| "Corey & Pablo story" | MOVE to /about page |
+| All GHL-specific references | REMOVE — CRM-agnostic |
+
+**Tagline direction:** "Your team's AI-powered performance engine" / "Train better. Perform better. Close more." / "Empowering teams through training, accountability, and efficient operations."
+
+**Hero section must communicate the three pillars:**
+1. **Training** — AI coaching that makes every rep better
+2. **Accountability** — Grades, KPIs, leaderboards that drive performance
+3. **Efficient Operations** — One-click actions, smart task prioritization, AI that does the busywork
+
+**Login on the Landing Page:**
+
+Currently there is NO login option visible on the landing page. Nav only has section links. This must change:
+
+| Element | Location | Action |
+|---|---|---|
+| "Sign In" button | Top-right nav (desktop) + mobile menu | Links to `/login` |
+| "Get Started" / "Start Free Trial" button | Top-right nav (desktop), bold/primary | Links to `/signup` |
+| Login form (optional) | Below hero or sticky header | Email + password fields + Google button + "Sign Up" link |
+| Google OAuth button | Prominent on both login and signup | "Continue with Google" — standard OAuth flow |
+| Email + Password | Login and Signup | Both must work (currently signup is disabled — re-enable) |
+
+**Auth requirements:**
+- Google OAuth (primary, already works for existing users)
+- Email + password (works for login, signup currently blocked — must re-enable)
+- Password reset flow (exists and works)
+- Cloudflare Turnstile on signup (exists)
+- "Continue with Google" must be visually prominent — most users prefer it
+
+**Landing page sections (rebuilt):**
+
+| # | Section | Content |
+|---|---|---|
+| 1 | Nav | Logo + Features / How It Works / Pricing + **Sign In** + **Get Started** |
+| 2 | Hero | Empowerment headline, 3-pillar subtext, CTA: "Start Free Trial", trust badges |
+| 3 | Problem | "Your team is capable of more." — frame around untapped potential, not distrust |
+| 4 | How It Works | 3 steps: Connect CRM → AI grades & coaches → Team levels up |
+| 5 | Features | Tabs: AI Coaching, Smart Inventory, Gamification, KPI Tracking |
+| 6 | Social Proof | Metrics + testimonials (dynamic — pulled from DB, not hardcoded) |
+| 7 | Pricing | Plans from DB, toggle monthly/yearly, CTA per plan |
+| 8 | Integrations | "Works with your CRM" — CRM-agnostic icons (GHL, HubSpot, Salesforce planned) |
+| 9 | FAQ | Common questions (from DB or config, not hardcoded) |
+| 10 | Final CTA | "Empower Your Team Today" + Get Started button |
+| 11 | Footer | Product, Company, Legal links, social media |
+
+**Critical design rules for landing page:**
+- Zero hardcoded tenant content
+- Zero hardcoded industry content (except on industry-specific pages)
+- CRM logos shown but no "Built for [CRM]" messaging
+- All testimonials from DB (tenant-approved, with real names/companies)
+- Pricing from DB (`plans` table)
+- FAQ from config/DB
+
+### 5 Industry Landing Pages
+
+Each industry gets its own landing page with tailored copy, use cases, and examples. Same design template, different data.
+
+| # | Industry | Route | Priority | Status |
+|---|---|---|---|---|
+| 1 | Real Estate Wholesaling | `/industries/wholesaling` | **HIGHEST** — first and primary | Build first |
+| 2 | Solar Sales | `/industries/solar` | HIGH — large TAM, similar call structure | Build second |
+| 3 | Insurance Sales | `/industries/insurance` | MEDIUM — high volume call teams | Build third |
+| 4 | SaaS Sales | `/industries/saas` | MEDIUM — tech-savvy audience | Build fourth |
+| 5 | Home Services | `/industries/home-services` | MEDIUM — HVAC, roofing, etc. | Build fifth |
+
+**Each industry page contains:**
+
+| Section | What Changes Per Industry |
+|---|---|
+| Hero headline | Industry-specific empowerment message |
+| Problem statement | Industry-specific pain points |
+| Use cases | 3-4 scenarios specific to that industry |
+| Terminology | Uses industry terms (seller/homeowner/policyholder/prospect) |
+| Example scorecards | Mockup graded call with industry-relevant criteria |
+| Roles shown | Industry-typical team structure |
+| Testimonials | Industry-specific (when available, otherwise generic) |
+| CTA | "Built for [Industry] Teams" |
+
+**RE Wholesaling page (`/industries/wholesaling`):**
+- Hero: "Your wholesaling team is capable of closing 2x more deals."
+- Problem: "Lead managers dropping the ball on follow-ups. Acquisition managers winging offer calls. Dispo managers blasting buyers with no strategy."
+- Use cases: Lead qualification scoring, appointment-setting accountability, offer call coaching, dispo call optimization
+- Example: Graded acquisition call with Motivation Extraction, Price Discussion, Offer Setup criteria
+- Roles: Lead Manager, Acquisition Manager, Dispo Manager, Lead Generator
+- The "Built by a Wholesaler" story moves HERE, not on the main landing page
+
+**Template architecture:**
+```
+client/src/pages/landing/
+├── Landing.tsx              ← Main CRM/industry-agnostic landing
+├── IndustryLanding.tsx      ← Template component (receives industry config)
+├── industryConfigs/
+│   ├── wholesaling.ts       ← Copy, use cases, testimonials for RE wholesaling
+│   ├── solar.ts
+│   ├── insurance.ts
+│   ├── saas.ts
+│   └── homeServices.ts
+└── components/
+    ├── HeroSection.tsx
+    ├── ProblemSection.tsx
+    ├── HowItWorks.tsx
+    ├── FeatureTabs.tsx
+    ├── SocialProof.tsx
+    ├── PricingSection.tsx
+    ├── FAQSection.tsx
+    └── FooterSection.tsx
+```
+
+Each industry config is a pure data object — no JSX, no components. The template renders the data.
+
+---
+
+## 16. Gamification System
+
+### Current State (Audit)
+
+The gamification system is one of Gunner's strongest features. It has real depth. But it has hardcoded elements and unfinished logic that need fixing.
+
+**What exists and works:**
+- 28 badges across 5 categories (3 universal, 7 LM, 5 AM, 5 LG, 7 DM + 1 shared)
+- 3-tier badge progression (Bronze → Silver → Gold)
+- XP system (10 base per call + grade bonus: A=+50, B=+30, C=+15, D=+5, F=+0)
+- 25-level progression (Rookie → Hall of Fame, 0 → 350,000 XP)
+- Hot streak (consecutive C+ grades) and consistency streak (consecutive weekdays with calls)
+- Weekend handling (skipped in CST)
+- Score leaderboard (average grade) and XP leaderboard
+- Profile page with badges, streaks, progress bars
+- Team page sorted by XP
+
+**What's broken / not implemented:**
+- `consistency_days` badge criteria (Consistency King) — code says "handled by other processes" but NO process exists
+- `weekly_volume` badge criteria (Volume Dialer, Cold Call Warrior, Deal Machine) — same, no implementation
+- `deals` badge criteria (Closer badge for AM) — no implementation
+- `IMPROVEMENT` XP (+20 for 2+ letter grade improvement) — defined but never awarded
+- Dispo Manager badges missing from `BADGE_ICON_URLS` (no custom icons)
+- Gamification leaderboard doesn't return full team member data (names/avatars broken in XP mode)
+- Badge evaluation only runs on call view, not on call grade completion
+
+### What Must Move to Playbooks
+
+| Hardcoded Item | Moves To |
+|---|---|
+| Badge definitions (28 badges, names, descriptions, icons, criteria, tier thresholds) | Industry Playbook (defaults) + Tenant Playbook (overrides) |
+| XP values (10 base, +50/+30/+15/+5/+0 grade bonus, +25 badge, +20 improvement) | Industry Playbook (defaults) + Tenant Playbook (overrides) |
+| Level thresholds (25 levels, 0→350K XP) | Software Playbook (universal) |
+| Level titles (Rookie, Starter, Playmaker... Hall of Fame) | Industry Playbook (defaults) + Tenant Playbook (custom titles) |
+| Role → badge category mapping | Tenant Playbook (roles → their badge sets) |
+| Rubric criteria names in badge criteria (`"Motivation Extraction"`, `"Offer Setup"`) | Industry Playbook (badges reference rubric criteria by ID, not name) |
+
+### Enhancements for Premium
+
+| Enhancement | Description | Priority |
+|---|---|---|
+| **Fix unimplemented badges** | Consistency King (use streak data), Volume badges (weekly cron job), Closer (sync from CRM deals) | HIGH |
+| **Award improvement XP** | +20 XP when grade improves 2+ letters vs previous call | HIGH |
+| **Fix gamification leaderboard** | Return full team member data so XP leaderboard shows names/avatars | HIGH |
+| **Dispo badge icons** | Add custom icons for all 7 dispo badges | MEDIUM |
+| **Daily/weekly challenges** | "Grade 5 calls today for +100 bonus XP", "Maintain hot streak all week for +500" | MEDIUM |
+| **Badge rarity visuals** | Bronze/Silver/Gold with distinct colors, glow effects, particle animation on earn | MEDIUM |
+| **XP history page** | Timeline view of all XP transactions with reasons | LOW |
+| **Gamification leaderboard date ranges** | Filter by today/week/month/ytd/all (currently all-time only) | LOW |
+| **Streak freeze** | 1 free missed day per month, purchasable with XP or feature of higher plan | LOW |
+| **Custom tenant badges** | Tenants can create their own badges via Playbook Editor | FUTURE |
+| **Team challenges** | Team-wide goals: "Team averages B+ this week → everyone gets 200 XP" | FUTURE |
+| **Achievement notifications** | Push/in-app notification + confetti when badge earned or level up | MEDIUM |
+
+---
+
+## 17. Design Standards
+
+### The Standard: Billion-Dollar Build
+
+Every pixel must feel intentional. No wobbly buttons, no off-balance page transitions, no janky hover states, no layout shifts. The bar is Linear, Notion, Stripe, Vercel — companies that treat their UI as a competitive advantage.
+
+### Design Principles
+
+| Principle | What It Means | What It Kills |
+|---|---|---|
+| **Firm** | Every element has weight. Buttons don't bounce. Panels don't wobble. Transitions are smooth and purposeful. | Springy animations, jittery hover states, layout shifts on load |
+| **Precise** | Pixel-perfect alignment. Consistent spacing. Typography hierarchy is clear and unbreakable. | Misaligned text, inconsistent padding, orphaned headings |
+| **Quiet** | Let content breathe. No visual noise. Only animate what needs attention. | Gratuitous gradients, excessive shadows, decorative elements |
+| **Fast** | Every interaction responds in <100ms. Pages load in <1s. No loading spinners that last >2s. | Skeleton screens that flash, slow transitions, heavy bundles |
+| **Dense where it matters** | Data-heavy pages (Inventory, KPIs, Calls) show maximum info in minimum space. | Oversized cards, excessive whitespace on data pages |
+
+### Specific UI Rules
+
+**Typography:**
+- Satoshi (primary body), Inter (secondary/labels), JetBrains Mono (code/numbers), Orbitron (gamification/scores)
+- Strict type scale: 5 sizes max (xs, sm, base, lg, xl). No arbitrary sizes.
+- Line heights locked: body=1.5, headings=1.2, dense data=1.3
+
+**Color:**
+- Dark mode primary (already implemented via design tokens)
+- Light mode as secondary (must be tested and polished, not an afterthought)
+- Accent: `#c41e3a` (Gunner red) for primary actions, success green, warning amber, error red
+- Grade colors: A=emerald, B=blue, C=amber, D=orange, F=red — consistent everywhere
+- Neutral scale: 10 shades, not 20. Simplify the palette.
+
+**Spacing:**
+- 4px base unit. All spacing is multiples of 4: 4, 8, 12, 16, 24, 32, 48, 64
+- No arbitrary margins. If it doesn't align to the grid, it's wrong.
+
+**Motion:**
+- Page transitions: 200ms ease-out slide (no bounce, no spring)
+- Micro-interactions: 150ms ease (hover, focus, toggle)
+- Loading states: skeleton shimmer (already exists as `g-shimmer`), never spinners for <1s
+- Celebrations: confetti on badge/level up only (already have canvas-confetti)
+- NO spring physics, NO elastic, NO overshoot
+
+**Components:**
+- All 54 shadcn components already exist — use them. Don't create custom UI when shadcn covers it.
+- Button variants: `default`, `destructive`, `outline`, `ghost`, `link`. That's it.
+- Card: consistent border-radius (use `--radius` token), consistent padding
+- Tables: zebra-striped for dense data, hover row highlight, sticky headers
+- Forms: label above input, error below, red border on error. No floating labels.
+
+**Page Layout:**
+- Sidebar navigation (already exists via shadcn `sidebar`)
+- Content area: max-width 1440px, centered
+- Panels: consistent border, consistent shadow level
+- Mobile: sidebar collapses to hamburger. Content is full-width. No horizontal scroll.
+
+**Loading:**
+- Skeleton screens for initial page load (already using `skeleton` component)
+- Optimistic updates for actions (show success immediately, rollback on failure)
+- Streaming text for AI responses (already implemented)
+- No empty states without guidance ("No calls yet. Connect your CRM to get started.")
+
+### Anti-Patterns (Banned)
+
+| Banned | Why | Replace With |
+|---|---|---|
+| `window.prompt()` / `window.confirm()` | Breaks immersion, ugly, inconsistent | ActionConfirmDialog |
+| Toast-only feedback for actions | User misses it, no detail | ActionResultCard with details |
+| Inline `style={}` props | Breaks consistency | Tailwind classes only |
+| Arbitrary z-index values | Stacking conflicts | z-index scale: 10, 20, 30, 40, 50 |
+| CSS `!important` | Fragile overrides | Properly scoped selectors |
+| Spinner for <1s loads | Flickering, feels slow | Skeleton or instant |
+| Layout shift on data load | Janky, unprofessional | Fixed height containers, skeleton |
+
+---
+
+## 18. Tech Stack Confirmation
+
+### Current Stack — CONFIRMED Ready for Premium Rebuild
+
+The existing tech stack is modern and capable. No framework migration needed.
+
+**Frontend (Confirmed):**
+
+| Tool | Version | Status |
+|---|---|---|
+| React | 19.2.1 | Latest stable |
+| TypeScript | 5.9.3 | Latest |
+| Vite | 7.1.7 | Latest, fast builds |
+| Tailwind CSS | 4.1.14 | Latest (v4 with CSS-first config) |
+| shadcn/ui (Radix) | 54 components | Full component library ready |
+| Framer Motion | 12.23.22 | Animation (use sparingly per design rules) |
+| Recharts | 2.15.2 | Charts/data viz |
+| React Hook Form + Zod | 7.64.0 / 4.1.12 | Form validation |
+| TanStack React Query | 5.90.2 | Server state management |
+| tRPC Client | 11.6.0 | Type-safe API calls |
+| Wouter | 3.3.5 | Lightweight routing |
+| Lucide React | 0.453.0 | Icons |
+| Sonner | 2.0.7 | Toast notifications |
+| cmdk | 1.1.1 | Command palette |
+
+**Backend (Confirmed):**
+
+| Tool | Version | Status |
+|---|---|---|
+| Node.js + Express | 4.21.2 | Stable |
+| tRPC Server | 11.6.0 | Type-safe API |
+| Drizzle ORM | 0.44.5 | Modern, type-safe ORM |
+| PostgreSQL (pg) | 8.13.1 | Production DB |
+| Zod | 4.1.12 | Schema validation |
+| Jose + jsonwebtoken | 6.1.0 / 9.0.3 | JWT auth |
+| bcrypt | 6.0.0 | Password hashing |
+| p-queue | 9.1.0 | Concurrency control |
+| nanoid | 5.1.5 | ID generation |
+
+**AI/ML (Confirmed):**
+
+| Tool | Version | Status |
+|---|---|---|
+| OpenAI API | via direct HTTP | GPT-4 grading + coaching |
+| Whisper API | via OpenAI | Transcription |
+| LangSmith | 0.5.9 | AI tracing/observability |
+
+**Services (Confirmed):**
+
+| Service | Purpose | Status |
+|---|---|---|
+| PostgreSQL (Railway) | Primary database | Active |
+| Supabase Storage | File storage (recordings) | Active |
+| Stripe | Payments/subscriptions | Active |
+| Resend | Transactional email | Active |
+| Loops | Drip email sequences | Active |
+| Sentry (backend) | Error tracking | Active |
+| PostHog (backend) | Analytics | Active |
+| Cloudflare Turnstile | CAPTCHA/bot protection | Active |
+| Google OAuth | Authentication | Active |
+
+**Dev Tooling (Confirmed):**
+
+| Tool | Version | Status |
+|---|---|---|
+| Vitest | 2.1.4 | Server-side tests (70+ test files) |
+| Prettier | 3.6.2 | Code formatting |
+| Drizzle Kit | 0.31.4 | DB migrations |
+| esbuild | 0.25.0 | Fast bundling |
+| tsx | 4.19.1 | TypeScript execution |
+
+### What's Missing (Must Add)
+
+| Gap | Tool to Add | Why |
+|---|---|---|
+| **Linting** | ESLint + `eslint-config-prettier` | Catch bugs, enforce patterns, prevent regressions |
+| **Frontend error tracking** | `@sentry/react` | Currently only backend errors are tracked — frontend crashes are invisible |
+| **Frontend analytics** | PostHog JS client | Track user behavior for playbook intelligence (user_events) |
+| **Frontend testing** | `@testing-library/react` | Critical flow regression protection |
+| **E2E testing** | Playwright | Full user journey tests (login → grade → action → verify) |
+| **Accessibility** | `eslint-plugin-jsx-a11y` | Catch a11y issues at lint time |
+| **Security headers** | Helmet | XSS, clickjacking, MIME sniffing protection |
+| **Rate limiting** | `express-rate-limit` | Login + API protection |
+
+### What to Remove
+
+| Package | Why |
+|---|---|
+| `@aws-sdk/client-s3` | Not used — storage is Supabase |
+| `@aws-sdk/s3-request-presigner` | Not used — same |
+| `add` (devDep) | Likely accidental install |
+
+---
+
+## 19. Codebase Organization
+
+### Current Problem
+
+`server/routers.ts` is a 9,059-line monolith with ~100 tRPC procedures. `server/opportunityDetection.ts` is 5,381 lines. Files mix concerns. Finding anything requires full-text search.
+
+### Target Structure
+
+```
+gunner/
+├── client/
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── landing/              ← Landing + industry pages
+│   │   │   │   ├── Landing.tsx
+│   │   │   │   ├── IndustryLanding.tsx
+│   │   │   │   └── industryConfigs/
+│   │   │   ├── Today.tsx
+│   │   │   ├── CallInbox.tsx
+│   │   │   ├── Inventory.tsx
+│   │   │   ├── KpiPage.tsx
+│   │   │   ├── Team.tsx
+│   │   │   ├── Training.tsx
+│   │   │   ├── Settings.tsx
+│   │   │   ├── Playbook.tsx
+│   │   │   ├── Profile.tsx
+│   │   │   ├── Login.tsx
+│   │   │   └── Admin.tsx
+│   │   ├── components/
+│   │   │   ├── ui/                   ← 54 shadcn components (keep as-is)
+│   │   │   ├── actions/              ← Universal action system
+│   │   │   │   ├── ActionConfirmDialog.tsx
+│   │   │   │   ├── SenderPicker.tsx
+│   │   │   │   ├── ContactDisplay.tsx
+│   │   │   │   └── ActionResultCard.tsx
+│   │   │   ├── layout/               ← App shell, sidebar, headers
+│   │   │   │   ├── DashboardLayout.tsx
+│   │   │   │   ├── Sidebar.tsx
+│   │   │   │   └── PageHeader.tsx
+│   │   │   ├── ai/                   ← AI chat interface
+│   │   │   │   ├── AiChat.tsx
+│   │   │   │   └── AiSuggestionCard.tsx
+│   │   │   ├── inventory/            ← Inventory-specific components
+│   │   │   ├── calls/                ← Call-specific components
+│   │   │   ├── gamification/         ← Badge, streak, XP components
+│   │   │   └── shared/               ← SearchableDropdown, DataTable, etc.
+│   │   ├── hooks/
+│   │   │   ├── useTenantConfig.ts    ← All labels from playbook (used everywhere)
+│   │   │   ├── useAi.ts             ← Unified AI hook
+│   │   │   ├── useActions.ts        ← Universal action hook
+│   │   │   └── usePlaybook.ts       ← Playbook data access
+│   │   ├── lib/
+│   │   │   ├── trpc.ts              ← tRPC client setup
+│   │   │   ├── utils.ts             ← Shared utilities
+│   │   │   └── constants.ts         ← App-wide constants (z-index scale, etc.)
+│   │   └── styles/
+│   │       └── index.css            ← Tailwind entry + design tokens
+│   └── index.html
+│
+├── server/
+│   ├── _core/                        ← Core infrastructure (keep)
+│   │   ├── db.ts                     ← Database connection
+│   │   ├── env.ts                    ← Environment variables
+│   │   ├── context.ts               ← tRPC context + auth
+│   │   ├── index.ts                 ← Server startup
+│   │   ├── analytics.ts             ← PostHog tracking
+│   │   └── llm.ts                   ← OpenAI client
+│   │
+│   ├── routers/                      ← tRPC routers (SPLIT from routers.ts)
+│   │   ├── index.ts                 ← Merges all routers
+│   │   ├── calls.ts                 ← Call-related endpoints
+│   │   ├── inventory.ts             ← Inventory/property endpoints
+│   │   ├── team.ts                  ← Team member endpoints
+│   │   ├── gamification.ts          ← XP, badges, leaderboard
+│   │   ├── kpi.ts                   ← KPI endpoints
+│   │   ├── training.ts              ← Training + roleplay
+│   │   ├── ai.ts                    ← Unified AI endpoint
+│   │   ├── playbook.ts              ← Playbook CRUD
+│   │   ├── actions.ts               ← Universal CRM action execution
+│   │   ├── auth.ts                  ← Auth endpoints
+│   │   └── admin.ts                 ← Admin-only endpoints
+│   │
+│   ├── services/                     ← Business logic (pure functions)
+│   │   ├── grading.ts               ← AI grading pipeline
+│   │   ├── gamification.ts          ← Badge evaluation, XP, streaks
+│   │   ├── coachStream.ts           ← AI coaching (streaming)
+│   │   ├── playbooks.ts             ← Playbook assembly + resolution
+│   │   ├── intelligence.ts          ← Learning loop jobs
+│   │   └── opportunityDetection.ts  ← Missed opportunity analysis
+│   │
+│   ├── crm/                          ← CRM abstraction layer
+│   │   ├── adapter.ts               ← CRM adapter interface
+│   │   ├── ghl/                     ← GHL-specific implementation
+│   │   │   ├── ghlAdapter.ts
+│   │   │   ├── ghlOAuth.ts
+│   │   │   ├── ghlSync.ts
+│   │   │   ├── ghlActions.ts
+│   │   │   └── ghlWebhook.ts
+│   │   └── hubspot/                 ← Future: HubSpot adapter
+│   │       └── hubspotAdapter.ts
+│   │
+│   ├── algorithms/                   ← Sorting algorithms with config objects
+│   │   ├── inventorySort.ts
+│   │   ├── buyerMatch.ts
+│   │   ├── taskSort.ts
+│   │   └── index.ts
+│   │
+│   ├── jobs/                         ← Scheduled/background jobs
+│   │   ├── polling.ts               ← CRM polling (calls, tasks, appointments)
+│   │   ├── reconciliation.ts        ← Daily/weekly data reconciliation
+│   │   ├── intelligenceJobs.ts      ← User/tenant/industry insight generation
+│   │   └── cleanup.ts              ← Stale data, expired sessions
+│   │
+│   └── middleware/                    ← Express middleware
+│       ├── auth.ts                  ← JWT verification
+│       ├── rateLimit.ts             ← Rate limiting rules
+│       ├── security.ts              ← Helmet, CORS, headers
+│       └── tenantScope.ts           ← Universal tenantId enforcement
+│
+├── shared/                           ← Shared types (frontend + backend)
+│   ├── playbooks.ts                 ← Playbook type definitions
+│   ├── types.ts                     ← Shared interfaces
+│   └── constants.ts                 ← Shared constants
+│
+├── drizzle/
+│   ├── schema.ts                    ← All DB tables (source of truth)
+│   └── migrations/                  ← Generated migrations
+│
+├── playbook-seeds/                   ← Industry playbook seed data
+│   ├── wholesaling.json
+│   ├── solar.json
+│   ├── insurance.json
+│   ├── saas.json
+│   └── homeServices.json
+│
+├── tests/
+│   ├── server/                      ← Server unit tests (70+ existing)
+│   ├── client/                      ← Frontend component tests (new)
+│   └── e2e/                         ← Playwright E2E tests (new)
+│
+└── config files
+    ├── package.json
+    ├── tsconfig.json
+    ├── vite.config.ts
+    ├── vitest.config.ts
+    ├── .prettierrc
+    ├── eslint.config.js             ← NEW
+    ├── playwright.config.ts         ← NEW
+    └── REBUILD-PLAN.md              ← This file
+```
+
+### Router Split Plan
+
+The 9,059-line `server/routers.ts` splits into ~12 focused routers:
+
+| New Router | Approx Procedures | Source |
+|---|---|---|
+| `routers/calls.ts` | ~15 | Call CRUD, grading, inbox |
+| `routers/inventory.ts` | ~12 | Property CRUD, stages, buyers |
+| `routers/team.ts` | ~8 | Team members, invites, roles |
+| `routers/gamification.ts` | ~8 | XP, badges, streaks, leaderboard |
+| `routers/kpi.ts` | ~6 | KPI data entry, dashboards |
+| `routers/training.ts` | ~8 | Materials, roleplay, sessions |
+| `routers/ai.ts` | ~3 | Unified stream, suggestions |
+| `routers/playbook.ts` | ~6 | Playbook CRUD, overrides |
+| `routers/actions.ts` | ~10 | All CRM write-back actions |
+| `routers/auth.ts` | ~5 | Login, signup, OAuth, session |
+| `routers/admin.ts` | ~8 | Super admin, tenant management |
+| `routers/settings.ts` | ~6 | Workspace config, CRM setup |
+
+Each router file: <500 lines. Import business logic from `services/`. Keep routers thin.
+
+---
+
+## 20. Tools, APIs & Services Needed
+
+### APIs to Integrate (Build Phase)
+
+| API / Service | Purpose | Priority | Notes |
+|---|---|---|---|
+| **OpenAI GPT-4** | Grading, coaching, playbook AI editor, content generation | HAVE | Already integrated |
+| **OpenAI Whisper** | Call transcription | HAVE | Already integrated |
+| **GoHighLevel API** | CRM sync (calls, contacts, opportunities, tasks, SMS) | HAVE | Already integrated |
+| **Stripe** | Billing, subscriptions, plan management | HAVE | Already integrated |
+| **Resend** | Transactional email (invites, resets, reports) | HAVE | Already integrated |
+| **Supabase Storage** | Call recording storage | HAVE | Already integrated |
+| **Google OAuth** | Authentication | HAVE | Already integrated |
+| **Sentry** | Error tracking (backend + frontend) | PARTIAL | Need `@sentry/react` for frontend |
+| **PostHog** | Analytics + user behavior tracking | PARTIAL | Need JS client for frontend events |
+| **Cloudflare Turnstile** | Bot protection on signup | HAVE | Already integrated |
+| **HubSpot API** | Second CRM adapter | NEW | Phase 5+ (after GHL is solid) |
+| **Salesforce API** | Third CRM adapter | FUTURE | After HubSpot proves the adapter pattern |
+| **Twilio** | Direct SMS (bypass CRM) | EVALUATE | If CRM SMS proves unreliable |
+| **Zillow/ATTOM API** | Property data enrichment (RE industry) | EVALUATE | For Industry Playbook intelligence |
+| **Google Maps API** | Market visualization, address autocomplete | EVALUATE | Types already in devDeps |
+| **BatchDialer API** | Dialer integration | HAVE | Already integrated (key exists) |
+| **BatchLeads API** | Lead data enrichment | HAVE | Already integrated (key exists) |
+
+### Internal Tools to Build
+
+| Tool | Purpose | When |
+|---|---|---|
+| **Playbook Seeder CLI** | `npm run playbook:seed wholesaling` — seeds industry playbook from JSON | Phase 1 |
+| **Migration Health Check** | Script that verifies all endpoints have tenantId enforcement | Phase 0 |
+| **Sync Health Monitor** | Dashboard showing webhook/polling/reconciliation status | Phase 1 |
+| **AI Cost Tracker** | Track OpenAI spend per tenant per day (for rate limiting + billing) | Phase 1 |
+| **Playbook Diff Tool** | Show what changed between playbook versions | Phase 2 |
+
+### External References & Inspirations
+
+| Site/Product | What to Study | Aspect |
+|---|---|---|
+| **Linear** (linear.app) | Keyboard shortcuts, command palette, sidebar, transitions | Navigation + Speed |
+| **Notion** (notion.so) | Block editor, clean typography, dark mode | Content + Flexibility |
+| **Stripe Dashboard** (dashboard.stripe.com) | Data density, tables, chart styling, dark mode | Data Presentation |
+| **Vercel** (vercel.com) | Landing page, deployment UI, status indicators | Design + Landing |
+| **Attio** (attio.com) | CRM UI, pipeline views, relationship mapping | CRM Patterns |
+| **Close** (close.com) | Sales CRM, inbox, calling, sequences | Sales Workflow |
+| **Gong** (gong.io) | Call intelligence, coaching, deal boards | Call Coaching |
+| **Chorus.ai** (chorus.ai) | Conversation intelligence, insights | AI Coaching |
+
+---
+
+## 21. Enhancement List — Premium Parity
+
+Everything needed to put functionality and visuals on par with software selling for billions. Grouped by category.
+
+### UI/UX Enhancements
+
+| # | Enhancement | Current State | Target State | Priority |
+|---|---|---|---|---|
+| 1 | **Command palette (⌘K)** | cmdk installed but not wired up | Global search: pages, contacts, properties, actions, settings | HIGH |
+| 2 | **Keyboard shortcuts** | None | `g` then `t` = Today, `g` then `c` = Calls, `g` then `i` = Inventory, etc. | MEDIUM |
+| 3 | **Page transitions** | Instant swap (flash) | 200ms ease-out crossfade, shared layout animation | HIGH |
+| 4 | **Empty states** | Some pages show blank white | Every list/table has designed empty state with CTA | HIGH |
+| 5 | **Error boundaries** | None — React crash = white screen | Graceful error UI per section ("Something went wrong. Retry.") | HIGH |
+| 6 | **Responsive tables** | Some tables break on small screens | All tables scroll horizontally or collapse to card view on mobile | MEDIUM |
+| 7 | **Dark mode polish** | Mostly done, some inconsistencies | Full audit — every component, every state, both modes perfect | MEDIUM |
+| 8 | **Loading skeleton consistency** | Mixed (some spinners, some skeleton, some blank) | All initial loads use skeleton. All actions use optimistic updates. | HIGH |
+| 9 | **Notification system** | None | In-app notifications: badge earned, task due, call graded, suggestion ready | MEDIUM |
+| 10 | **Breadcrumbs** | None | Show path on nested views (Inventory → Property → Buyers) | LOW |
+
+### Data & Intelligence Enhancements
+
+| # | Enhancement | Current State | Target State | Priority |
+|---|---|---|---|---|
+| 11 | **Real-time updates** | Polling on page focus | WebSocket or SSE for live data (new call, SMS, task completion) | MEDIUM |
+| 12 | **Advanced search** | Basic text search on some pages | Full-text search across calls, contacts, properties, notes, transcripts | HIGH |
+| 13 | **Export/reporting** | jsPDF exists but limited | Export any table to CSV. Weekly PDF report auto-emailed to admin. | MEDIUM |
+| 14 | **Audit log** | Partial (some actions logged) | Complete audit trail: who did what, when, on which entity. Viewable in admin. | HIGH |
+| 15 | **Data visualization upgrade** | Basic Recharts | Funnel charts, heat maps (call volume by hour), trend sparklines in tables | MEDIUM |
+
+### AI Enhancements
+
+| # | Enhancement | Current State | Target State | Priority |
+|---|---|---|---|---|
+| 16 | **Proactive suggestions** | None (reactive only) | AI suggests next actions based on patterns, shown as cards | HIGH (Phase 4) |
+| 17 | **Call summary auto-generation** | Exists but basic | One-paragraph executive summary + key moments with timestamps | MEDIUM |
+| 18 | **AI-generated training content** | Manual upload only | AI writes training modules based on team's weak areas | MEDIUM |
+| 19 | **Sentiment analysis** | Not implemented | Real-time sentiment tracking during call playback | LOW |
+| 20 | **Competitive intelligence** | None | AI researches competitors and adds to Industry Playbook | FUTURE |
+
+### Gamification Enhancements (see Section 16 for full detail)
+
+| # | Enhancement | Priority |
+|---|---|---|
+| 21 | Fix 4 unimplemented badge criteria | HIGH |
+| 22 | Award improvement XP | HIGH |
+| 23 | Daily/weekly challenges | MEDIUM |
+| 24 | Badge rarity visuals with animation | MEDIUM |
+| 25 | Achievement notifications (confetti + toast) | MEDIUM |
+| 26 | XP history timeline | LOW |
+| 27 | Custom tenant badges | FUTURE |
+| 28 | Team challenges | FUTURE |
+
+### Action & Workflow Enhancements
+
+| # | Enhancement | Current State | Target State | Priority |
+|---|---|---|---|---|
+| 29 | **Bulk actions** | "Push All" with no warning | Select multiple → bulk action with count + warning + confirm | HIGH |
+| 30 | **Action history** | Partial | Full action history per contact: every SMS, note, task, stage change, by whom, when | HIGH |
+| 31 | **Undo support** | None | 5-second undo window after non-destructive actions (note, task) | MEDIUM |
+| 32 | **Action templates** | None | Saved SMS/note templates per role (from Tenant Playbook) | MEDIUM |
+| 33 | **Workflow builder** | None (uses CRM workflows) | Visual sequence builder: trigger → condition → action | FUTURE |
+
+### Performance & Reliability Enhancements
+
+| # | Enhancement | Current State | Target State | Priority |
+|---|---|---|---|---|
+| 34 | **CDN for static assets** | Railway serves everything | Cloudflare CDN for JS/CSS/images | MEDIUM |
+| 35 | **Database query optimization** | No query analysis | Identify slow queries, add indexes, optimize N+1 patterns | HIGH |
+| 36 | **Bundle size optimization** | No analysis | Code-split per route, lazy load heavy pages (Training, KPIs) | MEDIUM |
+| 37 | **API response caching** | No caching layer | Cache playbook data, team members, frequently-read data (5-min TTL) | MEDIUM |
+| 38 | **Health check endpoint** | None | `GET /health` returning DB, CRM, storage status — for monitoring | HIGH |
+| 39 | **Graceful degradation** | CRM disconnect = broken UI | CRM disconnected: grading, training, gamification still work. Actions show "CRM offline" | HIGH |
+
+### Security & Compliance Enhancements
+
+| # | Enhancement | Current State | Target State | Priority |
+|---|---|---|---|---|
+| 40 | **SOC 2 readiness** | Not started | Audit logging, access controls, encryption at rest, data retention policies | FUTURE |
+| 41 | **RBAC (Role-Based Access Control)** | Basic (admin vs member) | Granular: admin, manager, member with per-feature permissions | MEDIUM |
+| 42 | **API key management** | No external API | Tenant API keys for external integrations (webhooks out, data export) | LOW |
+| 43 | **Session management** | JWT only, no revocation | Session list in profile, "Sign out everywhere", revoke on password change | MEDIUM |
+| 44 | **2FA** | None | TOTP 2FA optional for admin accounts | LOW |
+
+---
+
+## 22. Build Phases
+
+> Updated to reflect new sections (Landing Pages, Gamification, Design, Organization).
 
 ### Phase 0: Critical Security Fixes + Code Cleanup
 
@@ -957,10 +1627,24 @@ These features are well-built and must survive the rebuild. They migrate into pl
 - Consolidate GHL fetch patterns (eliminate 3 different ghlFetch implementations)
 - Start opportunity polling (code exists, never started)
 
-### Phase 1: Software Playbook Layer (The Platform Shell)
+### Phase 1: Software Playbook Layer + Codebase Restructure
 
-Build the shell. Pages render from playbook data. No hardcoded labels anywhere.
+Build the shell. Pages render from playbook data. No hardcoded labels anywhere. Restructure codebase for maintainability.
 
+**Codebase organization (do first):**
+- Split `server/routers.ts` (9,059 lines) → 12 focused router files in `server/routers/`
+- Break `server/opportunityDetection.ts` (5,381 lines) → smaller service modules
+- Create `server/crm/` adapter layer with GHL behind interface
+- Create `server/algorithms/` with config-object pattern
+- Create `server/jobs/` for scheduled tasks
+- Create `server/middleware/` for auth, rate limiting, security
+- Add ESLint + `eslint-config-prettier`
+- Add `@sentry/react` for frontend error tracking
+- Add Helmet + CORS + `express-rate-limit`
+- Remove unused `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`
+- Add `GET /health` endpoint
+
+**Platform shell:**
 - Playbook data model (DB tables / JSON structure for all 4 layers)
 - `useTenantConfig` hook reads ALL labels from playbook API (used on EVERY page)
 - 7 page shells (Today, Calls, Inventory, KPIs, Team, Training, Settings)
@@ -972,11 +1656,13 @@ Build the shell. Pages render from playbook data. No hardcoded labels anywhere.
 - `user_events` + `ai_suggestions` tables (start data collection)
 - `playbook_insights` + `playbook_intelligence_log` tables
 - `/playbook` page (viewer + AI editor)
-- Helmet, CORS, universal tenantId enforcement
 - Webhook retry queue for incoming events
 - DB-based deduplication for webhooks
+- Command palette (⌘K) wired to cmdk
+- Error boundaries on every page section
+- Skeleton loading on every page
 
-After this phase: site works but everything is "Asset", "Contact", "Stage 1". Functional but generic.
+After this phase: site works but everything is "Asset", "Contact", "Stage 1". Functional but generic. Codebase is clean, organized, maintainable.
 
 ### Phase 2: Industry Playbook Layer (RE Wholesaling)
 
@@ -1023,12 +1709,36 @@ After this phase: site is NAH's Gunner. Their stages, markets, team, rules. Same
 - Wire existing unused data into AI context (past actions, XP/badges always loaded, full performance profile)
 - Proactive suggestions (V2 AI — suggest without being asked)
 
-### Phase 5: Polish + Premium UI
+### Phase 5: Landing Pages + Gamification + Premium Polish
 
+**Landing pages:**
+- Rebuild main landing page (empowerment messaging, login in nav, CRM-agnostic)
+- Build industry page template (`IndustryLanding.tsx`)
+- Create RE Wholesaling industry page (`/industries/wholesaling`) — FIRST
+- Create 4 additional industry pages (solar, insurance, SaaS, home services)
+- Re-enable signup (email + Google OAuth)
+- Testimonials from DB (not hardcoded)
+- Pricing from DB plans table
+
+**Gamification fixes:**
+- Implement Consistency King badge (consistency_days criteria)
+- Implement Volume badges (weekly cron job for weekly_volume)
+- Implement Closer badge (sync from CRM deals)
+- Award improvement XP (+20 for 2+ letter grade jump)
+- Fix gamification leaderboard (return full team member data)
+- Add Dispo Manager badge icons
+- Move all badge/XP/level definitions to playbooks
+- Add achievement notifications (confetti + toast on badge/level up)
+
+**Premium UI pass:**
 - Premium UI pass on all 7 pages (Linear/Notion/Stripe quality)
+- Page transitions (200ms ease-out crossfade)
+- Dark mode full audit
+- Consistent loading skeletons everywhere
+- Empty states with guidance CTAs
+- Responsive table views
 - Self-onboarding CRM setup (one-button OAuth)
 - Reconciliation job (daily/weekly sync verification)
-- Landing page (industry-agnostic, no tenant content)
 - Full accessibility pass
 
 ### The Second Tenant Test
@@ -1037,7 +1747,7 @@ After the rebuild, onboarding a second RE wholesaling tenant should take <30 min
 
 ---
 
-## 16. Architecture Rules
+## 23. Architecture Rules
 
 ### Nothing Hardcoded. Ever.
 
