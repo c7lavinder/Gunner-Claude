@@ -26,6 +26,7 @@ export const ENV = {
 
   ghlClientId: optional("GHL_CLIENT_ID"),
   ghlClientSecret: optional("GHL_CLIENT_SECRET"),
+  ghlWebhookSecret: optional("GHL_WEBHOOK_SECRET"),
 
   resendApiKey: optional("RESEND_API_KEY"),
   resendFromEmail: optional("RESEND_FROM_EMAIL", "noreply@getgunner.ai"),

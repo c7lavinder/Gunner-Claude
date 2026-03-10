@@ -11,7 +11,7 @@ import {
   teamMembers,
   dispoProperties,
 } from "../../drizzle/schema";
-import { eq, and, sql, or, isNull } from "drizzle-orm";
+import { eq, and, sql, or, isNull, ne, gte } from "drizzle-orm";
 
 function scoreToGrade(score: number): string {
   if (score >= 90) return "A";
@@ -97,6 +97,38 @@ export async function processCallGamification(
     .innerJoin(calls, and(eq(calls.id, callGrades.callId), eq(calls.tenantId, tenantId)))
     .where(and(eq(calls.teamMemberId, teamMemberId), sql`cast(${callGrades.overallScore} as numeric) >= 90`));
 
+  // Weekly call volume (Sun-Sat)
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+  const [{ count: weekCalls }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(calls)
+    .where(and(eq(calls.teamMemberId, teamMemberId), eq(calls.tenantId, tenantId), eq(calls.status, "graded"), gte(calls.createdAt, weekStart)));
+
+  // Previous average score (all calls excluding current one)
+  const prevGrades = await db
+    .select({ score: callGrades.overallScore })
+    .from(callGrades)
+    .innerJoin(calls, and(eq(calls.id, callGrades.callId), eq(calls.tenantId, tenantId)))
+    .where(and(eq(calls.teamMemberId, teamMemberId), ne(callGrades.callId, callId)));
+  const prevAvg = prevGrades.length > 0
+    ? prevGrades.reduce((sum, g) => sum + Number(g.score ?? 0), 0) / prevGrades.length
+    : 0;
+  const improved = prevAvg > 0 && score > prevAvg;
+
+  // Award improvement XP if score beats previous average by 5+ points
+  if (improved && score - prevAvg >= 5) {
+    const xpBonus = score - prevAvg >= 15
+      ? SOFTWARE_PLAYBOOK.xpRewards.improvement * 2
+      : SOFTWARE_PLAYBOOK.xpRewards.improvement;
+    const xpNow = await db.select().from(userXp).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
+    if (xpNow[0]) {
+      await db.update(userXp).set({ totalXp: xpNow[0].totalXp + xpBonus, updatedAt: new Date() }).where(eq(userXp.id, xpNow[0].id));
+    }
+    await db.insert(xpTransactions).values({ tenantId, teamMemberId, amount: xpBonus, reason: `Improvement: +${(score - prevAvg).toFixed(0)}pts above avg`, callId });
+  }
+
   const checks: Array<[string, boolean]> = [
     ["first_call", totalCalls >= 1],
     ["first_90", score >= 90 && calls90Plus === 1],
@@ -115,7 +147,12 @@ export async function processCallGamification(
     ["calls_100", totalCalls >= 100],
     ["calls_250", totalCalls >= 250],
     ["calls_500", totalCalls >= 500],
-    ["improvement", score >= 80 && (streakRow?.hotStreakCurrent ?? 0) < 1],
+    // Weekly volume badges: number of calls graded this week
+    ["volume_dialer_10", weekCalls >= 10],
+    ["volume_warrior_25", weekCalls >= 25],
+    ["volume_machine_50", weekCalls >= 50],
+    // Improvement badge: score beats previous average by 5+ points
+    ["improvement", improved && score - prevAvg >= 5],
   ];
   const newBadges: string[] = [];
   for (const [code, met] of checks) {
@@ -258,5 +295,8 @@ export const DEFAULT_BADGE_DEFINITIONS = [
   { code: "closer_5", name: "Deal Maker", description: "Close 5 deals", icon: "🏆", category: "closer", tier: "silver", target: 5, criteriaType: "deals_closed" },
   { code: "closer_10", name: "Big League", description: "Close 10 deals", icon: "🏆", category: "closer", tier: "gold", target: 10, criteriaType: "deals_closed" },
   { code: "closer_25", name: "Top Producer", description: "Close 25 deals", icon: "🏆", category: "closer", tier: "platinum", target: 25, criteriaType: "deals_closed" },
-  { code: "improvement", name: "Rising Star", description: "Score higher than your average", icon: "📈", category: "improvement", tier: "bronze", target: 1, criteriaType: "improvement" },
+  { code: "improvement", name: "Rising Star", description: "Score 5+ points above your average", icon: "📈", category: "improvement", tier: "bronze", target: 1, criteriaType: "improvement" },
+  { code: "volume_dialer_10", name: "Volume Dialer", description: "Grade 10 calls in a single week", icon: "📞", category: "volume", tier: "bronze", target: 10, criteriaType: "weekly_volume" },
+  { code: "volume_warrior_25", name: "Cold Call Warrior", description: "Grade 25 calls in a single week", icon: "⚡", category: "volume", tier: "silver", target: 25, criteriaType: "weekly_volume" },
+  { code: "volume_machine_50", name: "Deal Machine", description: "Grade 50 calls in a single week", icon: "🏭", category: "volume", tier: "gold", target: 50, criteriaType: "weekly_volume" },
 ] as const;

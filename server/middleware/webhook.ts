@@ -1,7 +1,9 @@
 import { Router } from "express";
+import { createHmac } from "node:crypto";
 import { db } from "../_core/db";
 import { webhookEvents, webhookRetryQueue, calls, tenants } from "../../drizzle/schema";
 import { eq, and, lte, lt } from "drizzle-orm";
+import { ENV } from "../_core/env";
 import { gradeCall } from "../services/grading";
 import { transcribeAudio } from "../_core/llm";
 import { uploadFile } from "../_core/storage";
@@ -155,9 +157,34 @@ export function startRetryProcessor(): void {
 
 export const webhookRouter = Router();
 
+/**
+ * Verify GHL webhook signature using HMAC-SHA256.
+ * GHL signs the raw request body with the webhook secret and sends it in x-ghl-signature.
+ * If GHL_WEBHOOK_SECRET is not configured, verification is skipped (dev/test mode).
+ */
+function verifyGhlSignature(rawBody: Buffer, signature: string | undefined): boolean {
+  if (!ENV.ghlWebhookSecret) return true; // Skip verification if no secret configured
+  if (!signature) return false;
+  const expected = createHmac("sha256", ENV.ghlWebhookSecret)
+    .update(rawBody)
+    .digest("hex");
+  return signature === expected;
+}
+
 webhookRouter.post("/:provider", async (req, res) => {
-  res.status(200).json({ ok: true });
   const provider = req.params.provider as string;
+
+  // Verify GHL webhook signature before accepting the payload
+  if (provider === "ghl") {
+    const sig = req.headers["x-ghl-signature"] as string | undefined;
+    const rawBody = (req as { rawBody?: Buffer }).rawBody ?? Buffer.from(JSON.stringify(req.body));
+    if (!verifyGhlSignature(rawBody, sig)) {
+      res.status(401).json({ error: "Invalid webhook signature" });
+      return;
+    }
+  }
+
+  res.status(200).json({ ok: true });
   const body = req.body as Record<string, unknown>;
   const locationId = String(body.locationId ?? body.location_id ?? "").trim();
   const eventType = String(body.type ?? body.eventType ?? body.event ?? "unknown");

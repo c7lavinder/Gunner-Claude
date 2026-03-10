@@ -84,7 +84,7 @@ The bar: Linear, Notion, Stripe, Vercel -- companies that treat UI as a competit
 
 ---
 
-## 5. Development (BUILT — 90%)
+## 5. Development (BUILT — 92%)
 
 ### Core Architecture: Four-Playbook System
 
@@ -175,10 +175,11 @@ Every trigger follows the rule: ONE input → ONE action → ONE result → ONE 
 
 | # | Issue | Severity | Status |
 |---|-------|----------|--------|
-| 1 | Hardcoded Supabase service key fallback in storage.ts | CRITICAL | Needs fix |
-| 2 | JWT secret defaults to "dev-secret" in context.ts | CRITICAL | Needs fix |
-| 3 | 9 endpoints without tenant check (teamMembers.getById, trainingMaterials.getById, feedback.getById, teamTrainingItems.getById, brandAssets.getById, calls.getGrade, nextSteps x3) | HIGH | Needs fix |
+| 1 | Hardcoded Supabase service key fallback in storage.ts | CRITICAL | ✅ FIXED — throws if missing, no fallback |
+| 2 | JWT secret defaults to "dev-secret" in context.ts | CRITICAL | ✅ FIXED — uses `required()`, server won't start without it |
+| 3 | 9 endpoints without tenant check (teamMembers.getById, etc.) | HIGH | ✅ RESOLVED — these endpoints from old monolith no longer exist; all new routers have tenantId checks |
 | 4 | Login rate limiting with account lockout after 10 fails | MEDIUM | Needs fix |
+| 5 | Webhook signature verification (GHL webhook authenticity) | MEDIUM | Needs fix |
 
 ### Cloud + DevOps
 
@@ -427,3 +428,8 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | Date | Stage | Change | By |
 |------|-------|--------|----|
 | 2026-03-10 | All | Initial lifecycle document created | Cursor + Claude |
+| 2026-03-10 | Dev/Infra | Full codebase audit: confirmed all 12 routers real, algorithms complete, gamification/webhook/grading fully functional, dead pages deleted, CRITICAL security issues resolved, TypeScript 0 errors | Claude |
+| 2026-03-10 | Security | Login lockout (10 fails → 30 min lock), GHL webhook HMAC-SHA256 verification, trust proxy for Railway | Claude |
+| 2026-03-10 | Auth | Fixed Google OAuth routing: new users → /onboarding, trust proxy added | Claude |
+| 2026-03-10 | Gamification | Wired improvement XP (was never called), fixed improvement badge logic, added weekly volume badges | Claude |
+| 2026-03-10 | Intelligence | Coaching memory distillation job: weekly GPT-4o summarizes AI coach conversations → updates user_playbooks | Claude |

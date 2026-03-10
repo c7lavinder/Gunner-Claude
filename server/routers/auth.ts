@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, sql as rawSql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
@@ -42,10 +42,32 @@ export const authRouter = router({
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
       }
 
+      // Check if account is locked
+      if (user.lockedUntil && user.lockedUntil > new Date()) {
+        const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Account locked due to too many failed attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}.`,
+        });
+      }
+
       const valid = await authService.verifyPassword(input.password, user.passwordHash);
       if (!valid) {
+        // Increment failed attempts; lock after 10
+        const newCount = (user.failedLoginAttempts ?? 0) + 1;
+        const lockout = newCount >= 10 ? new Date(Date.now() + 30 * 60_000) : null;
+        await db
+          .update(users)
+          .set({ failedLoginAttempts: newCount, lockedUntil: lockout ?? undefined })
+          .where(eq(users.id, user.id));
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
       }
+
+      // Successful login: reset lockout counters
+      await db
+        .update(users)
+        .set({ failedLoginAttempts: 0, lockedUntil: rawSql`NULL`, lastSignedIn: new Date() })
+        .where(eq(users.id, user.id));
 
       const tenantId = user.tenantId ?? 0;
       const token = await authService.createJwtToken({

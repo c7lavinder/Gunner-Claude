@@ -35,6 +35,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
+// Trust Railway's reverse proxy so req.ip and secure cookies work correctly in production
+app.set("trust proxy", 1);
+
 app.use("/api/stripe/webhook", stripeWebhookRouter);
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());

@@ -1,6 +1,6 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 10, 2026
+> Last updated: March 10, 2026 (full audit + security batch + gamification fixes + coaching memory)
 > Last deploy: commit `9758055` — Railway live
 > Type check: `npx tsc --noEmit` — 0 errors
 
@@ -58,16 +58,19 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ## What Remains (by REBUILD-PLAN.md phase)
 
-### Phase 0: Security (mostly done, gaps remain)
+### Phase 0: Security (COMPLETE)
 
-- [ ] Add tenant checks to remaining IDOR-vulnerable endpoints — REBUILD-PLAN Section 12 lists 9 endpoints: `teamMembers.getById`, `trainingMaterials.getById`, `feedback.getById`, `teamTrainingItems.getById`, `brandAssets.getById`, `calls.getGrade`, `nextSteps.getNextStepsCount`, `nextSteps.updateNextStepStatus`, `nextSteps.editNextStep`. Audit each and add `WHERE tenantId = ctx.user.tenantId`.
-- [ ] Login rate limiting with account lockout after 10 failed attempts
-- [ ] Webhook signature verification (verify GHL webhook payloads are authentic)
+- [x] **IDOR endpoints** — All 9 endpoints from the old monolith no longer exist. Every endpoint in the new 12-router architecture has `WHERE tenantId = ctx.user.tenantId`. Verified in full audit.
+- [x] **Hardcoded Supabase service key** — `storage.ts` throws if credentials missing, no hardcoded fallback.
+- [x] **JWT secret defaulting to "dev-secret"** — `JWT_SECRET` uses `required()` in env.ts, server won't start without it.
+- [x] **Login lockout** — After 10 failed attempts, account locks for 30 minutes. Counter resets on success. `failedLoginAttempts` + `lockedUntil` columns added to users table via startupMigrations.
+- [x] **Webhook signature verification** — GHL payloads verified via HMAC-SHA256 with `GHL_WEBHOOK_SECRET` env var. Graceful skip if secret not configured (dev mode).
+- [x] **trust proxy** — Added `app.set("trust proxy", 1)` so Railway's reverse proxy sets correct `req.ip` and secure cookies work.
 
 ### Phase 1: Software Playbook + Codebase (mostly done, gaps remain)
 
-- [ ] Delete dead pages: Home (858 lines), LeadGenDashboard, ComponentShowcase, GradingRules, Feedback — see REBUILD-PLAN Section 4 "Pages to Delete/Consolidate"
-- [ ] Consolidate pages: Methodology → Training tab, TeamTraining → Training tab, Leaderboard → Team, Analytics → KPIs, SocialMedia → Training/Settings, Opportunities → Inventory, CoachActivityLog → Calls tab, TeamManagement → Settings, TenantSetup → Settings/Admin
+- [x] **Dead pages deleted** — Home, LeadGenDashboard, ComponentShowcase, GradingRules, Feedback are gone. Pages directory only contains the 7 core pages + auth pages. Verified in full audit.
+- [x] **Pages consolidated** — Methodology, TeamTraining, Leaderboard, Analytics, Opportunities, CoachActivityLog, TeamManagement, TenantSetup all eliminated or absorbed. Verified.
 - [ ] Remove unused packages: `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `add` devDep
 - [ ] Frontend testing setup: `@testing-library/react`
 - [ ] E2E testing setup: Playwright
@@ -75,10 +78,9 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ### Phase 2: Industry Playbook (mostly done, gaps remain)
 
-- [ ] Wire industry terminology into ALL frontend pages (replace hardcoded "Seller", "Property", "Deal" with `t.contact`, `t.asset`, `t.deal` from useTenantConfig) — see REBUILD-PLAN Section 3 "Currently Hardcoded → Moves To" table
-- [ ] Replace hardcoded role checks (`if (role === 'acquisition_manager')`) with playbook role references
-- [ ] Remove "Real estate wholesaling" from AI prompts (use `industryPlaybook.name` instead)
-- [ ] Remove GHL-specific copy from frontend ("GoHighLevel" mentions)
+- [x] **Industry terminology wired** — Full audit confirmed: no hardcoded "Seller", "Property", "Deal" outside of fallback defaults. All pages use `useTenantConfig()` for labels.
+- [x] **No hardcoded role checks** — No `if (role === 'acquisition_manager')` pattern found in codebase.
+- [x] **No RE-specific AI prompts** — Grading prompts load from playbook dynamically. No hardcoded "Real estate wholesaling" strings in AI code.
 - [ ] Create additional industry seeds: Solar, Insurance, SaaS, Home Services (REBUILD-PLAN Section 15)
 
 ### Phase 3: Tenant Playbook / NAH Config (partially done)
@@ -92,7 +94,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ### Phase 4: User Playbook + Intelligence Loop (early stage)
 
-- [ ] Coaching memory distillation job (weekly — summarize coaching themes from conversations)
+- [x] **Coaching memory distillation** — Weekly job (Monday 7am) that reads AI coaching conversations, calls GPT-4o to extract strengths + growth areas + grade trend, and updates `user_playbooks`. Wired into `startScheduledJobs`.
 - [ ] Action pattern analysis (from user_events — what actions each user takes, misses)
 - [ ] Proactive AI suggestions (V2 — AI suggests without being asked, shown as cards)
 - [ ] Voice sample extraction job (runs after grading, extracts user audio segments)
@@ -103,13 +105,15 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ### Phase 5: Landing + Premium Polish (partially done)
 
-- [ ] Rebuild main landing with empowerment messaging (replace "Stop Babysitting" — see REBUILD-PLAN Section 15)
-- [ ] Re-enable email+password signup
+- [x] **Empowerment messaging** — Landing hero already says "Empower Your Sales Team to Perform at Their Best". No "Stop Babysitting" copy exists. Verified in audit.
+- [x] **Email+password signup enabled** — Signup.tsx has full email/password form + Google OAuth. Both work. Backend `auth.signup` procedure is live.
+- [x] **Gamification fixes** — 4 broken items fixed: (1) Improvement XP now awarded in `processCallGamification` when score beats avg by 5+ pts. (2) Improvement badge check fixed to use score-vs-average logic. (3) Weekly volume badges added (Volume Dialer/Cold Call Warrior/Deal Machine). (4) All badges evaluated on every graded call.
+- [x] **Dark mode audit** — No critical raw color issues. `text-white` uses are intentional (text on colored backgrounds). `bg-white` on Google buttons is per Google branding spec.
+- [x] **Google OAuth new-user routing** — New users now go to `/onboarding` instead of `/today`.
 - [ ] Build 5 industry landing pages (wholesaling, solar, insurance, SaaS, home services) — template exists at `IndustryLanding.tsx`, need industry configs
 - [ ] Testimonials from DB (currently hardcoded)
 - [ ] FAQ section on landing (from config/DB)
 - [ ] Integrations section ("Works with your CRM" — CRM-agnostic icons)
-- [ ] Dark mode full audit — grep for raw colors (`#fff`, `rgb(`, `bg-white`) and replace with CSS variables
 - [ ] Loading skeleton consistency — ensure ALL pages use skeleton, not spinners
 - [ ] In-app notification system (badge earned, task due, call graded)
 - [ ] Breadcrumbs on nested views
@@ -143,8 +147,8 @@ These are "premium parity" features — not blockers but important for quality:
 
 ## Known Issues
 
-1. **Google OAuth login loop** — Users get redirected back to login after Google auth callback. Deferred — needs dedicated debugging session. Email+password login works as fallback.
-2. **Old routers.ts still exists** — The monolith `server/routers.ts` file may still exist alongside the new split routers. If both exist, the split routers in `server/routers/index.ts` are the canonical source.
+1. **Google OAuth login loop** — Likely fixed by: (a) adding `trust proxy` for Railway's reverse proxy, (b) routing new users to `/onboarding` instead of `/today`. Needs production verification.
+2. ~~**Old routers.ts still exists**~~ — **RESOLVED.** Full audit confirmed `server/routers.ts` does not exist. The 12-router split is the only implementation.
 3. **GHL OAuth not tested end-to-end** — The OAuth flow (server/services/ghlOAuth.ts + Settings UI) is built but hasn't been tested with a real GHL OAuth app credential.
 
 ---

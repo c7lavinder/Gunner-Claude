@@ -1,5 +1,6 @@
 import { db } from "../_core/db";
 import { sendEmail } from "../_core/email";
+import { chatCompletion } from "../_core/llm";
 import {
   tenants,
   teamMembers,
@@ -8,6 +9,8 @@ import {
   callGrades,
   performanceMetrics,
   dispoProperties,
+  coachMessages,
+  userPlaybooks,
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { createCrmAdapter } from "../crm";
@@ -231,6 +234,108 @@ export async function updateUserProfiles(tenantId: number): Promise<number> {
   return updated;
 }
 
+// ─── Coaching Memory Distillation ───────────────────────
+
+/**
+ * Weekly job: summarizes each user's coaching conversation themes with GPT-4o
+ * and updates their user_playbooks record with current strengths + growth areas.
+ * This is the core of the intelligence loop — the AI coach learns over time.
+ */
+export async function distillCoachingMemory(tenantId: number): Promise<number> {
+  const members = await db
+    .select({ id: teamMembers.id, userId: teamMembers.userId })
+    .from(teamMembers)
+    .where(and(eq(teamMembers.tenantId, tenantId), eq(teamMembers.isActive, "true")));
+
+  let updated = 0;
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  for (const member of members) {
+    if (!member.userId) continue;
+    try {
+      // Gather recent AI coaching conversations for this user
+      const messages = await db
+        .select({ role: coachMessages.role, content: coachMessages.content })
+        .from(coachMessages)
+        .where(and(eq(coachMessages.tenantId, tenantId), eq(coachMessages.userId, member.userId), gte(coachMessages.createdAt, twoWeeksAgo)))
+        .orderBy(coachMessages.createdAt)
+        .limit(200);
+
+      if (messages.length < 6) continue; // Not enough data to distill
+
+      const transcript = messages
+        .map((m) => `${m.role === "user" ? "Rep" : "Coach"}: ${m.content}`)
+        .join("\n");
+
+      // Also get recent grade trend
+      const recentGrades = await db
+        .select({ score: callGrades.overallScore, createdAt: callGrades.createdAt })
+        .from(callGrades)
+        .innerJoin(calls, and(eq(calls.id, callGrades.callId), eq(calls.tenantId, tenantId)))
+        .where(and(eq(calls.teamMemberId, member.id), gte(callGrades.createdAt, twoWeeksAgo)))
+        .orderBy(callGrades.createdAt);
+
+      const grades = recentGrades.map((g) => Number(g.score ?? 0));
+      const gradeTrend =
+        grades.length < 2 ? "stable"
+          : grades[grades.length - 1] - grades[0] > 5 ? "improving"
+          : grades[0] - grades[grades.length - 1] > 5 ? "declining"
+          : "stable";
+
+      const prompt = `Analyze this sales coaching conversation history and extract coaching insights.
+
+Conversation (last 2 weeks):
+${transcript}
+
+Grade trend: ${gradeTrend} (${grades.length} calls graded)
+
+Return JSON only:
+{
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "growthAreas": ["area 1", "area 2", "area 3"],
+  "gradeTrend": "improving" | "declining" | "stable",
+  "communicationStyle": { "pace": "fast/normal/slow", "tone": "confident/uncertain/professional", "notes": "one sentence" }
+}`;
+
+      const raw = await chatCompletion({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a sales coaching analyst. Extract actionable insights from coaching conversations. Return valid JSON only." },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.3,
+        maxTokens: 512,
+      });
+
+      const insights = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "")) as {
+        strengths: string[];
+        growthAreas: string[];
+        gradeTrend: string;
+        communicationStyle: Record<string, string>;
+      };
+
+      // Upsert user_playbooks
+      const [existing] = await db.select({ id: userPlaybooks.id }).from(userPlaybooks).where(eq(userPlaybooks.userId, member.userId));
+      const data = {
+        strengths: insights.strengths ?? [],
+        growthAreas: insights.growthAreas ?? [],
+        gradeTrend: gradeTrend,
+        communicationStyle: insights.communicationStyle ?? {},
+        updatedAt: new Date(),
+      };
+      if (existing) {
+        await db.update(userPlaybooks).set(data).where(eq(userPlaybooks.id, existing.id));
+      } else {
+        await db.insert(userPlaybooks).values({ tenantId, userId: member.userId, ...data });
+      }
+      updated++;
+    } catch (e) {
+      console.error(`[coaching-distill] Tenant ${tenantId} member ${member.id}:`, e);
+    }
+  }
+  return updated;
+}
+
 // ─── Job Runner ─────────────────────────────────────────
 
 export function startScheduledJobs(): void {
@@ -278,4 +383,20 @@ export function startScheduledJobs(): void {
       }
     }
   }, 2 * 60 * 60 * 1000);
+
+  // Coaching memory distillation: runs every hour, triggers on Monday at 7am
+  setInterval(async () => {
+    const now = new Date();
+    if (now.getDay() !== 1 || now.getHours() !== 7 || now.getMinutes() > 0) return;
+    console.log("[jobs] Running coaching memory distillation");
+    const all = await db.select().from(tenants).where(eq(tenants.onboardingCompleted, "true"));
+    for (const t of all) {
+      try {
+        const count = await distillCoachingMemory(t.id);
+        if (count > 0) console.log(`[coaching-distill] Tenant ${t.id}: updated ${count} user profiles`);
+      } catch (e) {
+        console.error(`[coaching-distill] Tenant ${t.id}:`, e);
+      }
+    }
+  }, 60 * 60 * 1000);
 }

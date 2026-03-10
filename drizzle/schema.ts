@@ -73,6 +73,9 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   profilePicture: text("profilePicture"), // S3 URL for profile picture
+  // Login lockout: reset on successful login
+  failedLoginAttempts: integer("failedLoginAttempts").default(0).notNull(),
+  lockedUntil: timestamp("lockedUntil"),
 });
 
 export type User = typeof users.$inferSelect;

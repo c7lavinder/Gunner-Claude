@@ -10,8 +10,9 @@ export function GoogleAuthCallback() {
   const called = useRef(false);
 
   const callbackMutation = trpc.auth.googleCallback.useMutation({
-    onSuccess: () => {
-      window.location.href = "/today";
+    onSuccess: (data) => {
+      // New users who haven't set up a tenant go to onboarding
+      window.location.href = data.isNewUser ? "/onboarding" : "/today";
     },
     onError: (err) => {
       setErrorMsg(err.message || "Google sign-in failed. Please try again.");
