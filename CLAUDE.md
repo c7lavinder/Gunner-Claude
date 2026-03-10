@@ -46,7 +46,7 @@ drizzle/migrations/   — DB migration files
 ## Database
 - PostgreSQL on Railway (internal: gunner-postgres.railway.internal:5432)
 - ORM: Drizzle — always update schema.ts + run migrations, never raw ALTER TABLE
-- NAH tenant ID: 1 (only real tenant — all others are test data)
+- Active tenants: ID=1 (New Again Houses), ID=450029 (NAH Kitty Hawk), ID=540044 (Apex Property Solutions demo)
 - 3,263 calls in DB for NAH
 
 ## Environment Variables

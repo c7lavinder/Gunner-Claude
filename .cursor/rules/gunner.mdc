@@ -1,0 +1,46 @@
+---
+description: Gunner project conventions — auto-applied to every Cursor session
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
+# Gunner — Cursor Rules
+
+## Branch
+Always work on `manus-migration`. Never commit to `main`.
+
+## Stack
+- Frontend: React + TypeScript + Vite (client/src/)
+- Backend: Node.js + Express + tRPC (server/)
+- DB: PostgreSQL + Drizzle ORM — schema in drizzle/schema.ts
+- Storage: Supabase Storage (gunner-recordings bucket)
+- Deploy: Railway — auto-deploys on push to manus-migration
+
+## Active Tenants
+- ID=1: New Again Houses (primary, live)
+- ID=450029: NAH Kitty Hawk (onboarding soon)
+- ID=540044: Apex Property Solutions (demo)
+- Never hardcode tenantId — always multi-tenant safe
+
+## Env Vars
+All secrets live in Railway env vars. Access via ENV object in server/_core/env.ts.
+Never use raw process.env in business logic. Never hardcode keys.
+
+## Before Every Push
+1. `npx tsc --noEmit` → must be 0 errors
+2. Commit with prefix: fix: / feat: / docs: / refactor:
+3. Push to manus-migration only
+
+## Key Files
+- server/_core/env.ts — all environment variables
+- server/routers.ts — all API endpoints
+- drizzle/schema.ts — database schema (source of truth)
+- server/_core/llm.ts — AI/LLM calls (OpenAI)
+- server/_core/voiceTranscription.ts — Whisper transcription
+- server/storage.ts — Supabase file storage
+- server/emailService.ts — Resend email sending
+- server/ghlService.ts — GHL CRM sync
+
+## Owner
+Corey Lavinder — non-technical. Explain changes in plain English.
+Never ask unnecessary questions — read files first, then act.

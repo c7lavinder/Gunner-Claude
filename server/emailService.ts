@@ -32,7 +32,9 @@ export type EmailType =
   | "sequence_day14_checkin"
   // Engagement triggers
   | "trigger_no_calls_48h"
-  | "trigger_power_user";
+  | "trigger_power_user"
+  // Internal owner alerts
+  | "owner_notification";
 
 // Template type for outreach history
 export type OutreachTemplateType = "7_day" | "14_day" | "30_day" | "custom";
@@ -529,6 +531,22 @@ function generateEmailContent(type: EmailType, data: Record<string, string>): { 
     case "churn_30_day":
       return generateChurnEmailContent(type, data);
     
+    case "owner_notification":
+      return {
+        subject: `[Gunner Alert] ${data.title || "Platform Notification"}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="padding: 24px; border-bottom: 3px solid #8B1A1A;">
+              <strong style="font-size: 18px;">[Gunner] ${data.title}</strong>
+            </div>
+            <div style="padding: 24px;">
+              <pre style="white-space: pre-wrap; font-size: 14px; color: #333;">${data.content}</pre>
+            </div>
+          </div>
+        `,
+        text: `[Gunner Alert] ${data.title}\n\n${data.content}`
+      };
+
     default:
       return {
         subject: "Gunner Notification",
