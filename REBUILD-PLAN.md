@@ -188,6 +188,87 @@ Contains:
   - Response times to suggestions
 - KPI targets and progress
 - Personal goals
+- **Voice profile (for future AI caller cloning):**
+  - Aggregated audio samples from graded calls (speaker-separated)
+  - Total minutes of clean audio collected
+  - Voice characteristics metadata (pace, pitch range, energy level — auto-extracted)
+  - Consent status (user must opt in)
+  - Ready-for-cloning flag (true when enough clean audio is collected)
+
+### Voice Sample Collection (Start NOW — Future AI Caller)
+
+Every call already goes through the transcription pipeline. The audio exists. The goal is to start isolating and storing each user's voice samples so that when voice cloning technology is ready for production AI callers, Gunner already has the data.
+
+**How it works:**
+
+1. **Speaker diarization** — When a call is transcribed, identify which audio segments belong to the Gunner user vs the contact. OpenAI Whisper doesn't natively diarize, so either:
+   - Use a diarization model (e.g., `pyannote/speaker-diarization` or a future OpenAI feature) as a post-processing step
+   - OR use a simpler heuristic: the first speaker on outbound calls is typically the rep; on inbound, the second speaker is the rep
+   - Start with the heuristic (free, fast), upgrade to diarization later
+
+2. **Extract user audio segments** — Clip the user's speaking portions from the call recording. Store as separate audio files.
+
+3. **Store in Supabase Storage** — New bucket: `gunner-voice-samples`
+   ```
+   gunner-voice-samples/
+   └── {tenantId}/
+       └── {userId}/
+           ├── sample-{callId}-001.wav
+           ├── sample-{callId}-002.wav
+           └── ...
+   ```
+
+4. **Track in database** — New table: `user_voice_samples`
+
+| Field | Type | Description |
+|---|---|---|
+| id | serial | Primary key |
+| tenantId | integer | Tenant |
+| userId | integer | Which team member |
+| callId | integer | Source call |
+| storageKey | text | Path in Supabase bucket |
+| durationSeconds | decimal | Length of this sample |
+| quality | text | good / noisy / unusable (auto-assessed or manual) |
+| speakerConfidence | decimal | 0-1 confidence this is actually the user speaking |
+| createdAt | timestamp | When extracted |
+
+5. **Aggregate stats on User Playbook** — New table: `user_voice_profiles`
+
+| Field | Type | Description |
+|---|---|---|
+| id | serial | Primary key |
+| tenantId | integer | Tenant |
+| userId | integer | Which team member |
+| totalSamples | integer | Count of stored samples |
+| totalDurationMinutes | decimal | Total clean audio minutes |
+| avgPace | decimal | Words per minute (from transcription data) |
+| consentGiven | boolean | User opted in to voice collection |
+| consentDate | timestamp | When they opted in |
+| readyForCloning | boolean | True when >= 30 min of clean audio |
+| metadata | jsonb | Additional voice characteristics |
+| updatedAt | timestamp | Last updated |
+
+**Consent requirement:** Users MUST opt in. Add a toggle in Profile page:
+> "Allow Gunner to store your voice samples for future AI features. Your voice data is never shared with other tenants."
+
+Default: OFF. Only collect when ON.
+
+**Quality thresholds:**
+- Minimum sample length: 5 seconds (shorter clips are noise)
+- Minimum speaker confidence: 0.7 (below = discard)
+- Target for "ready": 30+ minutes of clean audio across 20+ calls
+- Quality assessment: reject samples with heavy background noise or crosstalk
+
+**Processing:** Runs as a background job AFTER grading completes (low priority, never blocks the grading pipeline). Failed extraction = skip silently, try again on next call.
+
+**Cost:** Storage only. ~1 MB per minute of WAV audio. 30 minutes = ~30 MB per user. Negligible at current scale.
+
+**Privacy rules:**
+- Voice samples are tenant-isolated (same as all data)
+- Samples NEVER flow up to industry/software playbook intelligence
+- User can revoke consent at any time → samples are deleted within 24 hours
+- Deletion is hard delete (not soft delete) — audio is removed from storage
+- Terms of Service must explicitly cover voice data collection and intended use
 
 ---
 
@@ -1700,7 +1781,7 @@ Apply NAH's specific config. Again — data, not code.
 
 After this phase: site is NAH's Gunner. Their stages, markets, team, rules. Same code as any other tenant.
 
-### Phase 4: User Playbook + Intelligence Loop
+### Phase 4: User Playbook + Intelligence Loop + Voice Collection
 
 - User profile summary (auto-generated after each graded call)
 - Coaching memory distillation (weekly job)
@@ -1708,6 +1789,11 @@ After this phase: site is NAH's Gunner. Their stages, markets, team, rules. Same
 - First intelligence jobs (user profile update, tenant intelligence)
 - Wire existing unused data into AI context (past actions, XP/badges always loaded, full performance profile)
 - Proactive suggestions (V2 AI — suggest without being asked)
+- `user_voice_samples` + `user_voice_profiles` tables
+- Voice sample extraction job (runs after grading, background priority)
+- Consent toggle in Profile page
+- Storage bucket: `gunner-voice-samples`
+- Voice profile dashboard in Profile (total minutes, sample count, ready status)
 
 ### Phase 5: Landing Pages + Gamification + Premium Polish
 
