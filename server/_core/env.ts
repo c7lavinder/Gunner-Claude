@@ -4,6 +4,7 @@ export const ENV = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
+  oAuthServerUrl: "", // Manus-only — intentionally empty, kept for type compatibility
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
   // Forge API — legacy Manus proxy, replaced by direct OpenAI calls
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "https://api.openai.com",
