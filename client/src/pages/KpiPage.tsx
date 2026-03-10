@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BarChart3, Phone, MessageSquare, FileCheck, Calendar, DollarSign } from "lucide-react";
+import { BarChart3, Phone, MessageSquare, FileCheck, Calendar, DollarSign, TrendingUp } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { trpc } from "@/lib/trpc";
 
 const KPI_METRICS = [
@@ -108,7 +109,11 @@ export function KpiPage() {
         <CardContent className="p-6">
           <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--g-text-secondary)" }}>Funnel</h2>
           {funnel.length === 0 ? (
-            <p className="text-sm py-4" style={{ color: "var(--g-text-tertiary)" }}>No funnel data yet.</p>
+            <EmptyState
+              icon={TrendingUp}
+              title="No funnel data yet"
+              description="Funnel data will appear here as calls are graded and deals move through your pipeline."
+            />
           ) : (
             <div className="space-y-3">
               {funnel.map((stage, i) => (

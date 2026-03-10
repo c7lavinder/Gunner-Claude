@@ -2,12 +2,24 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
+import * as Sentry from "@sentry/react";
 import { trpc } from "./lib/trpc";
 import superjson from "superjson";
 import { ThemeProvider } from "next-themes";
 import { App } from "./App";
 import { AuthProvider } from "./hooks/useAuth";
 import "./index.css";
+
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: 1.0,
+  });
+}
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -25,16 +37,30 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+function FallbackUI() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", flexDirection: "column", gap: 16 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 600 }}>Something went wrong</h2>
+      <p style={{ color: "#888" }}>An unexpected error occurred. Try refreshing the page.</p>
+      <button onClick={() => window.location.reload()} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #ccc", cursor: "pointer" }}>
+        Refresh
+      </button>
+    </div>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </QueryClientProvider>
-      </trpc.Provider>
-    </ThemeProvider>
+    <Sentry.ErrorBoundary fallback={<FallbackUI />}>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <trpc.Provider client={trpcClient} queryClient={queryClient}>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </QueryClientProvider>
+        </trpc.Provider>
+      </ThemeProvider>
+    </Sentry.ErrorBoundary>
   </StrictMode>
 );

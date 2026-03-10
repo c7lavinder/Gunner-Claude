@@ -1,6 +1,7 @@
 import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import express from "express";
+import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import path from "node:path";
@@ -38,16 +39,12 @@ app.use("/api/stripe/webhook", stripeWebhookRouter);
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
-app.use((_req, res, next) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("X-XSS-Protection", "1; mode=block");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  if (ENV.isProduction) {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  }
-  next();
-});
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

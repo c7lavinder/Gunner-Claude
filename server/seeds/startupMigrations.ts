@@ -127,5 +127,36 @@ export async function runStartupMigrations(): Promise<void> {
     ADD COLUMN IF NOT EXISTS "gradingPhilosophy" jsonb
   `);
 
+  // Voice sample collection for future AI caller cloning
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "user_voice_samples" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer NOT NULL REFERENCES "tenants"("id"),
+      "userId" integer NOT NULL REFERENCES "users"("id"),
+      "callId" integer NOT NULL,
+      "storageKey" text NOT NULL,
+      "durationSeconds" varchar(20),
+      "quality" text DEFAULT 'good',
+      "speakerConfidence" varchar(10),
+      "createdAt" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "user_voice_profiles" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer NOT NULL REFERENCES "tenants"("id"),
+      "userId" integer NOT NULL REFERENCES "users"("id"),
+      "totalSamples" integer DEFAULT 0,
+      "totalDurationMinutes" varchar(20) DEFAULT '0',
+      "avgPace" varchar(10),
+      "consentGiven" boolean DEFAULT false,
+      "consentDate" timestamp,
+      "readyForCloning" boolean DEFAULT false,
+      "metadata" jsonb,
+      "updatedAt" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+
   console.log("[migrations] Startup migrations complete.");
 }

@@ -16,7 +16,9 @@ import {
   BarChart3,
   Zap,
   Users,
+  UserPlus,
 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { trpc } from "@/lib/trpc";
 
@@ -119,11 +121,13 @@ export function Team() {
         </CardHeader>
         <CardContent className="pt-0">
           {displayList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center" style={{ color: "var(--g-text-tertiary)" }}>
-              <Users className="size-12 mb-3 opacity-50" />
-              <p className="font-medium">No team members yet</p>
-              <p className="text-sm mt-1">Invite team members from Settings to see the leaderboard.</p>
-            </div>
+            <EmptyState
+              icon={UserPlus}
+              title="No team members yet"
+              description="Invite team members from Settings to see the leaderboard."
+              actionLabel="Go to Settings"
+              onAction={() => window.location.assign("/settings")}
+            />
           ) : (
             <div className="space-y-1">
               {displayList.map((m, i) => {

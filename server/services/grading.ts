@@ -67,9 +67,18 @@ export async function gradeCall(callId: number, tenantId: number) {
 
   const rubricText = criteria.map((c) => `- ${c.name} (${c.maxPoints} pts): ${c.description}`).join("\n");
   const failText = criticalFailures.length > 0
-    ? `\n\nCritical failures (auto-fail if detected):\n${criticalFailures.map((f) => `- ${f}`).join("\n")}`
+    ? `\n\nCritical failures (auto-cap at 50% if detected):\n${criticalFailures.map((f) => `- ${f}`).join("\n")}`
     : "";
-  const systemPrompt = `You are an expert sales call grading AI. Grade this call transcript against the provided rubric. Return valid JSON only, no markdown.`;
+
+  // Load grading philosophy from industry playbook
+  const tenantPb = await getTenantPlaybook(tenantId);
+  const industryPb = tenantPb?.industryCode ? await getIndustryPlaybook(tenantPb.industryCode) : null;
+  const philosophy = industryPb?.gradingPhilosophy;
+  const philosophyText = philosophy
+    ? `\n\nGrading philosophy:\n${philosophy.overview}\n\nCritical failure policy: ${philosophy.criticalFailurePolicy}\nTalk ratio guidance: ${philosophy.talkRatioGuidance}${philosophy.roleSpecific[callType] ? `\nRole-specific: ${philosophy.roleSpecific[callType]}` : ""}`
+    : "";
+
+  const systemPrompt = `You are an expert sales call grading AI. Grade this call transcript against the provided rubric. Return valid JSON only, no markdown.${philosophyText}`;
   const userPrompt = `Rubric criteria:\n${rubricText}${failText}\n\nTranscript:\n${call.transcript}\n\nReturn JSON: { "overallScore": number 0-100, "criteriaScores": [{ "name": string, "earned": number, "max": number }], "strengths": [string, string, string], "improvements": [string, string, string], "coachingTips": [string, string, string], "redFlags": [string], "summary": string }`;
 
   const raw = await chatCompletion({

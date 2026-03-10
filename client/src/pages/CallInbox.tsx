@@ -13,7 +13,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine, Star, Play, Plus, FileText } from "lucide-react";
+import { ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine, Star, Play, Plus, FileText, Phone } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { ActionConfirmDialog } from "@/components/actions/ActionConfirmDialog";
 import { useAction } from "@/hooks/useActions";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
@@ -149,9 +150,13 @@ export function CallInbox() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm py-8 text-center" style={{ color: "var(--g-text-tertiary)" }}>
-              No calls yet
-            </p>
+            <EmptyState
+              icon={Phone}
+              title="No calls yet"
+              description="Connect your CRM to start importing and grading calls automatically."
+              actionLabel="Go to Settings"
+              onAction={() => window.location.assign("/settings")}
+            />
           ) : (
             <ScrollArea className="h-[calc(100vh-220px)]">
               <div className="space-y-2 pr-4">

@@ -1937,3 +1937,35 @@ export const playbookInsights = pgTable("playbook_insights", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
+
+/**
+ * User Voice Samples — extracted audio segments for future AI caller cloning.
+ */
+export const userVoiceSamples = pgTable("user_voice_samples", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").notNull(),
+  userId: integer("userId").notNull(),
+  callId: integer("callId").notNull(),
+  storageKey: text("storageKey").notNull(),
+  durationSeconds: varchar("durationSeconds", { length: 20 }),
+  quality: text("quality").default("good"),
+  speakerConfidence: varchar("speakerConfidence", { length: 10 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/**
+ * User Voice Profiles — aggregate stats for voice sample collection per user.
+ */
+export const userVoiceProfiles = pgTable("user_voice_profiles", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").notNull(),
+  userId: integer("userId").notNull(),
+  totalSamples: integer("totalSamples").default(0),
+  totalDurationMinutes: varchar("totalDurationMinutes", { length: 20 }).default("0"),
+  avgPace: varchar("avgPace", { length: 10 }),
+  consentGiven: boolean("consentGiven").default(false),
+  consentDate: timestamp("consentDate"),
+  readyForCloning: boolean("readyForCloning").default(false),
+  metadata: jsonb("metadata"),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
