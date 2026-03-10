@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Route, Switch, Redirect } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Landing } from "@/pages/landing/Landing";
@@ -30,7 +31,7 @@ function PageLoader() {
 
 export function App() {
   return (
-    <>
+    <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         <Switch>
           <Route path="/" component={Landing} />
@@ -68,6 +69,6 @@ export function App() {
         </Switch>
       </Suspense>
       <Toaster />
-    </>
+    </ErrorBoundary>
   );
 }

@@ -97,12 +97,24 @@ export async function processCallGamification(
     .where(and(eq(calls.teamMemberId, teamMemberId), sql`cast(${callGrades.overallScore} as numeric) >= 90`));
 
   const checks: Array<[string, boolean]> = [
+    ["first_call", totalCalls >= 1],
     ["first_90", score >= 90 && calls90Plus === 1],
+    ["perfect_100", score === 100],
+    ["hot_streak_3", hotCurrent >= 3],
     ["hot_streak_5", hotCurrent >= 5],
     ["hot_streak_10", hotCurrent >= 10],
+    ["hot_streak_25", hotCurrent >= 25],
+    ["consistency_3", consistencyCurrent >= 3],
     ["consistency_7", consistencyCurrent >= 7],
+    ["consistency_14", consistencyCurrent >= 14],
+    ["consistency_30", consistencyCurrent >= 30],
+    ["calls_10", totalCalls >= 10],
+    ["calls_25", totalCalls >= 25],
     ["calls_50", totalCalls >= 50],
     ["calls_100", totalCalls >= 100],
+    ["calls_250", totalCalls >= 250],
+    ["calls_500", totalCalls >= 500],
+    ["improvement", score >= 80 && (streakRow?.hotStreakCurrent ?? 0) < 1],
   ];
   const newBadges: string[] = [];
   for (const [code, met] of checks) {

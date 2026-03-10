@@ -15,12 +15,6 @@ import { Check, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const STEPS = ["welcome", "crm", "team", "done"] as const;
-const INDUSTRIES = [
-  { value: "real-estate", label: "Real Estate" },
-  { value: "insurance", label: "Insurance" },
-  { value: "solar", label: "Solar" },
-  { value: "other", label: "Other" },
-];
 
 export function Onboarding() {
   const [, setLocation] = useLocation();
@@ -35,6 +29,7 @@ export function Onboarding() {
   const [invRole, setInvRole] = useState("member");
 
   const { data: workspace, isLoading } = trpc.settings.getWorkspace.useQuery();
+  const { data: industries } = trpc.playbook.listIndustries.useQuery();
   const updateMutation = trpc.settings.updateWorkspace.useMutation();
   const testQuery = trpc.settings.testCrmConnection.useQuery(undefined, { enabled: false });
   const inviteMutation = trpc.settings.inviteTeamMember.useMutation();
@@ -54,6 +49,7 @@ export function Onboarding() {
     await updateMutation.mutateAsync({
       name: companyName,
       settings: JSON.stringify({ industry }),
+      industryCode: industry !== "other" ? industry : undefined,
       onboardingStep: 2,
     });
     setStep(1);
@@ -128,9 +124,10 @@ export function Onboarding() {
             <div className="space-y-2">
               <Label>Industry</Label>
               <Select value={industry} onValueChange={setIndustry}>
-                <SelectTrigger className="bg-[var(--g-bg-surface)]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="bg-[var(--g-bg-surface)]"><SelectValue placeholder="Select your industry" /></SelectTrigger>
                 <SelectContent>
-                  {INDUSTRIES.map((i) => <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>)}
+                  {industries?.map((i) => <SelectItem key={i.code} value={i.code}>{i.name}</SelectItem>)}
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>

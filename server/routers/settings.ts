@@ -7,6 +7,7 @@ import {
   tenants,
   teamMembers,
   pendingInvitations,
+  tenantPlaybooks,
 } from "../../drizzle/schema";
 import { createCrmAdapter } from "../crm";
 import { createCheckoutSession, createPortalSession, getPlans } from "../services/stripe";
@@ -17,6 +18,7 @@ const updateWorkspaceInput = z.object({
   crmConfig: z.string().optional(),
   crmConnected: z.string().optional(),
   settings: z.string().optional(),
+  industryCode: z.string().optional(),
   onboardingStep: z.number().optional(),
   onboardingCompleted: z.string().optional(),
 });
@@ -69,6 +71,25 @@ export const settingsRouter = router({
       if (input.settings !== undefined) updates.settings = input.settings;
       if (input.onboardingStep !== undefined) updates.onboardingStep = input.onboardingStep;
       if (input.onboardingCompleted !== undefined) updates.onboardingCompleted = input.onboardingCompleted;
+      if (input.industryCode) {
+        const [existing] = await db
+          .select({ id: tenantPlaybooks.id })
+          .from(tenantPlaybooks)
+          .where(eq(tenantPlaybooks.tenantId, tenantId))
+          .limit(1);
+        if (existing) {
+          await db
+            .update(tenantPlaybooks)
+            .set({ industryCode: input.industryCode, updatedAt: new Date() })
+            .where(eq(tenantPlaybooks.id, existing.id));
+        } else {
+          await db.insert(tenantPlaybooks).values({
+            tenantId,
+            industryCode: input.industryCode,
+          });
+        }
+      }
+
       if (Object.keys(updates).length === 0) {
         const [t] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
         return t!;

@@ -59,16 +59,16 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     ctaText: "Accelerate Your Pipeline",
   },
   "recruiting": {
-    code: "recruiting",
-    name: "Recruiting & Staffing",
-    headline: "Train Recruiters to Close Candidates Faster",
-    subtext: "Grade candidate screens, client calls, and intake meetings with AI that understands the recruiting process.",
+    code: "home-services",
+    name: "Home Services",
+    headline: "Book More Jobs with AI-Coached Service Teams",
+    subtext: "Grade every inbound call, train your CSRs to book more estimates, and track job conversion rates across your team.",
     features: [
-      { title: "Screen Call Grading", description: "Ensure quality candidate screening every time" },
-      { title: "Client Relationship Tracking", description: "Monitor client call quality and satisfaction" },
-      { title: "Recruiter Accountability", description: "Leaderboards and KPIs for your recruiting team" },
+      { title: "Inbound Call Grading", description: "Grade every customer call for booking effectiveness" },
+      { title: "Estimate Follow-Up Tracking", description: "Never let a hot estimate go cold" },
+      { title: "CSR Performance Leaderboards", description: "See who's booking the most and coach the rest" },
     ],
-    ctaText: "Level Up Your Recruiters",
+    ctaText: "Book More Jobs",
   },
 };
 

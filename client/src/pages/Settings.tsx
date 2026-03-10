@@ -42,6 +42,7 @@ function parseJson<T>(raw: string | null, fallback: T): T {
 export function Settings() {
   const { roles } = useTenantConfig();
   const { data: workspace, isLoading } = trpc.settings.getWorkspace.useQuery();
+  const { data: industries } = trpc.playbook.listIndustries.useQuery();
   const updateMutation = trpc.settings.updateWorkspace.useMutation();
   const testQuery = trpc.settings.testCrmConnection.useQuery(undefined, { enabled: false });
   const inviteMutation = trpc.settings.inviteTeamMember.useMutation();
@@ -86,8 +87,13 @@ export function Settings() {
   }, [tenant]);
 
   const saveGeneral = async () => {
-    await updateMutation.mutateAsync({ name: companyName, settings: JSON.stringify({ ...settingsObj, industry, timezone, emailDigest, gradeAlerts }) });
+    await updateMutation.mutateAsync({
+      name: companyName,
+      settings: JSON.stringify({ ...settingsObj, industry, timezone, emailDigest, gradeAlerts }),
+      industryCode: industry !== "other" ? industry : undefined,
+    });
     await utils.settings.getWorkspace.invalidate();
+    await utils.playbook.getConfig.invalidate();
   };
   const saveCrm = async () => {
     await updateMutation.mutateAsync({ crmType: "ghl", crmConfig: JSON.stringify({ apiKey: apiKey || crmConfig.apiKey, locationId: locationId || crmConfig.locationId }) });
@@ -143,9 +149,9 @@ export function Settings() {
                   <Select value={industry} onValueChange={setIndustry}>
                     <SelectTrigger className="w-full bg-[var(--g-bg-surface)]"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="real-estate">Real Estate</SelectItem>
-                      <SelectItem value="insurance">Insurance</SelectItem>
-                      <SelectItem value="solar">Solar</SelectItem>
+                      {industries?.map((i) => (
+                        <SelectItem key={i.code} value={i.code}>{i.name}</SelectItem>
+                      ))}
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
