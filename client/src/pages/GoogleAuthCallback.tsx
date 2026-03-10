@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
@@ -6,17 +6,24 @@ export function GoogleAuthCallback() {
   const [, setLocation] = useLocation();
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
+  const utils = trpc.useUtils();
+  const called = useRef(false);
 
   const callbackMutation = trpc.auth.googleCallback.useMutation({
-    onSuccess: () => setLocation("/today"),
+    onSuccess: async () => {
+      await utils.auth.me.invalidate();
+      setLocation("/today");
+    },
     onError: () => setLocation("/login"),
   });
 
   useEffect(() => {
+    if (called.current) return;
     if (!code) {
       setLocation("/login");
       return;
     }
+    called.current = true;
     const redirectUri = `${window.location.origin}/auth/google/callback`;
     callbackMutation.mutate({ code, redirectUri });
   }, [code]);
