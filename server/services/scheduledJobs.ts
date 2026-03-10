@@ -11,6 +11,7 @@ import {
   dispoProperties,
   coachMessages,
   userPlaybooks,
+  userEvents,
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { createCrmAdapter } from "../crm";
@@ -336,6 +337,96 @@ Return JSON only:
   return updated;
 }
 
+// ─── Action Pattern Analysis ────────────────────────────
+
+const ALL_ACTIONS = ["sms", "note", "task", "stage_change", "call_reviewed"];
+
+export async function analyzeActionPatterns(tenantId: number): Promise<number> {
+  const members = await db
+    .select({ id: teamMembers.id, userId: teamMembers.userId })
+    .from(teamMembers)
+    .where(and(eq(teamMembers.tenantId, tenantId), eq(teamMembers.isActive, "true")));
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  let analyzed = 0;
+
+  for (const member of members) {
+    if (!member.userId) continue;
+    try {
+      // Check if user_playbook exists — skip if not (coaching distill job creates it)
+      const [existing] = await db
+        .select({ id: userPlaybooks.id, instructions: userPlaybooks.instructions })
+        .from(userPlaybooks)
+        .where(eq(userPlaybooks.userId, member.userId))
+        .limit(1);
+
+      if (!existing) continue;
+
+      // Fetch raw user events for the last 30 days
+      const events = await db
+        .select({ eventType: userEvents.eventType, page: userEvents.page })
+        .from(userEvents)
+        .where(
+          and(
+            eq(userEvents.userId, member.userId),
+            eq(userEvents.tenantId, tenantId),
+            gte(userEvents.createdAt, thirtyDaysAgo)
+          )
+        );
+
+      // Count by eventType
+      const eventsByType: Record<string, number> = events.reduce<Record<string, number>>((acc, e) => {
+        if (e.eventType) acc[e.eventType] = (acc[e.eventType] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      // Count by page
+      const pagesByCount: Record<string, number> = events.reduce<Record<string, number>>((acc, e) => {
+        if (e.page) acc[e.page] = (acc[e.page] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      // Top 3 event types
+      const mostUsed = Object.entries(eventsByType)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([type, count]) => ({ type, count }));
+
+      // Top 3 pages
+      const topPages = Object.entries(pagesByCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([page, count]) => ({ page, count }));
+
+      // Actions they never or rarely take
+      const missedActions = ALL_ACTIONS.filter((a) => !eventsByType[a] || eventsByType[a] < 2);
+
+      const patterns = {
+        mostUsed,
+        missedActions,
+        topPages,
+        analyzedAt: new Date().toISOString(),
+      };
+
+      // Merge into existing instructions object
+      const existingInstructions =
+        existing.instructions && typeof existing.instructions === "object" && !Array.isArray(existing.instructions)
+          ? (existing.instructions as Record<string, unknown>)
+          : {};
+
+      await db
+        .update(userPlaybooks)
+        .set({ instructions: { ...existingInstructions, actionPatterns: patterns }, updatedAt: new Date() })
+        .where(eq(userPlaybooks.id, existing.id));
+
+      analyzed++;
+    } catch (e) {
+      console.error(`[action-patterns] Tenant ${tenantId} member ${member.id}:`, e);
+    }
+  }
+  return analyzed;
+}
+
 // ─── Job Runner ─────────────────────────────────────────
 
 export function startScheduledJobs(): void {
@@ -399,4 +490,18 @@ export function startScheduledJobs(): void {
       }
     }
   }, 60 * 60 * 1000);
+
+  // Action pattern analysis: runs every 24 hours
+  setInterval(async () => {
+    console.log("[jobs] Running action pattern analysis");
+    const all = await db.select().from(tenants).where(eq(tenants.onboardingCompleted, "true"));
+    for (const t of all) {
+      try {
+        const count = await analyzeActionPatterns(t.id);
+        if (count > 0) console.log(`[action-patterns] Tenant ${t.id}: analyzed ${count} users`);
+      } catch (e) {
+        console.error(`[action-patterns] Tenant ${t.id}:`, e);
+      }
+    }
+  }, 24 * 60 * 60 * 1000);
 }

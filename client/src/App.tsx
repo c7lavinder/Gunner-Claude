@@ -1,11 +1,12 @@
-import { lazy, Suspense } from "react";
-import { Route, Switch, Redirect } from "wouter";
+import { lazy, Suspense, useEffect } from "react";
+import { Route, Switch, Redirect, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import { BadgeUnlockNotification } from "@/components/BadgeUnlockNotification";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useTrackEvent } from "@/hooks/useTrackEvent";
 import { Landing } from "@/pages/landing/Landing";
 import { Login } from "@/pages/Login";
 import { Signup } from "@/pages/Signup";
@@ -22,6 +23,17 @@ const Playbook = lazy(() => import("@/pages/Playbook").then((m) => ({ default: m
 const Profile = lazy(() => import("@/pages/Profile").then((m) => ({ default: m.Profile })));
 const IndustryLanding = lazy(() => import("@/pages/landing/IndustryLanding").then((m) => ({ default: m.IndustryLanding })));
 const Onboarding = lazy(() => import("@/pages/Onboarding").then((m) => ({ default: m.Onboarding })));
+
+function PageTracker() {
+  const [location] = useLocation();
+  const { track } = useTrackEvent();
+
+  useEffect(() => {
+    track({ type: "page_view", page: location });
+  }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
 
 function PageLoader() {
   return (
@@ -49,6 +61,7 @@ export function App() {
           <Route path="/:rest*">
             <AuthGuard>
               <DashboardLayout>
+                <PageTracker />
                 <Suspense fallback={<PageLoader />}>
                   <Switch>
                     <Route path="/today" component={Today} />
