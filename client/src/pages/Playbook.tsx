@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { BookOpen, Pencil, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -32,6 +32,7 @@ export function Playbook() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiInput, setAiInput] = useState("");
   const [newInstruction, setNewInstruction] = useState("");
+  const terminologyRef = useRef<Record<string, HTMLInputElement | null>>({});
   const { data: software } = trpc.playbook.getSoftware.useQuery();
   const { data: config } = trpc.playbook.getConfig.useQuery();
   const { data: tenant } = trpc.playbook.getTenant.useQuery();
@@ -42,11 +43,25 @@ export function Playbook() {
   const { data: userPlaybook } = trpc.playbook.getUser.useQuery();
   const aiChat = trpc.ai.chat.useMutation();
   const saveInstruction = trpc.ai.saveInstruction.useMutation();
+  const updateTenant = trpc.playbook.updateTenantConfig.useMutation();
   const utils = trpc.useUtils();
 
   const handleSaveTenant = () => {
-    // TODO: playbook.updateTenant mutation not yet implemented
-    toast.success("Changes saved");
+    const updatedTerminology: Record<string, string> = {};
+    for (const [key, ref] of Object.entries(terminologyRef.current)) {
+      if (ref) updatedTerminology[key] = ref.value;
+    }
+    updateTenant.mutate(
+      { terminology: JSON.stringify(updatedTerminology) },
+      {
+        onSuccess: () => {
+          toast.success("Changes saved");
+          void utils.playbook.getConfig.invalidate();
+          void utils.playbook.getTenant.invalidate();
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
   };
 
   const handleAiSend = () => {
@@ -193,7 +208,9 @@ export function Playbook() {
               <Sparkles className="size-4 mr-2" />
               Ask AI to Help
             </Button>
-            <Button onClick={handleSaveTenant}>Save</Button>
+            <Button onClick={handleSaveTenant} disabled={updateTenant.isPending}>
+              {updateTenant.isPending ? "Saving..." : "Save"}
+            </Button>
           </div>
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center gap-2">
@@ -204,7 +221,11 @@ export function Playbook() {
                 Object.entries(config.terminology).map(([k, v]) => (
                   <div key={k} className="flex items-center gap-2">
                     <Label className="w-24 shrink-0 text-muted-foreground">{k}</Label>
-                    <Input defaultValue={v} className="h-8" />
+                    <Input
+                      defaultValue={v}
+                      className="h-8"
+                      ref={(el) => { terminologyRef.current[k] = el; }}
+                    />
                   </div>
                 ))}
             </CardContent>

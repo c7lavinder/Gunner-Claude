@@ -91,19 +91,103 @@ export class GhlAdapter implements CrmAdapter {
   }
 
   async getOpportunity(opportunityId: string): Promise<CrmOpportunity | null> {
-    throw new Error("Not yet implemented");
+    try {
+      const data = (await ghlFetch(`/opportunities/${opportunityId}`, {
+        token: this.token,
+      })) as Record<string, unknown>;
+      const o = (data.opportunity ?? data) as Record<string, unknown>;
+      return {
+        id: String(o.id ?? opportunityId),
+        contactId: String(o.contactId ?? o.contact_id ?? ""),
+        name: String(o.name ?? ""),
+        pipelineId: String(o.pipelineId ?? o.pipeline_id ?? ""),
+        stageId: String(o.pipelineStageId ?? o.stageId ?? o.stage_id ?? ""),
+        value: o.monetaryValue != null ? Number(o.monetaryValue) : undefined,
+        customFields:
+          typeof o.customFields === "object"
+            ? (o.customFields as Record<string, unknown>)
+            : undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 
   async getOpportunities(pipelineId?: string): Promise<CrmOpportunity[]> {
-    throw new Error("Not yet implemented");
+    try {
+      const params = new URLSearchParams({ location_id: this.locationId });
+      if (pipelineId) params.set("pipeline_id", pipelineId);
+      const data = (await ghlFetch(`/opportunities/search?${params}`, {
+        token: this.token,
+      })) as { opportunities?: Array<Record<string, unknown>> };
+      return (data.opportunities ?? []).map((o) => ({
+        id: String(o.id ?? ""),
+        contactId: String(o.contactId ?? o.contact_id ?? ""),
+        name: String(o.name ?? ""),
+        pipelineId: String(o.pipelineId ?? o.pipeline_id ?? ""),
+        stageId: String(o.pipelineStageId ?? o.stageId ?? o.stage_id ?? ""),
+        value: o.monetaryValue != null ? Number(o.monetaryValue) : undefined,
+        customFields:
+          typeof o.customFields === "object"
+            ? (o.customFields as Record<string, unknown>)
+            : undefined,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   async getTasks(assignedTo?: string): Promise<CrmTask[]> {
-    throw new Error("Not yet implemented");
+    try {
+      const params = new URLSearchParams({ locationId: this.locationId });
+      if (assignedTo) params.set("assignedTo", assignedTo);
+      const data = (await ghlFetch(`/contacts/tasks?${params}`, {
+        token: this.token,
+      })) as { tasks?: Array<Record<string, unknown>> };
+      return (data.tasks ?? []).map((t) => ({
+        id: String(t.id ?? ""),
+        title: String(t.title ?? t.name ?? ""),
+        description: t.body ? String(t.body) : t.description ? String(t.description) : undefined,
+        assignedTo: t.assignedTo ? String(t.assignedTo) : undefined,
+        contactId: t.contactId ? String(t.contactId) : undefined,
+        dueDate: t.dueDate ? String(t.dueDate) : undefined,
+        completed: Boolean(t.completed ?? t.isCompleted ?? false),
+      }));
+    } catch {
+      return [];
+    }
   }
 
   async getConversation(contactId: string): Promise<CrmConversation | null> {
-    throw new Error("Not yet implemented");
+    try {
+      const params = new URLSearchParams({
+        locationId: this.locationId,
+        contactId,
+      });
+      const data = (await ghlFetch(`/conversations/search?${params}`, {
+        token: this.token,
+      })) as { conversations?: Array<Record<string, unknown>> };
+      const conv = data.conversations?.[0];
+      if (!conv) return null;
+      const rawMessages = (conv.messages ?? []) as Array<Record<string, unknown>>;
+      return {
+        id: String(conv.id ?? ""),
+        contactId,
+        messages: rawMessages.map((m) => ({
+          id: String(m.id ?? m.messageId ?? ""),
+          direction: m.direction === "inbound" ? ("inbound" as const) : ("outbound" as const),
+          body: String(m.body ?? m.message ?? m.text ?? ""),
+          timestamp: String(m.dateAdded ?? m.createdAt ?? m.timestamp ?? ""),
+          type: (m.type === "SMS" || m.type === "sms"
+            ? "sms"
+            : m.type === "EMAIL" || m.type === "email"
+              ? "email"
+              : "call") as "sms" | "email" | "call",
+        })),
+      };
+    } catch {
+      return null;
+    }
   }
 
   async getCallRecordings(since: Date): Promise<CrmCallRecording[]> {
