@@ -254,7 +254,7 @@ export function Training() {
           <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col m-4" style={{ background: "var(--g-bg-card)" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
               <h3 className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{selectedMaterial.title}</h3>
-              <Button variant="ghost" size="icon" onClick={() => setSelectedMaterial(null)}><X className="size-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close" onClick={() => setSelectedMaterial(null)}><X className="size-4" /></Button>
             </div>
             <ScrollArea className="flex-1 p-4">
               <div className="prose prose-sm max-w-none" style={{ color: "var(--g-text-secondary)" }}>
@@ -274,7 +274,7 @@ export function Training() {
           <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col m-4" style={{ background: "var(--g-bg-card)" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
               <h3 className="font-semibold" style={{ color: "var(--g-text-primary)" }}>Coaching Session</h3>
-              <Button variant="ghost" size="icon" onClick={() => { setCoachingOpen(false); setRoleplayResponse(null); }}><X className="size-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close" onClick={() => { setCoachingOpen(false); setRoleplayResponse(null); }}><X className="size-4" /></Button>
             </div>
             <ScrollArea className="flex-1 p-4">
               {roleplayMutation.isPending && (

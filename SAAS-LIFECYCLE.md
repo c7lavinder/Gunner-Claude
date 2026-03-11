@@ -153,11 +153,11 @@ Pipeline command center, not a property list. Asset-focused (not contact-focused
 
 ### Remaining Gaps
 
-- Phase 0: 9 IDOR endpoints need tenant checks, login lockout after 10 fails, webhook signature verification
-- Phase 3: NAH markets/zip codes, lead sources, KPI targets, algorithm overrides not configured
-- Phase 4: Coaching memory distillation, action pattern analysis, proactive suggestions, voice sample extraction, consent toggle
-- Phase 5: Empowerment messaging, signup re-enable, 5 industry landing pages, dark mode audit, gamification fixes
-- Dead pages not yet deleted. No real-time features (WebSockets). No mobile app.
+- Phase 0: ✅ Complete — IDOR endpoints fixed (old monolith gone, all new routers tenant-scoped), login lockout done, webhook HMAC done
+- Phase 3: NAH markets/zip codes, lead sources, KPI targets, algorithm overrides not configured (needs real GHL data)
+- Phase 4: Action pattern analysis, proactive suggestions, voice sample extraction, consent toggle (coaching memory distillation ✅ done)
+- Phase 5: Empowerment messaging, signup re-enable, 5 industry landing pages, dark mode audit (gamification ✅ fixed)
+- No real-time features (WebSockets). No mobile app.
 
 ---
 
@@ -186,8 +186,8 @@ Every trigger follows the rule: ONE input → ONE action → ONE result → ONE 
 | 1 | Hardcoded Supabase service key fallback in storage.ts | CRITICAL | ✅ FIXED — throws if missing, no fallback |
 | 2 | JWT secret defaults to "dev-secret" in context.ts | CRITICAL | ✅ FIXED — uses `required()`, server won't start without it |
 | 3 | 9 endpoints without tenant check (teamMembers.getById, etc.) | HIGH | ✅ RESOLVED — these endpoints from old monolith no longer exist; all new routers have tenantId checks |
-| 4 | Login rate limiting with account lockout after 10 fails | MEDIUM | Needs fix |
-| 5 | Webhook signature verification (GHL webhook authenticity) | MEDIUM | Needs fix |
+| 4 | Login rate limiting with account lockout after 10 fails | MEDIUM | ✅ FIXED — failedLoginAttempts + lockedUntil on users table, 10 fails → 30 min lock |
+| 5 | Webhook signature verification (GHL webhook authenticity) | MEDIUM | ✅ FIXED — HMAC-SHA256 via GHL_WEBHOOK_SECRET env var in middleware/webhook.ts |
 
 ### Cloud + DevOps
 
@@ -327,16 +327,13 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 
 **What works:** 28 badges (5 categories, 3 tiers: Bronze/Silver/Gold), XP system (10 base + grade bonus), 25 levels (0→350K XP), hot streaks + consistency streaks, confetti on badge unlock.
 
-**What's broken/missing:**
-- Consistency King badge (consistency_days) -- no process exists
-- Volume badges (weekly_volume: Volume Dialer, Cold Call Warrior, Deal Machine) -- not implemented
-- Closer badge (deals criteria) -- not implemented
-- Improvement XP (+20 for 2+ letter grade jump) -- defined but never awarded
-- Dispo Manager badge icons missing
-- Gamification leaderboard missing full team member data (names/avatars broken in XP mode)
-- Badge evaluation only runs on call view, not on grade completion
+**What works (fixed March 2026):**
+- Improvement XP: awarded in `processCallGamification` when score > prevAvg by 5+ pts ✅
+- Weekly volume badges: `volume_dialer_10`, `volume_warrior_25`, `volume_machine_50` ✅
+- Consistency badges: `consistency_3/7/14/30` -- all tracked ✅
+- Closer badges: evaluated in `processDealClosedGamification` (on stage change) ✅
 
-**Enhancements planned:** Daily/weekly challenges, badge rarity visuals (glow effects), XP history timeline, streak freeze, custom tenant badges, team challenges.
+**Enhancements still planned:** Daily/weekly challenges, badge rarity visuals (glow effects), XP history timeline, streak freeze, custom tenant badges, team challenges.
 
 ### Current State
 
@@ -346,7 +343,7 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 - **Feature Adoption:** Gamification drives rep engagement. AI Coach provides in-app coaching.
 - **Churn Reduction:** outreach_history table exists. Weekly digest job running.
 
-**Gaps:** 4 broken badge criteria. Improvement XP not awarded. No help center. No in-app NPS. Loops drip not implemented. No churn prediction.
+**Gaps:** No help center. No in-app NPS. Loops drip not implemented. No churn prediction.
 
 ---
 
@@ -441,3 +438,4 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | 2026-03-10 | Auth | Fixed Google OAuth routing: new users → /onboarding, trust proxy added | Claude |
 | 2026-03-10 | Gamification | Wired improvement XP (was never called), fixed improvement badge logic, added weekly volume badges | Claude |
 | 2026-03-10 | Intelligence | Coaching memory distillation job: weekly GPT-4o summarizes AI coach conversations → updates user_playbooks | Claude |
+| 2026-03-10 | Quality | Final hardening pass: accessibility aria-labels on all icon-only buttons (Training, Settings, Onboarding, Inventory, Playbook, ActionConfirmDialog, SearchableDropdown); corrected stale sections in SAAS-LIFECYCLE (gamification all fixed, Phase 0 security all fixed) | Claude |

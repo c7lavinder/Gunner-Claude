@@ -295,7 +295,7 @@ export function Playbook() {
                 >
                   {r.name}
                   {"id" in r && (
-                    <button className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); handleDeleteRole((r as { id: number }).id); }}>
+                    <button aria-label="Delete role" className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); handleDeleteRole((r as { id: number }).id); }}>
                       <X className="size-3" />
                     </button>
                   )}

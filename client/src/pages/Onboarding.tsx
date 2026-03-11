@@ -187,14 +187,14 @@ export function Onboarding() {
                   <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="icon" variant="outline" onClick={addMember}><Plus className="size-4" /></Button>
+              <Button size="icon" variant="outline" aria-label="Add team member" onClick={addMember}><Plus className="size-4" /></Button>
             </div>
             {members.length > 0 && (
               <ul className="space-y-2">
                 {members.map((m, i) => (
                   <li key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-[var(--g-bg-surface)]">
                     <span>{m.name} ({m.email}) — {m.role}</span>
-                    <Button variant="ghost" size="icon" onClick={() => removeMember(i)}><Trash2 className="size-4" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Remove member" onClick={() => removeMember(i)}><Trash2 className="size-4" /></Button>
                   </li>
                 ))}
               </ul>

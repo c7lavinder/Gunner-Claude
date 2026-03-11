@@ -144,7 +144,7 @@ export function ActionConfirmDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>What</Label>
-                {onEdit && !editing && <Button variant="ghost" size="sm" onClick={() => setEditing(true)}><PencilIcon className="size-4" /></Button>}
+                {onEdit && !editing && <Button variant="ghost" size="sm" aria-label="Edit" onClick={() => setEditing(true)}><PencilIcon className="size-4" /></Button>}
               </div>
               {editing ? (
                 <div className="space-y-2">

@@ -251,16 +251,16 @@ export function Inventory() {
                         <span>{daysInStage(item.stageChangedAt)}d in stage</span><span>Last: {item.lastContactedAt ? new Date(item.lastContactedAt).toLocaleDateString() : "—"}</span>
                       </div>
                       <div className="flex gap-1 pt-1" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openAction("sms", item, { message: "" })}>
+                        <Button variant="ghost" size="icon-sm" aria-label="Send SMS" onClick={() => openAction("sms", item, { message: "" })}>
                           <MessageSquare className="size-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openAction("note", item, { body: "" })}>
+                        <Button variant="ghost" size="icon-sm" aria-label="Add note" onClick={() => openAction("note", item, { body: "" })}>
                           <StickyNote className="size-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openAction("task", item, { title: "", description: "" })}>
+                        <Button variant="ghost" size="icon-sm" aria-label="Create task" onClick={() => openAction("task", item, { title: "", description: "" })}>
                           <ListTodo className="size-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openAction("stage_change", item, { stageCode: item.status })}>
+                        <Button variant="ghost" size="icon-sm" aria-label="Change stage" onClick={() => openAction("stage_change", item, { stageCode: item.status })}>
                           <ArrowRightLeft className="size-4" />
                         </Button>
                       </div>

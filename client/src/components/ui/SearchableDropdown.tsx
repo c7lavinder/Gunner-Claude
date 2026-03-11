@@ -115,7 +115,7 @@ export function SearchableDropdown({
               className="h-8 border-0 p-0 shadow-none focus-visible:ring-0"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="shrink-0">
+              <button aria-label="Clear search" onClick={() => setSearch("")} className="shrink-0">
                 <X className="size-3 text-muted-foreground" />
               </button>
             )}

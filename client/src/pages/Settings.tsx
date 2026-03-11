@@ -400,7 +400,7 @@ export function Settings() {
                             </SelectContent>
                           </Select>
                         </div>
-                        {isAdmin && <Button variant="ghost" size="icon" onClick={() => removeMember(m.id)} disabled={removeMutation.isPending}><Trash2 className="size-4" style={{ color: "var(--g-text-tertiary)" }} /></Button>}
+                        {isAdmin && <Button variant="ghost" size="icon" aria-label="Remove member" onClick={() => removeMember(m.id)} disabled={removeMutation.isPending}><Trash2 className="size-4" style={{ color: "var(--g-text-tertiary)" }} /></Button>}
                       </div>
                     ))
                   )}

@@ -1,7 +1,7 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 10, 2026 — **FEATURE COMPLETE**
-> Last deploy: commit `df3ad82` — Railway deploying
+> Last updated: March 10, 2026 — **FEATURE COMPLETE + HARDENED**
+> Last deploy: commit `65dfb37` — Railway live
 > Type check: `npx tsc --noEmit` — 0 errors
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
@@ -10,7 +10,13 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ## Completed Work
 
-### Final Build Session (Batches 1–5 — just completed)
+### Final Hardening Pass (just completed)
+
+- [x] **Accessibility:** `aria-label` added to all icon-only buttons — Training (2 close buttons), Settings (remove member), Onboarding (add/remove member), Inventory (SMS, note, task, stage buttons), Playbook (delete role), ActionConfirmDialog (edit pencil), SearchableDropdown (clear search)
+- [x] **SAAS-LIFECYCLE.md:** Corrected stale sections — gamification (all 4 "broken" badges were already fixed in prior session), security (Phase 0 items 4+5 were already fixed), Phase 0 remaining gaps section updated to reflect reality
+- [x] **Type check:** `npx tsc --noEmit` — 0 errors confirmed
+
+### Final Build Session (Batches 1–5 — prior session)
 
 - [x] **Batch 1 — RBAC:** `requireRole` helper in `server/_core/sdk.ts`; role guards on all write procedures in settings/team/playbook routers; `isAdmin`/`isManager`/`isMember` booleans in `useAuth`; admin-gated UI in Settings + Team page
 - [x] **Batch 2 — Session Management:** `sessions` table + startupMigration; session insert on every login/signup/googleCallback; `listSessions`/`revokeSession`/`revokeAllSessions` tRPC procedures; Sessions tab in Settings showing all active devices
@@ -65,13 +71,15 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ## What Remains (known gaps — not blockers)
 
-### Non-blockers / Nice-to-haves
-
-- [ ] E2E testing setup: Playwright
+### Needs external config / production data (not code issues)
 - [ ] Import NAH team members + map to GHL user IDs (needs real GHL data)
-- [ ] Supabase bucket: `gunner-voice-samples` (create in Supabase dashboard)
-- [ ] Testimonials from DB (currently hardcoded in landing page)
-- [ ] Full accessibility pass (aria-labels on icon-only buttons, form labels, keyboard nav)
+- [ ] Supabase bucket: `gunner-voice-samples` (create manually in Supabase dashboard)
+- [ ] GHL OAuth end-to-end test (built, needs live GHL OAuth app credentials)
+- [ ] Google OAuth login loop (likely fixed — needs production verification with real cookies)
+
+### Future features (enhancement backlog)
+- [ ] E2E testing: Playwright
+- [ ] Testimonials from DB (currently hardcoded in landing page — needs testimonials table + admin UI)
 - [ ] Funnel charts, heat maps, trend sparklines
 - [ ] AI-generated training content based on team weak areas
 - [ ] Daily/weekly gamification challenges
@@ -81,13 +89,16 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [ ] Action history per contact (every SMS, note, task, stage change)
 - [ ] 5-second undo window for non-destructive actions
 - [ ] SMS/note templates per role (from Tenant Playbook)
+- [ ] NAH markets/zip codes, lead sources, KPI targets in tenant playbook
+- [ ] Voice sample collection UI + consent toggle
+- [ ] Proactive AI suggestions (V2 intelligence loop)
 
 ---
 
 ## Known Issues
 
-1. **Google OAuth login loop** — Likely fixed by: (a) adding `trust proxy` for Railway's reverse proxy, (b) routing new users to `/onboarding` instead of `/today`. Needs production verification.
-2. **GHL OAuth not tested end-to-end** — The OAuth flow (server/services/ghlOAuth.ts + Settings UI) is built but hasn't been tested with a real GHL OAuth app credential.
+1. **Google OAuth login loop** — Likely fixed by: (a) `trust proxy: 1` for Railway's reverse proxy, (b) routing new users to `/onboarding` instead of `/today`. Needs production verification.
+2. **GHL OAuth not tested end-to-end** — Built (server/services/ghlOAuth.ts + Settings UI) but hasn't been tested with a real GHL OAuth app credential. Not a code bug.
 
 ---
 
