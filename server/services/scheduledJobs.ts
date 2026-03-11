@@ -428,6 +428,96 @@ export async function analyzeActionPatterns(tenantId: number): Promise<number> {
   return analyzed;
 }
 
+// ─── Daily AI Suggestions ───────────────────────────────
+
+/**
+ * Daily job: generates 1-2 proactive coaching suggestions for each active rep.
+ * Runs at 8am per the hourly interval trigger in startScheduledJobs.
+ * Skips users who already have suggestions in the last 20 hours.
+ */
+export async function generateDailySuggestions(): Promise<number> {
+  const activeTenants = await db.select().from(tenants).where(eq(tenants.onboardingCompleted, "true"));
+  let totalGenerated = 0;
+
+  for (const tenant of activeTenants) {
+    const members = await db
+      .select({ id: teamMembers.id, userId: teamMembers.userId })
+      .from(teamMembers)
+      .where(and(eq(teamMembers.tenantId, tenant.id), eq(teamMembers.isActive, "true")));
+
+    for (const member of members) {
+      if (!member.userId) continue;
+      try {
+        // Skip if suggestions already generated in the last 20 hours
+        const twentyHoursAgo = new Date(Date.now() - 20 * 60 * 60 * 1000);
+        const [recent] = await db
+          .select({ id: aiSuggestions.id })
+          .from(aiSuggestions)
+          .where(
+            and(
+              eq(aiSuggestions.userId, member.userId),
+              eq(aiSuggestions.tenantId, tenant.id),
+              gte(aiSuggestions.createdAt, twentyHoursAgo)
+            )
+          )
+          .limit(1);
+        if (recent) continue;
+
+        // Read user playbook for context
+        const [userPb] = await db
+          .select({ strengths: userPlaybooks.strengths, growthAreas: userPlaybooks.growthAreas, gradeTrend: userPlaybooks.gradeTrend, instructions: userPlaybooks.instructions })
+          .from(userPlaybooks)
+          .where(eq(userPlaybooks.userId, member.userId))
+          .limit(1);
+
+        const strengths = userPb?.strengths && Array.isArray(userPb.strengths) ? (userPb.strengths as string[]).join(", ") : "not yet identified";
+        const growthAreas = userPb?.growthAreas && Array.isArray(userPb.growthAreas) ? (userPb.growthAreas as string[]).join(", ") : "not yet identified";
+        const gradeTrend = userPb?.gradeTrend ?? "stable";
+        const actionPatterns = userPb?.instructions && typeof userPb.instructions === "object" && !Array.isArray(userPb.instructions)
+          ? JSON.stringify((userPb.instructions as Record<string, unknown>).actionPatterns ?? {})
+          : "{}";
+
+        const prompt = `You are a sales coaching AI. Based on this rep's profile, generate 1-2 actionable suggestions for today. Be specific and brief.
+
+Rep profile:
+- Strengths: ${strengths}
+- Growth areas: ${growthAreas}
+- Grade trend: ${gradeTrend}
+- Action patterns: ${actionPatterns}
+
+Return JSON array only:
+[{"suggestionType": "coaching_tip" | "action_reminder" | "practice_drill", "content": "suggestion (1-2 sentences)"}]`;
+
+        const raw = await chatCompletion({
+          model: "gpt-4o",
+          messages: [
+            { role: "system", content: "You are a sales coaching AI. Return valid JSON array only." },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.4,
+          maxTokens: 256,
+        });
+
+        const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "")) as Array<{ suggestionType: string; content: string }>;
+
+        for (const s of parsed) {
+          await db.insert(aiSuggestions).values({
+            tenantId: tenant.id,
+            userId: member.userId,
+            suggestionType: s.suggestionType,
+            content: s.content,
+            status: "shown",
+          });
+          totalGenerated++;
+        }
+      } catch (e) {
+        console.error(`[daily-suggestions] Tenant ${tenant.id} member ${member.id}:`, e);
+      }
+    }
+  }
+  return totalGenerated;
+}
+
 // ─── Job Runner ─────────────────────────────────────────
 
 export function startScheduledJobs(): void {
@@ -505,4 +595,17 @@ export function startScheduledJobs(): void {
       }
     }
   }, 24 * 60 * 60 * 1000);
+
+  // Daily AI suggestions: runs every hour, triggers at 8am
+  setInterval(async () => {
+    const day = new Date();
+    if (day.getHours() !== 8 || day.getMinutes() >= 5) return;
+    console.log("[jobs] Running daily AI suggestions");
+    try {
+      const count = await generateDailySuggestions();
+      if (count > 0) console.log(`[daily-suggestions] Generated ${count} suggestions across all tenants`);
+    } catch (e) {
+      console.error("[daily-suggestions]", e);
+    }
+  }, 60 * 60 * 1000);
 }

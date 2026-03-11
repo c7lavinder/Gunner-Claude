@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Search, Send, PhoneMissed, Calendar, CheckSquare } from "lucide-react";
+import { Search, Send, PhoneMissed, Calendar, CheckSquare, Sparkles } from "lucide-react";
 import { ActionConfirmDialog } from "@/components/actions/ActionConfirmDialog";
 import { useAction } from "@/hooks/useActions";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
@@ -26,7 +26,9 @@ export function Today() {
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [callTarget, setCallTarget] = useState<{ name: string; phone: string; ghlContactId?: string } | null>(null);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
+  const [tipDismissed, setTipDismissed] = useState(false);
   const completeTask = trpc.today.completeTask.useMutation();
+  const reactToSuggestion = trpc.ai.reactToSuggestion.useMutation();
   const todayUtils = trpc.useUtils();
 
   const searchTerm = search.trim() || undefined;
@@ -38,6 +40,7 @@ export function Today() {
   const { data: appointments } = trpc.today.getAppointments.useQuery();
   const { data: taskData } = trpc.today.getTasks.useQuery();
   const { data: stats } = trpc.today.getStats.useQuery();
+  const { data: suggestions } = trpc.ai.getSuggestions.useQuery();
 
   const convosList = convos ?? [];
   const selectedConvData = selectedConv ? convosList.find((c) => c.id === selectedConv) : null;
@@ -85,6 +88,30 @@ export function Today() {
           <span>{stats.tasksToday} tasks</span>
         </div>
       )}
+
+      {!tipDismissed && suggestions && suggestions.length > 0 && (
+        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
+          <CardContent className="py-3 px-4 flex items-start gap-3">
+            <Sparkles className="size-4 mt-0.5 shrink-0 text-[var(--g-accent-text)]" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-[var(--g-accent-text)] mb-0.5">AI Coach Tip</p>
+              <p className="text-sm text-[var(--g-text-primary)]">{suggestions[0].content}</p>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="shrink-0 text-xs text-[var(--g-text-tertiary)] hover:text-[var(--g-text-secondary)] px-2 h-7"
+              onClick={() => {
+                setTipDismissed(true);
+                reactToSuggestion.mutate({ id: suggestions[0].id, reaction: "dismissed" });
+              }}
+            >
+              Dismiss
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-[55%_45%]">
         <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden">
           <CardHeader className="flex-row items-center justify-between gap-2 py-4">

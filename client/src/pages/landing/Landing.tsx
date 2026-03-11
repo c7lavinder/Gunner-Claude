@@ -2,6 +2,8 @@ import { Link } from "wouter";
 import { GraduationCap, BarChart3, Zap, Package, Users, Shield, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const INDUSTRIES = [
   { slug: "wholesaling-real-estate", name: "Real Estate Wholesaling", tag: "Most Popular" },
@@ -17,6 +19,52 @@ const STATS = [
   { value: "5 min", label: "Setup time" },
 ];
 
+const FAQ_ITEMS = [
+  {
+    q: "How much does Gunner cost?",
+    a: "We offer a free Starter plan for up to 3 team members. Pro is $99/month for unlimited team members and call grades. Enterprise is custom pricing. All plans include a 14-day free trial.",
+  },
+  {
+    q: "Which CRMs does Gunner work with?",
+    a: "Gunner currently integrates natively with GoHighLevel (GHL) via OAuth. We're actively building HubSpot, Salesforce, and Close integrations. Any CRM with recording URLs can be connected via manual API key.",
+  },
+  {
+    q: "How long does setup take?",
+    a: "Most teams are fully set up in under 5 minutes. Connect your GHL account, pick your industry playbook, and invite your team. Your first calls will start grading automatically.",
+  },
+  {
+    q: "Is my call data secure?",
+    a: "Yes. All recordings and transcripts are encrypted in transit and at rest. We store audio files in Supabase's secure object storage. We never share your data with third parties.",
+  },
+  {
+    q: "Do you offer a free trial?",
+    a: "Yes, every new account starts with a 14-day free trial of the Pro plan. No credit card required. Downgrade to our free Starter plan anytime.",
+  },
+  {
+    q: "How accurate is AI call grading?",
+    a: "Our AI grades calls against industry-specific rubrics developed with sales experts. In internal testing, it aligns with human graders 87% of the time. Every grade includes an explanation so reps understand exactly why they scored what they did.",
+  },
+  {
+    q: "What kind of support do you offer?",
+    a: "Starter plan includes email support. Pro includes priority email support with a 4-hour response SLA. Enterprise customers get a dedicated account manager and phone support.",
+  },
+  {
+    q: "Are there long-term contracts?",
+    a: "No contracts. Gunner is month-to-month. Cancel anytime. If you upgrade to annual billing, you get 2 months free.",
+  },
+];
+
+const INTEGRATIONS = [
+  { name: "GoHighLevel", status: "live" },
+  { name: "HubSpot", status: "coming-soon" },
+  { name: "Salesforce", status: "coming-soon" },
+  { name: "Close.io", status: "coming-soon" },
+  { name: "Stripe", status: "live" },
+  { name: "OpenAI", status: "live" },
+  { name: "Supabase", status: "live" },
+  { name: "Twilio", status: "live" },
+];
+
 export function Landing() {
   return (
     <div className="dark min-h-screen scroll-smooth bg-[var(--g-bg-base)]">
@@ -30,6 +78,8 @@ export function Landing() {
           <a href="#industries" className="obs-topnav-tab">Industries</a>
           <a href="#pricing" className="obs-topnav-tab">Pricing</a>
           <a href="#how-it-works" className="obs-topnav-tab">How It Works</a>
+          <a href="#integrations" className="obs-topnav-tab">Integrations</a>
+          <a href="#faq" className="obs-topnav-tab">FAQ</a>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/login"><Button variant="ghost">Sign In</Button></Link>
@@ -160,6 +210,31 @@ export function Landing() {
           </div>
         </section>
 
+        <section id="integrations" className="py-24 px-6 border-t border-[var(--g-border-subtle)] bg-[var(--g-bg-surface)]">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-3xl font-bold text-center mb-4">Works With Your Stack</h2>
+            <p className="text-center text-[var(--g-text-secondary)] mb-12 max-w-xl mx-auto">Native CRM integrations + the AI and billing tools your team already uses.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {INTEGRATIONS.map((int) => (
+                <Card key={int.name} className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
+                  <CardContent className="pt-5 pb-4 flex flex-col items-center gap-3 text-center">
+                    <p className="font-medium text-sm">{int.name}</p>
+                    {int.status === "live" ? (
+                      <Badge variant="outline" className="text-[10px] border-[var(--g-accent-medium)]" style={{ color: "var(--g-accent-text)" }}>
+                        Connected
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] text-[var(--g-text-tertiary)] border-[var(--g-border-subtle)]">
+                        Coming Soon
+                      </Badge>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section id="pricing" className="py-24 px-6 border-t border-[var(--g-border-subtle)]">
           <div className="max-w-5xl mx-auto">
             <h2 className="text-3xl font-bold text-center mb-4">Simple, Transparent Pricing</h2>
@@ -263,6 +338,25 @@ export function Landing() {
                 </Card>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section id="faq" className="py-24 px-6 border-t border-[var(--g-border-subtle)]">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-3xl font-bold text-center mb-4">Frequently Asked Questions</h2>
+            <p className="text-center text-[var(--g-text-secondary)] mb-12">Everything you need to know before getting started.</p>
+            <Accordion type="single" collapsible className="space-y-2">
+              {FAQ_ITEMS.map((item, index) => (
+                <AccordionItem key={index} value={`item-${index}`} className="border border-[var(--g-border-subtle)] rounded-lg px-4 bg-[var(--g-bg-card)]">
+                  <AccordionTrigger className="text-left font-medium hover:no-underline py-4">
+                    {item.q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-sm text-[var(--g-text-secondary)] pb-4 leading-relaxed">
+                    {item.a}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </div>
         </section>
 

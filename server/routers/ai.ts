@@ -246,6 +246,23 @@ Generate 2-3 items. Be specific, not generic.`;
     return inserted;
   }),
 
+  reactToSuggestion: protectedProcedure
+    .input(z.object({ id: z.number(), reaction: z.enum(["dismissed", "accepted", "acted_on"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const [row] = await db
+        .update(aiSuggestions)
+        .set({ status: input.reaction, reactedAt: new Date() })
+        .where(
+          and(
+            eq(aiSuggestions.id, input.id),
+            eq(aiSuggestions.userId, ctx.user.userId),
+            eq(aiSuggestions.tenantId, ctx.user.tenantId)
+          )
+        )
+        .returning();
+      return row ?? null;
+    }),
+
   trackEvent: protectedProcedure
     .input(
       z.object({
