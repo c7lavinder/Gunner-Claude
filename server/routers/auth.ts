@@ -290,8 +290,11 @@ export const authRouter = router({
       // matches the owner account — covers first-time Google login as super admin
       let resolvedUser = user;
       if (!user.tenantId && user.email) {
-        const NAH_ADMIN_EMAIL = "corey@newagainhouses.com";
-        if (user.email.toLowerCase() === NAH_ADMIN_EMAIL.toLowerCase()) {
+        const NAH_ADMIN_EMAILS = [
+          "corey@newagainhouses.com",
+          "xhakalavinder@gmail.com",
+        ];
+        if (NAH_ADMIN_EMAILS.includes(user.email.toLowerCase())) {
           const [nahTenant] = await db
             .select({ id: tenants.id })
             .from(tenants)
