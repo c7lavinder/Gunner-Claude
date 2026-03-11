@@ -1,9 +1,0 @@
-{
-  "query": "SELECT u1.id as id1, u1.name as name1, u1.email as email1, u2.id as id2, u2.name as name2, u2.email as email2 FROM users u1 JOIN users u2 ON LOWER(u1.email) = LOWER(u2.email) AND u1.id < u2.id;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT u1.id as id1, u1.name as name1, u1.email as email1, u2.id as id2, u2.name as name2, u2.email as email2 FROM users u1 JOIN users u2 ON LOWER(u1.email) = LOWER(u2.email) AND u1.id < u2.id;",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 338
-}

@@ -1,9 +1,0 @@
-{
-  "query": "ALTER TABLE property_buyer_activity ADD COLUMN responseCount INT NOT NULL DEFAULT 0, ADD COLUMN lastResponseAt TIMESTAMP NULL, ADD COLUMN lastResponseNote TEXT NULL;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE property_buyer_activity ADD COLUMN responseCount INT NOT NULL DEFAULT 0, ADD COLUMN lastResponseAt TIMESTAMP NULL, ADD COLUMN lastResponseNote TEXT NULL;",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 896
-}

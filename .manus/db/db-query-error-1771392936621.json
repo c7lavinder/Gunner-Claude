@@ -1,8 +1,0 @@
-{
-  "query": "SELECT id, user_id, action_type, request_text, target_contact_name, target_contact_id, status, created_at FROM coach_action_log WHERE target_contact_name IN ('John Smith', 'John', 'Jose Ruiz') OR request_text LIKE '%Multi-action%' OR request_text LIKE '%Test task%' OR request_text LIKE '%test%' OR target_contact_id = 'ghl_contact_123' ORDER BY created_at DESC LIMIT 100;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, user_id, action_type, request_text, target_contact_name, target_contact_id, status, created_at FROM coach_action_log WHERE target_contact_name IN ('John Smith', 'John', 'Jose Ruiz') OR request_text LIKE '%Multi-action%' OR request_text LIKE '%Test task%' OR request_text LIKE '%test%' OR target_contact_id = 'ghl_contact_123' ORDER BY created_at DESC LIMIT 100;",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1054 (42S22) at line 1: Unknown column 'target_contact_name' in 'where clause'"
-  ]
-}

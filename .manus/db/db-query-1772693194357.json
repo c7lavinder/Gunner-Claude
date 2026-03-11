@@ -1,9 +1,0 @@
-{
-  "query": "ALTER TABLE `dispo_properties` ADD COLUMN `leadSource` varchar(100); ALTER TABLE `dispo_properties` ADD COLUMN `leadSourceDetail` varchar(255); ALTER TABLE `dispo_properties` ADD COLUMN `assignedAmUserId` int; ALTER TABLE `dispo_properties` ADD COLUMN `assignedLmUserId` int;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE `dispo_properties` ADD COLUMN `leadSource` varchar(100); ALTER TABLE `dispo_properties` ADD COLUMN `leadSourceDetail` varchar(255); ALTER TABLE `dispo_properties` ADD COLUMN `assignedAmUserId` int; ALTER TABLE `dispo_properties` ADD COLUMN `assignedLmUserId` int;",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 2167
-}

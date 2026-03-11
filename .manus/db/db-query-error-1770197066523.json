@@ -1,8 +1,0 @@
-{
-  "query": "ALTER TABLE users ADD COLUMN emailVerified ENUM('true', 'false') DEFAULT 'false';",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE users ADD COLUMN emailVerified ENUM('true', 'false') DEFAULT 'false';",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1060 (42S21) at line 1: Duplicate column name 'emailVerified'"
-  ]
-}

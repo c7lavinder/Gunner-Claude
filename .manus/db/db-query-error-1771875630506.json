@@ -1,8 +1,0 @@
-{
-  "query": "DELETE c FROM calls c INNER JOIN (SELECT batchDialerCallId, MIN(id) as minId FROM calls WHERE batchDialerCallId IS NOT NULL GROUP BY batchDialerCallId HAVING COUNT(*) > 1) dupes ON c.batchDialerCallId = dupes.batchDialerCallId WHERE c.id != dupes.minId;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute DELETE c FROM calls c INNER JOIN (SELECT batchDialerCallId, MIN(id) as minId FROM calls WHERE batchDialerCallId IS NOT NULL GROUP BY batchDialerCallId HAVING COUNT(*) > 1) dupes ON c.batchDialerCallId = dupes.batchDialerCallId WHERE c.id != dupes.minId;",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1451 (23000) at line 1: Cannot delete or update a parent row: a foreign key constraint fails (`nusxfqu5xbtmz3nucr6brb`.`reward_views`, CONSTRAINT `reward_views_callId_calls_id_fk` FOREIGN KEY (`callId`) REFERENCES `calls` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION)"
-  ]
-}

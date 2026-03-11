@@ -1,8 +1,0 @@
-{
-  "query": "SELECT id, callerName, duration, status, classificationReason FROM calls WHERE status = 'failed' ORDER BY createdAt DESC LIMIT 10;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, callerName, duration, status, classificationReason FROM calls WHERE status = 'failed' ORDER BY createdAt DESC LIMIT 10;",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1054 (42S22) at line 1: Unknown column 'callername' in 'field list'"
-  ]
-}

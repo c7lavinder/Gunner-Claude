@@ -1,9 +1,0 @@
-{
-  "query": "CREATE TABLE `user_streaks` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `teamMemberId` int NOT NULL,\n  `hotStreakCurrent` int NOT NULL DEFAULT 0,\n  `hotStreakBest` int NOT NULL DEFAULT 0,\n  `hotStreakLastCallId` int,\n  `consistencyStreakCurrent` int NOT NULL DEFAULT 0,\n  `consistencyStreakBest` int NOT NULL DEFAULT 0,\n  `consistencyLastDate` varchar(10),\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `user_streaks_id` PRIMARY KEY(`id`),\n  CONSTRAINT `user_streaks_teamMemberId_team_members_id_fk` FOREIGN KEY (`teamMemberId`) REFERENCES `team_members`(`id`) ON DELETE NO ACTION ON UPDATE NO ACTION\n);",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute CREATE TABLE `user_streaks` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `teamMemberId` int NOT NULL,\n  `hotStreakCurrent` int NOT NULL DEFAULT 0,\n  `hotStreakBest` int NOT NULL DEFAULT 0,\n  `hotStreakLastCallId` int,\n  `consistencyStreakCurrent` int NOT NULL DEFAULT 0,\n  `consistencyStreakBest` int NOT NULL DEFAULT 0,\n  `consistencyLastDate` varchar(10),\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `user_streaks_id` PRIMARY KEY(`id`),\n  CONSTRAINT `user_streaks_teamMemberId_team_members_id_fk` FOREIGN KEY (`teamMemberId`) REFERENCES `team_members`(`id`) ON DELETE NO ACTION ON UPDATE NO ACTION\n);",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 406
-}

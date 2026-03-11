@@ -1,9 +1,0 @@
-{
-  "query": "SELECT id, contactName, teamMemberName, status, classification, duration, callTimestamp, ghlCallId FROM calls WHERE (contactName LIKE '%Prince%' OR contactName LIKE '%Safi%' OR contactName LIKE '%Postma%' OR contactName LIKE '%Crumley%' OR contactName LIKE '%Hampton%') AND callTimestamp >= '2026-02-27 00:00:00' ORDER BY callTimestamp DESC LIMIT 20",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, contactName, teamMemberName, status, classification, duration, callTimestamp, ghlCallId FROM calls WHERE (contactName LIKE '%Prince%' OR contactName LIKE '%Safi%' OR contactName LIKE '%Postma%' OR contactName LIKE '%Crumley%' OR contactName LIKE '%Hampton%') AND callTimestamp >= '2026-02-27 00:00:00' ORDER BY callTimestamp DESC LIMIT 20",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 360
-}

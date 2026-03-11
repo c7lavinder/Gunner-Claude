@@ -1,9 +1,0 @@
-{
-  "query": "CREATE TABLE IF NOT EXISTS password_reset_tokens (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  userId INT NOT NULL,\n  token VARCHAR(255) NOT NULL UNIQUE,\n  expiresAt TIMESTAMP NOT NULL,\n  usedAt TIMESTAMP NULL,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  FOREIGN KEY (userId) REFERENCES users(id)\n);",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute CREATE TABLE IF NOT EXISTS password_reset_tokens (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  userId INT NOT NULL,\n  token VARCHAR(255) NOT NULL UNIQUE,\n  expiresAt TIMESTAMP NOT NULL,\n  usedAt TIMESTAMP NULL,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  FOREIGN KEY (userId) REFERENCES users(id)\n);",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 330
-}

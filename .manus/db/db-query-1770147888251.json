@@ -1,9 +1,0 @@
-{
-  "query": "CREATE TABLE IF NOT EXISTS outreach_history (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  tenantId INT NOT NULL,\n  templateType ENUM('7_day', '14_day', '30_day', 'custom') NOT NULL,\n  recipientEmail VARCHAR(320) NOT NULL,\n  recipientName VARCHAR(255),\n  daysInactive INT NOT NULL,\n  lastActivityDate TIMESTAMP NULL,\n  sentByUserId INT NULL,\n  sentByName VARCHAR(255),\n  emailOpened ENUM('true', 'false') DEFAULT 'false',\n  openedAt TIMESTAMP NULL,\n  tenantReactivated ENUM('true', 'false') DEFAULT 'false',\n  reactivatedAt TIMESTAMP NULL,\n  notes TEXT,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  FOREIGN KEY (tenantId) REFERENCES tenants(id),\n  FOREIGN KEY (sentByUserId) REFERENCES users(id)\n);",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute CREATE TABLE IF NOT EXISTS outreach_history (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  tenantId INT NOT NULL,\n  templateType ENUM('7_day', '14_day', '30_day', 'custom') NOT NULL,\n  recipientEmail VARCHAR(320) NOT NULL,\n  recipientName VARCHAR(255),\n  daysInactive INT NOT NULL,\n  lastActivityDate TIMESTAMP NULL,\n  sentByUserId INT NULL,\n  sentByName VARCHAR(255),\n  emailOpened ENUM('true', 'false') DEFAULT 'false',\n  openedAt TIMESTAMP NULL,\n  tenantReactivated ENUM('true', 'false') DEFAULT 'false',\n  reactivatedAt TIMESTAMP NULL,\n  notes TEXT,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  FOREIGN KEY (tenantId) REFERENCES tenants(id),\n  FOREIGN KEY (sentByUserId) REFERENCES users(id)\n);",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 327
-}

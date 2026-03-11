@@ -1,9 +1,0 @@
-{
-  "query": "ALTER TABLE kpi_deals \nADD COLUMN IF NOT EXISTS revenue INT DEFAULT 0,\nADD COLUMN IF NOT EXISTS profit INT DEFAULT 0;\n\nALTER TABLE kpi_deals \nDROP COLUMN IF EXISTS sellerName,\nDROP COLUMN IF EXISTS isNah,\nDROP COLUMN IF EXISTS contractPrice,\nDROP COLUMN IF EXISTS estimatedArv,\nDROP COLUMN IF EXISTS estimatedRepairs;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE kpi_deals \nADD COLUMN IF NOT EXISTS revenue INT DEFAULT 0,\nADD COLUMN IF NOT EXISTS profit INT DEFAULT 0;\n\nALTER TABLE kpi_deals \nDROP COLUMN IF EXISTS sellerName,\nDROP COLUMN IF EXISTS isNah,\nDROP COLUMN IF EXISTS contractPrice,\nDROP COLUMN IF EXISTS estimatedArv,\nDROP COLUMN IF EXISTS estimatedRepairs;",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 3334
-}

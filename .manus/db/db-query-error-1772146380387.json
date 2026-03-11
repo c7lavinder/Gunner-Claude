@@ -1,8 +1,0 @@
-{
-  "query": "SELECT id, name, created_at FROM tenants WHERE id IN (780001, 780004) OR name LIKE '%Test%' OR name LIKE '%Settings Test%' ORDER BY id;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute SELECT id, name, created_at FROM tenants WHERE id IN (780001, 780004) OR name LIKE '%Test%' OR name LIKE '%Settings Test%' ORDER BY id;",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1054 (42S22) at line 1: Unknown column 'created_at' in 'field list'"
-  ]
-}

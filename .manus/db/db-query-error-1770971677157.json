@@ -1,8 +1,0 @@
-{
-  "query": "\nUPDATE badge_progress SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE xp_events SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE user_levels SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE content_ideas SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE social_posts SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE brand_assets SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE brand_profile SET tenantId = 1 WHERE tenantId IS NULL;\n",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute \nUPDATE badge_progress SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE xp_events SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE user_levels SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE content_ideas SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE social_posts SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE brand_assets SET tenantId = 1 WHERE tenantId IS NULL;\nUPDATE brand_profile SET tenantId = 1 WHERE tenantId IS NULL;\n",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1146 (42S02) at line 3: Table 'nusxfqu5xbtmz3nucr6brb.xp_events' doesn't exist"
-  ]
-}

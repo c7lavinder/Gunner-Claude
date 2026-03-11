@@ -1,9 +1,0 @@
-{
-  "query": "UPDATE tenants SET crmConnected = 'false' WHERE crmType = 'ghl' AND id NOT IN (1, 450029) AND name LIKE '%Test%' OR (id >= 840000 AND crmType = 'ghl' AND id NOT IN (1, 450029))",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute UPDATE tenants SET crmConnected = 'false' WHERE crmType = 'ghl' AND id NOT IN (1, 450029) AND name LIKE '%Test%' OR (id >= 840000 AND crmType = 'ghl' AND id NOT IN (1, 450029))",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 73
-}

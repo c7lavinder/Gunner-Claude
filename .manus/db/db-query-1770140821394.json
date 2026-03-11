@@ -1,9 +1,0 @@
-{
-  "query": "UPDATE calls c\nJOIN team_members tm ON c.teamMemberId = tm.id\nSET c.tenantId = tm.tenantId\nWHERE c.tenantId IS NULL AND tm.tenantId IS NOT NULL;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute UPDATE calls c\nJOIN team_members tm ON c.teamMemberId = tm.id\nSET c.tenantId = tm.tenantId\nWHERE c.tenantId IS NULL AND tm.tenantId IS NOT NULL;",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 79
-}

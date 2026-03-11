@@ -1,9 +1,0 @@
-{
-  "query": "INSERT INTO tenant_roles (tenantId, name, code, description, isActive, sortOrder) VALUES (1, 'Disposition Manager', 'dispo_manager', 'Manages properties, showings & buyer offers', 'true', 4);",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute INSERT INTO tenant_roles (tenantId, name, code, description, isActive, sortOrder) VALUES (1, 'Disposition Manager', 'dispo_manager', 'Manages properties, showings & buyer offers', 'true', 4);",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 61
-}

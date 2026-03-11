@@ -1,9 +1,0 @@
-{
-  "query": "DELETE FROM tenant_rubrics WHERE tenantId IN (1000373, 1000374, 1000375, 1000376, 1000377, 1000378, 1000379)",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute DELETE FROM tenant_rubrics WHERE tenantId IN (1000373, 1000374, 1000375, 1000376, 1000377, 1000378, 1000379)",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 63
-}

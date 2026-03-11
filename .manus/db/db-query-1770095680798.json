@@ -1,9 +1,0 @@
-{
-  "query": "ALTER TABLE kpi_deals \nADD COLUMN inventoryStatus ENUM('for_sale', 'assigned', 'funded') DEFAULT 'for_sale',\nADD COLUMN location ENUM('nashville', 'nash_sw', 'knoxville', 'chattanooga', 'global', 'nah'),\nADD COLUMN lmName ENUM('chris', 'daniel'),\nADD COLUMN amName ENUM('kyle'),\nADD COLUMN dmName ENUM('esteban', 'steve'),\nADD COLUMN isNah ENUM('yes', 'no') DEFAULT 'no';",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2bTLYzeacnuAd6z.root --database nusXfQu5XBTMz3NUCR6brb --execute ALTER TABLE kpi_deals \nADD COLUMN inventoryStatus ENUM('for_sale', 'assigned', 'funded') DEFAULT 'for_sale',\nADD COLUMN location ENUM('nashville', 'nash_sw', 'knoxville', 'chattanooga', 'global', 'nah'),\nADD COLUMN lmName ENUM('chris', 'daniel'),\nADD COLUMN amName ENUM('kyle'),\nADD COLUMN dmName ENUM('esteban', 'steve'),\nADD COLUMN isNah ENUM('yes', 'no') DEFAULT 'no';",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 3521
-}
