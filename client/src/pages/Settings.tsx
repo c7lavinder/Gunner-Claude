@@ -328,7 +328,7 @@ export function Settings() {
                 </p>
                 <Button
                   onClick={() => {
-                    const redirectUri = `${window.location.origin}/settings?tab=crm&ghl_callback=1`;
+                    const redirectUri = `${window.location.origin}/settings?tab=crm&crm_callback=1`;
                     window.location.href = `/api/trpc/settings.getGhlOAuthUrl?input=${encodeURIComponent(JSON.stringify({ redirectUri }))}`;
                   }}
                 >

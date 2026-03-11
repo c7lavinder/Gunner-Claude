@@ -243,7 +243,7 @@ export const settingsRouter = router({
       );
       // Register webhooks after OAuth
       const appUrl = process.env.RAILWAY_STATIC_URL || "https://gunner-app-production.up.railway.app";
-      const webhookUrl = `${appUrl}/api/webhooks/ghl`;
+      const webhookUrl = `${appUrl}/api/webhooks/crm`;
       await registerGhlWebhooks(tokens.locationId, tokens.access_token, webhookUrl);
       return { success: true, locationId: tokens.locationId };
     }),
