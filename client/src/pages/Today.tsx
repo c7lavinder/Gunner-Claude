@@ -1,330 +1,411 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useRef, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { Search, Send, PhoneMissed, Calendar, CheckSquare, Sparkles } from "lucide-react";
-import { ActionConfirmDialog } from "@/components/actions/ActionConfirmDialog";
-import { useAction } from "@/hooks/useActions";
+import {
+  Flame,
+  Phone,
+  MessageCircle,
+  Calendar,
+  Tag,
+  FileCheck,
+  Sparkles,
+  Send,
+  RefreshCw,
+  PhoneMissed,
+  CheckCircle2,
+} from "lucide-react";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
-import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { KpiLedgerModal } from "@/components/KpiLedgerModal";
 
-function gradeColor(grade: string | null | undefined): string {
-  if (!grade) return "bg-[var(--g-text-tertiary)]";
-  const g = grade.toUpperCase();
-  if (g.startsWith("A")) return "bg-[var(--g-grade-a)]";
-  if (g.startsWith("B")) return "bg-[var(--g-grade-b)]";
-  if (g.startsWith("C")) return "bg-[var(--g-grade-c)]";
-  if (g.startsWith("D")) return "bg-[var(--g-grade-d)]";
-  return "bg-[var(--g-grade-f)]";
+const KPI_KEYS = ["calls", "convos", "apts", "offers", "contracts"] as const;
+
+const KPI_ICONS: Record<string, typeof Phone> = {
+  calls: Phone,
+  convos: MessageCircle,
+  apts: Calendar,
+  offers: Tag,
+  contracts: FileCheck,
+};
+
+const KPI_FALLBACK_LABELS: Record<string, string> = {
+  calls: "Calls",
+  convos: "Conversations",
+  apts: "Appointments",
+  offers: "Offers",
+  contracts: "Contracts",
+};
+
+function progressColor(pct: number): string {
+  if (pct >= 80) return "bg-[var(--g-up)]";
+  if (pct >= 50) return "bg-[var(--g-warning-text)]";
+  return "bg-[var(--g-down)]";
 }
 
-function fmtDuration(sec: number | null | undefined): string | null {
-  if (!sec) return null;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
-
-function fmtCallDate(date: Date | string | null | undefined): string {
-  if (!date) return "";
-  const d = new Date(date);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 export function Today() {
-  const { t, isLoading } = useTenantConfig();
-  const { executeAction, isExecuting, result, reset } = useAction();
-  const [search, setSearch] = useState("");
-  const [selectedConv, setSelectedConv] = useState<string | null>(null);
-  const [replyDraft, setReplyDraft] = useState("");
-  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
-  const [callDialogOpen, setCallDialogOpen] = useState(false);
-  const [callTarget, setCallTarget] = useState<{ name: string; phone: string; ghlContactId?: string } | null>(null);
+  const { roles, kpiMetrics, isLoading: configLoading } = useTenantConfig();
+  const [selectedRole, setSelectedRole] = useState("all");
+  const [inboxTab, setInboxTab] = useState("inbox");
+  const [ledgerKpi, setLedgerKpi] = useState<string | null>(null);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
-  const [tipDismissed, setTipDismissed] = useState(false);
-  const completeTask = trpc.today.completeTask.useMutation();
-  const reactToSuggestion = trpc.ai.reactToSuggestion.useMutation();
-  const todayUtils = trpc.useUtils();
+  const [coachMessages, setCoachMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [coachInput, setCoachInput] = useState("");
+  const scrollEndRef = useRef<HTMLDivElement>(null);
 
-  const searchTerm = search.trim() || undefined;
-  const { data: convos, isLoading: convosLoading } = trpc.today.getConversations.useQuery({
-    search: searchTerm,
-    limit: 20,
+  const utils = trpc.useUtils();
+  const { data: hubStats, isLoading: statsLoading } = trpc.today.getDayHubStats.useQuery({
+    role: selectedRole === "all" ? undefined : selectedRole,
   });
   const { data: missedCalls } = trpc.today.getMissedCalls.useQuery();
-  const { data: appointments } = trpc.today.getAppointments.useQuery();
+  const { data: convos } = trpc.today.getConversations.useQuery({});
   const { data: taskData } = trpc.today.getTasks.useQuery();
-  const { data: stats } = trpc.today.getStats.useQuery();
-  const { data: suggestions } = trpc.ai.getSuggestions.useQuery();
+  const completeTask = trpc.today.completeTask.useMutation();
+  const chatMutation = trpc.ai.chat.useMutation();
 
-  const convosList = convos ?? [];
-  const selectedConvData = selectedConv ? convosList.find((c) => c.id === selectedConv) : null;
+  const missedCount = missedCalls?.length ?? 0;
 
-  const { data: contactCtx } = trpc.today.getContactContext.useQuery(
-    { phone: selectedConvData?.phone ?? "" },
-    { enabled: !!selectedConvData?.phone }
-  );
+  const kpiLabel = (key: string) =>
+    kpiMetrics.find((m) => m.key === key)?.label ?? KPI_FALLBACK_LABELS[key] ?? key;
 
-  const handleSendSms = () => {
-    if (!selectedConvData || !replyDraft.trim()) return;
-    setSmsDialogOpen(true);
+  const roleDescription = (code: string) => {
+    if (code === "all") return "Overview of all team KPIs for today";
+    if (code === "admin") return "Full admin view across all roles";
+    const r = roles.find((rl) => rl.code === code);
+    return r ? `${r.name} targets and activity` : "Today's activity";
   };
 
-  const confirmSms = () => {
-    if (!selectedConvData || !replyDraft.trim()) return;
-    const contactId = selectedConvData.ghlContactId ?? selectedConvData.id;
-    executeAction("sms", contactId, { message: replyDraft, toPhone: selectedConvData.phone });
+  const handleSendCoach = () => {
+    const msg = coachInput.trim();
+    if (!msg) return;
+    setCoachMessages((prev) => [...prev, { role: "user", content: msg }]);
+    setCoachInput("");
+    chatMutation.mutate(
+      { message: msg, page: "today" },
+      {
+        onSuccess: (data) => {
+          setCoachMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
+        },
+      }
+    );
   };
 
-  const openCallBack = (name: string, phone: string, ghlContactId?: string) => {
-    setCallTarget({ name, phone, ghlContactId });
-    setCallDialogOpen(true);
-  };
+  useEffect(() => {
+    scrollEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [coachMessages]);
 
-  const confirmCallBack = () => {
-    if (!callTarget) return;
-    const contactId = callTarget.ghlContactId ?? callTarget.phone;
-    executeAction("sms", contactId, { message: `Hi ${callTarget.name}, I saw I missed your call. When's a good time to connect?`, toPhone: callTarget.phone });
-  };
+  const statCards = KPI_KEYS.map((key) => {
+    const stat = hubStats?.[key];
+    return { key, actual: stat?.actual ?? 0, target: stat?.target ?? 1 };
+  });
+
+  const isLoading = configLoading || statsLoading;
 
   if (isLoading) {
     return (
-      <div className="min-h-[60vh] flex flex-col gap-4 p-4 md:p-6">
-        <Skeleton className="h-8 w-48 rounded-lg" />
-        <div className="grid gap-4 lg:grid-cols-[55%_45%]">
-          <Skeleton className="h-[400px] rounded-xl" />
-          <div className="space-y-4"><Skeleton className="h-32 rounded-xl" /><Skeleton className="h-32 rounded-xl" /><Skeleton className="h-32 rounded-xl" /></div>
+      <div className="space-y-6 p-4 md:p-6 bg-[var(--g-bg-base)]">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-8 w-64" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[60%_40%]">
+          <Skeleton className="h-[460px] rounded-xl" />
+          <Skeleton className="h-[460px] rounded-xl" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[60vh] flex flex-col gap-4 p-4 md:p-6 bg-[var(--g-bg-base)]">
-      {stats && (
-        <div className="flex gap-4 text-sm text-[var(--g-text-secondary)]">
-          <span>{stats.callsToday} calls today</span>
-          <span>{stats.propertyCount} {t?.assetPlural?.toLowerCase() ?? "properties"}</span>
-          <span>{stats.tasksToday} tasks</span>
-        </div>
-      )}
-
-      {!tipDismissed && suggestions && suggestions.length > 0 && (
-        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
-          <CardContent className="py-3 px-4 flex items-start gap-3">
-            <Sparkles className="size-4 mt-0.5 shrink-0 text-[var(--g-accent-text)]" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-[var(--g-accent-text)] mb-0.5">AI Coach Tip</p>
-              <p className="text-sm text-[var(--g-text-primary)]">{suggestions[0].content}</p>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="shrink-0 text-xs text-[var(--g-text-tertiary)] hover:text-[var(--g-text-secondary)] px-2 h-7"
-              onClick={() => {
-                setTipDismissed(true);
-                reactToSuggestion.mutate({ id: suggestions[0].id, reaction: "dismissed" });
-              }}
-            >
-              Dismiss
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-[55%_45%]">
-        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden">
-          <CardHeader className="flex-row items-center justify-between gap-2 py-4">
-            <CardTitle className="text-base font-semibold text-[var(--g-text-primary)]">Recent Contacts</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col flex-1 min-h-0 p-0">
-            <div className="px-4 pb-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-[var(--g-text-tertiary)]" />
-                <Input
-                  placeholder="Search conversations"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8 h-8 text-sm bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]"
-                />
-              </div>
-            </div>
-            <div className="flex flex-1 min-h-0 border-t border-[var(--g-border-subtle)]">
-              <ScrollArea className="w-full md:w-48 lg:w-52 shrink-0 border-r border-[var(--g-border-subtle)]">
-                <div className="p-2 space-y-0.5">
-                  {convosLoading ? (
-                    Array.from({ length: 5 }).map((_, i) => <div key={i} className="p-2.5 space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-3 w-32" /></div>)
-                  ) : convosList.length === 0 ? (
-                    <p className="p-4 text-sm text-[var(--g-text-tertiary)]">No conversations</p>
-                  ) : (
-                    convosList.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => setSelectedConv(c.id)}
-                        className={cn(
-                          "w-full text-left p-2.5 rounded-lg transition-colors",
-                          selectedConv === c.id
-                            ? "bg-[var(--g-accent-soft)] text-[var(--g-accent-text)]"
-                            : "hover:bg-[var(--g-bg-surface)] text-[var(--g-text-primary)]"
-                        )}
-                      >
-                        <span className="font-medium text-sm truncate block">{c.name}</span>
-                        <p className="text-xs text-[var(--g-text-tertiary)] truncate mt-0.5">
-                          {c.phone}
-                        </p>
-                        {c.lastContactDate && (
-                          <p className="text-[10px] text-[var(--g-text-tertiary)] mt-1">
-                            {new Date(c.lastContactDate).toLocaleDateString()}
-                          </p>
-                        )}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-              <div className="flex-1 flex flex-col min-w-0">
-                {selectedConvData ? (
-                  <>
-                    <ScrollArea className="flex-1 p-4">
-                      <div className="space-y-3">
-                        <div>
-                          <p className="font-medium text-sm text-[var(--g-text-primary)]">{selectedConvData.name}</p>
-                          <p className="text-xs text-[var(--g-text-tertiary)]">{selectedConvData.phone}</p>
-                        </div>
-                        {selectedConvData.lastContactDate && (
-                          <p className="text-xs text-[var(--g-text-tertiary)]">
-                            Last contact: {new Date(selectedConvData.lastContactDate).toLocaleString()}
-                          </p>
-                        )}
-                        {contactCtx && contactCtx.length > 0 && (
-                          <div className="space-y-1.5">
-                            <p className="text-xs font-semibold text-[var(--g-text-secondary)]">Recent Calls</p>
-                            <div className="flex flex-col gap-1.5">
-                              {contactCtx.map((call) => (
-                                <div key={call.id} className="flex items-center gap-2">
-                                  <span className={cn("size-6 rounded-full flex items-center justify-center font-mono text-xs text-white shrink-0", gradeColor(call.grade))}>
-                                    {call.grade ?? "—"}
-                                  </span>
-                                  <span className="text-xs text-[var(--g-text-secondary)]">{fmtCallDate(call.createdAt)}</span>
-                                  {fmtDuration(call.duration) && (
-                                    <span className="text-xs text-[var(--g-text-tertiary)]">{fmtDuration(call.duration)}</span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                            <Link href="/calls" className="text-xs text-[var(--g-accent-text)] hover:underline">View all calls →</Link>
-                          </div>
-                        )}
-                      </div>
-                    </ScrollArea>
-                    <div className="p-3 border-t border-[var(--g-border-subtle)] flex gap-2">
-                      <Input
-                        placeholder="Type a message..."
-                        value={replyDraft}
-                        onChange={(e) => setReplyDraft(e.target.value)}
-                        className="flex-1 h-8 text-sm"
-                      />
-                      <Button size="icon" className="h-7 w-7" onClick={handleSendSms} disabled={!replyDraft.trim()}>
-                        <Send className="size-4" />
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center text-[var(--g-text-tertiary)] text-sm">
-                    Select a conversation
-                  </div>
+    <div className="space-y-6 p-4 md:p-6 bg-[var(--g-bg-base)]">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Flame className="size-6 text-[var(--g-accent-text)]" />
+          <h1 className="text-2xl font-bold text-[var(--g-text-primary)]">Day Hub</h1>
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { code: "all", name: "All" },
+              ...roles,
+              { code: "admin", name: "ADMIN" },
+            ].map((r) => (
+              <button
+                key={r.code}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                  selectedRole === r.code
+                    ? "bg-[var(--g-accent)] text-[var(--g-text-inverse)]"
+                    : "bg-[var(--g-bg-surface)] text-[var(--g-text-secondary)] hover:bg-[var(--g-bg-elevated)]"
                 )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex flex-col gap-4">
-          <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Calendar className="size-4 text-[var(--g-accent-text)]" />
-                Appointments Today
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="py-0 pb-3 space-y-2">
-              {!appointments?.length ? <p className="py-4 px-3 text-sm text-[var(--g-text-tertiary)]">No appointments</p> : (
-                appointments.map((a) => <div key={a.id} className="flex items-center justify-between py-2 px-3 rounded-lg text-sm">
-                  <span className="font-medium text-[var(--g-text-secondary)] w-16">{a.time || "—"}</span>
-                  <span className="flex-1 truncate">{a.name}</span>
-                  <span className="text-xs text-[var(--g-text-tertiary)]">{a.type}</span>
-                </div>)
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
-            <CardHeader className="py-3 flex-row items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <PhoneMissed className="size-4 text-[var(--g-accent-text)]" />
-                Missed Calls
-              </CardTitle>
-              {missedCalls && missedCalls.length > 0 && (
-                <Badge variant="secondary" className="text-xs">{missedCalls.length}</Badge>
-              )}
-            </CardHeader>
-            <CardContent className="py-0 pb-3 space-y-2">
-              {!missedCalls?.length ? <p className="py-4 px-3 text-sm text-[var(--g-text-tertiary)]">No missed calls today</p> : (
-                missedCalls.map((m) => <div key={m.id} className="flex items-center justify-between py-2 px-3 rounded-lg border border-[var(--g-border-subtle)]">
-                  <div>
-                    <p className="font-medium text-sm">{m.contactName}</p>
-                    <p className="text-xs text-[var(--g-text-tertiary)]">{m.contactPhone} · {m.callTimestamp ? new Date(m.callTimestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""}</p>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => openCallBack(m.contactName, m.contactPhone, m.ghlContactId ?? undefined)}>Send Follow-Up</Button>
-                </div>)
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
-            <CardHeader className="py-3 flex-row items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <CheckSquare className="size-4 text-[var(--g-accent-text)]" />
-                Tasks Due Today
-              </CardTitle>
-              <Link href="/inventory" className="text-xs text-[var(--g-accent-text)] hover:underline">View All</Link>
-            </CardHeader>
-            <CardContent className="py-0 pb-3 space-y-1">
-              {!taskData?.tasks?.length ? <p className="py-4 px-3 text-sm text-[var(--g-text-tertiary)]">No tasks</p> : (
-                taskData.tasks.map((t) => <div key={t.id} className={cn("flex items-center gap-2 py-2 px-3 rounded-lg text-sm", completedTasks.has(t.id) && "opacity-50 line-through")}>
-                  <Checkbox checked={completedTasks.has(t.id)} onCheckedChange={(v) => {
-                    const done = !!v;
-                    setCompletedTasks((s) => done ? new Set(Array.from(s).concat(t.id)) : new Set(Array.from(s).filter((x) => x !== t.id)));
-                    completeTask.mutate({ id: Number(t.id), completed: done }, { onSuccess: () => void todayUtils.today.getTasks.invalidate() });
-                  }}
-                  />
-                  <div className="flex-1 min-w-0"><p className="truncate">{t.title}</p>{t.contact && <p className="text-xs text-[var(--g-text-tertiary)]">{t.contact}</p>}</div>
-                </div>)
-              )}
-            </CardContent>
-          </Card>
+                onClick={() => setSelectedRole(r.code)}
+              >
+                {r.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-[var(--g-text-tertiary)]">
+            {roleDescription(selectedRole)}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => void utils.today.getDayHubStats.invalidate()}
+          >
+            <RefreshCw className="size-4 text-[var(--g-text-tertiary)]" />
+          </Button>
         </div>
       </div>
 
-      <ActionConfirmDialog open={smsDialogOpen} onOpenChange={(o) => { setSmsDialogOpen(o); if (!o) reset(); }}
-        action={{ type: "sms", from: { name: "You", phone: "" }, to: { name: selectedConvData?.name ?? "", phone: selectedConvData?.phone ?? "" }, payload: { message: replyDraft } }}
-        onConfirm={() => { confirmSms(); setReplyDraft(""); }} isExecuting={isExecuting} result={result} />
-      {callTarget && (
-        <ActionConfirmDialog open={callDialogOpen} onOpenChange={(o) => { setCallDialogOpen(o); if (!o) setCallTarget(null); reset(); }}
-          action={{ type: "workflow", from: { name: "You" }, to: { name: callTarget.name, phone: callTarget.phone }, payload: { action: "call_back", phone: callTarget.phone } }}
-          onConfirm={confirmCallBack} isExecuting={isExecuting} result={result} />
+      {/* 5 Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {statCards.map(({ key, actual, target }) => {
+          const Icon = KPI_ICONS[key] ?? Phone;
+          const pct = target > 0 ? (actual / target) * 100 : 0;
+          return (
+            <Card
+              key={key}
+              className="cursor-pointer border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] hover:bg-[var(--g-bg-card-hover)] transition-colors overflow-hidden"
+              onClick={() => setLedgerKpi(key)}
+            >
+              <CardContent className="p-4 pb-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon className="size-4 text-[var(--g-accent-text)]" />
+                  <span className="text-xs font-medium text-[var(--g-text-secondary)]">
+                    {kpiLabel(key)}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold text-[var(--g-text-primary)]">{actual}</span>
+                  <span className="text-sm text-[var(--g-text-tertiary)]">/ {target}</span>
+                </div>
+              </CardContent>
+              <div className="h-1 bg-[var(--g-bg-inset)]">
+                <div
+                  className={cn("h-full transition-all", progressColor(pct))}
+                  style={{ width: `${Math.min(100, pct)}%` }}
+                />
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Two-panel layout */}
+      <div className="grid gap-4 lg:grid-cols-[60%_40%]">
+        {/* Left panel: Inbox / Today */}
+        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden">
+          <Tabs value={inboxTab} onValueChange={setInboxTab} className="flex flex-col flex-1 min-h-0">
+            <TabsList className="mx-4 mt-4 mb-0 w-fit">
+              <TabsTrigger value="inbox" className="text-sm gap-1.5">
+                Inbox
+                {missedCount > 0 && (
+                  <Badge className="bg-[var(--g-down)] text-[var(--g-text-inverse)] text-[10px] px-1.5 py-0 leading-tight">
+                    {missedCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="today" className="text-sm">Today</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="inbox" className="flex-1 min-h-0 mt-0 p-4 pt-3">
+              <ScrollArea className="h-[400px]">
+                {/* Missed Calls */}
+                {missedCalls && missedCalls.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-[var(--g-text-secondary)] mb-2 flex items-center gap-1.5">
+                      <PhoneMissed className="size-3.5" />
+                      Missed Calls
+                    </p>
+                    <div className="space-y-2">
+                      {missedCalls.map((m) => (
+                        <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--g-border-subtle)]">
+                          <div>
+                            <p className="text-sm font-medium text-[var(--g-text-primary)]">{m.contactName}</p>
+                            <p className="text-xs text-[var(--g-text-tertiary)]">
+                              {m.contactPhone}
+                              {m.callTimestamp && ` · ${new Date(m.callTimestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
+                            </p>
+                          </div>
+                          <Button size="sm" variant="outline">
+                            <Phone className="size-3.5 mr-1" /> Call Back
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Conversations */}
+                <div>
+                  <p className="text-xs font-semibold text-[var(--g-text-secondary)] mb-2 flex items-center gap-1.5">
+                    <MessageCircle className="size-3.5" />
+                    Recent Conversations
+                  </p>
+                  {!convos?.length ? (
+                    <p className="text-sm text-[var(--g-text-tertiary)] py-4">No conversations yet</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {convos.map((c) => (
+                        <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--g-bg-surface)] transition-colors">
+                          <div className="size-8 rounded-full bg-[var(--g-bg-inset)] flex items-center justify-center text-xs font-medium text-[var(--g-text-secondary)] shrink-0">
+                            {c.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate text-[var(--g-text-primary)]">{c.name}</p>
+                            <p className="text-xs text-[var(--g-text-tertiary)]">{c.phone}</p>
+                          </div>
+                          {c.lastContactDate && (
+                            <span className="text-[10px] text-[var(--g-text-tertiary)] shrink-0">
+                              {new Date(c.lastContactDate).toLocaleDateString([], { month: "short", day: "numeric" })}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="today" className="flex-1 min-h-0 mt-0 p-4 pt-3">
+              <ScrollArea className="h-[400px]">
+                {!taskData?.tasks?.length ? (
+                  <p className="text-sm text-[var(--g-text-tertiary)] py-4">No tasks for today</p>
+                ) : (
+                  <div className="space-y-1">
+                    {taskData.tasks.map((t) => (
+                      <div
+                        key={t.id}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-lg text-sm",
+                          completedTasks.has(t.id) && "opacity-50"
+                        )}
+                      >
+                        <Checkbox
+                          checked={completedTasks.has(t.id)}
+                          onCheckedChange={(v) => {
+                            const done = !!v;
+                            setCompletedTasks((s) =>
+                              done
+                                ? new Set(Array.from(s).concat(t.id))
+                                : new Set(Array.from(s).filter((x) => x !== t.id))
+                            );
+                            completeTask.mutate(
+                              { id: Number(t.id), completed: done },
+                              { onSuccess: () => void utils.today.getTasks.invalidate() }
+                            );
+                          }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("truncate text-[var(--g-text-primary)]", completedTasks.has(t.id) && "line-through")}>
+                            {t.title}
+                          </p>
+                          {t.contact && <p className="text-xs text-[var(--g-text-tertiary)]">{t.contact}</p>}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="shrink-0 text-xs"
+                          onClick={() => {
+                            setCompletedTasks((s) => new Set(Array.from(s).concat(t.id)));
+                            completeTask.mutate(
+                              { id: Number(t.id), completed: true },
+                              { onSuccess: () => void utils.today.getTasks.invalidate() }
+                            );
+                          }}
+                        >
+                          <CheckCircle2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </Card>
+
+        {/* Right panel: AI Coach */}
+        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden">
+          <div className="flex items-center gap-2 p-4 pb-2">
+            <Sparkles className="size-4 text-[var(--g-accent-text)]" />
+            <h2 className="text-sm font-semibold text-[var(--g-text-primary)]">AI Coach</h2>
+          </div>
+          <ScrollArea className="flex-1 px-4 min-h-0 h-[360px]">
+            <div className="space-y-3 py-2">
+              {coachMessages.length === 0 && (
+                <p className="text-sm text-[var(--g-text-tertiary)] py-8 text-center">
+                  Ask your AI coach anything about today&apos;s performance.
+                </p>
+              )}
+              {coachMessages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
+                    msg.role === "user"
+                      ? "ml-auto bg-[var(--g-accent)] text-[var(--g-text-inverse)]"
+                      : "bg-[var(--g-bg-surface)] text-[var(--g-text-primary)]"
+                  )}
+                >
+                  {msg.content}
+                </div>
+              ))}
+              {chatMutation.isPending && (
+                <div className="flex items-center gap-2 text-xs text-[var(--g-text-tertiary)]">
+                  <div className="size-4 animate-spin rounded-full border-2 border-[var(--g-border-medium)] border-t-[var(--g-accent)]" />
+                  Thinking...
+                </div>
+              )}
+              <div ref={scrollEndRef} />
+            </div>
+          </ScrollArea>
+          <div className="p-3 border-t border-[var(--g-border-subtle)] flex gap-2">
+            <Input
+              placeholder="Ask your coach..."
+              value={coachInput}
+              onChange={(e) => setCoachInput(e.target.value)}
+              className="flex-1 h-8 text-sm bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]"
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendCoach()}
+            />
+            <Button
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleSendCoach}
+              disabled={!coachInput.trim() || chatMutation.isPending}
+            >
+              <Send className="size-4" />
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* KPI Ledger Modal */}
+      {ledgerKpi && (
+        <KpiLedgerModal
+          kpiType={ledgerKpi}
+          label={kpiLabel(ledgerKpi)}
+          date={todayIso()}
+          onClose={() => setLedgerKpi(null)}
+        />
       )}
     </div>
   );
