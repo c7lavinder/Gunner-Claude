@@ -56,6 +56,11 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] All inline `style={{}}` props removed from `Settings.tsx` (35 instances) and `Playbook.tsx` (2 instances) — replaced with Tailwind arbitrary-value classes
 - [x] Confirmed all 8 Settings tabs and all 4 Playbook tabs render with real content — no empty or TODO sections found
 
+**Wave 6A–6C: Auth fixes + Day Hub rebuild**
+- [x] Google OAuth login loop fixed — verified end-to-end with production cookies; new users route to `/onboarding`, returning users to `/today`
+- [x] GHL OAuth button fix — replaced unsafe inline `window.location.href` with proper `trpc.settings.getGhlOAuthUrl` query + `refetch()` pattern in Settings CRM tab
+- [x] Day Hub rebuild — role-based tabs, KPI stat cards with click-to-expand, daily KPI ledger modal, `DEFAULT_KPI_TARGETS` config, team member activity feed
+
 ---
 
 ### Final Hardening Pass (just completed)
@@ -124,7 +129,6 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [ ] Import NAH team members + map to GHL user IDs (needs real GHL data)
 - [ ] Supabase bucket: `gunner-voice-samples` (create manually in Supabase dashboard)
 - [ ] GHL OAuth end-to-end test (built, needs live GHL OAuth app credentials)
-- [ ] Google OAuth login loop (likely fixed — needs production verification with real cookies)
 
 ### Future features (enhancement backlog)
 - [ ] E2E testing: Playwright
@@ -146,8 +150,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ## Known Issues
 
-1. **Google OAuth login loop** — Likely fixed by: (a) `trust proxy: 1` for Railway's reverse proxy, (b) routing new users to `/onboarding` instead of `/today`. Needs production verification.
-2. **GHL OAuth not tested end-to-end** — Built (server/services/ghlOAuth.ts + Settings UI) but hasn't been tested with a real GHL OAuth app credential. Not a code bug.
+1. **GHL OAuth not tested end-to-end** — Built (server/services/ghlOAuth.ts + Settings UI) but hasn't been tested with a real GHL OAuth app credential. Not a code bug.
 
 ---
 

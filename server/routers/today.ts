@@ -1,11 +1,20 @@
 import { z } from "zod";
-import { eq, and, desc, gte, count, or, ilike, lt, isNull, like, sql } from "drizzle-orm";
+import { eq, and, desc, gte, count, or, ilike, lt, isNull, like, sql, ne, inArray } from "drizzle-orm";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
-import { calls, callGrades, contactCache, dispoProperties, dailyKpiEntries } from "../../drizzle/schema";
+import { calls, callGrades, contactCache, dispoProperties, dailyKpiEntries, teamMembers } from "../../drizzle/schema";
 
 const todayStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 const todayStr = () => new Date().toISOString().slice(0, 10);
+
+// KPI types and their default daily targets
+const DEFAULT_KPI_TARGETS: Record<string, number> = {
+  calls: 50,
+  convos: 20,
+  apts: 3,
+  offers: 2,
+  contracts: 1,
+};
 
 export const todayRouter = router({
   getConversations: protectedProcedure
@@ -140,4 +149,195 @@ export const todayRouter = router({
       tasksToday: tasksResult?.count ?? 0,
     };
   }),
+
+  getDayHubStats: protectedProcedure
+    .input(z.object({ role: z.string().optional(), date: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const tid = ctx.user!.tenantId;
+      const date = input.date ?? todayStr();
+      const start = new Date(date + "T00:00:00.000Z");
+
+      // Get team member IDs scoped to the selected role tab
+      let scopedUserIds: number[] | null = null;
+      if (input.role && input.role !== "admin") {
+        const members = await db.select({ userId: teamMembers.userId })
+          .from(teamMembers)
+          .where(and(eq(teamMembers.tenantId, tid), eq(teamMembers.teamRole, input.role), eq(teamMembers.isActive, "true")));
+        scopedUserIds = members.map((m) => m.userId).filter((id): id is number => id !== null);
+      }
+
+      // calls: any call today for this tenant (scoped by role if set)
+      const callsWhere = [eq(calls.tenantId, tid), gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, start)];
+      const [callsResult] = await db.select({ count: count() }).from(calls).where(and(...callsWhere));
+
+      // convos: calls with duration >= 60s
+      const convosWhere = [...callsWhere, gte(calls.duration, 60)];
+      const [convosResult] = await db.select({ count: count() }).from(calls).where(and(...convosWhere));
+
+      // apts, offers, contracts: from daily_kpi_entries
+      const kpiTypes = ["apts", "offers", "contracts"];
+      const kpiCounts: Record<string, number> = {};
+      for (const kpiType of kpiTypes) {
+        const conditions = [eq(dailyKpiEntries.tenantId, tid), eq(dailyKpiEntries.date, date), eq(dailyKpiEntries.kpiType, kpiType)];
+        if (scopedUserIds && scopedUserIds.length > 0) {
+          conditions.push(inArray(dailyKpiEntries.userId, scopedUserIds));
+        }
+        const [res] = await db.select({ count: count() }).from(dailyKpiEntries).where(and(...conditions));
+        kpiCounts[kpiType] = res?.count ?? 0;
+      }
+
+      return {
+        calls: { actual: callsResult?.count ?? 0, target: DEFAULT_KPI_TARGETS.calls },
+        convos: { actual: convosResult?.count ?? 0, target: DEFAULT_KPI_TARGETS.convos },
+        apts: { actual: kpiCounts.apts ?? 0, target: DEFAULT_KPI_TARGETS.apts },
+        offers: { actual: kpiCounts.offers ?? 0, target: DEFAULT_KPI_TARGETS.offers },
+        contracts: { actual: kpiCounts.contracts ?? 0, target: DEFAULT_KPI_TARGETS.contracts },
+      };
+    }),
+
+  getKpiLedger: protectedProcedure
+    .input(z.object({ kpiType: z.string(), date: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const tid = ctx.user!.tenantId;
+      const date = input.date ?? todayStr();
+      const start = new Date(date + "T00:00:00.000Z");
+      const end = new Date(date + "T23:59:59.999Z");
+
+      let autoEntries: { id: string; time: string; contactName: string; assignedTo: string | null; duration: number | null; grade: string | null; source: string }[] = [];
+
+      if (input.kpiType === "calls" || input.kpiType === "convos") {
+        const minDuration = input.kpiType === "convos" ? 60 : 0;
+        const rows = await db.select({
+          id: calls.id,
+          contactName: calls.contactName,
+          duration: calls.duration,
+          callTimestamp: calls.callTimestamp,
+          createdAt: calls.createdAt,
+          grade: callGrades.overallGrade,
+          teamMemberName: calls.teamMemberName,
+        }).from(calls)
+          .leftJoin(callGrades, eq(callGrades.callId, calls.id))
+          .where(and(
+            eq(calls.tenantId, tid),
+            gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, start),
+            sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) <= ${end}`,
+            gte(calls.duration, minDuration),
+          ))
+          .orderBy(desc(calls.callTimestamp));
+        autoEntries = rows.map((r) => ({
+          id: `call-${r.id}`,
+          time: (r.callTimestamp ?? r.createdAt).toISOString(),
+          contactName: r.contactName ?? "Unknown",
+          assignedTo: r.teamMemberName ?? null,
+          duration: r.duration ?? null,
+          grade: r.grade ?? null,
+          source: "auto",
+        }));
+      } else {
+        const rows = await db.select().from(dailyKpiEntries).where(and(
+          eq(dailyKpiEntries.tenantId, tid),
+          eq(dailyKpiEntries.date, date),
+          eq(dailyKpiEntries.kpiType, input.kpiType),
+          ne(dailyKpiEntries.source, "manual"),
+        )).orderBy(desc(dailyKpiEntries.createdAt));
+        autoEntries = rows.map((r) => ({
+          id: `kpi-${r.id}`,
+          time: r.createdAt.toISOString(),
+          contactName: r.contactName ?? "Unknown",
+          assignedTo: null,
+          duration: null,
+          grade: null,
+          source: r.source,
+        }));
+      }
+
+      const manualRows = await db.select().from(dailyKpiEntries).where(and(
+        eq(dailyKpiEntries.tenantId, tid),
+        eq(dailyKpiEntries.date, date),
+        eq(dailyKpiEntries.kpiType, input.kpiType),
+        eq(dailyKpiEntries.source, "manual"),
+      )).orderBy(desc(dailyKpiEntries.createdAt));
+
+      const manualEntries = manualRows.map((r) => ({
+        id: `manual-${r.id}`,
+        time: r.createdAt.toISOString(),
+        contactName: r.contactName ?? "Unknown",
+        assignedTo: null,
+        duration: null,
+        grade: null,
+        notes: r.notes ?? null,
+        source: "manual",
+      }));
+
+      return { autoEntries, manualEntries };
+    }),
+
+  addManualKpiEntry: protectedProcedure
+    .input(z.object({
+      kpiType: z.string(),
+      date: z.string().optional(),
+      contactName: z.string().optional(),
+      contactId: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const tid = ctx.user!.tenantId;
+      const uid = ctx.user!.userId;
+      const [row] = await db.insert(dailyKpiEntries).values({
+        tenantId: tid,
+        userId: uid,
+        date: input.date ?? todayStr(),
+        kpiType: input.kpiType,
+        contactName: input.contactName ?? null,
+        contactId: input.contactId ?? null,
+        notes: input.notes ?? null,
+        source: "manual",
+        detectionType: "manual",
+      }).returning();
+      return row ?? null;
+    }),
+
+  getAmPmCallStatus: protectedProcedure
+    .input(z.object({ date: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const tid = ctx.user!.tenantId;
+      const uid = ctx.user!.userId;
+      const date = input.date ?? todayStr();
+      const amEnd = new Date(date + "T12:00:00.000Z");
+      const dayStart = new Date(date + "T00:00:00.000Z");
+      const dayEnd = new Date(date + "T23:59:59.999Z");
+
+      const [amCall] = await db.select({ id: calls.id }).from(calls).where(and(
+        eq(calls.tenantId, tid),
+        gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, dayStart),
+        sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) < ${amEnd}`,
+        gte(calls.duration, 30),
+      )).limit(1);
+
+      const [pmCall] = await db.select({ id: calls.id }).from(calls).where(and(
+        eq(calls.tenantId, tid),
+        gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, amEnd),
+        sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) <= ${dayEnd}`,
+        gte(calls.duration, 30),
+      )).limit(1);
+
+      const [manualAm] = await db.select({ id: dailyKpiEntries.id }).from(dailyKpiEntries).where(and(
+        eq(dailyKpiEntries.tenantId, tid),
+        eq(dailyKpiEntries.userId, uid),
+        eq(dailyKpiEntries.date, date),
+        eq(dailyKpiEntries.kpiType, "am_call"),
+      )).limit(1);
+
+      const [manualPm] = await db.select({ id: dailyKpiEntries.id }).from(dailyKpiEntries).where(and(
+        eq(dailyKpiEntries.tenantId, tid),
+        eq(dailyKpiEntries.userId, uid),
+        eq(dailyKpiEntries.date, date),
+        eq(dailyKpiEntries.kpiType, "pm_call"),
+      )).limit(1);
+
+      return {
+        amDone: !!(amCall ?? manualAm),
+        pmDone: !!(pmCall ?? manualPm),
+      };
+    }),
 });
