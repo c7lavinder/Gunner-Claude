@@ -5,7 +5,7 @@ on:
     # Runs at 2:00 AM CST (8:00 AM UTC) every night
     - cron: '0 8 * * *'
   push:
-    branches: [manus-migration]
+    branches: [production]
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout manus-migration branch
+      - name: Checkout production branch
         uses: actions/checkout@v4
         with:
-          ref: manus-migration
+          ref: production
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js

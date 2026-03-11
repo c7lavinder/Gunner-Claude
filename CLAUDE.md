@@ -109,7 +109,11 @@ gunner/
 │   │   ├── playbook.ts               — Playbook CRUD + overrides
 │   │   ├── actions.ts                — CRM write-back actions
 │   │   ├── settings.ts               — Workspace config, CRM setup, GHL OAuth
-│   │   └── today.ts                  — Day Hub (tasks, SMS, appointments)
+│   │   ├── today.ts                  — Day Hub (tasks, SMS, appointments)
+│   │   ├── notifications.ts          — Notification preferences + history
+│   │   ├── users.ts                  — User profile management
+│   │   ├── search.ts                 — Global search (Cmd+K)
+│   │   └── auditLog.ts               — Audit log entries
 │   │
 │   ├── services/                     — Business logic
 │   │   ├── grading.ts                — AI call grading pipeline (uses playbook philosophy)
@@ -173,7 +177,7 @@ gunner/
 | `server/_core/llm.ts` | OpenAI chat completion + `chatCompletionStream` for SSE |
 | `server/_core/storage.ts` | Supabase Storage file upload/download/delete |
 | `server/_core/context.ts` | tRPC context creation + JWT session verification |
-| `server/routers/index.ts` | Merges all 12 routers into `appRouter` |
+| `server/routers/index.ts` | Merges all 16 routers into `appRouter` |
 | `server/services/grading.ts` | AI grading pipeline (loads rubric + grading philosophy from playbook) |
 | `server/services/gamification.ts` | XP, badges (closer, improvement, volume), streaks, confetti |
 | `server/services/playbooks.ts` | `SOFTWARE_PLAYBOOK` + `getIndustryPlaybook` + `getTenantPlaybook` + `getUserPlaybook` |
