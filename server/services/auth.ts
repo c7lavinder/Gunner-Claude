@@ -1,4 +1,4 @@
-import * as jose from "jose";
+import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { ENV } from "../_core/env";
 
@@ -20,23 +20,22 @@ export async function createJwtToken(payload: {
   name: string;
   role: string;
 }): Promise<string> {
-  const secret = new TextEncoder().encode(ENV.jwtSecret);
-  return new jose.SignJWT({
-    userId: payload.userId,
-    tenantId: payload.tenantId,
-    email: payload.email,
-    name: payload.name,
-    role: payload.role,
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime(JWT_EXPIRY)
-    .sign(secret);
+  return jwt.sign(
+    {
+      userId: payload.userId,
+      tenantId: payload.tenantId,
+      email: payload.email,
+      name: payload.name,
+      role: payload.role,
+    },
+    ENV.jwtSecret,
+    { algorithm: "HS256", expiresIn: JWT_EXPIRY },
+  );
 }
 
 export async function verifyJwtToken(token: string): Promise<SessionUser | null> {
   try {
-    const secret = new TextEncoder().encode(ENV.jwtSecret);
-    const { payload } = await jose.jwtVerify(token, secret);
+    const payload = jwt.verify(token, ENV.jwtSecret) as jwt.JwtPayload;
     return {
       userId: payload.userId as number,
       tenantId: payload.tenantId as number,
@@ -55,7 +54,7 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function verifyPassword(
   password: string,
-  hash: string
+  hash: string,
 ): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
@@ -69,7 +68,7 @@ export interface GoogleUserInfo {
 
 export async function exchangeGoogleCode(
   code: string,
-  redirectUri: string
+  redirectUri: string,
 ): Promise<GoogleUserInfo> {
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -93,22 +92,30 @@ export async function exchangeGoogleCode(
     access_token?: string;
   };
 
-  if (!tokenData.id_token) {
-    throw new Error("Google did not return id_token");
+  if (!tokenData.access_token) {
+    throw new Error("Google did not return access_token");
   }
 
-  const JWKS = jose.createRemoteJWKSet(
-    new URL("https://www.googleapis.com/oauth2/v3/certs")
-  );
-  const { payload } = await jose.jwtVerify(tokenData.id_token, JWKS, {
-    issuer: "https://accounts.google.com",
-    audience: ENV.googleClientId,
+  // Use Google's userinfo endpoint instead of JWKS id_token verification
+  const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
 
-  const email = payload.email as string;
-  const name = (payload.name as string) ?? email.split("@")[0];
-  const picture = (payload.picture as string) ?? "";
-  const googleId = payload.sub as string;
+  if (!userInfoRes.ok) {
+    throw new Error("Failed to fetch Google user info");
+  }
 
-  return { email, name, picture, googleId };
+  const userInfo = (await userInfoRes.json()) as {
+    id: string;
+    email: string;
+    name?: string;
+    picture?: string;
+  };
+
+  return {
+    email: userInfo.email,
+    name: userInfo.name ?? userInfo.email.split("@")[0],
+    picture: userInfo.picture ?? "",
+    googleId: userInfo.id,
+  };
 }

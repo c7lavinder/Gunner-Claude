@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
-import * as jose from "jose";
+import jwt from "jsonwebtoken";
 import superjson from "superjson";
 import { ENV } from "./env";
 import { db } from "./db";
@@ -22,8 +22,7 @@ export async function createContext({ req, res }: CreateExpressContextOptions) {
 
   if (token) {
     try {
-      const secret = new TextEncoder().encode(ENV.jwtSecret);
-      const { payload } = await jose.jwtVerify(token, secret);
+      const payload = jwt.verify(token, ENV.jwtSecret) as jwt.JwtPayload;
       user = {
         userId: payload.userId as number,
         tenantId: payload.tenantId as number,

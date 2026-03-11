@@ -1,6 +1,3 @@
-import { webcrypto } from "node:crypto";
-if (!globalThis.crypto) globalThis.crypto = webcrypto as Crypto;
-
 import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import express from "express";
@@ -9,6 +6,7 @@ import cookieParser from "cookie-parser";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import jwt from "jsonwebtoken";
 import { ENV } from "./env";
 import { createContext } from "./context";
 import { appRouter } from "../routers";
@@ -24,7 +22,6 @@ import { seedIndustryPlaybooks } from "../seeds/seedPlaybooks";
 import { runStartupMigrations } from "../seeds/startupMigrations";
 import { seedNahTenantPlaybook } from "../seeds/nahTenant";
 import { chatCompletionStream } from "./llm";
-import * as jose from "jose";
 
 if (ENV.sentryDsn) {
   Sentry.init({
@@ -97,8 +94,7 @@ app.use("/api/webhooks", webhookRouter);
 app.post("/api/ai/stream", async (req, res) => {
   const token = req.cookies?.auth_token ?? (req.headers.authorization?.replace("Bearer ", "") || "");
   try {
-    const secret = new TextEncoder().encode(ENV.jwtSecret);
-    const { payload } = await jose.jwtVerify(token, secret);
+    const payload = jwt.verify(token, ENV.jwtSecret) as jwt.JwtPayload;
     if (!payload.userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   } catch {
     res.status(401).json({ error: "Unauthorized" }); return;
