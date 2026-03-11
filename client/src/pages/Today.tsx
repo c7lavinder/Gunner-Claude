@@ -14,6 +14,35 @@ import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 
+function gradeColor(grade: string | null | undefined): string {
+  if (!grade) return "bg-[var(--g-text-tertiary)]";
+  const g = grade.toUpperCase();
+  if (g.startsWith("A")) return "bg-[var(--g-grade-a)]";
+  if (g.startsWith("B")) return "bg-[var(--g-grade-b)]";
+  if (g.startsWith("C")) return "bg-[var(--g-grade-c)]";
+  if (g.startsWith("D")) return "bg-[var(--g-grade-d)]";
+  return "bg-[var(--g-grade-f)]";
+}
+
+function fmtDuration(sec: number | null | undefined): string | null {
+  if (!sec) return null;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function fmtCallDate(date: Date | string | null | undefined): string {
+  if (!date) return "";
+  const d = new Date(date);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
 export function Today() {
   const { t, isLoading } = useTenantConfig();
   const { executeAction, isExecuting, result, reset } = useAction();
@@ -42,6 +71,11 @@ export function Today() {
 
   const convosList = convos ?? [];
   const selectedConvData = selectedConv ? convosList.find((c) => c.id === selectedConv) : null;
+
+  const { data: contactCtx } = trpc.today.getContactContext.useQuery(
+    { phone: selectedConvData?.phone ?? "" },
+    { enabled: !!selectedConvData?.phone }
+  );
 
   const handleSendSms = () => {
     if (!selectedConvData || !replyDraft.trim()) return;
@@ -173,6 +207,25 @@ export function Today() {
                           <p className="text-xs text-[var(--g-text-tertiary)]">
                             Last contact: {new Date(selectedConvData.lastContactDate).toLocaleString()}
                           </p>
+                        )}
+                        {contactCtx && contactCtx.length > 0 && (
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-semibold text-[var(--g-text-secondary)]">Recent Calls</p>
+                            <div className="flex flex-col gap-1.5">
+                              {contactCtx.map((call) => (
+                                <div key={call.id} className="flex items-center gap-2">
+                                  <span className={cn("size-6 rounded-full flex items-center justify-center font-mono text-xs text-white shrink-0", gradeColor(call.grade))}>
+                                    {call.grade ?? "—"}
+                                  </span>
+                                  <span className="text-xs text-[var(--g-text-secondary)]">{fmtCallDate(call.createdAt)}</span>
+                                  {fmtDuration(call.duration) && (
+                                    <span className="text-xs text-[var(--g-text-tertiary)]">{fmtDuration(call.duration)}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            <Link href="/calls" className="text-xs text-[var(--g-accent-text)] hover:underline">View all calls →</Link>
+                          </div>
                         )}
                       </div>
                     </ScrollArea>

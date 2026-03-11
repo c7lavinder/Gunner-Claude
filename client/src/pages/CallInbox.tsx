@@ -9,6 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -138,7 +145,7 @@ export function CallInbox() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold" style={{ color: "var(--g-text-primary)" }}>
+        <h1 className="text-xl font-bold text-[var(--g-text-primary)]">
           Calls
         </h1>
         <Input
@@ -147,20 +154,18 @@ export function CallInbox() {
           onChange={(e) => setSearch(e.target.value)}
           className="h-8 w-48 text-sm"
         />
-        <div className="flex gap-2">
-          <select
-            className="h-8 rounded-md border px-2 text-xs"
-            style={{ borderColor: "var(--g-border-subtle)", background: "var(--g-bg-surface)" }}
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-          >
-            <option value="7">Last 7 days</option>
-            <option value="14">Last 14 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="all">All time</option>
-          </select>
-        </div>
+        <Select value={dateRange} onValueChange={setDateRange}>
+          <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="14">Last 14 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+            <SelectItem value="90">Last 90 days</SelectItem>
+            <SelectItem value="all">All time</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v); setCurrentPage(1); }}>
@@ -195,35 +200,34 @@ export function CallInbox() {
                     <div key={call.id}>
                       <Card
                         className={cn(
-                          "cursor-pointer transition-all hover:shadow-md",
+                          "cursor-pointer transition-all hover:shadow-md bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]",
                           expandedId === call.id && "ring-2 ring-[var(--g-accent)]"
                         )}
-                        style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}
                         onClick={() => setExpandedId(expandedId === call.id ? null : call.id)}
                       >
                         <CardContent className="p-4 py-3">
                           <div className="flex items-center gap-4">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>
+                                <span className="font-semibold truncate text-[var(--g-text-primary)]">
                                   {call.contactName ?? "Unknown"}
                                 </span>
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                                   {call.callType ?? "—"}
                                 </Badge>
                               </div>
-                              <p className="text-xs mt-0.5 truncate" style={{ color: "var(--g-text-tertiary)" }}>
+                              <p className="text-xs mt-0.5 truncate text-[var(--g-text-tertiary)]">
                                 {call.teamMemberName ?? "—"} · {formatRelativeTime(call.callTimestamp)}
                               </p>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              <span className="text-sm tabular-nums" style={{ color: "var(--g-text-secondary)" }}>
+                              <span className="text-sm tabular-nums text-[var(--g-text-secondary)]">
                                 {formatDuration(call.duration)}
                               </span>
                               {(call.callDirection ?? "").toLowerCase() === "inbound" ? (
-                                <ArrowDownToLine className="size-4" style={{ color: "var(--g-text-tertiary)" }} />
+                                <ArrowDownToLine className="size-4 text-[var(--g-text-tertiary)]" />
                               ) : (
-                                <ArrowUpFromLine className="size-4" style={{ color: "var(--g-text-tertiary)" }} />
+                                <ArrowUpFromLine className="size-4 text-[var(--g-text-tertiary)]" />
                               )}
                               <div
                                 className={cn(
@@ -249,7 +253,7 @@ export function CallInbox() {
                       </Card>
 
                       {expandedId === call.id && grade && (
-                        <Card className="mt-2" style={{ background: "var(--g-bg-surface)", borderColor: "var(--g-border-subtle)" }}>
+                        <Card className="mt-2 bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]">
                           <CardContent className="p-4 space-y-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
@@ -257,9 +261,9 @@ export function CallInbox() {
                                   {grade.overallScore ? Math.round(Number(grade.overallScore)) : "—"}
                                 </div>
                                 <div>
-                                  <p className="font-semibold" style={{ color: "var(--g-text-primary)" }}>Scorecard</p>
+                                  <p className="font-semibold text-[var(--g-text-primary)]">Scorecard</p>
                                   {grade.summary && (
-                                    <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>{grade.summary}</p>
+                                    <p className="text-xs text-[var(--g-text-tertiary)]">{grade.summary}</p>
                                   )}
                                 </div>
                               </div>
@@ -296,7 +300,10 @@ export function CallInbox() {
                             {criteriaScores.length > 0 && (
                               <div className="space-y-2">{criteriaScores.map((c) => (
                                 <div key={c.name}>
-                                  <div className="flex justify-between text-xs mb-1"><span style={{ color: "var(--g-text-secondary)" }}>{c.name}</span><span style={{ color: "var(--g-text-tertiary)" }}>{c.earned}/{c.max}</span></div>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-[var(--g-text-secondary)]">{c.name}</span>
+                                    <span className="text-[var(--g-text-tertiary)]">{c.earned}/{c.max}</span>
+                                  </div>
                                   <Progress value={(c.earned / c.max) * 100} className="h-1.5" />
                                 </div>
                               ))}</div>
@@ -306,27 +313,32 @@ export function CallInbox() {
                               <div className="space-y-2">
                                 {coachStrengths.length > 0 && (
                                   <div>
-                                    <p className="text-xs font-medium mb-1" style={{ color: "var(--g-grade-a)" }}>Strengths</p>
-                                    <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: "var(--g-text-secondary)" }}>{coachStrengths.map((s, idx) => <li key={idx}>{s}</li>)}</ul>
+                                    <p className="text-xs font-medium mb-1 text-[var(--g-grade-a)]">Strengths</p>
+                                    <ul className="text-sm space-y-1 list-disc list-inside text-[var(--g-text-secondary)]">{coachStrengths.map((s, idx) => <li key={idx}>{s}</li>)}</ul>
                                   </div>
                                 )}
                                 {coachImprovements.length > 0 && (
                                   <div>
-                                    <p className="text-xs font-medium mb-1" style={{ color: "var(--g-text-secondary)" }}>Areas to improve</p>
-                                    <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: "var(--g-text-secondary)" }}>{coachImprovements.map((i, idx) => <li key={idx}>{i}</li>)}</ul>
+                                    <p className="text-xs font-medium mb-1 text-[var(--g-grade-d)]">Areas to improve</p>
+                                    <ul className="text-sm space-y-1 list-disc list-inside text-[var(--g-grade-d)]">{coachImprovements.map((i, idx) => <li key={idx}>{i}</li>)}</ul>
                                   </div>
                                 )}
                               </div>
                             )}
                             <Collapsible open={transcriptOpen} onOpenChange={setTranscriptOpen}>
-                              <CollapsibleTrigger className="flex items-center gap-1 text-sm" style={{ color: "var(--g-accent-text)" }}>
+                              <CollapsibleTrigger className="flex items-center gap-1 text-sm text-[var(--g-accent-text)]">
                                 {transcriptOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                                 Transcript
                               </CollapsibleTrigger>
                               <CollapsibleContent>
-                                <p className="mt-2 text-sm p-3 rounded-md" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>
-                                  {callDetail?.transcript || "No transcript available"}
-                                </p>
+                                <div className="mt-2 max-h-48 overflow-y-auto font-mono text-xs leading-relaxed bg-[var(--g-bg-inset)] rounded-md p-3 text-[var(--g-text-secondary)]">
+                                  {callDetail?.transcript
+                                    ? callDetail.transcript.split("\n").map((line, i) => (
+                                        <p key={i}>{line || "\u00A0"}</p>
+                                      ))
+                                    : <p>No transcript available</p>
+                                  }
+                                </div>
                               </CollapsibleContent>
                             </Collapsible>
                           </CardContent>
@@ -334,9 +346,9 @@ export function CallInbox() {
                       )}
 
                       {expandedId === call.id && !grade && (
-                        <Card className="mt-2" style={{ background: "var(--g-bg-surface)", borderColor: "var(--g-border-subtle)" }}>
+                        <Card className="mt-2 bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]">
                           <CardContent className="p-4">
-                            <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Not yet graded.</p>
+                            <p className="text-sm text-[var(--g-text-tertiary)]">Not yet graded.</p>
                             {callDetail?.recordingUrl ? (
                               <Button variant="outline" size="sm" className="mt-2" asChild>
                                 <a href={callDetail.recordingUrl} target="_blank" rel="noopener noreferrer">
@@ -367,7 +379,7 @@ export function CallInbox() {
               >
                 Previous
               </Button>
-              <span className="text-sm" style={{ color: "var(--g-text-secondary)" }}>
+              <span className="text-sm text-[var(--g-text-secondary)]">
                 Page {currentPage} of {totalPages}
               </span>
               <Button

@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useMemo, useEffect } from "react";
 import {
   Search,
@@ -47,7 +45,10 @@ import type { ActionType } from "@shared/types";
 type PropertyItem = { id: number; address: string; city: string; state: string; status: string; leadSource: string | null; sellerName: string | null; sellerPhone: string | null; ghlContactId: string | null; stageChangedAt: Date | null; lastContactedAt: Date | null; lastConversationAt?: Date | string | null };
 
 const STAGE_COLORS: Record<string, string> = { new: "bg-slate-500/15 text-slate-600 border-slate-500/30", lead: "bg-slate-500/15 text-slate-600 border-slate-500/30", contacted: "bg-blue-500/15 text-blue-600 border-blue-500/30", qualified: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30", offer: "bg-amber-500/15 text-amber-600 border-amber-500/30", under_contract: "bg-violet-500/15 text-violet-600 border-violet-500/30" };
-const STAGE_COLOR_FALLBACK = "bg-gray-500/15 text-gray-600 border-gray-500/30";
+
+function stageColor(stage: string): string {
+  return STAGE_COLORS[stage] ?? "bg-[var(--g-accent-soft)] text-[var(--g-accent-text)]";
+}
 
 function daysInStage(ts: Date | string | null): number {
   if (!ts) return 0;
@@ -225,7 +226,7 @@ export function Inventory() {
                           const displayStage = optimisticStages.get(item.id) ?? item.status;
                           const isOptimistic = optimisticStages.has(item.id);
                           return (
-                            <Badge className={cn("border text-xs shrink-0 transition-opacity", STAGE_COLORS[displayStage] ?? STAGE_COLOR_FALLBACK, isOptimistic && "opacity-60")}>
+                            <Badge className={cn("border text-xs shrink-0 transition-opacity", stageColor(displayStage), isOptimistic && "opacity-60")}>
                               {stages.find((s) => s.code === displayStage)?.name ?? displayStage}
                             </Badge>
                           );
@@ -273,7 +274,7 @@ export function Inventory() {
               </SheetHeader>
               <div className="space-y-4 py-4">
                 <p style={{ color: "var(--g-text-secondary)" }}>{[detailItem.address, detailItem.city, detailItem.state].filter(Boolean).join(", ") || detailItem.address}</p>
-                <Badge className={cn("border", STAGE_COLORS[detailItem.status] ?? STAGE_COLOR_FALLBACK)}>{stages.find((s) => s.code === detailItem.status)?.name ?? detailItem.status}</Badge>
+                <Badge className={cn("border", stageColor(detailItem.status))}>{stages.find((s) => s.code === detailItem.status)?.name ?? detailItem.status}</Badge>
                 <Separator />
                 <div className="space-y-2 text-sm">
                   <p><span style={{ color: "var(--g-text-tertiary)" }}>Lead source:</span> {detailItem.leadSource ?? "—"}</p>
