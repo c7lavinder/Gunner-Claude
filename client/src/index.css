@@ -43,6 +43,7 @@
   --font-sans: 'Satoshi', 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Satoshi', 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-display-game: 'Orbitron', sans-serif;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -112,6 +113,8 @@
   --g-accent-text: #8B1A1A;
   --g-accent-glow: rgba(139,26,26,0.15);
   --g-nav-bg: rgba(255,255,255,0.85);
+  --g-nav-height: 56px;
+  --g-nav-link-active: var(--g-accent-text);
   --g-stat-bar-bg: rgba(0,0,0,0.06);
   --g-xp-bar-bg: rgba(0,0,0,0.06);
   --g-badge-bg: rgba(0,0,0,0.04);
@@ -234,6 +237,7 @@
   --g-accent-text: #e8364f;
   --g-accent-glow: rgba(196,30,58,0.25);
   --g-nav-bg: rgba(8,8,12,0.85);
+  --g-nav-height: 56px;
   --g-stat-bar-bg: rgba(255,255,255,0.06);
   --g-xp-bar-bg: rgba(255,255,255,0.06);
   --g-badge-bg: rgba(255,255,255,0.04);
@@ -2016,11 +2020,11 @@
 
   /* Page transition */
   @keyframes pageEnter {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(6px) scale(0.99); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
   .g-page-enter {
-    animation: pageEnter 200ms ease-out;
+    animation: pageEnter 250ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   /* Gradient border effect */

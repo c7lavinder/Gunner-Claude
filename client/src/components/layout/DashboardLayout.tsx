@@ -1,10 +1,11 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { AiCoach } from "../AiCoach";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
 import { trpc } from "@/lib/trpc";
 import {
+  Flame,
   CalendarDays,
   Phone,
   Package,
@@ -17,40 +18,35 @@ import {
   Moon,
   Sun,
   LogOut,
-  ChevronRight,
+  Menu,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarInset,
-} from "@/components/ui/sidebar";
-const ROUTE_LABELS: Record<string, string> = {
-  "/today": "Today",
-  "/calls": "Calls",
-  "/inventory": "Inventory",
-  "/kpis": "KPIs",
-  "/team": "Team",
-  "/training": "Training",
-  "/playbook": "Playbook",
-  "/settings": "Settings",
-  "/profile": "Profile",
-};
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
-const NAV_ITEMS = [
+const PRIMARY_NAV = [
   { path: "/today", label: "Today", icon: CalendarDays },
   { path: "/calls", label: "Calls", icon: Phone },
   { path: "/inventory", label: "Inventory", icon: Package },
   { path: "/kpis", label: "KPIs", icon: BarChart3 },
-  { path: "/team", label: "Team", icon: Users },
   { path: "/training", label: "Training", icon: GraduationCap },
+  { path: "/team", label: "Team", icon: Users },
+] as const;
+
+const ALL_NAV = [
+  ...PRIMARY_NAV,
   { path: "/playbook", label: "Playbook", icon: BookOpen },
   { path: "/settings", label: "Settings", icon: SettingsIcon },
   { path: "/profile", label: "Profile", icon: UserCircle },
@@ -61,13 +57,10 @@ function CrmDegradedBanner() {
     staleTime: 5 * 60 * 1000,
   });
   if (!health || health.connected) return null;
-  if (!health.oauthActive) return null; // No CRM configured at all, no banner needed
+  if (!health.oauthActive) return null;
 
   return (
-    <div
-      className="w-full px-4 py-2 text-sm text-center"
-      style={{ background: "var(--g-warning-bg, #fef3c7)", color: "var(--g-warning-text, #92400e)" }}
-    >
+    <div className="w-full px-4 py-2 text-sm text-center bg-[var(--g-warning-bg,#fef3c7)] text-[var(--g-warning-text,#92400e)]">
       CRM sync paused — call grading and coaching still work.{" "}
       <a href="/settings?tab=crm" className="underline font-medium">Check CRM settings</a>
     </div>
@@ -75,131 +68,139 @@ function CrmDegradedBanner() {
 }
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
-  const pageLabel = ROUTE_LABELS[location];
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Breadcrumb segments: split location path, generate labels
-  const segments = location.split("/").filter(Boolean);
-  const breadcrumbs = segments.map((seg, idx) => {
-    const path = "/" + segments.slice(0, idx + 1).join("/");
-    const label = ROUTE_LABELS[path] ?? (seg.charAt(0).toUpperCase() + seg.slice(1));
-    return { label, path, isLast: idx === segments.length - 1 };
-  });
+  const initial = (user?.name ?? user?.email ?? "U").charAt(0).toUpperCase();
 
   return (
-    <SidebarProvider>
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:px-4 focus:py-2 focus:bg-[var(--g-accent)] focus:text-white focus:rounded-md focus:m-2">
+    <div className="min-h-svh w-full bg-[var(--g-bg-base)] text-[var(--g-text-primary)]">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[60] focus:px-4 focus:py-2 focus:bg-[var(--g-accent)] focus:text-white focus:rounded-md focus:m-2">
         Skip to main content
       </a>
-      <div
-        className="flex min-h-svh w-full"
-        style={{
-          background: "var(--g-bg-base)",
-          color: "var(--g-text-primary)",
-        }}
-      >
-        <Sidebar
-          className="border-r"
-          style={{ borderColor: "var(--g-border-subtle)" }}
-        >
-          <SidebarHeader className="p-4">
-            <Link href="/" className="font-semibold text-lg" aria-label="Gunner home">
-              Gunner
-            </Link>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
-                    <SidebarMenuItem key={path}>
-                      <SidebarMenuButton asChild isActive={location === path}>
-                        <Link href={path}>
-                          <Icon className="size-4" />
-                          <span>{label}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-        </Sidebar>
-        <SidebarInset>
-          <CrmDegradedBanner />
-          <header
-            className="sticky top-0 z-10 flex h-14 items-center justify-end gap-2 px-6 border-b"
-            style={{
-              background: "var(--g-bg-surface)",
-              borderColor: "var(--g-border-subtle)",
-            }}
-          >
-            <div className="mr-auto flex items-center gap-3">
-              {user && (
-                <span className="text-sm text-[var(--g-text-secondary)]">
-                  {user.name || user.email}
-                </span>
-              )}
-              {pageLabel && (
-                <>
-                  <span className="text-sm text-[var(--g-text-tertiary)] select-none">·</span>
-                  <span className="text-sm font-semibold text-[var(--g-text-primary)]">{pageLabel}</span>
-                </>
-              )}
+
+      {/* ── Top Bar ── */}
+      <header className="sticky top-0 z-50 h-14 border-b border-[var(--g-border-subtle)] bg-[var(--g-bg-surface)] flex items-center px-4 md:px-6 gap-4">
+        {/* Mobile hamburger */}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="md:hidden shrink-0">
+              <Menu className="size-5" />
+              <span className="sr-only">Open menu</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64 bg-[var(--g-bg-surface)] border-r border-[var(--g-border-subtle)] p-0">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <div className="flex items-center gap-2 px-5 h-14 border-b border-[var(--g-border-subtle)]">
+              <Flame className="size-5 text-[var(--g-accent-text)]" />
+              <span className="font-bold tracking-wider text-[var(--g-accent-text)]">GUNNER</span>
             </div>
-            <kbd className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded" style={{ background: "var(--g-bg-surface)", color: "var(--g-text-tertiary)", border: "1px solid var(--g-border-subtle)" }}>
-              ⌘K
-            </kbd>
-            <NotificationBell />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="rounded-lg"
-            >
-              <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              <span className="sr-only">Toggle theme</span>
-            </Button>
-            <Button variant="ghost" size="icon" onClick={logout} className="rounded-lg">
-              <LogOut className="size-4" />
-              <span className="sr-only">Log out</span>
-            </Button>
-          </header>
-          {breadcrumbs.length > 0 && (
-            <nav
-              aria-label="Breadcrumb"
-              className="flex items-center gap-1 px-6 py-2 text-sm border-b"
-              style={{ borderColor: "var(--g-border-subtle)", background: "var(--g-bg-surface)" }}
-            >
-              <Link href="/today" className="text-[var(--g-text-tertiary)] hover:text-[var(--g-text-secondary)]">Home</Link>
-              {breadcrumbs.map((crumb) => (
-                <span key={crumb.path} className="flex items-center gap-1">
-                  <ChevronRight className="size-3 text-[var(--g-text-tertiary)]" />
-                  {crumb.isLast ? (
-                    <span style={{ color: "var(--g-text-primary)" }}>{crumb.label}</span>
-                  ) : (
-                    <Link href={crumb.path} className="text-[var(--g-text-tertiary)] hover:text-[var(--g-text-secondary)]">{crumb.label}</Link>
+            <nav className="flex flex-col gap-1 p-3">
+              {ALL_NAV.map(({ path, label, icon: Icon }) => (
+                <Link
+                  key={path}
+                  href={path}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+                    location === path
+                      ? "text-[var(--g-accent-text)] bg-[var(--g-accent-soft)]"
+                      : "text-[var(--g-text-secondary)] hover:text-[var(--g-text-primary)] hover:bg-[var(--g-bg-inset)]"
                   )}
-                </span>
+                >
+                  <Icon className="size-4" />
+                  {label}
+                </Link>
               ))}
             </nav>
-          )}
-          <main
-            id="main-content"
-            key={location}
-            className="flex-1 p-6 g-page-enter"
-            style={{ background: "var(--g-bg-base)" }}
-            role="main"
-          >
-            {children}
-          </main>
-          <AiCoach page={location} />
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+          </SheetContent>
+        </Sheet>
+
+        {/* Brand */}
+        <Link href="/today" className="flex items-center gap-2 shrink-0">
+          <Flame className="size-5 text-[var(--g-accent-text)]" />
+          <span className="font-bold tracking-wider text-[var(--g-accent-text)]">GUNNER</span>
+        </Link>
+
+        {/* Center nav — desktop only */}
+        <nav className="hidden md:flex items-center gap-1 ml-6">
+          {PRIMARY_NAV.map(({ path, label }) => (
+            <Link
+              key={path}
+              href={path}
+              className={cn(
+                "text-sm font-medium px-3 py-1.5 rounded-md transition-colors",
+                location === path
+                  ? "text-[var(--g-accent-text)] border-b-2 border-[var(--g-accent)] font-semibold"
+                  : "text-[var(--g-text-secondary)] hover:text-[var(--g-text-primary)]"
+              )}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Right side controls */}
+        <kbd className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded bg-[var(--g-bg-inset)] text-[var(--g-text-tertiary)] border border-[var(--g-border-subtle)]">
+          ⌘K
+        </kbd>
+        <NotificationBell />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="rounded-lg"
+        >
+          <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+
+        {/* User dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center justify-center size-8 rounded-full bg-[var(--g-accent-soft)] text-[var(--g-accent-text)] text-sm font-semibold shrink-0 cursor-pointer">
+              {initial}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <div className="px-2 py-1.5">
+              <p className="text-sm font-medium truncate">{user?.name ?? "User"}</p>
+              {user?.email && <p className="text-xs text-[var(--g-text-tertiary)] truncate">{user.email}</p>}
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate("/profile")}>
+              <UserCircle className="size-4 mr-2" /> Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/settings")}>
+              <SettingsIcon className="size-4 mr-2" /> Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/playbook")}>
+              <BookOpen className="size-4 mr-2" /> Playbook
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={logout}>
+              <LogOut className="size-4 mr-2" /> Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
+      <CrmDegradedBanner />
+
+      <main
+        id="main-content"
+        key={location}
+        className="max-w-[1440px] mx-auto px-6 py-6 g-page-enter"
+        role="main"
+      >
+        {children}
+      </main>
+    </div>
   );
 }

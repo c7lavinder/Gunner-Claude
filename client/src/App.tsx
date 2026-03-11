@@ -71,8 +71,24 @@ function PageTracker() {
 
 function PageLoader() {
   return (
-    <div className="flex items-center justify-center min-h-[40vh]">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
+    <div className="min-h-screen bg-[var(--g-bg-base)]">
+      <div className="h-14 border-b border-[var(--g-border-subtle)] bg-[var(--g-bg-surface)] flex items-center px-6 gap-8">
+        <div className="h-5 w-24 rounded bg-[var(--g-bg-inset)] animate-pulse" />
+        <div className="flex gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-4 w-16 rounded bg-[var(--g-bg-inset)] animate-pulse" />
+          ))}
+        </div>
+      </div>
+      <div className="max-w-[1440px] mx-auto px-6 py-6 space-y-4">
+        <div className="h-8 w-48 rounded bg-[var(--g-bg-inset)] animate-pulse" />
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-32 rounded-xl bg-[var(--g-bg-inset)] animate-pulse" />
+          ))}
+        </div>
+        <div className="h-64 rounded-xl bg-[var(--g-bg-inset)] animate-pulse" />
+      </div>
     </div>
   );
 }
