@@ -1,5 +1,5 @@
 import { db } from "../_core/db";
-import { tenantPlaybooks } from "../../drizzle/schema";
+import { tenants, tenantPlaybooks } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 const NAH_TENANT_ID = 1;
@@ -90,6 +90,18 @@ const NAH_ALGORITHM_OVERRIDES = {
 };
 
 export async function seedNahTenantPlaybook() {
+  // Only run if tenant ID=1 exists — skips gracefully on fresh databases
+  const [tenant] = await db
+    .select({ id: tenants.id })
+    .from(tenants)
+    .where(eq(tenants.id, NAH_TENANT_ID))
+    .limit(1);
+
+  if (!tenant) {
+    console.log("[seed] NAH tenant not found — skipping tenant playbook seed");
+    return;
+  }
+
   const [existing] = await db
     .select({ id: tenantPlaybooks.id })
     .from(tenantPlaybooks)
