@@ -186,7 +186,7 @@ export function Settings() {
   const { data: industries } = trpc.playbook.listIndustries.useQuery();
   const updateMutation = trpc.settings.updateWorkspace.useMutation();
   const { data: plans } = trpc.settings.getPlans.useQuery();
-  const ghlOAuthRedirectUri = "https://gunner-app-production.up.railway.app/settings?tab=crm&crm_callback=1";
+  const ghlOAuthRedirectUri = "https://gunner-production.up.railway.app/settings?tab=crm&crm_callback=1";
   const ghlOAuthUrlQuery = trpc.settings.getGhlOAuthUrl.useQuery(
     { redirectUri: ghlOAuthRedirectUri },
     { enabled: false }
