@@ -6,8 +6,17 @@ alwaysApply: true
 
 # Gunner — Cursor Rules
 
+## Repository & Folder Sync
+- Local folder: `/Users/coreylavinder/Gunner`
+- GitHub repo: `github.com/c7lavinder/Gunner`
+- Deploy branch: `production` (Railway auto-deploys from this branch)
+- Default branch: `main` (keep in sync with `production` after every meaningful session)
+- These three must always match: local folder name = GitHub repo name = Railway project name = `Gunner`
+- Never create sub-folders, scratch files, or debug scripts in the repo root — keep root clean
+
 ## Branch
-Always work on the active deploy branch. Never commit to `main`.
+Always work on `production`. Never commit directly to `main`.
+Keep `main` in sync: after every working session, merge `production` into `main` and push both.
 
 ## Stack
 - Frontend: React + TypeScript + Vite (client/src/)
