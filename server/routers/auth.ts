@@ -220,9 +220,6 @@ export const authRouter = router({
   googleCallback: publicProcedure
     .input(z.object({ code: z.string().min(1), redirectUri: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
-      // #region agent log
-      console.error('[DEBUG-dfb296] googleCallback called', JSON.stringify({redirectUri:input.redirectUri,isProduction:ENV.isProduction}));
-      // #endregion
       if (!ENV.googleClientId || !ENV.googleClientSecret) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Google OAuth is not configured on this server." });
       }
@@ -280,14 +277,8 @@ export const authRouter = router({
         role: user.role,
       });
 
-      // #region agent log
-      console.error('[DEBUG-dfb296] pre-cookie', JSON.stringify({userId:user.id,tenantId,isNewUser,cookieSecure:ENV.isProduction}));
-      // #endregion
       setAuthCookie(ctx.res, token);
       void createSession(user.id, tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
-      // #region agent log
-      console.error('[DEBUG-dfb296] post-cookie, returning', JSON.stringify({isNewUser,tokenLen:token.length}));
-      // #endregion
 
       return {
         token,
@@ -324,7 +315,7 @@ export const authRouter = router({
         .set({ revokedAt: new Date() })
         .where(and(eq(sessions.tokenHash, hash)));
     }
-    ctx.res.clearCookie("auth_token", { path: "/" });
+    ctx.res.clearCookie("auth_token", { path: "/", httpOnly: true, secure: ENV.isProduction, sameSite: "lax" as const });
     return { success: true };
   }),
 
@@ -362,7 +353,7 @@ export const authRouter = router({
       .update(sessions)
       .set({ revokedAt: new Date() })
       .where(eq(sessions.userId, ctx.user.userId));
-    ctx.res.clearCookie("auth_token", { path: "/" });
+    ctx.res.clearCookie("auth_token", { path: "/", httpOnly: true, secure: ENV.isProduction, sameSite: "lax" as const });
     return { success: true };
   }),
 });

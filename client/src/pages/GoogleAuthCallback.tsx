@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/hooks/useAuth";
 
 export function GoogleAuthCallback() {
   const [, setLocation] = useLocation();
+  const { setAuthenticatedUser } = useAuth();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
@@ -11,15 +13,19 @@ export function GoogleAuthCallback() {
 
   const callbackMutation = trpc.auth.googleCallback.useMutation({
     onSuccess: (data) => {
-      // #region agent log
-      console.error('[DEBUG-dfb296] googleCallback OK', JSON.stringify({isNewUser:data.isNewUser,userId:data.user.id,tenantId:data.user.tenantId,redirectTo:data.isNewUser?'/onboarding':'/today'}));
-      // #endregion
-      window.location.href = data.isNewUser ? "/onboarding" : "/today";
+      setAuthenticatedUser(
+        {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role,
+          tenantId: data.user.tenantId ?? null,
+        },
+        data.token,
+      );
+      setLocation(data.isNewUser ? "/onboarding" : "/today");
     },
     onError: (err) => {
-      // #region agent log
-      console.error('[DEBUG-dfb296] googleCallback FAILED', JSON.stringify({error:err.message,code:err.data?.code}));
-      // #endregion
       setErrorMsg(err.message || "Google sign-in failed. Please try again.");
     },
   });

@@ -13,7 +13,7 @@ export function getGhlOAuthUrl(tenantId: number, redirectUri: string): string | 
     response_type: "code",
     client_id: ENV.ghlClientId,
     redirect_uri: redirectUri,
-    scope: "contacts.readonly contacts.write opportunities.readonly opportunities.write conversations.readonly conversations/message.write locations.readonly workflows.readonly calendars.readonly calendars/events.write",
+    scope: "contacts.readonly contacts.write conversations.readonly conversations.write conversations/message.readonly conversations/message.write opportunities.readonly opportunities.write users.readonly calendars.readonly calendars.write calendars/events.readonly calendars/events.write workflows.readonly locations.readonly locations/customValues.readonly locations/customValues.write locations/customFields.readonly locations/customFields.write locations/tasks.readonly locations/tasks.write locations/tags.readonly locations/tags.write campaigns.readonly forms.readonly surveys.readonly",
     state,
   });
   return `${GHL_AUTH_BASE}/oauth/chooselocation?${params}`;

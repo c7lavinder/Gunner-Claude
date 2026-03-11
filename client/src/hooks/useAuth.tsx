@@ -35,6 +35,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, companyName: string) => Promise<void>;
   loginWithGoogle: () => void;
+  setAuthenticatedUser: (userData: AuthUser, token?: string) => void;
   logout: () => void;
 }
 
@@ -52,9 +53,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (meQuery.isLoading) return;
-    // #region agent log
-    console.error('[DEBUG-dfb296] auth.me resolved', JSON.stringify({hasData:!!meQuery.data,errorCode:meQuery.error?.data?.code,errorMsg:meQuery.error?.message,path:window.location.pathname}));
-    // #endregion
     if (meQuery.data) {
       setUser({
         id: meQuery.data.id,
@@ -126,8 +124,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [googleAuthUrlQuery]);
 
+  const setAuthenticatedUser = useCallback((userData: AuthUser, token?: string) => {
+    setUser(userData);
+    if (token) localStorage.setItem("auth_token", token);
+  }, []);
+
   const logout = useCallback(async () => {
     await logoutMutation.mutateAsync();
+    localStorage.removeItem("auth_token");
     setUser(null);
     setLocation("/login");
   }, [logoutMutation, setLocation]);
@@ -144,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     signup,
     loginWithGoogle,
+    setAuthenticatedUser,
     logout,
   };
 
