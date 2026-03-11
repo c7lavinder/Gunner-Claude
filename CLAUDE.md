@@ -258,5 +258,10 @@ Health check: `GET /health` returns `{"status":"ok"}`
 Corey Lavinder — non-technical. Explain changes in plain English. Never ask unnecessary questions — read files first, then act.
 
 ## Git Sync Rule
-At the start of every session, run: git pull origin production
-After every commit, run: git push origin production
+At the start of every session, run: `git pull origin production`
+
+After every commit to production, sync main using this exact command (never plain `git merge`):
+```
+git push origin production && git checkout main && git reset --hard origin/production && git push origin main --force && git checkout production
+```
+This does a hard reset — main always mirrors production exactly. Never commit directly to main. Never merge main into production.
