@@ -84,7 +84,7 @@ The bar: Linear, Notion, Stripe, Vercel -- companies that treat UI as a competit
 
 ---
 
-## 5. Development (BUILT — 92%)
+## 5. Development (BUILT — 100% — Feature Complete)
 
 ### Core Architecture: Four-Playbook System
 
@@ -133,10 +133,18 @@ Every CRM action goes through `ActionConfirmDialog` -- Preview (FROM/TO/WHAT) �
 
 Pipeline command center, not a property list. Asset-focused (not contact-focused). Stage tabs from Tenant Playbook (no hardcoded stage names). Property Detail Panel: Overview, Buyers, Outreach, Activity, AI Assistant, Deal Blast. Every action writes back to CRM.
 
+### Change Log — March 10, 2026 (Feature Complete session)
+
+- **RBAC:** Role-based access control across all write operations. `requireRole()` helper, admin/manager/member hierarchy, frontend booleans, admin-gated UI.
+- **Session Management:** Sessions table, login session tracking, per-device sign-out, sign-out-all-devices, Sessions tab in Settings.
+- **Global Search:** Real debounced search across calls, contacts, and coach notes wired into the Cmd+K command palette.
+- **Audit Log:** Every admin/write action logged with user, timestamp, before/after state. Audit Log tab in Settings (admin-only).
+- **Performance:** DB indexes on hot query paths, Vite chunk splitting for react/recharts/radix, CRM status in `/health`, degradation banner in DashboardLayout.
+
 ### What's Built
 
 - **Frontend:** 15 pages, 50+ shadcn/Radix UI components, TanStack Query + tRPC, Framer Motion, Recharts, cmdk, canvas-confetti, wavesurfer.js.
-- **Backend:** 13 tRPC routers (split from 9,059-line monolith). Express middleware. Scheduled jobs: daily digest, weekly report, 5-min call polling, 10-min opportunity sync.
+- **Backend:** 15 tRPC routers (split from 9,059-line monolith). Express middleware. Scheduled jobs: daily digest, weekly report, 5-min call polling, 10-min opportunity sync.
 - **APIs:** tRPC internal + REST for Stripe webhooks, GHL webhooks, AI streaming, health check.
 - **Database:** 68+ tables, 79 migrations. Multi-tenancy, calls/grades, gamification, KPIs, pipeline, playbooks, AI coach, subscriptions, voice profiles.
 - **Authentication:** Google OAuth + email/password + bcrypt + JWT (jose) + Turnstile (env-ready).
