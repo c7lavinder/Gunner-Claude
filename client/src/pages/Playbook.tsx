@@ -147,8 +147,8 @@ export function Playbook() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
-        <BookOpen className="size-6" style={{ color: "var(--g-accent-text)" }} />
+      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
+        <BookOpen className="size-6 text-[var(--g-accent-text)]" />
         Playbook
       </h1>
       <Tabs defaultValue="software">
@@ -450,7 +450,7 @@ export function Playbook() {
             rows={4}
           />
           {aiChat.data?.response && (
-            <div className="rounded-lg bg-[var(--g-bg-inset)] p-3 text-sm" style={{ color: "var(--g-text-secondary)" }}>{aiChat.data.response}</div>
+            <div className="rounded-lg bg-[var(--g-bg-inset)] p-3 text-sm text-[var(--g-text-secondary)]">{aiChat.data.response}</div>
           )}
           <DialogFooter>
             <Button onClick={handleAiSend} disabled={aiChat.isPending}>

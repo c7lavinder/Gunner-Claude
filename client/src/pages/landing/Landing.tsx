@@ -22,7 +22,7 @@ const STATS = [
 const FAQ_ITEMS = [
   {
     q: "How much does Gunner cost?",
-    a: "We offer a free Starter plan for up to 3 team members. Pro is $99/month for unlimited team members and call grades. Enterprise is custom pricing. All plans include a 14-day free trial.",
+    a: "Starter is $199/month for up to 3 team members. Growth is $499/month for unlimited team members and call grades. Scale is $999/month for large teams with custom needs. All plans include a 14-day free trial.",
   },
   {
     q: "Which CRMs does Gunner work with?",
@@ -62,7 +62,7 @@ const INTEGRATIONS = [
   { name: "Stripe", status: "live" },
   { name: "OpenAI", status: "live" },
   { name: "Supabase", status: "live" },
-  { name: "Twilio", status: "live" },
+  { name: "Twilio", status: "coming-soon" },
 ];
 
 export function Landing() {
@@ -243,16 +243,16 @@ export function Landing() {
               {[
                 {
                   name: "Starter",
-                  price: "Free",
-                  period: "",
+                  price: "$199",
+                  period: "/mo",
                   desc: "For small teams getting started with AI coaching",
                   features: ["Up to 3 team members", "50 call grades/month", "Basic scorecards", "1 industry playbook", "Email support"],
-                  cta: "Start Free",
+                  cta: "Get Started",
                   highlight: false,
                 },
                 {
-                  name: "Pro",
-                  price: "$99",
+                  name: "Growth",
+                  price: "$499",
                   period: "/mo",
                   desc: "For growing teams that want full power",
                   features: ["Unlimited team members", "Unlimited call grades", "Full AI coaching & roleplay", "All industry playbooks", "GHL OAuth integration", "Leaderboards & badges", "Priority support"],
@@ -260,11 +260,11 @@ export function Landing() {
                   highlight: true,
                 },
                 {
-                  name: "Enterprise",
-                  price: "Custom",
-                  period: "",
+                  name: "Scale",
+                  price: "$999",
+                  period: "/mo",
                   desc: "For large teams with custom needs",
-                  features: ["Everything in Pro", "Custom rubrics & grading", "Dedicated account manager", "API access", "SSO / SAML", "Custom integrations", "SLA guarantee"],
+                  features: ["Everything in Growth", "Custom rubrics & grading", "Dedicated account manager", "API access", "SSO / SAML", "Custom integrations", "SLA guarantee"],
                   cta: "Contact Sales",
                   highlight: false,
                 },
@@ -378,8 +378,8 @@ export function Landing() {
               <span>Gunner</span>
             </a>
             <div className="flex items-center gap-6 text-sm text-[var(--g-text-tertiary)]">
-              <a href="#" className="hover:text-[var(--g-text-secondary)]">Privacy</a>
-              <a href="#" className="hover:text-[var(--g-text-secondary)]">Terms</a>
+              <a href="/privacy" className="hover:text-[var(--g-text-secondary)]">Privacy</a>
+              <a href="/terms" className="hover:text-[var(--g-text-secondary)]">Terms</a>
             </div>
           </div>
           <p className="text-center text-xs text-[var(--g-text-tertiary)] mt-6">&copy; {new Date().getFullYear()} Gunner. All rights reserved.</p>

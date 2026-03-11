@@ -152,3 +152,10 @@ export interface ActionResult {
   timestamp: string;
   error?: string;
 }
+
+// XP level thresholds — single source of truth (mirrors SOFTWARE_PLAYBOOK on the server)
+export const LEVEL_THRESHOLDS: number[] = [
+  0, 500, 1000, 1750, 2500, 4000, 6000, 9000, 12000, 15000,
+  20000, 27000, 35000, 42500, 50000, 62500, 77500, 95000, 110000, 125000,
+  150000, 180000, 220000, 270000, 350000,
+];

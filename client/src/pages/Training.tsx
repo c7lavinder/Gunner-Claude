@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { GraduationCap, TrendingUp, TrendingDown, Shield, Target, Zap, BookOpen, Lock, Award, X, MessageSquare, Phone } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { trpc } from "@/lib/trpc";
+import { LEVEL_THRESHOLDS } from "@shared/types";
 
 const MATERIAL_ICONS: Record<string, typeof Shield> = {
   objections: Shield,
@@ -61,7 +62,6 @@ export function Training() {
   const xp = progress?.xp ?? 0;
   const level = progress?.level ?? 1;
 
-  const LEVEL_THRESHOLDS = [0, 500, 1000, 1750, 2500, 4000, 6000, 9000, 12000, 15000, 20000, 27000, 35000, 42500, 50000, 62500, 77500, 95000, 110000, 125000, 150000, 180000, 220000, 270000, 350000];
   const currentThreshold = LEVEL_THRESHOLDS[Math.max(0, level - 1)] ?? 0;
   const nextThreshold = LEVEL_THRESHOLDS[Math.min(level, LEVEL_THRESHOLDS.length - 1)] ?? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]!;
   const xpForNext = Math.max(1, nextThreshold - currentThreshold);
@@ -71,11 +71,11 @@ export function Training() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
-          <GraduationCap className="size-6" style={{ color: "var(--g-accent-text)" }} />
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
+          <GraduationCap className="size-6 text-[var(--g-accent-text)]" />
           Training
         </h1>
-        <Card className="overflow-hidden" style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+        <Card className="overflow-hidden bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="p-6">
             <Skeleton className="h-6 w-32 mb-4" />
             <div className="flex gap-4">
@@ -98,14 +98,14 @@ export function Training() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
-        <GraduationCap className="size-6" style={{ color: "var(--g-accent-text)" }} />
+      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
+        <GraduationCap className="size-6 text-[var(--g-accent-text)]" />
         Training
       </h1>
 
-      <Card className="overflow-hidden" style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+      <Card className="overflow-hidden bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--g-text-primary)" }}>Your AI Coach</h2>
+          <h2 className="text-lg font-semibold mb-4 text-[var(--g-text-primary)]">Your AI Coach</h2>
           <div className="flex flex-wrap gap-6 items-start">
             <div className="flex items-center gap-3">
               <div
@@ -117,7 +117,7 @@ export function Training() {
                 {avgGrade100}
               </div>
               <div>
-                <div className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Grade average</div>
+                <div className="text-sm text-[var(--g-text-secondary)]">Grade average</div>
                 <Badge
                   className="mt-1 gap-1"
                   style={{
@@ -165,7 +165,7 @@ export function Training() {
       </Card>
 
       <div>
-        <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--g-text-secondary)" }}>Recent Calls to Review</h2>
+        <h2 className="text-sm font-semibold mb-3 text-[var(--g-text-secondary)]">Recent Calls to Review</h2>
         {recentCalls.length === 0 ? (
           <EmptyState
             icon={Phone}
@@ -176,15 +176,15 @@ export function Training() {
           <div className="space-y-2 overflow-x-auto">
             {recentCalls.map(({ call, grade }) => (
               <Link key={call.id} href={`/calls?call=${call.id}`}>
-                <Card className="flex items-center gap-4 p-4 cursor-pointer transition hover:border-[var(--g-border-medium)]" style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+                <Card className="flex items-center gap-4 p-4 cursor-pointer transition hover:border-[var(--g-border-medium)] bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
                   <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold font-mono text-white shrink-0", gradeClass(letterToScore(grade)))}>
                     {letterToScore(grade)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate" style={{ color: "var(--g-text-primary)" }}>{call.contactName ?? "Unknown"}</div>
-                    <div className="text-xs truncate" style={{ color: "var(--g-text-tertiary)" }}>Graded</div>
+                    <div className="font-medium truncate text-[var(--g-text-primary)]">{call.contactName ?? "Unknown"}</div>
+                    <div className="text-xs truncate text-[var(--g-text-tertiary)]">Graded</div>
                   </div>
-                  <div className="text-xs shrink-0" style={{ color: "var(--g-text-tertiary)" }}>
+                  <div className="text-xs shrink-0 text-[var(--g-text-tertiary)]">
                     {formatRelative(call.callTimestamp ?? call.createdAt)}
                   </div>
                 </Card>
@@ -195,7 +195,7 @@ export function Training() {
       </div>
 
       <div>
-        <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--g-text-secondary)" }}>Training Material</h2>
+        <h2 className="text-sm font-semibold mb-3 text-[var(--g-text-secondary)]">Training Material</h2>
         {!materials?.length ? (
           <EmptyState
             icon={BookOpen}
@@ -209,15 +209,15 @@ export function Training() {
               const unlocked = minLevel === null || level >= minLevel;
               const Icon = MATERIAL_ICONS[m.category ?? ""] ?? BookOpen;
               return (
-                <Card key={m.id} className={cn(!unlocked && "opacity-70")} style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+                <Card key={m.id} className={cn("bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]", !unlocked && "opacity-70")}>
                   <CardContent className="p-4 flex flex-col gap-3">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: unlocked ? "var(--g-accent-soft)" : "var(--g-bg-inset)" }}>
                         {unlocked ? <Icon className="size-5" style={{ color: "var(--g-accent-text)" }} /> : <Lock className="size-5" style={{ color: "var(--g-text-tertiary)" }} />}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-medium" style={{ color: "var(--g-text-primary)" }}>{m.title}</div>
-                        <div className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>{m.description ?? ""}</div>
+                        <div className="font-medium text-[var(--g-text-primary)]">{m.title}</div>
+                        <div className="text-xs mt-0.5 text-[var(--g-text-tertiary)]">{m.description ?? ""}</div>
                       </div>
                     </div>
                     <Button
@@ -236,19 +236,19 @@ export function Training() {
         )}
       </div>
 
-      <Card style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+      <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--g-text-primary)" }}>Your Journey</h2>
+          <h2 className="text-lg font-semibold mb-4 text-[var(--g-text-primary)]">Your Journey</h2>
           <div className="flex items-center gap-4 mb-4">
-            <Badge className="text-lg px-4 py-1" style={{ background: "var(--g-accent-soft)", color: "var(--g-accent-text)", border: "none" }}>
+            <Badge className="text-lg px-4 py-1 bg-[var(--g-accent-soft)] text-[var(--g-accent-text)] border-none">
               Level {level}
             </Badge>
             <div className="flex-1">
-              <div className="text-xs mb-1" style={{ color: "var(--g-text-tertiary)" }}>XP to Level {level + 1}</div>
+              <div className="text-xs mb-1 text-[var(--g-text-tertiary)]">XP to Level {level + 1}</div>
               <Progress value={progressPct} className="h-2" />
             </div>
           </div>
-          <div className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+          <div className="text-xs text-[var(--g-text-tertiary)]">
             {xp} XP total · {progress?.streak ?? 0} day streak
           </div>
         </CardContent>
@@ -256,13 +256,13 @@ export function Training() {
 
       {selectedMaterial && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setSelectedMaterial(null)}>
-          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col m-4" style={{ background: "var(--g-bg-card)" }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
-              <h3 className="font-semibold" style={{ color: "var(--g-text-primary)" }}>{selectedMaterial.title}</h3>
+          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col m-4 bg-[var(--g-bg-card)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-[var(--g-border-subtle)]">
+              <h3 className="font-semibold text-[var(--g-text-primary)]">{selectedMaterial.title}</h3>
               <Button variant="ghost" size="icon" aria-label="Close" onClick={() => setSelectedMaterial(null)}><X className="size-4" /></Button>
             </div>
             <ScrollArea className="flex-1 p-4">
-              <div className="prose prose-sm max-w-none" style={{ color: "var(--g-text-secondary)" }}>
+              <div className="prose prose-sm max-w-none text-[var(--g-text-secondary)]">
                 {selectedMaterial.content ? (
                   <div className="whitespace-pre-wrap">{selectedMaterial.content}</div>
                 ) : (
@@ -276,20 +276,20 @@ export function Training() {
 
       {coachingOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setCoachingOpen(false); setRoleplayResponse(null); }}>
-          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col m-4" style={{ background: "var(--g-bg-card)" }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
-              <h3 className="font-semibold" style={{ color: "var(--g-text-primary)" }}>Coaching Session</h3>
+          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col m-4 bg-[var(--g-bg-card)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-[var(--g-border-subtle)]">
+              <h3 className="font-semibold text-[var(--g-text-primary)]">Coaching Session</h3>
               <Button variant="ghost" size="icon" aria-label="Close" onClick={() => { setCoachingOpen(false); setRoleplayResponse(null); }}><X className="size-4" /></Button>
             </div>
             <ScrollArea className="flex-1 p-4">
               {roleplayMutation.isPending && (
-                <div className="flex items-center gap-2 text-sm" style={{ color: "var(--g-text-tertiary)" }}>
+                <div className="flex items-center gap-2 text-sm text-[var(--g-text-tertiary)]">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary" />
                   Your AI coach is preparing...
                 </div>
               )}
               {roleplayResponse && (
-                <div className="text-sm whitespace-pre-wrap" style={{ color: "var(--g-text-secondary)" }}>
+                <div className="text-sm whitespace-pre-wrap text-[var(--g-text-secondary)]">
                   {roleplayResponse}
                 </div>
               )}

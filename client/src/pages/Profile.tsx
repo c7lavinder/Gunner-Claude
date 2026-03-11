@@ -176,7 +176,10 @@ export function Profile() {
             <p className="text-sm font-medium" style={{ color: "var(--g-text-secondary)" }}>Voice Samples Collected: {voiceProfile?.totalSamples ?? 0}/20</p>
             <div className="h-2 rounded-full mt-2 overflow-hidden" style={{ background: "var(--g-stat-bar-bg)" }}><div className="h-full rounded-full" style={{ background: "var(--g-accent)", width: `${Math.min(100, ((voiceProfile?.totalSamples ?? 0) / 20) * 100)}%` }} /></div>
           </div>
-          <Button variant="outline" disabled={!voiceConsent} onClick={() => toast("Voice recording coming soon — your consent is saved.")}><Phone className="size-4" />Record Sample</Button>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" disabled={!voiceConsent} onClick={() => toast("Voice recording coming soon — your consent is saved.")}><Phone className="size-4" />Record Sample</Button>
+            <Badge variant="outline" className="text-xs">Coming soon</Badge>
+          </div>
           <div className="flex items-center justify-between pt-2">
             <Label htmlFor="voice-consent" className="text-sm" style={{ color: "var(--g-text-secondary)" }}>I consent to voice sample collection</Label>
             <Switch id="voice-consent" checked={voiceConsent} disabled={updateVoiceConsentMutation.isPending} onCheckedChange={async (v) => {

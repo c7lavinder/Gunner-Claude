@@ -24,6 +24,40 @@ const Profile = lazy(() => import("@/pages/Profile").then((m) => ({ default: m.P
 const IndustryLanding = lazy(() => import("@/pages/landing/IndustryLanding").then((m) => ({ default: m.IndustryLanding })));
 const Onboarding = lazy(() => import("@/pages/Onboarding").then((m) => ({ default: m.Onboarding })));
 
+function PrivacyPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-8">
+      <div className="max-w-xl w-full rounded-xl border p-8 space-y-4">
+        <h1 className="text-2xl font-bold">Privacy Policy</h1>
+        <p className="text-sm text-muted-foreground">
+          Privacy policy coming soon. Contact{" "}
+          <a href="mailto:corey@getgunner.ai" className="underline">
+            corey@getgunner.ai
+          </a>{" "}
+          for questions.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TermsPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-8">
+      <div className="max-w-xl w-full rounded-xl border p-8 space-y-4">
+        <h1 className="text-2xl font-bold">Terms of Service</h1>
+        <p className="text-sm text-muted-foreground">
+          Terms of service coming soon. Contact{" "}
+          <a href="mailto:corey@getgunner.ai" className="underline">
+            corey@getgunner.ai
+          </a>{" "}
+          for questions.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function PageTracker() {
   const [location] = useLocation();
   const { track } = useTrackEvent();
@@ -53,6 +87,8 @@ export function App() {
           <Route path="/signup" component={Signup} />
           <Route path="/auth/google/callback" component={GoogleAuthCallback} />
           <Route path="/industries/:industry" component={IndustryLanding} />
+          <Route path="/privacy" component={PrivacyPage} />
+          <Route path="/terms" component={TermsPage} />
           <Route path="/onboarding">
             <AuthGuard>
               <Onboarding />
