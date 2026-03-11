@@ -1,7 +1,7 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 10, 2026 — **FEATURE COMPLETE + HARDENED**
-> Last deploy: commit `65dfb37` — Railway live
+> Last updated: March 11, 2026 — **LIVE + DEPLOY FIXED**
+> Last deploy: commit `3572c9f` — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
@@ -22,7 +22,8 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] **Batch 2 — Session Management:** `sessions` table + startupMigration; session insert on every login/signup/googleCallback; `listSessions`/`revokeSession`/`revokeAllSessions` tRPC procedures; Sessions tab in Settings showing all active devices
 - [x] **Batch 3 — Advanced Search:** `search.global` tRPC procedure (calls, contacts, notes via ILIKE); CommandPalette (Cmd+K) wired to real debounced search with grouped results by type and icons (Phone, User, FileText); falls back to page navigation when query is short
 - [x] **Batch 4 — Audit Log:** `audit_log` table + startupMigration; fire-and-forget `logAction` service; `auditLogRouter` (admin-only); audit events on tenant settings change, team invite, team removal, playbook edit; Audit Log tab in Settings (admin-only)
-- [x] **Batch 5 — Performance & Polish:** DB indexes for calls/user_events/notifications/audit_log; Vite `manualChunks` for react/recharts/radix; `crmStatus` in `/health` endpoint; CRM degraded banner in DashboardLayout; loading skeleton final pass confirmed (no Loader2 spinners remain)
+- [x] **Batch 5 — Performance & Polish:** DB indexes for calls/user_events/notifications/audit_log; `crmStatus` in `/health` endpoint; CRM degraded banner in DashboardLayout; loading skeleton final pass confirmed (no Loader2 spinners remain)
+- **NOTE:** Vite `manualChunks` (react/recharts/radix splitting) was removed — it caused React 19.2 to crash on startup (`Cannot set properties of undefined (setting 'Activity')`). Vite handles chunking automatically.
 
 ### Finish Line Batches (all 8 complete — prior session)
 
