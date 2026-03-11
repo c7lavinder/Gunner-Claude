@@ -10,11 +10,9 @@ const pool = new pg.Pool({
   connectionTimeoutMillis: 5000,
 });
 
-// #region agent log
 pool.on("error", (err) => {
   console.error("[db] Pool background error (non-fatal):", err.message);
 });
-// #endregion
 
 export const db = drizzle(pool, { schema });
 export type Database = typeof db;

@@ -23,19 +23,12 @@ import { runStartupMigrations } from "../seeds/startupMigrations";
 import { seedNahTenantPlaybook } from "../seeds/nahTenant";
 import { chatCompletionStream } from "./llm";
 
-// #region agent log — in-memory debug buffer readable via /debug
-const _debugLog: string[] = [];
-function dlog(msg: string) { const entry = `[${new Date().toISOString()}] ${msg}`; _debugLog.push(entry); console.log(entry); }
-
 process.on("unhandledRejection", (reason) => {
-  dlog(`[FATAL] unhandledRejection: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`);
+  console.error("[process] unhandledRejection:", reason instanceof Error ? reason.stack ?? reason.message : String(reason));
 });
 process.on("uncaughtException", (err) => {
-  dlog(`[FATAL] uncaughtException: ${err.stack ?? err.message}`);
+  console.error("[process] uncaughtException:", err.stack ?? err.message);
 });
-
-dlog(`[boot] ENV loaded. PORT=${ENV.port} NODE_ENV=${process.env.NODE_ENV} DB_HOST=${new URL(ENV.databaseUrl).hostname}`);
-// #endregion
 
 if (ENV.sentryDsn) {
   Sentry.init({
@@ -43,7 +36,7 @@ if (ENV.sentryDsn) {
     environment: ENV.isProduction ? "production" : "development",
     tracesSampleRate: ENV.isProduction ? 0.1 : 1.0,
   });
-  dlog("[sentry] Initialized");
+  console.log("[sentry] Initialized");
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -88,12 +81,6 @@ app.get("/health", async (_req, res) => {
   }
   res.json({ status: "ok", timestamp: new Date().toISOString(), crmStatus });
 });
-
-// #region agent log — remote-readable debug endpoint
-app.get("/debug", (_req, res) => {
-  res.json({ logs: _debugLog, count: _debugLog.length, uptime: process.uptime() });
-});
-// #endregion
 
 app.use(
   "/api/trpc/auth.login",
@@ -156,20 +143,17 @@ if (ENV.isProduction) {
 }
 
 app.listen(ENV.port, "0.0.0.0", () => {
-  dlog(`[listen] Gunner v2 running on port ${ENV.port}`);
+  console.log(`Gunner v2 running on port ${ENV.port}`);
   runStartupMigrations()
-    .then(() => { dlog("[startup] Migrations done"); return seedIndustryPlaybooks(); })
-    .then(() => { dlog("[startup] Industry playbooks seeded"); return seedNahTenantPlaybook(); })
-    .then(() => { dlog("[startup] NAH tenant seeded — startup complete"); })
-    .catch((err) => dlog(`[startup] Migration/seed error (non-fatal): ${err instanceof Error ? err.message : String(err)}`));
+    .then(() => seedIndustryPlaybooks())
+    .then(() => seedNahTenantPlaybook())
+    .catch((err) => console.error("[startup] Migration/seed error:", err));
   if (ENV.isProduction) {
-    // #region agent log — wrap services in try/catch so they don't crash the process
-    try { startPolling(5); dlog("[services] Polling started"); } catch (e) { dlog(`[services] Polling failed: ${e}`); }
-    try { startDailyDigestJob(); dlog("[services] Daily digest started"); } catch (e) { dlog(`[services] Digest failed: ${e}`); }
-    try { startEventFlusher(); dlog("[services] Event flusher started"); } catch (e) { dlog(`[services] Flusher failed: ${e}`); }
-    try { startRetryProcessor(); dlog("[services] Retry processor started"); } catch (e) { dlog(`[services] Retry failed: ${e}`); }
-    try { startScheduledJobs(); dlog("[services] Scheduled jobs started"); } catch (e) { dlog(`[services] Jobs failed: ${e}`); }
-    // #endregion
+    try { startPolling(5); } catch (e) { console.error("[services] Polling failed:", e); }
+    try { startDailyDigestJob(); } catch (e) { console.error("[services] Digest failed:", e); }
+    try { startEventFlusher(); } catch (e) { console.error("[services] Flusher failed:", e); }
+    try { startRetryProcessor(); } catch (e) { console.error("[services] Retry failed:", e); }
+    try { startScheduledJobs(); } catch (e) { console.error("[services] Jobs failed:", e); }
   }
 });
 
