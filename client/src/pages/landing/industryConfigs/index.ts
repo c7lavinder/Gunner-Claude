@@ -9,7 +9,7 @@ export interface IndustryConfig {
 }
 
 export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
-  "wholesaling-real-estate": {
+  wholesaling: {
     code: "wholesaling_re",
     name: "Real Estate Wholesaling",
     headline: "Close More Deals with AI-Coached Acquisition Teams",
@@ -22,7 +22,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     testimonial: { quote: "Gunner helped us double our contact rate in 30 days.", author: "Sales Manager", company: "Leading Wholesale Company" },
     ctaText: "Start Closing More Deals",
   },
-  "solar-sales": {
+  solar: {
     code: "solar",
     name: "Solar Sales",
     headline: "Turn Every Solar Rep Into a Top Closer",
@@ -32,9 +32,10 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       { title: "Objection Handling Training", description: "AI identifies missed objections and coaches responses" },
       { title: "Rep Performance Tracking", description: "See who's improving and who needs help" },
     ],
+    testimonial: { quote: "Our close rate jumped 28% after the first month with Gunner.", author: "Regional Manager", company: "SunPower Solutions" },
     ctaText: "Empower Your Solar Team",
   },
-  "insurance": {
+  insurance: {
     code: "insurance",
     name: "Insurance Sales",
     headline: "AI Coaching That Makes Every Agent Better",
@@ -44,9 +45,10 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       { title: "Compliance Monitoring", description: "Flag risky language and missing disclosures" },
       { title: "Agent Development", description: "Personalized coaching paths for each agent" },
     ],
+    testimonial: { quote: "Compliance issues dropped 60% after we started using Gunner for every call.", author: "Director of Sales", company: "Apex Insurance Group" },
     ctaText: "Improve Agent Performance",
   },
-  "saas-sales": {
+  saas: {
     code: "saas",
     name: "SaaS Sales",
     headline: "Scale Your SDR Team Without Scaling Your Managers",
@@ -56,9 +58,10 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       { title: "Demo Effectiveness", description: "Score presentations and identify improvement areas" },
       { title: "Pipeline Velocity", description: "Track which reps move deals fastest" },
     ],
+    testimonial: { quote: "Our SDRs book 40% more demos now that they get instant AI coaching after every call.", author: "VP of Sales", company: "CloudPilot Inc." },
     ctaText: "Accelerate Your Pipeline",
   },
-  "recruiting": {
+  "home-services": {
     code: "home-services",
     name: "Home Services",
     headline: "Book More Jobs with AI-Coached Service Teams",
@@ -68,6 +71,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       { title: "Estimate Follow-Up Tracking", description: "Never let a hot estimate go cold" },
       { title: "CSR Performance Leaderboards", description: "See who's booking the most and coach the rest" },
     ],
+    testimonial: { quote: "Booking rate went from 54% to 79% in 8 weeks with Gunner coaching our CSRs.", author: "Operations Manager", company: "Premier Home Services" },
     ctaText: "Book More Jobs",
   },
 };

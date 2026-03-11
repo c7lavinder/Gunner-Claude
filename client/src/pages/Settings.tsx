@@ -26,6 +26,7 @@ import {
   X,
   Plus,
   Trash2,
+  Mic,
 } from "lucide-react";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { trpc } from "@/lib/trpc";
@@ -79,6 +80,8 @@ export function Settings() {
   const inviteMutation = trpc.settings.inviteTeamMember.useMutation();
   const removeMutation = trpc.settings.removeTeamMember.useMutation();
   const updateRoleMutation = trpc.settings.updateMemberRole.useMutation();
+  const updateVoiceConsentMutation = trpc.users.updateVoiceConsent.useMutation();
+  const { data: voiceProfile, refetch: refetchVoiceProfile } = trpc.users.getVoiceProfile.useQuery();
   const utils = trpc.useUtils();
 
   const tenant = workspace?.tenant;
@@ -165,6 +168,7 @@ export function Settings() {
           <TabsTrigger value="crm" className="justify-start gap-2"><Link2 className="size-4" />CRM</TabsTrigger>
           <TabsTrigger value="team" className="justify-start gap-2"><Users className="size-4" />Team</TabsTrigger>
           <TabsTrigger value="notifications" className="justify-start gap-2"><Bell className="size-4" />Notifications</TabsTrigger>
+          <TabsTrigger value="voice" className="justify-start gap-2"><Mic className="size-4" />Voice</TabsTrigger>
           <TabsTrigger value="billing" className="justify-start gap-2"><CreditCard className="size-4" />Billing</TabsTrigger>
         </TabsList>
         <div className="flex-1 min-w-0">
@@ -317,6 +321,60 @@ export function Settings() {
                   <Switch disabled />
                 </div>
                 <Button onClick={saveGeneral} disabled={updateMutation.isPending}>Save</Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="voice" className="mt-0 space-y-4">
+            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
+              <CardHeader><CardTitle>Voice Coaching</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="font-medium" style={{ color: "var(--g-text-primary)" }}>Allow voice sample collection</p>
+                    <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>
+                      Allow Gunner to collect voice samples from your calls to build a personalized coaching profile.
+                      Your voice data is stored securely and used only to improve your AI coaching experience.
+                      You can revoke consent at any time.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={voiceProfile?.consentGiven ?? false}
+                    onCheckedChange={async (checked) => {
+                      await updateVoiceConsentMutation.mutateAsync({ consentGiven: checked });
+                      await refetchVoiceProfile();
+                    }}
+                    disabled={updateVoiceConsentMutation.isPending}
+                  />
+                </div>
+                {voiceProfile && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <p className="font-medium" style={{ color: "var(--g-text-primary)" }}>Voice Profile</p>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="p-3 rounded-lg" style={{ background: "var(--g-bg-inset)" }}>
+                          <p className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{voiceProfile.totalSamples ?? 0}</p>
+                          <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>Samples collected</p>
+                        </div>
+                        <div className="p-3 rounded-lg" style={{ background: "var(--g-bg-inset)" }}>
+                          <p className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{parseFloat(voiceProfile.totalDurationMinutes ?? "0").toFixed(0)}</p>
+                          <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>Minutes recorded</p>
+                        </div>
+                        <div className="p-3 rounded-lg" style={{ background: "var(--g-bg-inset)" }}>
+                          <p className="text-sm font-semibold" style={{ color: voiceProfile.readyForCloning ? "var(--g-grade-a)" : "var(--g-text-secondary)" }}>
+                            {voiceProfile.readyForCloning ? "Ready" : (voiceProfile.totalSamples ?? 0) > 0 ? "Building" : "Not started"}
+                          </p>
+                          <p className="text-xs mt-0.5" style={{ color: "var(--g-text-tertiary)" }}>Profile status</p>
+                        </div>
+                      </div>
+                      {!voiceProfile.readyForCloning && (voiceProfile.totalSamples ?? 0) > 0 && (
+                        <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                          Need {Math.max(0, 20 - (voiceProfile.totalSamples ?? 0))} more samples and {Math.max(0, 60 - parseFloat(voiceProfile.totalDurationMinutes ?? "0")).toFixed(0)} more minutes to unlock cloning.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

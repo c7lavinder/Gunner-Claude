@@ -6,11 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const INDUSTRIES = [
-  { slug: "wholesaling-real-estate", name: "Real Estate Wholesaling", tag: "Most Popular" },
-  { slug: "solar-sales", name: "Solar Sales" },
+  { slug: "wholesaling", name: "Real Estate Wholesaling", tag: "Most Popular" },
+  { slug: "solar", name: "Solar Sales" },
   { slug: "insurance", name: "Insurance Sales" },
-  { slug: "saas-sales", name: "SaaS Sales" },
-  { slug: "recruiting", name: "Home Services" },
+  { slug: "saas", name: "SaaS Sales" },
+  { slug: "home-services", name: "Home Services" },
 ];
 
 const STATS = [

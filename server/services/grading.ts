@@ -4,6 +4,7 @@ import { calls, callGrades, tenantRubrics } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { sendGradeAlert } from "./notifications";
 import { processCallGamification } from "./gamification";
+import { extractVoiceSample } from "./voiceSamples";
 import { getTenantPlaybook, getIndustryPlaybook } from "./playbooks";
 import type { RubricDef } from "../../shared/types";
 
@@ -127,6 +128,14 @@ export async function gradeCall(callId: number, tenantId: number) {
     await sendGradeAlert(callId, tenantId);
   } catch {
     // Email failure shouldn't block grading
+  }
+
+  try {
+    if (call.teamMemberId) {
+      await extractVoiceSample(callId, call.teamMemberId, tenantId);
+    }
+  } catch {
+    // Voice sample extraction failure shouldn't block grading
   }
 
   return grade;

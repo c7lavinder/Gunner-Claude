@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, desc, sql, ne, count } from "drizzle-orm";
+import { eq, and, desc, sql, ne, count, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
@@ -84,6 +84,34 @@ export const callsRouter = router({
 
       return { ...row.call, grade };
     }),
+
+  export: protectedProcedure.query(async ({ ctx }) => {
+    const tenantId = ctx.user!.tenantId;
+
+    const rows = await db
+      .select({
+        call: calls,
+        overallScore: callGrades.overallScore,
+      })
+      .from(calls)
+      .leftJoin(callGrades, and(eq(calls.id, callGrades.callId), eq(callGrades.tenantId, tenantId)))
+      .where(and(eq(calls.tenantId, tenantId), ne(calls.isArchived, "true")))
+      .orderBy(asc(calls.callTimestamp))
+      .limit(5000);
+
+    const header = "id,date,rep_name,call_type,score,duration_seconds,summary";
+    const csvRows = rows.map((r) => {
+      const date = r.call.callTimestamp ? new Date(r.call.callTimestamp).toISOString().split("T")[0] : "";
+      const rep = (r.call.teamMemberName ?? "").replace(/"/g, '""');
+      const callType = (r.call.callType ?? "").replace(/"/g, '""');
+      const score = r.overallScore ? Number(r.overallScore) : "";
+      const duration = r.call.duration ?? "";
+      const summary = "";
+      return `${r.call.id},"${date}","${rep}","${callType}",${score},${duration},"${summary}"`;
+    });
+
+    return { csv: [header, ...csvRows].join("\n") };
+  }),
 
   getStats: protectedProcedure.query(async ({ ctx }) => {
     const tenantId = ctx.user!.tenantId;

@@ -12,6 +12,7 @@ import { authRouter } from "./auth";
 import { settingsRouter } from "./settings";
 import { todayRouter } from "./today";
 import { notificationsRouter } from "./notifications";
+import { usersRouter } from "./users";
 
 export const appRouter = router({
   calls: callsRouter,
@@ -27,6 +28,7 @@ export const appRouter = router({
   settings: settingsRouter,
   today: todayRouter,
   notifications: notificationsRouter,
+  users: usersRouter,
 });
 
 export type AppRouter = typeof appRouter;

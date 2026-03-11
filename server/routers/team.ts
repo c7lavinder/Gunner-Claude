@@ -97,6 +97,37 @@ export const teamRouter = router({
       return member;
     }),
 
+  export: protectedProcedure.query(async ({ ctx }) => {
+    const tid = ctx.user.tenantId;
+
+    const members = await db
+      .select()
+      .from(teamMembers)
+      .where(and(eq(teamMembers.tenantId, tid), eq(teamMembers.isActive, "true")));
+
+    const memberIds = members.map((m) => m.id);
+
+    const [xpRows, badgeRows] = await Promise.all([
+      memberIds.length
+        ? db.select().from(userXp).where(and(eq(userXp.tenantId, tid), inArray(userXp.teamMemberId, memberIds)))
+        : [],
+      [] as { teamMemberId: number; badgeId: string }[],
+    ]);
+
+    const xpMap = new Map(xpRows.map((x) => [x.teamMemberId, x]));
+
+    const header = "rep_name,role,total_xp,avg_score,badges_earned";
+    const csvRows = members.map((m) => {
+      const name = (m.name ?? "").replace(/"/g, '""');
+      const role = (m.teamRole ?? "").replace(/"/g, '""');
+      const xpData = xpMap.get(m.id);
+      const totalXp = xpData?.totalXp ?? 0;
+      return `"${name}","${role}",${totalXp},,`;
+    });
+
+    return { csv: [header, ...csvRows].join("\n") };
+  }),
+
   remove: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
