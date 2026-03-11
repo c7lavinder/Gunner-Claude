@@ -27,27 +27,27 @@ Last audited: March 11, 2026
 |---|---|---|---|---|
 | 1 | `Inventory.tsx` | 47 | `STAGE_COLORS` keyed to wrong RE-specific stage codes — doesn't match actual seeded stage codes (`new_lead`, `offer_made`, etc.) | 🔴 Open |
 | 2 | `Inventory.tsx` | 61 | Hardcoded `"lead"` fallback stage when `configStages` is empty | 🔴 Open |
-| 3 | `KpiPage.tsx` | 12-18 | `DEFAULT_KPI_METRICS` array always used — `kpiMetrics` never actually flows through `getConfig` | 🔴 Open |
-| 4 | `KpiPage.tsx` | 143 | Funnel renders raw DB status codes (`under_contract`) not human-readable stage names | 🔴 Open |
-| 5 | `Onboarding.tsx` | 186-187 | Role picker hardcodes `"Lead Manager"` / `"Acquisition Manager"` — first UX for every new user | 🔴 Open |
-| 6 | `useTenantConfig.ts` | — | Missing fields: `kpiFunnelStages`, `kpiMetrics`, `outcomeTypes`, `trainingCategories`, `roleplayPersonas`, `markets`, `leadSources` | 🔴 Open |
+| 3 | `KpiPage.tsx` | 12-18 | `DEFAULT_KPI_METRICS` array always used — `kpiMetrics` never actually flows through `getConfig` | ✅ Fixed Wave 5 |
+| 4 | `KpiPage.tsx` | 143 | Funnel renders raw DB status codes (`under_contract`) not human-readable stage names | ✅ Fixed Wave 5 |
+| 5 | `Onboarding.tsx` | 186-187 | Role picker hardcodes `"Lead Manager"` / `"Acquisition Manager"` — first UX for every new user | ✅ Fixed Wave 5 |
+| 6 | `useTenantConfig.ts` | — | Missing fields: `kpiFunnelStages`, `kpiMetrics`, `outcomeTypes`, `trainingCategories`, `roleplayPersonas`, `markets`, `leadSources` | ✅ Fixed Wave 5 (kpiFunnelStages, kpiMetrics, roleplayPersonas, trainingCategories added) |
 
 ### Severity 2 — Functionally Broken (works today, breaks for tenant 2)
 
 | # | File | Line | Violation | Status |
 |---|---|---|---|---|
-| 7 | `Training.tsx` | 155 | Roleplay scenario hardcoded as `"general_coaching"` — ignores the 6 rich RE personas in the playbook | 🟠 Open |
+| 7 | `Training.tsx` | 155 | Roleplay scenario hardcoded as `"general_coaching"` — ignores the 6 rich RE personas in the playbook | ✅ Fixed Wave 5 |
 | 8 | `Training.tsx` | 15-21 | `MATERIAL_ICONS` keyed to wrong category codes — every material shows fallback icon | 🟠 Open |
-| 9 | `CallInbox.tsx` | 216 | `call.callType` displayed as raw code (`cold_call`) not resolved name (`"Cold Call"`) | 🟠 Open |
+| 9 | `CallInbox.tsx` | 216 | `call.callType` displayed as raw code (`cold_call`) not resolved name (`"Cold Call"`) | ✅ Fixed Wave 5 |
 | 10 | `grading.ts` | 11-18 | `FALLBACK_CRITERIA` are generic SaaS demo criteria — leak into stored `criteriaScores` | 🟠 Open |
-| 11 | `grading.ts` | 66 | Default `callType = "qualification"` matches no rubric in RE Wholesaling playbook | 🟠 Open |
+| 11 | `grading.ts` | 66 | Default `callType = "qualification"` matches no rubric in RE Wholesaling playbook | ✅ Fixed Wave 5 |
 
 ### Severity 3 — Architectural Gaps (playbook resolution chain incomplete)
 
 | # | File | Line | Violation | Status |
 |---|---|---|---|---|
 | 12 | `useTenantConfig.ts` | 34 | `algorithm` field is untyped `Record<string, unknown>` blob — should be named typed fields | 🟡 Open |
-| 13 | `playbook.ts (router)` | 29-38 | `getConfig` never returns `kpiFunnelStages`, `outcomeTypes`, `trainingCategories`, `roleplayPersonas` — they're discarded | 🟡 Open |
+| 13 | `playbook.ts (router)` | 29-38 | `getConfig` never returns `kpiFunnelStages`, `outcomeTypes`, `trainingCategories`, `roleplayPersonas` — they're discarded | ✅ Fixed Wave 5 |
 | 14 | `shared/types.ts` | 5-13 | `Terminology` interface missing `leadSource` and other field overrides needed by Inventory | 🟡 Open |
 
 ### Severity 4 — Cosmetic (hardcoded but not tenant-breaking today)
@@ -106,3 +106,4 @@ These patterns are compliant and should be followed as the model:
 | Date | Change | Author |
 |---|---|---|
 | 2026-03-11 | Initial compliance audit — 17 violations identified across 6 files | Cursor AI Sprint |
+| 2026-03-11 | Wave 5 fixes — violations 3, 4, 5, 6 (partial), 7, 9, 11, 13 resolved. 9 files changed. | Cursor AI Sprint |
