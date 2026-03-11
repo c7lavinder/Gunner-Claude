@@ -1,0 +1,28 @@
+name: Sync main with production
+
+on:
+  push:
+    branches: [production]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout production
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge production into main
+        run: |
+          git fetch origin main
+          git checkout main
+          git merge production --no-edit -m "chore: sync main with production [skip ci]"
+          git push origin main

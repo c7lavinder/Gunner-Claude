@@ -1,11 +1,9 @@
-name: Nightly Autonomous Build
+name: Nightly Build Check
 
 on:
   schedule:
     # Runs at 2:00 AM CST (8:00 AM UTC) every night
     - cron: '0 8 * * *'
-  push:
-    branches: [production]
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -47,6 +45,9 @@ jobs:
       - name: Type check
         run: pnpm exec tsc --noEmit
 
+      - name: Lint
+        run: pnpm exec eslint . --max-warnings 0
+
       - name: Build
         run: pnpm run build
         env:
@@ -58,4 +59,4 @@ jobs:
       - name: Notify on failure
         if: failure()
         run: |
-          echo "Build failed — check logs above"
+          echo "Nightly build failed — check logs above"
