@@ -94,6 +94,7 @@ export interface IndustryPlaybook {
   rubrics: RubricDef[];
   outcomeTypes: string[];
   kpiFunnelStages: string[];
+  kpiMetrics?: Array<{ key: string; label: string }>;
   algorithmDefaults: AlgorithmConfig;
   roleplayPersonas?: RoleplayPersona[];
   trainingCategories?: TrainingCategory[];

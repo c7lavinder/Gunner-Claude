@@ -8,8 +8,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { GraduationCap, TrendingUp, TrendingDown, Shield, Target, Zap, BookOpen, Lock, Award, X, MessageSquare, Phone } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/EmptyState";
 import { trpc } from "@/lib/trpc";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { LEVEL_THRESHOLDS } from "@shared/types";
 
 const MATERIAL_ICONS: Record<string, typeof Shield> = {
@@ -48,10 +56,13 @@ function formatRelative(date: Date | string): string {
 }
 
 export function Training() {
+  const { algorithm } = useTenantConfig();
+  const roleplayPersonas = (algorithm.roleplayPersonas as Array<{ id: string; name: string }> | undefined) ?? [];
   const { data: materials, isLoading: materialsLoading } = trpc.training.getMaterials.useQuery();
   const { data: progress, isLoading: progressLoading } = trpc.training.getUserProgress.useQuery();
   const [selectedMaterial, setSelectedMaterial] = useState<{ id: number; title: string; content: string | null; description: string | null } | null>(null);
   const [coachingOpen, setCoachingOpen] = useState(false);
+  const [selectedPersona, setSelectedPersona] = useState<string>("general_coaching");
   const roleplayMutation = trpc.training.startRoleplay.useMutation();
   const [roleplayResponse, setRoleplayResponse] = useState<string | null>(null);
 
@@ -146,13 +157,28 @@ export function Training() {
               </div>
             )}
           </div>
+          {roleplayPersonas.length > 0 && (
+            <Select
+              value={selectedPersona}
+              onValueChange={setSelectedPersona}
+            >
+              <SelectTrigger className="mt-4 w-full max-w-xs bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]">
+                <SelectValue placeholder="Select persona" />
+              </SelectTrigger>
+              <SelectContent>
+                {roleplayPersonas.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button
             className="mt-4"
             size="lg"
             onClick={() => {
               setCoachingOpen(true);
               roleplayMutation.mutate(
-                { scenario: "general_coaching" },
+                { scenario: selectedPersona },
                 { onSuccess: (data) => setRoleplayResponse(data) }
               );
             }}

@@ -63,8 +63,13 @@ export async function gradeCall(callId: number, tenantId: number) {
   const [call] = await db.select().from(calls).where(and(eq(calls.id, callId), eq(calls.tenantId, tenantId)));
   if (!call?.transcript) throw new Error("Call not found or missing transcript");
 
-  const callType = call.callType ?? "qualification";
-  const { criteria, rubricType, tenantRubricId, criticalFailures } = await resolveRubricCriteria(tenantId, callType);
+  const callType = call.callType ?? null;
+  if (callType === null) {
+    console.warn(`[grading] call ${call.id} has no callType — using FALLBACK_CRITERIA`);
+  }
+  const { criteria, rubricType, tenantRubricId, criticalFailures } = callType
+    ? await resolveRubricCriteria(tenantId, callType)
+    : { criteria: FALLBACK_CRITERIA, rubricType: "fallback", tenantRubricId: null as number | null, criticalFailures: [] as string[] };
 
   const rubricText = criteria.map((c) => `- ${c.name} (${c.maxPoints} pts): ${c.description}`).join("\n");
   const failText = criticalFailures.length > 0
@@ -76,7 +81,7 @@ export async function gradeCall(callId: number, tenantId: number) {
   const industryPb = tenantPb?.industryCode ? await getIndustryPlaybook(tenantPb.industryCode) : null;
   const philosophy = industryPb?.gradingPhilosophy;
   const philosophyText = philosophy
-    ? `\n\nGrading philosophy:\n${philosophy.overview}\n\nCritical failure policy: ${philosophy.criticalFailurePolicy}\nTalk ratio guidance: ${philosophy.talkRatioGuidance}${philosophy.roleSpecific[callType] ? `\nRole-specific: ${philosophy.roleSpecific[callType]}` : ""}`
+    ? `\n\nGrading philosophy:\n${philosophy.overview}\n\nCritical failure policy: ${philosophy.criticalFailurePolicy}\nTalk ratio guidance: ${philosophy.talkRatioGuidance}${callType && philosophy.roleSpecific[callType] ? `\nRole-specific: ${philosophy.roleSpecific[callType]}` : ""}`
     : "";
 
   const systemPrompt = `You are an expert sales call grading AI. Grade this call transcript against the provided rubric. Return valid JSON only, no markdown.${philosophyText}`;

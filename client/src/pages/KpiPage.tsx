@@ -30,8 +30,10 @@ function todayStr() {
 }
 
 export function KpiPage() {
-  const { algorithm } = useTenantConfig();
-  const kpiMetrics = (algorithm.kpiMetrics as Array<{ key: string; label: string }> | undefined) ?? DEFAULT_KPI_METRICS;
+  const { algorithm, stages } = useTenantConfig();
+  const kpiMetricsRaw = (algorithm.kpiMetrics as Array<{ key: string; label: string }> | undefined) ?? [];
+  const kpiMetrics = kpiMetricsRaw.length > 0 ? kpiMetricsRaw : DEFAULT_KPI_METRICS;
+  const kpiFunnelStages = (algorithm.kpiFunnelStages as string[] | undefined) ?? [];
   const [period, setPeriod] = useState("week");
   const [kpiValues, setKpiValues] = useState<Record<string, string>>({});
   const today = todayStr();
@@ -134,9 +136,9 @@ export function KpiPage() {
                   <div key={stage.status} className="flex items-center gap-3">
                     <span
                       className="w-32 text-xs text-right shrink-0 text-[var(--g-text-secondary)] truncate"
-                      title={stage.status ?? ""}
+                      title={stages.find((s) => s.code === stage.status)?.name ?? stage.status ?? ""}
                     >
-                      {stage.status}
+                      {stages.find((s) => s.code === stage.status)?.name ?? stage.status}
                     </span>
                     <div className="flex-1 h-8 rounded-md bg-[var(--g-bg-inset)] overflow-hidden">
                       <div
@@ -243,7 +245,11 @@ export function KpiPage() {
                 "—"
               )}
             </div>
-            <div className="text-sm text-[var(--g-text-secondary)]">Lead → Closed</div>
+            <div className="text-sm text-[var(--g-text-secondary)]">
+              {kpiFunnelStages.length >= 2
+                ? `${kpiFunnelStages[0]} → ${kpiFunnelStages[kpiFunnelStages.length - 1]}`
+                : "Lead → Closed"}
+            </div>
           </CardContent>
         </Card>
       </div>

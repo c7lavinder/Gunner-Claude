@@ -23,6 +23,10 @@ import {
   resolveStages,
   resolveCallTypes,
   resolveAlgorithmConfig,
+  resolveKpiFunnelStages,
+  resolveKpiMetrics,
+  resolveRoleplayPersonas,
+  resolveTrainingCategories,
 } from "../services/playbooks";
 
 export const playbookRouter = router({
@@ -35,6 +39,10 @@ export const playbookRouter = router({
       stages: resolveStages(industry, tenant),
       callTypes: resolveCallTypes(industry),
       algorithm: resolveAlgorithmConfig(industry, tenant),
+      kpiFunnelStages: resolveKpiFunnelStages(industry, tenant),
+      kpiMetrics: resolveKpiMetrics(industry, tenant),
+      roleplayPersonas: resolveRoleplayPersonas(industry),
+      trainingCategories: resolveTrainingCategories(industry),
     };
   }),
 

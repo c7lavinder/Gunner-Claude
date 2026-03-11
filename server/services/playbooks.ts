@@ -242,3 +242,31 @@ export function resolveAlgorithmConfig(
     ...(tenant?.algorithmOverrides ?? {}),
   };
 }
+
+export function resolveKpiFunnelStages(
+  industry?: IndustryPlaybook | null,
+  tenant?: TenantPlaybook | null
+): string[] {
+  void tenant; // reserved for future tenant overrides
+  return industry?.kpiFunnelStages ?? [];
+}
+
+export function resolveKpiMetrics(
+  industry?: IndustryPlaybook | null,
+  tenant?: TenantPlaybook | null
+): Array<{ key: string; label: string }> {
+  void tenant; // reserved for future tenant overrides
+  return industry?.kpiMetrics ?? [];
+}
+
+export function resolveRoleplayPersonas(
+  industry?: IndustryPlaybook | null
+): RoleplayPersona[] {
+  return industry?.roleplayPersonas ?? [];
+}
+
+export function resolveTrainingCategories(
+  industry?: IndustryPlaybook | null
+): TrainingCategory[] {
+  return industry?.trainingCategories ?? [];
+}

@@ -57,7 +57,9 @@ function gradeColor(grade: number | null) {
 }
 
 export function CallInbox() {
-  const { t } = useTenantConfig();
+  const { t, callTypes } = useTenantConfig();
+  const resolveCallType = (code: string | null) =>
+    callTypes.find((ct) => ct.code === code)?.name ?? code ?? "—";
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<number>>(new Set());
@@ -213,7 +215,7 @@ export function CallInbox() {
                                   {call.contactName ?? "Unknown"}
                                 </span>
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                  {call.callType ?? "—"}
+                                  {resolveCallType(call.callType)}
                                 </Badge>
                               </div>
                               <p className="text-xs mt-0.5 truncate text-[var(--g-text-tertiary)]">

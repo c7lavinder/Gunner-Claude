@@ -13,6 +13,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
 const STEPS = ["welcome", "crm", "team", "done"] as const;
 
@@ -28,6 +29,7 @@ export function Onboarding() {
   const [invEmail, setInvEmail] = useState("");
   const [invRole, setInvRole] = useState("member");
 
+  const { roles } = useTenantConfig();
   const { data: workspace, isLoading } = trpc.settings.getWorkspace.useQuery();
   const { data: industries } = trpc.playbook.listIndustries.useQuery();
   const updateMutation = trpc.settings.updateWorkspace.useMutation();
@@ -182,9 +184,9 @@ export function Onboarding() {
               <Select value={invRole} onValueChange={setInvRole}>
                 <SelectTrigger className="w-[120px] bg-[var(--g-bg-surface)]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="lead_manager">Lead Manager</SelectItem>
-                  <SelectItem value="acquisition_manager">Acquisition Manager</SelectItem>
+                  {roles.length > 0
+                    ? roles.map((r) => <SelectItem key={r.code} value={r.code}>{r.name}</SelectItem>)
+                    : <SelectItem value="member">Team Member</SelectItem>}
                 </SelectContent>
               </Select>
               <Button size="icon" variant="outline" aria-label="Add team member" onClick={addMember}><Plus className="size-4" /></Button>
