@@ -27,8 +27,12 @@ import {
   Plus,
   Trash2,
   Mic,
+  Monitor,
+  LogOut,
+  ClipboardList,
 } from "lucide-react";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
+import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 
 function parseJson<T>(raw: string | null, fallback: T): T {
@@ -71,7 +75,112 @@ function SyncHealthDisplay() {
   );
 }
 
+function SessionsTab() {
+  const { data: sessions, isLoading } = trpc.auth.listSessions.useQuery();
+  const revokeMutation = trpc.auth.revokeSession.useMutation();
+  const revokeAllMutation = trpc.auth.revokeAllSessions.useMutation();
+  const utils = trpc.useUtils();
+
+  const handleRevoke = async (sessionId: number) => {
+    await revokeMutation.mutateAsync({ sessionId });
+    await utils.auth.listSessions.invalidate();
+  };
+  const handleRevokeAll = async () => {
+    await revokeAllMutation.mutateAsync();
+    window.location.assign("/login");
+  };
+
+  return (
+    <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Active Sessions</CardTitle>
+        <Button variant="destructive" size="sm" onClick={handleRevokeAll} disabled={revokeAllMutation.isPending}>
+          <LogOut className="size-4 mr-1" />Sign out all devices
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+          </div>
+        ) : !sessions?.length ? (
+          <p className="text-sm py-4" style={{ color: "var(--g-text-tertiary)" }}>No active sessions.</p>
+        ) : (
+          <div className="space-y-2">
+            {sessions.map((s) => (
+              <div key={s.id} className="flex items-center justify-between p-3 rounded-lg" style={{ background: "var(--g-bg-surface)" }}>
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <p className="text-sm font-medium truncate" style={{ color: "var(--g-text-primary)" }}>
+                    {s.userAgent ? s.userAgent.slice(0, 60) : "Unknown device"}
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                    IP: {s.ipAddress ?? "—"} · Last seen: {s.lastSeenAt ? new Date(s.lastSeenAt).toLocaleDateString() : "—"}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => handleRevoke(s.id)} disabled={revokeMutation.isPending}>
+                  <LogOut className="size-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AuditLogTab() {
+  const { data: entries, isLoading } = trpc.auditLog.list.useQuery();
+
+  return (
+    <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
+      <CardHeader><CardTitle>Audit Log</CardTitle></CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        ) : !entries?.length ? (
+          <p className="text-sm py-4" style={{ color: "var(--g-text-tertiary)" }}>No activity logged yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
+                  <th className="pb-2 text-left font-medium" style={{ color: "var(--g-text-secondary)" }}>Time</th>
+                  <th className="pb-2 text-left font-medium" style={{ color: "var(--g-text-secondary)" }}>User</th>
+                  <th className="pb-2 text-left font-medium" style={{ color: "var(--g-text-secondary)" }}>Action</th>
+                  <th className="pb-2 text-left font-medium" style={{ color: "var(--g-text-secondary)" }}>Entity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y" style={{ borderColor: "var(--g-border-subtle)" }}>
+                {entries.map((e) => (
+                  <tr key={e.id} className="py-2">
+                    <td className="py-2 pr-4 whitespace-nowrap" style={{ color: "var(--g-text-tertiary)" }}>
+                      {new Date(e.createdAt).toLocaleString()}
+                    </td>
+                    <td className="py-2 pr-4" style={{ color: "var(--g-text-secondary)" }}>
+                      {e.userName ?? `User #${e.userId}`}
+                    </td>
+                    <td className="py-2 pr-4 font-mono text-xs" style={{ color: "var(--g-text-primary)" }}>
+                      {e.action}
+                    </td>
+                    <td className="py-2" style={{ color: "var(--g-text-tertiary)" }}>
+                      {e.entityType ? `${e.entityType} ${e.entityId ?? ""}` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function Settings() {
+  const { isAdmin } = useAuth();
   const { roles } = useTenantConfig();
   const { data: workspace, isLoading } = trpc.settings.getWorkspace.useQuery();
   const { data: industries } = trpc.playbook.listIndustries.useQuery();
@@ -169,6 +278,8 @@ export function Settings() {
           <TabsTrigger value="team" className="justify-start gap-2"><Users className="size-4" />Team</TabsTrigger>
           <TabsTrigger value="notifications" className="justify-start gap-2"><Bell className="size-4" />Notifications</TabsTrigger>
           <TabsTrigger value="voice" className="justify-start gap-2"><Mic className="size-4" />Voice</TabsTrigger>
+          <TabsTrigger value="sessions" className="justify-start gap-2"><Monitor className="size-4" />Sessions</TabsTrigger>
+          {isAdmin && <TabsTrigger value="audit" className="justify-start gap-2"><ClipboardList className="size-4" />Audit Log</TabsTrigger>}
           <TabsTrigger value="billing" className="justify-start gap-2"><CreditCard className="size-4" />Billing</TabsTrigger>
         </TabsList>
         <div className="flex-1 min-w-0">
@@ -204,7 +315,7 @@ export function Settings() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={saveGeneral} disabled={updateMutation.isPending}>Save</Button>
+                {isAdmin && <Button onClick={saveGeneral} disabled={updateMutation.isPending}>Save</Button>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -254,7 +365,7 @@ export function Settings() {
             <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Team</CardTitle>
-                <Button size="sm" onClick={() => setShowInvite(!showInvite)}><Plus className="size-4" />Invite</Button>
+                {isAdmin && <Button size="sm" onClick={() => setShowInvite(!showInvite)}><Plus className="size-4" />Invite</Button>}
               </CardHeader>
               <CardContent className="space-y-4">
                 {showInvite && (
@@ -289,7 +400,7 @@ export function Settings() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => removeMember(m.id)} disabled={removeMutation.isPending}><Trash2 className="size-4" style={{ color: "var(--g-text-tertiary)" }} /></Button>
+                        {isAdmin && <Button variant="ghost" size="icon" onClick={() => removeMember(m.id)} disabled={removeMutation.isPending}><Trash2 className="size-4" style={{ color: "var(--g-text-tertiary)" }} /></Button>}
                       </div>
                     ))
                   )}
@@ -378,6 +489,14 @@ export function Settings() {
               </CardContent>
             </Card>
           </TabsContent>
+          <TabsContent value="sessions" className="mt-0">
+            <SessionsTab />
+          </TabsContent>
+          {isAdmin && (
+            <TabsContent value="audit" className="mt-0">
+              <AuditLogTab />
+            </TabsContent>
+          )}
           <TabsContent value="billing" className="mt-0">
             <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
               <CardHeader><CardTitle>Billing</CardTitle></CardHeader>

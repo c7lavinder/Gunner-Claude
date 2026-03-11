@@ -82,6 +82,44 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
+ * Active login sessions — one row per device/browser login
+ */
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id),
+  userId: integer("userId").references(() => users.id).notNull(),
+  tokenHash: text("tokenHash").notNull(), // SHA-256 of the JWT
+  userAgent: text("userAgent"),
+  ipAddress: text("ipAddress"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  revokedAt: timestamp("revokedAt"),
+});
+
+export type Session = typeof sessions.$inferSelect;
+export type InsertSession = typeof sessions.$inferInsert;
+
+/**
+ * Audit log — immutable record of significant admin/write actions
+ */
+export const auditLog = pgTable("audit_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id),
+  userId: integer("userId").references(() => users.id),
+  action: text("action").notNull(), // e.g. "stage_change", "user_role_change", "playbook_edit"
+  entityType: text("entityType"), // e.g. "call", "user", "tenant"
+  entityId: text("entityId"),
+  before: jsonb("before"), // snapshot before change
+  after: jsonb("after"), // snapshot after change
+  ipAddress: text("ipAddress"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = typeof auditLog.$inferInsert;
+
+/**
  * Password reset tokens for email/password auth
  */
 export const passwordResetTokens = pgTable("password_reset_tokens", {

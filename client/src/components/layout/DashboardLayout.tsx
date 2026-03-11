@@ -3,6 +3,7 @@ import { AiCoach } from "../AiCoach";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
+import { trpc } from "@/lib/trpc";
 import {
   CalendarDays,
   Phone,
@@ -54,6 +55,24 @@ const NAV_ITEMS = [
   { path: "/settings", label: "Settings", icon: SettingsIcon },
   { path: "/profile", label: "Profile", icon: UserCircle },
 ] as const;
+
+function CrmDegradedBanner() {
+  const { data: health } = trpc.settings.getSyncHealth.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  if (!health || health.connected) return null;
+  if (!health.oauthActive) return null; // No CRM configured at all, no banner needed
+
+  return (
+    <div
+      className="w-full px-4 py-2 text-sm text-center"
+      style={{ background: "var(--g-warning-bg, #fef3c7)", color: "var(--g-warning-text, #92400e)" }}
+    >
+      CRM sync paused — call grading and coaching still work.{" "}
+      <a href="/settings?tab=crm" className="underline font-medium">Check CRM settings</a>
+    </div>
+  );
+}
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -109,6 +128,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </SidebarContent>
         </Sidebar>
         <SidebarInset>
+          <CrmDegradedBanner />
           <header
             className="sticky top-0 z-10 flex h-14 items-center justify-end gap-2 px-6 border-b"
             style={{

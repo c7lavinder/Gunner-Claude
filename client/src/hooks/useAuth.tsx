@@ -17,10 +17,21 @@ export interface AuthUser {
   tenantId: number | null;
 }
 
+const ROLE_LEVEL: Record<string, number> = {
+  user: 0,
+  member: 0,
+  manager: 1,
+  admin: 2,
+  super_admin: 2,
+};
+
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isAdmin: boolean;
+  isManager: boolean;
+  isMember: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, companyName: string) => Promise<void>;
   loginWithGoogle: () => void;
@@ -118,10 +129,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLocation("/login");
   }, [logoutMutation, setLocation]);
 
+  const roleLevel = ROLE_LEVEL[user?.role ?? ""] ?? 0;
+
   const value: AuthContextValue = {
     user,
     isAuthenticated: !!user,
     isLoading,
+    isAdmin: roleLevel >= 2,
+    isManager: roleLevel >= 1,
+    isMember: roleLevel >= 0,
     login,
     signup,
     loginWithGoogle,

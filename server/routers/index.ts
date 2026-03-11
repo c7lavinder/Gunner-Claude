@@ -13,6 +13,8 @@ import { settingsRouter } from "./settings";
 import { todayRouter } from "./today";
 import { notificationsRouter } from "./notifications";
 import { usersRouter } from "./users";
+import { searchRouter } from "./search";
+import { auditLogRouter } from "./auditLog";
 
 export const appRouter = router({
   calls: callsRouter,
@@ -29,6 +31,8 @@ export const appRouter = router({
   today: todayRouter,
   notifications: notificationsRouter,
   users: usersRouter,
+  search: searchRouter,
+  auditLog: auditLogRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -50,8 +50,29 @@ app.use(
   })
 );
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/health", async (_req, res) => {
+  let crmStatus: "connected" | "degraded" | "disconnected" = "disconnected";
+  try {
+    const { db: healthDb } = await import("./db");
+    const { tenants: tenantsTable } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const connected = await healthDb
+      .select({ lastWebhookAt: tenantsTable.lastWebhookAt })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.crmConnected, "true"))
+      .limit(1);
+    if (connected.length > 0) {
+      const lastWebhook = connected[0]?.lastWebhookAt;
+      if (lastWebhook && Date.now() - lastWebhook.getTime() < 2 * 60 * 60 * 1000) {
+        crmStatus = "connected";
+      } else {
+        crmStatus = "degraded";
+      }
+    }
+  } catch {
+    crmStatus = "degraded";
+  }
+  res.json({ status: "ok", timestamp: new Date().toISOString(), crmStatus });
 });
 
 app.use(

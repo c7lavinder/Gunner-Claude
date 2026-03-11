@@ -1,12 +1,35 @@
 import { z } from "zod";
-import { eq, sql as rawSql } from "drizzle-orm";
+import { eq, sql as rawSql, and } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
-import { users, tenants } from "../../drizzle/schema";
+import { users, tenants, sessions } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import * as authService from "../services/auth";
 import { nanoid } from "nanoid";
+
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function createSession(
+  userId: number,
+  tenantId: number,
+  token: string,
+  userAgent: string | undefined,
+  ipAddress: string | undefined
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+  await db.insert(sessions).values({
+    userId,
+    tenantId,
+    tokenHash: hashToken(token),
+    userAgent: userAgent ?? null,
+    ipAddress: ipAddress ?? null,
+    expiresAt,
+  });
+}
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -79,6 +102,7 @@ export const authRouter = router({
       });
 
       setAuthCookie(ctx.res, token);
+      void createSession(user.id, tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
 
       return {
         token,
@@ -154,6 +178,7 @@ export const authRouter = router({
       });
 
       setAuthCookie(ctx.res, token);
+      void createSession(user.id, tenant.id, token, ctx.req.headers["user-agent"], ctx.req.ip);
 
       return {
         token,
@@ -253,6 +278,7 @@ export const authRouter = router({
       });
 
       setAuthCookie(ctx.res, token);
+      void createSession(user.id, tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
 
       return {
         token,
@@ -280,7 +306,53 @@ export const authRouter = router({
       return { success: true };
     }),
 
-  logout: publicProcedure.mutation(({ ctx }) => {
+  logout: publicProcedure.mutation(async ({ ctx }) => {
+    const token = ctx.req.cookies?.auth_token;
+    if (token) {
+      const hash = hashToken(token);
+      await db
+        .update(sessions)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(sessions.tokenHash, hash)));
+    }
+    ctx.res.clearCookie("auth_token", { path: "/" });
+    return { success: true };
+  }),
+
+  listSessions: protectedProcedure.query(async ({ ctx }) => {
+    const now = new Date();
+    return db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.userId, ctx.user.userId),
+          rawSql`${sessions.revokedAt} IS NULL`,
+          rawSql`${sessions.expiresAt} > ${now}`
+        )
+      );
+  }),
+
+  revokeSession: protectedProcedure
+    .input(z.object({ sessionId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await db
+        .update(sessions)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(sessions.id, input.sessionId),
+            eq(sessions.userId, ctx.user.userId)
+          )
+        );
+      return { success: true };
+    }),
+
+  revokeAllSessions: protectedProcedure.mutation(async ({ ctx }) => {
+    await db
+      .update(sessions)
+      .set({ revokedAt: new Date() })
+      .where(eq(sessions.userId, ctx.user.userId));
     ctx.res.clearCookie("auth_token", { path: "/" });
     return { success: true };
   }),

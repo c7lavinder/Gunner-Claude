@@ -165,6 +165,22 @@ export async function runStartupMigrations(): Promise<void> {
     ADD COLUMN IF NOT EXISTS "lockedUntil" timestamp
   `);
 
+  // Sessions table for active login tracking
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "sessions" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer REFERENCES "tenants"("id"),
+      "userId" integer NOT NULL REFERENCES "users"("id"),
+      "tokenHash" text NOT NULL,
+      "userAgent" text,
+      "ipAddress" text,
+      "createdAt" timestamp DEFAULT now() NOT NULL,
+      "lastSeenAt" timestamp DEFAULT now() NOT NULL,
+      "expiresAt" timestamp NOT NULL,
+      "revokedAt" timestamp
+    )
+  `);
+
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS "notifications" (
       "id" serial PRIMARY KEY NOT NULL,
@@ -179,6 +195,29 @@ export async function runStartupMigrations(): Promise<void> {
       "createdAt" timestamp DEFAULT now() NOT NULL
     )
   `);
+
+  // Audit log — immutable record of admin/write actions
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "audit_log" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer REFERENCES "tenants"("id"),
+      "userId" integer REFERENCES "users"("id"),
+      "action" text NOT NULL,
+      "entityType" text,
+      "entityId" text,
+      "before" jsonb,
+      "after" jsonb,
+      "ipAddress" text,
+      "createdAt" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+
+  // Performance indexes
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_created" ON "calls" ("tenantId", "createdAt" DESC)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_user" ON "calls" ("tenantId", "teamMemberId")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_user_events_tenant_user_created" ON "user_events" ("tenantId", "userId", "createdAt" DESC)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_notifications_tenant_user_read" ON "notifications" ("tenantId", "userId", "isRead")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_audit_log_tenant_created" ON "audit_log" ("tenantId", "createdAt" DESC)`);
 
   console.log("[migrations] Startup migrations complete.");
 }

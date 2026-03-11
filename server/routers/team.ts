@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
+import { requireRole } from "../_core/sdk";
 import { db } from "../_core/db";
 import {
   teamMembers,
@@ -79,6 +80,7 @@ export const teamRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "manager");
       const [member] = await db
         .insert(teamMembers)
         .values({
@@ -131,6 +133,7 @@ export const teamRouter = router({
   remove: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "manager");
       const [updated] = await db
         .update(teamMembers)
         .set({ isActive: "false", updatedAt: new Date() })

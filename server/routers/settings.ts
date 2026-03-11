@@ -2,6 +2,8 @@ import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
+import { requireRole } from "../_core/sdk";
+import { logAction } from "../services/auditLog";
 import { db } from "../_core/db";
 import {
   tenants,
@@ -63,6 +65,7 @@ export const settingsRouter = router({
   updateWorkspace: protectedProcedure
     .input(updateWorkspaceInput)
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tenantId = ctx.user.tenantId;
       const updates: Record<string, unknown> = {};
       if (input.name !== undefined) updates.name = input.name;
@@ -103,6 +106,7 @@ export const settingsRouter = router({
       if (!updated) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Tenant not found" });
       }
+      logAction({ tenantId, userId: ctx.user.userId, action: "tenant_settings_change", entityType: "tenant", entityId: tenantId, after: updates });
       return updated;
     }),
 
@@ -131,6 +135,7 @@ export const settingsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tenantId = ctx.user.tenantId;
       const [member] = await db
         .insert(teamMembers)
@@ -150,12 +155,14 @@ export const settingsRouter = router({
         invitedBy: ctx.user.userId,
         status: "pending",
       });
+      logAction({ tenantId, userId: ctx.user.userId, action: "user_invite", entityType: "team_member", entityId: member.id, after: { email: input.email, teamRole: input.teamRole } });
       return member;
     }),
 
   updateMemberRole: protectedProcedure
     .input(z.object({ id: z.number(), teamRole: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tenantId = ctx.user.tenantId;
       const [updated] = await db
         .update(teamMembers)
@@ -176,6 +183,7 @@ export const settingsRouter = router({
   removeTeamMember: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tenantId = ctx.user.tenantId;
       const [updated] = await db
         .update(teamMembers)
@@ -190,6 +198,7 @@ export const settingsRouter = router({
       if (!updated) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found" });
       }
+      logAction({ tenantId, userId: ctx.user.userId, action: "user_removal", entityType: "team_member", entityId: input.id });
       return updated;
     }),
 
@@ -223,6 +232,7 @@ export const settingsRouter = router({
   completeGhlOAuth: protectedProcedure
     .input(z.object({ code: z.string(), redirectUri: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tokens = await exchangeGhlCode(input.code, input.redirectUri);
       await saveGhlTokens(
         ctx.user.tenantId,

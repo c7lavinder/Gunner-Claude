@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { router, publicProcedure, protectedProcedure } from "../_core/context";
+import { requireRole } from "../_core/sdk";
+import { logAction } from "../services/auditLog";
 import { db } from "../_core/db";
 import {
   tenants,
@@ -80,6 +82,7 @@ export const playbookRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tenantId = ctx.user.tenantId;
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.terminology !== undefined) {
@@ -101,6 +104,7 @@ export const playbookRouter = router({
           .set(updates as typeof tenantPlaybooks.$inferInsert)
           .where(eq(tenantPlaybooks.id, existing.id))
           .returning();
+        logAction({ tenantId, userId: ctx.user.userId, action: "playbook_edit", entityType: "tenant_playbook", entityId: existing.id, after: updates });
         return updated ?? null;
       }
       const insertValues = { ...updates, tenantId } as typeof tenantPlaybooks.$inferInsert;
@@ -108,6 +112,7 @@ export const playbookRouter = router({
         .insert(tenantPlaybooks)
         .values(insertValues)
         .returning();
+      logAction({ tenantId, userId: ctx.user.userId, action: "playbook_edit", entityType: "tenant_playbook", after: updates });
       return inserted ?? null;
     }),
 
@@ -121,6 +126,7 @@ export const playbookRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tid = ctx.user.tenantId;
       if (input.id) {
         const [updated] = await db
@@ -140,6 +146,7 @@ export const playbookRouter = router({
   deleteRole: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       await db
         .delete(tenantRoles)
         .where(and(eq(tenantRoles.id, input.id), eq(tenantRoles.tenantId, ctx.user.tenantId)));
@@ -157,6 +164,7 @@ export const playbookRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tid = ctx.user.tenantId;
       if (input.id) {
         const [updated] = await db
@@ -196,6 +204,7 @@ export const playbookRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
       const tid = ctx.user.tenantId;
       if (input.id) {
         const [updated] = await db
