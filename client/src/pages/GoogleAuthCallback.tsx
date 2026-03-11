@@ -11,10 +11,15 @@ export function GoogleAuthCallback() {
 
   const callbackMutation = trpc.auth.googleCallback.useMutation({
     onSuccess: (data) => {
-      // New users who haven't set up a tenant go to onboarding
+      // #region agent log
+      console.error('[DEBUG-dfb296] googleCallback OK', JSON.stringify({isNewUser:data.isNewUser,userId:data.user.id,tenantId:data.user.tenantId,redirectTo:data.isNewUser?'/onboarding':'/today'}));
+      // #endregion
       window.location.href = data.isNewUser ? "/onboarding" : "/today";
     },
     onError: (err) => {
+      // #region agent log
+      console.error('[DEBUG-dfb296] googleCallback FAILED', JSON.stringify({error:err.message,code:err.data?.code}));
+      // #endregion
       setErrorMsg(err.message || "Google sign-in failed. Please try again.");
     },
   });

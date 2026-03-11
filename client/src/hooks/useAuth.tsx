@@ -52,6 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (meQuery.isLoading) return;
+    // #region agent log
+    console.error('[DEBUG-dfb296] auth.me resolved', JSON.stringify({hasData:!!meQuery.data,errorCode:meQuery.error?.data?.code,errorMsg:meQuery.error?.message,path:window.location.pathname}));
+    // #endregion
     if (meQuery.data) {
       setUser({
         id: meQuery.data.id,
