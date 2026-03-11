@@ -229,10 +229,28 @@ export const authRouter = router({
       );
 
       const openId = `google:${googleId}`;
-      const [existing] = await db
+
+      // Primary lookup by openId, fallback to email match (handles users created
+      // under a different openId format in a previous build)
+      let [existing] = await db
         .select()
         .from(users)
         .where(eq(users.openId, openId));
+
+      if (!existing && email) {
+        const [byEmail] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, email));
+        if (byEmail) {
+          // Migrate the openId to the canonical Google format and treat as existing
+          await db
+            .update(users)
+            .set({ openId, loginMethod: "google", emailVerified: "true" })
+            .where(eq(users.id, byEmail.id));
+          existing = { ...byEmail, openId, loginMethod: "google", emailVerified: "true" };
+        }
+      }
 
       let user: typeof users.$inferSelect;
       let isNewUser = false;
@@ -268,26 +286,52 @@ export const authRouter = router({
         isNewUser = true;
       }
 
-      const tenantId = user.tenantId ?? 0;
+      // If user has no tenant yet, auto-assign to NAH (tenant 1) if their email
+      // matches the owner account — covers first-time Google login as super admin
+      let resolvedUser = user;
+      if (!user.tenantId && user.email) {
+        const NAH_ADMIN_EMAIL = "corey@newagainhouses.com";
+        if (user.email.toLowerCase() === NAH_ADMIN_EMAIL.toLowerCase()) {
+          const [nahTenant] = await db
+            .select({ id: tenants.id })
+            .from(tenants)
+            .where(eq(tenants.id, 1))
+            .limit(1);
+          if (nahTenant) {
+            const [updated] = await db
+              .update(users)
+              .set({
+                tenantId: nahTenant.id,
+                role: "admin",
+                isTenantAdmin: "true",
+              })
+              .where(eq(users.id, user.id))
+              .returning();
+            if (updated) resolvedUser = updated;
+          }
+        }
+      }
+
+      const tenantId = resolvedUser.tenantId ?? 0;
       const token = await authService.createJwtToken({
-        userId: user.id,
+        userId: resolvedUser.id,
         tenantId,
-        email: user.email ?? "",
-        name: user.name ?? "",
-        role: user.role,
+        email: resolvedUser.email ?? "",
+        name: resolvedUser.name ?? "",
+        role: resolvedUser.role,
       });
 
       setAuthCookie(ctx.res, token);
-      void createSession(user.id, tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
+      void createSession(resolvedUser.id, tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
 
       return {
         token,
         user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          tenantId: user.tenantId,
+          id: resolvedUser.id,
+          name: resolvedUser.name,
+          email: resolvedUser.email,
+          role: resolvedUser.role,
+          tenantId: resolvedUser.tenantId,
         },
         isNewUser,
       };
