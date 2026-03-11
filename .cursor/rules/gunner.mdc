@@ -57,6 +57,14 @@ After completing meaningful work, update the relevant docs:
 - CLAUDE.md — Update if directory structure, key files, or stack changes.
 These docs are read by every AI agent. Stale docs = wasted work.
 
+## Playbook Architecture — Non-Negotiable
+The four-layer playbook chain (User > Tenant > Industry > Software) drives ALL labels, names,
+stage colors, call types, KPI metrics, and terminology in the app.
+- Frontend: always use `useTenantConfig()` — never hardcode strings that belong to the playbook
+- Backend: always resolve through `server/services/playbooks.ts` resolver functions
+- Full compliance rules: see `.cursor/rules/playbook-compliance.mdc`
+- Open violations tracker: see `COMPLIANCE.md` in repo root
+
 ## Owner
 Corey Lavinder — non-technical. Explain changes in plain English.
 Never ask unnecessary questions — read files first, then act.

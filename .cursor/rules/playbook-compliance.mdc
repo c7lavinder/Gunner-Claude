@@ -1,0 +1,87 @@
+---
+description: Playbook architecture compliance — enforced on every file edit
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
+# Gunner — Playbook Compliance Rules
+
+## The Four-Layer Architecture
+
+Every label, name, list, color, and configuration value in Gunner must flow through the playbook resolution chain:
+
+```
+User Playbook > Tenant Playbook > Industry Playbook > Software Playbook
+```
+
+The most specific layer always wins. Pages are DUMB — they display what the playbook says. The system is SMART.
+
+## The Compliance Checklist
+
+Run this mentally before writing ANY string, array, or object in a component or router:
+
+| What you're writing | Where it must come from |
+|---|---|
+| A label or terminology word | `useTenantConfig().t.*` |
+| A role name | `useTenantConfig().roles` |
+| A stage name or color | `useTenantConfig().stages` |
+| A call type name | `useTenantConfig().callTypes` |
+| A KPI metric name or list | `useTenantConfig().kpiMetrics` |
+| A roleplay persona | `useTenantConfig().roleplayPersonas` |
+| A market or lead source | `useTenantConfig().markets` / `.leadSources` |
+| A funnel stage label | `useTenantConfig().kpiFunnelStages` |
+| A grading rubric criterion | Loaded in `grading.ts` from industry/tenant playbook |
+| An algorithm threshold | `SOFTWARE_PLAYBOOK` constants in `playbooks.ts` |
+
+## Banned Patterns — Never Write These
+
+### Hardcoded stage codes (outside schema.ts and playbooks.ts)
+```
+"new" "lead" "contacted" "qualified" "offer" "under_contract"
+"new_lead" "appointment_set" "offer_made" "dispo" "closing" "closed" "dead"
+```
+
+### Hardcoded role names (outside seeds and playbooks)
+```
+"Acquisition Manager" "Lead Manager" "Generator" "Dispo"
+"acquisition_manager" "lead_manager" "generator" "dispo"
+```
+
+### Hardcoded call types (outside seeds and playbooks)
+```
+"cold_call" "warm_call" "inbound" "follow_up" "offer_call" "dispo_call"
+"Acquisition Call" "Follow Up" "qualification"
+```
+
+### Hardcoded terminology (use t.* from useTenantConfig instead)
+```
+"property" "properties" "lead" "leads" "deal" "deals" "walkthrough"
+```
+Use: `t.asset`, `t.assetPlural`, `t.contact`, `t.contactPlural`, `t.deal`, `t.dealPlural`
+
+### Hardcoded tenant IDs (outside seeds)
+```
+tenantId: 1    tenantId: 450029    tenantId: 540044
+```
+
+## How to Add a New Playbook-Driven Field
+
+Follow this exact sequence — skip no steps:
+
+1. **`shared/types.ts`** — Add the field to the relevant interface (`IndustryPlaybook`, `TenantPlaybook`, or `Terminology`)
+2. **`server/seeds/reWholesaling.ts`** — Add the value to the RE Wholesaling seed
+3. **`server/services/playbooks.ts`** — Add a `resolveX()` function with the 4-layer precedence
+4. **`server/routers/playbook.ts`** — Add the resolved field to the `getConfig` response object
+5. **`client/src/hooks/useTenantConfig.ts`** — Expose the field with a typed default
+6. **Component** — Use the hook value. Never hardcode.
+
+## Current Known Violations (track fixes here)
+
+See `COMPLIANCE.md` in the repo root for the full violation tracker.
+
+## Enforcement
+
+- This rule file is read by every Cursor AI session automatically
+- ESLint runs on every push via `.github/workflows/pr-check.yml`
+- `COMPLIANCE.md` tracks open violations and fix status
+- TypeScript strict mode is always on — `npx tsc --noEmit` must return 0 errors before any commit
