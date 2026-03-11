@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -156,6 +157,36 @@ export function KpiPage() {
               })}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-[var(--g-text-secondary)] flex items-center gap-2">
+              <BarChart3 className="size-4" />
+              Source × Market
+            </h2>
+            <Badge variant="outline" className="text-[10px] text-[var(--g-text-tertiary)]">Coming soon — playbook-driven pivot table</Badge>
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-xs">
+            <div />
+            <div className="text-center font-medium text-[var(--g-text-secondary)] py-2">Market A</div>
+            <div className="text-center font-medium text-[var(--g-text-secondary)] py-2">Market B</div>
+            <div className="text-center font-medium text-[var(--g-text-secondary)] py-2">Market C</div>
+            <div className="font-medium text-[var(--g-text-secondary)] py-2">Direct Mail</div>
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+            <div className="font-medium text-[var(--g-text-secondary)] py-2">PPC</div>
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+            <div className="font-medium text-[var(--g-text-secondary)] py-2">Cold Call</div>
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+            <div className="h-10 rounded-lg bg-[var(--g-bg-inset)] animate-pulse" />
+          </div>
         </CardContent>
       </Card>
 

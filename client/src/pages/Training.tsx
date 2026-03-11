@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { GraduationCap, TrendingUp, TrendingDown, Shield, Target, Zap, BookOpen, Lock, Award, X, MessageSquare, Phone } from "lucide-react";
+import { GraduationCap, TrendingUp, TrendingDown, Shield, Target, Zap, BookOpen, Lock, Award, X, MessageSquare, Phone, Users, ChevronRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -277,6 +278,50 @@ export function Training() {
           <div className="text-xs text-[var(--g-text-tertiary)]">
             {xp} XP total · {progress?.streak ?? 0} day streak
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold mb-4 text-[var(--g-text-primary)] flex items-center gap-2">
+            <BookOpen className="size-5 text-[var(--g-accent-text)]" />
+            Objection Library
+          </h2>
+          <div className="space-y-2">
+            {["I need to think about it", "The price is too high", "I'm not interested", "Let me talk to my spouse"].map((objection) => (
+              <div key={objection} className="flex items-center justify-between p-3 rounded-lg border border-[var(--g-border-subtle)]">
+                <span className="text-sm font-medium text-[var(--g-text-primary)]">{objection}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs gap-1 text-[var(--g-text-secondary)]"
+                  onClick={() => toast("Coming soon — objection responses powered by your Industry Playbook")}
+                >
+                  View Response
+                  <ChevronRight className="size-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Badge variant="outline" className="mt-3 text-[10px] text-[var(--g-text-tertiary)]">
+            Powered by Industry Playbook
+          </Badge>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold mb-4 text-[var(--g-text-primary)] flex items-center gap-2">
+            <Users className="size-5 text-[var(--g-accent-text)]" />
+            Team Training
+          </h2>
+          <p className="text-sm text-[var(--g-text-secondary)] mb-4">
+            Schedule a team training session — Coming soon
+          </p>
+          <Button disabled>
+            Schedule Session
+            <Badge variant="outline" className="ml-2 text-[10px]">Coming soon</Badge>
+          </Button>
         </CardContent>
       </Card>
 

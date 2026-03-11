@@ -265,28 +265,55 @@ export function Inventory() {
       </Tabs>
 
       <Sheet open={!!detailItem} onOpenChange={(o) => !o && setDetailItem(null)}>
-        <SheetContent className="w-full sm:max-w-md" side="right">
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto" side="right">
           {detailItem && (
             <>
               <SheetHeader>
                 <SheetTitle>{detailItem.address}</SheetTitle>
               </SheetHeader>
-              <div className="space-y-4 py-4">
-                <p className="text-[var(--g-text-secondary)]">{[detailItem.address, detailItem.city, detailItem.state].filter(Boolean).join(", ") || detailItem.address}</p>
-                <Badge className={cn("border", stageColor(detailItem.status))}>{stages.find((s) => s.code === detailItem.status)?.name ?? detailItem.status}</Badge>
-                <Separator />
-                <div className="space-y-2 text-sm">
-                  <p><span className="text-[var(--g-text-tertiary)]">Lead source:</span> {detailItem.leadSource ?? "—"}</p>
-                  <p><span className="text-[var(--g-text-tertiary)]">{t.contact}:</span> {detailItem.sellerName ?? "—"} {detailItem.sellerPhone ?? ""}</p>
-                  <p><span className="text-[var(--g-text-tertiary)]">Days in stage:</span> {daysInStage(detailItem.stageChangedAt)}</p>
-                </div>
-                <Separator />
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Button size="sm" onClick={() => detailItem && openAction("sms", detailItem, { message: "" })}><MessageSquare className="size-4 mr-1" />SMS</Button>
-                  <Button size="sm" variant="outline" onClick={() => detailItem && openAction("note", detailItem, { body: "" })}><StickyNote className="size-4 mr-1" />Note</Button>
-                  <Button size="sm" variant="outline" onClick={() => detailItem && openAction("task", detailItem, { title: "", description: "" })}><ListTodo className="size-4 mr-1" />Task</Button>
-                  <Button size="sm" variant="outline" onClick={() => detailItem && setStageChangeDialog({ open: true, item: { id: detailItem.id, address: detailItem.address, status: detailItem.status }, newStage: detailItem.status })}><ArrowRightLeft className="size-4 mr-1" />Stage</Button></div>
-              </div>
+              <Tabs defaultValue="overview" className="mt-4">
+                <TabsList className="w-full justify-start">
+                  <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+                  <TabsTrigger value="buyers" className="text-xs">Buyers</TabsTrigger>
+                  <TabsTrigger value="outreach" className="text-xs">Outreach</TabsTrigger>
+                  <TabsTrigger value="activity" className="text-xs">Activity</TabsTrigger>
+                  <TabsTrigger value="ai" className="text-xs">AI</TabsTrigger>
+                </TabsList>
+                <TabsContent value="overview" className="mt-4 space-y-4">
+                  <Badge className={cn("border", stageColor(detailItem.status))}>{stages.find((s) => s.code === detailItem.status)?.name ?? detailItem.status}</Badge>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="text-[var(--g-text-tertiary)]">Lead source:</span> {detailItem.leadSource ?? "—"}</p>
+                    <p><span className="text-[var(--g-text-tertiary)]">{t.contact}:</span> {detailItem.sellerName ?? "—"} {detailItem.sellerPhone ?? ""}</p>
+                    <p><span className="text-[var(--g-text-tertiary)]">Days in stage:</span> {daysInStage(detailItem.stageChangedAt)}</p>
+                  </div>
+                  <Separator />
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button size="sm" onClick={() => detailItem && openAction("sms", detailItem, { message: "" })}><MessageSquare className="size-4 mr-1" />SMS</Button>
+                    <Button size="sm" variant="outline" onClick={() => detailItem && openAction("note", detailItem, { body: "" })}><StickyNote className="size-4 mr-1" />Note</Button>
+                    <Button size="sm" variant="outline" onClick={() => detailItem && openAction("task", detailItem, { title: "", description: "" })}><ListTodo className="size-4 mr-1" />Task</Button>
+                    <Button size="sm" variant="outline" onClick={() => detailItem && setStageChangeDialog({ open: true, item: { id: detailItem.id, address: detailItem.address, status: detailItem.status }, newStage: detailItem.status })}><ArrowRightLeft className="size-4 mr-1" />Stage</Button>
+                  </div>
+                </TabsContent>
+                <TabsContent value="buyers" className="mt-4 space-y-3">
+                  <p className="text-sm font-medium text-[var(--g-text-secondary)]">Matched buyers, interest level, and deal blast history</p>
+                  <Skeleton className="h-24 w-full rounded-lg" />
+                  <Skeleton className="h-24 w-full rounded-lg" />
+                </TabsContent>
+                <TabsContent value="outreach" className="mt-4 space-y-3">
+                  <p className="text-sm font-medium text-[var(--g-text-secondary)]">SMS, calls, and emails sent to this contact</p>
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                </TabsContent>
+                <TabsContent value="activity" className="mt-4 space-y-3">
+                  <p className="text-sm font-medium text-[var(--g-text-secondary)]">Timeline of all actions, stage changes, and notes</p>
+                  <Skeleton className="h-48 w-full rounded-lg" />
+                </TabsContent>
+                <TabsContent value="ai" className="mt-4 space-y-3">
+                  <p className="text-sm font-medium text-[var(--g-text-secondary)]">AI-powered property analysis and negotiation coaching</p>
+                  <Skeleton className="h-32 w-full rounded-lg" />
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </SheetContent>
