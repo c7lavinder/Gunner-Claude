@@ -22,4 +22,10 @@ export default defineConfig({
     host: true,
     allowedHosts: ["localhost", "127.0.0.1", ".getgunner.ai", ".railway.app"],
   },
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: ["./client/src/test/setup.ts"],
+    include: ["client/src/**/*.test.{ts,tsx}"],
+  },
 });
