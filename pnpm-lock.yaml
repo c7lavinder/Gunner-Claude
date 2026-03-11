@@ -1,5 +1,7 @@
 lockfileVersion: '9.0'
 
+# cache-bust: 2026-03-11
+
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
