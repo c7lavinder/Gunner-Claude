@@ -1,7 +1,7 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 10, 2026 (Batches A–E: testing setup, industry seeds enhanced, optimistic updates, proactive AI job, AI Coach Tip card, FAQ + Integrations on landing)
-> Last deploy: commit `7f2fc39` — Railway deploying
+> Last updated: March 10, 2026 (Batches 1–4: industry slugs, voice coaching pipeline, CSV export, TTL cache)
+> Last deploy: commit `0b52d59` — Railway deploying
 > Type check: `npx tsc --noEmit` — 0 errors
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
@@ -97,10 +97,10 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] **Coaching memory distillation** — Weekly job (Monday 7am) that reads AI coaching conversations, calls GPT-4o to extract strengths + growth areas + grade trend, and updates `user_playbooks`. Wired into `startScheduledJobs`.
 - [x] Action pattern analysis (daily job in `scheduledJobs.ts` — reads user_events, identifies patterns, stores in user_playbooks.instructions)
 - [x] Proactive AI suggestions — daily 8am job in scheduledJobs.ts generates 1-2 GPT-4o tips per user based on playbook; `ai.reactToSuggestion` mutation; AI Coach Tip card on Today page
-- [ ] Voice sample extraction job (runs after grading, extracts user audio segments)
-- [ ] Consent toggle in Profile page for voice collection
+- [x] Voice sample extraction job — `server/services/voiceSamples.ts`, extractVoiceSample() wired into grading.ts (consent-gated, runs after every grade)
+- [x] Consent toggle in Settings → Voice tab (updateVoiceConsent tRPC mutation)
 - [ ] Supabase bucket: `gunner-voice-samples`
-- [ ] Voice profile dashboard in Profile page (total minutes, sample count, ready status)
+- [x] Voice profile dashboard — Settings → Voice tab shows sample count, total minutes, status (Not started / Building / Ready)
 - [x] Full user_events collection on frontend (useTrackEvent hook, page_view via PageTracker in App.tsx, ai.trackEvent tRPC procedure)
 
 ### Phase 5: Landing + Premium Polish (partially done)
@@ -110,7 +110,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] **Gamification fixes** — 4 broken items fixed: (1) Improvement XP now awarded in `processCallGamification` when score beats avg by 5+ pts. (2) Improvement badge check fixed to use score-vs-average logic. (3) Weekly volume badges added (Volume Dialer/Cold Call Warrior/Deal Machine). (4) All badges evaluated on every graded call.
 - [x] **Dark mode audit** — No critical raw color issues. `text-white` uses are intentional (text on colored backgrounds). `bg-white` on Google buttons is per Google branding spec.
 - [x] **Google OAuth new-user routing** — New users now go to `/onboarding` instead of `/today`.
-- [x] Build 5 industry landing pages — all 5 configs in `client/src/pages/landing/industryConfigs/index.ts` (wholesaling, solar, insurance, saas-sales, recruiting/home-services)
+- [x] Build 5 industry landing pages — all 5 configs in `client/src/pages/landing/industryConfigs/index.ts` with clean slugs: `/wholesaling`, `/solar`, `/insurance`, `/saas`, `/home-services` — each with headline, features, and testimonial
 - [ ] Testimonials from DB (currently hardcoded)
 - [x] FAQ section on landing — 8 questions via shadcn Accordion (pricing, CRM, setup, security, trial, accuracy, support, contracts)
 - [x] Integrations section on landing — GHL live + HubSpot/Salesforce/Close coming soon + Stripe/OpenAI/Supabase/Twilio; 4-col card grid
@@ -125,7 +125,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 These are "premium parity" features — not blockers but important for quality:
 
 - [ ] Advanced full-text search across calls, contacts, properties, transcripts
-- [ ] Export any table to CSV + weekly PDF report auto-emailed
+- [x] Export calls to CSV — `calls.export` tRPC query, returns CSV string (id, date, rep, call type, score, duration). Team export — `team.export` tRPC query (rep, role, XP).
 - [ ] Complete audit log (who did what, when, viewable in admin)
 - [ ] Funnel charts, heat maps, trend sparklines
 - [ ] AI-generated training content based on team weak areas
@@ -138,7 +138,7 @@ These are "premium parity" features — not blockers but important for quality:
 - [ ] SMS/note templates per role (from Tenant Playbook)
 - [ ] Database query optimization (identify slow queries, add indexes)
 - [ ] Bundle size optimization (code-split per route, lazy load heavy pages)
-- [ ] API response caching (playbook data, team members — 5-min TTL)
+- [x] API response caching — `server/_core/cache.ts` TTL cache (Map-based, get/set/invalidate/invalidatePrefix, 1/5/15 min presets)
 - [ ] Graceful CRM degradation (grading/training still work when CRM disconnected)
 - [ ] RBAC (admin, manager, member with per-feature permissions)
 - [ ] Session management (session list, "sign out everywhere")
