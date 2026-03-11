@@ -1,7 +1,7 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 10, 2026 (Phases 1-5 batch build: pkg cleanup, PostHog, NAH seed, AI suggestions, notifications, breadcrumbs, skeletons, optimistic updates)
-> Last deploy: Railway auto-deploys from manus-migration
+> Last updated: March 10, 2026 (Batches A–E: testing setup, industry seeds enhanced, optimistic updates, proactive AI job, AI Coach Tip card, FAQ + Integrations on landing)
+> Last deploy: commit `7f2fc39` — Railway deploying
 > Type check: `npx tsc --noEmit` — 0 errors
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
@@ -72,7 +72,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] **Dead pages deleted** — Home, LeadGenDashboard, ComponentShowcase, GradingRules, Feedback are gone. Pages directory only contains the 7 core pages + auth pages. Verified in full audit.
 - [x] **Pages consolidated** — Methodology, TeamTraining, Leaderboard, Analytics, Opportunities, CoachActivityLog, TeamManagement, TenantSetup all eliminated or absorbed. Verified.
 - [x] Remove unused packages: `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `add` devDep
-- [ ] Frontend testing setup: `@testing-library/react`
+- [x] Frontend testing setup: vitest + @testing-library/react + jest-dom, vitest config in vite.config.ts, setup.ts, EmptyState.test.tsx sample test (2 passing)
 - [ ] E2E testing setup: Playwright
 - [x] PostHog JS client for frontend analytics/user_events (posthog-js installed, init in main.tsx gated on VITE_POSTHOG_API_KEY)
 
@@ -81,7 +81,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] **Industry terminology wired** — Full audit confirmed: no hardcoded "Seller", "Property", "Deal" outside of fallback defaults. All pages use `useTenantConfig()` for labels.
 - [x] **No hardcoded role checks** — No `if (role === 'acquisition_manager')` pattern found in codebase.
 - [x] **No RE-specific AI prompts** — Grading prompts load from playbook dynamically. No hardcoded "Real estate wholesaling" strings in AI code.
-- [x] Create additional industry seeds: Solar, Insurance, SaaS, Home Services — all 4 seeded in `server/seeds/industries.ts` + wired into `seedPlaybooks.ts`
+- [x] Create additional industry seeds: Solar, Insurance, SaaS, Home Services — all 4 seeded in `server/seeds/industries.ts` with roles, rubrics, call types, stages, personas (4 each), training categories (5 each), and grading philosophy
 
 ### Phase 3: Tenant Playbook / NAH Config (partially done)
 
@@ -96,7 +96,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 - [x] **Coaching memory distillation** — Weekly job (Monday 7am) that reads AI coaching conversations, calls GPT-4o to extract strengths + growth areas + grade trend, and updates `user_playbooks`. Wired into `startScheduledJobs`.
 - [x] Action pattern analysis (daily job in `scheduledJobs.ts` — reads user_events, identifies patterns, stores in user_playbooks.instructions)
-- [x] Proactive AI suggestions (V2 — `ai.generateSuggestions` + `ai.getSuggestions` tRPC procedures; cards on Today page)
+- [x] Proactive AI suggestions — daily 8am job in scheduledJobs.ts generates 1-2 GPT-4o tips per user based on playbook; `ai.reactToSuggestion` mutation; AI Coach Tip card on Today page
 - [ ] Voice sample extraction job (runs after grading, extracts user audio segments)
 - [ ] Consent toggle in Profile page for voice collection
 - [ ] Supabase bucket: `gunner-voice-samples`
@@ -112,13 +112,13 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] **Google OAuth new-user routing** — New users now go to `/onboarding` instead of `/today`.
 - [x] Build 5 industry landing pages — all 5 configs in `client/src/pages/landing/industryConfigs/index.ts` (wholesaling, solar, insurance, saas-sales, recruiting/home-services)
 - [ ] Testimonials from DB (currently hardcoded)
-- [ ] FAQ section on landing (from config/DB)
-- [ ] Integrations section ("Works with your CRM" — CRM-agnostic icons)
+- [x] FAQ section on landing — 8 questions via shadcn Accordion (pricing, CRM, setup, security, trial, accuracy, support, contracts)
+- [x] Integrations section on landing — GHL live + HubSpot/Salesforce/Close coming soon + Stripe/OpenAI/Supabase/Twilio; 4-col card grid
 - [x] Loading skeleton consistency — CallInbox, Inventory, Today shimmer replaced with Skeleton; all other pages already correct
 - [x] In-app notification system — `notifications` table, `notificationsRouter`, `NotificationBell` component in header (badge_earned triggers notifications from gamification service)
 - [x] Breadcrumbs on nested views — auto-generated from route in DashboardLayout
 - [ ] Full accessibility pass (aria-labels on icon-only buttons, form labels, keyboard nav)
-- [x] Optimistic updates for CRM actions — `optimisticStatus` in useActions hook, "Sending..." button state in ActionConfirmDialog
+- [x] Optimistic updates for CRM actions — useActions.ts supports onSuccess/onError callbacks; Inventory stage_change shows new stage badge immediately (60% opacity), rolls back on error, invalidates query on success
 
 ### Enhancement List (REBUILD-PLAN Section 21)
 
