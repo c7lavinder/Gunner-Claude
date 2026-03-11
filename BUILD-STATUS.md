@@ -1,6 +1,6 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 11, 2026 — **LIVE + DEPLOY FIXED**
+> Last updated: March 11, 2026 — **POST-BUILD SPRINT COMPLETE**
 > Last deploy: commit `3572c9f` — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
 
@@ -9,6 +9,54 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 ---
 
 ## Completed Work
+
+### Post-Build Sprint — March 11, 2026
+
+**Wave 0: GitHub CI hygiene**
+- [x] `sync-main.yml` auto-sync workflow added — keeps `main` in sync with the deploy branch
+- [x] ESLint added to `pr-check.yml` — lint failures block PRs
+- [x] `nightly.yml` cleaned up — removed stale steps, consistent env handling
+
+**Wave 0: Tech stack wiring**
+- [x] `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` promoted to `required()` in `server/_core/env.ts` — server won't start if missing
+- [x] `VITE_POSTHOG_API_KEY` documented in `.env.example`
+- [x] Loops and LangSmith env vars marked with `// TODO: wire up` comments to surface remaining integration gaps
+
+**Wave 1: Bug fixes**
+- [x] `isStarred` boolean fix — was comparing string `"true"` instead of boolean; fixed across call grading and inbox
+- [x] D-grade color restored — `--g-grade-d` CSS var was missing from token sheet; orange added back
+- [x] Nested anchor removed — `<a>` inside `<a>` on landing page caused React hydration warning
+- [x] `icon-sm` button variant fixed — was rendering at wrong size; corrected in `button.tsx`
+- [x] `--g-warning-bg` and `--g-warning-text` CSS vars added to design token sheet
+- [x] Team leaderboard column headers added — table was rendering data rows with no header row
+
+**Wave 2: CallInbox polish**
+- [x] shadcn `Select` component replaces native `<select>` for date filter — consistent with design system
+- [x] Improvements section styled orange — matches grade-D / warning color convention
+- [x] Transcript formatted — line breaks and speaker labels rendered properly instead of raw string
+- [x] Inline `style={{}}` props removed from CallInbox — replaced with Tailwind arbitrary-value classes
+
+**Wave 2: Design system cleanup**
+- [x] All `--obs-*` alias tokens removed (58 lines deleted from `index.css`) — these were stale Obsidian-era tokens never used in the app
+- [x] `"nt"` typo removed from Inventory — orphaned string fragment cleaned up
+- [x] `stageColor()` helper added with safe fallback — prevents crash when an unknown stage code is passed
+
+**Wave 2: Today page — contact context**
+- [x] `getContactContext` tRPC procedure added to `server/routers/today.ts` — returns last 3 calls for a phone number (grade, duration, date) via left join on `callGrades`
+- [x] Recent Calls section added to contact detail panel in `Today.tsx` — shows grade circle, date, duration chips + "View all calls →" link
+
+**Wave 3: Landing page accuracy**
+- [x] Integration badges corrected — Twilio, HubSpot, and Salesforce moved to "Coming Soon"; only live integrations (GHL, Stripe, OpenAI, Google) shown as active
+- [x] Privacy Policy and Terms of Service stub routes added (`/privacy`, `/terms`) — prevents 404 from footer links
+
+**Wave 3: XP level thresholds centralized**
+- [x] XP level thresholds moved to `shared/types.ts` — single source of truth used by both frontend (leaderboard) and backend (gamification service); no more duplication
+
+**Wave 3: Settings + Playbook incomplete sections**
+- [x] All inline `style={{}}` props removed from `Settings.tsx` (35 instances) and `Playbook.tsx` (2 instances) — replaced with Tailwind arbitrary-value classes
+- [x] Confirmed all 8 Settings tabs and all 4 Playbook tabs render with real content — no empty or TODO sections found
+
+---
 
 ### Final Hardening Pass (just completed)
 

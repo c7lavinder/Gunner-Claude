@@ -2,7 +2,7 @@
 
 > **Purpose:** This is the strategic north star for all product decisions. It maps the 16-stage SaaS lifecycle to Gunner's current state, gaps, and priorities. Update this document whenever a stage advances.
 >
-> **Last updated:** March 10, 2026
+> **Last updated:** March 11, 2026
 
 ---
 
@@ -55,7 +55,7 @@
 
 ---
 
-## 4. Design (IN PROGRESS — 80%)
+## 4. Design (IN PROGRESS — 92%)
 
 ### Design Standards (from REBUILD-PLAN Section 17)
 
@@ -84,7 +84,7 @@ The bar: Linear, Notion, Stripe, Vercel -- companies that treat UI as a competit
 
 ---
 
-## 5. Development (BUILT — 100% — Feature Complete)
+## 5. Development (BUILT — 95% — Feature Complete, Polish In Progress)
 
 ### Core Architecture: Four-Playbook System
 
@@ -376,8 +376,8 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | Idea           | DONE   | --                                                   |
 | Validation     | DONE   | --                                                   |
 | Planning       | DONE   | --                                                   |
-| Design         | 80%    | Low -- iterate in code                               |
-| Development    | 90%    | Medium -- ongoing feature work, 20 AI agents active  |
+| Design         | 92%    | Low -- iterate in code                               |
+| Development    | 95%    | Medium -- ongoing feature work, 20 AI agents active  |
 | Infrastructure | 85%    | Low -- operational, needs staging + uptime monitoring |
 | Testing        | 15%    | Medium -- agents cover QA, need CI test suite        |
 | Launch         | 50%    | HIGH -- flip DNS, plan Product Hunt                  |
@@ -439,3 +439,4 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | 2026-03-10 | Gamification | Wired improvement XP (was never called), fixed improvement badge logic, added weekly volume badges | Claude |
 | 2026-03-10 | Intelligence | Coaching memory distillation job: weekly GPT-4o summarizes AI coach conversations → updates user_playbooks | Claude |
 | 2026-03-10 | Quality | Final hardening pass: accessibility aria-labels on all icon-only buttons (Training, Settings, Onboarding, Inventory, Playbook, ActionConfirmDialog, SearchableDropdown); corrected stale sections in SAAS-LIFECYCLE (gamification all fixed, Phase 0 security all fixed) | Claude |
+| 2026-03-11 | Design / Dev | 24-hour post-build sprint — bug fixes, visual alignment, design system cleanup, GitHub CI hygiene. Waves 0-3: CI wiring (sync-main, ESLint in PR check), env var hardening, isStarred/D-grade/icon-sm/warning token fixes, CallInbox polish, --obs-* token removal (58 lines), stageColor() fallback, getContactContext tRPC + Recent Calls UI, landing page integration badge corrections, Privacy/Terms stubs, XP thresholds centralized to shared/types.ts, 35 inline styles removed from Settings/Playbook. Design: 80% → 92%. Development: 90% → 95%. | Claude |

@@ -68,11 +68,11 @@ export function Team() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 p-4 md:p-6" style={{ background: "var(--g-bg-base)" }}>
-        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--g-text-primary)" }}>
+      <div className="space-y-6 p-4 md:p-6 bg-[var(--g-bg-base)]">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--g-text-primary)]">
           Team Leaderboard
         </h1>
-        <Card className="border-[var(--g-border-subtle)]" style={{ background: "var(--g-bg-card)" }}>
+        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
           <CardContent className="pt-6">
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -91,7 +91,7 @@ export function Team() {
         </Card>
         <div className="grid gap-4 sm:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <Card key={i} className="border-[var(--g-border-subtle)]" style={{ background: "var(--g-bg-card)" }}>
+            <Card key={i} className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
               <CardContent className="pt-6">
                 <Skeleton className="h-4 w-32 mb-2" />
                 <Skeleton className="h-8 w-16" />
@@ -104,12 +104,12 @@ export function Team() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6" style={{ background: "var(--g-bg-base)" }}>
-      <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--g-text-primary)" }}>
+    <div className="space-y-6 p-4 md:p-6 bg-[var(--g-bg-base)]">
+      <h1 className="text-2xl font-bold tracking-tight text-[var(--g-text-primary)]">
         Team Leaderboard
       </h1>
 
-      <Card className="border-[var(--g-border-subtle)]" style={{ background: "var(--g-bg-card)" }}>
+      <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
         <CardHeader className="pb-2">
           <Tabs value={period} onValueChange={setPeriod}>
             <TabsList className="bg-[var(--g-bg-surface)] border border-[var(--g-border-subtle)]">
@@ -136,9 +136,9 @@ export function Team() {
                 <div className="size-9 shrink-0" />
                 <div className="min-w-0 flex-1" />
                 <div className="flex shrink-0 items-center gap-4">
-                  <span className="w-10 text-right text-xs" style={{ color: "var(--g-text-tertiary)" }}>Score</span>
-                  <span className="w-8 text-right text-xs" style={{ color: "var(--g-text-tertiary)" }}>Calls</span>
-                  <span className="w-8 text-right text-xs" style={{ color: "var(--g-text-tertiary)" }}>Streak</span>
+                  <span className="w-10 text-right text-xs text-[var(--g-text-tertiary)]">Score</span>
+                  <span className="w-8 text-right text-xs text-[var(--g-text-tertiary)]">Calls</span>
+                  <span className="w-8 text-right text-xs text-[var(--g-text-tertiary)]">Streak</span>
                 </div>
               </div>
               {displayList.map((m, i) => {
@@ -161,32 +161,32 @@ export function Team() {
                           #{rank}
                         </span>
                       ) : (
-                        <span className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>
+                        <span className="text-sm text-[var(--g-text-tertiary)]">
                           #{rank}
                         </span>
                       )}
                     </div>
                     <Avatar className="size-9 shrink-0">
-                      <AvatarFallback className="text-xs font-medium" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-primary)" }}>
+                      <AvatarFallback className="text-xs font-medium bg-[var(--g-bg-inset)] text-[var(--g-text-primary)]">
                         {m.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium" style={{ color: "var(--g-text-primary)" }}>
+                      <p className="truncate font-medium text-[var(--g-text-primary)]">
                         {m.name}
                       </p>
-                      <Badge variant="secondary" className="mt-0.5 text-[10px]" style={{ background: "var(--g-bg-inset)", color: "var(--g-text-secondary)" }}>
+                      <Badge variant="secondary" className="mt-0.5 text-[10px] bg-[var(--g-bg-inset)] text-[var(--g-text-secondary)]">
                         {roleLabel(m.teamRole, roles)}
                       </Badge>
                     </div>
                     <div className="flex shrink-0 items-center gap-4">
-                      <span className="w-10 text-right font-semibold" style={{ color: "var(--g-text-primary)" }}>
+                      <span className="w-10 text-right font-semibold text-[var(--g-text-primary)]">
                         {avgScore}
                       </span>
-                      <span className="w-8 text-right text-sm" style={{ color: "var(--g-text-secondary)" }}>
+                      <span className="w-8 text-right text-sm text-[var(--g-text-secondary)]">
                         {m.totalCalls ?? 0}
                       </span>
-                      <span className="w-8 text-right text-sm" style={{ color: streak >= 3 ? "var(--g-streak)" : "var(--g-text-tertiary)" }}>
+                      <span className={cn("w-8 text-right text-sm", streak >= 3 ? "text-[var(--g-streak)]" : "text-[var(--g-text-tertiary)]")}>
                         {streak}d
                       </span>
                     </div>
@@ -199,57 +199,57 @@ export function Team() {
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="border-[var(--g-border-subtle)]" style={{ background: "var(--g-bg-card)" }}>
+        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
-              <div className="rounded-lg p-2" style={{ background: "var(--g-accent-soft)" }}>
-                <Phone className="size-4" style={{ color: "var(--g-accent-text)" }} />
+              <div className="rounded-lg p-2 bg-[var(--g-accent-soft)]">
+                <Phone className="size-4 text-[var(--g-accent-text)]" />
               </div>
               <div>
-                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Total Calls {periodLabel}</p>
-                <p className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{totalCalls}</p>
-                <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Period total</p>
+                <p className="text-sm text-[var(--g-text-secondary)]">Total Calls {periodLabel}</p>
+                <p className="text-2xl font-bold text-[var(--g-text-primary)]">{totalCalls}</p>
+                <p className="text-xs text-[var(--g-text-tertiary)]">Period total</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-[var(--g-border-subtle)]" style={{ background: "var(--g-bg-card)" }}>
+        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
-              <div className="rounded-lg p-2" style={{ background: "var(--g-accent-soft)" }}>
-                <BarChart3 className="size-4" style={{ color: "var(--g-accent-text)" }} />
+              <div className="rounded-lg p-2 bg-[var(--g-accent-soft)]">
+                <BarChart3 className="size-4 text-[var(--g-accent-text)]" />
               </div>
               <div>
-                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Team Average Grade</p>
-                <p className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{teamAvg}</p>
-                <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Period average</p>
+                <p className="text-sm text-[var(--g-text-secondary)]">Team Average Grade</p>
+                <p className="text-2xl font-bold text-[var(--g-text-primary)]">{teamAvg}</p>
+                <p className="text-xs text-[var(--g-text-tertiary)]">Period average</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-[var(--g-border-subtle)]" style={{ background: "var(--g-bg-card)" }}>
+        <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
-              <div className="rounded-lg p-2" style={{ background: "var(--g-streak-bg)" }}>
-                <Zap className="size-4" style={{ color: "var(--g-streak)" }} />
+              <div className="rounded-lg p-2 bg-[var(--g-streak-bg)]">
+                <Zap className="size-4 text-[var(--g-streak)]" />
               </div>
               <div>
-                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Active Streaks</p>
-                <p className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{activeStreaks}</p>
-                <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>3+ day streaks</p>
+                <p className="text-sm text-[var(--g-text-secondary)]">Active Streaks</p>
+                <p className="text-2xl font-bold text-[var(--g-text-primary)]">{activeStreaks}</p>
+                <p className="text-xs text-[var(--g-text-tertiary)]">3+ day streaks</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="border-[var(--g-border-subtle)]" style={{ background: "var(--g-bg-card)" }}>
+      <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
         <CardHeader>
-          <CardTitle style={{ color: "var(--g-text-primary)" }}>Achievements</CardTitle>
+          <CardTitle className="text-[var(--g-text-primary)]">Achievements</CardTitle>
         </CardHeader>
         <CardContent>
           {definitions.length === 0 ? (
-            <p className="text-sm py-6 text-center" style={{ color: "var(--g-text-tertiary)" }}>
+            <p className="text-sm py-6 text-center text-[var(--g-text-tertiary)]">
               No badges configured yet.
             </p>
           ) : (
@@ -275,18 +275,18 @@ export function Team() {
                       <Icon className={cn("size-5", earned ? "text-[var(--g-accent-text)]" : "text-[var(--g-text-tertiary)]")} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium" style={{ color: earned ? "var(--g-text-primary)" : "var(--g-text-secondary)" }}>
+                      <p className={cn("font-medium", earned ? "text-[var(--g-text-primary)]" : "text-[var(--g-text-secondary)]")}>
                         {b.name}
                       </p>
-                      <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>
+                      <p className="text-sm text-[var(--g-text-tertiary)]">
                         {b.description ?? b.code}
                       </p>
                       {earnedStr ? (
-                        <p className="mt-1 text-xs font-medium" style={{ color: "var(--g-accent-text)" }}>
+                        <p className="mt-1 text-xs font-medium text-[var(--g-accent-text)]">
                           Earned {earnedStr}
                         </p>
                       ) : (
-                        <p className="mt-1 text-xs" style={{ color: "var(--g-text-tertiary)" }}>
+                        <p className="mt-1 text-xs text-[var(--g-text-tertiary)]">
                           Locked
                         </p>
                       )}

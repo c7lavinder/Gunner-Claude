@@ -174,10 +174,10 @@ export function Inventory() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--g-text-primary)" }}>{assetLabel}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--g-text-primary)]">{assetLabel}</h1>
         <div className="flex flex-1 max-w-md gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4" style={{ color: "var(--g-text-tertiary)" }} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[var(--g-text-tertiary)]" />
             <Input placeholder={`Search ${assetLabel.toLowerCase()}...`} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Button onClick={() => setAddDialogOpen(true)}><Plus className="size-4" /> Add {assetSingular}</Button>
@@ -203,7 +203,7 @@ export function Inventory() {
               </div>
             </div>
           ) : sorted.length === 0 ? (
-            <p className="text-sm py-8 text-center" style={{ color: "var(--g-text-tertiary)" }}>
+            <p className="text-sm py-8 text-center text-[var(--g-text-tertiary)]">
               No {assetLabel.toLowerCase()} yet
             </p>
           ) : (
@@ -212,15 +212,14 @@ export function Inventory() {
                 {sorted.map((item) => (
                   <Card
                     key={item.id}
-                    className="cursor-pointer border transition-all hover:shadow-md"
-                    style={{ borderColor: "var(--g-border-subtle)" }}
+                    className="cursor-pointer border transition-all hover:shadow-md border-[var(--g-border-subtle)]"
                     onClick={() => setDetailItem(item)}
                   >
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>{item.address}</p>
-                          <p className="text-sm truncate" style={{ color: "var(--g-text-tertiary)" }}>{[item.city, item.state].filter(Boolean).join(", ") || "—"}</p>
+                          <p className="font-semibold truncate text-[var(--g-text-primary)]">{item.address}</p>
+                          <p className="text-sm truncate text-[var(--g-text-tertiary)]">{[item.city, item.state].filter(Boolean).join(", ") || "—"}</p>
                         </div>
                         {(() => {
                           const displayStage = optimisticStages.get(item.id) ?? item.status;
@@ -232,7 +231,7 @@ export function Inventory() {
                           );
                         })()}
                       </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--g-text-secondary)" }}>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--g-text-secondary)]">
                         <span>{item.leadSource ?? "—"}</span><span>{item.sellerName ?? "—"}</span>
                         <span>{daysInStage(item.stageChangedAt)}d in stage</span><span>Last: {item.lastContactedAt ? new Date(item.lastContactedAt).toLocaleDateString() : "—"}</span>
                       </div>
@@ -259,7 +258,7 @@ export function Inventory() {
           {totalPages > 1 && !isLoading && sorted.length > 0 && (
             <div className="flex items-center justify-center gap-2 pt-4">
               <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>Previous</Button>
-              <span className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Page {currentPage} of {totalPages}</span>
+              <span className="text-sm text-[var(--g-text-secondary)]">Page {currentPage} of {totalPages}</span>
               <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)}>Next</Button></div>
           )}
         </TabsContent>
@@ -273,13 +272,13 @@ export function Inventory() {
                 <SheetTitle>{detailItem.address}</SheetTitle>
               </SheetHeader>
               <div className="space-y-4 py-4">
-                <p style={{ color: "var(--g-text-secondary)" }}>{[detailItem.address, detailItem.city, detailItem.state].filter(Boolean).join(", ") || detailItem.address}</p>
+                <p className="text-[var(--g-text-secondary)]">{[detailItem.address, detailItem.city, detailItem.state].filter(Boolean).join(", ") || detailItem.address}</p>
                 <Badge className={cn("border", stageColor(detailItem.status))}>{stages.find((s) => s.code === detailItem.status)?.name ?? detailItem.status}</Badge>
                 <Separator />
                 <div className="space-y-2 text-sm">
-                  <p><span style={{ color: "var(--g-text-tertiary)" }}>Lead source:</span> {detailItem.leadSource ?? "—"}</p>
-                  <p><span style={{ color: "var(--g-text-tertiary)" }}>{t.contact}:</span> {detailItem.sellerName ?? "—"} {detailItem.sellerPhone ?? ""}</p>
-                  <p><span style={{ color: "var(--g-text-tertiary)" }}>Days in stage:</span> {daysInStage(detailItem.stageChangedAt)}</p>
+                  <p><span className="text-[var(--g-text-tertiary)]">Lead source:</span> {detailItem.leadSource ?? "—"}</p>
+                  <p><span className="text-[var(--g-text-tertiary)]">{t.contact}:</span> {detailItem.sellerName ?? "—"} {detailItem.sellerPhone ?? ""}</p>
+                  <p><span className="text-[var(--g-text-tertiary)]">Days in stage:</span> {daysInStage(detailItem.stageChangedAt)}</p>
                 </div>
                 <Separator />
                 <div className="flex flex-wrap gap-2 pt-2">
@@ -313,7 +312,7 @@ export function Inventory() {
         <Dialog open={stageChangeDialog.open} onOpenChange={(o) => !o && setStageChangeDialog(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>Change stage</DialogTitle></DialogHeader>
-            <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>{stageChangeDialog.item.address}</p>
+            <p className="text-sm text-[var(--g-text-secondary)]">{stageChangeDialog.item.address}</p>
             <Select value={stageChangeDialog.newStage} onValueChange={(v) => setStageChangeDialog((d) => d ? { ...d, newStage: v } : null)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{stages.map((s) => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}</SelectContent>

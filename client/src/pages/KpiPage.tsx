@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BarChart3, Phone, MessageSquare, FileCheck, Calendar, DollarSign, TrendingUp } from "lucide-react";
+import { BarChart3, Phone, MessageSquare, FileCheck, Calendar, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { trpc } from "@/lib/trpc";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
@@ -82,12 +82,12 @@ export function KpiPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
-          <BarChart3 className="size-6" style={{ color: "var(--g-accent-text)" }} />
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
+          <BarChart3 className="size-6 text-[var(--g-accent-text)]" />
           KPIs
         </h1>
         <Skeleton className="h-10 w-64" />
-        <Card className="overflow-hidden" style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+        <Card className="overflow-hidden bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="p-6">
             <Skeleton className="h-4 w-20 mb-4" />
             <div className="space-y-3">
@@ -103,8 +103,8 @@ export function KpiPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
-        <BarChart3 className="size-6" style={{ color: "var(--g-accent-text)" }} />
+      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
+        <BarChart3 className="size-6 text-[var(--g-accent-text)]" />
         KPIs
       </h1>
 
@@ -116,9 +116,9 @@ export function KpiPage() {
         </TabsList>
       </Tabs>
 
-      <Card className="overflow-hidden" style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+      <Card className="overflow-hidden bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
         <CardContent className="p-6">
-          <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--g-text-secondary)" }}>Funnel</h2>
+          <h2 className="text-sm font-semibold mb-4 text-[var(--g-text-secondary)]">Funnel</h2>
           {funnel.length === 0 ? (
             <EmptyState
               icon={TrendingUp}
@@ -126,88 +126,113 @@ export function KpiPage() {
               description="Funnel data will appear here as calls are graded and deals move through your pipeline."
             />
           ) : (
-            <div className="space-y-3">
-              {funnel.map((stage, i) => (
-                <div key={stage.status} className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <div
-                      className="h-10 rounded-lg flex items-center justify-end pr-2 transition-all shrink-0"
-                      style={{
-                        width: `${Math.max(15, (stage.count / maxFunnel) * 100)}%`,
-                        background: "linear-gradient(90deg, var(--g-accent), var(--g-accent-light))",
-                        opacity: 0.9 - i * 0.06,
-                      }}
+            <div className="space-y-2">
+              {funnel.map((stage, i) => {
+                const pct = Math.round((stage.count / maxFunnel) * 100);
+                const barWidth = Math.max(15, pct);
+                return (
+                  <div key={stage.status} className="flex items-center gap-3">
+                    <span
+                      className="w-32 text-xs text-right shrink-0 text-[var(--g-text-secondary)] truncate"
+                      title={stage.status ?? ""}
                     >
-                      <span className="text-xs font-bold font-mono text-white tabular-nums">{stage.count}</span>
+                      {stage.status}
+                    </span>
+                    <div className="flex-1 h-8 rounded-md bg-[var(--g-bg-inset)] overflow-hidden">
+                      <div
+                        className="h-full rounded-md flex items-center px-2 transition-all bg-[linear-gradient(90deg,var(--g-accent),var(--g-accent-light))]"
+                        style={{ width: `${barWidth}%`, opacity: 0.9 - i * 0.06 }}
+                      >
+                        <span className="text-xs font-bold text-white tabular-nums">{pct}%</span>
+                      </div>
                     </div>
-                    <span className="text-sm font-medium shrink-0" style={{ color: "var(--g-text-primary)" }}>{stage.status}</span>
+                    <span className="w-10 text-xs font-mono tabular-nums text-right shrink-0 text-[var(--g-text-secondary)]">
+                      {stage.count}
+                    </span>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
 
       <div>
-        <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--g-text-secondary)" }}>Log Daily Numbers</h2>
+        <h2 className="text-sm font-semibold mb-3 text-[var(--g-text-secondary)]">Log Daily Numbers</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {kpiMetrics.map(({ key, label }) => {
             const Icon = KPI_ICON_MAP[key] ?? BarChart3;
+            const currentNum = parseFloat(kpiValues[key] ?? "");
+            const lastNum = parseFloat(lastValues[key] ?? "");
+            const hasTrend = !isNaN(currentNum) && !isNaN(lastNum) && lastNum > 0 && currentNum !== lastNum;
+            const pctChange = hasTrend ? Math.abs(((currentNum - lastNum) / lastNum) * 100) : 0;
+            const trendUp = hasTrend && currentNum > lastNum;
             return (
-            <Card key={key} style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
-              <CardContent className="p-4 flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <Icon className="size-4" style={{ color: "var(--g-accent-text)" }} />
-                  <span className="text-sm font-medium" style={{ color: "var(--g-text-primary)" }}>{label}</span>
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={kpiValues[key] ?? ""}
-                    onChange={(e) => setKpiValues((prev) => ({ ...prev, [key]: e.target.value }))}
-                    className="h-11 text-lg font-mono tabular-nums"
-                    style={{ background: "var(--g-bg-surface)", borderColor: "var(--g-border-subtle)" }}
-                  />
-                  <Button
-                    size="lg"
-                    className="h-11 px-4"
-                    onClick={() => handleSave(key)}
-                    disabled={saveMutation.isPending}
-                  >
-                    Save
-                  </Button>
-                </div>
-                <span className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>
-                  Last: {lastValues[key] ?? "—"}
-                </span>
-              </CardContent>
-            </Card>
+              <Card key={key} className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
+                <CardContent className="p-4 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <Icon className="size-4 text-[var(--g-accent-text)]" />
+                    <span className="text-sm font-medium text-[var(--g-text-primary)]">{label}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={kpiValues[key] ?? ""}
+                      onChange={(e) => setKpiValues((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className="h-11 text-lg font-mono tabular-nums bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]"
+                    />
+                    <Button
+                      size="lg"
+                      className="h-11 px-4"
+                      onClick={() => handleSave(key)}
+                      disabled={saveMutation.isPending}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-[var(--g-text-tertiary)]">
+                    <span>Last: {lastValues[key] ?? "—"}</span>
+                    {hasTrend && (
+                      trendUp ? (
+                        <span className="flex items-center gap-0.5 text-[var(--g-up)]">
+                          <TrendingUp className="size-3" />
+                          +{pctChange.toFixed(0)}%
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-0.5 text-[var(--g-down)]">
+                          <TrendingDown className="size-3" />
+                          -{pctChange.toFixed(0)}%
+                        </span>
+                      )
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+        <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
-            <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>Calls Graded</div>
-            <div className="mt-1 text-2xl font-bold font-mono tabular-nums" style={{ color: "var(--g-text-primary)" }}>{callStats.graded}</div>
-            <div className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Avg {Math.round(callStats.avgScore)}</div>
+            <div className="text-xs font-medium text-[var(--g-text-tertiary)]">Calls Graded</div>
+            <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-[var(--g-text-primary)]">{callStats.graded}</div>
+            <div className="text-sm text-[var(--g-text-secondary)]">Avg {Math.round(callStats.avgScore)}</div>
           </CardContent>
         </Card>
-        <Card style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+        <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
-            <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>Total Calls</div>
-            <div className="mt-1 text-2xl font-bold font-mono tabular-nums" style={{ color: "var(--g-text-primary)" }}>{callStats.total}</div>
-            <div className="text-sm" style={{ color: "var(--g-text-secondary)" }}>In period</div>
+            <div className="text-xs font-medium text-[var(--g-text-tertiary)]">Total Calls</div>
+            <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-[var(--g-text-primary)]">{callStats.total}</div>
+            <div className="text-sm text-[var(--g-text-secondary)]">In period</div>
           </CardContent>
         </Card>
-        <Card style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
+        <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
-            <div className="text-xs font-medium" style={{ color: "var(--g-text-tertiary)" }}>Conversion Rate</div>
-            <div className="mt-1 text-2xl font-bold font-mono tabular-nums" style={{ color: "var(--g-text-primary)" }}>
+            <div className="text-xs font-medium text-[var(--g-text-tertiary)]">Conversion Rate</div>
+            <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-[var(--g-text-primary)]">
               {funnel.length > 0 ? (
                 (() => {
                   const first = funnel[0]?.count ?? 0;
@@ -218,7 +243,7 @@ export function KpiPage() {
                 "—"
               )}
             </div>
-            <div className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Lead → Closed</div>
+            <div className="text-sm text-[var(--g-text-secondary)]">Lead → Closed</div>
           </CardContent>
         </Card>
       </div>

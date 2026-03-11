@@ -78,6 +78,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
+  const pageLabel = ROUTE_LABELS[location];
 
   // Breadcrumb segments: split location path, generate labels
   const segments = location.split("/").filter(Boolean);
@@ -136,11 +137,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               borderColor: "var(--g-border-subtle)",
             }}
           >
-            {user && (
-              <span className="text-sm mr-auto" style={{ color: "var(--g-text-secondary)" }}>
-                {user.name || user.email}
-              </span>
-            )}
+            <div className="mr-auto flex items-center gap-3">
+              {user && (
+                <span className="text-sm text-[var(--g-text-secondary)]">
+                  {user.name || user.email}
+                </span>
+              )}
+              {pageLabel && (
+                <>
+                  <span className="text-sm text-[var(--g-text-tertiary)] select-none">·</span>
+                  <span className="text-sm font-semibold text-[var(--g-text-primary)]">{pageLabel}</span>
+                </>
+              )}
+            </div>
             <kbd className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded" style={{ background: "var(--g-bg-surface)", color: "var(--g-text-tertiary)", border: "1px solid var(--g-border-subtle)" }}>
               ⌘K
             </kbd>
