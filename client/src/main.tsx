@@ -11,15 +11,21 @@ import { App } from "./App";
 import { AuthProvider } from "./hooks/useAuth";
 import "./index.css";
 
-const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
-if (SENTRY_DSN) {
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    environment: import.meta.env.MODE,
-    tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
-    replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 1.0,
-  });
+let sentryReady = false;
+try {
+  const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+  if (SENTRY_DSN) {
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      environment: import.meta.env.MODE,
+      tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+      replaysSessionSampleRate: 0,
+      replaysOnErrorSampleRate: 1.0,
+    });
+    sentryReady = true;
+  }
+} catch {
+  console.warn("[sentry] Failed to initialize — skipping");
 }
 
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_API_KEY as string | undefined;
@@ -64,18 +70,26 @@ function FallbackUI() {
   );
 }
 
+const AppTree = (
+  <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </QueryClientProvider>
+    </trpc.Provider>
+  </ThemeProvider>
+);
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Sentry.ErrorBoundary fallback={<FallbackUI />}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <trpc.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <App />
-            </AuthProvider>
-          </QueryClientProvider>
-        </trpc.Provider>
-      </ThemeProvider>
-    </Sentry.ErrorBoundary>
+    {sentryReady ? (
+      <Sentry.ErrorBoundary fallback={<FallbackUI />}>
+        {AppTree}
+      </Sentry.ErrorBoundary>
+    ) : (
+      AppTree
+    )}
   </StrictMode>
 );
