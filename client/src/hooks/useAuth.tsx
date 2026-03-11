@@ -64,8 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     } else if (!meQuery.error || meQuery.error.data?.code === "UNAUTHORIZED") {
       // Only clear the user for UNAUTHORIZED errors (not logged in).
-      // Transient errors (network, 500s) keep the current auth state to avoid
-      // bouncing authenticated users back to the login screen.
+      // Skip clearing if we just set auth (Google callback race condition guard).
+      const justAuthed = localStorage.getItem("auth_just_set") === "true";
+      if (justAuthed) {
+        localStorage.removeItem("auth_just_set");
+        setIsLoading(false);
+        return;
+      }
       setUser(null);
       setIsLoading(false);
     } else {
@@ -126,7 +131,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setAuthenticatedUser = useCallback((userData: AuthUser, token?: string) => {
     setUser(userData);
-    if (token) localStorage.setItem("auth_token", token);
+    if (token) {
+      localStorage.setItem("auth_token", token);
+      // Flag that auth was just set so the meQuery error handler doesn't
+      // immediately clear the user during the Google OAuth cookie propagation window.
+      localStorage.setItem("auth_just_set", "true");
+    }
   }, []);
 
   const logout = useCallback(async () => {

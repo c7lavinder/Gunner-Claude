@@ -186,6 +186,11 @@ export function Settings() {
   const { data: industries } = trpc.playbook.listIndustries.useQuery();
   const updateMutation = trpc.settings.updateWorkspace.useMutation();
   const { data: plans } = trpc.settings.getPlans.useQuery();
+  const ghlOAuthRedirectUri = `${window.location.origin}/settings?tab=crm&crm_callback=1`;
+  const ghlOAuthUrlQuery = trpc.settings.getGhlOAuthUrl.useQuery(
+    { redirectUri: ghlOAuthRedirectUri },
+    { enabled: false }
+  );
   const testQuery = trpc.settings.testCrmConnection.useQuery(undefined, { enabled: false });
   const inviteMutation = trpc.settings.inviteTeamMember.useMutation();
   const removeMutation = trpc.settings.removeTeamMember.useMutation();
@@ -331,9 +336,11 @@ export function Settings() {
                 </p>
                 <Button
                   onClick={() => {
-                    const redirectUri = `${window.location.origin}/settings?tab=crm&crm_callback=1`;
-                    window.location.href = `/api/trpc/settings.getGhlOAuthUrl?input=${encodeURIComponent(JSON.stringify({ redirectUri }))}`;
+                    ghlOAuthUrlQuery.refetch().then((res) => {
+                      if (res.data?.url) window.location.href = res.data.url;
+                    });
                   }}
+                  disabled={ghlOAuthUrlQuery.isFetching}
                 >
                   <Link2 className="size-4 mr-2" />
                   Connect GoHighLevel

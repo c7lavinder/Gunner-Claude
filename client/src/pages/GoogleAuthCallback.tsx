@@ -23,7 +23,12 @@ export function GoogleAuthCallback() {
         },
         data.token,
       );
-      setLocation(data.isNewUser ? "/onboarding" : "/today");
+      // Short delay so the httpOnly auth_token cookie is fully written before
+      // useAuth fires its /me query on the next page, preventing a loop where
+      // the cookie isn't available yet and the user gets bounced back to login.
+      setTimeout(() => {
+        setLocation(data.isNewUser ? "/onboarding" : "/today");
+      }, 350);
     },
     onError: (err) => {
       setErrorMsg(err.message || "Google sign-in failed. Please try again.");
