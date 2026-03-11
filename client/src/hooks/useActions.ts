@@ -23,11 +23,26 @@ export function useAction() {
   });
 
   const executeAction = useCallback(
-    (type: ActionType, contactId: string, payload: Record<string, unknown>) => {
+    (
+      type: ActionType,
+      contactId: string,
+      payload: Record<string, unknown>,
+      callbacks?: { onSuccess?: () => void; onError?: () => void }
+    ) => {
       setIsExecuting(true);
       setOptimisticStatus("executing");
       setResult(null);
-      executeMutation.mutate({ type, contactId, payload });
+      executeMutation.mutate(
+        { type, contactId, payload },
+        {
+          onSuccess: (data) => {
+            if (data.success) callbacks?.onSuccess?.();
+          },
+          onError: () => {
+            callbacks?.onError?.();
+          },
+        }
+      );
     },
     [executeMutation]
   );

@@ -86,6 +86,7 @@ export function Inventory() {
   const [newState, setNewState] = useState("");
   const [newSellerName, setNewSellerName] = useState("");
   const [newSellerPhone, setNewSellerPhone] = useState("");
+  const [optimisticStages, setOptimisticStages] = useState<Map<number, string>>(new Map());
   const { executeAction, isExecuting, result, reset } = useAction();
 
   useEffect(() => {
@@ -101,13 +102,7 @@ export function Inventory() {
   });
   const { data: stageCountsRaw } = trpc.inventory.getStageCounts.useQuery();
   const utils = trpc.useUtils();
-  const updateStageMutation = trpc.inventory.updateStage.useMutation({
-    onSuccess: () => {
-      void utils.inventory.list.invalidate();
-      void utils.inventory.getStageCounts.invalidate();
-      setStageChangeDialog(null);
-    },
-  });
+  const updateStageMutation = trpc.inventory.updateStage.useMutation();
   const createMutation = trpc.inventory.create.useMutation({
     onSuccess: () => {
       void utils.inventory.list.invalidate();
@@ -153,7 +148,35 @@ export function Inventory() {
 
   const handleStageChangeConfirm = () => {
     if (!stageChangeDialog) return;
-    updateStageMutation.mutate({ propertyId: stageChangeDialog.item.id, newStage: stageChangeDialog.newStage });
+    const { item, newStage } = stageChangeDialog;
+    const previousStage = item.status;
+    // Apply optimistic stage immediately
+    setOptimisticStages((prev) => new Map(prev).set(item.id, newStage));
+    setStageChangeDialog(null);
+    updateStageMutation.mutate(
+      { propertyId: item.id, newStage },
+      {
+        onSuccess: () => {
+          setOptimisticStages((prev) => {
+            const next = new Map(prev);
+            next.delete(item.id);
+            return next;
+          });
+          void utils.inventory.list.invalidate();
+          void utils.inventory.getStageCounts.invalidate();
+        },
+        onError: () => {
+          // Roll back the optimistic stage
+          setOptimisticStages((prev) => {
+            const next = new Map(prev);
+            next.set(item.id, previousStage);
+            return next;
+          });
+          void utils.inventory.list.invalidate();
+          void utils.inventory.getStageCounts.invalidate();
+        },
+      }
+    );
   };
 
   const assetLabel = t?.assetPlural ?? "Properties";
@@ -213,7 +236,15 @@ export function Inventory() {
                           <p className="font-semibold truncate" style={{ color: "var(--g-text-primary)" }}>{item.address}</p>
                           <p className="text-sm truncate" style={{ color: "var(--g-text-tertiary)" }}>{[item.city, item.state].filter(Boolean).join(", ") || "—"}</p>
                         </div>
-                        <Badge className={cn("border text-xs shrink-0", STAGE_COLORS[item.status] ?? "bg-gray-500/15")}>{stages.find((s) => s.code === item.status)?.name ?? item.status}</Badge>
+                        {(() => {
+                          const displayStage = optimisticStages.get(item.id) ?? item.status;
+                          const isOptimistic = optimisticStages.has(item.id);
+                          return (
+                            <Badge className={cn("border text-xs shrink-0 transition-opacity", STAGE_COLORS[displayStage] ?? "bg-gray-500/15", isOptimistic && "opacity-60")}>
+                              {stages.find((s) => s.code === displayStage)?.name ?? displayStage}
+                            </Badge>
+                          );
+                        })()}
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--g-text-secondary)" }}>
                         <span>{item.leadSource ?? "—"}</span><span>{item.sellerName ?? "—"}</span>

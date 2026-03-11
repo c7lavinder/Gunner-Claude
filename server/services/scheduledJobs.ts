@@ -12,6 +12,7 @@ import {
   coachMessages,
   userPlaybooks,
   userEvents,
+  aiSuggestions,
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { createCrmAdapter } from "../crm";
