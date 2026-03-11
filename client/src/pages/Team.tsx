@@ -15,7 +15,6 @@ import {
   Phone,
   BarChart3,
   Zap,
-  Users,
   UserPlus,
 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
@@ -132,6 +131,16 @@ export function Team() {
             />
           ) : (
             <div className="space-y-1">
+              <div className="flex items-center gap-4 px-4 pb-1">
+                <div className="w-8 shrink-0" />
+                <div className="size-9 shrink-0" />
+                <div className="min-w-0 flex-1" />
+                <div className="flex shrink-0 items-center gap-4">
+                  <span className="w-10 text-right text-xs" style={{ color: "var(--g-text-tertiary)" }}>Score</span>
+                  <span className="w-8 text-right text-xs" style={{ color: "var(--g-text-tertiary)" }}>Calls</span>
+                  <span className="w-8 text-right text-xs" style={{ color: "var(--g-text-tertiary)" }}>Streak</span>
+                </div>
+              </div>
               {displayList.map((m, i) => {
                 const rank = i + 1;
                 const medal = rank <= 3 ? ["#FFD700", "#C0C0C0", "#CD7F32"][rank - 1] : null;

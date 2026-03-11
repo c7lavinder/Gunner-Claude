@@ -164,6 +164,9 @@
   --g-streak: #ea580c;
   --g-streak-bg: rgba(234,88,12,0.08);
 
+  --g-warning-bg: #fef3c7;
+  --g-warning-text: #92400e;
+
   /* Keep obs- aliases for backward compat */
   --obs-bg-base: var(--g-bg-base);
   --obs-bg-surface: var(--g-bg-surface);
@@ -336,6 +339,9 @@
 
   --g-streak: #f97316;
   --g-streak-bg: rgba(249,115,22,0.12);
+
+  --g-warning-bg: rgba(251,191,36,0.1);
+  --g-warning-text: #fbbf24;
 }
 
 /* ═══════════════════════════════════════════════════════

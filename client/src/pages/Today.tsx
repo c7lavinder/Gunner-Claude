@@ -183,7 +183,7 @@ export function Today() {
                         onChange={(e) => setReplyDraft(e.target.value)}
                         className="flex-1 h-8 text-sm"
                       />
-                      <Button size="icon-sm" onClick={handleSendSms} disabled={!replyDraft.trim()}>
+                      <Button size="icon" className="h-7 w-7" onClick={handleSendSms} disabled={!replyDraft.trim()}>
                         <Send className="size-4" />
                       </Button>
                     </div>
@@ -246,9 +246,7 @@ export function Today() {
                 <CheckSquare className="size-4 text-[var(--g-accent-text)]" />
                 Tasks Due Today
               </CardTitle>
-              <Link href="/inventory">
-                <a className="text-xs text-[var(--g-accent-text)] hover:underline">View All</a>
-              </Link>
+              <Link href="/inventory" className="text-xs text-[var(--g-accent-text)] hover:underline">View All</Link>
             </CardHeader>
             <CardContent className="py-0 pb-3 space-y-1">
               {!taskData?.tasks?.length ? <p className="py-4 px-3 text-sm text-[var(--g-text-tertiary)]">No tasks</p> : (

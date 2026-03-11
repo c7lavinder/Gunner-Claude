@@ -45,6 +45,7 @@ function gradeColor(grade: number | null) {
   if (grade >= 90) return "bg-[var(--g-grade-a)]";
   if (grade >= 75) return "bg-[var(--g-grade-b)]";
   if (grade >= 60) return "bg-[var(--g-grade-c)]";
+  if (grade >= 45) return "bg-[var(--g-grade-d)]";
   return "bg-[var(--g-grade-f)]";
 }
 
@@ -94,7 +95,7 @@ export function CallInbox() {
     setStarred((prev) => {
       const next = new Set(prev);
       items.forEach((c) => {
-        if (c.isStarred === "true") next.add(c.id);
+        if (!!c.isStarred) next.add(c.id);
       });
       return next;
     });
@@ -234,9 +235,9 @@ export function CallInbox() {
                               </div>
                               <Button
                                 variant="ghost"
-                                size="icon-sm"
+                                size="icon"
                                 onClick={(e) => toggleStar(call.id, e)}
-                                className="shrink-0"
+                                className="h-7 w-7 shrink-0"
                               >
                                 <Star
                                   className={cn("size-4", starred.has(call.id) && "fill-amber-400 text-amber-500")}

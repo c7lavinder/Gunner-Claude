@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq, and, desc, gte, count, or, ilike, lt, isNull, like, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
-import { calls, contactCache, dispoProperties, dailyKpiEntries } from "../../drizzle/schema";
+import { calls, callGrades, contactCache, dispoProperties, dailyKpiEntries } from "../../drizzle/schema";
 
 const todayStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -95,6 +95,30 @@ export const todayRouter = router({
         .where(eq(dailyKpiEntries.id, input.id))
         .returning();
       return row ?? null;
+    }),
+
+  getContactContext: protectedProcedure
+    .input(z.object({ phone: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const tid = ctx.user!.tenantId;
+      const rows = await db.select({
+        id: calls.id,
+        contactName: calls.contactName,
+        grade: callGrades.overallGrade,
+        duration: calls.duration,
+        createdAt: calls.createdAt,
+      }).from(calls)
+        .leftJoin(callGrades, eq(callGrades.callId, calls.id))
+        .where(and(eq(calls.tenantId, tid), eq(calls.contactPhone, input.phone)))
+        .orderBy(desc(calls.createdAt))
+        .limit(3);
+      return rows.map((r) => ({
+        id: r.id,
+        contactName: r.contactName ?? "Unknown",
+        grade: r.grade ?? null,
+        duration: r.duration ?? null,
+        createdAt: r.createdAt,
+      }));
     }),
 
   getStats: protectedProcedure.query(async ({ ctx }) => {
