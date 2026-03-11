@@ -256,3 +256,7 @@ Health check: `GET /health` returns `{"status":"ok"}`
 ## Owner
 
 Corey Lavinder — non-technical. Explain changes in plain English. Never ask unnecessary questions — read files first, then act.
+
+## Git Sync Rule
+At the start of every session, run: git pull origin production
+After every commit, run: git push origin production
