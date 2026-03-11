@@ -1,3 +1,6 @@
+import { webcrypto } from "node:crypto";
+if (!globalThis.crypto) globalThis.crypto = webcrypto as Crypto;
+
 import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import express from "express";
