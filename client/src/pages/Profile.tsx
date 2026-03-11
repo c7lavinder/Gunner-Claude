@@ -32,6 +32,8 @@ export function Profile() {
   const { data: userPlaybook } = trpc.playbook.getUser.useQuery();
   const saveInstruction = trpc.ai.saveInstruction.useMutation();
   const updateProfile = trpc.auth.updateProfile.useMutation();
+  const updateVoiceConsentMutation = trpc.users.updateVoiceConsent.useMutation();
+  const { data: voiceProfile, refetch: refetchVoiceProfile } = trpc.users.getVoiceProfile.useQuery();
   const utils = trpc.useUtils();
 
   const [editing, setEditing] = useState(false);
@@ -40,12 +42,21 @@ export function Profile() {
   const [defaultGreeting, setDefaultGreeting] = useState("");
   const [voiceConsent, setVoiceConsent] = useState(false);
   const [saving, setSaving] = useState(false);
-  const updateUserPlaybook = trpc.playbook.updateUserPlaybook.useMutation();
 
   useEffect(() => {
-    if (userPlaybook) {
-      setVoiceConsent((userPlaybook as { voiceConsentGiven?: string }).voiceConsentGiven === "true");
+    if (voiceProfile) {
+      setVoiceConsent(voiceProfile.consentGiven ?? false);
     }
+  }, [voiceProfile]);
+
+  useEffect(() => {
+    if (!userPlaybook) return;
+    const instructions = (userPlaybook.instructions as Record<string, string> | null | undefined) ?? {};
+    const prefs = instructions.preferences ?? "";
+    const toneMatch = prefs.match(/SMS tone:\s*(\w+)/i);
+    const greetMatch = prefs.match(/Default greeting:\s*(.+?)(?:\.|$)/i);
+    if (toneMatch?.[1]) setSmsTone(toneMatch[1].toLowerCase());
+    if (greetMatch?.[1] && greetMatch[1].trim() !== "(none)") setDefaultGreeting(greetMatch[1].trim());
   }, [userPlaybook]);
 
   useEffect(() => {
@@ -162,15 +173,16 @@ export function Profile() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 rounded-lg" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-            <p className="text-sm font-medium" style={{ color: "var(--g-text-secondary)" }}>Voice Samples Collected: {(userPlaybook as { voiceSampleCount?: number } | undefined)?.voiceSampleCount ?? 0}/10</p>
-            <div className="h-2 rounded-full mt-2 overflow-hidden" style={{ background: "var(--g-stat-bar-bg)" }}><div className="h-full rounded-full" style={{ background: "var(--g-accent)", width: `${Math.min(100, ((userPlaybook as { voiceSampleCount?: number } | undefined)?.voiceSampleCount ?? 0) * 10)}%` }} /></div>
+            <p className="text-sm font-medium" style={{ color: "var(--g-text-secondary)" }}>Voice Samples Collected: {voiceProfile?.totalSamples ?? 0}/20</p>
+            <div className="h-2 rounded-full mt-2 overflow-hidden" style={{ background: "var(--g-stat-bar-bg)" }}><div className="h-full rounded-full" style={{ background: "var(--g-accent)", width: `${Math.min(100, ((voiceProfile?.totalSamples ?? 0) / 20) * 100)}%` }} /></div>
           </div>
           <Button variant="outline" disabled={!voiceConsent} onClick={() => toast("Voice recording coming soon — your consent is saved.")}><Phone className="size-4" />Record Sample</Button>
           <div className="flex items-center justify-between pt-2">
             <Label htmlFor="voice-consent" className="text-sm" style={{ color: "var(--g-text-secondary)" }}>I consent to voice sample collection</Label>
-            <Switch id="voice-consent" checked={voiceConsent} onCheckedChange={(v) => {
+            <Switch id="voice-consent" checked={voiceConsent} disabled={updateVoiceConsentMutation.isPending} onCheckedChange={async (v) => {
               setVoiceConsent(v);
-              updateUserPlaybook.mutate({ voiceConsentGiven: v ? "true" : "false" });
+              await updateVoiceConsentMutation.mutateAsync({ consentGiven: v });
+              await refetchVoiceProfile();
             }} />
           </div>
         </CardContent>

@@ -7,20 +7,31 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart3, Phone, MessageSquare, FileCheck, Calendar, DollarSign, TrendingUp } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { trpc } from "@/lib/trpc";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 
-const KPI_METRICS = [
-  { key: "calls", label: "Calls Made", icon: Phone },
-  { key: "texts", label: "Texts Sent", icon: MessageSquare },
-  { key: "offers", label: "Offers Made", icon: FileCheck },
-  { key: "appointments", label: "Appointments Set", icon: Calendar },
-  { key: "revenue", label: "Revenue Closed", icon: DollarSign },
+const DEFAULT_KPI_METRICS = [
+  { key: "calls", label: "Calls Made" },
+  { key: "texts", label: "Texts Sent" },
+  { key: "offers", label: "Offers Made" },
+  { key: "appointments", label: "Appointments Set" },
+  { key: "revenue", label: "Revenue Closed" },
 ];
+
+const KPI_ICON_MAP: Record<string, typeof Phone> = {
+  calls: Phone,
+  texts: MessageSquare,
+  offers: FileCheck,
+  appointments: Calendar,
+  revenue: DollarSign,
+};
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
 export function KpiPage() {
+  const { algorithm } = useTenantConfig();
+  const kpiMetrics = (algorithm.kpiMetrics as Array<{ key: string; label: string }> | undefined) ?? DEFAULT_KPI_METRICS;
   const [period, setPeriod] = useState("week");
   const [kpiValues, setKpiValues] = useState<Record<string, string>>({});
   const today = todayStr();
@@ -141,7 +152,9 @@ export function KpiPage() {
       <div>
         <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--g-text-secondary)" }}>Log Daily Numbers</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {KPI_METRICS.map(({ key, label, icon: Icon }) => (
+          {kpiMetrics.map(({ key, label }) => {
+            const Icon = KPI_ICON_MAP[key] ?? BarChart3;
+            return (
             <Card key={key} style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>
               <CardContent className="p-4 flex flex-col gap-3">
                 <div className="flex items-center gap-2">
@@ -171,7 +184,8 @@ export function KpiPage() {
                 </span>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </div>
 

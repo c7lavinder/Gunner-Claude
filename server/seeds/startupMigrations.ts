@@ -212,6 +212,9 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
+  // Add isStarred to calls if not present
+  await db.execute(sql`ALTER TABLE "calls" ADD COLUMN IF NOT EXISTS "isStarred" text DEFAULT 'false'`);
+
   // Performance indexes
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_created" ON "calls" ("tenantId", "createdAt" DESC)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_user" ON "calls" ("tenantId", "teamMemberId")`);

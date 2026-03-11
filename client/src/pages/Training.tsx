@@ -60,9 +60,13 @@ export function Training() {
   const gradeBars = recentCalls.slice(0, 10).map((r) => letterToScore(r.grade));
   const xp = progress?.xp ?? 0;
   const level = progress?.level ?? 1;
-  const xpForNext = 500;
-  const xpInLevel = xp % xpForNext;
-  const progressPct = (xpInLevel / xpForNext) * 100;
+
+  const LEVEL_THRESHOLDS = [0, 500, 1000, 1750, 2500, 4000, 6000, 9000, 12000, 15000, 20000, 27000, 35000, 42500, 50000, 62500, 77500, 95000, 110000, 125000, 150000, 180000, 220000, 270000, 350000];
+  const currentThreshold = LEVEL_THRESHOLDS[Math.max(0, level - 1)] ?? 0;
+  const nextThreshold = LEVEL_THRESHOLDS[Math.min(level, LEVEL_THRESHOLDS.length - 1)] ?? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]!;
+  const xpForNext = Math.max(1, nextThreshold - currentThreshold);
+  const xpInLevel = Math.max(0, xp - currentThreshold);
+  const progressPct = Math.min(100, (xpInLevel / xpForNext) * 100);
 
   if (isLoading) {
     return (
@@ -201,7 +205,8 @@ export function Training() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {materials.map((m) => {
-              const unlocked = true;
+              const minLevel = (m as { minLevel?: number | null }).minLevel ?? null;
+              const unlocked = minLevel === null || level >= minLevel;
               const Icon = MATERIAL_ICONS[m.category ?? ""] ?? BookOpen;
               return (
                 <Card key={m.id} className={cn(!unlocked && "opacity-70")} style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}>

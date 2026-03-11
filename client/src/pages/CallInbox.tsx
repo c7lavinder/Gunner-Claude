@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,11 +65,21 @@ export function CallInbox() {
   const statusFilter =
     tab === "graded" ? "graded" : tab === "needs-review" ? "pending" : undefined;
 
+  const dateFrom = useMemo(() => {
+    if (dateRange === "all") return undefined;
+    const d = new Date();
+    d.setDate(d.getDate() - parseInt(dateRange, 10));
+    return d.toISOString();
+  }, [dateRange]);
+
   const { data: callsData, isLoading } = trpc.calls.list.useQuery({
     page: currentPage,
     limit: 25,
     status: statusFilter,
+    starred: tab === "starred" ? true : undefined,
+    dateFrom,
   });
+  const toggleStarMutation = trpc.calls.toggleStar.useMutation();
   const { data: stats } = trpc.calls.getStats.useQuery();
   const { data: callDetail } = trpc.calls.getById.useQuery(
     { id: expandedId! },
@@ -77,6 +87,19 @@ export function CallInbox() {
   );
 
   const items = callsData?.items ?? [];
+
+  // Seed starred state from server on page load / page change
+  useEffect(() => {
+    if (!items.length) return;
+    setStarred((prev) => {
+      const next = new Set(prev);
+      items.forEach((c) => {
+        if (c.isStarred === "true") next.add(c.id);
+      });
+      return next;
+    });
+  }, [items]);
+
   const filtered = useMemo(() => {
     let list = items;
     const q = search.toLowerCase().trim();
@@ -95,8 +118,10 @@ export function CallInbox() {
     e.stopPropagation();
     setStarred((s) => {
       const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const nowStarred = !next.has(id);
+      if (nowStarred) next.add(id);
+      else next.delete(id);
+      toggleStarMutation.mutate({ id, starred: nowStarred });
       return next;
     });
   };
@@ -106,7 +131,8 @@ export function CallInbox() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const grade = callDetail?.grade;
   const criteriaScores = (grade?.criteriaScores as Array<{ name: string; earned: number; max: number }>) ?? [];
-  const coachInsights = (grade?.improvements as string[]) ?? (grade?.strengths as string[]) ?? [];
+  const coachImprovements = (grade?.improvements as string[]) ?? [];
+  const coachStrengths = (grade?.strengths as string[]) ?? [];
 
   return (
     <div className="space-y-4">
@@ -275,9 +301,20 @@ export function CallInbox() {
                               ))}</div>
                             )}
                             <Separator />
-                            {coachInsights.length > 0 && (
-                              <div><p className="text-xs font-medium mb-2" style={{ color: "var(--g-text-secondary)" }}>Coach insights</p>
-                                <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: "var(--g-text-secondary)" }}>{coachInsights.map((i, idx) => <li key={idx}>{i}</li>)}</ul>
+                            {(coachStrengths.length > 0 || coachImprovements.length > 0) && (
+                              <div className="space-y-2">
+                                {coachStrengths.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-medium mb-1" style={{ color: "var(--g-grade-a)" }}>Strengths</p>
+                                    <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: "var(--g-text-secondary)" }}>{coachStrengths.map((s, idx) => <li key={idx}>{s}</li>)}</ul>
+                                  </div>
+                                )}
+                                {coachImprovements.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-medium mb-1" style={{ color: "var(--g-text-secondary)" }}>Areas to improve</p>
+                                    <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: "var(--g-text-secondary)" }}>{coachImprovements.map((i, idx) => <li key={idx}>{i}</li>)}</ul>
+                                  </div>
+                                )}
                               </div>
                             )}
                             <Collapsible open={transcriptOpen} onOpenChange={setTranscriptOpen}>

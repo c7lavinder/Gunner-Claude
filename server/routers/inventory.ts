@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, desc, or, ilike, count } from "drizzle-orm";
+import { eq, and, desc, or, ilike, count } from "drizzle-orm"; // count used in getStageCounts
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
@@ -31,24 +31,19 @@ export const inventoryRouter = router({
         conditions.push(or(ilike(dispoProperties.address, term), ilike(dispoProperties.sellerName, term))!);
       }
 
-      const [totalResult] = await db
-        .select({ count: count() })
-        .from(dispoProperties)
-        .where(and(...conditions));
-
-      const rawItems = await db
+      const allItems = await db
         .select()
         .from(dispoProperties)
         .where(and(...conditions))
-        .orderBy(desc(dispoProperties.createdAt))
-        .limit(input.limit)
-        .offset(offset);
+        .orderBy(desc(dispoProperties.createdAt));
 
-      const items = inventorySort(rawItems);
+      const sortedAll = inventorySort(allItems);
+      const total = sortedAll.length;
+      const items = sortedAll.slice(offset, offset + input.limit);
 
       return {
         items,
-        total: totalResult?.count ?? 0,
+        total,
         page: input.page,
         limit: input.limit,
       };

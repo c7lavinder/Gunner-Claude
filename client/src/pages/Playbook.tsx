@@ -32,6 +32,7 @@ export function Playbook() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiInput, setAiInput] = useState("");
   const [newInstruction, setNewInstruction] = useState("");
+  const [termDirty, setTermDirty] = useState(false);
   const terminologyRef = useRef<Record<string, HTMLInputElement | null>>({});
   const { data: software } = trpc.playbook.getSoftware.useQuery();
   const { data: config } = trpc.playbook.getConfig.useQuery();
@@ -67,6 +68,7 @@ export function Playbook() {
       {
         onSuccess: () => {
           toast.success("Changes saved");
+          setTermDirty(false);
           void utils.playbook.getConfig.invalidate();
           void utils.playbook.getTenant.invalidate();
         },
@@ -145,8 +147,8 @@ export function Playbook() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-        <BookOpen className="size-6 text-primary" />
+      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--g-text-primary)" }}>
+        <BookOpen className="size-6" style={{ color: "var(--g-accent-text)" }} />
         Playbook
       </h1>
       <Tabs defaultValue="software">
@@ -162,7 +164,7 @@ export function Playbook() {
             <Skeleton className="h-48 w-full rounded-lg" />
           ) : (
             <>
-              <Card className="bg-muted/30">
+              <Card className="bg-[var(--g-bg-surface)]">
                 <CardHeader className="pb-2">Action Types & Grade Scale</CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex flex-wrap gap-1">
@@ -179,10 +181,10 @@ export function Playbook() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="bg-muted/30">
+              <Card className="bg-[var(--g-bg-surface)]">
                 <CardHeader className="pb-2">XP Rewards & Level Titles</CardHeader>
                 <CardContent className="space-y-3">
-                  <pre className="text-xs overflow-auto rounded bg-muted p-3">
+                  <pre className="text-xs overflow-auto rounded bg-[var(--g-bg-inset)] p-3">
                     {JSON.stringify(software.xpRewards, null, 2)}
                   </pre>
                   <div className="flex flex-wrap gap-1">
@@ -192,10 +194,10 @@ export function Playbook() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="bg-muted/30">
+              <Card className="bg-[var(--g-bg-surface)]">
                 <CardHeader className="pb-2">Algorithm Framework</CardHeader>
                 <CardContent>
-                  <pre className="text-xs overflow-auto rounded bg-muted p-3">
+                  <pre className="text-xs overflow-auto rounded bg-[var(--g-bg-inset)] p-3">
                     {JSON.stringify(software.algorithmFramework, null, 2)}
                   </pre>
                 </CardContent>
@@ -206,8 +208,8 @@ export function Playbook() {
 
         <TabsContent value="industry" className="mt-4 space-y-4">
           {!tenant?.industryCode ? (
-            <Card className="bg-muted/30">
-              <CardContent className="py-12 text-center text-muted-foreground">
+            <Card className="bg-[var(--g-bg-surface)]">
+              <CardContent className="py-12 text-center text-[var(--g-text-tertiary)]">
                 Select your industry in Settings
               </CardContent>
             </Card>
@@ -215,17 +217,17 @@ export function Playbook() {
             <Skeleton className="h-48 w-full rounded-lg" />
           ) : (
             <>
-              <Card className="bg-muted/30">
+              <Card className="bg-[var(--g-bg-surface)]">
                 <CardHeader className="pb-2">Terminology</CardHeader>
                 <CardContent className="grid grid-cols-2 gap-2 text-sm">
                   {Object.entries(industry.terminology).map(([k, v]) => (
                     <div key={k}>
-                      <span className="text-muted-foreground">{k}:</span> {v}
+                      <span className="text-[var(--g-text-tertiary)]">{k}:</span> {v}
                     </div>
                   ))}
                 </CardContent>
               </Card>
-              <Card className="bg-muted/30">
+              <Card className="bg-[var(--g-bg-surface)]">
                 <CardHeader className="pb-2">Roles, Stages & Call Types</CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex flex-wrap gap-2">
@@ -241,10 +243,10 @@ export function Playbook() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="bg-muted/30">
+              <Card className="bg-[var(--g-bg-surface)]">
                 <CardHeader className="pb-2">Rubrics</CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-[var(--g-text-tertiary)]">
                     {industry.rubrics?.length ?? 0} rubric(s) defined
                   </p>
                 </CardContent>
@@ -254,7 +256,8 @@ export function Playbook() {
         </TabsContent>
 
         <TabsContent value="tenant" className="mt-4 space-y-4">
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 items-center">
+            {termDirty && <Badge variant="outline" className="text-amber-600 border-amber-400 text-xs">Unsaved changes</Badge>}
             <Button variant="outline" onClick={() => setAiOpen(true)}>
               <Sparkles className="size-4 mr-2" />
               Ask AI to Help
@@ -265,17 +268,18 @@ export function Playbook() {
           </div>
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center gap-2">
-              Terminology <Pencil className="size-4 text-muted-foreground" />
+              Terminology <Pencil className="size-4 text-[var(--g-text-tertiary)]" />
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
               {config &&
                 Object.entries(config.terminology).map(([k, v]) => (
                   <div key={k} className="flex items-center gap-2">
-                    <Label className="w-24 shrink-0 text-muted-foreground">{k}</Label>
+                    <Label className="w-24 shrink-0 text-[var(--g-text-tertiary)]">{k}</Label>
                     <Input
                       defaultValue={v}
                       className="h-8"
                       ref={(el) => { terminologyRef.current[k] = el; }}
+                      onChange={() => setTermDirty(true)}
                     />
                   </div>
                 ))}
@@ -283,7 +287,7 @@ export function Playbook() {
           </Card>
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <span className="flex items-center gap-2">Roles <Pencil className="size-4 text-muted-foreground" /></span>
+              <span className="flex items-center gap-2">Roles <Pencil className="size-4 text-[var(--g-text-tertiary)]" /></span>
               <Button size="sm" variant="outline" onClick={() => setRoleDialog({ name: "", code: "", description: "" })}>
                 <Plus className="size-4 mr-1" />Add
               </Button>
@@ -305,7 +309,7 @@ export function Playbook() {
           </Card>
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center gap-2">
-              Stages <Pencil className="size-4 text-muted-foreground" />
+              Stages <Pencil className="size-4 text-[var(--g-text-tertiary)]" />
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               {config?.stages.map((s) => (
@@ -317,7 +321,7 @@ export function Playbook() {
           </Card>
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <span className="flex items-center gap-2">Call Types <Pencil className="size-4 text-muted-foreground" /></span>
+              <span className="flex items-center gap-2">Call Types <Pencil className="size-4 text-[var(--g-text-tertiary)]" /></span>
               <Button size="sm" variant="outline" onClick={() => setCallTypeDialog({ name: "", code: "", description: "" })}>
                 <Plus className="size-4 mr-1" />Add
               </Button>
@@ -337,30 +341,30 @@ export function Playbook() {
           </Card>
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <span className="flex items-center gap-2">Rubrics <Pencil className="size-4 text-muted-foreground" /></span>
+              <span className="flex items-center gap-2">Rubrics <Pencil className="size-4 text-[var(--g-text-tertiary)]" /></span>
               <Button size="sm" variant="outline" onClick={() => setRubricDialog({ name: "", callType: "", criteria: "", redFlags: "" })}>
                 <Plus className="size-4 mr-1" />Add
               </Button>
             </CardHeader>
             <CardContent className="space-y-2">
               {(rubrics ?? []).map((rb) => (
-                <div key={rb.id} className="flex items-center justify-between p-2 rounded-lg border cursor-pointer hover:bg-muted/50"
+                <div key={rb.id} className="flex items-center justify-between p-2 rounded-lg border cursor-pointer hover:bg-[var(--g-bg-surface)]"
                   onClick={() => setRubricDialog({ id: rb.id, name: rb.name, callType: rb.callType ?? "", criteria: rb.criteria ?? "", redFlags: rb.redFlags ?? "" })}
                 >
                   <div>
                     <p className="text-sm font-medium">{rb.name}</p>
-                    <p className="text-xs text-muted-foreground">{rb.callType}</p>
+                    <p className="text-xs text-[var(--g-text-tertiary)]">{rb.callType}</p>
                   </div>
-                  <Pencil className="size-4 text-muted-foreground" />
+                  <Pencil className="size-4 text-[var(--g-text-tertiary)]" />
                 </div>
               ))}
-              {!(rubrics?.length) && <p className="text-sm text-muted-foreground">No custom rubrics — using industry defaults</p>}
+              {!(rubrics?.length) && <p className="text-sm text-[var(--g-text-tertiary)]">No custom rubrics — using industry defaults</p>}
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">Algorithm Weights</CardHeader>
             <CardContent>
-              <pre className="text-xs overflow-auto rounded bg-muted p-3">
+              <pre className="text-xs overflow-auto rounded bg-[var(--g-bg-inset)] p-3">
                 {JSON.stringify(config?.algorithm ?? {}, null, 2)}
               </pre>
             </CardContent>
@@ -372,7 +376,7 @@ export function Playbook() {
             <Skeleton className="h-48 w-full rounded-lg" />
           ) : (
             <>
-              <Card className="bg-muted/30">
+              <Card className="bg-[var(--g-bg-surface)]">
                 <CardHeader className="pb-2">Strengths & Growth Areas</CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex flex-wrap gap-2">
@@ -385,13 +389,13 @@ export function Playbook() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="bg-muted/30">
+              <Card className="bg-[var(--g-bg-surface)]">
                 <CardHeader className="pb-2">Communication Style & Grade Trend</CardHeader>
                 <CardContent className="space-y-2">
                   <div className="text-sm space-y-1">
                     {Object.entries(userPlaybook.communicationStyle || {}).map(
                       ([k, v]) => v && (
-                        <div key={k}><span className="text-muted-foreground">{k}:</span> {v}</div>
+                        <div key={k}><span className="text-[var(--g-text-tertiary)]">{k}:</span> {v}</div>
                       )
                     )}
                   </div>
@@ -413,7 +417,7 @@ export function Playbook() {
                 <CardContent className="space-y-4">
                   {Object.entries(userPlaybook.instructions || {}).map(([k, v]) => (
                     <div key={k} className="text-sm">
-                      <span className="font-medium text-muted-foreground">{k}:</span> {v}
+                      <span className="font-medium text-[var(--g-text-tertiary)]">{k}:</span> {v}
                     </div>
                   ))}
                   <Separator />
@@ -446,7 +450,7 @@ export function Playbook() {
             rows={4}
           />
           {aiChat.data?.response && (
-            <div className="rounded-lg bg-muted p-3 text-sm">{aiChat.data.response}</div>
+            <div className="rounded-lg bg-[var(--g-bg-inset)] p-3 text-sm" style={{ color: "var(--g-text-secondary)" }}>{aiChat.data.response}</div>
           )}
           <DialogFooter>
             <Button onClick={handleAiSend} disabled={aiChat.isPending}>
@@ -498,11 +502,11 @@ export function Playbook() {
               <Input placeholder="Rubric name" value={rubricDialog.name} onChange={(e) => setRubricDialog({ ...rubricDialog, name: e.target.value })} />
               <Input placeholder="Call type code (e.g. qualification)" value={rubricDialog.callType} onChange={(e) => setRubricDialog({ ...rubricDialog, callType: e.target.value })} />
               <div>
-                <Label className="text-sm text-muted-foreground mb-1 block">Criteria (JSON array of name/maxPoints/description)</Label>
+                <Label className="text-sm text-[var(--g-text-tertiary)] mb-1 block">Criteria (JSON array of name/maxPoints/description)</Label>
                 <Textarea rows={6} value={rubricDialog.criteria} onChange={(e) => setRubricDialog({ ...rubricDialog, criteria: e.target.value })} />
               </div>
               <div>
-                <Label className="text-sm text-muted-foreground mb-1 block">Red flags (comma-separated)</Label>
+                <Label className="text-sm text-[var(--g-text-tertiary)] mb-1 block">Red flags (comma-separated)</Label>
                 <Input value={rubricDialog.redFlags} onChange={(e) => setRubricDialog({ ...rubricDialog, redFlags: e.target.value })} />
               </div>
             </div>

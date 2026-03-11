@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, desc, sql, ne, count, asc } from "drizzle-orm";
+import { eq, and, desc, sql, ne, count, asc, gte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
@@ -13,6 +13,7 @@ export const callsRouter = router({
         limit: z.number().optional().default(25),
         status: z.string().optional(),
         starred: z.boolean().optional(),
+        dateFrom: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -24,6 +25,8 @@ export const callsRouter = router({
         ne(calls.isArchived, "true"),
       ];
       if (input.status) conditions.push(eq(calls.status, input.status));
+      if (input.starred === true) conditions.push(eq(calls.isStarred, "true"));
+      if (input.dateFrom) conditions.push(gte(calls.callTimestamp, new Date(input.dateFrom)));
 
       const [totalResult] = await db
         .select({ count: count() })
@@ -112,6 +115,17 @@ export const callsRouter = router({
 
     return { csv: [header, ...csvRows].join("\n") };
   }),
+
+  toggleStar: protectedProcedure
+    .input(z.object({ id: z.number(), starred: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user!.tenantId;
+      await db
+        .update(calls)
+        .set({ isStarred: input.starred ? "true" : "false", updatedAt: new Date() })
+        .where(and(eq(calls.id, input.id), eq(calls.tenantId, tenantId)));
+      return { success: true };
+    }),
 
   getStats: protectedProcedure.query(async ({ ctx }) => {
     const tenantId = ctx.user!.tenantId;

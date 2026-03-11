@@ -185,6 +185,7 @@ export function Settings() {
   const { data: workspace, isLoading } = trpc.settings.getWorkspace.useQuery();
   const { data: industries } = trpc.playbook.listIndustries.useQuery();
   const updateMutation = trpc.settings.updateWorkspace.useMutation();
+  const { data: plans } = trpc.settings.getPlans.useQuery();
   const testQuery = trpc.settings.testCrmConnection.useQuery(undefined, { enabled: false });
   const inviteMutation = trpc.settings.inviteTeamMember.useMutation();
   const removeMutation = trpc.settings.removeTeamMember.useMutation();
@@ -212,6 +213,7 @@ export function Settings() {
   const [locationId, setLocationId] = useState("");
   const [emailDigest, setEmailDigest] = useState(true);
   const [gradeAlerts, setGradeAlerts] = useState(true);
+  const [notifDirty, setNotifDirty] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -236,6 +238,7 @@ export function Settings() {
       settings: JSON.stringify({ ...settingsObj, industry, timezone, emailDigest, gradeAlerts }),
       industryCode: industry !== "other" ? industry : undefined,
     });
+    setNotifDirty(false);
     await utils.settings.getWorkspace.invalidate();
     await utils.playbook.getConfig.invalidate();
   };
@@ -394,9 +397,7 @@ export function Settings() {
                           }}>
                             <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="manager">Manager</SelectItem>
-                              <SelectItem value="member">Member</SelectItem>
+                              {roles.map((r) => <SelectItem key={r.code} value={r.code}>{r.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
@@ -414,12 +415,12 @@ export function Settings() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div><p className="font-medium" style={{ color: "var(--g-text-primary)" }}>Email daily digest</p><p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Summary of calls and grades</p></div>
-                  <Switch checked={emailDigest} onCheckedChange={setEmailDigest} />
+                  <Switch checked={emailDigest} onCheckedChange={(v) => { setEmailDigest(v); setNotifDirty(true); }} />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div><p className="font-medium" style={{ color: "var(--g-text-primary)" }}>Email grade alerts</p><p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>When new grades are ready</p></div>
-                  <Switch checked={gradeAlerts} onCheckedChange={setGradeAlerts} />
+                  <Switch checked={gradeAlerts} onCheckedChange={(v) => { setGradeAlerts(v); setNotifDirty(true); }} />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between opacity-60">
@@ -431,7 +432,10 @@ export function Settings() {
                   <div><p className="font-medium" style={{ color: "var(--g-text-primary)" }}>SMS alerts</p><Badge variant="outline" className="text-[10px]">Soon</Badge></div>
                   <Switch disabled />
                 </div>
-                <Button onClick={saveGeneral} disabled={updateMutation.isPending}>Save</Button>
+                <div className="flex items-center gap-2">
+                  {notifDirty && <Badge variant="outline" className="text-amber-600 border-amber-400 text-xs">Unsaved changes</Badge>}
+                  <Button onClick={saveGeneral} disabled={updateMutation.isPending}>Save</Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -501,9 +505,19 @@ export function Settings() {
             <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
               <CardHeader><CardTitle>Billing</CardTitle></CardHeader>
               <CardContent className="space-y-6">
+                {(() => {
+                  const tierCode = tenant?.subscriptionTier ?? "starter";
+                  const planStatus = tenant?.subscriptionStatus ?? "trial";
+                  const currentPlan = plans?.find((p) => p.code === tierCode);
+                  const planName = currentPlan?.name ?? tierCode.charAt(0).toUpperCase() + tierCode.slice(1) + " Plan";
+                  const planPrice = currentPlan?.priceMonthly ? `$${(currentPlan.priceMonthly / 100).toFixed(0)}/mo` : null;
+                  return (
                 <div className="p-4 rounded-xl" style={{ background: "var(--g-accent-soft)", border: "1px solid var(--g-accent-medium)" }}>
-                  <p className="font-semibold" style={{ color: "var(--g-accent-text)" }}>Pro Plan</p>
-                  <p className="text-2xl font-bold mt-1" style={{ color: "var(--g-text-primary)" }}>$99/mo</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold" style={{ color: "var(--g-accent-text)" }}>{planName}</p>
+                    <Badge variant="outline" className="text-xs capitalize">{planStatus}</Badge>
+                  </div>
+                  {planPrice && <p className="text-2xl font-bold mt-1" style={{ color: "var(--g-text-primary)" }}>{planPrice}</p>}
                   <p className="mt-2 text-sm" style={{ color: "var(--g-text-secondary)" }}>Unlimited calls · AI grading · Team leaderboard · GHL sync</p>
                   <Button
                     className="mt-4"
@@ -522,6 +536,8 @@ export function Settings() {
                     Manage Subscription
                   </Button>
                 </div>
+                  );
+                })()}
                 <div>
                   <p className="text-sm font-medium mb-2" style={{ color: "var(--g-text-secondary)" }}>Usage this month</p>
                   <div className="flex gap-4">

@@ -59,6 +59,8 @@ export function Team() {
       : 0;
   const totalCalls = displayList.reduce((s, m) => s + (m.totalCalls ?? 0), 0);
 
+  const periodLabel = period === "today" ? "Today" : period === "week" ? "This Week" : period === "month" ? "This Month" : "All Time";
+
   const earnedBadgeIds = new Set((badgesData?.earned ?? []).map((e) => e.badgeCode));
   const earnedAtMap = new Map(
     (badgesData?.earned ?? []).map((e) => [e.badgeCode, e.earnedAt])
@@ -195,7 +197,7 @@ export function Team() {
                 <Phone className="size-4" style={{ color: "var(--g-accent-text)" }} />
               </div>
               <div>
-                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Total Calls This Week</p>
+                <p className="text-sm" style={{ color: "var(--g-text-secondary)" }}>Total Calls {periodLabel}</p>
                 <p className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{totalCalls}</p>
                 <p className="text-xs" style={{ color: "var(--g-text-tertiary)" }}>Period total</p>
               </div>

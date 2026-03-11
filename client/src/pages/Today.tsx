@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -115,7 +113,7 @@ export function Today() {
       <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-[55%_45%]">
         <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden">
           <CardHeader className="flex-row items-center justify-between gap-2 py-4">
-            <CardTitle className="text-base font-semibold text-[var(--g-text-primary)]">Messages</CardTitle>
+            <CardTitle className="text-base font-semibold text-[var(--g-text-primary)]">Recent Contacts</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col flex-1 min-h-0 p-0">
             <div className="px-4 pb-2">
@@ -236,7 +234,7 @@ export function Today() {
                     <p className="font-medium text-sm">{m.contactName}</p>
                     <p className="text-xs text-[var(--g-text-tertiary)]">{m.contactPhone} · {m.callTimestamp ? new Date(m.callTimestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""}</p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => openCallBack(m.contactName, m.contactPhone, m.ghlContactId ?? undefined)}>Call Back</Button>
+                  <Button size="sm" variant="outline" onClick={() => openCallBack(m.contactName, m.contactPhone, m.ghlContactId ?? undefined)}>Send Follow-Up</Button>
                 </div>)
               )}
             </CardContent>

@@ -300,6 +300,8 @@ export const calls = pgTable("calls", {
   transcriptUrl: text("transcriptUrl"), // S3 URL for archived transcripts
   // BatchLeads property enrichment data (JSON)
   batchLeadsEnrichment: text("batchLeadsEnrichment"),
+  // Starred / bookmarked
+  isStarred: text("isStarred").default("false"),
   // Archival
   isArchived: text("isArchived").default("false"),
   archivedAt: timestamp("archivedAt"),
