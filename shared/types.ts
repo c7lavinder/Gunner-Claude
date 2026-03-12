@@ -12,6 +12,8 @@ export interface Terminology {
   call?: string;
   callPlural?: string;
   walkthrough: string;
+  leadSource?: string;
+  leadSourcePlural?: string;
 }
 
 export interface RoleDef {
@@ -57,7 +59,7 @@ export interface RubricDef {
 export interface AlgorithmConfig {
   inventorySort: Record<string, number>;
   buyerMatch: Record<string, number>;
-  taskSort: Record<string, unknown>;
+  taskSort: Record<string, number>;
   kpiTargets?: Record<string, number>;
 }
 

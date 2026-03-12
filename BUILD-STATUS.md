@@ -1,7 +1,7 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 11, 2026 — **POST-BUILD SPRINT COMPLETE**
-> Last deploy: commit `3572c9f` — Railway live, site loading correctly
+> Last updated: March 12, 2026 — **INFRASTRUCTURE UPGRADE COMPLETE**
+> Last deploy: commit `9d0a42b` — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
@@ -9,6 +9,18 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 ---
 
 ## Completed Work
+
+### Infrastructure Upgrade — March 12, 2026
+
+- [x] **7-Agent Orchestration System** — `server/agents/` with CallGrader, IngestionAgent, CoachingAgent, PlaybookAgent, GamificationAgent, NotificationAgent, ReconciliationAgent
+- [x] **BullMQ/Redis Queue System** — `server/queues/` with job queues, workers, and retry logic replacing in-process scheduling
+- [x] **Agent Memory Store** — persistent agent state and context across job runs
+- [x] **Control Room tRPC API** — real-time agent status, queue health, and job management endpoints
+- [x] **Vitest Test Suite + CI Enforcement** — unit tests for grading, gamification, playbook resolution; `vitest run` in GitHub Actions PR check
+- [x] **Dockerfile + Railway Config** — production Docker build for Railway deployment
+- [x] **Redis Cloud Essentials** — connected via `REDIS_URL` env var for BullMQ backing store
+- [x] **190 ESLint Warnings Cleared** — bulk cleanup of unused vars, explicit any, console.log usage
+- [x] **Compliance Violations Fixed** — #8 (MATERIAL_ICONS), #10 (FALLBACK_CRITERIA), #12 (algorithm typing), #14 (Terminology.leadSource), #15 (Today.tsx properties), #16 (KPI conversion label), #17 (streak threshold), #21 (AlgorithmConfig.taskSort)
 
 ### Post-Build Sprint — March 11, 2026
 

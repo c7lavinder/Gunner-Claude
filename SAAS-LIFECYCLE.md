@@ -84,7 +84,7 @@ The bar: Linear, Notion, Stripe, Vercel -- companies that treat UI as a competit
 
 ---
 
-## 5. Development (BUILT — 95% — Feature Complete, Polish In Progress)
+## 5. Development (BUILT — 97% — Feature Complete, Polish In Progress)
 
 ### Core Architecture: Four-Playbook System
 
@@ -161,7 +161,7 @@ Pipeline command center, not a property list. Asset-focused (not contact-focused
 
 ---
 
-## 6. Infrastructure (BUILT — 85%)
+## 6. Infrastructure (BUILT — 90%)
 
 ### CRM Sync Architecture (Triple-Layer)
 
@@ -213,7 +213,7 @@ Every trigger follows the rule: ONE input → ONE action → ONE result → ONE 
 
 ---
 
-## 7. Testing (AGENT-POWERED — 15%)
+## 7. Testing (AGENT-POWERED — 35%)
 
 - **Unit Testing:** Vitest configured, no test files written yet. Need: @testing-library/react for frontend.
 - **Integration Testing:** None automated. Manual testing via live NAH tenant.
@@ -377,9 +377,9 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | Validation     | DONE   | --                                                   |
 | Planning       | DONE   | --                                                   |
 | Design         | 92%    | Low -- iterate in code                               |
-| Development    | 95%    | Medium -- ongoing feature work, 20 AI agents active  |
-| Infrastructure | 85%    | Low -- operational, needs staging + uptime monitoring |
-| Testing        | 15%    | Medium -- agents cover QA, need CI test suite        |
+| Development    | 97%    | Medium -- ongoing feature work, 20 AI agents active  |
+| Infrastructure | 90%    | Low -- operational, needs staging + uptime monitoring |
+| Testing        | 35%    | Medium -- Vitest CI enforced, need E2E coverage      |
 | Launch         | 50%    | HIGH -- flip DNS, plan Product Hunt                  |
 | Acquisition    | 5%     | CRITICAL -- no customers finding you organically     |
 | Distribution   | 10%    | HIGH -- GHL Marketplace is low-hanging fruit         |
@@ -441,3 +441,4 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | 2026-03-10 | Quality | Final hardening pass: accessibility aria-labels on all icon-only buttons (Training, Settings, Onboarding, Inventory, Playbook, ActionConfirmDialog, SearchableDropdown); corrected stale sections in SAAS-LIFECYCLE (gamification all fixed, Phase 0 security all fixed) | Claude |
 | 2026-03-11 | Design / Dev | 24-hour post-build sprint — bug fixes, visual alignment, design system cleanup, GitHub CI hygiene. Waves 0-3: CI wiring (sync-main, ESLint in PR check), env var hardening, isStarred/D-grade/icon-sm/warning token fixes, CallInbox polish, --obs-* token removal (58 lines), stageColor() fallback, getContactContext tRPC + Recent Calls UI, landing page integration badge corrections, Privacy/Terms stubs, XP thresholds centralized to shared/types.ts, 35 inline styles removed from Settings/Playbook. Design: 80% → 92%. Development: 90% → 95%. | Claude |
 | 2026-03-11 | Wave 6A-6C | Google OAuth fixed, Day Hub rebuilt with KPI ledger, role tabs, clickable stat cards | Claude |
+| 2026-03-12 | Infrastructure Upgrade | Added 7-agent orchestration (server/agents/), BullMQ/Redis queue system (server/queues/), agent memory store, Control Room API, Vitest test suite with CI enforcement, Dockerfile, Redis Cloud connected. 190 ESLint warnings cleared. Compliance violations #8, #10, #12, #14, #15, #16, #17, #21 resolved. | Claude |

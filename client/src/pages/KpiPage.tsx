@@ -12,14 +12,6 @@ import { PageShell } from "@/components/layout/PageShell";
 import { trpc } from "@/lib/trpc";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 
-const DEFAULT_KPI_METRICS = [
-  { key: "calls", label: "Calls Made" },
-  { key: "texts", label: "Texts Sent" },
-  { key: "offers", label: "Offers Made" },
-  { key: "appointments", label: "Appointments Set" },
-  { key: "revenue", label: "Revenue Closed" },
-];
-
 const KPI_ICON_MAP: Record<string, typeof Phone> = {
   calls: Phone,
   texts: MessageSquare,
@@ -33,8 +25,7 @@ function todayStr() {
 }
 
 export function KpiPage() {
-  const { t, stages, kpiMetrics: kpiMetricsRaw, kpiFunnelStages } = useTenantConfig();
-  const kpiMetrics = kpiMetricsRaw.length > 0 ? kpiMetricsRaw : DEFAULT_KPI_METRICS;
+  const { t, stages, kpiMetrics, kpiFunnelStages } = useTenantConfig();
   const [period, setPeriod] = useState("week");
   const [kpiValues, setKpiValues] = useState<Record<string, string>>({});
   const today = todayStr();

@@ -8,13 +8,15 @@ import { extractVoiceSample } from "./voiceSamples";
 import { getTenantPlaybook, getIndustryPlaybook } from "./playbooks";
 import type { RubricDef } from "../../shared/types";
 
+// RE Wholesaling fallback — used only when playbook rubric lookup fails
 const FALLBACK_CRITERIA: Array<{ name: string; maxPoints: number; description: string }> = [
-  { name: "Introduction & Rapport", maxPoints: 15, description: "Professional greeting, built rapport" },
-  { name: "Needs Discovery", maxPoints: 25, description: "Asked probing questions, identified needs" },
-  { name: "Active Listening", maxPoints: 20, description: "Paraphrased, acknowledged concerns" },
-  { name: "Value Presentation", maxPoints: 20, description: "Clearly communicated value proposition" },
-  { name: "Next Steps", maxPoints: 10, description: "Set clear next steps, got commitment" },
-  { name: "Professionalism", maxPoints: 10, description: "Professional tone throughout" },
+  { name: "Introduction & Rapport", maxPoints: 15, description: "Introduces self and company clearly, builds initial rapport" },
+  { name: "Seller Motivation", maxPoints: 20, description: "Uncovers why the seller wants/needs to sell (timeline, situation)" },
+  { name: "Property Condition", maxPoints: 15, description: "Asks about condition, repairs needed, occupancy" },
+  { name: "Financial Discovery", maxPoints: 15, description: "Discovers mortgage balance, liens, asking price expectations" },
+  { name: "Timeline & Urgency", maxPoints: 10, description: "Establishes seller's timeline and urgency level" },
+  { name: "Active Listening", maxPoints: 15, description: "Paraphrases seller concerns, acknowledges situation" },
+  { name: "Next Steps & Close", maxPoints: 10, description: "Sets a clear next step — appointment, follow-up, or offer" },
 ];
 
 async function resolveRubricCriteria(

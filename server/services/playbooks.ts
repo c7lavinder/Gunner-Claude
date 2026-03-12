@@ -83,6 +83,8 @@ export const DEFAULT_TERMINOLOGY: Terminology = {
   deal: "Deal",
   dealPlural: "Deals",
   walkthrough: "Walkthrough",
+  leadSource: "Lead Source",
+  leadSourcePlural: "Lead Sources",
 };
 
 function parseJsonField<T>(raw: unknown, fallback: T): T {

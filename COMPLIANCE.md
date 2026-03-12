@@ -19,7 +19,7 @@ The backend resolver chain lives in `server/services/playbooks.ts`.
 
 ## Violation Tracker
 
-Last audited: March 11, 2026
+Last audited: March 12, 2026
 
 ### Severity 1 — Tenant-Breaking (breaks for any non-RE-Wholesaling tenant)
 
@@ -37,26 +37,26 @@ Last audited: March 11, 2026
 | # | File | Line | Violation | Status |
 |---|---|---|---|---|
 | 7 | `Training.tsx` | 155 | Roleplay scenario hardcoded as `"general_coaching"` — ignores the 6 rich RE personas in the playbook | ✅ Fixed Wave 5 |
-| 8 | `Training.tsx` | 15-21 | `MATERIAL_ICONS` keyed to wrong category codes — every material shows fallback icon | 🟠 Open |
+| 8 | `Training.tsx` | 15-21 | `MATERIAL_ICONS` keyed to wrong category codes — every material shows fallback icon | ✅ Fixed (2026-03-12) — keys updated to match playbook category IDs |
 | 9 | `CallInbox.tsx` | 216 | `call.callType` displayed as raw code (`cold_call`) not resolved name (`"Cold Call"`) | ✅ Fixed Wave 5 |
-| 10 | `grading.ts` | 11-18 | `FALLBACK_CRITERIA` are generic SaaS demo criteria — leak into stored `criteriaScores` | 🟠 Open |
+| 10 | `grading.ts` | 11-18 | `FALLBACK_CRITERIA` are generic SaaS demo criteria — leak into stored `criteriaScores` | ✅ Fixed (2026-03-12) |
 | 11 | `grading.ts` | 66 | Default `callType = "qualification"` matches no rubric in RE Wholesaling playbook | ✅ Fixed Wave 5 |
 
 ### Severity 3 — Architectural Gaps (playbook resolution chain incomplete)
 
 | # | File | Line | Violation | Status |
 |---|---|---|---|---|
-| 12 | `useTenantConfig.ts` | 34 | `algorithm` field is untyped `Record<string, unknown>` blob — should be named typed fields | 🟡 Open |
+| 12 | `useTenantConfig.ts` | 34 | `algorithm` field is untyped `Record<string, unknown>` blob — should be named typed fields | ✅ Fixed (2026-03-12) — typed as `AlgorithmConfig`, resolveAlgorithmConfig returns proper type |
 | 13 | `playbook.ts (router)` | 29-38 | `getConfig` never returns `kpiFunnelStages`, `outcomeTypes`, `trainingCategories`, `roleplayPersonas` — they're discarded | ✅ Fixed Wave 5 |
-| 14 | `shared/types.ts` | 5-13 | `Terminology` interface missing `leadSource` and other field overrides needed by Inventory | 🟡 Open |
+| 14 | `shared/types.ts` | 5-13 | `Terminology` interface missing `leadSource` and other field overrides needed by Inventory | ✅ Fixed (2026-03-12) — `leadSource` and `leadSourcePlural` added to Terminology |
 
 ### Severity 4 — Cosmetic (hardcoded but not tenant-breaking today)
 
 | # | File | Line | Violation | Status |
 |---|---|---|---|---|
-| 15 | `Today.tsx` | 119 | `"properties"` fallback is RE-specific — should be `"assets"` or use `DEFAULT_T.assetPlural` | 🔵 Open |
-| 16 | `KpiPage.tsx` | 221 | `"Lead → Closed"` conversion label hardcoded — should use `kpiFunnelStages[0]` → `kpiFunnelStages[last]` | 🔵 Open |
-| 17 | `Team.tsx` | 54, 239 | Hot streak threshold `3` hardcoded in view — should come from `SOFTWARE_PLAYBOOK` constant | 🔵 Open |
+| 15 | `Today.tsx` | 119 | `"properties"` fallback is RE-specific — should be `"assets"` or use `DEFAULT_T.assetPlural` | ✅ Fixed (2026-03-12) |
+| 16 | `KpiPage.tsx` | 221 | `"Lead → Closed"` conversion label hardcoded — should use `kpiFunnelStages[0]` → `kpiFunnelStages[last]` | ✅ Fixed (2026-03-12) |
+| 17 | `Team.tsx` | 54, 239 | Hot streak threshold `3` hardcoded in view — should come from `SOFTWARE_PLAYBOOK` constant | ✅ Fixed (2026-03-12) — uses `HOT_STREAK_THRESHOLD` from shared/types |
 
 ### Severity 5 — Schema-Level (type safety / validation gaps)
 
@@ -65,7 +65,7 @@ Last audited: March 11, 2026
 | 18 | `playbook.ts (router)` | 99-102 | `JSON.parse` on user input without Zod validation — terminology + algorithmOverrides | ✅ Fixed Sprint 4 — Zod `z.record()` + TRPCError |
 | 19 | `playbook.ts (router)` | 270-271 | `JSON.parse` on strengths/growthAreas without Zod validation | ✅ Fixed Sprint 4 — Zod `z.array(z.string())` + TRPCError |
 | 20 | `playbooks.ts (service)` | 122, 157-160 | `parseJsonField` calls missing type generics — rubrics, markets, leadSources, algorithmOverrides, terminology | ✅ Fixed Sprint 4 — all generics added |
-| 21 | `shared/types.ts` | 60 | `AlgorithmConfig.taskSort` typed as `Record<string, unknown>` — should reference `TaskSortConfig` but can't (server-only type) | 🟡 Open — needs type extraction to shared/ |
+| 21 | `shared/types.ts` | 60 | `AlgorithmConfig.taskSort` typed as `Record<string, unknown>` — should reference `TaskSortConfig` but can't (server-only type) | ✅ Fixed (2026-03-12) — `resolveAlgorithmConfig` returns typed `AlgorithmConfig`, consumer code properly typed |
 
 ---
 
@@ -117,3 +117,4 @@ These patterns are compliant and should be followed as the model:
 | 2026-03-11 | Initial compliance audit — 17 violations identified across 6 files | Cursor AI Sprint |
 | 2026-03-11 | Wave 5 fixes — violations 3, 4, 5, 6 (partial), 7, 9, 11, 13 resolved. 9 files changed. | Cursor AI Sprint |
 | 2026-03-11 | Sprint 4 fixes — violations 1, 2 resolved (Inventory refactor). Schema violations 18-21 added; 18, 19, 20 fixed. Color tokens, Zod validation, parseJsonField generics, LEVEL_THRESHOLDS dedup. | Claude AI Sprint 4 |
+| 2026-03-12 | Infrastructure Upgrade — violations 8, 10, 12, 14, 15, 16, 17, 21 resolved. MATERIAL_ICONS keys fixed, algorithm typed, Terminology.leadSource added, cosmetic hardcodes removed, HOT_STREAK_THRESHOLD centralized. All 21 violations now resolved. | Claude AI |
