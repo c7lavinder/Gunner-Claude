@@ -1362,6 +1362,7 @@ export const callNextSteps = pgTable("call_next_steps", {
   // Action details
   actionType: varchar("actionType", { length: 50 }).notNull(),
   reason: text("reason").notNull(),
+  editableContent: text("editable_content"),
   suggested: varchar("suggested", { length: 5 }).notNull().default("true"),
   payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   // Status tracking
@@ -1373,6 +1374,24 @@ export const callNextSteps = pgTable("call_next_steps", {
 });
 export type CallNextStep = typeof callNextSteps.$inferSelect;
 export type InsertCallNextStep = typeof callNextSteps.$inferInsert;
+
+// ============ CALL FEEDBACK ============
+
+export const callFeedback = pgTable("call_feedback", {
+  id: serial("id").primaryKey(),
+  callId: integer("call_id").references(() => calls.id).notNull(),
+  userId: integer("user_id"),
+  tenantId: integer("tenant_id"),
+  feedbackType: text("feedback_type").default("general_correction"),
+  currentGrade: text("current_grade"),
+  suggestedGrade: text("suggested_grade"),
+  specificCriteria: text("specific_criteria"),
+  explanation: text("explanation"),
+  correctBehavior: text("correct_behavior"),
+  originalScore: text("original_score"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type CallFeedback = typeof callFeedback.$inferSelect;
 
 
 // ============ WEBHOOK EVENTS LOG ============

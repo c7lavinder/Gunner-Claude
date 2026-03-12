@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
 import { chatCompletion } from "../_core/llm";
-import { calls, callGrades, callNextSteps, aiFeedback } from "../../drizzle/schema";
+import { calls, callGrades, callNextSteps, aiFeedback, callFeedback } from "../../drizzle/schema";
 import {
   getTenantPlaybook,
   getIndustryPlaybook,

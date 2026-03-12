@@ -268,5 +268,26 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
+  // call_feedback table for grade disputes
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "call_feedback" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "call_id" integer NOT NULL REFERENCES "calls"("id"),
+      "user_id" integer,
+      "tenant_id" integer,
+      "feedback_type" text DEFAULT 'general_correction',
+      "current_grade" text,
+      "suggested_grade" text,
+      "specific_criteria" text,
+      "explanation" text,
+      "correct_behavior" text,
+      "original_score" text,
+      "created_at" timestamp DEFAULT now()
+    )
+  `);
+
+  // Add editable_content column to call_next_steps
+  await db.execute(sql`ALTER TABLE "call_next_steps" ADD COLUMN IF NOT EXISTS "editable_content" text`);
+
   console.log("[migrations] Startup migrations complete.");
 }

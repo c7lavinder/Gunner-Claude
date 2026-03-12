@@ -115,23 +115,25 @@ export function App() {
             <AuthGuard>
               <DashboardLayout>
                 <PageTracker />
-                <Suspense fallback={<PageLoader />}>
-                  <Switch>
-                    <Route path="/today" component={Today} />
-                    <Route path="/calls/:id" component={CallDetail} />
-                    <Route path="/calls" component={CallInbox} />
-                    <Route path="/inventory" component={Inventory} />
-                    <Route path="/kpis" component={KpiPage} />
-                    <Route path="/team" component={Team} />
-                    <Route path="/training" component={Training} />
-                    <Route path="/settings" component={Settings} />
-                    <Route path="/playbook" component={Playbook} />
-                    <Route path="/profile" component={Profile} />
-                    <Route>
-                      <Redirect to="/today" />
-                    </Route>
-                  </Switch>
-                </Suspense>
+                <ErrorBoundary>
+                  <Suspense fallback={<PageLoader />}>
+                    <Switch>
+                      <Route path="/today" component={Today} />
+                      <Route path="/calls/:id" component={CallDetail} />
+                      <Route path="/calls" component={CallInbox} />
+                      <Route path="/inventory" component={Inventory} />
+                      <Route path="/kpis" component={KpiPage} />
+                      <Route path="/team" component={Team} />
+                      <Route path="/training" component={Training} />
+                      <Route path="/settings" component={Settings} />
+                      <Route path="/playbook" component={Playbook} />
+                      <Route path="/profile" component={Profile} />
+                      <Route>
+                        <Redirect to="/today" />
+                      </Route>
+                    </Switch>
+                  </Suspense>
+                </ErrorBoundary>
               </DashboardLayout>
             </AuthGuard>
           </Route>
