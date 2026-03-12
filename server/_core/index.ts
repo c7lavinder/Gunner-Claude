@@ -21,6 +21,7 @@ import { startScheduledJobs } from "../services/scheduledJobs";
 import { seedIndustryPlaybooks } from "../seeds/seedPlaybooks";
 import { runStartupMigrations } from "../seeds/startupMigrations";
 import { seedNahTenantPlaybook } from "../seeds/nahTenant";
+import { seedDemoTenant } from "../seeds/seedDemoTenant";
 import { chatCompletionStream } from "./llm";
 
 process.on("unhandledRejection", (reason) => {
@@ -147,6 +148,7 @@ app.listen(ENV.port, "0.0.0.0", () => {
   runStartupMigrations()
     .then(() => seedIndustryPlaybooks())
     .then(() => seedNahTenantPlaybook())
+    .then(() => seedDemoTenant())
     .catch((err) => console.error("[startup] Migration/seed error:", err));
   if (ENV.isProduction) {
     try { startPolling(5); } catch (e) { console.error("[services] Polling failed:", e); }
