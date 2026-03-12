@@ -1,6 +1,6 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 12, 2026 — **DAY HUB POLISH + AI COACH CONTEXT COMPLETE**
+> Last updated: March 12, 2026 — **THREE-LAYER CRM SYNC SYSTEM COMPLETE**
 > Last deploy: production branch — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
 
@@ -9,6 +9,18 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 ---
 
 ## Completed Work
+
+### Three-Layer CRM Sync System — March 12, 2026
+
+- [x] **Layer 1: OAuth + Webhooks (real-time)** — GHL OAuth flow fixed end-to-end: CrmTab now reads `?code=` param on return from OAuth redirect, calls `completeGhlOAuth`, shows loading state. Webhook URL registration fixed (`/api/webhooks/ghl` not `/api/webhooks/crm`). Activity logged to `sync_activity_log` with `layer='oauth'`
+- [x] **Layer 2: API Token (on-demand fallback)** — Manual API key + Location ID entry with Test Connection and Save. Activity logged with `layer='api'`
+- [x] **Layer 3: Polling (safety net)** — 5-minute call polling + 10-minute opportunity polling with per-cycle activity logging (`layer='polling'`, details as JSON with processed/skipped/errors)
+- [x] **Token Refresh** — `refreshTokenIfNeeded(tenantId)` utility in `ghlOAuth.ts` checks `tokenExpiresAt` and refreshes within 5-minute expiry window. Called before every API call in `ingestCallsForTenant`, `ingestOpportunitiesForTenant`, and `testCrmConnection`
+- [x] **`sync_activity_log` table** — New table in schema + startup migrations. Columns: tenantId, layer (oauth/api/polling), eventType, status (success/error/skipped), details, createdAt. Indexed on tenantId+createdAt
+- [x] **Settings Router Endpoints** — `getSyncLayerStatus` (3-layer status with last activity timestamps), `getSyncActivityLog` (filterable by layer, default 20 entries), `disconnectOAuth` (clears OAuth tokens, preserves manual API key), `getSyncSummary` (total calls/opportunities/data freshness)
+- [x] **Three-Layer CRM Settings Dashboard** — Complete rebuild of CrmTab.tsx: connection status banner with colored dots per layer, Layer 1 card (OAuth status/token expiry countdown/webhooks/activity), Layer 2 card (API key/location ID/test/save/activity), Layer 3 card (polling interval/last poll/cycle results/activity), Sync Summary footer (total calls/opportunities/data freshness)
+- [x] **CRM-Agnostic UI** — `CRM_DISPLAY_NAMES` map (ghl→GoHighLevel, hubspot→HubSpot, etc.) used everywhere. No hardcoded "GoHighLevel" in user-facing labels. CRM adapter interface unchanged
+- [x] **Bug Fixes** — OAuth callback never completing (#1), webhook URL mismatch (#2), token refresh missing from ingestion (#3)
 
 ### Day Hub Polish — March 12, 2026
 
@@ -171,7 +183,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 ### Needs external config / production data (not code issues)
 - [ ] Import NAH team members + map to GHL user IDs (needs real GHL data)
 - [ ] Supabase bucket: `gunner-voice-samples` (create manually in Supabase dashboard)
-- [ ] GHL OAuth end-to-end test (built, needs live GHL OAuth app credentials)
+- [ ] GHL OAuth end-to-end test (code-complete with 3-layer sync dashboard, needs live GHL OAuth app credentials to verify)
 
 ### Calls Section — Remaining Polish
 
@@ -199,7 +211,7 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ## Known Issues
 
-1. **GHL OAuth not tested end-to-end** — Built (server/services/ghlOAuth.ts + Settings UI) but hasn't been tested with a real GHL OAuth app credential. Not a code bug.
+1. **GHL OAuth not tested end-to-end** — Full flow now built (OAuth redirect → callback → token exchange → webhook registration → token refresh). Code-complete — needs live GHL OAuth app credential to verify. Not a code bug.
 
 ---
 

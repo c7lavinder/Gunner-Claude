@@ -288,6 +288,20 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
+  // Sync activity log — tracks all CRM sync events across 3 layers
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "sync_activity_log" (
+      "id" serial PRIMARY KEY,
+      "tenantId" integer REFERENCES "tenants"("id") NOT NULL,
+      "layer" varchar(20) NOT NULL,
+      "eventType" varchar(100),
+      "status" varchar(20) NOT NULL,
+      "details" text,
+      "createdAt" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_sync_activity_tenant_created" ON "sync_activity_log" ("tenantId", "createdAt" DESC)`);
+
   console.log("[migrations] Startup migrations complete.");
 
   await bootstrapDemoTenant();

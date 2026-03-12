@@ -142,6 +142,42 @@ export async function registerGhlWebhooks(
   }
 }
 
+/**
+ * Checks if the OAuth token for a tenant is expired (or near-expiry) and refreshes it.
+ * Call this before any GHL API call to ensure a valid access token.
+ * Returns the current access token (refreshed if needed) or null if no OAuth config.
+ */
+export async function refreshTokenIfNeeded(tenantId: number): Promise<string | null> {
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  if (!tenant?.crmConfig || tenant.crmType !== "ghl") return null;
+
+  try {
+    const config = JSON.parse(tenant.crmConfig) as Record<string, unknown>;
+    if (!config.oauthConnected || !config.refreshToken) return (config.accessToken as string) ?? null;
+
+    const expiresAt = config.tokenExpiresAt ? new Date(String(config.tokenExpiresAt)) : null;
+    const now = new Date();
+    // Refresh if token expires within 5 minutes
+    const needsRefresh = !expiresAt || expiresAt.getTime() - now.getTime() < 5 * 60 * 1000;
+
+    if (!needsRefresh) return config.accessToken as string;
+
+    console.log(`[ghl-oauth] Refreshing token for tenant ${tenantId}`);
+    const tokens = await refreshGhlToken(String(config.refreshToken));
+    await saveGhlTokens(
+      tenantId,
+      String(config.locationId ?? ""),
+      tokens.access_token,
+      tokens.refresh_token,
+      tokens.expires_in
+    );
+    return tokens.access_token;
+  } catch (e) {
+    console.error(`[ghl-oauth] Token refresh failed for tenant ${tenantId}:`, e);
+    return null;
+  }
+}
+
 export async function getGhlSyncHealth(tenantId: number): Promise<{
   connected: boolean;
   oauthActive: boolean;

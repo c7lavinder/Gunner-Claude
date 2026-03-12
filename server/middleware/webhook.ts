@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createHmac } from "node:crypto";
 import { db } from "../_core/db";
-import { webhookEvents, webhookRetryQueue, calls, tenants } from "../../drizzle/schema";
+import { webhookEvents, webhookRetryQueue, calls, tenants, syncActivityLog } from "../../drizzle/schema";
 import { eq, and, lte, lt } from "drizzle-orm";
 import { ENV } from "../_core/env";
 import { gradeCall } from "../services/grading";
@@ -205,19 +205,43 @@ webhookRouter.post("/:provider", async (req, res) => {
     .returning();
 
   const process = async () => {
+    const tenant = await findTenantByLocationId(locationId);
     try {
       if (provider === "ghl" && (eventType === "CallCompleted" || eventType === "call.completed")) {
         await processCallEvent(body, locationId, ev!.id);
       } else {
         await db.update(webhookEvents).set({ status: "processed", processedAt: new Date() }).where(eq(webhookEvents.id, ev!.id));
       }
+      // Log successful webhook processing
+      if (tenant) {
+        await db.insert(syncActivityLog).values({
+          tenantId: tenant.id,
+          layer: "oauth",
+          eventType,
+          status: "success",
+          details: JSON.stringify({ provider, eventId, locationId }),
+        });
+        // Update lastWebhookAt on tenant
+        await db.update(tenants).set({ lastWebhookAt: new Date() }).where(eq(tenants.id, tenant.id));
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await db.update(webhookEvents).set({ status: "failed", errorMessage: msg, processedAt: new Date() }).where(eq(webhookEvents.id, ev!.id));
-      // Enqueue for retry
-      const tenant = await findTenantByLocationId(locationId);
+      // Log webhook error
       if (tenant) {
+        await db.insert(syncActivityLog).values({
+          tenantId: tenant.id,
+          layer: "oauth",
+          eventType,
+          status: "error",
+          details: JSON.stringify({ provider, error: msg }),
+        });
         await enqueueRetry(ev!.id, tenant.id, body, 0);
+      } else {
+        const fallbackTenant = await findTenantByLocationId(locationId);
+        if (fallbackTenant) {
+          await enqueueRetry(ev!.id, fallbackTenant.id, body, 0);
+        }
       }
     }
   };

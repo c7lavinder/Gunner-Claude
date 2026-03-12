@@ -2089,3 +2089,23 @@ export const demoTasks = pgTable("demo_tasks", {
 
 export type DemoTask = typeof demoTasks.$inferSelect;
 export type InsertDemoTask = typeof demoTasks.$inferInsert;
+
+// ============ SYNC ACTIVITY LOG ============
+
+/**
+ * Sync Activity Log — tracks all CRM sync events across the 3-layer architecture
+ * Layer values: 'oauth' (webhooks), 'api' (direct API), 'polling' (interval)
+ * Status values: 'success', 'error', 'skipped'
+ */
+export const syncActivityLog = pgTable("sync_activity_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  layer: varchar("layer", { length: 20 }).notNull(),
+  eventType: varchar("eventType", { length: 100 }),
+  status: varchar("status", { length: 20 }).notNull(),
+  details: text("details"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SyncActivityLog = typeof syncActivityLog.$inferSelect;
+export type InsertSyncActivityLog = typeof syncActivityLog.$inferInsert;

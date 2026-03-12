@@ -9,8 +9,6 @@ import {
   Users,
   Bell,
   CreditCard,
-  Check,
-  X,
   Mic,
   Monitor,
   LogOut,
@@ -38,36 +36,6 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   }
 }
 
-function SyncHealthDisplay() {
-  const { data: health } = trpc.settings.getSyncHealth.useQuery();
-  if (!health) return null;
-  if (!health.connected && !health.oauthActive) return null;
-
-  return (
-    <div className="p-3 rounded-lg space-y-2 bg-[var(--g-bg-inset)] border border-[var(--g-border-subtle)]">
-      <p className="text-sm font-medium text-[var(--g-text-primary)]">Sync Health</p>
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div className="flex items-center gap-1.5">
-          {health.connected ? <Check className="size-3 text-[var(--g-grade-a)]" /> : <X className="size-3 text-[var(--g-grade-f)]" />}
-          <span className="text-[var(--g-text-secondary)]">CRM Connected</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {health.oauthActive ? <Check className="size-3 text-[var(--g-grade-a)]" /> : <X className="size-3 text-[var(--g-grade-f)]" />}
-          <span className="text-[var(--g-text-secondary)]">OAuth Active</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {health.webhooksRegistered ? <Check className="size-3 text-[var(--g-grade-a)]" /> : <X className="size-3 text-[var(--g-grade-f)]" />}
-          <span className="text-[var(--g-text-secondary)]">Webhooks</span>
-        </div>
-        {health.lastSync && (
-          <div className="text-xs text-[var(--g-text-tertiary)]">
-            Last sync: {new Date(health.lastSync).toLocaleDateString()}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function SessionsTab() {
   const { data: sessions, isLoading } = trpc.auth.listSessions.useQuery();
@@ -312,7 +280,7 @@ export function Settings() {
               crmError={crmError}
               onSaveCrm={saveCrm}
               isSaving={updateMutation.isPending}
-              syncHealthDisplay={<SyncHealthDisplay />}
+              syncHealthDisplay={null}
             />
           </TabsContent>
           <TabsContent value="team" className="mt-0">

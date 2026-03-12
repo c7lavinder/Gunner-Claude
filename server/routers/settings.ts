@@ -10,10 +10,14 @@ import {
   teamMembers,
   pendingInvitations,
   tenantPlaybooks,
+  syncActivityLog,
+  calls,
+  dispoProperties,
 } from "../../drizzle/schema";
+import { desc, sql } from "drizzle-orm";
 import { createCrmAdapter } from "../crm";
 import { createCheckoutSession, createPortalSession, getPlans } from "../services/stripe";
-import { getGhlOAuthUrl, exchangeGhlCode, saveGhlTokens, registerGhlWebhooks, getGhlSyncHealth } from "../services/ghlOAuth";
+import { getGhlOAuthUrl, exchangeGhlCode, saveGhlTokens, registerGhlWebhooks, getGhlSyncHealth, refreshTokenIfNeeded } from "../services/ghlOAuth";
 
 const updateWorkspaceInput = z.object({
   name: z.string().optional(),
@@ -112,6 +116,8 @@ export const settingsRouter = router({
 
   testCrmConnection: protectedProcedure.query(async ({ ctx }) => {
     const tenantId = ctx.user.tenantId;
+    // Refresh OAuth token if needed before testing
+    if (tenantId) await refreshTokenIfNeeded(tenantId);
     const [tenant] = await db
       .select()
       .from(tenants)
@@ -243,12 +249,115 @@ export const settingsRouter = router({
       );
       // Register webhooks after OAuth
       const appUrl = process.env.RAILWAY_STATIC_URL || "https://gunner-app-production.up.railway.app";
-      const webhookUrl = `${appUrl}/api/webhooks/crm`;
+      const webhookUrl = `${appUrl}/api/webhooks/ghl`;
       await registerGhlWebhooks(tokens.locationId, tokens.access_token, webhookUrl);
       return { success: true, locationId: tokens.locationId };
     }),
 
   getSyncHealth: protectedProcedure.query(async ({ ctx }) => {
     return getGhlSyncHealth(ctx.user.tenantId);
+  }),
+
+  getSyncLayerStatus: protectedProcedure.query(async ({ ctx }) => {
+    const tenantId = ctx.user.tenantId;
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    if (!tenant) throw new TRPCError({ code: "NOT_FOUND" });
+
+    const config = tenant.crmConfig ? JSON.parse(tenant.crmConfig) as Record<string, unknown> : {};
+    const oauthConnected = !!config.oauthConnected;
+    const tokenExpiresAt = config.tokenExpiresAt ? String(config.tokenExpiresAt) : null;
+    const isExpired = tokenExpiresAt ? new Date(tokenExpiresAt).getTime() < Date.now() : false;
+
+    // Get last activity timestamp per layer
+    const lastActivity = await db
+      .select({ layer: syncActivityLog.layer, lastAt: sql<string>`MAX(${syncActivityLog.createdAt})` })
+      .from(syncActivityLog)
+      .where(eq(syncActivityLog.tenantId, tenantId))
+      .groupBy(syncActivityLog.layer);
+
+    const layerLastAt: Record<string, string | null> = {};
+    for (const row of lastActivity) {
+      layerLastAt[row.layer] = row.lastAt;
+    }
+
+    return {
+      crmType: tenant.crmType ?? "none",
+      oauth: {
+        status: oauthConnected ? (isExpired ? "expired" : "connected") : "disconnected",
+        locationId: config.locationId ? String(config.locationId) : null,
+        tokenExpiresAt,
+        webhooksRegistered: oauthConnected,
+        lastActivity: layerLastAt.oauth ?? tenant.lastWebhookAt?.toISOString() ?? null,
+      },
+      api: {
+        status: config.apiKey ? "connected" : "not_set",
+        hasApiKey: !!config.apiKey,
+        hasLocationId: !!config.locationId,
+        lastActivity: layerLastAt.api ?? null,
+      },
+      polling: {
+        status: tenant.crmConnected === "true" ? "active" : "paused",
+        lastSync: tenant.lastGhlSync?.toISOString() ?? null,
+        lastActivity: layerLastAt.polling ?? null,
+      },
+    };
+  }),
+
+  getSyncActivityLog: protectedProcedure
+    .input(z.object({
+      layer: z.string().optional(),
+      limit: z.number().optional().default(20),
+    }))
+    .query(async ({ ctx, input }) => {
+      const tenantId = ctx.user.tenantId;
+      const conditions = [eq(syncActivityLog.tenantId, tenantId)];
+      if (input.layer) conditions.push(eq(syncActivityLog.layer, input.layer));
+
+      return db
+        .select()
+        .from(syncActivityLog)
+        .where(and(...conditions))
+        .orderBy(desc(syncActivityLog.createdAt))
+        .limit(input.limit);
+    }),
+
+  disconnectOAuth: protectedProcedure.mutation(async ({ ctx }) => {
+    requireRole(ctx, "admin");
+    const tenantId = ctx.user.tenantId;
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    if (!tenant) throw new TRPCError({ code: "NOT_FOUND" });
+
+    // Preserve apiKey/locationId if they were set manually, remove OAuth tokens
+    const existingConfig = tenant.crmConfig ? JSON.parse(tenant.crmConfig) as Record<string, unknown> : {};
+    const cleanConfig: Record<string, unknown> = {};
+    if (existingConfig.apiKey) cleanConfig.apiKey = existingConfig.apiKey;
+    if (existingConfig.locationId) cleanConfig.locationId = existingConfig.locationId;
+
+    await db.update(tenants).set({
+      crmConfig: JSON.stringify(cleanConfig),
+      crmConnected: Object.keys(cleanConfig).length > 0 ? "true" : "false",
+      updatedAt: new Date(),
+    }).where(eq(tenants.id, tenantId));
+
+    logAction({ tenantId, userId: ctx.user.userId, action: "oauth_disconnected", entityType: "tenant", entityId: tenantId });
+    return { success: true };
+  }),
+
+  getSyncSummary: protectedProcedure.query(async ({ ctx }) => {
+    const tenantId = ctx.user.tenantId;
+    const [callCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(calls)
+      .where(eq(calls.tenantId, tenantId));
+    const [oppCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(dispoProperties)
+      .where(eq(dispoProperties.tenantId, tenantId));
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    return {
+      totalCalls: Number(callCount?.count ?? 0),
+      totalOpportunities: Number(oppCount?.count ?? 0),
+      lastSync: tenant?.lastGhlSync?.toISOString() ?? null,
+    };
   }),
 });

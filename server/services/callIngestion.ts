@@ -4,11 +4,12 @@ import { uploadFile } from "../_core/storage";
 import { createCrmAdapter } from "../crm";
 import { gradeCall } from "./grading";
 import { SOFTWARE_PLAYBOOK } from "./playbooks";
-import { calls, callGrades, tenants, dispoProperties, tenantPlaybooks } from "../../drizzle/schema";
+import { calls, callGrades, tenants, dispoProperties, tenantPlaybooks, syncActivityLog } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { demoRecordingMeta } from "../crm/demo/demoAdapter";
 import { getRandomTranscript, getCallOutcome } from "../seeds/demoTranscripts";
 import { getRandomGrade } from "../seeds/demoGrades";
+import { refreshTokenIfNeeded } from "./ghlOAuth";
 
 const BUCKET = "gunner-recordings";
 
@@ -29,6 +30,16 @@ export async function ingestCallsForTenant(tenantId: number) {
 
   if (!isDemo && (!tenant?.crmConfig || tenant.crmType === "none")) {
     return { processed: 0, skipped: 0, errors: 0 };
+  }
+
+  // Refresh OAuth token if needed before making API calls
+  if (!isDemo && tenant!.crmType === "ghl") {
+    const freshToken = await refreshTokenIfNeeded(tenantId);
+    if (freshToken) {
+      // Re-read tenant to get updated crmConfig with fresh token
+      const [refreshed] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      if (refreshed?.crmConfig) Object.assign(tenant!, refreshed);
+    }
   }
 
   const since = tenant!.lastGhlSync ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -150,10 +161,19 @@ function mapGhlStageToStatus(stageId: string, stageMappings?: Record<string, str
 }
 
 export async function ingestOpportunitiesForTenant(tenantId: number): Promise<{ upserted: number; skipped: number; errors: number }> {
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  let [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
   if (!tenant?.crmConfig || tenant.crmType === "none") return { upserted: 0, skipped: 0, errors: 0 };
 
-  const config = normalizeCrmConfig(JSON.parse(tenant.crmConfig) as Record<string, unknown>);
+  // Refresh OAuth token if needed
+  if (tenant.crmType === "ghl") {
+    const freshToken = await refreshTokenIfNeeded(tenantId);
+    if (freshToken) {
+      const [refreshed] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      if (refreshed) tenant = refreshed;
+    }
+  }
+
+  const config = normalizeCrmConfig(JSON.parse(tenant.crmConfig!) as Record<string, unknown>);
   const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
 
   // Load tenant playbook for stage mappings
@@ -221,8 +241,22 @@ export function startPolling(intervalMinutes: number) {
       try {
         const result = await ingestCallsForTenant(t.id);
         console.log(`[ingest] Tenant ${t.id}: processed=${result.processed} skipped=${result.skipped} errors=${result.errors}`);
+        await db.insert(syncActivityLog).values({
+          tenantId: t.id,
+          layer: "polling",
+          eventType: "call_ingestion",
+          status: result.errors > 0 ? "error" : "success",
+          details: JSON.stringify(result),
+        });
       } catch (e) {
         console.error(`[ingest] Tenant ${t.id} failed:`, e);
+        await db.insert(syncActivityLog).values({
+          tenantId: t.id,
+          layer: "polling",
+          eventType: "call_ingestion",
+          status: "error",
+          details: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
+        }).catch(() => {/* ignore logging failure */});
       }
     }
     console.log("[ingest] Call cycle ended");
@@ -237,9 +271,23 @@ export function startPolling(intervalMinutes: number) {
         const result = await ingestOpportunitiesForTenant(t.id);
         if (result.upserted > 0 || result.errors > 0) {
           console.log(`[opp-ingest] Tenant ${t.id}: upserted=${result.upserted} skipped=${result.skipped} errors=${result.errors}`);
+          await db.insert(syncActivityLog).values({
+            tenantId: t.id,
+            layer: "polling",
+            eventType: "opportunity_ingestion",
+            status: result.errors > 0 ? "error" : "success",
+            details: JSON.stringify(result),
+          });
         }
       } catch (e) {
         console.error(`[opp-ingest] Tenant ${t.id} failed:`, e);
+        await db.insert(syncActivityLog).values({
+          tenantId: t.id,
+          layer: "polling",
+          eventType: "opportunity_ingestion",
+          status: "error",
+          details: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
+        }).catch(() => {/* ignore logging failure */});
       }
     }
     console.log("[opp-ingest] Cycle ended");
