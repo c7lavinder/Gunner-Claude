@@ -144,6 +144,7 @@ export function TaskList({
                 const isExpanded = expandedTaskId === t.id;
                 const isDone = completedTasks.has(t.id);
                 const taskType = resolveTaskType(t.title);
+                const isOverdue = !!t.dueDate && new Date(t.dueDate) < new Date(new Date().toISOString().slice(0, 10));
                 return (
                   <div key={t.id}>
                     <motion.div
@@ -190,10 +191,13 @@ export function TaskList({
                       )}
                       {/* Due date chip */}
                       {t.dueDate && (
-                        <div className="flex items-center gap-1 text-[10px] text-[var(--g-text-tertiary)] shrink-0">
+                        <div className={cn("flex items-center gap-1 text-[10px] shrink-0", isOverdue ? "text-[var(--g-grade-f)]" : "text-[var(--g-text-tertiary)]")}>
                           <Clock className="size-3" />
                           <span>{t.dueDate}</span>
                         </div>
+                      )}
+                      {isOverdue && (
+                        <Badge className="bg-[var(--g-grade-f)] text-white text-[10px] px-1.5 shrink-0">Overdue</Badge>
                       )}
                       {isExpanded
                         ? <ChevronDown className="size-4 text-[var(--g-text-tertiary)] shrink-0" />

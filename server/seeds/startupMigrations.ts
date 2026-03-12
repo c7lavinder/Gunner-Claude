@@ -222,5 +222,34 @@ export async function runStartupMigrations(): Promise<void> {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_notifications_tenant_user_read" ON "notifications" ("tenantId", "userId", "isRead")`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_audit_log_tenant_created" ON "audit_log" ("tenantId", "createdAt" DESC)`);
 
+  // Demo data tables for tenants without a live CRM connection
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "demo_conversations" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer NOT NULL REFERENCES "tenants"("id"),
+      "contactName" text,
+      "contactPhone" text,
+      "lastMessageBody" text,
+      "lastMessageDate" timestamp,
+      "unreadCount" integer DEFAULT 0,
+      "messages" jsonb DEFAULT '[]'
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "demo_tasks" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "tenantId" integer NOT NULL REFERENCES "tenants"("id"),
+      "title" text,
+      "contactName" text,
+      "propertyAddress" text,
+      "currentStage" text,
+      "assignedTo" text,
+      "dueDate" text,
+      "overdue" boolean DEFAULT false,
+      "instructions" text
+    )
+  `);
+
   console.log("[migrations] Startup migrations complete.");
 }

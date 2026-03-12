@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Calendar, PhoneOff, Check, Send, X, ExternalLink, Phone, MessageSquare, StickyNote } from "lucide-react";
+import { Calendar, PhoneOff, Check, Send, X, ExternalLink, Phone, MessageSquare, Search } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +31,8 @@ interface Appointment {
   status: string;
 }
 
+type InboxFilter = "all" | "unread" | "sms" | "missed";
+
 interface DayHubInboxProps {
   conversations: ConvoItem[];
   missedCalls: MissedCall[];
@@ -43,6 +46,7 @@ interface DayHubInboxProps {
   onCallBack: (name: string) => void;
   missedCount: number;
   unreadTotal: number;
+  onSearchChange: (search: string) => void;
 }
 
 export function DayHubInbox({
@@ -58,13 +62,45 @@ export function DayHubInbox({
   onCallBack,
   missedCount,
   unreadTotal,
+  onSearchChange,
 }: DayHubInboxProps) {
+  const [filter, setFilter] = useState<InboxFilter>("all");
+  const [searchLocal, setSearchLocal] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Debounce search → parent
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onSearchChange(searchLocal);
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [searchLocal, onSearchChange]);
+
+  // Sync filter → parent inboxSub for missed calls query visibility
+  useEffect(() => {
+    if (filter === "missed") setInboxSub("missed");
+    else setInboxSub("sms");
+  }, [filter, setInboxSub]);
+
   const unreadConvos = conversations.filter((c) => (c.unreadCount ?? 0) > 0);
   const readConvos = conversations.filter((c) => !c.unreadCount);
 
+  // Determine what to show based on filter
+  const showConversations = filter !== "missed";
+  const showMissed = filter === "all" || filter === "missed";
+  const filteredConvos = filter === "unread" ? unreadConvos : conversations;
+
+  const FILTER_PILLS: { key: InboxFilter; label: string; count?: number }[] = [
+    { key: "all", label: "All" },
+    { key: "unread", label: "Unread", count: unreadTotal > 0 ? unreadTotal : undefined },
+    { key: "sms", label: "SMS" },
+    { key: "missed", label: "Missed Calls", count: missedCount > 0 ? missedCount : undefined },
+  ];
+
   return (
     <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden">
-      {/* Pill tabs */}
+      {/* Top tabs: Inbox | Apts */}
       <div className="flex items-center gap-2 px-4 pt-4">
         {(["inbox", "apts"] as const).map((tab) => (
           <button
@@ -90,34 +126,43 @@ export function DayHubInbox({
       {/* Inbox content */}
       {leftTab === "inbox" && (
         <div className="flex flex-col flex-1 min-h-0 p-4 pt-3 gap-3">
-          {/* Sub-tabs with counts */}
-          <div className="flex gap-4 border-b border-[var(--g-border-subtle)] relative">
-            {(["sms", "missed"] as const).map((sub) => (
+          {/* Filter pills */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {FILTER_PILLS.map((pill) => (
               <button
-                key={sub}
-                onClick={() => { setInboxSub(sub); setSelectedConv(null); }}
+                key={pill.key}
+                onClick={() => { setFilter(pill.key); setSelectedConv(null); }}
                 className={cn(
-                  "pb-2 text-sm font-medium transition-colors relative flex items-center gap-1.5",
-                  inboxSub === sub
-                    ? "text-[var(--g-accent-text)]"
-                    : "text-[var(--g-text-secondary)] hover:text-[var(--g-text-primary)]",
+                  "px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1",
+                  filter === pill.key
+                    ? "bg-[var(--g-accent)] text-[var(--g-text-inverse)]"
+                    : "bg-[var(--g-bg-surface)] text-[var(--g-text-secondary)] hover:bg-[var(--g-bg-elevated)]",
                 )}
               >
-                {sub === "sms" ? "SMS Messages" : "Missed Calls"}
-                {sub === "missed" && missedCount > 0 && (
-                  <Badge className="bg-[var(--g-grade-f)] text-white rounded-full px-1.5 text-[10px]">
-                    {missedCount}
+                {pill.label}
+                {pill.count != null && (
+                  <Badge className={cn(
+                    "rounded-full px-1.5 text-[10px] ml-0.5",
+                    filter === pill.key
+                      ? "bg-white/20 text-white"
+                      : pill.key === "missed" ? "bg-[var(--g-grade-f)] text-white" : "bg-[var(--g-accent-soft)] text-[var(--g-accent-text)]",
+                  )}>
+                    {pill.count}
                   </Badge>
-                )}
-                {inboxSub === sub && (
-                  <motion.div
-                    layoutId="inbox-tab-indicator"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--g-accent)]"
-                    transition={{ duration: 0.2 }}
-                  />
                 )}
               </button>
             ))}
+          </div>
+
+          {/* Search input */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[var(--g-text-tertiary)]" />
+            <Input
+              placeholder="Search contacts..."
+              value={searchLocal}
+              onChange={(e) => setSearchLocal(e.target.value)}
+              className="h-8 pl-8 text-sm bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]"
+            />
           </div>
 
           {/* Split-pane: conversation list + inline thread */}
@@ -127,90 +172,129 @@ export function DayHubInbox({
               "flex-1 min-h-0 transition-all",
               selectedConv ? "hidden lg:block lg:w-[45%] lg:flex-none lg:border-r lg:border-[var(--g-border-subtle)] lg:pr-3" : "w-full",
             )}>
-              <AnimatePresence mode="wait">
-                {inboxSub === "sms" && (
-                  <motion.div key="sms" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
-                    <ScrollArea className="max-h-[360px]">
-                      {!conversations.length ? (
-                        <p className="text-sm text-[var(--g-text-tertiary)] py-8 text-center">No conversations yet</p>
-                      ) : (
-                        <div className="space-y-1 pr-1">
-                          {/* Unread section */}
-                          {unreadConvos.length > 0 && (
-                            <>
-                              <p className="text-[10px] font-semibold text-[var(--g-text-tertiary)] uppercase tracking-wider px-1 pt-1">
-                                Unread ({unreadConvos.length})
-                              </p>
-                              {unreadConvos.map((c) => (
-                                <ConvoRow key={c.id} convo={c} isSelected={selectedConv?.id === c.id} onClick={() => setSelectedConv(c)} />
-                              ))}
-                            </>
-                          )}
-                          {/* Read section */}
-                          {readConvos.length > 0 && unreadConvos.length > 0 && (
-                            <p className="text-[10px] font-semibold text-[var(--g-text-tertiary)] uppercase tracking-wider px-1 pt-2">
-                              Earlier
+              <ScrollArea className="max-h-[320px]">
+                {/* SMS conversations */}
+                {showConversations && (
+                  <>
+                    {!filteredConvos.length && filter !== "all" ? (
+                      <p className="text-sm text-[var(--g-text-tertiary)] py-6 text-center">
+                        {filter === "unread" ? "No unread conversations" : "No conversations yet"}
+                      </p>
+                    ) : !filteredConvos.length ? (
+                      <p className="text-sm text-[var(--g-text-tertiary)] py-6 text-center">No conversations yet</p>
+                    ) : (
+                      <div className="space-y-1 pr-1">
+                        {filter === "all" && unreadConvos.length > 0 && (
+                          <>
+                            <p className="text-[10px] font-semibold text-[var(--g-text-tertiary)] uppercase tracking-wider px-1 pt-1">
+                              Unread ({unreadConvos.length})
                             </p>
-                          )}
-                          {readConvos.map((c) => (
-                            <ConvoRow key={c.id} convo={c} isSelected={selectedConv?.id === c.id} onClick={() => setSelectedConv(c)} />
-                          ))}
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </motion.div>
+                            {unreadConvos.map((c) => (
+                              <ConvoRow key={c.id} convo={c} isSelected={selectedConv?.id === c.id} onClick={() => setSelectedConv(c)} />
+                            ))}
+                            {readConvos.length > 0 && (
+                              <p className="text-[10px] font-semibold text-[var(--g-text-tertiary)] uppercase tracking-wider px-1 pt-2">
+                                Earlier
+                              </p>
+                            )}
+                            {readConvos.map((c) => (
+                              <ConvoRow key={c.id} convo={c} isSelected={selectedConv?.id === c.id} onClick={() => setSelectedConv(c)} />
+                            ))}
+                          </>
+                        )}
+                        {(filter === "sms" || filter === "unread" || (filter === "all" && unreadConvos.length === 0)) && filter !== "all" && (
+                          <>
+                            {filteredConvos.map((c) => (
+                              <ConvoRow key={c.id} convo={c} isSelected={selectedConv?.id === c.id} onClick={() => setSelectedConv(c)} />
+                            ))}
+                          </>
+                        )}
+                        {filter === "all" && unreadConvos.length === 0 && (
+                          <>
+                            {conversations.map((c) => (
+                              <ConvoRow key={c.id} convo={c} isSelected={selectedConv?.id === c.id} onClick={() => setSelectedConv(c)} />
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {inboxSub === "missed" && (
-                  <motion.div key="missed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
-                    <ScrollArea className="max-h-[360px]">
-                      {!missedCalls.length ? (
-                        <div className="py-8 text-center space-y-2">
-                          <Check className="size-6 mx-auto text-[var(--g-grade-a)]" />
-                          <p className="text-sm text-[var(--g-text-secondary)]">No missed calls today</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 pr-1">
-                          {missedCalls.map((m) => (
-                            <motion.div
-                              key={m.id}
-                              whileHover={{ y: -1 }}
-                              transition={{ duration: 0.15 }}
-                              className="bg-[var(--g-bg-card)] border border-[var(--g-border-subtle)] rounded-xl px-4 py-3"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="size-9 rounded-full bg-[var(--g-bg-inset)] flex items-center justify-center shrink-0">
-                                  <PhoneOff className="size-4 text-[var(--g-grade-f)]" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-[var(--g-text-primary)]">{m.contactName}</p>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-[var(--g-text-tertiary)]">{m.contactPhone}</span>
-                                    <span className="text-xs text-[var(--g-grade-f)]">Missed call</span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-xs text-[var(--g-text-tertiary)]">
-                                    {m.callTimestamp ? relativeTime(m.callTimestamp) : ""}
-                                  </span>
-                                  <Button size="sm" variant="outline" onClick={() => onCallBack(m.contactName)}>
-                                    Call Back
-                                  </Button>
+                {/* Missed calls */}
+                {showMissed && filter === "missed" && (
+                  <>
+                    {!missedCalls.length ? (
+                      <div className="py-6 text-center space-y-2">
+                        <Check className="size-6 mx-auto text-[var(--g-grade-a)]" />
+                        <p className="text-sm text-[var(--g-text-secondary)]">No missed calls today</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 pr-1">
+                        {missedCalls.map((m) => (
+                          <motion.div
+                            key={m.id}
+                            whileHover={{ y: -1 }}
+                            transition={{ duration: 0.15 }}
+                            className="bg-[var(--g-bg-card)] border border-[var(--g-border-subtle)] rounded-xl px-4 py-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="size-9 rounded-full bg-[var(--g-bg-inset)] flex items-center justify-center shrink-0">
+                                <PhoneOff className="size-4 text-[var(--g-grade-f)]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-[var(--g-text-primary)]">{m.contactName}</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-[var(--g-text-tertiary)]">{m.contactPhone}</span>
+                                  <span className="text-xs text-[var(--g-grade-f)]">Missed call</span>
                                 </div>
                               </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </motion.div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-xs text-[var(--g-text-tertiary)]">
+                                  {m.callTimestamp ? relativeTime(m.callTimestamp) : ""}
+                                </span>
+                                <Button size="sm" variant="outline" onClick={() => onCallBack(m.contactName)}>
+                                  Call Back
+                                </Button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
-              </AnimatePresence>
+
+                {/* "All" filter: show missed calls below conversations */}
+                {filter === "all" && missedCalls.length > 0 && (
+                  <div className="mt-3 space-y-2 pr-1">
+                    <p className="text-[10px] font-semibold text-[var(--g-text-tertiary)] uppercase tracking-wider px-1">
+                      Missed Calls ({missedCalls.length})
+                    </p>
+                    {missedCalls.slice(0, 3).map((m) => (
+                      <motion.div
+                        key={m.id}
+                        whileHover={{ y: -1 }}
+                        transition={{ duration: 0.15 }}
+                        className="bg-[var(--g-bg-card)] border border-[var(--g-border-subtle)] rounded-xl px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <PhoneOff className="size-3.5 text-[var(--g-grade-f)] shrink-0" />
+                          <span className="text-xs font-medium text-[var(--g-text-primary)] truncate flex-1">{m.contactName}</span>
+                          <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => onCallBack(m.contactName)}>
+                            Call Back
+                          </Button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
             </div>
 
             {/* Right side: inline thread panel */}
             <AnimatePresence>
-              {selectedConv && inboxSub === "sms" && (
+              {selectedConv && filter !== "missed" && (
                 <motion.div
                   key="thread"
                   initial={{ opacity: 0, x: 20 }}
@@ -219,10 +303,7 @@ export function DayHubInbox({
                   transition={{ duration: 0.2 }}
                   className="flex-1 lg:flex-none lg:w-[55%] flex flex-col min-h-0 pl-3"
                 >
-                  <InlineThread
-                    conversation={selectedConv}
-                    onClose={() => setSelectedConv(null)}
-                  />
+                  <InlineThread conversation={selectedConv} onClose={() => setSelectedConv(null)} />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -319,6 +400,7 @@ function ConvoRow({ convo, isSelected, onClick }: { convo: ConvoItem; isSelected
 function InlineThread({ conversation, onClose }: { conversation: ConvoItem; onClose: () => void }) {
   const { user } = useAuth();
   const [compose, setCompose] = useState("");
+  const userName = user?.name ?? "You";
 
   // Load recent activity for this contact
   const { data: activity, isLoading } = trpc.today.getContactContext.useQuery(
@@ -359,8 +441,8 @@ function InlineThread({ conversation, onClose }: { conversation: ConvoItem; onCl
         </Button>
       </div>
 
-      {/* Activity feed */}
-      <ScrollArea className="flex-1 min-h-0 max-h-[260px] py-2">
+      {/* Activity feed with sender labels */}
+      <ScrollArea className="flex-1 min-h-0 max-h-[240px] py-2">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="size-5 animate-spin rounded-full border-2 border-[var(--g-border-medium)] border-t-[var(--g-accent)]" />
@@ -371,23 +453,33 @@ function InlineThread({ conversation, onClose }: { conversation: ConvoItem; onCl
             <p className="text-xs text-[var(--g-text-tertiary)]">No recent activity with this contact</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {activity.map((item) => (
-              <div key={item.id} className="rounded-lg bg-[var(--g-bg-inset)] px-3 py-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <Phone className="size-3 text-[var(--g-text-tertiary)]" />
-                  <span className="text-[10px] font-medium text-[var(--g-text-secondary)]">
-                    Call {item.grade ? `• Grade: ${item.grade}` : ""}
-                  </span>
-                  <span className="text-[10px] text-[var(--g-text-tertiary)] ml-auto">
-                    {item.duration ? `${Math.floor(item.duration / 60)}m ${item.duration % 60}s` : ""}
-                  </span>
+          <div className="space-y-3">
+            {activity.map((item) => {
+              // Inbound = from contact; outbound = from our team
+              const isInbound = true; // getContactContext returns calls with this contact — display with contact attribution
+              return (
+                <div key={item.id}>
+                  {/* Sender label */}
+                  <p className="text-[10px] font-medium text-[var(--g-text-tertiary)] mb-0.5 px-1">
+                    {isInbound ? `${item.contactName} • ${conversation.phone}` : userName}
+                  </p>
+                  <div className="rounded-lg bg-[var(--g-bg-inset)] px-3 py-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Phone className="size-3 text-[var(--g-text-tertiary)]" />
+                      <span className="text-[10px] font-medium text-[var(--g-text-secondary)]">
+                        Call {item.grade ? `• Grade: ${item.grade}` : ""}
+                      </span>
+                      <span className="text-[10px] text-[var(--g-text-tertiary)] ml-auto">
+                        {item.duration ? `${Math.floor(item.duration / 60)}m ${item.duration % 60}s` : ""}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--g-text-tertiary)]">
+                      {item.createdAt ? relativeTime(item.createdAt) : ""}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs text-[var(--g-text-tertiary)]">
-                  {item.createdAt ? relativeTime(item.createdAt) : ""}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </ScrollArea>
@@ -395,7 +487,7 @@ function InlineThread({ conversation, onClose }: { conversation: ConvoItem; onCl
       {/* Compose */}
       <div className="pt-2 border-t border-[var(--g-border-subtle)] space-y-2">
         <Textarea
-          placeholder={`Reply as ${user?.name ?? "You"}...`}
+          placeholder={`Reply as ${userName}...`}
           value={compose}
           onChange={(e) => setCompose(e.target.value)}
           className="min-h-[56px] text-sm bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)] resize-none"
@@ -405,7 +497,7 @@ function InlineThread({ conversation, onClose }: { conversation: ConvoItem; onCl
         />
         <div className="flex justify-end">
           <Button size="sm" onClick={handleSend} disabled={!compose.trim()}>
-            <Send className="size-3.5 mr-1" /> Send
+            <Send className="size-3.5 mr-1" /> Send as {userName}
           </Button>
         </div>
       </div>

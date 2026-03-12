@@ -89,6 +89,7 @@ export function Today() {
           onCallBack={(name) => toast(`Calling ${name}...`)}
           missedCount={d.missedCount}
           unreadTotal={d.unreadTotal}
+          onSearchChange={d.setInboxSearch}
         />
         <AiCoachPanel
           messages={d.coachMessages}

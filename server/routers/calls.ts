@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, desc, sql, ne, count, asc, gte } from "drizzle-orm";
+import { eq, and, desc, sql, ne, count, asc, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
@@ -14,24 +14,38 @@ export const callsRouter = router({
         status: z.string().optional(),
         starred: z.boolean().optional(),
         dateFrom: z.string().optional(),
+        callType: z.string().optional(),
+        gradeMin: z.number().optional(),
+        gradeMax: z.number().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
       const tenantId = ctx.user!.tenantId;
       const offset = (input.page - 1) * input.limit;
 
-      const conditions = [
+      const conditions: ReturnType<typeof eq>[] = [
         eq(calls.tenantId, tenantId),
         ne(calls.isArchived, "true"),
       ];
       if (input.status) conditions.push(eq(calls.status, input.status));
       if (input.starred === true) conditions.push(eq(calls.isStarred, "true"));
       if (input.dateFrom) conditions.push(gte(calls.callTimestamp, new Date(input.dateFrom)));
+      if (input.callType) conditions.push(eq(calls.callType, input.callType));
+
+      // Grade range filters require a join condition
+      const gradeConditions: ReturnType<typeof eq>[] = [];
+      if (input.gradeMin != null) gradeConditions.push(gte(callGrades.overallScore, String(input.gradeMin)));
+      if (input.gradeMax != null) gradeConditions.push(lte(callGrades.overallScore, String(input.gradeMax)));
+
+      const allConditions = [...conditions, ...gradeConditions];
+
+      const joinCondition = and(eq(calls.id, callGrades.callId), eq(callGrades.tenantId, tenantId));
 
       const [totalResult] = await db
         .select({ count: count() })
         .from(calls)
-        .where(and(...conditions));
+        .leftJoin(callGrades, joinCondition)
+        .where(and(...allConditions));
 
       const rows = await db
         .select({
@@ -39,8 +53,8 @@ export const callsRouter = router({
           overallScore: callGrades.overallScore,
         })
         .from(calls)
-        .leftJoin(callGrades, and(eq(calls.id, callGrades.callId), eq(callGrades.tenantId, tenantId)))
-        .where(and(...conditions))
+        .leftJoin(callGrades, joinCondition)
+        .where(and(...allConditions))
         .orderBy(desc(calls.callTimestamp))
         .limit(input.limit)
         .offset(offset);
@@ -151,4 +165,23 @@ export const callsRouter = router({
       avgScore: avgResult?.avg ? Number(avgResult.avg) : 0,
     };
   }),
+
+  regrade: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user!.tenantId;
+      if (ctx.user!.role !== "admin" && ctx.user!.role !== "owner") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins can re-grade calls" });
+      }
+      // Delete existing grade so the grading pipeline picks it up
+      await db
+        .delete(callGrades)
+        .where(and(eq(callGrades.callId, input.id), eq(callGrades.tenantId, tenantId)));
+      // Reset call status to pending
+      await db
+        .update(calls)
+        .set({ status: "pending", updatedAt: new Date() })
+        .where(and(eq(calls.id, input.id), eq(calls.tenantId, tenantId)));
+      return { success: true };
+    }),
 });

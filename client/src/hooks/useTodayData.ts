@@ -102,6 +102,7 @@ export function useTodayData() {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const [taskSearch, setTaskSearch] = useState("");
+  const [inboxSearch, setInboxSearch] = useState("");
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([]);
   const [coachInput, setCoachInput] = useState("");
   const scrollEndRef = useRef<HTMLDivElement>(null);
@@ -112,7 +113,7 @@ export function useTodayData() {
     role: selectedRole === "all" ? undefined : selectedRole,
   });
   const { data: missedCalls } = trpc.today.getMissedCalls.useQuery();
-  const { data: convos } = trpc.today.getConversations.useQuery({});
+  const { data: convos } = trpc.today.getConversations.useQuery({ search: inboxSearch || undefined });
   const { data: apts } = trpc.today.getAppointments.useQuery();
   const { data: taskData } = trpc.today.getTasks.useQuery();
   const { data: amPm } = trpc.today.getAmPmCallStatus.useQuery({});
@@ -261,6 +262,8 @@ export function useTodayData() {
     convoModal,
     setConvoModal,
     unreadTotal,
+    inboxSearch,
+    setInboxSearch,
 
     // tasks
     filteredTasks,

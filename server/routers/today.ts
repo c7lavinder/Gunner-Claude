@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq, and, desc, gte, count, or, ilike, lt, isNull, like, sql, ne, inArray } from "drizzle-orm";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
-import { calls, callGrades, contactCache, dispoProperties, dailyKpiEntries, teamMembers, tenants } from "../../drizzle/schema";
+import { calls, callGrades, contactCache, dispoProperties, dailyKpiEntries, teamMembers, tenants, demoConversations, demoTasks } from "../../drizzle/schema";
 import { GhlAdapter } from "../crm/ghl/ghlAdapter";
 import { refreshGhlToken, saveGhlTokens } from "../services/ghlOAuth";
 import { getTenantPlaybook, getIndustryPlaybook, resolveAlgorithmConfig } from "../services/playbooks";
@@ -75,11 +75,59 @@ export const todayRouter = router({
     .input(z.object({ search: z.string().optional(), limit: z.number().optional().default(20) }))
     .query(async ({ ctx, input }) => {
       const tid = ctx.user!.tenantId;
+
+      // Check if tenant has live CRM — if not, use demo conversations
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid));
+      if (tenant?.crmConnected === "false") {
+        const demoConds = [eq(demoConversations.tenantId, tid)];
+        if (input.search?.trim()) {
+          const term = `%${input.search.trim()}%`;
+          demoConds.push(or(ilike(demoConversations.contactName, term), ilike(demoConversations.contactPhone, term))!);
+        }
+        const demoRows = await db.select().from(demoConversations)
+          .where(and(...demoConds))
+          .orderBy(desc(demoConversations.lastMessageDate))
+          .limit(input.limit);
+        return demoRows.map((r) => ({
+          id: String(r.id),
+          name: r.contactName ?? "Unknown",
+          phone: r.contactPhone ?? "",
+          ghlContactId: null as string | null,
+          lastContactDate: r.lastMessageDate,
+          lastMessageBody: r.lastMessageBody ?? null,
+          unreadCount: r.unreadCount ?? 0,
+        }));
+      }
+
       const conditions = [eq(contactCache.tenantId, tid)];
       if (input.search?.trim()) {
         const term = `%${input.search.trim()}%`;
         conditions.push(or(ilike(contactCache.name, term), ilike(contactCache.phone, term))!);
       }
+
+      // Phone-scope: non-admin users only see contacts matching their LC phone numbers
+      const userRole = ctx.user!.role;
+      if (userRole !== "admin" && userRole !== "owner") {
+        const [member] = await db.select({ lcPhone: teamMembers.lcPhone, lcPhones: teamMembers.lcPhones })
+          .from(teamMembers)
+          .where(and(eq(teamMembers.tenantId, tid), eq(teamMembers.userId, ctx.user!.userId)))
+          .limit(1);
+        if (member) {
+          const phones: string[] = [];
+          if (member.lcPhone) phones.push(member.lcPhone);
+          if (member.lcPhones) {
+            try {
+              const parsed = JSON.parse(member.lcPhones);
+              if (Array.isArray(parsed)) phones.push(...parsed.filter((p: unknown) => typeof p === "string" && p));
+            } catch { /* ignore parse errors */ }
+          }
+          const uniquePhones = Array.from(new Set(phones));
+          if (uniquePhones.length > 0) {
+            conditions.push(inArray(contactCache.phone, uniquePhones));
+          }
+        }
+      }
+
       const rows = await db.select({
         id: contactCache.id, name: contactCache.name, phone: contactCache.phone,
         ghlContactId: contactCache.ghlContactId, lastContactDate: contactCache.lastContactDate,
@@ -88,6 +136,8 @@ export const todayRouter = router({
       return rows.map((r) => ({
         id: String(r.id), name: r.name ?? "Unknown", phone: r.phone ?? "",
         ghlContactId: r.ghlContactId, lastContactDate: r.lastContactDate,
+        lastMessageBody: null as string | null,
+        unreadCount: 0,
       }));
     }),
 
@@ -123,6 +173,32 @@ export const todayRouter = router({
     const tid = ctx.user!.tenantId;
     const uid = ctx.user!.userId;
     const twoDaysAgo = new Date(); twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+    // Check if tenant has live CRM — if not, use demo tasks
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid));
+    if (tenant?.crmConnected === "false") {
+      const demoRows = await db.select().from(demoTasks)
+        .where(eq(demoTasks.tenantId, tid));
+      const [alertResult] = await db.select({ count: count() }).from(dispoProperties).where(and(
+        eq(dispoProperties.tenantId, tid),
+        or(isNull(dispoProperties.lastContactedAt), lt(dispoProperties.lastContactedAt, twoDaysAgo))!
+      ));
+      return {
+        tasks: demoRows.map((r) => ({
+          id: String(r.id),
+          title: r.title ?? "",
+          contact: r.contactName ?? "",
+          due: r.dueDate ?? "",
+          propertyAddress: r.propertyAddress ?? "",
+          currentStage: r.currentStage ?? "",
+          assignedTo: r.assignedTo ?? "",
+          overdue: r.overdue ?? false,
+          instructions: r.instructions ?? "",
+        })),
+        propertyAlerts: alertResult?.count ?? 0,
+      };
+    }
+
     const taskRows = await db.select().from(dailyKpiEntries).where(and(
       eq(dailyKpiEntries.tenantId, tid), eq(dailyKpiEntries.userId, uid),
       eq(dailyKpiEntries.date, todayStr()), like(dailyKpiEntries.kpiType, "task%")
@@ -185,11 +261,22 @@ export const todayRouter = router({
     }),
 
   getContactActivity: protectedProcedure
-    .input(z.object({ ghlContactId: z.string() }))
+    .input(z.object({ ghlContactId: z.string().optional(), contactPhone: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const tid = ctx.user!.tenantId;
 
+      // Check if tenant has live CRM
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tid));
+      const isDemo = tenant?.crmConnected === "false";
+
       // Local call history for this contact
+      const callConditions = [eq(calls.tenantId, tid)];
+      if (input.ghlContactId) {
+        callConditions.push(eq(calls.ghlContactId, input.ghlContactId));
+      } else if (input.contactPhone) {
+        callConditions.push(eq(calls.contactPhone, input.contactPhone));
+      }
+
       const localCalls = await db.select({
         id: calls.id,
         contactName: calls.contactName,
@@ -199,21 +286,37 @@ export const todayRouter = router({
         grade: callGrades.overallGrade,
       }).from(calls)
         .leftJoin(callGrades, and(eq(callGrades.callId, calls.id), eq(callGrades.tenantId, tid)))
-        .where(and(eq(calls.tenantId, tid), eq(calls.ghlContactId, input.ghlContactId)))
+        .where(and(...callConditions))
         .orderBy(desc(calls.callTimestamp))
         .limit(10);
 
-      // CRM conversation messages (if adapter available)
+      // Messages: demo path reads from demoConversations, live path uses CRM adapter
       let crmMessages: Array<{ id: string; direction: string; body: string; timestamp: string; type: string }> = [];
-      const adapter = await getCrmAdapterForTenant(tid);
-      if (adapter) {
-        try {
-          const conversation = await adapter.getConversation(input.ghlContactId);
-          if (conversation) {
-            crmMessages = conversation.messages.slice(0, 20);
+
+      if (isDemo && input.contactPhone) {
+        const [demoConv] = await db.select().from(demoConversations)
+          .where(and(eq(demoConversations.tenantId, tid), eq(demoConversations.contactPhone, input.contactPhone)))
+          .limit(1);
+        if (demoConv?.messages && Array.isArray(demoConv.messages)) {
+          crmMessages = (demoConv.messages as Array<{ direction: string; body: string; timestamp: string; senderName: string }>).map((m, i) => ({
+            id: `demo-msg-${i}`,
+            direction: m.direction,
+            body: m.body,
+            timestamp: m.timestamp,
+            type: "sms",
+          }));
+        }
+      } else if (!isDemo && input.ghlContactId) {
+        const adapter = await getCrmAdapterForTenant(tid);
+        if (adapter) {
+          try {
+            const conversation = await adapter.getConversation(input.ghlContactId);
+            if (conversation) {
+              crmMessages = conversation.messages.slice(0, 20);
+            }
+          } catch {
+            // CRM unavailable — return local data only
           }
-        } catch {
-          // CRM unavailable — return local data only
         }
       }
 

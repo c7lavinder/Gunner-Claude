@@ -17,6 +17,9 @@ import {
   userStreaks,
   badgeProgress,
   trainingMaterials,
+  performanceMetrics,
+  demoConversations,
+  demoTasks,
 } from "../../drizzle/schema";
 
 const TENANT_ID = 540044;
@@ -57,7 +60,7 @@ export async function seedDemoTenant(): Promise<void> {
   await db.execute(sql.raw(`SET session_replication_role = 'origin'`));
 
   // Fix serial sequences after deletes — advance to max(id) + 1 for key tables
-  const seqTables = ["users", "team_members", "calls", "call_grades", "dispo_properties", "badges", "user_badges", "xp_transactions", "user_xp", "user_streaks", "badge_progress", "daily_kpi_entries", "contact_cache", "training_materials"];
+  const seqTables = ["users", "team_members", "calls", "call_grades", "dispo_properties", "badges", "user_badges", "xp_transactions", "user_xp", "user_streaks", "badge_progress", "daily_kpi_entries", "contact_cache", "training_materials", "performance_metrics", "demo_conversations", "demo_tasks"];
   for (const t of seqTables) {
     try { await db.execute(sql.raw(`SELECT setval(pg_get_serial_sequence('"${t}"', 'id'), COALESCE((SELECT MAX(id) FROM "${t}"), 0) + 1, false)`)); } catch { /* skip */ }
   }
@@ -75,7 +78,7 @@ export async function seedDemoTenant(): Promise<void> {
     maxUsers: 10,
     onboardingCompleted: "true",
     onboardingStep: 5,
-    crmConnected: "true",
+    crmConnected: "false",
   }).onConflictDoUpdate({
     target: tenants.id,
     set: { name: "Apex Property Solutions", slug: "apex-demo", subscriptionTier: "growth", subscriptionStatus: "active" },
@@ -464,6 +467,341 @@ export async function seedDemoTenant(): Promise<void> {
     },
   ]);
   console.log("[seed] 4 training materials created.");
+
+  // ── 11. PERFORMANCE METRICS (4 weeks weekly + 1 monthly per rep) ──
+  const repProfiles = [
+    { name: "Marcus Williams", avgScore: 85, calls: 48, a: 5, b: 4, c: 2, d: 1, f: 0 },
+    { name: "Sarah Chen", avgScore: 78, calls: 42, a: 3, b: 5, c: 3, d: 1, f: 0 },
+    { name: "Jessica Rivera", avgScore: 72, calls: 38, a: 2, b: 3, c: 4, d: 2, f: 1 },
+    { name: "Tyler Brooks", avgScore: 65, calls: 30, a: 1, b: 2, c: 3, d: 3, f: 2 },
+  ];
+
+  const perfRows: Array<{
+    tenantId: number; teamMemberId: number; periodType: string;
+    periodStart: Date; periodEnd: Date; totalCalls: number;
+    averageScore: string; aGradeCount: number; bGradeCount: number;
+    cGradeCount: number; dGradeCount: number; fGradeCount: number;
+    scoreChange: string;
+  }> = [];
+
+  for (const rep of repProfiles) {
+    const tmId = tmMap[rep.name];
+    // 4 weekly records
+    for (let w = 0; w < 4; w++) {
+      const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - (w + 1) * 7);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      const jitter = Math.round((Math.random() - 0.5) * 6); // ±3 score jitter
+      perfRows.push({
+        tenantId: TENANT_ID, teamMemberId: tmId, periodType: "weekly",
+        periodStart: weekStart, periodEnd: weekEnd,
+        totalCalls: rep.calls + Math.round((Math.random() - 0.5) * 10),
+        averageScore: String(rep.avgScore + jitter),
+        aGradeCount: rep.a + (w === 0 ? 1 : 0),
+        bGradeCount: rep.b,
+        cGradeCount: rep.c,
+        dGradeCount: rep.d,
+        fGradeCount: rep.f,
+        scoreChange: String(w === 0 ? jitter : (Math.random() > 0.5 ? 2.5 : -1.5)),
+      });
+    }
+    // 1 monthly record
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const monthEnd = new Date();
+    perfRows.push({
+      tenantId: TENANT_ID, teamMemberId: tmId, periodType: "monthly",
+      periodStart: monthStart, periodEnd: monthEnd,
+      totalCalls: rep.calls * 4 + Math.round(Math.random() * 20),
+      averageScore: String(rep.avgScore),
+      aGradeCount: rep.a * 4,
+      bGradeCount: rep.b * 4,
+      cGradeCount: rep.c * 4,
+      dGradeCount: rep.d * 4,
+      fGradeCount: rep.f * 4,
+      scoreChange: String(rep.avgScore > 75 ? 3.2 : -1.8),
+    });
+  }
+
+  await db.insert(performanceMetrics).values(perfRows);
+  console.log("[seed] 20 performance metrics created.");
+
+  // ── 12. 60 ROLLING DAYS OF DAILY KPI ENTRIES ─────────────────────
+  function isWeekend(n: number): boolean {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    const dow = d.getDay();
+    return dow === 0 || dow === 6;
+  }
+
+  // Per-rep volume multipliers: Marcus highest, Tyler lowest
+  const repVolume: Record<string, number> = {
+    "Marcus Williams": 1.3,
+    "Sarah Chen": 1.1,
+    "Jessica Rivera": 0.9,
+    "Tyler Brooks": 0.7,
+  };
+
+  const kpiReps = ["Marcus Williams", "Sarah Chen", "Jessica Rivera", "Tyler Brooks"];
+  const historicalKpiRows: Array<{
+    tenantId: number; userId: number; date: string; kpiType: string;
+    source: string; detectionType: string; contactName: string | null;
+    notes: string | null;
+  }> = [];
+
+  for (let day = 1; day <= 59; day++) {
+    const dateStr = daysAgoStr(day);
+    const weekend = isWeekend(day);
+
+    for (const repName of kpiReps) {
+      const uid = userMap[repName];
+      const vol = repVolume[repName];
+
+      // Weekday: ~30 calls/day total → ~7-8 per rep (scaled by vol)
+      // Weekend: ~10 calls/day total → ~2-3 per rep (scaled by vol)
+      const baseCallsPerRep = weekend ? 2 : 7;
+      const callJitter = weekend ? 2 : 3;
+      const callCount = Math.max(0, Math.round((baseCallsPerRep + Math.floor(Math.random() * callJitter)) * vol));
+      for (let c = 0; c < callCount; c++) {
+        historicalKpiRows.push({
+          tenantId: TENANT_ID, userId: uid, date: dateStr, kpiType: "calls",
+          source: "auto", detectionType: "auto", contactName: null, notes: null,
+        });
+      }
+
+      // Weekday: ~12 convos/day → ~3 per rep; Weekend: ~4/day → ~1
+      const baseConvosPerRep = weekend ? 1 : 3;
+      const convoJitter = weekend ? 1 : 2;
+      const convoCount = Math.max(0, Math.round((baseConvosPerRep + Math.floor(Math.random() * convoJitter)) * vol));
+      for (let c = 0; c < convoCount; c++) {
+        historicalKpiRows.push({
+          tenantId: TENANT_ID, userId: uid, date: dateStr, kpiType: "convos",
+          source: "auto", detectionType: "auto", contactName: null, notes: null,
+        });
+      }
+    }
+
+    // Appointments: weekday ~2/day, weekend 0-1
+    const aptCount = weekend ? (Math.random() > 0.6 ? 1 : 0) : (1 + Math.floor(Math.random() * 2));
+    for (let a = 0; a < aptCount; a++) {
+      historicalKpiRows.push({
+        tenantId: TENANT_ID, userId: userMap[kpiReps[a % kpiReps.length]], date: dateStr,
+        kpiType: "apts", source: "auto", detectionType: "auto", contactName: null, notes: null,
+      });
+    }
+
+    // Offers: weekday ~1/day (70%), weekend 0
+    if (!weekend && Math.random() > 0.3) {
+      historicalKpiRows.push({
+        tenantId: TENANT_ID, userId: userMap[kpiReps[day % kpiReps.length]], date: dateStr,
+        kpiType: "offers", source: "auto", detectionType: "auto", contactName: null, notes: null,
+      });
+    }
+
+    // Contracts: weekday 0-1 (30%), weekend 0
+    if (!weekend && Math.random() > 0.7) {
+      historicalKpiRows.push({
+        tenantId: TENANT_ID, userId: userMap[kpiReps[day % kpiReps.length]], date: dateStr,
+        kpiType: "contracts", source: "auto", detectionType: "auto", contactName: null, notes: null,
+      });
+    }
+  }
+
+  // ── 12b. MANUAL KPI ENTRIES (15 entries over last 30 days) ────────
+  const manualEntries: Array<{ repIdx: number; daysBack: number; kpiType: string; contactName: string; notes: string }> = [
+    { repIdx: 0, daysBack: 2, kpiType: "apts", contactName: "James Wilson", notes: "Confirmed walkthrough for 2pm Thursday" },
+    { repIdx: 1, daysBack: 3, kpiType: "apts", contactName: "Maria Garcia", notes: "Seller agreed to morning walkthrough" },
+    { repIdx: 2, daysBack: 5, kpiType: "offers", contactName: "Nancy Scott", notes: "Verbal offer accepted at $195k" },
+    { repIdx: 0, daysBack: 6, kpiType: "offers", contactName: "Michael Davis", notes: "Submitted written offer — $125k, 14-day close" },
+    { repIdx: 3, daysBack: 7, kpiType: "apts", contactName: "Amanda Taylor", notes: "Rescheduled walkthrough to Friday 10am" },
+    { repIdx: 1, daysBack: 8, kpiType: "contracts", contactName: "Susan Martinez", notes: "Contract signed — $118k, closing in 2 weeks" },
+    { repIdx: 0, daysBack: 10, kpiType: "apts", contactName: "David Thompson", notes: "Confirmed first walkthrough — Shelby Ave" },
+    { repIdx: 2, daysBack: 12, kpiType: "offers", contactName: "Karen Mitchell", notes: "Verbal offer at $130k, pending seller decision" },
+    { repIdx: 3, daysBack: 14, kpiType: "apts", contactName: "Steven Anderson", notes: "Set appointment for property viewing" },
+    { repIdx: 0, daysBack: 16, kpiType: "contracts", contactName: "Richard Clark", notes: "Signed purchase agreement — $145k" },
+    { repIdx: 1, daysBack: 18, kpiType: "offers", contactName: "Daniel King", notes: "Offer presented at $85k — seller countered" },
+    { repIdx: 2, daysBack: 20, kpiType: "apts", contactName: "Lisa Robinson", notes: "Walkthrough confirmed — 1414 Laurel St" },
+    { repIdx: 0, daysBack: 23, kpiType: "offers", contactName: "Linda Johnson", notes: "Verbal offer accepted — sending contract tonight" },
+    { repIdx: 3, daysBack: 26, kpiType: "apts", contactName: "Thomas White", notes: "Seller wants to meet at property Saturday" },
+    { repIdx: 1, daysBack: 28, kpiType: "contracts", contactName: "Linda Johnson", notes: "Contract fully executed — closing scheduled" },
+  ];
+
+  for (const entry of manualEntries) {
+    historicalKpiRows.push({
+      tenantId: TENANT_ID,
+      userId: userMap[kpiReps[entry.repIdx]],
+      date: daysAgoStr(entry.daysBack),
+      kpiType: entry.kpiType,
+      source: "manual",
+      detectionType: "manual",
+      contactName: entry.contactName,
+      notes: entry.notes,
+    });
+  }
+
+  // Insert in batches of 200 to avoid query size limits
+  for (let i = 0; i < historicalKpiRows.length; i += 200) {
+    await db.insert(dailyKpiEntries).values(historicalKpiRows.slice(i, i + 200));
+  }
+  console.log(`[seed] ${historicalKpiRows.length} historical KPI entries created (60 days + 15 manual).`);
+
+  // ── 13. DEMO CONVERSATIONS (8 SMS threads) ───────────────────────
+  await db.insert(demoConversations).values([
+    {
+      tenantId: TENANT_ID, contactName: "David Thompson", contactPhone: "615-555-0101",
+      lastMessageBody: "Sounds good, what time works for you tomorrow?", lastMessageDate: daysAgo(0, 10, 30), unreadCount: 2,
+      messages: [
+        { direction: "outbound", body: "Hi David, this is Marcus with Apex Property Solutions. I noticed your property on Shelby Ave — are you still considering selling?", timestamp: daysAgo(1, 9, 0).toISOString(), senderName: "Marcus Williams" },
+        { direction: "inbound", body: "Yeah I've been thinking about it. What kind of offer are we talking?", timestamp: daysAgo(1, 9, 15).toISOString(), senderName: "David Thompson" },
+        { direction: "outbound", body: "Great! We typically close in 2-3 weeks, cash, no inspections. I'd love to take a quick look at the property to give you a solid number.", timestamp: daysAgo(1, 9, 30).toISOString(), senderName: "Marcus Williams" },
+        { direction: "inbound", body: "Ok that sounds fair. I'm free this week if you want to come by.", timestamp: daysAgo(0, 10, 15).toISOString(), senderName: "David Thompson" },
+        { direction: "inbound", body: "Sounds good, what time works for you tomorrow?", timestamp: daysAgo(0, 10, 30).toISOString(), senderName: "David Thompson" },
+      ],
+    },
+    {
+      tenantId: TENANT_ID, contactName: "Maria Garcia", contactPhone: "615-555-0102",
+      lastMessageBody: "I'll check with my husband and get back to you.", lastMessageDate: daysAgo(0, 11, 0), unreadCount: 1,
+      messages: [
+        { direction: "outbound", body: "Hi Maria, following up on our conversation about the duplex on Fatherland St. Have you had a chance to think about our offer?", timestamp: daysAgo(2, 14, 0).toISOString(), senderName: "Sarah Chen" },
+        { direction: "inbound", body: "Yes, we're interested but the price seems low. Can you do $95k?", timestamp: daysAgo(2, 15, 0).toISOString(), senderName: "Maria Garcia" },
+        { direction: "outbound", body: "I understand your concern. Our offer factors in the repairs needed — the roof and HVAC alone are about $25k. I could go to $88k with a 10-day close.", timestamp: daysAgo(1, 9, 0).toISOString(), senderName: "Sarah Chen" },
+        { direction: "inbound", body: "I'll check with my husband and get back to you.", timestamp: daysAgo(0, 11, 0).toISOString(), senderName: "Maria Garcia" },
+      ],
+    },
+    {
+      tenantId: TENANT_ID, contactName: "Jennifer Smith", contactPhone: "615-555-0104",
+      lastMessageBody: "Perfect, see you Thursday at 2pm!", lastMessageDate: daysAgo(0, 14, 0), unreadCount: 0,
+      messages: [
+        { direction: "outbound", body: "Hi Jennifer, Marcus from Apex. I wanted to follow up — we'd love to schedule a quick walkthrough of your Nolensville Pike property.", timestamp: daysAgo(1, 10, 0).toISOString(), senderName: "Marcus Williams" },
+        { direction: "inbound", body: "Sure, I can do Thursday afternoon. Around 2?", timestamp: daysAgo(1, 11, 0).toISOString(), senderName: "Jennifer Smith" },
+        { direction: "outbound", body: "Perfect, see you Thursday at 2pm!", timestamp: daysAgo(0, 14, 0).toISOString(), senderName: "Marcus Williams" },
+      ],
+    },
+    {
+      tenantId: TENANT_ID, contactName: "Carlos Mendez", contactPhone: "615-555-0105",
+      lastMessageBody: "What repairs are you expecting to need?", lastMessageDate: daysAgo(0, 12, 0), unreadCount: 1,
+      messages: [
+        { direction: "outbound", body: "Carlos, thanks for chatting earlier. Just wanted to confirm — you're looking to sell within the next 30 days, correct?", timestamp: daysAgo(2, 11, 0).toISOString(), senderName: "Jessica Rivera" },
+        { direction: "inbound", body: "Yes, ideally sooner. I'm relocating for work.", timestamp: daysAgo(2, 12, 0).toISOString(), senderName: "Carlos Mendez" },
+        { direction: "outbound", body: "Got it. We can definitely work with that timeline. Our team can close in as few as 7 days.", timestamp: daysAgo(1, 9, 0).toISOString(), senderName: "Jessica Rivera" },
+        { direction: "inbound", body: "What repairs are you expecting to need?", timestamp: daysAgo(0, 12, 0).toISOString(), senderName: "Carlos Mendez" },
+      ],
+    },
+    {
+      tenantId: TENANT_ID, contactName: "James Wilson", contactPhone: "615-555-0107",
+      lastMessageBody: "I'll have the offer ready by end of day. Stand by!", lastMessageDate: daysAgo(0, 15, 0), unreadCount: 0,
+      messages: [
+        { direction: "inbound", body: "Hey Marcus, just wanted to check — when should I expect the offer?", timestamp: daysAgo(0, 13, 0).toISOString(), senderName: "James Wilson" },
+        { direction: "outbound", body: "Great question James. I just finished the walkthrough notes. Your property is in solid shape.", timestamp: daysAgo(0, 14, 15).toISOString(), senderName: "Marcus Williams" },
+        { direction: "outbound", body: "I'll have the offer ready by end of day. Stand by!", timestamp: daysAgo(0, 15, 0).toISOString(), senderName: "Marcus Williams" },
+      ],
+    },
+    {
+      tenantId: TENANT_ID, contactName: "Michael Davis", contactPhone: "615-555-0109",
+      lastMessageBody: "Let me think about it overnight. I'll call you in the morning.", lastMessageDate: daysAgo(0, 16, 0), unreadCount: 1,
+      messages: [
+        { direction: "outbound", body: "Michael, following up on the $125k offer for Charlotte Ave. Have you had a chance to review?", timestamp: daysAgo(0, 10, 0).toISOString(), senderName: "Marcus Williams" },
+        { direction: "inbound", body: "I did. I was hoping for closer to $135k honestly.", timestamp: daysAgo(0, 11, 0).toISOString(), senderName: "Michael Davis" },
+        { direction: "outbound", body: "I hear you. Given the foundation work needed (~$15k), $128k is the highest I can go and still make this work. That includes a 14-day close and we cover all closing costs.", timestamp: daysAgo(0, 14, 0).toISOString(), senderName: "Marcus Williams" },
+        { direction: "inbound", body: "Let me think about it overnight. I'll call you in the morning.", timestamp: daysAgo(0, 16, 0).toISOString(), senderName: "Michael Davis" },
+      ],
+    },
+    {
+      tenantId: TENANT_ID, contactName: "Karen Mitchell", contactPhone: "615-555-0114",
+      lastMessageBody: "See you at 10am sharp!", lastMessageDate: daysAgo(0, 9, 0), unreadCount: 0,
+      messages: [
+        { direction: "outbound", body: "Karen, confirming your walkthrough tomorrow at 10am at 7788 Gallatin Pike. Does that still work?", timestamp: daysAgo(1, 15, 0).toISOString(), senderName: "Jessica Rivera" },
+        { direction: "inbound", body: "Yes! I'll be there. Should I have any paperwork ready?", timestamp: daysAgo(1, 16, 0).toISOString(), senderName: "Karen Mitchell" },
+        { direction: "outbound", body: "Nope, just be there and I'll walk you through everything. If we agree on a number I'll have a contract ready same day.", timestamp: daysAgo(1, 17, 0).toISOString(), senderName: "Jessica Rivera" },
+        { direction: "inbound", body: "See you at 10am sharp!", timestamp: daysAgo(0, 9, 0).toISOString(), senderName: "Karen Mitchell" },
+      ],
+    },
+    {
+      tenantId: TENANT_ID, contactName: "Susan Martinez", contactPhone: "615-555-0110",
+      lastMessageBody: "Title company confirmed — closing next Friday!", lastMessageDate: daysAgo(0, 11, 0), unreadCount: 0,
+      messages: [
+        { direction: "outbound", body: "Susan, great news! Title came back clean. We're on track for closing next Friday.", timestamp: daysAgo(1, 10, 0).toISOString(), senderName: "Marcus Williams" },
+        { direction: "inbound", body: "That's wonderful! Do I need to do anything else?", timestamp: daysAgo(1, 11, 0).toISOString(), senderName: "Susan Martinez" },
+        { direction: "outbound", body: "Just bring a valid ID to the title company. I'll send you the address and time once it's confirmed.", timestamp: daysAgo(1, 14, 0).toISOString(), senderName: "Marcus Williams" },
+        { direction: "inbound", body: "Title company confirmed — closing next Friday!", timestamp: daysAgo(0, 11, 0).toISOString(), senderName: "Susan Martinez" },
+      ],
+    },
+  ]);
+  console.log("[seed] 8 demo conversations created.");
+
+  // ── 14. DEMO TASKS (28 tasks) ─────────────────────────────────────
+  const reps = ["Marcus Williams", "Sarah Chen", "Jessica Rivera", "Tyler Brooks"];
+  const taskEntries: Array<{
+    tenantId: number; title: string; contactName: string;
+    propertyAddress: string; currentStage: string; assignedTo: string;
+    dueDate: string; overdue: boolean; instructions: string;
+  }> = [];
+
+  // 8 overdue tasks (yesterday or earlier)
+  const overdueSpecs = [
+    { title: "Follow up on offer — David Thompson", contact: "David Thompson", addr: "2200 Shelby Ave, Nashville, TN", stage: "new_lead", rep: 0, ago: 2, instr: "Call David to discuss initial offer. He expressed interest last week." },
+    { title: "Send comps to Maria Garcia", contact: "Maria Garcia", addr: "1100 Fatherland St, Nashville, TN", stage: "new_lead", rep: 1, ago: 1, instr: "Email 3 comparable sales within 0.5 miles to support our offer price." },
+    { title: "Schedule walkthrough — Robert Lee", contact: "Robert Lee", addr: "3300 Dickerson Pike, Nashville, TN", stage: "new_lead", rep: 1, ago: 3, instr: "Robert wants a morning walkthrough. Confirm date and time via text." },
+    { title: "Re-engage cold lead — Amanda Taylor", contact: "Amanda Taylor", addr: "901 Maple Ct, Nashville, TN", stage: "contacted", rep: 3, ago: 2, instr: "Amanda went cold after initial call. Try SMS + voicemail drop." },
+    { title: "Update CRM notes — Karen Mitchell", contact: "Karen Mitchell", addr: "7788 Gallatin Pike, Nashville, TN", stage: "appointment_set", rep: 2, ago: 1, instr: "Add walkthrough notes and photos from yesterday's visit." },
+    { title: "Submit offer — Lisa Robinson", contact: "Lisa Robinson", addr: "1414 Laurel St, Nashville, TN", stage: "contacted", rep: 2, ago: 4, instr: "Prepare and submit written offer based on walkthrough findings." },
+    { title: "Call back Brian Harris", contact: "Brian Harris", addr: "8899 Fern Ct, Nashville, TN", stage: "contacted", rep: 1, ago: 1, instr: "Brian called back while you were on another line. Return his call ASAP." },
+    { title: "Verify seller identity — Thomas White", contact: "Thomas White", addr: "4455 Cherry Ave, Nashville, TN", stage: "new_lead", rep: 3, ago: 5, instr: "Run skip trace to confirm Thomas is the actual property owner." },
+  ];
+  for (const t of overdueSpecs) {
+    taskEntries.push({
+      tenantId: TENANT_ID, title: t.title, contactName: t.contact,
+      propertyAddress: t.addr, currentStage: t.stage, assignedTo: reps[t.rep],
+      dueDate: daysAgoStr(t.ago), overdue: true, instructions: t.instr,
+    });
+  }
+
+  // 12 today tasks
+  const todaySpecs = [
+    { title: "Call Jennifer Smith — walkthrough prep", contact: "Jennifer Smith", addr: "4455 Nolensville Pike, Nashville, TN", stage: "contacted", rep: 0, instr: "Confirm Thursday walkthrough and ask about property condition details." },
+    { title: "Send contract to Michael Davis", contact: "Michael Davis", addr: "8899 Charlotte Ave, Nashville, TN", stage: "offer_made", rep: 0, instr: "Draft and send purchase agreement at $128k. Include 14-day close timeline." },
+    { title: "Follow up — Carlos Mendez repair questions", contact: "Carlos Mendez", addr: "5566 Murfreesboro Pike, Nashville, TN", stage: "contacted", rep: 2, instr: "Answer Carlos's questions about expected repairs. Send repair estimate breakdown." },
+    { title: "Prep closing docs — Susan Martinez", contact: "Susan Martinez", addr: "1011 8th Ave S, Nashville, TN", stage: "under_contract", rep: 0, instr: "Coordinate with title company. Ensure all docs are ready for Friday closing." },
+    { title: "Call James Wilson with offer", contact: "James Wilson", addr: "6677 Lebanon Pike, Nashville, TN", stage: "appointment_set", rep: 0, instr: "Present offer based on walkthrough. Target: $175k, max allowable $185k." },
+    { title: "Text Nancy Scott — offer follow-up", contact: "Nancy Scott", addr: "9900 West End Ave, Nashville, TN", stage: "offer_made", rep: 2, instr: "Check if Nancy has reviewed the $195k offer. Push for decision this week." },
+    { title: "Run comps for new lead — Dickerson Pike", contact: "Robert Lee", addr: "3300 Dickerson Pike, Nashville, TN", stage: "new_lead", rep: 1, instr: "Pull 5 comparable sales within 1 mile, last 6 months. Estimate ARV and repairs." },
+    { title: "Confirm closing date — Linda Johnson", contact: "Linda Johnson", addr: "1213 Broadway, Nashville, TN", stage: "under_contract", rep: 2, instr: "Touch base with title company to confirm closing date. Update Linda." },
+    { title: "Cold call block — 10 new leads", contact: "", addr: "", stage: "new_lead", rep: 3, instr: "Work through today's cold call list. Target 10 dials minimum." },
+    { title: "Update pipeline spreadsheet", contact: "", addr: "", stage: "", rep: 1, instr: "Update weekly pipeline tracker with new leads, offers, and contracts." },
+    { title: "Review call recordings — team coaching", contact: "", addr: "", stage: "", rep: 1, instr: "Review Tyler's 3 most recent calls and prepare coaching notes." },
+    { title: "Coordinate with dispo — Richard Clark property", contact: "Richard Clark", addr: "1415 Music Row, Nashville, TN", stage: "closed", rep: 3, instr: "Ensure buyer side closing is on track. Confirm assignment fee collection." },
+  ];
+  for (const t of todaySpecs) {
+    taskEntries.push({
+      tenantId: TENANT_ID, title: t.title, contactName: t.contact,
+      propertyAddress: t.addr, currentStage: t.stage, assignedTo: reps[t.rep],
+      dueDate: todayStr(), overdue: false, instructions: t.instr,
+    });
+  }
+
+  // 8 upcoming tasks (next 1-2 days)
+  const upcomingSpecs = [
+    { title: "Walkthrough — Jennifer Smith", contact: "Jennifer Smith", addr: "4455 Nolensville Pike, Nashville, TN", stage: "contacted", rep: 0, days: 1, instr: "Thursday 2pm walkthrough. Bring camera and repair checklist." },
+    { title: "Follow up on offer — Michael Davis", contact: "Michael Davis", addr: "8899 Charlotte Ave, Nashville, TN", stage: "offer_made", rep: 0, days: 1, instr: "Call Michael if he hasn't accepted by EOD today." },
+    { title: "Send marketing packet to Derek Patel", contact: "Derek Patel", addr: "", stage: "qualified", rep: 3, days: 1, instr: "Send new deal sheet for Charlotte Ave property to buyer Derek Patel." },
+    { title: "Inspection — 1011 8th Ave S", contact: "Susan Martinez", addr: "1011 8th Ave S, Nashville, TN", stage: "under_contract", rep: 0, days: 2, instr: "Meet inspector at property. Document any findings for buyer." },
+    { title: "Closing — Linda Johnson property", contact: "Linda Johnson", addr: "1213 Broadway, Nashville, TN", stage: "under_contract", rep: 2, days: 2, instr: "Attend closing at title company. Bring all original signed docs." },
+    { title: "Team training — objection handling", contact: "", addr: "", stage: "", rep: 1, days: 1, instr: "Run team training session on top 5 seller objections." },
+    { title: "Review new skip trace results", contact: "", addr: "", stage: "new_lead", rep: 1, days: 2, instr: "Review batch of 50 skip trace results and add best leads to call list." },
+    { title: "Call Karen Mitchell — post-walkthrough", contact: "Karen Mitchell", addr: "7788 Gallatin Pike, Nashville, TN", stage: "appointment_set", rep: 2, days: 1, instr: "Discuss walkthrough findings and present preliminary offer range." },
+  ];
+  for (const t of upcomingSpecs) {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + t.days);
+    taskEntries.push({
+      tenantId: TENANT_ID, title: t.title, contactName: t.contact,
+      propertyAddress: t.addr, currentStage: t.stage, assignedTo: reps[t.rep],
+      dueDate: futureDate.toISOString().slice(0, 10), overdue: false, instructions: t.instr,
+    });
+  }
+
+  await db.insert(demoTasks).values(taskEntries);
+  console.log("[seed] 28 demo tasks created.");
 
   console.log("[seed] ✅ Demo tenant (Apex Property Solutions) seeded successfully!");
 }

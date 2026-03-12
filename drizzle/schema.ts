@@ -2031,3 +2031,42 @@ export const notifications = pgTable("notifications", {
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
+
+
+// ============ DEMO DATA TABLES ============
+
+/**
+ * Demo Conversations — fake SMS threads used when crmConnected=false
+ */
+export const demoConversations = pgTable("demo_conversations", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  contactName: text("contactName"),
+  contactPhone: text("contactPhone"),
+  lastMessageBody: text("lastMessageBody"),
+  lastMessageDate: timestamp("lastMessageDate"),
+  unreadCount: integer("unreadCount").default(0),
+  messages: jsonb("messages").$type<Array<{ direction: "inbound" | "outbound"; body: string; timestamp: string; senderName: string }>>().default([]),
+});
+
+export type DemoConversation = typeof demoConversations.$inferSelect;
+export type InsertDemoConversation = typeof demoConversations.$inferInsert;
+
+/**
+ * Demo Tasks — fake tasks used when crmConnected=false
+ */
+export const demoTasks = pgTable("demo_tasks", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id).notNull(),
+  title: text("title"),
+  contactName: text("contactName"),
+  propertyAddress: text("propertyAddress"),
+  currentStage: text("currentStage"),
+  assignedTo: text("assignedTo"),
+  dueDate: text("dueDate"),
+  overdue: boolean("overdue").default(false),
+  instructions: text("instructions"),
+});
+
+export type DemoTask = typeof demoTasks.$inferSelect;
+export type InsertDemoTask = typeof demoTasks.$inferInsert;

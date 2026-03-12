@@ -47,7 +47,10 @@ export const gamificationRouter = router({
       const withScores = members.map((m) => {
         const ms = metricByMember.get(m.id) ?? [];
         const avg = ms.length > 0 ? ms.reduce((a, b) => a + (b.averageScore ? Number(b.averageScore) : 0), 0) / ms.length : 0;
-        return { ...m, averageScore: avg, totalCalls: ms.reduce((a, b) => a + (b.totalCalls ?? 0), 0), streak: streakMap.get(m.id) ?? null, xp: xpMap.get(m.id) ?? null };
+        const sorted = [...ms].sort((a, b) => new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime());
+        const latestScoreChange = sorted.length > 0 && sorted[sorted.length - 1]!.scoreChange ? Number(sorted[sorted.length - 1]!.scoreChange) : 0;
+        const weeklyScores = sorted.slice(-4).map((pm) => Number(pm.averageScore ?? 0));
+        return { ...m, averageScore: avg, totalCalls: ms.reduce((a, b) => a + (b.totalCalls ?? 0), 0), streak: streakMap.get(m.id) ?? null, xp: xpMap.get(m.id) ?? null, scoreChange: latestScoreChange, weeklyScores };
       });
       return withScores.sort((a, b) => b.averageScore - a.averageScore);
     }),

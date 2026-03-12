@@ -16,10 +16,51 @@ import {
   BarChart3,
   Zap,
   UserPlus,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { trpc } from "@/lib/trpc";
+
+function scoreToLetter(score: number): string {
+  if (score >= 90) return "A";
+  if (score >= 80) return "B";
+  if (score >= 70) return "C";
+  if (score >= 60) return "D";
+  return "F";
+}
+
+function gradeColor(letter: string): string {
+  switch (letter) {
+    case "A": return "text-[var(--g-grade-a)]";
+    case "B": return "text-[var(--g-grade-b)]";
+    case "C": return "text-[var(--g-grade-c)]";
+    case "D": return "text-[var(--g-grade-d)]";
+    default: return "text-[var(--g-grade-f)]";
+  }
+}
+
+function MiniSparkline({ scores }: { scores: number[] }) {
+  if (scores.length < 2) return null;
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const range = max - min || 1;
+  const w = 60;
+  const h = 24;
+  const pad = 2;
+  const points = scores.map((v, i) => {
+    const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x},${y}`;
+  });
+  const color = scores[scores.length - 1]! > scores[0]! ? "var(--g-up)" : scores[scores.length - 1]! < scores[0]! ? "var(--g-down)" : "var(--g-text-tertiary)";
+  return (
+    <svg width={w} height={h} className="shrink-0">
+      <polyline fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" points={points.join(" ")} />
+    </svg>
+  );
+}
 
 const BADGE_ICONS: Record<string, typeof Trophy> = {
   first90: Trophy,
@@ -135,9 +176,11 @@ export function Team() {
                 <div className="w-8 shrink-0" />
                 <div className="size-9 shrink-0" />
                 <div className="min-w-0 flex-1" />
-                <div className="flex shrink-0 items-center gap-4">
-                  <span className="w-10 text-right text-xs text-[var(--g-text-tertiary)]">Score</span>
-                  <span className="w-8 text-right text-xs text-[var(--g-text-tertiary)]">Calls</span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="w-10 text-right text-xs text-[var(--g-text-tertiary)]">Grade</span>
+                  <span className="w-[60px] text-center text-xs text-[var(--g-text-tertiary)]">Trend</span>
+                  <span className="w-10 text-right text-xs text-[var(--g-text-tertiary)]">Calls</span>
+                  <span className="w-14 text-right text-xs text-[var(--g-text-tertiary)]">XP</span>
                   <span className="w-8 text-right text-xs text-[var(--g-text-tertiary)]">Streak</span>
                 </div>
               </div>
@@ -146,7 +189,11 @@ export function Team() {
                 const medal = rank <= 3 ? ["#FFD700", "#C0C0C0", "#CD7F32"][rank - 1] : null;
                 const isCurrent = m.id === currentMemberId;
                 const avgScore = Math.round(m.averageScore ?? 0);
+                const letter = scoreToLetter(avgScore);
                 const streak = m.streak?.hotStreakCurrent ?? 0;
+                const change = (m as { scoreChange?: number }).scoreChange ?? 0;
+                const totalXp = m.xp?.totalXp ?? 0;
+                const weekly = ((m as { weeklyScores?: number[] }).weeklyScores ?? []);
                 return (
                   <div
                     key={m.id}
@@ -179,12 +226,22 @@ export function Team() {
                         {roleLabel(m.teamRole, roles)}
                       </Badge>
                     </div>
-                    <div className="flex shrink-0 items-center gap-4">
-                      <span className="w-10 text-right font-semibold text-[var(--g-text-primary)]">
-                        {avgScore}
-                      </span>
-                      <span className="w-8 text-right text-sm text-[var(--g-text-secondary)]">
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="w-10 text-right flex items-center justify-end gap-1">
+                        <span className={cn("text-lg font-bold", gradeColor(letter))}>{letter}</span>
+                        {change !== 0 && (
+                          <span className={cn("flex items-center text-[10px]", change > 0 ? "text-[var(--g-up)]" : "text-[var(--g-down)]")}>
+                            {change > 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                            {Math.abs(Math.round(change))}%
+                          </span>
+                        )}
+                      </div>
+                      <MiniSparkline scores={weekly} />
+                      <span className="w-10 text-right text-sm text-[var(--g-text-secondary)]">
                         {m.totalCalls ?? 0}
+                      </span>
+                      <span className="w-14 text-right text-sm font-mono text-[var(--g-text-secondary)]">
+                        {totalXp.toLocaleString()}
                       </span>
                       <span className={cn("w-8 text-right text-sm", streak >= 3 ? "text-[var(--g-streak)]" : "text-[var(--g-text-tertiary)]")}>
                         {streak}d

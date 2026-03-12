@@ -1,191 +1,56 @@
-import { useState, useMemo, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine, Star, Play, Plus, FileText, Phone } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Phone } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { ActionConfirmDialog } from "@/components/actions/ActionConfirmDialog";
-import { useAction } from "@/hooks/useActions";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
-import { trpc } from "@/lib/trpc";
-
-function formatDuration(sec: number | null) {
-  if (sec == null) return "—";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function formatRelativeTime(ts: Date | string | null) {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  const now = Date.now();
-  const diff = now - d.getTime();
-  if (diff < 60_000) return "Just now";
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} min ago`;
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} hours ago`;
-  if (diff < 604800_000) return `${Math.floor(diff / 86400_000)} days ago`;
-  return d.toLocaleDateString();
-}
-
-function gradeColor(grade: number | null) {
-  if (grade === null) return "bg-[var(--g-text-tertiary)]";
-  if (grade >= 90) return "bg-[var(--g-grade-a)]";
-  if (grade >= 75) return "bg-[var(--g-grade-b)]";
-  if (grade >= 60) return "bg-[var(--g-grade-c)]";
-  if (grade >= 45) return "bg-[var(--g-grade-d)]";
-  return "bg-[var(--g-grade-f)]";
-}
+import { useCallInboxData } from "@/hooks/useCallInboxData";
+import { CallFilters } from "@/components/callinbox/CallFilters";
+import { CallCard } from "@/components/callinbox/CallCard";
 
 export function CallInbox() {
   const { t, callTypes } = useTenantConfig();
   const resolveCallType = (code: string | null) =>
-    callTypes.find((ct) => ct.code === code)?.name ?? code ?? "—";
-  const [search, setSearch] = useState("");
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [starred, setStarred] = useState<Set<number>>(new Set());
-  const [tab, setTab] = useState("all");
-  const [transcriptOpenId, setTranscriptOpenId] = useState<number | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [dateRange, setDateRange] = useState("7");
-  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [actionTarget, setActionTarget] = useState<{ name: string; contactId: string } | null>(null);
-  const { executeAction, isExecuting, result, reset } = useAction();
+    callTypes.find((ct) => ct.code === code)?.name ?? code ?? "\u2014";
 
-  const statusFilter =
-    tab === "graded" ? "graded" : tab === "needs-review" ? "pending" : undefined;
-
-  const dateFrom = useMemo(() => {
-    if (dateRange === "all") return undefined;
-    const d = new Date();
-    d.setDate(d.getDate() - parseInt(dateRange, 10));
-    return d.toISOString();
-  }, [dateRange]);
-
-  const { data: callsData, isLoading } = trpc.calls.list.useQuery({
-    page: currentPage,
-    limit: 25,
-    status: statusFilter,
-    starred: tab === "starred" ? true : undefined,
-    dateFrom,
-  });
-  const toggleStarMutation = trpc.calls.toggleStar.useMutation();
-  const { data: stats } = trpc.calls.getStats.useQuery();
-  const { data: callDetail } = trpc.calls.getById.useQuery(
-    { id: expandedId! },
-    { enabled: !!expandedId }
-  );
-
-  const items = callsData?.items ?? [];
-
-  // Seed starred state from server on page load / page change
-  useEffect(() => {
-    if (!items.length) return;
-    setStarred((prev) => {
-      const next = new Set(prev);
-      items.forEach((c) => {
-        if (!!c.isStarred) next.add(c.id);
-      });
-      return next;
-    });
-  }, [items]);
-
-  const filtered = useMemo(() => {
-    let list = items;
-    const q = search.toLowerCase().trim();
-    if (q) {
-      list = list.filter(
-        (c) =>
-          (c.contactName?.toLowerCase().includes(q)) ||
-          (c.teamMemberName?.toLowerCase().includes(q))
-      );
-    }
-    if (tab === "starred") list = list.filter((c) => starred.has(c.id));
-    return list;
-  }, [items, search, tab, starred]);
-
-  const toggleStar = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setStarred((s) => {
-      const next = new Set(s);
-      const nowStarred = !next.has(id);
-      if (nowStarred) next.add(id);
-      else next.delete(id);
-      toggleStarMutation.mutate({ id, starred: nowStarred });
-      return next;
-    });
-  };
-
-  const total = callsData?.total ?? 0;
-  const limit = callsData?.limit ?? 25;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
-  const grade = callDetail?.grade;
-  const criteriaScores = (grade?.criteriaScores as Array<{ name: string; earned: number; max: number }>) ?? [];
-  const coachImprovements = (grade?.improvements as string[]) ?? [];
-  const coachStrengths = (grade?.strengths as string[]) ?? [];
+  const d = useCallInboxData();
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold text-[var(--g-text-primary)]">
-          Calls
-        </h1>
-        <Input
-          placeholder={`Search ${t.contact.toLowerCase()} or caller...`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-8 w-48 text-sm"
+        <h1 className="text-xl font-bold text-[var(--g-text-primary)]">Calls</h1>
+        <CallFilters
+          search={d.search}
+          onSearchChange={d.setSearch}
+          dateRange={d.dateRange}
+          onDateRangeChange={d.setDateRange}
+          gradeFilter={d.gradeFilter}
+          onGradeFilterChange={d.setGradeFilter}
+          callTypeFilter={d.callTypeFilter}
+          onCallTypeFilterChange={d.setCallTypeFilter}
+          callTypes={callTypes}
+          contactLabel={t.contact}
         />
-        <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="h-8 w-36 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="14">Last 14 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-            <SelectItem value="all">All time</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => { setTab(v); setCurrentPage(1); }}>
+      <Tabs value={d.tab} onValueChange={(v) => { d.setTab(v); d.setCurrentPage(1); }}>
         <TabsList className="h-8">
-          <TabsTrigger value="all" className="text-xs">All {stats ? `(${stats.total})` : ""}</TabsTrigger>
+          <TabsTrigger value="all" className="text-xs">All {d.stats ? `(${d.stats.total})` : ""}</TabsTrigger>
           <TabsTrigger value="needs-review" className="text-xs">Needs Review</TabsTrigger>
-          <TabsTrigger value="graded" className="text-xs">Graded {stats ? `(${stats.graded})` : ""}</TabsTrigger>
+          <TabsTrigger value="graded" className="text-xs">Graded {d.stats ? `(${d.stats.graded})` : ""}</TabsTrigger>
           <TabsTrigger value="starred" className="text-xs">Starred</TabsTrigger>
         </TabsList>
-        <TabsContent value={tab} className="mt-4">
-          {isLoading ? (
+        <TabsContent value={d.tab} className="mt-4">
+          {d.isLoading ? (
             <div className="space-y-3 p-4 md:p-6">
               <Skeleton className="h-8 w-48" />
               {Array.from({ length: 8 }).map((_, i) => (
                 <Skeleton key={i} className="h-14 w-full rounded-lg" />
               ))}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : d.filtered.length === 0 ? (
             <EmptyState
               icon={Phone}
               title="No calls yet"
@@ -196,200 +61,41 @@ export function CallInbox() {
           ) : (
             <ScrollArea className="h-[calc(100vh-220px)]">
               <div className="space-y-2 pr-4">
-                {filtered.map((call) => {
-                  const score = call.overallScore ?? null;
-                  return (
-                    <div key={call.id}>
-                      <Card
-                        className={cn(
-                          "cursor-pointer transition-all hover:shadow-md bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]",
-                          expandedId === call.id && "ring-2 ring-[var(--g-accent)]"
-                        )}
-                        onClick={() => setExpandedId(expandedId === call.id ? null : call.id)}
-                      >
-                        <CardContent className="p-4 py-3">
-                          <div className="flex items-center gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold truncate text-[var(--g-text-primary)]">
-                                  {call.contactName ?? "Unknown"}
-                                </span>
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                  {resolveCallType(call.callType)}
-                                </Badge>
-                              </div>
-                              <p className="text-xs mt-0.5 truncate text-[var(--g-text-tertiary)]">
-                                {call.teamMemberName ?? "—"} · {formatRelativeTime(call.callTimestamp)}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <span className="text-sm tabular-nums text-[var(--g-text-secondary)]">
-                                {formatDuration(call.duration)}
-                              </span>
-                              {(call.callDirection ?? "").toLowerCase() === "inbound" ? (
-                                <ArrowDownToLine className="size-4 text-[var(--g-text-tertiary)]" />
-                              ) : (
-                                <ArrowUpFromLine className="size-4 text-[var(--g-text-tertiary)]" />
-                              )}
-                              <div
-                                className={cn(
-                                  "size-10 rounded-full flex items-center justify-center font-mono font-bold text-sm text-white shrink-0",
-                                  gradeColor(score)
-                                )}
-                              >
-                                {score !== null ? Math.round(score) : "—"}
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => toggleStar(call.id, e)}
-                                className="h-7 w-7 shrink-0"
-                              >
-                                <Star
-                                  className={cn("size-4", starred.has(call.id) && "fill-amber-400 text-amber-500")}
-                                />
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {expandedId === call.id && grade && (
-                        <Card className="mt-2 bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]">
-                          <CardContent className="p-4 space-y-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className={cn("size-12 rounded-full flex items-center justify-center font-mono font-bold text-lg text-white", gradeColor(grade.overallScore ? Number(grade.overallScore) : null))}>
-                                  {grade.overallScore ? Math.round(Number(grade.overallScore)) : "—"}
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-[var(--g-text-primary)]">Scorecard</p>
-                                  {grade.summary && (
-                                    <p className="text-xs text-[var(--g-text-tertiary)]">{grade.summary}</p>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                {callDetail?.recordingUrl && (
-                                  <Button variant="outline" size="sm" asChild>
-                                    <a href={callDetail.recordingUrl} target="_blank" rel="noopener noreferrer">
-                                      <Play className="size-3.5 mr-1" /> Listen
-                                    </a>
-                                  </Button>
-                                )}
-                                {!callDetail?.recordingUrl && (
-                                  <Button variant="outline" size="sm" disabled>
-                                    <Play className="size-3.5 mr-1" /> No Recording
-                                  </Button>
-                                )}
-                                <Button variant="outline" size="sm" onClick={() => {
-                                  setActionTarget({ name: call.contactName ?? "Unknown", contactId: call.ghlContactId ?? String(call.id) });
-                                  setTaskDialogOpen(true);
-                                }}>
-                                  <Plus className="size-3.5 mr-1" /> Task
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={() => {
-                                  setActionTarget({ name: call.contactName ?? "Unknown", contactId: call.ghlContactId ?? String(call.id) });
-                                  setNoteDialogOpen(true);
-                                }}>
-                                  <FileText className="size-3.5 mr-1" /> Note
-                                </Button>
-                              </div>
-                            </div>
-                            {(grade.redFlags as string[])?.length > 0 && (
-                              <div className="text-sm text-red-600 dark:text-red-400"><span className="font-medium">Critical: </span>{(grade.redFlags as string[]).join("; ")}</div>
-                            )}
-                            {criteriaScores.length > 0 && (
-                              <div className="space-y-2">{criteriaScores.map((c) => (
-                                <div key={c.name}>
-                                  <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-[var(--g-text-secondary)]">{c.name}</span>
-                                    <span className="text-[var(--g-text-tertiary)]">{c.earned}/{c.max}</span>
-                                  </div>
-                                  <Progress value={(c.earned / c.max) * 100} className="h-1.5" />
-                                </div>
-                              ))}</div>
-                            )}
-                            <Separator />
-                            {(coachStrengths.length > 0 || coachImprovements.length > 0) && (
-                              <div className="space-y-2">
-                                {coachStrengths.length > 0 && (
-                                  <div>
-                                    <p className="text-xs font-medium mb-1 text-[var(--g-grade-a)]">Strengths</p>
-                                    <ul className="text-sm space-y-1 list-disc list-inside text-[var(--g-text-secondary)]">{coachStrengths.map((s, idx) => <li key={idx}>{s}</li>)}</ul>
-                                  </div>
-                                )}
-                                {coachImprovements.length > 0 && (
-                                  <div>
-                                    <p className="text-xs font-medium mb-1 text-[var(--g-grade-d)]">Areas to improve</p>
-                                    <ul className="text-sm space-y-1 list-disc list-inside text-[var(--g-grade-d)]">{coachImprovements.map((i, idx) => <li key={idx}>{i}</li>)}</ul>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            <Collapsible open={transcriptOpenId === call.id} onOpenChange={(open) => setTranscriptOpenId(open ? call.id : null)}>
-                              <CollapsibleTrigger className="flex items-center gap-1 text-sm text-[var(--g-accent-text)]">
-                                {transcriptOpenId === call.id ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                                Transcript
-                              </CollapsibleTrigger>
-                              <CollapsibleContent>
-                                <div className="mt-2 max-h-48 overflow-y-auto font-mono text-xs leading-relaxed bg-[var(--g-bg-inset)] rounded-md p-3 text-[var(--g-text-secondary)]">
-                                  {callDetail?.transcript
-                                    ? callDetail.transcript.split("\n").map((line, i) => (
-                                        <p key={i}>{line || "\u00A0"}</p>
-                                      ))
-                                    : <p>No transcript available</p>
-                                  }
-                                </div>
-                              </CollapsibleContent>
-                            </Collapsible>
-                          </CardContent>
-                        </Card>
-                      )}
-
-                      {expandedId === call.id && !grade && (
-                        <Card className="mt-2 bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]">
-                          <CardContent className="p-4">
-                            <p className="text-sm text-[var(--g-text-tertiary)]">Not yet graded.</p>
-                            {callDetail?.recordingUrl ? (
-                              <Button variant="outline" size="sm" className="mt-2" asChild>
-                                <a href={callDetail.recordingUrl} target="_blank" rel="noopener noreferrer">
-                                  <Play className="size-3.5 mr-1" /> Listen
-                                </a>
-                              </Button>
-                            ) : (
-                              <Button variant="outline" size="sm" className="mt-2" disabled>
-                                <Play className="size-3.5 mr-1" /> No Recording
-                              </Button>
-                            )}
-                          </CardContent>
-                        </Card>
-                      )}
-                    </div>
-                  );
-                })}
+                {d.filtered.map((call) => (
+                  <CallCard
+                    key={call.id}
+                    call={call}
+                    isExpanded={d.expandedId === call.id}
+                    isStarred={d.starred.has(call.id)}
+                    onToggleExpand={() => d.setExpandedId(d.expandedId === call.id ? null : call.id)}
+                    onToggleStar={(e) => d.toggleStar(call.id, e)}
+                    resolveCallType={resolveCallType}
+                    grade={d.expandedId === call.id ? d.grade ?? null : null}
+                    callDetail={d.expandedId === call.id && d.callDetail ? { recordingUrl: d.callDetail.recordingUrl, transcript: d.callDetail.transcript } : null}
+                    transcriptOpen={d.transcriptOpenId === call.id}
+                    onTranscriptToggle={(open) => d.setTranscriptOpenId(open ? call.id : null)}
+                    onTaskAction={() => {
+                      d.setActionTarget({ name: call.contactName ?? "Unknown", contactId: call.ghlContactId ?? String(call.id) });
+                      d.setTaskDialogOpen(true);
+                    }}
+                    onNoteAction={() => {
+                      d.setActionTarget({ name: call.contactName ?? "Unknown", contactId: call.ghlContactId ?? String(call.id) });
+                      d.setNoteDialogOpen(true);
+                    }}
+                  />
+                ))}
               </div>
             </ScrollArea>
           )}
-          {totalPages > 1 && !isLoading && filtered.length > 0 && (
+          {d.totalPages > 1 && !d.isLoading && d.filtered.length > 0 && (
             <div className="flex items-center justify-center gap-2 pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
-              >
+              <Button variant="outline" size="sm" disabled={d.currentPage <= 1} onClick={() => d.setCurrentPage((p) => p - 1)}>
                 Previous
               </Button>
               <span className="text-sm text-[var(--g-text-secondary)]">
-                Page {currentPage} of {totalPages}
+                Page {d.currentPage} of {d.totalPages}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => p + 1)}
-              >
+              <Button variant="outline" size="sm" disabled={d.currentPage >= d.totalPages} onClick={() => d.setCurrentPage((p) => p + 1)}>
                 Next
               </Button>
             </div>
@@ -397,23 +103,23 @@ export function CallInbox() {
         </TabsContent>
       </Tabs>
 
-      {actionTarget && (
+      {d.actionTarget && (
         <>
           <ActionConfirmDialog
-            open={taskDialogOpen}
-            onOpenChange={(o) => { setTaskDialogOpen(o); if (!o) { setActionTarget(null); reset(); } }}
-            action={{ type: "task", from: { name: "You" }, to: { name: actionTarget.name }, payload: {} }}
-            onConfirm={() => executeAction("task", actionTarget.contactId, { title: `Follow up with ${actionTarget.name}` })}
-            isExecuting={isExecuting}
-            result={result}
+            open={d.taskDialogOpen}
+            onOpenChange={(o) => { d.setTaskDialogOpen(o); if (!o) { d.setActionTarget(null); d.reset(); } }}
+            action={{ type: "task", from: { name: "You" }, to: { name: d.actionTarget.name }, payload: {} }}
+            onConfirm={() => d.executeAction("task", d.actionTarget!.contactId, { title: `Follow up with ${d.actionTarget!.name}` })}
+            isExecuting={d.isExecuting}
+            result={d.result}
           />
           <ActionConfirmDialog
-            open={noteDialogOpen}
-            onOpenChange={(o) => { setNoteDialogOpen(o); if (!o) { setActionTarget(null); reset(); } }}
-            action={{ type: "note", from: { name: "You" }, to: { name: actionTarget.name }, payload: {} }}
-            onConfirm={() => executeAction("note", actionTarget.contactId, { body: `Call review note for ${actionTarget.name}` })}
-            isExecuting={isExecuting}
-            result={result}
+            open={d.noteDialogOpen}
+            onOpenChange={(o) => { d.setNoteDialogOpen(o); if (!o) { d.setActionTarget(null); d.reset(); } }}
+            action={{ type: "note", from: { name: "You" }, to: { name: d.actionTarget.name }, payload: {} }}
+            onConfirm={() => d.executeAction("note", d.actionTarget!.contactId, { body: `Call review note for ${d.actionTarget!.name}` })}
+            isExecuting={d.isExecuting}
+            result={d.result}
           />
         </>
       )}
