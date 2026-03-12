@@ -58,29 +58,8 @@ app.use(
   })
 );
 
-app.get("/health", async (_req, res) => {
-  let crmStatus: "connected" | "degraded" | "disconnected" = "disconnected";
-  try {
-    const { db: healthDb } = await import("./db");
-    const { tenants: tenantsTable } = await import("../../drizzle/schema");
-    const { eq } = await import("drizzle-orm");
-    const connected = await healthDb
-      .select({ lastWebhookAt: tenantsTable.lastWebhookAt })
-      .from(tenantsTable)
-      .where(eq(tenantsTable.crmConnected, "true"))
-      .limit(1);
-    if (connected.length > 0) {
-      const lastWebhook = connected[0]?.lastWebhookAt;
-      if (lastWebhook && Date.now() - lastWebhook.getTime() < 2 * 60 * 60 * 1000) {
-        crmStatus = "connected";
-      } else {
-        crmStatus = "degraded";
-      }
-    }
-  } catch {
-    crmStatus = "degraded";
-  }
-  res.json({ status: "ok", timestamp: new Date().toISOString(), crmStatus });
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 app.use(
@@ -143,20 +122,25 @@ if (ENV.isProduction) {
   });
 }
 
-app.listen(ENV.port, "0.0.0.0", () => {
-  console.log(`Gunner v2 running on port ${ENV.port}`);
-  runStartupMigrations()
-    .then(() => seedIndustryPlaybooks())
-    .then(() => seedNahTenantPlaybook())
-    .then(() => seedDemoTenant())
-    .catch((err) => console.error("[startup] Migration/seed error:", err));
-  if (ENV.isProduction) {
-    try { startPolling(5); } catch (e) { console.error("[services] Polling failed:", e); }
-    try { startDailyDigestJob(); } catch (e) { console.error("[services] Digest failed:", e); }
-    try { startEventFlusher(); } catch (e) { console.error("[services] Flusher failed:", e); }
-    try { startRetryProcessor(); } catch (e) { console.error("[services] Retry failed:", e); }
-    try { startScheduledJobs(); } catch (e) { console.error("[services] Jobs failed:", e); }
-  }
-});
+runStartupMigrations()
+  .then(() => seedIndustryPlaybooks())
+  .then(() => seedNahTenantPlaybook())
+  .then(() => seedDemoTenant())
+  .then(() => {
+    app.listen(ENV.port, "0.0.0.0", () => {
+      console.log(`Gunner v2 running on port ${ENV.port}`);
+      if (ENV.isProduction) {
+        try { startPolling(5); } catch (e) { console.error("[services] Polling failed:", e); }
+        try { startDailyDigestJob(); } catch (e) { console.error("[services] Digest failed:", e); }
+        try { startEventFlusher(); } catch (e) { console.error("[services] Flusher failed:", e); }
+        try { startRetryProcessor(); } catch (e) { console.error("[services] Retry failed:", e); }
+        try { startScheduledJobs(); } catch (e) { console.error("[services] Jobs failed:", e); }
+      }
+    });
+  })
+  .catch((err) => {
+    console.error("[startup] Fatal migration/seed error:", err);
+    process.exit(1);
+  });
 
 export type AppRouter = typeof appRouter;
