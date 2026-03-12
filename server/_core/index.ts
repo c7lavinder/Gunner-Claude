@@ -24,11 +24,6 @@ import { seedNahTenantPlaybook } from "../seeds/nahTenant";
 import { seedDemoTenant } from "../seeds/seedDemoTenant";
 import { chatCompletionStream } from "./llm";
 
-// #region agent log
-console.log(`[debug] Module evaluation started at ${new Date().toISOString()}, pid=${process.pid}`);
-fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:top',message:'module evaluation started',data:{pid:process.pid,nodeVersion:process.version},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-// #endregion
-
 process.on("unhandledRejection", (reason) => {
   console.error("[process] unhandledRejection:", reason instanceof Error ? reason.stack ?? reason.message : String(reason));
 });
@@ -49,8 +44,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
-// Trust Railway's reverse proxy so req.ip and secure cookies work correctly in production
 app.set("trust proxy", 1);
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 app.use("/api/stripe/webhook", stripeWebhookRouter);
 app.use(express.json({ limit: "10mb" }));
@@ -62,14 +60,6 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
-
-app.get("/health", (_req, res) => {
-  // #region agent log
-  console.log(`[debug] /health hit at ${new Date().toISOString()}`);
-  fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:/health',message:'healthcheck endpoint hit',data:{ts:new Date().toISOString()},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
 
 app.use(
   "/api/trpc/auth.login",
@@ -86,7 +76,6 @@ app.use(
 
 app.use("/api/webhooks", webhookRouter);
 
-// SSE streaming endpoint for AI coach
 app.post("/api/ai/stream", async (req, res) => {
   const token = req.cookies?.auth_token ?? (req.headers.authorization?.replace("Bearer ", "") || "");
   try {
@@ -131,18 +120,8 @@ if (ENV.isProduction) {
   });
 }
 
-// #region agent log
-console.log(`[debug] About to call app.listen on port ${ENV.port}, host 0.0.0.0 at ${new Date().toISOString()}`);
-fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:beforeListen',message:'about to call app.listen',data:{port:ENV.port,host:'0.0.0.0',NODE_ENV:process.env.NODE_ENV},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-// #endregion
-
 const server = app.listen(ENV.port, "0.0.0.0", () => {
-  // #region agent log
-  const addr = server.address();
-  console.log(`[debug] app.listen callback fired. address=${JSON.stringify(addr)} at ${new Date().toISOString()}`);
-  fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:listenCallback',message:'server listening - port bound',data:{address:addr},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
-  console.log(`Gunner v2 running on port ${ENV.port}`);
+  console.log(`[startup] Gunner v2 listening on port ${ENV.port}`);
   runStartupMigrations()
     .then(() => seedIndustryPlaybooks())
     .then(() => seedNahTenantPlaybook())
@@ -158,11 +137,8 @@ const server = app.listen(ENV.port, "0.0.0.0", () => {
   }
 });
 
-// #region agent log
 server.on("error", (err) => {
-  console.error(`[debug] server.on('error'): ${err.message}`, err);
-  fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:serverError',message:'server error event',data:{error:err.message,code:(err as NodeJS.ErrnoException).code},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+  console.error("[startup] Server error:", err.message);
 });
-// #endregion
 
 export type AppRouter = typeof appRouter;
