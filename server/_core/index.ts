@@ -24,6 +24,11 @@ import { seedNahTenantPlaybook } from "../seeds/nahTenant";
 import { seedDemoTenant } from "../seeds/seedDemoTenant";
 import { chatCompletionStream } from "./llm";
 
+// #region agent log
+console.log(`[debug] Module evaluation started at ${new Date().toISOString()}, pid=${process.pid}`);
+fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:top',message:'module evaluation started',data:{pid:process.pid,nodeVersion:process.version},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+// #endregion
+
 process.on("unhandledRejection", (reason) => {
   console.error("[process] unhandledRejection:", reason instanceof Error ? reason.stack ?? reason.message : String(reason));
 });
@@ -59,6 +64,10 @@ app.use(
 );
 
 app.get("/health", (_req, res) => {
+  // #region agent log
+  console.log(`[debug] /health hit at ${new Date().toISOString()}`);
+  fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:/health',message:'healthcheck endpoint hit',data:{ts:new Date().toISOString()},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
@@ -122,7 +131,17 @@ if (ENV.isProduction) {
   });
 }
 
-app.listen(ENV.port, "0.0.0.0", () => {
+// #region agent log
+console.log(`[debug] About to call app.listen on port ${ENV.port}, host 0.0.0.0 at ${new Date().toISOString()}`);
+fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:beforeListen',message:'about to call app.listen',data:{port:ENV.port,host:'0.0.0.0',NODE_ENV:process.env.NODE_ENV},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+// #endregion
+
+const server = app.listen(ENV.port, "0.0.0.0", () => {
+  // #region agent log
+  const addr = server.address();
+  console.log(`[debug] app.listen callback fired. address=${JSON.stringify(addr)} at ${new Date().toISOString()}`);
+  fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:listenCallback',message:'server listening - port bound',data:{address:addr},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
   console.log(`Gunner v2 running on port ${ENV.port}`);
   runStartupMigrations()
     .then(() => seedIndustryPlaybooks())
@@ -138,5 +157,12 @@ app.listen(ENV.port, "0.0.0.0", () => {
     try { startScheduledJobs(); } catch (e) { console.error("[services] Jobs failed:", e); }
   }
 });
+
+// #region agent log
+server.on("error", (err) => {
+  console.error(`[debug] server.on('error'): ${err.message}`, err);
+  fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d22012'},body:JSON.stringify({sessionId:'d22012',location:'index.ts:serverError',message:'server error event',data:{error:err.message,code:(err as NodeJS.ErrnoException).code},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+});
+// #endregion
 
 export type AppRouter = typeof appRouter;
