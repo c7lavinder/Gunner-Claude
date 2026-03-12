@@ -122,7 +122,7 @@ if (ENV.isProduction) {
   });
 }
 
-app.listen(ENV.port, "::", () => {
+app.listen(ENV.port, "0.0.0.0", () => {
   console.log(`Gunner v2 running on port ${ENV.port}`);
   runStartupMigrations()
     .then(() => seedIndustryPlaybooks())
