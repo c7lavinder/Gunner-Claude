@@ -139,6 +139,8 @@ export const callsRouter = router({
         starred: z.boolean().optional(),
         dateFrom: z.string().optional(),
         callType: z.string().optional(),
+        teamMemberId: z.number().optional(),
+        classification: z.string().optional(),
         gradeMin: z.number().optional(),
         gradeMax: z.number().optional(),
       })
@@ -155,6 +157,8 @@ export const callsRouter = router({
       if (input.starred === true) conditions.push(eq(calls.isStarred, "true"));
       if (input.dateFrom) conditions.push(gte(calls.callTimestamp, new Date(input.dateFrom)));
       if (input.callType) conditions.push(eq(calls.callType, input.callType));
+      if (input.teamMemberId) conditions.push(eq(calls.teamMemberId, input.teamMemberId));
+      if (input.classification) conditions.push(eq(calls.classification, input.classification));
 
       // Grade range filters require a join condition
       const gradeConditions: ReturnType<typeof eq>[] = [];
@@ -175,6 +179,7 @@ export const callsRouter = router({
         .select({
           call: calls,
           overallScore: callGrades.overallScore,
+          summary: callGrades.summary,
         })
         .from(calls)
         .leftJoin(callGrades, joinCondition)
@@ -186,6 +191,7 @@ export const callsRouter = router({
       const items = rows.map((r) => ({
         ...r.call,
         overallScore: r.overallScore ? Number(r.overallScore) : null,
+        summary: r.summary ?? null,
       }));
 
       return {

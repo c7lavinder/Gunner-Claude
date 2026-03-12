@@ -1357,10 +1357,10 @@ export type InsertUserInstruction = typeof userInstructions.$inferInsert;
  */
 export const callNextSteps = pgTable("call_next_steps", {
   id: serial("id").primaryKey(),
-  callId: integer("callId").references(() => calls.id).notNull(),
-  tenantId: integer("tenantId").references(() => tenants.id),
+  callId: integer("call_id").references(() => calls.id).notNull(),
+  tenantId: integer("tenant_id").references(() => tenants.id),
   // Action details
-  actionType: varchar("actionType", { length: 50 }).notNull(),
+  actionType: varchar("action_type", { length: 50 }).notNull(),
   reason: text("reason").notNull(),
   editableContent: text("editable_content"),
   suggested: varchar("suggested", { length: 5 }).notNull().default("true"),
@@ -1369,8 +1369,8 @@ export const callNextSteps = pgTable("call_next_steps", {
   status: text("status").default("pending"),
   result: text("result"),
   // Timestamps
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 export type CallNextStep = typeof callNextSteps.$inferSelect;
 export type InsertCallNextStep = typeof callNextSteps.$inferInsert;

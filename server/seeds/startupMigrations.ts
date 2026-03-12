@@ -1,5 +1,7 @@
-import { sql } from "drizzle-orm";
+import { sql, eq, and, or, gte, isNull } from "drizzle-orm";
 import { db } from "../_core/db";
+import { calls, callGrades } from "../../drizzle/schema";
+import { gradeCall } from "../services/grading";
 
 /**
  * Idempotent DDL that must exist before the seed and runtime code runs.
@@ -251,20 +253,23 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
-  // Call next steps — AI-suggested and manual post-call actions
+  // Call next steps — AI-suggested and manual post-call actions (snake_case columns)
+  // Drop old camelCase version if it exists, then recreate with snake_case
+  await db.execute(sql`DROP TABLE IF EXISTS "call_next_steps"`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS "call_next_steps" (
       "id" serial PRIMARY KEY NOT NULL,
-      "callId" integer NOT NULL REFERENCES "calls"("id"),
-      "tenantId" integer REFERENCES "tenants"("id"),
-      "actionType" varchar(50) NOT NULL,
+      "call_id" integer NOT NULL REFERENCES "calls"("id"),
+      "tenant_id" integer REFERENCES "tenants"("id"),
+      "action_type" varchar(50) NOT NULL,
       "reason" text NOT NULL,
+      "editable_content" text,
       "suggested" varchar(5) NOT NULL DEFAULT 'true',
       "payload" jsonb NOT NULL,
       "status" text DEFAULT 'pending',
       "result" text,
-      "createdAt" timestamp DEFAULT now() NOT NULL,
-      "updatedAt" timestamp DEFAULT now() NOT NULL
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
     )
   `);
 
@@ -286,8 +291,50 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
-  // Add editable_content column to call_next_steps
-  await db.execute(sql`ALTER TABLE "call_next_steps" ADD COLUMN IF NOT EXISTS "editable_content" text`);
-
   console.log("[migrations] Startup migrations complete.");
+
+  // Grade orphaned / pending calls (limit 10 to avoid overwhelming OpenAI)
+  await gradeOrphanedCalls();
+}
+
+async function gradeOrphanedCalls(): Promise<void> {
+  try {
+    // Find calls marked "graded" but missing a call_grades row (orphaned status)
+    const orphaned = await db
+      .select({ id: calls.id, tenantId: calls.tenantId })
+      .from(calls)
+      .leftJoin(callGrades, eq(callGrades.callId, calls.id))
+      .where(and(eq(calls.status, "graded"), isNull(callGrades.id)))
+      .limit(10);
+
+    // Find calls that are "pending" with duration >= 60 (should have been graded)
+    const pending = await db
+      .select({ id: calls.id, tenantId: calls.tenantId })
+      .from(calls)
+      .where(and(
+        or(eq(calls.status, "pending"), eq(calls.status, "transcribed"))!,
+        gte(calls.duration, 60),
+      ))
+      .limit(10 - orphaned.length);
+
+    const toGrade = [...orphaned, ...pending].slice(0, 10);
+    if (toGrade.length === 0) return;
+
+    console.log(`[migrations] Grading ${toGrade.length} orphaned/pending calls...`);
+
+    for (const call of toGrade) {
+      try {
+        // Reset status to pending before grading
+        await db.update(calls).set({ status: "pending" }).where(eq(calls.id, call.id));
+        await gradeCall(call.id, call.tenantId);
+        console.log(`[migrations] Graded call ${call.id}`);
+      } catch (e) {
+        console.error(`[migrations] Failed to grade call ${call.id}:`, e);
+      }
+    }
+
+    console.log("[migrations] Orphaned call grading complete.");
+  } catch (e) {
+    console.error("[migrations] gradeOrphanedCalls error:", e);
+  }
 }

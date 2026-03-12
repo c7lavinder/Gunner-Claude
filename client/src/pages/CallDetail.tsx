@@ -66,6 +66,10 @@ function gradeCircleColor(score: number | null): string {
   return "bg-red-500";
 }
 
+function formatCodeLabel(code: string) {
+  return code.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const CLASSIFICATION_COLOR: Record<string, string> = {
   green: "border-green-500 text-green-600",
   red: "border-red-500 text-red-600",
@@ -121,7 +125,7 @@ export function CallDetail() {
   const letter = scoreLetter(score);
   const direction = (call.callDirection ?? "").toLowerCase();
   const isInbound = direction === "inbound";
-  const callTypeName = callTypes.find((ct) => ct.code === call.callType)?.name ?? call.callType ?? "\u2014";
+  const callTypeName = callTypes.find((ct) => ct.code === call.callType)?.name ?? (call.callType ? formatCodeLabel(call.callType) : "\u2014");
   const classLabel = call.classification ? classificationLabels[call.classification] : undefined;
   const classColor = classLabel ? (CLASSIFICATION_COLOR[classLabel.color] ?? CLASSIFICATION_COLOR.gray) : null;
   const relativeTime = call.callTimestamp
@@ -554,7 +558,7 @@ function TranscriptTab({ transcript, recordingUrl }: { transcript: string | null
 
 function NextStepsTab({ callId }: { callId: number }) {
   const utils = trpc.useUtils();
-  const { data: steps, isLoading } = trpc.calls.getNextSteps.useQuery({ callId });
+  const { data: steps, isLoading, isError } = trpc.calls.getNextSteps.useQuery({ callId });
   const generateMutation = trpc.calls.generateNextSteps.useMutation({
     onSuccess: () => void utils.calls.getNextSteps.invalidate({ callId }),
   });
@@ -569,6 +573,16 @@ function NextStepsTab({ callId }: { callId: number }) {
           <Skeleton key={i} className="h-16 w-full rounded-lg" />
         ))}
       </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className="border-[var(--g-border-subtle)]">
+        <CardContent className="p-6 text-center text-sm text-[var(--g-text-tertiary)]">
+          Next steps unavailable. The call may still be processing.
+        </CardContent>
+      </Card>
     );
   }
 

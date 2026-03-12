@@ -34,6 +34,8 @@ export function useCallInboxData(params: UseCallInboxParams) {
     starred: tab === "starred" ? true : undefined,
     dateFrom,
     callType: params.callTypeFilter !== "All" ? params.callTypeFilter : undefined,
+    teamMemberId: params.teamMemberIds.length === 1 ? params.teamMemberIds[0] : undefined,
+    classification: params.outcome !== "All" ? params.outcome : undefined,
     gradeMin: params.gradeFilter === "All" ? undefined : gradeRanges[params.gradeFilter]?.[0],
     gradeMax: params.gradeFilter === "All" ? undefined : gradeRanges[params.gradeFilter]?.[1],
   });

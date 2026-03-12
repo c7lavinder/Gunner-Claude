@@ -38,6 +38,10 @@ const CLASSIFICATION_COLOR: Record<string, string> = {
   gray: "border-gray-400 text-gray-500",
 };
 
+function formatCodeLabel(code: string) {
+  return code.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export interface CallItem {
   id: number;
   contactName: string | null;
@@ -69,7 +73,7 @@ export function CallCard({ call, isStarred, onToggleStar }: CallCardProps) {
   const direction = (call.callDirection ?? "").toLowerCase();
   const isInbound = direction === "inbound";
 
-  const callTypeName = callTypes.find((ct) => ct.code === call.callType)?.name ?? call.callType ?? "\u2014";
+  const callTypeName = callTypes.find((ct) => ct.code === call.callType)?.name ?? (call.callType ? formatCodeLabel(call.callType) : "\u2014");
 
   const classLabel = call.classification ? classificationLabels[call.classification] : undefined;
   const classColor = classLabel ? (CLASSIFICATION_COLOR[classLabel.color] ?? CLASSIFICATION_COLOR.gray) : null;
