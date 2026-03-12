@@ -42,6 +42,12 @@ function daysAgoStr(n: number): string {
 }
 
 export async function seedDemoTenant(): Promise<void> {
+  const existing = await db.select().from(tenants).where(eq(tenants.id, TENANT_ID)).limit(1);
+  if (existing.length > 0) {
+    console.log("[seed] Demo tenant already exists — skipping.");
+    return;
+  }
+
   console.log("[seed] Seeding demo tenant (ID=540044)...");
 
   // ── DELETE existing demo data ──────────────────────────────────
