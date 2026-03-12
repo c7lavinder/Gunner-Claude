@@ -72,6 +72,7 @@ export interface ConvoItem {
   propertyAddress?: string;
   currentStage?: string;
   lastMessageBody?: string;
+  teamMemberName?: string;
 }
 
 /* ── task type ── */
@@ -85,6 +86,9 @@ export interface TaskItem {
   currentStage?: string;
   assignedTo?: string;
   dueDate?: string;
+  amCalled?: boolean;
+  pmCalled?: boolean;
+  crmTaskId?: string;
 }
 
 /* ── hook ── */
@@ -102,6 +106,7 @@ export function useTodayData() {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const [taskSearch, setTaskSearch] = useState("");
+  const [visibleTaskCount, setVisibleTaskCount] = useState(50);
   const [inboxSearch, setInboxSearch] = useState("");
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([]);
   const [coachInput, setCoachInput] = useState("");
@@ -176,6 +181,10 @@ export function useTodayData() {
     );
   }, [taskData, taskSearch]);
 
+  const visibleTasks = useMemo(() => filteredTasks.slice(0, visibleTaskCount), [filteredTasks, visibleTaskCount]);
+  const loadMoreTasks = useCallback(() => setVisibleTaskCount((n) => n + 50), []);
+  const remainingTaskCount = Math.max(0, filteredTasks.length - visibleTaskCount);
+
   // Resolve a task title to a stage code (best-effort match)
   const resolveTaskType = useCallback(
     (title: string): string => {
@@ -202,14 +211,24 @@ export function useTodayData() {
     setCoachMessages((prev) => [...prev, { role: "user", content: msg }]);
     setCoachInput("");
     chatMutation.mutate(
-      { message: msg, page: "today" },
+      {
+        message: msg,
+        page: "today",
+        pageContext: {
+          role: selectedRole,
+          kpis: statCards.map((s) => ({ key: s.key, actual: s.actual, target: s.target })),
+          taskCount: filteredTasks.length,
+          unreadConvos: unreadTotal,
+          missedCalls: missedCount,
+        },
+      },
       {
         onSuccess: (data) => {
           setCoachMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
         },
       },
     );
-  }, [coachInput, chatMutation]);
+  }, [coachInput, chatMutation, selectedRole, statCards, filteredTasks.length, unreadTotal, missedCount]);
 
   const handleCompleteTask = useCallback(
     (taskId: string, done: boolean) => {
@@ -269,6 +288,9 @@ export function useTodayData() {
 
     // tasks
     filteredTasks,
+    visibleTasks,
+    loadMoreTasks,
+    remainingTaskCount,
     taskSearch,
     setTaskSearch,
     expandedTask,

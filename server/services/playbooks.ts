@@ -287,6 +287,12 @@ export function resolveOutcomeTypes(
   return industry?.outcomeTypes ?? [];
 }
 
+export function resolveTaskCategories(
+  industry?: IndustryPlaybook | null
+): Array<{ code: string; name: string }> {
+  return industry?.taskCategories ?? [];
+}
+
 export function resolveClassificationLabels(
   industry?: IndustryPlaybook | null
 ): Record<string, { label: string; color: string }> {

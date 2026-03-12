@@ -363,6 +363,12 @@ export const RE_WHOLESALING_PLAYBOOK: IndustryPlaybook = {
   roleplayPersonas: ROLEPLAY_PERSONAS,
   trainingCategories: TRAINING_CATEGORIES,
   gradingPhilosophy: GRADING_PHILOSOPHY,
+  taskCategories: [
+    { code: "new_lead", name: "New Lead" },
+    { code: "follow_up", name: "Follow Up" },
+    { code: "admin", name: "Admin" },
+    { code: "reschedule", name: "Reschedule" },
+  ],
   classificationLabels: {
     "Interested": { label: "Interested", color: "green" },
     "Not Interested": { label: "Not Interested", color: "red" },

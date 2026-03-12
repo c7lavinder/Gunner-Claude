@@ -130,6 +130,24 @@ export const teamRouter = router({
     return { csv: [header, ...csvRows].join("\n") };
   }),
 
+  updateLcPhone: protectedProcedure
+    .input(z.object({ id: z.number(), lcPhone: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "manager");
+      const [updated] = await db
+        .update(teamMembers)
+        .set({ lcPhone: input.lcPhone, updatedAt: new Date() })
+        .where(
+          and(
+            eq(teamMembers.id, input.id),
+            eq(teamMembers.tenantId, ctx.user.tenantId)
+          )
+        )
+        .returning();
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND" });
+      return updated;
+    }),
+
   remove: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {

@@ -99,7 +99,7 @@ export function DayHubInbox({
   ];
 
   return (
-    <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden">
+    <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden h-[620px]">
       {/* Top tabs: Inbox | Apts */}
       <div className="flex items-center gap-2 px-4 pt-4">
         {(["inbox", "apts"] as const).map((tab) => (
@@ -172,7 +172,7 @@ export function DayHubInbox({
               "flex-1 min-h-0 transition-all",
               selectedConv ? "hidden lg:block lg:w-[45%] lg:flex-none lg:border-r lg:border-[var(--g-border-subtle)] lg:pr-3" : "w-full",
             )}>
-              <ScrollArea className="max-h-[320px]">
+              <div className="flex-1 overflow-y-auto">
                 {/* SMS conversations */}
                 {showConversations && (
                   <>
@@ -289,7 +289,7 @@ export function DayHubInbox({
                     ))}
                   </div>
                 )}
-              </ScrollArea>
+              </div>
             </div>
 
             {/* Right side: inline thread panel */}
@@ -363,8 +363,8 @@ function ConvoRow({ convo, isSelected, onClick }: { convo: ConvoItem; isSelected
     >
       <div className="flex items-center gap-3">
         <div className="relative shrink-0">
-          <div className="size-9 rounded-full bg-[var(--g-accent-soft)] text-[var(--g-accent-text)] flex items-center justify-center text-sm font-bold">
-            {convo.name.charAt(0).toUpperCase()}
+          <div className="size-9 rounded-full bg-[var(--g-bg-inset)] flex items-center justify-center">
+            <MessageSquare className="size-4 text-[var(--g-accent-text)]" />
           </div>
           <div className={cn("absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[var(--g-bg-card)]", presenceDotColor(convo.lastContactDate))} />
         </div>
@@ -383,6 +383,11 @@ function ConvoRow({ convo, isSelected, onClick }: { convo: ConvoItem; isSelected
             </p>
           ) : (
             <p className="text-xs text-[var(--g-text-tertiary)]">{convo.phone}</p>
+          )}
+          {(convo.propertyAddress || convo.teamMemberName) && (
+            <p className="text-[10px] text-[var(--g-text-tertiary)] truncate mt-0.5">
+              {convo.propertyAddress}{convo.propertyAddress && convo.teamMemberName ? " · " : ""}{convo.teamMemberName}
+            </p>
           )}
         </div>
         {isUnread && (

@@ -37,17 +37,17 @@ export function KpiStatCards({ cards, kpiLabel, onClickCard }: KpiStatCardsProps
               className="cursor-pointer border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] hover:bg-[var(--g-bg-card-hover)] transition-colors overflow-hidden"
               onClick={() => onClickCard(key)}
             >
-              <CardContent className="p-4 pb-2">
+              <CardContent className="p-5 pb-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Icon className="size-4 text-[var(--g-accent-text)]" />
-                  <span className="text-xs font-medium text-[var(--g-text-secondary)]">{kpiLabel(key)}</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--g-text-secondary)]">{kpiLabel(key)}</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold text-[var(--g-text-primary)]">{actual}</span>
+                  <span className="text-3xl font-bold text-[var(--g-text-primary)]">{actual}</span>
                   <span className="text-sm text-[var(--g-text-tertiary)]">/ {target}</span>
                 </div>
               </CardContent>
-              <div className="h-1 bg-[var(--g-bg-inset)]">
+              <div className="h-1.5 bg-[var(--g-bg-inset)]">
                 <div
                   className={cn("h-full transition-all", progressColor(pct))}
                   style={{ width: `${Math.min(100, pct)}%` }}

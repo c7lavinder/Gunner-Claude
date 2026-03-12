@@ -1,9 +1,9 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { eq, and, desc, gte } from "drizzle-orm";
+import { eq, and, desc, gte, count, sql, like, or, isNull, lt } from "drizzle-orm";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
-import { coachMessages, userInstructions, aiSuggestions, userEvents, callGrades, calls, teamMembers } from "../../drizzle/schema";
+import { coachMessages, userInstructions, aiSuggestions, userEvents, callGrades, calls, teamMembers, dailyKpiEntries, dispoProperties, contactCache } from "../../drizzle/schema";
 import { chatCompletion } from "../_core/llm";
 import {
   getIndustryPlaybook,
@@ -65,11 +65,83 @@ export const aiRouter = router({
       userPb?.gradeTrend ? `Grade trend: ${userPb.gradeTrend}` : null,
     ].filter(Boolean).join("\n");
 
+    // Build Day Hub context when on the Today page
+    let dayHubContext = "";
+    if (input.page === "today") {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStartDt = new Date(); todayStartDt.setHours(0, 0, 0, 0);
+      const amEnd = new Date(todayStr + "T12:00:00.000Z");
+      const dayEnd = new Date(todayStr + "T23:59:59.999Z");
+
+      // KPI stats
+      const [callsResult] = await db.select({ count: count() }).from(calls)
+        .where(and(eq(calls.tenantId, tenantId), gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, todayStartDt)));
+      const [convosResult] = await db.select({ count: count() }).from(calls)
+        .where(and(eq(calls.tenantId, tenantId), gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, todayStartDt), gte(calls.duration, 60)));
+
+      // AM/PM call status for this user
+      const [amCall] = await db.select({ id: calls.id }).from(calls).where(and(
+        eq(calls.tenantId, tenantId),
+        gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, todayStartDt),
+        sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) < ${amEnd}`,
+        gte(calls.duration, 30),
+      )).limit(1);
+      const [pmCall] = await db.select({ id: calls.id }).from(calls).where(and(
+        eq(calls.tenantId, tenantId),
+        gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, amEnd),
+        sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) <= ${dayEnd}`,
+        gte(calls.duration, 30),
+      )).limit(1);
+
+      // Task count
+      const [taskResult] = await db.select({ count: count() }).from(dailyKpiEntries).where(and(
+        eq(dailyKpiEntries.tenantId, tenantId), eq(dailyKpiEntries.userId, userId),
+        eq(dailyKpiEntries.date, todayStr), like(dailyKpiEntries.kpiType, "task%"),
+      ));
+      const [doneTaskResult] = await db.select({ count: count() }).from(dailyKpiEntries).where(and(
+        eq(dailyKpiEntries.tenantId, tenantId), eq(dailyKpiEntries.userId, userId),
+        eq(dailyKpiEntries.date, todayStr), like(dailyKpiEntries.kpiType, "task%"),
+        like(dailyKpiEntries.notes, "[DONE]%"),
+      ));
+
+      // Missed calls
+      const [missedResult] = await db.select({ count: count() }).from(calls).where(and(
+        eq(calls.tenantId, tenantId), eq(calls.callDirection, "inbound"),
+        gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, todayStartDt),
+        or(lt(calls.duration, 30), isNull(calls.duration))!,
+      ));
+
+      // Stale properties (no contact in 2 days)
+      const twoDaysAgo = new Date(); twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      const [staleResult] = await db.select({ count: count() }).from(dispoProperties).where(and(
+        eq(dispoProperties.tenantId, tenantId),
+        or(isNull(dispoProperties.lastContactedAt), lt(dispoProperties.lastContactedAt, twoDaysAgo))!,
+      ));
+
+      // Unread conversations
+      const [convoResult] = await db.select({ count: count() }).from(contactCache)
+        .where(eq(contactCache.tenantId, tenantId));
+
+      dayHubContext = `
+--- DAY HUB SNAPSHOT ---
+Date: ${todayStr}
+Calls today: ${callsResult?.count ?? 0}
+Conversations (60s+): ${convosResult?.count ?? 0}
+AM call done: ${amCall ? "yes" : "no"}
+PM call done: ${pmCall ? "yes" : "no"}
+Tasks: ${doneTaskResult?.count ?? 0}/${taskResult?.count ?? 0} completed
+Missed calls: ${missedResult?.count ?? 0}
+Stale properties (no contact 2+ days): ${staleResult?.count ?? 0}
+Total contacts: ${convoResult?.count ?? 0}
+--- END SNAPSHOT ---`;
+    }
+
     const systemPrompt = `You are the Gunner AI Coach — a consistent, persistent AI assistant.
 You help ${ctx.user.name ?? "User"} (${ctx.user.role}) improve their performance.
 You have access to their call grades, KPIs, and team context.
 ${playbookContext}
 Current page: ${input.page}
+${dayHubContext}
 ${input.pageContext ? `Page context: ${JSON.stringify(input.pageContext)}` : ""}
 ${userInstructionsText}
 Use the correct terminology for this team's industry. Be direct, actionable, and encouraging. Never be generic.`;

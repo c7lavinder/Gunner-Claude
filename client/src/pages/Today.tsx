@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Sparkles, Send, RefreshCw } from "lucide-react";
+import type { StatCard } from "@/hooks/useTodayData";
 import { ErrorState } from "@/components/ErrorState";
 import { PageShell } from "@/components/layout/PageShell";
 import { toast } from "sonner";
@@ -104,12 +105,18 @@ export function Today() {
           onSend={d.handleSendCoach}
           isPending={d.chatIsPending}
           scrollEndRef={d.scrollEndRef}
+          unreadTotal={d.unreadTotal}
+          statCards={d.statCards}
+          amPm={d.amPm}
         />
       </div>
 
       {/* ═══ Task List ═══ */}
       <TaskList
         tasks={d.filteredTasks}
+        visibleTasks={d.visibleTasks}
+        loadMoreTasks={d.loadMoreTasks}
+        remainingTaskCount={d.remainingTaskCount}
         taskSearch={d.taskSearch}
         setTaskSearch={d.setTaskSearch}
         expandedTaskId={d.expandedTask}
@@ -145,6 +152,9 @@ function AiCoachPanel({
   onSend,
   isPending,
   scrollEndRef,
+  unreadTotal,
+  statCards,
+  amPm,
 }: {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   input: string;
@@ -152,16 +162,33 @@ function AiCoachPanel({
   onSend: () => void;
   isPending: boolean;
   scrollEndRef: React.RefObject<HTMLDivElement | null>;
+  unreadTotal: number;
+  statCards: StatCard[];
+  amPm?: { amDone?: boolean; pmDone?: boolean } | null;
 }) {
+  // Build dynamic chips based on current state
+  const chips: string[] = [];
+  if (unreadTotal > 0) chips.push(`Review ${unreadTotal} unread convo${unreadTotal > 1 ? "s" : ""}`);
+  if (amPm && !amPm.amDone) chips.push("Start AM calls");
+  if (amPm && amPm.amDone && !amPm.pmDone) chips.push("Start PM calls");
+  const offerCard = statCards.find((s) => s.key === "offers");
+  if (offerCard && offerCard.actual < offerCard.target) {
+    chips.push(`${offerCard.target - offerCard.actual} more offers to hit target`);
+  }
+  // Always include baseline chips
+  if (chips.length < 3) chips.push("What should I focus on?");
+  if (chips.length < 3) chips.push("Send an SMS to...");
+  if (chips.length < 3) chips.push("Add a note");
+
   return (
-    <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden">
+    <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] flex flex-col overflow-hidden h-[620px]">
       <div className="flex items-center gap-2 p-4 pb-2">
         <Sparkles className="size-4 text-[var(--g-accent-text)]" />
         <h2 className="text-sm font-semibold text-[var(--g-text-primary)]">AI Coach</h2>
       </div>
 
       <div className="flex flex-wrap gap-2 px-4 pb-2">
-        {["What should I focus on?", "Send an SMS to...", "Add a note"].map((chip) => (
+        {chips.map((chip) => (
           <button
             key={chip}
             onClick={() => setInput(chip)}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +10,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Phone, Check } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 interface TeamMember {
   id: number;
   name: string | null;
   teamRole: string | null;
+  lcPhone?: string | null;
 }
 
 interface Role {
@@ -99,7 +103,79 @@ export function TeamTab({
             ))
           )}
         </div>
+
+        {/* CRM Phone Linking — admin/owner only */}
+        {isAdmin && team.length > 0 && (
+          <CrmPhoneSection team={team} />
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+/* ── CRM Phone Linking ── */
+
+function CrmPhoneSection({ team }: { team: TeamMember[] }) {
+  const updateLcPhone = trpc.team.updateLcPhone.useMutation();
+  const utils = trpc.useUtils();
+  const [phones, setPhones] = useState<Record<number, string>>(() => {
+    const map: Record<number, string> = {};
+    for (const m of team) {
+      map[m.id] = m.lcPhone ?? "";
+    }
+    return map;
+  });
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+
+  const handleSave = async (memberId: number) => {
+    const value = phones[memberId] ?? "";
+    await updateLcPhone.mutateAsync({ id: memberId, lcPhone: value });
+    await utils.settings.getWorkspace.invalidate();
+    setSavedIds((prev) => new Set(Array.from(prev).concat(memberId)));
+    setTimeout(() => setSavedIds((prev) => {
+      const next = new Set(Array.from(prev));
+      next.delete(memberId);
+      return next;
+    }), 2000);
+    toast.success("CRM phone updated");
+  };
+
+  return (
+    <div className="pt-4 border-t border-[var(--g-border-subtle)] space-y-3">
+      <div className="flex items-center gap-2">
+        <Phone className="size-4 text-[var(--g-accent-text)]" />
+        <h3 className="text-sm font-semibold text-[var(--g-text-primary)]">Team CRM Phones</h3>
+      </div>
+      <p className="text-xs text-[var(--g-text-tertiary)]">
+        Map each team member to the phone number contacts use to reach them in your CRM.
+      </p>
+      <div className="space-y-2">
+        {team.map((m) => {
+          const justSaved = savedIds.has(m.id);
+          return (
+            <div key={m.id} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-[var(--g-bg-surface)]">
+              <span className="text-sm font-medium text-[var(--g-text-primary)] w-36 truncate shrink-0">
+                {m.name ?? "Unnamed"}
+              </span>
+              <Input
+                placeholder="CRM Phone Number"
+                value={phones[m.id] ?? ""}
+                onChange={(e) => setPhones((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                className="h-8 text-sm flex-1 bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0"
+                onClick={() => handleSave(m.id)}
+                disabled={updateLcPhone.isPending}
+              >
+                {justSaved ? <Check className="size-3.5 text-[var(--g-grade-a)]" /> : "Save"}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

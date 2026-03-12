@@ -35,6 +35,9 @@ import { relativeTime } from "@/hooks/useTodayData";
 
 interface TaskListProps {
   tasks: TaskItem[];
+  visibleTasks?: TaskItem[];
+  loadMoreTasks?: () => void;
+  remainingTaskCount?: number;
   taskSearch: string;
   setTaskSearch: (v: string) => void;
   expandedTaskId: string | null;
@@ -62,6 +65,9 @@ const TASK_ACTIONS = [
 
 export function TaskList({
   tasks,
+  visibleTasks,
+  loadMoreTasks,
+  remainingTaskCount,
   taskSearch,
   setTaskSearch,
   expandedTaskId,
@@ -76,6 +82,19 @@ export function TaskList({
 }: TaskListProps) {
   const { user } = useAuth();
   const [actionDialog, setActionDialog] = useState<PendingAction | null>(null);
+  const [confirmTaskId, setConfirmTaskId] = useState<string | null>(null);
+  const [stageFilter, setStageFilter] = useState("all");
+  const [memberFilter, setMemberFilter] = useState("all");
+
+  // Unique assigned members for filter
+  const uniqueMembers = Array.from(new Set(tasks.map((t) => t.assignedTo).filter(Boolean))) as string[];
+
+  // Apply category/member filters on top of search-filtered tasks
+  const displayTasks = (visibleTasks ?? tasks).filter((t) => {
+    if (stageFilter !== "all" && resolveTaskType(t.title) !== stageFilter) return false;
+    if (memberFilter !== "all" && t.assignedTo !== memberFilter) return false;
+    return true;
+  });
 
   const stageLabel = (code: string) => {
     const s = stages.find((st) => st.code === code);
@@ -125,6 +144,30 @@ export function TaskList({
                 className="h-8 w-56 pl-8 text-sm bg-[var(--g-bg-surface)] border-[var(--g-border-subtle)]"
               />
             </div>
+            {/* Category filter */}
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              className="h-8 text-xs rounded-md border border-[var(--g-border-subtle)] bg-[var(--g-bg-surface)] text-[var(--g-text-secondary)] px-2"
+            >
+              <option value="all">All Stages</option>
+              {stages.map((s) => (
+                <option key={s.code} value={s.code}>{s.name}</option>
+              ))}
+            </select>
+            {/* Member filter */}
+            {uniqueMembers.length > 1 && (
+              <select
+                value={memberFilter}
+                onChange={(e) => setMemberFilter(e.target.value)}
+                className="h-8 text-xs rounded-md border border-[var(--g-border-subtle)] bg-[var(--g-bg-surface)] text-[var(--g-text-secondary)] px-2"
+              >
+                <option value="all">All Members</option>
+                {uniqueMembers.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            )}
             <div className="flex gap-1.5">
               <Badge className={cn("text-[10px] px-2", amPm?.amDone ? "bg-[var(--g-grade-a)] text-white" : "bg-[var(--g-bg-inset)] text-[var(--g-text-tertiary)]")}>
                 AM {amPm?.amDone ? "✓" : ""}
@@ -136,15 +179,16 @@ export function TaskList({
           </div>
 
           {/* Task rows */}
-          {!tasks.length ? (
+          {!displayTasks.length ? (
             <EmptyState icon={CheckSquare} title="All caught up" description="No tasks due today" />
           ) : (
             <div className="space-y-1">
-              {tasks.map((t, idx) => {
+              {displayTasks.map((t, idx) => {
                 const isExpanded = expandedTaskId === t.id;
                 const isDone = completedTasks.has(t.id);
                 const taskType = resolveTaskType(t.title);
                 const isOverdue = !!t.dueDate && new Date(t.dueDate) < new Date(new Date().toISOString().slice(0, 10));
+                const isConfirming = confirmTaskId === t.id;
                 return (
                   <div key={t.id}>
                     <motion.div
@@ -157,11 +201,36 @@ export function TaskList({
                       onClick={() => setExpandedTaskId(isExpanded ? null : t.id)}
                     >
                       <span className="text-xs font-mono text-[var(--g-text-tertiary)] w-5 text-right shrink-0">{idx + 1}</span>
-                      <Checkbox
-                        checked={isDone}
-                        onCheckedChange={(v) => onComplete(t.id, !!v)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                      {/* Two-click confirm: first click shows confirm state, second completes */}
+                      {isConfirming && !isDone ? (
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[10px] px-2 text-[var(--g-grade-a)]"
+                            onClick={() => { onComplete(t.id, true); setConfirmTaskId(null); }}
+                          >
+                            Done
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[10px] px-1 text-[var(--g-text-tertiary)]"
+                            onClick={() => setConfirmTaskId(null)}
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      ) : (
+                        <Checkbox
+                          checked={isDone}
+                          onCheckedChange={(v) => {
+                            if (v && !isDone) { setConfirmTaskId(t.id); return; }
+                            onComplete(t.id, !!v);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      )}
                       <Badge className={cn("text-[10px] px-1.5 shrink-0", taskTypeColors[taskType] ?? "bg-[var(--g-bg-inset)] text-[var(--g-text-secondary)]")}>
                         {stageLabel(taskType)}
                       </Badge>
@@ -197,7 +266,9 @@ export function TaskList({
                         </div>
                       )}
                       {isOverdue && (
-                        <Badge className="bg-[var(--g-grade-f)] text-white text-[10px] px-1.5 shrink-0">Overdue</Badge>
+                        <span className="text-[10px] font-bold shrink-0 bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
+                          OVERDUE
+                        </span>
                       )}
                       {isExpanded
                         ? <ChevronDown className="size-4 text-[var(--g-text-tertiary)] shrink-0" />
@@ -240,6 +311,15 @@ export function TaskList({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* View More pagination */}
+          {(remainingTaskCount ?? 0) > 0 && loadMoreTasks && (
+            <div className="flex justify-center pt-2">
+              <Button variant="ghost" size="sm" onClick={loadMoreTasks} className="text-xs text-[var(--g-accent-text)]">
+                View {remainingTaskCount} more tasks
+              </Button>
             </div>
           )}
         </CardContent>

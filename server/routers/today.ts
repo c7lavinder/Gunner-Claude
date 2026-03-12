@@ -95,6 +95,8 @@ export const todayRouter = router({
           lastContactDate: r.lastMessageDate,
           lastMessageBody: r.lastMessageBody ?? null,
           unreadCount: r.unreadCount ?? 0,
+          propertyAddress: null as string | null,
+          teamMemberName: null as string | null,
         }));
       }
 
@@ -130,13 +132,30 @@ export const todayRouter = router({
       const rows = await db.select({
         id: contactCache.id, name: contactCache.name, phone: contactCache.phone,
         ghlContactId: contactCache.ghlContactId, lastContactDate: contactCache.lastContactDate,
-      }).from(contactCache).where(and(...conditions))
+        propertyAddress: dispoProperties.address,
+        teamMemberName: calls.teamMemberName,
+      }).from(contactCache)
+        .leftJoin(dispoProperties, and(eq(dispoProperties.tenantId, tid), eq(dispoProperties.ghlContactId, contactCache.ghlContactId)))
+        .leftJoin(calls, and(eq(calls.tenantId, tid), eq(calls.ghlContactId, contactCache.ghlContactId)))
+        .where(and(...conditions))
         .orderBy(desc(contactCache.lastContactDate)).limit(input.limit);
-      return rows.map((r) => ({
+
+      // Deduplicate by contactCache.id (joins may produce multiple rows)
+      const seen = new Set<string>();
+      const unique = rows.filter((r) => {
+        const key = String(r.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      return unique.map((r) => ({
         id: String(r.id), name: r.name ?? "Unknown", phone: r.phone ?? "",
         ghlContactId: r.ghlContactId, lastContactDate: r.lastContactDate,
         lastMessageBody: null as string | null,
         unreadCount: 0,
+        propertyAddress: r.propertyAddress ?? null,
+        teamMemberName: r.teamMemberName ?? null,
       }));
     }),
 
@@ -206,9 +225,40 @@ export const todayRouter = router({
       eq(dispoProperties.tenantId, tid),
       or(isNull(dispoProperties.lastContactedAt), lt(dispoProperties.lastContactedAt, twoDaysAgo))!
     ));
+
+    // Gather contact IDs from tasks to look up AM/PM call flags
+    const contactIds = taskRows.map((r) => r.contactId).filter((c): c is string => !!c);
+    const amPmMap = new Map<string, { amDone: boolean; pmDone: boolean }>();
+    if (contactIds.length > 0) {
+      const amEnd = new Date(todayStr() + "T12:00:00.000Z");
+      const dayStart = todayStart();
+      const dayEnd = new Date(todayStr() + "T23:59:59.999Z");
+      for (const cid of Array.from(new Set(contactIds))) {
+        const [am] = await db.select({ id: calls.id }).from(calls).where(and(
+          eq(calls.tenantId, tid), eq(calls.ghlContactId, cid),
+          gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, dayStart),
+          sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) < ${amEnd}`,
+          gte(calls.duration, 30),
+        )).limit(1);
+        const [pm] = await db.select({ id: calls.id }).from(calls).where(and(
+          eq(calls.tenantId, tid), eq(calls.ghlContactId, cid),
+          gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, amEnd),
+          sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) <= ${dayEnd}`,
+          gte(calls.duration, 30),
+        )).limit(1);
+        amPmMap.set(cid, { amDone: !!am, pmDone: !!pm });
+      }
+    }
+
     return {
       tasks: taskRows.map((r) => ({
-        id: String(r.id), title: r.notes ?? r.kpiType, contact: r.contactName ?? "", due: "",
+        id: String(r.id),
+        title: r.notes ?? r.kpiType,
+        contact: r.contactName ?? "",
+        due: "",
+        crmTaskId: r.ghlReferenceId ?? null,
+        amCallDone: r.contactId ? (amPmMap.get(r.contactId)?.amDone ?? false) : false,
+        pmCallDone: r.contactId ? (amPmMap.get(r.contactId)?.pmDone ?? false) : false,
       })),
       propertyAlerts: alertResult?.count ?? 0,
     };
@@ -232,6 +282,19 @@ export const todayRouter = router({
         .set({ notes: newNotes })
         .where(eq(dailyKpiEntries.id, input.id))
         .returning();
+
+      // Also complete the task in the CRM if we have a reference ID
+      if (input.completed && existing.ghlReferenceId) {
+        const adapter = await getCrmAdapterForTenant(tid);
+        if (adapter) {
+          try {
+            await adapter.completeTask(existing.ghlReferenceId);
+          } catch (e) {
+            console.error(`[completeTask] CRM update failed for task ${existing.ghlReferenceId}:`, e);
+          }
+        }
+      }
+
       return row ?? null;
     }),
 

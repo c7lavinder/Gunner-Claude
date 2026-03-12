@@ -28,6 +28,7 @@ import {
   resolveRoleplayPersonas,
   resolveTrainingCategories,
   resolveOutcomeTypes,
+  resolveTaskCategories,
   resolveClassificationLabels,
 } from "../services/playbooks";
 
@@ -46,6 +47,7 @@ export const playbookRouter = router({
       roleplayPersonas: resolveRoleplayPersonas(industry),
       trainingCategories: resolveTrainingCategories(industry),
       outcomeTypes: resolveOutcomeTypes(industry),
+      taskCategories: resolveTaskCategories(industry),
       classificationLabels: resolveClassificationLabels(industry),
       markets: tenant?.markets ?? [],
       leadSources: tenant?.leadSources ?? [],

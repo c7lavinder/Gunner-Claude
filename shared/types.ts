@@ -107,6 +107,7 @@ export interface IndustryPlaybook {
   trainingCategories?: TrainingCategory[];
   gradingPhilosophy?: GradingPhilosophy;
   classificationLabels?: Record<string, { label: string; color: "green" | "red" | "amber" | "gray" }>;
+  taskCategories?: Array<{ code: string; name: string }>;
 }
 
 export interface TenantPlaybook {

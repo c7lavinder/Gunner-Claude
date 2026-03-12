@@ -37,6 +37,7 @@ export function useTenantConfig() {
     roleplayPersonas: data?.roleplayPersonas ?? ([] as RoleplayPersona[]),
     trainingCategories: data?.trainingCategories ?? ([] as TrainingCategory[]),
     outcomeTypes: data?.outcomeTypes ?? ([] as string[]),
+    taskCategories: data?.taskCategories ?? ([] as Array<{ code: string; name: string }>),
     classificationLabels: data?.classificationLabels ?? ({} as Record<string, { label: string; color: string }>),
     markets: data?.markets ?? [],
     leadSources: data?.leadSources ?? [],
