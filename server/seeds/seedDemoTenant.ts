@@ -40,6 +40,178 @@ function daysAgoStr(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function getDemoTranscript(callType: string, contactName: string, address: string): string {
+  const first = contactName.split(" ")[0];
+  switch (callType) {
+    case "cold_call":
+      return `Rep: Hey, good morning! This is Marcus with Apex Property Solutions. Am I speaking with ${first}?
+
+${first}: Yeah, that's me. What's this about?
+
+Rep: Great, thanks for picking up. I was reaching out because I noticed you own the property at ${address}. We're a local investment company and we help homeowners in your area who might be interested in selling their property quickly, without the hassle of listing with an agent. I was curious — have you ever thought about selling?
+
+${first}: I mean, I've thought about it a little bit. The house needs a lot of work and I just don't have the money to fix it up right now. But I'm not sure I want to sell either.
+
+Rep: That totally makes sense. A lot of the people we work with are in similar situations — they've got a property that needs repairs but it doesn't make sense to dump money into it. Can I ask, how long have you owned the place?
+
+${first}: About 12 years now. Bought it when things were cheaper. The roof needs replacing, the kitchen is outdated, and the basement had some water damage last year.
+
+Rep: Wow, okay. That's a lot to deal with. And are you currently living there or is it a rental?
+
+${first}: I'm living here, but I've been thinking about moving closer to my daughter. She's in Memphis and I'm getting older, you know.
+
+Rep: I completely understand. Family is important. So if we could make you a fair cash offer and close on your timeline — whether that's two weeks or two months — would that be something worth exploring?
+
+${first}: I guess it wouldn't hurt to hear what you'd offer. But I'm not going to give it away.
+
+Rep: Absolutely, and I wouldn't expect you to. What I'd like to do is get a few more details about the property, maybe schedule a quick walkthrough, and then I can put together a real number for you. No pressure, no obligation. Would that work?
+
+${first}: Let me think about it. Can you call me back next week?
+
+Rep: Of course! I'll give you a call next Tuesday around this same time. Sound good?
+
+${first}: Yeah, that works. Talk to you then.
+
+Rep: Perfect. Thanks for your time, ${first}. Have a great day!`;
+
+    case "follow_up":
+      return `Rep: Hi ${first}, this is Sarah from Apex Property Solutions. We spoke last week about your property at ${address}. How are you doing today?
+
+${first}: Oh right, yeah. I've been thinking about what we talked about.
+
+Rep: Great! I'm glad you've had some time to think it over. Have your plans changed at all since we last chatted? Are you still considering moving closer to family?
+
+${first}: Yeah, I talked to my daughter and she really wants me to come down there. So I'm more serious about it now than I was before.
+
+Rep: That's wonderful. I think that's a smart move. So let me ask — when we spoke last time, you mentioned the property needs a new roof and has some water damage in the basement. Has anything else come up since then?
+
+${first}: Actually, the HVAC started acting up too. It's making this terrible noise. I got a quote to fix it and they said $4,500. I just can't keep throwing money at this place.
+
+Rep: That's frustrating, and I completely understand. The good news is, when we make an offer, we factor in all those repairs. You wouldn't need to fix a thing. We buy properties as-is.
+
+${first}: Okay, so what kind of number are we talking about?
+
+Rep: Well, I'd love to get out there and see the property in person so I can give you the most accurate offer possible. Based on what you've told me, I'm confident we can put together something fair. Are you free sometime this week for a quick 15-minute walkthrough?
+
+${first}: How about Thursday afternoon?
+
+Rep: Thursday afternoon works great. Let's say 2 PM? I'll come by, take a quick look, and we can talk numbers right there. No pressure at all.
+
+${first}: Alright, let's do it.
+
+Rep: Perfect! I'll see you Thursday at 2 PM at ${address}. Thanks, ${first}. Looking forward to it!`;
+
+    case "offer_call":
+      return `Rep: Hi ${first}, thanks for taking my call. I'm following up on our walkthrough at ${address}. I've had a chance to run the numbers and I wanted to go through everything with you.
+
+${first}: Okay, I've been waiting to hear from you.
+
+Rep: So I really appreciate you showing me the property. After looking at comparable sales in your area, factoring in the condition of the property and the repairs needed — the roof, the basement water damage, the HVAC, and the kitchen — I'd like to make you an offer of $142,000, all cash, and we can close in as little as two weeks.
+
+${first}: $142,000? I was hoping for more like $175,000. The Zillow estimate says it's worth $195,000.
+
+Rep: I totally understand. Zillow estimates are based on properties that are in move-in ready condition. When you factor in the roof replacement — that's about $12,000 to $15,000 — the HVAC repair, the basement waterproofing, and a kitchen update, we're looking at roughly $40,000 to $50,000 in repairs. After those repairs, the property would sell for around $190,000, but by then you'd also be paying agent commissions, closing costs, and holding costs.
+
+${first}: I see what you're saying, but $142,000 still feels low.
+
+Rep: I hear you, and I want to make sure this feels right for you. Here's what we bring to the table that you wouldn't get listing with an agent: we close in two weeks, we pay all closing costs, you don't fix a thing, and there's zero risk of the deal falling through. No inspections, no financing contingencies. Just certainty.
+
+${first}: And I wouldn't have to pay any agent fees?
+
+Rep: Zero. No commissions, no closing costs on your end, no hidden fees. The $142,000 is what you walk away with.
+
+${first}: Let me talk to my daughter about it this weekend. Can you give me until Monday?
+
+Rep: Absolutely. I'll follow up with you Monday afternoon. Take your time, talk it over, and if you have any questions before then, you've got my number. Sound good?
+
+${first}: Yeah, that sounds fair. I'll let you know Monday.
+
+Rep: Perfect. Thanks, ${first}. Talk to you Monday!`;
+
+    case "appointment_call":
+      return `Rep: Hey ${first}, this is Marcus from Apex Property Solutions. I'm calling to confirm our walkthrough appointment at ${address}. We had you down for Thursday at 2 PM — does that still work?
+
+${first}: Yes, I've got it on my calendar. What exactly should I expect?
+
+Rep: Great question. So when I come by, I'll take a quick walk through the property — usually takes about 15 to 20 minutes. I'll look at the overall condition, take some notes, and check out the areas you mentioned need work like the roof and the basement. After that, I'll go back and run some comparable sales in your area and put together a fair cash offer.
+
+${first}: Are you going to bring a contractor or anything like that?
+
+Rep: No, it'll just be me. I've been doing this for years, so I have a pretty good eye for estimating repairs. And anything I can't see, I'll factor in conservatively. We always account for the unexpected.
+
+${first}: Okay. And how long until I get an offer after the walkthrough?
+
+Rep: Usually within 24 to 48 hours. I want to make sure I do my homework and give you an accurate number. I never want to lowball anyone — that's not how we operate.
+
+${first}: Good, because I had another investor come through a few months ago and their offer was insultingly low.
+
+Rep: I'm sorry to hear that. We pride ourselves on being transparent and fair. I'll walk you through exactly how I arrive at the number, so there's no mystery. If it works for you, great. If not, no hard feelings.
+
+${first}: That sounds reasonable. I'll see you Thursday then.
+
+Rep: Perfect! Thursday at 2 PM. One last thing — will anyone else be at the property who's involved in the decision? Just want to make sure everyone has the information they need.
+
+${first}: My wife will be here too. She wants to be part of the conversation.
+
+Rep: Wonderful, that's even better. I'll make sure to address any questions she has as well. See you both Thursday!`;
+
+    case "dispo_call":
+      return `Rep: Hey Nick, it's Tyler from Apex. I've got a deal I think is right in your wheelhouse. You got a minute?
+
+Nick: Yeah, what do you have?
+
+Rep: So we just locked up a property at ${address}. It's a 3-bed, 2-bath, about 1,400 square feet. Built in 1985. The ARV on this one is around $235,000 based on three recent comps within a half mile.
+
+Nick: Okay, what kind of shape is it in?
+
+Rep: It needs a full rehab — kitchen, bathrooms, flooring throughout, and the roof has about 3 years left on it. I'd estimate total rehab around $45,000 to $55,000 if you're using your own crew. We've got it under contract at $125,000.
+
+Nick: So my all-in would be around $180,000 with an ARV of $235,000. That's decent margins. What about the neighborhood?
+
+Rep: It's in a great pocket. The street has mostly owner-occupied homes, and there have been two flips on the same block in the last year — both sold within 30 days. One went for $228,000 and the other for $241,000.
+
+Nick: Those are strong comps. Any issues with the title or anything like that?
+
+Rep: Clean title, no liens, no code violations. Seller is cooperative and we can do a double close or assignment — whatever works better for you. Inspection period is 10 days.
+
+Nick: What's the assignment fee?
+
+Rep: We're asking $12,000 on this one. Given the margins and the area, I think it's very fair.
+
+Nick: Yeah, that's reasonable. Can I drive by the property this afternoon?
+
+Rep: Absolutely. I'll text you the lockbox code after this call. If you like what you see, I can have the assignment contract ready to sign tomorrow.
+
+Nick: Sounds good. Let me take a look and I'll call you back tonight.
+
+Rep: Perfect! Talk to you later, Nick.`;
+
+    default:
+      return `Rep: Hi ${first}, this is a representative from Apex Property Solutions calling about the property at ${address}. We had a conversation about the property details, the current condition, and potential next steps. The seller shared information about their motivation and timeline. We discussed the process and what to expect moving forward. The call covered several important topics including property condition, repairs needed, and the seller's goals for the sale.`;
+  }
+}
+
+function getDemoOutcome(callType: string, index: number): { callOutcome: string; classification: string } {
+  switch (callType) {
+    case "cold_call":
+      return index % 2 === 0
+        ? { callOutcome: "Follow-Up Scheduled", classification: "Interested" }
+        : { callOutcome: "Not Interested", classification: "Not Interested" };
+    case "follow_up":
+      return { callOutcome: "Follow-Up Scheduled", classification: "Follow-Up Scheduled" };
+    case "offer_call":
+      return index % 3 === 0
+        ? { callOutcome: "Offer Accepted", classification: "Offer Accepted" }
+        : { callOutcome: "Offer Made", classification: "Offer Rejected" };
+    case "appointment_call":
+      return { callOutcome: "Appointment Set", classification: "Interested" };
+    case "dispo_call":
+      return { callOutcome: "Follow-Up Scheduled", classification: "Interested" };
+    default:
+      return { callOutcome: "none", classification: "pending" };
+  }
+}
+
 export async function seedDemoTenant(): Promise<void> {
   const existing = await db.select().from(tenants).where(eq(tenants.id, TENANT_ID)).limit(1);
   if (existing.length > 0) {
@@ -211,19 +383,24 @@ export async function seedDemoTenant(): Promise<void> {
   const callRows = await db
     .insert(calls)
     .values(
-      callData.map((c) => ({
-        tenantId: TENANT_ID,
-        contactName: c.contactName,
-        contactPhone: c.contactPhone,
-        propertyAddress: c.propertyAddress,
-        callDirection: c.callDirection,
-        duration: c.duration,
-        teamMemberName: c.teamMemberName,
-        callType: c.callType,
-        status: "completed" as const,
-        callTimestamp: c.callTimestamp,
-        transcript: c.duration > 300 ? "This is a sample transcript for demo purposes. The conversation covered property details, seller motivation, and next steps." : null,
-      }))
+      callData.map((c, i) => {
+        const outcome = getDemoOutcome(c.callType, i);
+        return {
+          tenantId: TENANT_ID,
+          contactName: c.contactName,
+          contactPhone: c.contactPhone,
+          propertyAddress: c.propertyAddress,
+          callDirection: c.callDirection,
+          duration: c.duration,
+          teamMemberName: c.teamMemberName,
+          callType: c.callType,
+          status: "completed" as const,
+          callTimestamp: c.callTimestamp,
+          transcript: c.duration >= 60 ? getDemoTranscript(c.callType, c.contactName, c.propertyAddress) : null,
+          callOutcome: outcome.callOutcome,
+          classification: outcome.classification,
+        };
+      })
     )
     .returning();
 

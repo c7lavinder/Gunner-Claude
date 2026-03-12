@@ -55,6 +55,7 @@ export interface CallItem {
   isStarred?: string | boolean | null;
   propertyAddress?: string | null;
   classification?: string | null;
+  callOutcome?: string | null;
   summary?: string | null;
 }
 
@@ -116,6 +117,11 @@ export function CallCard({ call, isStarred, onToggleStar }: CallCardProps) {
               {classLabel && classColor && (
                 <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium", classColor)}>
                   {classLabel.label}
+                </span>
+              )}
+              {call.callOutcome && call.callOutcome !== "none" && call.callOutcome !== "pending" && !classLabel && (
+                <span className="inline-flex items-center rounded-full border border-purple-400 text-purple-600 px-2.5 py-0.5 text-[11px] font-medium">
+                  {formatCodeLabel(call.callOutcome)}
                 </span>
               )}
             </div>

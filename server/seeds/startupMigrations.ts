@@ -304,7 +304,7 @@ async function gradeOrphanedCalls(): Promise<void> {
       .select({ id: calls.id, tenantId: calls.tenantId })
       .from(calls)
       .leftJoin(callGrades, eq(callGrades.callId, calls.id))
-      .where(and(eq(calls.status, "graded"), isNull(callGrades.id)))
+      .where(and(or(eq(calls.status, "graded"), eq(calls.status, "completed"))!, isNull(callGrades.id)))
       .limit(10);
 
     // Find calls that are "pending" with duration >= 60 (should have been graded)
@@ -324,6 +324,12 @@ async function gradeOrphanedCalls(): Promise<void> {
 
     for (const call of toGrade) {
       try {
+        // Check for transcript before attempting to grade
+        const [callRow] = await db.select({ transcript: calls.transcript }).from(calls).where(eq(calls.id, call.id));
+        if (!callRow?.transcript) {
+          console.log(`[migrations] Skipping call ${call.id} — no transcript`);
+          continue;
+        }
         // Reset status to pending before grading
         await db.update(calls).set({ status: "pending" }).where(eq(calls.id, call.id));
         await gradeCall(call.id, call.tenantId);

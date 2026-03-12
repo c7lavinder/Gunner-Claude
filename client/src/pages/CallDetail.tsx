@@ -126,6 +126,7 @@ export function CallDetail() {
   const direction = (call.callDirection ?? "").toLowerCase();
   const isInbound = direction === "inbound";
   const callTypeName = callTypes.find((ct) => ct.code === call.callType)?.name ?? (call.callType ? formatCodeLabel(call.callType) : "\u2014");
+  const outcomeDisplay = call.callOutcome && call.callOutcome !== "none" ? call.callOutcome : null;
   const classLabel = call.classification ? classificationLabels[call.classification] : undefined;
   const classColor = classLabel ? (CLASSIFICATION_COLOR[classLabel.color] ?? CLASSIFICATION_COLOR.gray) : null;
   const relativeTime = call.callTimestamp
@@ -180,6 +181,11 @@ export function CallDetail() {
               {classLabel && classColor && (
                 <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium", classColor)}>
                   {classLabel.label}
+                </span>
+              )}
+              {outcomeDisplay && (
+                <span className="inline-flex items-center rounded-full border border-purple-400 text-purple-600 px-2.5 py-0.5 text-[11px] font-medium">
+                  {formatCodeLabel(outcomeDisplay)}
                 </span>
               )}
             </div>
