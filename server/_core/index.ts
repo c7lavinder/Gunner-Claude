@@ -59,6 +59,9 @@ app.use(
 );
 
 app.get("/health", (_req, res) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c9202e'},body:JSON.stringify({sessionId:'c9202e',location:'index.ts:/health',message:'healthcheck endpoint hit',data:{ts:new Date().toISOString()},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
@@ -122,16 +125,46 @@ if (ENV.isProduction) {
   });
 }
 
+// #region agent log
+fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c9202e'},body:JSON.stringify({sessionId:'c9202e',location:'index.ts:beforeListen',message:'process reached app.listen call',data:{port:ENV.port,ts:new Date().toISOString()},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+// #endregion
 app.listen(ENV.port, "0.0.0.0", () => {
-  console.log(`Gunner v2 running on port ${ENV.port}`);
-  // Run migrations + seeds in the background so the server starts immediately
-  // and Railway's healthcheck can pass before migrations complete.
+  const t0 = Date.now();
+  console.log(`[startup] Gunner v2 listening on port ${ENV.port} at ${new Date().toISOString()}`);
+  // #region agent log
+  fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c9202e'},body:JSON.stringify({sessionId:'c9202e',location:'index.ts:app.listen',message:'server listening - port bound',data:{port:ENV.port,ts:new Date().toISOString()},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   runStartupMigrations()
-    .then(() => seedIndustryPlaybooks())
-    .then(() => seedNahTenantPlaybook())
-    .then(() => seedDemoTenant())
-    .then(() => console.log("[startup] All migrations and seeds complete."))
-    .catch((err) => console.error("[startup] Migration/seed error:", err));
+    .then(() => {
+      // #region agent log
+      fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c9202e'},body:JSON.stringify({sessionId:'c9202e',location:'index.ts:afterMigrations',message:'startup migrations complete',data:{elapsedMs:Date.now()-t0},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      return seedIndustryPlaybooks();
+    })
+    .then(() => {
+      // #region agent log
+      fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c9202e'},body:JSON.stringify({sessionId:'c9202e',location:'index.ts:afterIndustryPlaybooks',message:'industry playbooks seeded',data:{elapsedMs:Date.now()-t0},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      return seedNahTenantPlaybook();
+    })
+    .then(() => {
+      // #region agent log
+      fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c9202e'},body:JSON.stringify({sessionId:'c9202e',location:'index.ts:afterNahSeed',message:'NAH tenant seeded',data:{elapsedMs:Date.now()-t0},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      return seedDemoTenant();
+    })
+    .then(() => {
+      console.log("[startup] All migrations and seeds complete.");
+      // #region agent log
+      fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c9202e'},body:JSON.stringify({sessionId:'c9202e',location:'index.ts:afterAllSeeds',message:'all seeds complete',data:{elapsedMs:Date.now()-t0},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+    })
+    .catch((err) => {
+      console.error("[startup] Migration/seed error:", err);
+      // #region agent log
+      fetch('http://127.0.0.1:7316/ingest/c1bc405f-7550-4dc7-9f21-822afeacd0cb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c9202e'},body:JSON.stringify({sessionId:'c9202e',location:'index.ts:seedError',message:'seed/migration error',data:{error:String(err),elapsedMs:Date.now()-t0},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+    });
   if (ENV.isProduction) {
     try { startPolling(5); } catch (e) { console.error("[services] Polling failed:", e); }
     try { startDailyDigestJob(); } catch (e) { console.error("[services] Digest failed:", e); }
