@@ -20,6 +20,7 @@ export function GoogleAuthCallback() {
           email: data.user.email,
           role: data.user.role,
           tenantId: data.user.tenantId ?? null,
+          profilePicture: data.user.profilePicture ?? null,
         },
         data.token,
       );

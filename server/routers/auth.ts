@@ -112,6 +112,7 @@ export const authRouter = router({
           email: user.email,
           role: user.role,
           tenantId: user.tenantId,
+          profilePicture: user.profilePicture ?? null,
         },
       };
     }),
@@ -188,17 +189,26 @@ export const authRouter = router({
           email: user.email,
           role: user.role,
           tenantId: user.tenantId,
+          profilePicture: user.profilePicture ?? null,
         },
       };
     }),
 
-  me: protectedProcedure.query(({ ctx }) => ({
-    id: ctx.user!.userId,
-    name: ctx.user!.name,
-    email: ctx.user!.email,
-    role: ctx.user!.role,
-    tenantId: ctx.user!.tenantId,
-  })),
+  me: protectedProcedure.query(async ({ ctx }) => {
+    const [row] = await db
+      .select({ profilePicture: users.profilePicture })
+      .from(users)
+      .where(eq(users.id, ctx.user!.userId))
+      .limit(1);
+    return {
+      id: ctx.user!.userId,
+      name: ctx.user!.name,
+      email: ctx.user!.email,
+      role: ctx.user!.role,
+      tenantId: ctx.user!.tenantId,
+      profilePicture: row?.profilePicture ?? null,
+    };
+  }),
 
   googleAuthUrl: publicProcedure
     .input(z.object({ redirectUri: z.string().url() }))
@@ -335,6 +345,7 @@ export const authRouter = router({
           email: resolvedUser.email,
           role: resolvedUser.role,
           tenantId: resolvedUser.tenantId,
+          profilePicture: resolvedUser.profilePicture ?? null,
         },
         isNewUser,
       };

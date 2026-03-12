@@ -15,6 +15,7 @@ export interface AuthUser {
   email: string | null;
   role: string;
   tenantId: number | null;
+  profilePicture: string | null;
 }
 
 const ROLE_LEVEL: Record<string, number> = {
@@ -60,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: meQuery.data.email,
         role: meQuery.data.role,
         tenantId: meQuery.data.tenantId,
+        profilePicture: meQuery.data.profilePicture ?? null,
       });
       setIsLoading(false);
     } else if (!meQuery.error || meQuery.error.data?.code === "UNAUTHORIZED") {
@@ -97,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: result.user.email,
         role: result.user.role,
         tenantId: result.user.tenantId ?? null,
+        profilePicture: result.user.profilePicture ?? null,
       });
       setLocation("/today");
     },
@@ -117,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: result.user.email,
         role: result.user.role,
         tenantId: result.user.tenantId ?? null,
+        profilePicture: result.user.profilePicture ?? null,
       });
       setLocation("/today");
     },

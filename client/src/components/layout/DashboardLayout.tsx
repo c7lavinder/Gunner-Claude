@@ -82,50 +82,51 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </a>
 
       {/* ── Top Bar ── */}
-      <header className="sticky top-0 z-50 h-14 border-b border-[var(--g-border-subtle)] bg-[var(--g-bg-surface)] flex items-center px-4 md:px-6 gap-4">
-        {/* Mobile hamburger */}
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden shrink-0">
-              <Menu className="size-5" />
-              <span className="sr-only">Open menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-64 bg-[var(--g-bg-surface)] border-r border-[var(--g-border-subtle)] p-0">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <div className="flex items-center gap-2 px-5 h-14 border-b border-[var(--g-border-subtle)]">
-              <Flame className="size-5 text-[var(--g-accent-text)]" />
-              <span className="font-bold tracking-wider text-[var(--g-accent-text)]">GUNNER</span>
-            </div>
-            <nav className="flex flex-col gap-1 p-3">
-              {ALL_NAV.map(({ path, label, icon: Icon }) => (
-                <Link
-                  key={path}
-                  href={path}
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-                    location === path
-                      ? "text-[var(--g-accent-text)] bg-[var(--g-accent-soft)]"
-                      : "text-[var(--g-text-secondary)] hover:text-[var(--g-text-primary)] hover:bg-[var(--g-bg-inset)]"
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {label}
-                </Link>
-              ))}
-            </nav>
-          </SheetContent>
-        </Sheet>
+      <header className="sticky top-0 z-50 h-14 border-b border-[var(--g-border-subtle)] bg-[var(--g-bg-surface)] grid grid-cols-[auto_1fr_auto] items-center px-4 md:px-6 gap-4">
+        {/* Left: Mobile hamburger + logo */}
+        <div className="flex items-center gap-3">
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden shrink-0">
+                <Menu className="size-5" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 bg-[var(--g-bg-surface)] border-r border-[var(--g-border-subtle)] p-0">
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <div className="flex items-center gap-2 px-5 h-14 border-b border-[var(--g-border-subtle)]">
+                <Flame className="size-5 text-[var(--g-accent-text)]" />
+                <span className="font-bold tracking-wider text-[var(--g-accent-text)]">GUNNER</span>
+              </div>
+              <nav className="flex flex-col gap-1 p-3">
+                {ALL_NAV.map(({ path, label, icon: Icon }) => (
+                  <Link
+                    key={path}
+                    href={path}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+                      location === path
+                        ? "text-[var(--g-accent-text)] bg-[var(--g-accent-soft)]"
+                        : "text-[var(--g-text-secondary)] hover:text-[var(--g-text-primary)] hover:bg-[var(--g-bg-inset)]"
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    {label}
+                  </Link>
+                ))}
+              </nav>
+            </SheetContent>
+          </Sheet>
 
-        {/* Brand */}
-        <Link href="/today" className="flex items-center gap-2 shrink-0">
-          <Flame className="size-5 text-[var(--g-accent-text)]" />
-          <span className="font-bold tracking-wider text-[var(--g-accent-text)]">GUNNER</span>
-        </Link>
+          {/* Brand logo */}
+          <Link href="/today" className="flex items-center shrink-0">
+            <img src="/gunner-logo.png" alt="Gunner" className="h-8 w-auto" />
+          </Link>
+        </div>
 
-        {/* Center nav — desktop only */}
-        <nav className="hidden md:flex items-center gap-1 ml-6">
+        {/* Center nav — desktop only, truly centered */}
+        <nav className="hidden md:flex items-center justify-center gap-1">
           {PRIMARY_NAV.map(({ path, label }) => (
             <Link
               key={path}
@@ -142,53 +143,63 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        {/* Spacer */}
-        <div className="flex-1" />
-
         {/* Right side controls */}
-        <kbd className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded bg-[var(--g-bg-inset)] text-[var(--g-text-tertiary)] border border-[var(--g-border-subtle)]">
-          ⌘K
-        </kbd>
-        <NotificationBell />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="rounded-lg"
-        >
-          <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="rounded-lg"
+          >
+            <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="sr-only">Toggle theme</span>
+          </Button>
 
-        {/* User dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center justify-center size-8 rounded-full bg-[var(--g-accent-soft)] text-[var(--g-accent-text)] text-sm font-semibold shrink-0 cursor-pointer">
-              {initial}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-medium truncate">{user?.name ?? "User"}</p>
-              {user?.email && <p className="text-xs text-[var(--g-text-tertiary)] truncate">{user.email}</p>}
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate("/profile")}>
-              <UserCircle className="size-4 mr-2" /> Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/settings")}>
-              <SettingsIcon className="size-4 mr-2" /> Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/playbook")}>
-              <BookOpen className="size-4 mr-2" /> Playbook
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout}>
-              <LogOut className="size-4 mr-2" /> Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          {/* User dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 cursor-pointer">
+                {user?.profilePicture ? (
+                  <img
+                    src={user.profilePicture}
+                    alt={user.name ?? "User"}
+                    className="size-8 rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="flex items-center justify-center size-8 rounded-full bg-[var(--g-accent-soft)] text-[var(--g-accent-text)] text-sm font-semibold shrink-0">
+                    {initial}
+                  </span>
+                )}
+                <span className="hidden md:block text-sm font-medium text-[var(--g-text-primary)]">
+                  {user?.name?.split(" ")[0] ?? "User"}
+                </span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <div className="px-2 py-1.5">
+                <p className="text-sm font-medium truncate">{user?.name ?? "User"}</p>
+                {user?.email && <p className="text-xs text-[var(--g-text-tertiary)] truncate">{user.email}</p>}
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate("/profile")}>
+                <UserCircle className="size-4 mr-2" /> Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/settings")}>
+                <SettingsIcon className="size-4 mr-2" /> Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/playbook")}>
+                <BookOpen className="size-4 mr-2" /> Playbook
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout}>
+                <LogOut className="size-4 mr-2" /> Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </header>
 
       <CrmDegradedBanner />
