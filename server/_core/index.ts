@@ -21,7 +21,6 @@ import { startScheduledJobs } from "../services/scheduledJobs";
 import { seedIndustryPlaybooks } from "../seeds/seedPlaybooks";
 import { runStartupMigrations } from "../seeds/startupMigrations";
 import { seedNahTenantPlaybook } from "../seeds/nahTenant";
-import { seedDemoTenant } from "../seeds/seedDemoTenant";
 import { chatCompletionStream } from "./llm";
 
 process.on("unhandledRejection", (reason) => {
@@ -125,7 +124,6 @@ const server = app.listen(ENV.port, "0.0.0.0", () => {
   runStartupMigrations()
     .then(() => seedIndustryPlaybooks())
     .then(() => seedNahTenantPlaybook())
-    .then(() => seedDemoTenant())
     .then(() => console.log("[startup] All migrations and seeds complete."))
     .catch((err) => console.error("[startup] Migration/seed error:", err));
   if (ENV.isProduction) {
