@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { Flame } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
+import { HOT_STREAK_THRESHOLD } from "@shared/types";
 
 function roleLabel(code: string, roles: { code: string; name: string }[]): string {
   return roles.find((r) => r.code === code)?.name ?? code.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -56,7 +57,7 @@ export function TeamHotStreaks({ displayList, roles }: TeamHotStreaksProps) {
                   <p className="font-medium truncate text-[var(--g-text-primary)]">{m.name}</p>
                   <p className="text-xs text-[var(--g-text-tertiary)]">{roleLabel(m.teamRole, roles)}</p>
                 </div>
-                <Badge variant="secondary" className={cn("text-xs", streak >= 3 ? "bg-[var(--g-streak-bg)] text-[var(--g-streak)]" : "bg-[var(--g-bg-inset)] text-[var(--g-text-secondary)]")}>
+                <Badge variant="secondary" className={cn("text-xs", streak >= HOT_STREAK_THRESHOLD ? "bg-[var(--g-streak-bg)] text-[var(--g-streak)]" : "bg-[var(--g-bg-inset)] text-[var(--g-text-secondary)]")}>
                   {streak}d streak
                 </Badge>
               </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -18,6 +18,7 @@ import { ErrorState } from "@/components/ErrorState";
 import { PageShell } from "@/components/layout/PageShell";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { trpc } from "@/lib/trpc";
+import { HOT_STREAK_THRESHOLD } from "@shared/types";
 import { TeamAchievements } from "./team/TeamAchievements";
 import { TeamHotStreaks } from "./team/TeamHotStreaks";
 
@@ -76,7 +77,7 @@ export function Team() {
   const isError = membersError || leaderboardError || badgesError;
   const currentMemberId = members?.find((m) => m.userId === me?.id)?.id ?? null;
   const displayList = (leaderboard ?? []).sort((a, b) => (b.averageScore ?? 0) - (a.averageScore ?? 0));
-  const activeStreaks = displayList.filter((m) => (m.streak?.hotStreakCurrent ?? 0) >= 3).length;
+  const activeStreaks = displayList.filter((m) => (m.streak?.hotStreakCurrent ?? 0) >= HOT_STREAK_THRESHOLD).length;
   const teamAvg =
     displayList.length > 0
       ? Math.round(displayList.reduce((s, m) => s + (m.averageScore ?? 0), 0) / displayList.length)
@@ -228,7 +229,7 @@ export function Team() {
                       <span className="w-14 text-right text-sm font-mono text-[var(--g-text-secondary)]">
                         {totalXp.toLocaleString()}
                       </span>
-                      <span className={cn("w-8 text-right text-sm", streak >= 3 ? "text-[var(--g-streak)]" : "text-[var(--g-text-tertiary)]")}>
+                      <span className={cn("w-8 text-right text-sm", streak >= HOT_STREAK_THRESHOLD ? "text-[var(--g-streak)]" : "text-[var(--g-text-tertiary)]")}>
                         {streak}d
                       </span>
                     </div>
@@ -278,7 +279,7 @@ export function Team() {
               <div>
                 <p className="text-sm text-[var(--g-text-secondary)]">Active Streaks</p>
                 <p className="text-2xl font-bold text-[var(--g-text-primary)]">{activeStreaks}</p>
-                <p className="text-xs text-[var(--g-text-tertiary)]">3+ day streaks</p>
+                <p className="text-xs text-[var(--g-text-tertiary)]">{HOT_STREAK_THRESHOLD}+ day streaks</p>
               </div>
             </div>
           </CardContent>

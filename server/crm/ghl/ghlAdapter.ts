@@ -64,7 +64,7 @@ export class GhlAdapter implements CrmAdapter {
         tags: Array.isArray(c.tags) ? (c.tags as string[]) : undefined,
         customFields: typeof c.customFields === "object" ? (c.customFields as Record<string, unknown>) : undefined,
       };
-    } catch (e) {
+    } catch (_e) {
       return null;
     }
   }
@@ -86,7 +86,7 @@ export class GhlAdapter implements CrmAdapter {
         tags: Array.isArray(c.tags) ? (c.tags as string[]) : undefined,
         customFields: typeof c.customFields === "object" ? (c.customFields as Record<string, unknown>) : undefined,
       }));
-    } catch (e) {
+    } catch (_e) {
       return [];
     }
   }
@@ -280,7 +280,7 @@ export class GhlAdapter implements CrmAdapter {
   async sendSms(
     contactId: string,
     message: string,
-    fromUserId?: string
+    _fromUserId?: string
   ): Promise<ActionResult> {
     try {
       await ghlFetch("/conversations/messages", {

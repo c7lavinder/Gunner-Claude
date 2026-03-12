@@ -12,8 +12,8 @@ import { AddAssetDialog } from "@/components/inventory/AddAssetDialog";
 
 export function Inventory() {
   const data = useInventoryData();
-  const assetLabel = data.t?.assetPlural ?? "Properties";
-  const assetSingular = data.t?.asset ?? "Property";
+  const assetLabel = data.t?.assetPlural ?? "Assets";
+  const assetSingular = data.t?.asset ?? "Asset";
 
   if (data.isError) {
     return <PageShell title={assetLabel}><ErrorState onRetry={() => window.location.reload()} /></PageShell>;

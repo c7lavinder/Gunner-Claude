@@ -64,7 +64,7 @@ function PageTracker() {
 
   useEffect(() => {
     track({ type: "page_view", page: location });
-  }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location, track]);
 
   return null;
 }

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Pencil, Sparkles, Plus, Trash2, X } from "lucide-react";
+import { Pencil, Sparkles, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";

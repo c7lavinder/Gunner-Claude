@@ -31,7 +31,7 @@ export function useTenantConfig() {
     roles: data?.roles ?? DEFAULT_ROLES,
     stages: data?.stages ?? DEFAULT_STAGES,
     callTypes: data?.callTypes ?? [],
-    algorithm: (data?.algorithm ?? {}) as AlgorithmConfig & Record<string, unknown>,
+    algorithm: (data?.algorithm ?? { inventorySort: {}, buyerMatch: {}, taskSort: {} }) as AlgorithmConfig,
     kpiFunnelStages: data?.kpiFunnelStages ?? ([] as string[]),
     kpiMetrics: data?.kpiMetrics ?? ([] as Array<{ key: string; label: string }>),
     roleplayPersonas: data?.roleplayPersonas ?? ([] as RoleplayPersona[]),

@@ -1363,7 +1363,7 @@ export const callNextSteps = pgTable("call_next_steps", {
   actionType: varchar("actionType", { length: 50 }).notNull(),
   reason: text("reason").notNull(),
   suggested: varchar("suggested", { length: 5 }).notNull().default("true"),
-  payload: jsonb("payload").$type<Record<string, any>>().notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   // Status tracking
   status: text("status").default("pending"),
   result: text("result"),
@@ -1516,7 +1516,7 @@ export const dispoProperties = pgTable("dispo_properties", {
   lockboxCode: varchar("lockboxCode", { length: 50 }),
   occupancyStatus: text("occupancyStatus").default("unknown"),
   // Deal Pipeline Status
-  status: varchar("status", { length: 50 }).default("lead").notNull(),
+  status: varchar("status", { length: 50 }).default("lead").notNull(), // eslint-disable-line no-restricted-syntax -- DB default, not UI label
   // Media & Notes
   mediaLink: text("mediaLink"),
   description: text("description"),

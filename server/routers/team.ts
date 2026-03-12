@@ -109,7 +109,7 @@ export const teamRouter = router({
 
     const memberIds = members.map((m) => m.id);
 
-    const [xpRows, badgeRows] = await Promise.all([
+    const [xpRows] = await Promise.all([
       memberIds.length
         ? db.select().from(userXp).where(and(eq(userXp.tenantId, tid), inArray(userXp.teamMemberId, memberIds)))
         : [],

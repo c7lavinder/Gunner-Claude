@@ -22,6 +22,8 @@ import { seedIndustryPlaybooks } from "../seeds/seedPlaybooks";
 import { runStartupMigrations } from "../seeds/startupMigrations";
 import { seedNahTenantPlaybook } from "../seeds/nahTenant";
 import { chatCompletionStream } from "./llm";
+import { initRedis, initQueueManager, initWorkers } from "../queues";
+import { registerAllAgents, startOrchestrator } from "../agents";
 
 process.on("unhandledRejection", (reason) => {
   console.error("[process] unhandledRejection:", reason instanceof Error ? reason.stack ?? reason.message : String(reason));
@@ -43,11 +45,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
+// Trust Railway's reverse proxy so req.ip and secure cookies work correctly in production
 app.set("trust proxy", 1);
-
-app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok" });
-});
 
 app.use("/api/stripe/webhook", stripeWebhookRouter);
 app.use(express.json({ limit: "10mb" }));
@@ -59,6 +58,31 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
+
+app.get("/health", async (_req, res) => {
+  let crmStatus: "connected" | "degraded" | "disconnected" = "disconnected";
+  try {
+    const { db: healthDb } = await import("./db");
+    const { tenants: tenantsTable } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const connected = await healthDb
+      .select({ lastWebhookAt: tenantsTable.lastWebhookAt })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.crmConnected, "true"))
+      .limit(1);
+    if (connected.length > 0) {
+      const lastWebhook = connected[0]?.lastWebhookAt;
+      if (lastWebhook && Date.now() - lastWebhook.getTime() < 2 * 60 * 60 * 1000) {
+        crmStatus = "connected";
+      } else {
+        crmStatus = "degraded";
+      }
+    }
+  } catch {
+    crmStatus = "degraded";
+  }
+  res.json({ status: "ok", timestamp: new Date().toISOString(), crmStatus });
+});
 
 app.use(
   "/api/trpc/auth.login",
@@ -75,6 +99,7 @@ app.use(
 
 app.use("/api/webhooks", webhookRouter);
 
+// SSE streaming endpoint for AI coach
 app.post("/api/ai/stream", async (req, res) => {
   const token = req.cookies?.auth_token ?? (req.headers.authorization?.replace("Bearer ", "") || "");
   try {
@@ -119,24 +144,46 @@ if (ENV.isProduction) {
   });
 }
 
-const server = app.listen(ENV.port, "0.0.0.0", () => {
-  console.log(`[startup] Gunner v2 listening on port ${ENV.port}`);
-  runStartupMigrations()
-    .then(() => seedIndustryPlaybooks())
-    .then(() => seedNahTenantPlaybook())
-    .then(() => console.log("[startup] All migrations and seeds complete."))
-    .catch((err) => console.error("[startup] Migration/seed error:", err));
+async function startup() {
+  // 1. Run database migrations and seeds FIRST — tables must exist before any queries
+  try {
+    await runStartupMigrations();
+    await seedIndustryPlaybooks();
+    await seedNahTenantPlaybook();
+    console.log("[startup] Migrations and seeds complete");
+  } catch (err) {
+    console.error("[startup] Migration/seed error:", err);
+    // Continue anyway — drizzle-kit push in the start script handles core tables,
+    // startup migrations are supplementary (IF NOT EXISTS)
+  }
+
+  // 2. Initialize queue system (Redis + BullMQ or in-memory fallback)
+  initRedis(ENV.redisUrl || undefined);
+  initQueueManager();
+
+  // 3. Register the agent system
+  registerAllAgents();
+
+  // 4. Start the HTTP server
+  app.listen(ENV.port, "0.0.0.0", () => {
+    console.log(`[startup] Gunner v2 listening on port ${ENV.port}`);
+  });
+
+  // 5. Start background services (production only)
   if (ENV.isProduction) {
     try { startPolling(5); } catch (e) { console.error("[services] Polling failed:", e); }
     try { startDailyDigestJob(); } catch (e) { console.error("[services] Digest failed:", e); }
     try { startEventFlusher(); } catch (e) { console.error("[services] Flusher failed:", e); }
     try { startRetryProcessor(); } catch (e) { console.error("[services] Retry failed:", e); }
     try { startScheduledJobs(); } catch (e) { console.error("[services] Jobs failed:", e); }
+    initWorkers().catch((e) => console.error("[workers] Init failed:", e));
+    startOrchestrator();
   }
-});
+}
 
-server.on("error", (err) => {
-  console.error("[startup] Server error:", err.message);
+startup().catch((err) => {
+  console.error("[startup] Fatal error:", err);
+  process.exit(1);
 });
 
 export type AppRouter = typeof appRouter;

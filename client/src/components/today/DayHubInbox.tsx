@@ -55,7 +55,7 @@ export function DayHubInbox({
   appointments,
   leftTab,
   setLeftTab,
-  inboxSub,
+  inboxSub: _inboxSub,
   setInboxSub,
   selectedConv,
   setSelectedConv,

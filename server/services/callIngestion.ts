@@ -85,7 +85,7 @@ export async function ingestCallsForTenant(tenantId: number) {
 function mapGhlStageToStatus(stageId: string, stageMappings?: Record<string, string>): string {
   if (stageMappings?.[stageId]) return stageMappings[stageId]!;
   const lower = stageId.toLowerCase();
-  if (lower.includes("new") || lower.includes("lead")) return "new_lead";
+  if (lower.includes("new") || lower.includes("lead")) return "new_lead"; // eslint-disable-line no-restricted-syntax -- CRM stage matching, not UI label
   if (lower.includes("contact") || lower.includes("reached")) return "contacted";
   if (lower.includes("appt") || lower.includes("appointment") || lower.includes("sched")) return "apt_set";
   if (lower.includes("offer") || lower.includes("negotiat")) return "offer_made";

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
 

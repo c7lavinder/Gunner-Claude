@@ -63,9 +63,8 @@ async function resolveKpiTargets(tenantId: number): Promise<Record<string, numbe
   const tenantPb = await getTenantPlaybook(tenantId);
   const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
   const algorithmConfig = resolveAlgorithmConfig(industryPb, tenantPb);
-  const pbTargets = (algorithmConfig as Record<string, unknown>).kpiTargets;
-  if (pbTargets && typeof pbTargets === "object") {
-    return { ...DEFAULT_KPI_TARGETS, ...(pbTargets as Record<string, number>) };
+  if (algorithmConfig.kpiTargets) {
+    return { ...DEFAULT_KPI_TARGETS, ...algorithmConfig.kpiTargets };
   }
   return DEFAULT_KPI_TARGETS;
 }

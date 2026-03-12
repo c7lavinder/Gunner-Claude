@@ -29,7 +29,7 @@ function findTenantByLocationId(locationId: string): Promise<{ id: number; crmCo
   });
 }
 
-async function isDuplicateEvent(eventId: string | undefined, eventType: string, locationId: string): Promise<boolean> {
+async function isDuplicateEvent(eventId: string | undefined, eventType: string, _locationId: string): Promise<boolean> {
   if (!eventId) return false;
   const [existing] = await db
     .select({ id: webhookEvents.id })

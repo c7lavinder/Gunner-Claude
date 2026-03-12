@@ -157,6 +157,9 @@ export interface ActionResult {
   error?: string;
 }
 
+// Hot streak minimum days — single source of truth (mirrors SOFTWARE_PLAYBOOK on the server)
+export const HOT_STREAK_THRESHOLD = 3;
+
 // XP level thresholds — single source of truth (mirrors SOFTWARE_PLAYBOOK on the server)
 export const LEVEL_THRESHOLDS: number[] = [
   0, 500, 1000, 1750, 2500, 4000, 6000, 9000, 12000, 15000,

@@ -46,6 +46,8 @@ export const ENV = {
 
   turnstileSecretKey: optional("TURNSTILE_SECRET_KEY"),
 
+  redisUrl: optional("REDIS_URL"),
+
   isProduction: process.env.NODE_ENV === "production",
   port: parseInt(optional("PORT", "3000"), 10),
 };

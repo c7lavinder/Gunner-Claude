@@ -6,7 +6,6 @@ import { requireRole } from "../_core/sdk";
 import { logAction } from "../services/auditLog";
 import { db } from "../_core/db";
 import {
-  tenants,
   tenantRoles,
   tenantCallTypes,
   tenantRubrics,

@@ -33,7 +33,7 @@ function todayStr() {
 }
 
 export function KpiPage() {
-  const { stages, kpiMetrics: kpiMetricsRaw, kpiFunnelStages } = useTenantConfig();
+  const { t, stages, kpiMetrics: kpiMetricsRaw, kpiFunnelStages } = useTenantConfig();
   const kpiMetrics = kpiMetricsRaw.length > 0 ? kpiMetricsRaw : DEFAULT_KPI_METRICS;
   const [period, setPeriod] = useState("week");
   const [kpiValues, setKpiValues] = useState<Record<string, string>>({});
@@ -267,7 +267,7 @@ export function KpiPage() {
             <div className="text-sm text-[var(--g-text-secondary)]">
               {kpiFunnelStages.length >= 2
                 ? `${kpiFunnelStages[0]} → ${kpiFunnelStages[kpiFunnelStages.length - 1]}`
-                : "Start → Closed"}
+                : `${t.contact} → ${t.deal}`}
             </div>
           </CardContent>
         </Card>

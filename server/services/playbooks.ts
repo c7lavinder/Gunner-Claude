@@ -6,6 +6,7 @@ import {
   userPlaybooks,
 } from "../../drizzle/schema";
 import {
+  HOT_STREAK_THRESHOLD,
   LEVEL_THRESHOLDS,
   type IndustryPlaybook,
   type TenantPlaybook,
@@ -63,6 +64,7 @@ export const SOFTWARE_PLAYBOOK = {
     badgeEarned: 25,
     improvement: 20,
   },
+  hotStreakThreshold: HOT_STREAK_THRESHOLD,
   levelThresholds: LEVEL_THRESHOLDS,
   levelTitles: [
     "Rookie", "Starter", "Starter", "Playmaker", "Playmaker",
@@ -233,11 +235,18 @@ export function resolveCallTypes(
 export function resolveAlgorithmConfig(
   industry?: IndustryPlaybook | null,
   tenant?: TenantPlaybook | null
-): Record<string, unknown> {
+): AlgorithmConfig {
+  const defaults: AlgorithmConfig = {
+    inventorySort: {},
+    buyerMatch: {},
+    taskSort: {},
+  };
+  const base = industry?.algorithmDefaults ?? defaults;
   return {
-    ...SOFTWARE_PLAYBOOK.algorithmFramework,
-    ...(industry?.algorithmDefaults ?? {}),
-    ...(tenant?.algorithmOverrides ?? {}),
+    inventorySort: { ...base.inventorySort, ...(tenant?.algorithmOverrides?.inventorySort ?? {}) },
+    buyerMatch: { ...base.buyerMatch, ...(tenant?.algorithmOverrides?.buyerMatch ?? {}) },
+    taskSort: { ...base.taskSort, ...(tenant?.algorithmOverrides?.taskSort ?? {}) },
+    kpiTargets: { ...(base.kpiTargets ?? {}), ...(tenant?.algorithmOverrides?.kpiTargets ?? {}) },
   };
 }
 

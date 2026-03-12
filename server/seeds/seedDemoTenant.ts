@@ -15,7 +15,6 @@ import {
   xpTransactions,
   userXp,
   userStreaks,
-  badgeProgress,
   trainingMaterials,
   performanceMetrics,
   demoConversations,

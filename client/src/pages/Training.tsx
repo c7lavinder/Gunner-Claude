@@ -31,11 +31,16 @@ import { LEVEL_THRESHOLDS } from "@shared/types";
 import { ObjectionLibrary } from "./training/ObjectionLibrary";
 
 const MATERIAL_ICONS: Record<string, typeof Shield> = {
-  objections: Shield,
-  tonality: Target,
-  speed: Zap,
-  closing: Award,
-  listening: BookOpen,
+  "cold-calling": Phone,
+  "negotiation": Target,
+  "objection-handling": Shield,
+  "rapport-building": Users,
+  "deal-analysis": Zap,
+  "dispo-pitching": MessageSquare,
+  "follow-up": TrendingUp,
+  "closing": Award,
+  "crm-workflow": BookOpen,
+  "mindset": Award,
 };
 
 function gradeClass(grade: number) {
