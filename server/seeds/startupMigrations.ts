@@ -164,7 +164,8 @@ export async function runStartupMigrations(): Promise<void> {
   await db.execute(sql`
     ALTER TABLE "users"
     ADD COLUMN IF NOT EXISTS "failedLoginAttempts" integer NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS "lockedUntil" timestamp
+    ADD COLUMN IF NOT EXISTS "lockedUntil" timestamp,
+    ADD COLUMN IF NOT EXISTS "profilePicture" text
   `);
 
   // Sessions table for active login tracking
