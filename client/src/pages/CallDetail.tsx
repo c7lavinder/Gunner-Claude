@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -82,7 +82,7 @@ type ContentTab = "coaching" | "criteria" | "transcript" | "next-steps";
 /* ── Main Component ── */
 
 export function CallDetail() {
-  const [, params] = useRoute("/calls/:id");
+  const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const callId = params?.id ? Number(params.id) : null;
 
