@@ -10,6 +10,11 @@ const pool = new pg.Pool({
   connectionTimeoutMillis: 5000,
 });
 
+// Set a 30-second statement timeout so no query can hang indefinitely
+pool.on("connect", (client) => {
+  client.query("SET statement_timeout = 30000").catch(() => {});
+});
+
 pool.on("error", (err) => {
   console.error("[db] Pool background error (non-fatal):", err.message);
 });
