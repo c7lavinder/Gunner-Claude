@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { eq, and } from "drizzle-orm";
 import { router, publicProcedure, protectedProcedure } from "../_core/context";
 import { requireRole } from "../_core/sdk";
@@ -43,6 +44,8 @@ export const playbookRouter = router({
       kpiMetrics: resolveKpiMetrics(industry, tenant),
       roleplayPersonas: resolveRoleplayPersonas(industry),
       trainingCategories: resolveTrainingCategories(industry),
+      markets: tenant?.markets ?? [],
+      leadSources: tenant?.leadSources ?? [],
     };
   }),
 
@@ -94,10 +97,18 @@ export const playbookRouter = router({
       const tenantId = ctx.user.tenantId;
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.terminology !== undefined) {
-        try { updates.terminology = JSON.parse(input.terminology); } catch { updates.terminology = null; }
+        try {
+          updates.terminology = z.record(z.string(), z.string()).parse(JSON.parse(input.terminology));
+        } catch {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid terminology JSON" });
+        }
       }
       if (input.algorithmOverrides !== undefined) {
-        try { updates.algorithmOverrides = JSON.parse(input.algorithmOverrides); } catch { updates.algorithmOverrides = null; }
+        try {
+          updates.algorithmOverrides = z.record(z.string(), z.unknown()).parse(JSON.parse(input.algorithmOverrides));
+        } catch {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid algorithm overrides JSON" });
+        }
       }
 
       const [existing] = await db
@@ -256,8 +267,20 @@ export const playbookRouter = router({
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.voiceConsentGiven !== undefined) updates.voiceConsentGiven = input.voiceConsentGiven;
       if (input.role !== undefined) updates.role = input.role;
-      if (input.strengths !== undefined) updates.strengths = JSON.parse(input.strengths);
-      if (input.growthAreas !== undefined) updates.growthAreas = JSON.parse(input.growthAreas);
+      if (input.strengths !== undefined) {
+        try {
+          updates.strengths = z.array(z.string()).parse(JSON.parse(input.strengths));
+        } catch {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid strengths JSON" });
+        }
+      }
+      if (input.growthAreas !== undefined) {
+        try {
+          updates.growthAreas = z.array(z.string()).parse(JSON.parse(input.growthAreas));
+        } catch {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid growth areas JSON" });
+        }
+      }
       const [updated] = await db
         .update(userPlaybooks)
         .set(updates as typeof userPlaybooks.$inferInsert)

@@ -27,7 +27,7 @@ export function useCallInboxData() {
     return d.toISOString();
   }, [dateRange]);
 
-  const { data: callsData, isLoading } = trpc.calls.list.useQuery({
+  const { data: callsData, isLoading, isError } = trpc.calls.list.useQuery({
     page: currentPage,
     limit: 25,
     status: statusFilter,
@@ -109,6 +109,7 @@ export function useCallInboxData() {
     actionTarget, setActionTarget,
     executeAction, isExecuting, result, reset,
     isLoading,
+    isError,
     filtered,
     callDetail,
     grade,

@@ -1,22 +1,9 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Settings as SettingsIcon,
   Building2,
   Link2,
   Users,
@@ -24,8 +11,6 @@ import {
   CreditCard,
   Check,
   X,
-  Plus,
-  Trash2,
   Mic,
   Monitor,
   LogOut,
@@ -33,7 +18,16 @@ import {
 } from "lucide-react";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { useAuth } from "@/hooks/useAuth";
+import { ErrorState } from "@/components/ErrorState";
+import { PageShell } from "@/components/layout/PageShell";
 import { trpc } from "@/lib/trpc";
+
+import { GeneralTab } from "./settings/GeneralTab";
+import { CrmTab } from "./settings/CrmTab";
+import { TeamTab } from "./settings/TeamTab";
+import { NotificationsTab } from "./settings/NotificationsTab";
+import { VoiceTab } from "./settings/VoiceTab";
+import { BillingTab } from "./settings/BillingTab";
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -182,7 +176,7 @@ function AuditLogTab() {
 export function Settings() {
   const { isAdmin } = useAuth();
   const { roles } = useTenantConfig();
-  const { data: workspace, isLoading } = trpc.settings.getWorkspace.useQuery();
+  const { data: workspace, isLoading, isError } = trpc.settings.getWorkspace.useQuery();
   const { data: industries } = trpc.playbook.listIndustries.useQuery();
   const updateMutation = trpc.settings.updateWorkspace.useMutation();
   const { data: plans } = trpc.settings.getPlans.useQuery();
@@ -267,18 +261,11 @@ export function Settings() {
   const crmConnected = testQuery.data?.connected ?? null;
   const crmError = testQuery.data?.error;
 
-  const header = (
-    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
-      <SettingsIcon className="size-6 text-[var(--g-accent-text)]" />
-      Settings
-    </h1>
-  );
-
-  if (isLoading) return <div className="space-y-6">{header}<Skeleton className="h-64 w-full" /></div>;
+  if (isError) return <PageShell title="Settings"><ErrorState onRetry={() => window.location.reload()} /></PageShell>;
+  if (isLoading) return <PageShell title="Settings"><Skeleton className="h-64 w-full" /></PageShell>;
 
   return (
-    <div className="space-y-6">
-      {header}
+    <PageShell title="Settings">
       <Tabs defaultValue="general" className="flex flex-col sm:flex-row gap-8">
         <TabsList className="flex flex-col h-auto w-full sm:w-48 flex-shrink-0 bg-[var(--g-bg-surface)] border border-[var(--g-border-subtle)] p-1 rounded-xl">
           <TabsTrigger value="general" className="justify-start gap-2"><Building2 className="size-4" />General</TabsTrigger>
@@ -292,211 +279,85 @@ export function Settings() {
         </TabsList>
         <div className="flex-1 min-w-0">
           <TabsContent value="general" className="mt-0">
-            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-              <CardHeader><CardTitle>General</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Company name</Label>
-                  <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="bg-[var(--g-bg-surface)]" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Industry</Label>
-                  <Select value={industry} onValueChange={setIndustry}>
-                    <SelectTrigger className="w-full bg-[var(--g-bg-surface)]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {industries?.map((i) => (
-                        <SelectItem key={i.code} value={i.code}>{i.name}</SelectItem>
-                      ))}
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Timezone</Label>
-                  <Select value={timezone} onValueChange={setTimezone}>
-                    <SelectTrigger className="w-full bg-[var(--g-bg-surface)]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="America/New_York">Eastern</SelectItem>
-                      <SelectItem value="America/Chicago">Central</SelectItem>
-                      <SelectItem value="America/Denver">Mountain</SelectItem>
-                      <SelectItem value="America/Los_Angeles">Pacific</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {isAdmin && <Button onClick={saveGeneral} disabled={updateMutation.isPending}>Save</Button>}
-              </CardContent>
-            </Card>
+            <GeneralTab
+              companyName={companyName}
+              setCompanyName={setCompanyName}
+              industry={industry}
+              setIndustry={setIndustry}
+              timezone={timezone}
+              setTimezone={setTimezone}
+              industries={industries}
+              isAdmin={isAdmin}
+              onSave={saveGeneral}
+              isSaving={updateMutation.isPending}
+            />
           </TabsContent>
           <TabsContent value="crm" className="mt-0 space-y-4">
-            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-              <CardHeader><CardTitle>Connect via OAuth (Recommended)</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-[var(--g-text-secondary)]">
-                  Connect your GoHighLevel account with one click. This automatically sets up API access and webhook notifications.
-                </p>
-                <Button
-                  onClick={() => {
-                    const redirectUri = encodeURIComponent(`${window.location.origin}/settings?tab=crm&crm_callback=1`);
-                    window.location.href = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${redirectUri}&client_id=69b0ef6de3575a61010ffe83-mmljpt73&scope=contacts.readonly+contacts.write+conversations.readonly+conversations.write+conversations%2Fmessage.readonly+conversations%2Fmessage.write+opportunities.readonly+opportunities.write+users.readonly+calendars.readonly+calendars.write+calendars%2Fevents.readonly+calendars%2Fevents.write+workflows.readonly+locations.readonly+locations%2FcustomValues.readonly+locations%2FcustomValues.write+locations%2FcustomFields.readonly+locations%2FcustomFields.write+locations%2Ftasks.readonly+locations%2Ftasks.write+locations%2Ftags.readonly+locations%2Ftags.write+campaigns.readonly+forms.readonly+surveys.readonly&version_id=69b0ef6de3575a61010ffe83`;
-                  }}
-                >
-                  <Link2 className="size-4 mr-2" />
-                  Connect GoHighLevel
-                </Button>
-                <SyncHealthDisplay />
-              </CardContent>
-            </Card>
-            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-              <CardHeader><CardTitle>Manual API Key</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-[var(--g-text-tertiary)]">
-                  Or connect manually using your GHL API key and location ID.
-                </p>
-                <div className="space-y-2">
-                  <Label>API Key</Label>
-                  <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={crmConfig.apiKey ? "••••••••••••••••" : ""} className="bg-[var(--g-bg-surface)]" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Location ID</Label>
-                  <Input value={locationId} onChange={(e) => setLocationId(e.target.value)} className="bg-[var(--g-bg-surface)]" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button variant="outline" onClick={() => testQuery.refetch()} disabled={testQuery.isFetching}>Test Connection</Button>
-                  {!testQuery.isFetching && crmConnected === true && <span className="flex items-center gap-1 text-sm text-[var(--g-grade-a)]"><Check className="size-4" />Connected</span>}
-                  {!testQuery.isFetching && crmConnected === false && <span className="flex items-center gap-1 text-sm text-[var(--g-grade-f)]"><X className="size-4" />{crmError ?? "Failed"}</span>}
-                </div>
-                <Button variant="secondary" onClick={saveCrm} disabled={updateMutation.isPending}>Save CRM Config</Button>
-              </CardContent>
-            </Card>
+            <CrmTab
+              apiKey={apiKey}
+              setApiKey={setApiKey}
+              locationId={locationId}
+              setLocationId={setLocationId}
+              crmConfig={crmConfig}
+              onOAuthConnect={async () => {
+                const result = await ghlOAuthUrlQuery.refetch();
+                if (result.data?.url) {
+                  window.location.href = result.data.url;
+                }
+              }}
+              isOAuthFetching={ghlOAuthUrlQuery.isFetching}
+              onTestConnection={() => { void testQuery.refetch(); }}
+              isTestFetching={testQuery.isFetching}
+              crmConnected={crmConnected}
+              crmError={crmError}
+              onSaveCrm={saveCrm}
+              isSaving={updateMutation.isPending}
+              syncHealthDisplay={<SyncHealthDisplay />}
+            />
           </TabsContent>
           <TabsContent value="team" className="mt-0">
-            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Team</CardTitle>
-                {isAdmin && <Button size="sm" onClick={() => setShowInvite(!showInvite)}><Plus className="size-4" />Invite</Button>}
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {showInvite && (
-                  <div className="p-4 rounded-lg space-y-3 bg-[var(--g-bg-inset)] border border-[var(--g-border-subtle)]">
-                    <div className="space-y-2"><Label>Name</Label><Input value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Name" className="bg-[var(--g-bg-surface)]" /></div>
-                    <div className="space-y-2"><Label>Email</Label><Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="Email" className="bg-[var(--g-bg-surface)]" /></div>
-                    <div className="space-y-2"><Label>Role</Label>
-                      <Select value={inviteRole} onValueChange={setInviteRole}>
-                        <SelectTrigger className="w-full bg-[var(--g-bg-surface)]"><SelectValue /></SelectTrigger>
-                        <SelectContent>{roles.map((r) => <SelectItem key={r.code} value={r.code}>{r.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <Button size="sm" onClick={sendInvite} disabled={inviteMutation.isPending}>Send Invite</Button>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  {team.length === 0 ? (
-                    <p className="text-sm py-4 text-[var(--g-text-tertiary)]">No team members yet.</p>
-                  ) : (
-                    team.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-[var(--g-bg-surface)]">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-[var(--g-text-primary)]">{m.name}</span>
-                          <Select value={m.teamRole ?? "member"} onValueChange={(v) => {
-                            updateRoleMutation.mutate({ id: m.id, teamRole: v }, { onSuccess: () => void utils.settings.getWorkspace.invalidate() });
-                          }}>
-                            <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {roles.map((r) => <SelectItem key={r.code} value={r.code}>{r.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {isAdmin && <Button variant="ghost" size="icon" aria-label="Remove member" onClick={() => removeMember(m.id)} disabled={removeMutation.isPending}><Trash2 className="size-4 text-[var(--g-text-tertiary)]" /></Button>}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <TeamTab
+              isAdmin={isAdmin}
+              team={team}
+              roles={roles}
+              showInvite={showInvite}
+              setShowInvite={setShowInvite}
+              inviteName={inviteName}
+              setInviteName={setInviteName}
+              inviteEmail={inviteEmail}
+              setInviteEmail={setInviteEmail}
+              inviteRole={inviteRole}
+              setInviteRole={setInviteRole}
+              onSendInvite={sendInvite}
+              isInviting={inviteMutation.isPending}
+              onRemoveMember={removeMember}
+              isRemoving={removeMutation.isPending}
+              onUpdateRole={(id, role) => {
+                updateRoleMutation.mutate({ id, teamRole: role }, { onSuccess: () => void utils.settings.getWorkspace.invalidate() });
+              }}
+            />
           </TabsContent>
           <TabsContent value="notifications" className="mt-0">
-            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-              <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div><p className="font-medium text-[var(--g-text-primary)]">Email daily digest</p><p className="text-sm text-[var(--g-text-tertiary)]">Summary of calls and grades</p></div>
-                  <Switch checked={emailDigest} onCheckedChange={(v) => { setEmailDigest(v); setNotifDirty(true); }} />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div><p className="font-medium text-[var(--g-text-primary)]">Email grade alerts</p><p className="text-sm text-[var(--g-text-tertiary)]">When new grades are ready</p></div>
-                  <Switch checked={gradeAlerts} onCheckedChange={(v) => { setGradeAlerts(v); setNotifDirty(true); }} />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between opacity-60">
-                  <div><p className="font-medium text-[var(--g-text-primary)]">Slack integration</p><Badge variant="outline" className="text-[10px]">Soon</Badge></div>
-                  <Switch disabled />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between opacity-60">
-                  <div><p className="font-medium text-[var(--g-text-primary)]">SMS alerts</p><Badge variant="outline" className="text-[10px]">Soon</Badge></div>
-                  <Switch disabled />
-                </div>
-                <div className="flex items-center gap-2">
-                  {notifDirty && <Badge variant="outline" className="text-amber-600 border-amber-400 text-xs">Unsaved changes</Badge>}
-                  <Button onClick={saveGeneral} disabled={updateMutation.isPending}>Save</Button>
-                </div>
-              </CardContent>
-            </Card>
+            <NotificationsTab
+              emailDigest={emailDigest}
+              setEmailDigest={setEmailDigest}
+              gradeAlerts={gradeAlerts}
+              setGradeAlerts={setGradeAlerts}
+              notifDirty={notifDirty}
+              setNotifDirty={setNotifDirty}
+              onSave={saveGeneral}
+              isSaving={updateMutation.isPending}
+            />
           </TabsContent>
           <TabsContent value="voice" className="mt-0 space-y-4">
-            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-              <CardHeader><CardTitle>Voice Coaching</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <p className="font-medium text-[var(--g-text-primary)]">Allow voice sample collection</p>
-                    <p className="text-sm text-[var(--g-text-tertiary)]">
-                      Allow Gunner to collect voice samples from your calls to build a personalized coaching profile.
-                      Your voice data is stored securely and used only to improve your AI coaching experience.
-                      You can revoke consent at any time.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={voiceProfile?.consentGiven ?? false}
-                    onCheckedChange={async (checked) => {
-                      await updateVoiceConsentMutation.mutateAsync({ consentGiven: checked });
-                      await refetchVoiceProfile();
-                    }}
-                    disabled={updateVoiceConsentMutation.isPending}
-                  />
-                </div>
-                {voiceProfile && (
-                  <>
-                    <Separator />
-                    <div className="space-y-3">
-                      <p className="font-medium text-[var(--g-text-primary)]">Voice Profile</p>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="p-3 rounded-lg bg-[var(--g-bg-inset)]">
-                          <p className="text-2xl font-bold text-[var(--g-text-primary)]">{voiceProfile.totalSamples ?? 0}</p>
-                          <p className="text-xs mt-0.5 text-[var(--g-text-tertiary)]">Samples collected</p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-[var(--g-bg-inset)]">
-                          <p className="text-2xl font-bold text-[var(--g-text-primary)]">{parseFloat(voiceProfile.totalDurationMinutes ?? "0").toFixed(0)}</p>
-                          <p className="text-xs mt-0.5 text-[var(--g-text-tertiary)]">Minutes recorded</p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-[var(--g-bg-inset)]">
-                          <p className={voiceProfile.readyForCloning ? "text-sm font-semibold text-[var(--g-grade-a)]" : "text-sm font-semibold text-[var(--g-text-secondary)]"}>
-                            {voiceProfile.readyForCloning ? "Ready" : (voiceProfile.totalSamples ?? 0) > 0 ? "Building" : "Not started"}
-                          </p>
-                          <p className="text-xs mt-0.5 text-[var(--g-text-tertiary)]">Profile status</p>
-                        </div>
-                      </div>
-                      {!voiceProfile.readyForCloning && (voiceProfile.totalSamples ?? 0) > 0 && (
-                        <p className="text-xs text-[var(--g-text-tertiary)]">
-                          Need {Math.max(0, 20 - (voiceProfile.totalSamples ?? 0))} more samples and {Math.max(0, 60 - parseFloat(voiceProfile.totalDurationMinutes ?? "0")).toFixed(0)} more minutes to unlock cloning.
-                        </p>
-                      )}
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+            <VoiceTab
+              voiceProfile={voiceProfile}
+              onToggleConsent={async (checked) => {
+                await updateVoiceConsentMutation.mutateAsync({ consentGiven: checked });
+                await refetchVoiceProfile();
+              }}
+              isUpdatingConsent={updateVoiceConsentMutation.isPending}
+            />
           </TabsContent>
           <TabsContent value="sessions" className="mt-0">
             <SessionsTab />
@@ -507,53 +368,15 @@ export function Settings() {
             </TabsContent>
           )}
           <TabsContent value="billing" className="mt-0">
-            <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-              <CardHeader><CardTitle>Billing</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                {(() => {
-                  const tierCode = tenant?.subscriptionTier ?? "starter";
-                  const planStatus = tenant?.subscriptionStatus ?? "trial";
-                  const currentPlan = plans?.find((p) => p.code === tierCode);
-                  const planName = currentPlan?.name ?? tierCode.charAt(0).toUpperCase() + tierCode.slice(1) + " Plan";
-                  const planPrice = currentPlan?.priceMonthly ? `$${(currentPlan.priceMonthly / 100).toFixed(0)}/mo` : null;
-                  return (
-                <div className="p-4 rounded-xl bg-[var(--g-accent-soft)] border border-[var(--g-accent-medium)]">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-[var(--g-accent-text)]">{planName}</p>
-                    <Badge variant="outline" className="text-xs capitalize">{planStatus}</Badge>
-                  </div>
-                  {planPrice && <p className="text-2xl font-bold mt-1 text-[var(--g-text-primary)]">{planPrice}</p>}
-                  <p className="mt-2 text-sm text-[var(--g-text-secondary)]">Unlimited calls · AI grading · Team leaderboard · GHL sync</p>
-                  <Button
-                    className="mt-4"
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        const result = await utils.client.settings.manageBilling.mutate({
-                          returnUrl: window.location.href,
-                        });
-                        if (result?.url) window.location.href = result.url;
-                      } catch {
-                        window.alert("Billing portal is not configured yet.");
-                      }
-                    }}
-                  >
-                    Manage Subscription
-                  </Button>
-                </div>
-                  );
-                })()}
-                <div>
-                  <p className="text-sm font-medium mb-2 text-[var(--g-text-secondary)]">Usage this month</p>
-                  <div className="flex gap-4">
-                    <div><span className="text-2xl font-bold text-[var(--g-text-primary)]">{team.length}</span><span className="text-sm ml-1 text-[var(--g-text-tertiary)]">team members</span></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <BillingTab
+              subscriptionTier={tenant?.subscriptionTier ?? "starter"}
+              subscriptionStatus={tenant?.subscriptionStatus ?? "trial"}
+              plans={plans}
+              teamCount={team.length}
+            />
           </TabsContent>
         </div>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

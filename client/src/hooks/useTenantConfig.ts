@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import type { Terminology, RoleDef, StageDef, RoleplayPersona, TrainingCategory } from "@shared/types";
+import type { Terminology, RoleDef, StageDef, RoleplayPersona, TrainingCategory, AlgorithmConfig } from "@shared/types";
 
 const DEFAULT_T: Terminology = {
   contact: "Contact",
@@ -31,11 +31,13 @@ export function useTenantConfig() {
     roles: data?.roles ?? DEFAULT_ROLES,
     stages: data?.stages ?? DEFAULT_STAGES,
     callTypes: data?.callTypes ?? [],
-    algorithm: data?.algorithm ?? {},
+    algorithm: (data?.algorithm ?? {}) as AlgorithmConfig & Record<string, unknown>,
     kpiFunnelStages: data?.kpiFunnelStages ?? ([] as string[]),
     kpiMetrics: data?.kpiMetrics ?? ([] as Array<{ key: string; label: string }>),
     roleplayPersonas: data?.roleplayPersonas ?? ([] as RoleplayPersona[]),
     trainingCategories: data?.trainingCategories ?? ([] as TrainingCategory[]),
+    markets: data?.markets ?? [],
+    leadSources: data?.leadSources ?? [],
     isLoading,
   };
 }

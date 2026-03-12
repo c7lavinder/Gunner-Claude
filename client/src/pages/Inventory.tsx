@@ -1,6 +1,8 @@
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ActionConfirmDialog } from "@/components/actions/ActionConfirmDialog";
+import { ErrorState } from "@/components/ErrorState";
+import { PageShell } from "@/components/layout/PageShell";
 import { useInventoryData } from "@/hooks/useInventoryData";
 import { InventoryFilters } from "@/components/inventory/InventoryFilters";
 import { InventoryGrid } from "@/components/inventory/InventoryGrid";
@@ -13,10 +15,14 @@ export function Inventory() {
   const assetLabel = data.t?.assetPlural ?? "Properties";
   const assetSingular = data.t?.asset ?? "Property";
 
+  if (data.isError) {
+    return <PageShell title={assetLabel}><ErrorState onRetry={() => window.location.reload()} /></PageShell>;
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--g-text-primary)]">{assetLabel}</h1>
+    <PageShell
+      title={assetLabel}
+      actions={
         <div className="flex flex-1 max-w-md gap-2">
           <InventoryFilters
             search={data.search}
@@ -31,8 +37,8 @@ export function Inventory() {
             <Plus className="size-4" /> Add {assetSingular}
           </Button>
         </div>
-      </div>
-
+      }
+    >
       <InventoryGrid
         items={data.items}
         stages={data.stages}
@@ -113,6 +119,6 @@ export function Inventory() {
         onSubmit={data.handleCreate}
         isSubmitting={data.isCreating}
       />
-    </div>
+    </PageShell>
   );
 }

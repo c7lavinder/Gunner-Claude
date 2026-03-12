@@ -109,7 +109,7 @@ export function useTodayData() {
 
   // ── tRPC queries ──
   const utils = trpc.useUtils();
-  const { data: hubStats, isLoading: statsLoading } = trpc.today.getDayHubStats.useQuery({
+  const { data: hubStats, isLoading: statsLoading, isError: statsError } = trpc.today.getDayHubStats.useQuery({
     role: selectedRole === "all" ? undefined : selectedRole,
   });
   const { data: missedCalls } = trpc.today.getMissedCalls.useQuery();
@@ -125,6 +125,7 @@ export function useTodayData() {
   // ── derived ──
   const missedCount = missedCalls?.length ?? 0;
   const isLoading = config.isLoading || statsLoading;
+  const isError = statsError;
 
   const kpiLabel = useCallback(
     (key: string) => kpiMetrics.find((m) => m.key === key)?.label ?? KPI_FALLBACK_LABELS[key] ?? key,
@@ -240,6 +241,7 @@ export function useTodayData() {
     stages,
     kpiMetrics,
     isLoading,
+    isError,
 
     // role tabs
     selectedRole,

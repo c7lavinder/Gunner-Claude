@@ -9,6 +9,8 @@ export interface Terminology {
   assetPlural: string;
   deal: string;
   dealPlural: string;
+  call?: string;
+  callPlural?: string;
   walkthrough: string;
 }
 

@@ -4,6 +4,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Phone } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
+import { PageShell } from "@/components/layout/PageShell";
 import { ActionConfirmDialog } from "@/components/actions/ActionConfirmDialog";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { useCallInboxData } from "@/hooks/useCallInboxData";
@@ -17,11 +19,17 @@ export function CallInbox() {
 
   const d = useCallInboxData();
 
+  if (d.isError) {
+    return (
+      <PageShell title={t.callPlural ?? "Calls"}>
+        <ErrorState onRetry={() => window.location.reload()} />
+      </PageShell>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold text-[var(--g-text-primary)]">Calls</h1>
-        <CallFilters
+    <PageShell title={t.callPlural ?? "Calls"} actions={
+      <CallFilters
           search={d.search}
           onSearchChange={d.setSearch}
           dateRange={d.dateRange}
@@ -33,7 +41,7 @@ export function CallInbox() {
           callTypes={callTypes}
           contactLabel={t.contact}
         />
-      </div>
+    }>
 
       <Tabs value={d.tab} onValueChange={(v) => { d.setTab(v); d.setCurrentPage(1); }}>
         <TabsList className="h-8">
@@ -123,6 +131,6 @@ export function CallInbox() {
           />
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

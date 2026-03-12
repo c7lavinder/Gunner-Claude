@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Flame, Sparkles, Send, RefreshCw } from "lucide-react";
+import { Sparkles, Send, RefreshCw } from "lucide-react";
+import { ErrorState } from "@/components/ErrorState";
+import { PageShell } from "@/components/layout/PageShell";
 import { toast } from "sonner";
 import { KpiLedgerModal } from "@/components/KpiLedgerModal";
 import { KpiStatCards } from "@/components/today/KpiStatCards";
@@ -18,9 +20,17 @@ import { useTodayData, todayIso } from "@/hooks/useTodayData";
 export function Today() {
   const d = useTodayData();
 
+  if (d.isError) {
+    return (
+      <PageShell title="Day Hub">
+        <ErrorState onRetry={() => window.location.reload()} />
+      </PageShell>
+    );
+  }
+
   if (d.isLoading) {
     return (
-      <div className="space-y-6">
+      <PageShell title="Day Hub">
         <div className="flex items-center gap-3">
           <Skeleton className="h-8 w-32" />
           <Skeleton className="h-8 w-64" />
@@ -35,17 +45,15 @@ export function Today() {
           <Skeleton className="h-[460px] rounded-xl" />
         </div>
         <Skeleton className="h-64 rounded-xl" />
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* ═══ Header + Role Tabs ═══ */}
+    <PageShell title="Day Hub">
+      {/* ═══ Role Tabs ═══ */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <Flame className="size-6 text-[var(--g-accent-text)]" />
-          <h1 className="text-2xl font-bold text-[var(--g-text-primary)]">Day Hub</h1>
           <div className="flex gap-1.5 flex-wrap">
             {[{ code: "all", name: "All" }, ...d.roles, { code: "admin", name: "ADMIN" }].map((r) => (
               <button
@@ -126,7 +134,7 @@ export function Today() {
           onClose={() => d.setLedgerKpi(null)}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 

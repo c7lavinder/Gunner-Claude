@@ -93,7 +93,7 @@ export function useInventoryData() {
   }, [search]);
 
   // ── Queries ──
-  const { data: inventoryData, isLoading } = trpc.inventory.list.useQuery({
+  const { data: inventoryData, isLoading, isError } = trpc.inventory.list.useQuery({
     stage: activeStage === "all" ? undefined : activeStage,
     search: searchDebounced || undefined,
     page: currentPage,
@@ -207,6 +207,7 @@ export function useInventoryData() {
     // List data
     items,
     isLoading,
+    isError,
     currentPage,
     setCurrentPage,
     totalPages,

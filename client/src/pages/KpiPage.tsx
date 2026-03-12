@@ -7,6 +7,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart3, Phone, MessageSquare, FileCheck, Calendar, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
+import { PageShell } from "@/components/layout/PageShell";
 import { trpc } from "@/lib/trpc";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 
@@ -31,16 +33,14 @@ function todayStr() {
 }
 
 export function KpiPage() {
-  const { algorithm, stages } = useTenantConfig();
-  const kpiMetricsRaw = (algorithm.kpiMetrics as Array<{ key: string; label: string }> | undefined) ?? [];
+  const { stages, kpiMetrics: kpiMetricsRaw, kpiFunnelStages } = useTenantConfig();
   const kpiMetrics = kpiMetricsRaw.length > 0 ? kpiMetricsRaw : DEFAULT_KPI_METRICS;
-  const kpiFunnelStages = (algorithm.kpiFunnelStages as string[] | undefined) ?? [];
   const [period, setPeriod] = useState("week");
   const [kpiValues, setKpiValues] = useState<Record<string, string>>({});
   const today = todayStr();
 
-  const { data: dashboard, isLoading: dashboardLoading } = trpc.kpi.getDashboard.useQuery({ period });
-  const { data: entries, isLoading: entriesLoading } = trpc.kpi.getEntries.useQuery({ date: today });
+  const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError } = trpc.kpi.getDashboard.useQuery({ period });
+  const { data: entries, isLoading: entriesLoading, isError: entriesError } = trpc.kpi.getEntries.useQuery({ date: today });
   const saveMutation = trpc.kpi.saveEntry.useMutation();
   const utils = trpc.useUtils();
 
@@ -81,14 +81,19 @@ export function KpiPage() {
   };
 
   const isLoading = dashboardLoading || entriesLoading;
+  const isError = dashboardError || entriesError;
+
+  if (isError) {
+    return (
+      <PageShell title="KPIs">
+        <ErrorState onRetry={() => window.location.reload()} />
+      </PageShell>
+    );
+  }
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
-          <BarChart3 className="size-6 text-[var(--g-accent-text)]" />
-          KPIs
-        </h1>
+      <PageShell title="KPIs">
         <Skeleton className="h-10 w-64" />
         <Card className="overflow-hidden bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="p-6">
@@ -100,16 +105,12 @@ export function KpiPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
-        <BarChart3 className="size-6 text-[var(--g-accent-text)]" />
-        KPIs
-      </h1>
+    <PageShell title="KPIs">
 
       <Tabs value={period} onValueChange={setPeriod}>
         <TabsList>
@@ -271,6 +272,6 @@ export function KpiPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

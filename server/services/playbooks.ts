@@ -5,18 +5,20 @@ import {
   tenantPlaybooks,
   userPlaybooks,
 } from "../../drizzle/schema";
-import type {
-  IndustryPlaybook,
-  TenantPlaybook,
-  UserPlaybook,
-  Terminology,
-  RoleDef,
-  StageDef,
-  CallTypeDef,
-  AlgorithmConfig,
-  RoleplayPersona,
-  TrainingCategory,
-  GradingPhilosophy,
+import {
+  LEVEL_THRESHOLDS,
+  type IndustryPlaybook,
+  type TenantPlaybook,
+  type UserPlaybook,
+  type Terminology,
+  type RoleDef,
+  type StageDef,
+  type CallTypeDef,
+  type RubricDef,
+  type AlgorithmConfig,
+  type RoleplayPersona,
+  type TrainingCategory,
+  type GradingPhilosophy,
 } from "../../shared/types";
 
 export const SOFTWARE_PLAYBOOK = {
@@ -61,11 +63,7 @@ export const SOFTWARE_PLAYBOOK = {
     badgeEarned: 25,
     improvement: 20,
   },
-  levelThresholds: [
-    0, 500, 1000, 1750, 2500, 4000, 6000, 9000, 12000, 15000, 20000, 27000,
-    35000, 42500, 50000, 62500, 77500, 95000, 110000, 125000, 150000, 180000,
-    220000, 270000, 350000,
-  ],
+  levelThresholds: LEVEL_THRESHOLDS,
   levelTitles: [
     "Rookie", "Starter", "Starter", "Playmaker", "Playmaker",
     "All-Star", "All-Star", "Captain", "Captain", "Captain",
@@ -119,7 +117,7 @@ export async function getIndustryPlaybook(
     roles: parseJsonField<RoleDef[]>(row.roles, []),
     stages: parseJsonField<StageDef[]>(row.stages, []),
     callTypes: parseJsonField<CallTypeDef[]>(row.callTypes, []),
-    rubrics: parseJsonField(row.rubrics, []),
+    rubrics: parseJsonField<RubricDef[]>(row.rubrics, []),
     outcomeTypes: parseJsonField<string[]>(row.outcomeTypes, []),
     kpiFunnelStages: parseJsonField<string[]>(row.kpiFunnelStages, []),
     algorithmDefaults: parseJsonField<AlgorithmConfig>(row.algorithmDefaults, {
@@ -153,10 +151,10 @@ export async function getTenantPlaybook(
     crmType: "ghl",
     roles: parseJsonField<RoleDef[]>(row.roles, []),
     stages: parseJsonField<StageDef[]>(row.stages, []),
-    markets: parseJsonField(row.markets, []),
-    leadSources: parseJsonField(row.leadSources, []),
-    algorithmOverrides: parseJsonField(row.algorithmOverrides, undefined),
-    terminology: parseJsonField(row.terminology, undefined),
+    markets: parseJsonField<{ name: string; zipCodes: string[] }[]>(row.markets, []),
+    leadSources: parseJsonField<{ name: string; crmMapping?: string }[]>(row.leadSources, []),
+    algorithmOverrides: parseJsonField<Partial<AlgorithmConfig> | undefined>(row.algorithmOverrides, undefined),
+    terminology: parseJsonField<Partial<Terminology> | undefined>(row.terminology, undefined),
   };
 }
 

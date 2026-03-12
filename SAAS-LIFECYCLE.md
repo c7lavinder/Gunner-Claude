@@ -209,7 +209,7 @@ Every trigger follows the rule: ONE input → ONE action → ONE result → ONE 
 - AI Cost Tracker (OpenAI spend per tenant per day)
 - Playbook Diff Tool (show what changed between versions)
 
-**Gaps:** 4 critical security fixes still open. No staging environment. No uptime monitoring (Pingdom/Better Uptime). No automated DB backups beyond Railway built-in. PostHog frontend SDK not wired. No webhook signature verification for GHL.
+**Gaps:** All 5 critical security fixes resolved (see table above). No staging environment. No uptime monitoring (Pingdom/Better Uptime). No automated DB backups beyond Railway built-in. PostHog frontend SDK not wired.
 
 ---
 

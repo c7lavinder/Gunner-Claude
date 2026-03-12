@@ -15,6 +15,7 @@ import {
 import { Pencil, Flame, Phone, Mic } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { trpc } from "@/lib/trpc";
 
 function gradeColor(grade: number) {
@@ -27,6 +28,7 @@ function gradeColor(grade: number) {
 
 export function Profile() {
   const { user } = useAuth();
+  const { roles } = useTenantConfig();
   const { data: members } = trpc.team.list.useQuery();
   const { data: progress } = trpc.training.getUserProgress.useQuery();
   const { data: userPlaybook } = trpc.playbook.getUser.useQuery();
@@ -67,6 +69,7 @@ export function Profile() {
   const displayEmail = user?.email ?? "";
   const myMember = members?.find((m) => m.userId === user?.id);
   const role = myMember?.teamRole ?? user?.role ?? "user";
+  const roleDisplayName = roles.find((r) => r.code === role)?.name ?? role;
   const callsGraded = progress?.totalCallsGraded ?? 0;
   const avgGradeNum = progress?.avgGrade ?? 0;
   const avgGradePct = Math.round(avgGradeNum * 25);
@@ -105,7 +108,7 @@ export function Profile() {
             ) : (
               <h1 className="text-2xl font-bold text-[var(--g-text-primary)]">{displayName || "User"}</h1>
             )}
-            <Badge variant="secondary">{role}</Badge>
+            <Badge variant="secondary">{roleDisplayName}</Badge>
             {editing ? (
               <div className="flex gap-2">
                 <Button size="sm" onClick={handleSaveProfile} disabled={updateProfile.isPending}>

@@ -20,6 +20,21 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-explicit-any": "warn",
       "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-restricted-syntax": [
+        "warn",
+        {
+          selector: "Literal[value='property']",
+          message: "Use terminology from useTenantConfig() instead of hardcoded 'property'.",
+        },
+        {
+          selector: "Literal[value='properties']",
+          message: "Use terminology from useTenantConfig() instead of hardcoded 'properties'.",
+        },
+        {
+          selector: "Literal[value='lead']",
+          message: "Use stage codes from useTenantConfig() instead of hardcoded 'lead'.",
+        },
+      ],
     },
   }
 );

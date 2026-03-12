@@ -25,8 +25,8 @@ Last audited: March 11, 2026
 
 | # | File | Line | Violation | Status |
 |---|---|---|---|---|
-| 1 | `Inventory.tsx` | 47 | `STAGE_COLORS` keyed to wrong RE-specific stage codes — doesn't match actual seeded stage codes (`new_lead`, `offer_made`, etc.) | 🔴 Open |
-| 2 | `Inventory.tsx` | 61 | Hardcoded `"lead"` fallback stage when `configStages` is empty | 🔴 Open |
+| 1 | `Inventory.tsx` | 47 | `STAGE_COLORS` keyed to wrong RE-specific stage codes — doesn't match actual seeded stage codes (`new_lead`, `offer_made`, etc.) | ✅ Fixed Sprint 4 — replaced with index-based STAGE_PALETTE |
+| 2 | `Inventory.tsx` | 61 | Hardcoded `"lead"` fallback stage when `configStages` is empty | ✅ Fixed Sprint 4 — uses `stages[0]` from config |
 | 3 | `KpiPage.tsx` | 12-18 | `DEFAULT_KPI_METRICS` array always used — `kpiMetrics` never actually flows through `getConfig` | ✅ Fixed Wave 5 |
 | 4 | `KpiPage.tsx` | 143 | Funnel renders raw DB status codes (`under_contract`) not human-readable stage names | ✅ Fixed Wave 5 |
 | 5 | `Onboarding.tsx` | 186-187 | Role picker hardcodes `"Lead Manager"` / `"Acquisition Manager"` — first UX for every new user | ✅ Fixed Wave 5 |
@@ -57,6 +57,15 @@ Last audited: March 11, 2026
 | 15 | `Today.tsx` | 119 | `"properties"` fallback is RE-specific — should be `"assets"` or use `DEFAULT_T.assetPlural` | 🔵 Open |
 | 16 | `KpiPage.tsx` | 221 | `"Lead → Closed"` conversion label hardcoded — should use `kpiFunnelStages[0]` → `kpiFunnelStages[last]` | 🔵 Open |
 | 17 | `Team.tsx` | 54, 239 | Hot streak threshold `3` hardcoded in view — should come from `SOFTWARE_PLAYBOOK` constant | 🔵 Open |
+
+### Severity 5 — Schema-Level (type safety / validation gaps)
+
+| # | File | Line | Violation | Status |
+|---|---|---|---|---|
+| 18 | `playbook.ts (router)` | 99-102 | `JSON.parse` on user input without Zod validation — terminology + algorithmOverrides | ✅ Fixed Sprint 4 — Zod `z.record()` + TRPCError |
+| 19 | `playbook.ts (router)` | 270-271 | `JSON.parse` on strengths/growthAreas without Zod validation | ✅ Fixed Sprint 4 — Zod `z.array(z.string())` + TRPCError |
+| 20 | `playbooks.ts (service)` | 122, 157-160 | `parseJsonField` calls missing type generics — rubrics, markets, leadSources, algorithmOverrides, terminology | ✅ Fixed Sprint 4 — all generics added |
+| 21 | `shared/types.ts` | 60 | `AlgorithmConfig.taskSort` typed as `Record<string, unknown>` — should reference `TaskSortConfig` but can't (server-only type) | 🟡 Open — needs type extraction to shared/ |
 
 ---
 
@@ -107,3 +116,4 @@ These patterns are compliant and should be followed as the model:
 |---|---|---|
 | 2026-03-11 | Initial compliance audit — 17 violations identified across 6 files | Cursor AI Sprint |
 | 2026-03-11 | Wave 5 fixes — violations 3, 4, 5, 6 (partial), 7, 9, 11, 13 resolved. 9 files changed. | Cursor AI Sprint |
+| 2026-03-11 | Sprint 4 fixes — violations 1, 2 resolved (Inventory refactor). Schema violations 18-21 added; 18, 19, 20 fixed. Color tokens, Zod validation, parseJsonField generics, LEVEL_THRESHOLDS dedup. | Claude AI Sprint 4 |

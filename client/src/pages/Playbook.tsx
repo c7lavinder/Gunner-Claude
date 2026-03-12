@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { BookOpen, Pencil, Sparkles, Plus, Trash2, X } from "lucide-react";
+import { Pencil, Sparkles, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -19,13 +19,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageShell } from "@/components/layout/PageShell";
 
 const GRADE_COLORS: Record<string, string> = {
-  emerald: "bg-emerald-500/20 text-emerald-700",
-  blue: "bg-blue-500/20 text-blue-700",
-  amber: "bg-amber-500/20 text-amber-700",
-  orange: "bg-orange-500/20 text-orange-700",
-  red: "bg-red-500/20 text-red-700",
+  emerald: "bg-[var(--g-grade-a)]/20 text-[var(--g-grade-a)]",
+  blue: "bg-[var(--g-grade-b)]/20 text-[var(--g-grade-b)]",
+  amber: "bg-[var(--g-grade-c)]/20 text-[var(--g-grade-c)]",
+  orange: "bg-[var(--g-grade-d)]/20 text-[var(--g-grade-d)]",
+  red: "bg-[var(--g-grade-f)]/20 text-[var(--g-grade-f)]",
 };
 
 export function Playbook() {
@@ -146,11 +147,7 @@ export function Playbook() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-[var(--g-text-primary)]">
-        <BookOpen className="size-6 text-[var(--g-accent-text)]" />
-        Playbook
-      </h1>
+    <PageShell title="Playbook">
       <Tabs defaultValue="software">
         <TabsList>
           <TabsTrigger value="software">Software</TabsTrigger>
@@ -257,7 +254,7 @@ export function Playbook() {
 
         <TabsContent value="tenant" className="mt-4 space-y-4">
           <div className="flex justify-end gap-2 items-center">
-            {termDirty && <Badge variant="outline" className="text-amber-600 border-amber-400 text-xs">Unsaved changes</Badge>}
+            {termDirty && <Badge variant="outline" className="text-[var(--g-warning-text)] border-[var(--g-warning-border)] text-xs">Unsaved changes</Badge>}
             <Button variant="outline" onClick={() => setAiOpen(true)}>
               <Sparkles className="size-4 mr-2" />
               Ask AI to Help
@@ -381,10 +378,10 @@ export function Playbook() {
                 <CardContent className="space-y-2">
                   <div className="flex flex-wrap gap-2">
                     {userPlaybook.strengths.map((s) => (
-                      <Badge key={s} className="bg-emerald-500/20 text-emerald-700">{s}</Badge>
+                      <Badge key={s} className="bg-[var(--g-grade-a)]/20 text-[var(--g-grade-a)]">{s}</Badge>
                     ))}
                     {userPlaybook.growthAreas.map((g) => (
-                      <Badge key={g} className="bg-amber-500/20 text-amber-700">{g}</Badge>
+                      <Badge key={g} className="bg-[var(--g-warning-text)]/20 text-[var(--g-warning-text)]">{g}</Badge>
                     ))}
                   </div>
                 </CardContent>
@@ -517,6 +514,6 @@ export function Playbook() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </PageShell>
   );
 }
