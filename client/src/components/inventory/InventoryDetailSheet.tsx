@@ -115,7 +115,7 @@ function ActivityTab() {
   );
 }
 
-function AiTab({ asset }: { asset: PropertyItem }) {
+function AiTab({ asset, assetLabel }: { asset: PropertyItem; assetLabel: string }) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([]);
   const chatMutation = trpc.ai.chat.useMutation();
@@ -153,7 +153,7 @@ function AiTab({ asset }: { asset: PropertyItem }) {
           <div className="py-8 text-center">
             <Sparkles className="size-8 mx-auto mb-2 text-[var(--g-text-tertiary)]" />
             <p className="text-sm text-[var(--g-text-tertiary)]">
-              Ask about this property — negotiation strategy, comps, or next steps.
+              Ask about this {assetLabel.toLowerCase()} — negotiation strategy, comps, or next steps.
             </p>
           </div>
         ) : (
@@ -181,7 +181,7 @@ function AiTab({ asset }: { asset: PropertyItem }) {
       </ScrollArea>
       <div className="flex gap-2 pt-2 border-t border-[var(--g-border-subtle)]">
         <Input
-          placeholder="Ask about this property..."
+          placeholder={`Ask about this ${assetLabel.toLowerCase()}...`}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
@@ -218,7 +218,7 @@ export function InventoryDetailSheet({ asset, open, onClose, stages, getStageCol
                 </Badge>
                 <div className="space-y-2">
                   <DetailRow label="Address" value={`${asset.address}, ${[asset.city, asset.state].filter(Boolean).join(", ")}`} />
-                  <DetailRow label="Lead source" value={asset.leadSource} />
+                  <DetailRow label="Source" value={asset.leadSource} />
                   <DetailRow label={t.contact} value={`${asset.sellerName ?? "—"} ${asset.sellerPhone ?? ""}`.trim()} />
                   <DetailRow label="Asking price" value={asset.askingPrice != null ? `$${asset.askingPrice.toLocaleString()}` : null} />
                   <DetailRow label="ARV" value={asset.arv != null ? `$${asset.arv.toLocaleString()}` : null} />
@@ -252,7 +252,7 @@ export function InventoryDetailSheet({ asset, open, onClose, stages, getStageCol
                 <ActivityTab />
               </TabsContent>
               <TabsContent value="ai" className="mt-4">
-                <AiTab asset={asset} />
+                <AiTab asset={asset} assetLabel={t.asset ?? "Property"} />
               </TabsContent>
             </Tabs>
           </>

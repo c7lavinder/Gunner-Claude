@@ -81,14 +81,11 @@ export function AiCoach({
           <div
             className={cn(
               "g-glass flex flex-col overflow-hidden rounded-xl shadow-lg border",
-              "w-[400px] h-[500px] animate-in slide-in-from-bottom-4 duration-300"
+              "w-[400px] h-[500px] animate-in slide-in-from-bottom-4 duration-300",
+              "border-[var(--g-border-subtle)]"
             )}
-            style={{ borderColor: "var(--g-border-subtle)" }}
           >
-            <div
-              className="flex items-center justify-between px-4 py-3 border-b"
-              style={{ borderColor: "var(--g-border-subtle)" }}
-            >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--g-border-subtle)]">
               <span className="font-semibold text-base">Gunner AI</span>
               <Button variant="ghost" size="icon-sm" onClick={() => setOpen(false)} aria-label="Close">
                 <X className="size-4" />
@@ -125,7 +122,7 @@ export function AiCoach({
                 )}
               </div>
             </div>
-            <div className="flex gap-2 p-4 pt-2 border-t" style={{ borderColor: "var(--g-border-subtle)" }}>
+            <div className="flex gap-2 p-4 pt-2 border-t border-[var(--g-border-subtle)]">
               <Input
                 placeholder="Ask Gunner AI..."
                 value={input}

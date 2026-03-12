@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { cn } from "@/lib/utils";
 
 const INDUSTRIES = [
   { slug: "wholesaling", name: "Real Estate Wholesaling", tag: "Most Popular" },
@@ -90,7 +91,7 @@ export function Landing() {
       <main>
         <section id="hero" className="g-mesh-bg relative py-28 px-6">
           <div className="max-w-3xl mx-auto text-center space-y-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium" style={{ background: "var(--g-accent-soft)", color: "var(--g-accent-text)" }}>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-[var(--g-accent-soft)] text-[var(--g-accent-text)]">
               AI-Powered Sales Coaching
             </div>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight">
@@ -106,7 +107,7 @@ export function Landing() {
             <div className="flex items-center justify-center gap-8 pt-4">
               {STATS.map((s) => (
                 <div key={s.label} className="text-center">
-                  <p className="text-2xl font-bold" style={{ color: "var(--g-accent-text)" }}>{s.value}</p>
+                  <p className="text-2xl font-bold text-[var(--g-accent-text)]">{s.value}</p>
                   <p className="text-xs text-[var(--g-text-tertiary)]">{s.label}</p>
                 </div>
               ))}
@@ -126,15 +127,15 @@ export function Landing() {
               ].map(({ icon: Icon, title, desc, items }) => (
                 <Card key={title} className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
                   <CardContent className="pt-6 space-y-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "var(--g-accent-soft)" }}>
-                      <Icon className="size-6" style={{ color: "var(--g-accent-text)" }} />
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-[var(--g-accent-soft)]">
+                      <Icon className="size-6 text-[var(--g-accent-text)]" />
                     </div>
                     <h3 className="font-semibold text-lg">{title}</h3>
                     <p className="text-sm text-[var(--g-text-secondary)]">{desc}</p>
                     <ul className="space-y-2">
                       {items.map((item) => (
                         <li key={item} className="flex items-start gap-2 text-sm text-[var(--g-text-secondary)]">
-                          <CheckCircle2 className="size-4 shrink-0 mt-0.5" style={{ color: "var(--g-accent-text)" }} />
+                          <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-[var(--g-accent-text)]" />
                           {item}
                         </li>
                       ))}
@@ -156,8 +157,8 @@ export function Landing() {
                 { icon: GraduationCap, title: "AI Coach", desc: "Persistent AI assistant across every page of the app" },
               ].map(({ icon: Icon, title, desc }) => (
                 <div key={title} className="text-center">
-                  <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center" style={{ background: "var(--g-accent-soft)" }}>
-                    <Icon className="size-5" style={{ color: "var(--g-accent-text)" }} />
+                  <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center bg-[var(--g-accent-soft)]">
+                    <Icon className="size-5 text-[var(--g-accent-text)]" />
                   </div>
                   <h4 className="font-medium mb-1">{title}</h4>
                   <p className="text-sm text-[var(--g-text-tertiary)]">{desc}</p>
@@ -178,7 +179,7 @@ export function Landing() {
                     <CardContent className="pt-5 pb-4 flex items-center justify-between">
                       <div>
                         <p className="font-medium">{ind.name}</p>
-                        {ind.tag && <span className="text-[10px] px-2 py-0.5 rounded-full mt-1 inline-block" style={{ background: "var(--g-accent-soft)", color: "var(--g-accent-text)" }}>{ind.tag}</span>}
+                        {ind.tag && <span className="text-[10px] px-2 py-0.5 rounded-full mt-1 inline-block bg-[var(--g-accent-soft)] text-[var(--g-accent-text)]">{ind.tag}</span>}
                       </div>
                       <ArrowRight className="size-4 text-[var(--g-text-tertiary)]" />
                     </CardContent>
@@ -199,7 +200,7 @@ export function Landing() {
                 { n: "3", title: "Watch Your Team Level Up", desc: "AI grades every call. Reps get coaching. Managers get visibility. Everyone improves." },
               ].map(({ n, title, desc }) => (
                 <div key={n} className="text-center">
-                  <div className="w-14 h-14 rounded-full border-2 flex items-center justify-center mx-auto mb-4 text-xl font-bold" style={{ borderColor: "var(--g-accent-medium)", color: "var(--g-accent-text)", background: "var(--g-accent-soft)" }}>
+                  <div className="w-14 h-14 rounded-full border-2 flex items-center justify-center mx-auto mb-4 text-xl font-bold border-[var(--g-accent-medium)] text-[var(--g-accent-text)] bg-[var(--g-accent-soft)]">
                     {n}
                   </div>
                   <h3 className="font-semibold text-lg mb-2">{title}</h3>
@@ -220,7 +221,7 @@ export function Landing() {
                   <CardContent className="pt-5 pb-4 flex flex-col items-center gap-3 text-center">
                     <p className="font-medium text-sm">{int.name}</p>
                     {int.status === "live" ? (
-                      <Badge variant="outline" className="text-[10px] border-[var(--g-accent-medium)]" style={{ color: "var(--g-accent-text)" }}>
+                      <Badge variant="outline" className="text-[10px] border-[var(--g-accent-medium)] text-[var(--g-accent-text)]">
                         Connected
                       </Badge>
                     ) : (
@@ -271,7 +272,7 @@ export function Landing() {
               ].map((plan) => (
                 <Card key={plan.name} className={`relative border-[var(--g-border-subtle)] bg-[var(--g-bg-card)] ${plan.highlight ? "ring-2 ring-[var(--g-accent)]" : ""}`}>
                   {plan.highlight && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-xs font-semibold" style={{ background: "var(--g-accent)", color: "white" }}>
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-xs font-semibold bg-[var(--g-accent)] text-white">
                       Most Popular
                     </div>
                   )}
@@ -279,7 +280,7 @@ export function Landing() {
                     <div>
                       <h3 className="font-semibold text-lg">{plan.name}</h3>
                       <div className="flex items-baseline gap-1 mt-2">
-                        <span className="text-3xl font-bold" style={{ color: plan.highlight ? "var(--g-accent-text)" : "var(--g-text-primary)" }}>{plan.price}</span>
+                        <span className={cn("text-3xl font-bold", plan.highlight ? "text-[var(--g-accent-text)]" : "text-[var(--g-text-primary)]")}>{plan.price}</span>
                         {plan.period && <span className="text-sm text-[var(--g-text-tertiary)]">{plan.period}</span>}
                       </div>
                       <p className="text-sm text-[var(--g-text-secondary)] mt-2">{plan.desc}</p>
@@ -287,7 +288,7 @@ export function Landing() {
                     <ul className="space-y-2.5">
                       {plan.features.map((f) => (
                         <li key={f} className="flex items-start gap-2 text-sm text-[var(--g-text-secondary)]">
-                          <CheckCircle2 className="size-4 shrink-0 mt-0.5" style={{ color: "var(--g-accent-text)" }} />
+                          <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-[var(--g-accent-text)]" />
                           {f}
                         </li>
                       ))}

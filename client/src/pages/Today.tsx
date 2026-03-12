@@ -88,6 +88,7 @@ export function Today() {
           setSelectedConv={d.setConvoModal}
           onCallBack={(name) => toast(`Calling ${name}...`)}
           missedCount={d.missedCount}
+          unreadTotal={d.unreadTotal}
         />
         <AiCoachPanel
           messages={d.coachMessages}

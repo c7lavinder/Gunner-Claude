@@ -239,8 +239,8 @@ export function Training() {
                 <Card key={m.id} className={cn("bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]", !unlocked && "opacity-70")}>
                   <CardContent className="p-4 flex flex-col gap-3">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: unlocked ? "var(--g-accent-soft)" : "var(--g-bg-inset)" }}>
-                        {unlocked ? <Icon className="size-5" style={{ color: "var(--g-accent-text)" }} /> : <Lock className="size-5" style={{ color: "var(--g-text-tertiary)" }} />}
+                      <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", unlocked ? "bg-[var(--g-accent-soft)]" : "bg-[var(--g-bg-inset)]")}>
+                        {unlocked ? <Icon className="size-5 text-[var(--g-accent-text)]" /> : <Lock className="size-5 text-[var(--g-text-tertiary)]" />}
                       </div>
                       <div className="min-w-0">
                         <div className="font-medium text-[var(--g-text-primary)]">{m.title}</div>

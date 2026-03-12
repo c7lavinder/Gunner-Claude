@@ -56,6 +56,7 @@ export interface AlgorithmConfig {
   inventorySort: Record<string, number>;
   buyerMatch: Record<string, number>;
   taskSort: Record<string, unknown>;
+  kpiTargets?: Record<string, number>;
 }
 
 export interface RoleplayPersona {

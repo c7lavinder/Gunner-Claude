@@ -3,6 +3,7 @@ import type {
   CrmCallRecording,
   CrmContact,
   CrmConversation,
+  CrmMessage,
   CrmOpportunity,
   CrmTask,
 } from "../adapter";
@@ -187,6 +188,57 @@ export class GhlAdapter implements CrmAdapter {
       };
     } catch {
       return null;
+    }
+  }
+
+  async searchConversations(locationId: string, query?: string): Promise<CrmConversation[]> {
+    try {
+      const params = new URLSearchParams({ locationId });
+      if (query) params.set("query", query);
+      const data = (await ghlFetch(`/conversations/search?${params}`, {
+        token: this.token,
+      })) as { conversations?: Array<Record<string, unknown>> };
+      return (data.conversations ?? []).map((conv) => {
+        const rawMessages = (conv.messages ?? []) as Array<Record<string, unknown>>;
+        return {
+          id: String(conv.id ?? ""),
+          contactId: String(conv.contactId ?? conv.contact_id ?? ""),
+          messages: rawMessages.map((m) => ({
+            id: String(m.id ?? m.messageId ?? ""),
+            direction: m.direction === "inbound" ? ("inbound" as const) : ("outbound" as const),
+            body: String(m.body ?? m.message ?? m.text ?? ""),
+            timestamp: String(m.dateAdded ?? m.createdAt ?? m.timestamp ?? ""),
+            type: (m.type === "SMS" || m.type === "sms"
+              ? "sms"
+              : m.type === "EMAIL" || m.type === "email"
+                ? "email"
+                : "call") as "sms" | "email" | "call",
+          })),
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async getConversationMessages(conversationId: string): Promise<CrmMessage[]> {
+    try {
+      const data = (await ghlFetch(`/conversations/${conversationId}/messages`, {
+        token: this.token,
+      })) as { messages?: Array<Record<string, unknown>> };
+      return (data.messages ?? []).map((m) => ({
+        id: String(m.id ?? m.messageId ?? ""),
+        direction: m.direction === "inbound" ? ("inbound" as const) : ("outbound" as const),
+        body: String(m.body ?? m.message ?? m.text ?? ""),
+        timestamp: String(m.dateAdded ?? m.createdAt ?? m.timestamp ?? ""),
+        type: (m.type === "SMS" || m.type === "sms"
+          ? "sms"
+          : m.type === "EMAIL" || m.type === "email"
+            ? "email"
+            : "call") as "sms" | "email" | "call",
+      }));
+    } catch {
+      return [];
     }
   }
 

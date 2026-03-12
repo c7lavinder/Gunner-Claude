@@ -74,29 +74,26 @@ export function CommandPalette() {
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]" onClick={() => setOpen(false)}>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-lg rounded-xl border shadow-2xl overflow-hidden"
-        style={{ background: "var(--g-bg-card)", borderColor: "var(--g-border-subtle)" }}
+        className="relative w-full max-w-lg rounded-xl border shadow-2xl overflow-hidden bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]"
         onClick={(e) => e.stopPropagation()}
       >
         <Command className="flex flex-col" shouldFilter={!hasResults && debouncedQuery.length < 2}>
-          <div className="flex items-center gap-2 px-4 border-b" style={{ borderColor: "var(--g-border-subtle)" }}>
-            <Search className="size-4 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
+          <div className="flex items-center gap-2 px-4 border-b border-[var(--g-border-subtle)]">
+            <Search className="size-4 shrink-0 text-[var(--g-text-tertiary)]" />
             <Command.Input
               autoFocus
               value={query}
               onValueChange={setQuery}
               placeholder="Search pages, calls, contacts..."
-              className="flex-1 h-12 bg-transparent text-sm outline-none placeholder:text-[var(--g-text-tertiary)]"
-              style={{ color: "var(--g-text-primary)" }}
+              className="flex-1 h-12 bg-transparent text-sm outline-none placeholder:text-[var(--g-text-tertiary)] text-[var(--g-text-primary)]"
             />
-            <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--g-bg-surface)", color: "var(--g-text-tertiary)" }}>ESC</kbd>
+            <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--g-bg-surface)] text-[var(--g-text-tertiary)]">ESC</kbd>
           </div>
           <Command.List className="max-h-80 overflow-auto p-2">
-            <Command.Empty className="py-8 text-center text-sm" style={{ color: "var(--g-text-tertiary)" }}>
+            <Command.Empty className="py-8 text-center text-sm text-[var(--g-text-tertiary)]">
               {searchQuery.isFetching ? "Searching…" : "No results found."}
             </Command.Empty>
 
-            {/* Real search results */}
             {results && results.calls.length > 0 && (
               <Command.Group heading="Calls">
                 {results.calls.map((r) => (
@@ -104,13 +101,12 @@ export function CommandPalette() {
                     key={`call-${r.id}`}
                     value={`call-${r.id}-${r.label}`}
                     onSelect={() => navigate(r.path)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors data-[selected=true]:bg-[var(--g-accent-soft)]"
-                    style={{ color: "var(--g-text-primary)" }}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors data-[selected=true]:bg-[var(--g-accent-soft)] text-[var(--g-text-primary)]"
                   >
-                    <Phone className="size-4 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
+                    <Phone className="size-4 shrink-0 text-[var(--g-text-tertiary)]" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate">{r.label}</p>
-                      {r.sub && <p className="text-xs truncate" style={{ color: "var(--g-text-tertiary)" }}>{r.sub}</p>}
+                      {r.sub && <p className="text-xs truncate text-[var(--g-text-tertiary)]">{r.sub}</p>}
                     </div>
                   </Command.Item>
                 ))}
@@ -124,13 +120,12 @@ export function CommandPalette() {
                     key={`contact-${r.id}`}
                     value={`contact-${r.id}-${r.label}`}
                     onSelect={() => navigate(r.path)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors data-[selected=true]:bg-[var(--g-accent-soft)]"
-                    style={{ color: "var(--g-text-primary)" }}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors data-[selected=true]:bg-[var(--g-accent-soft)] text-[var(--g-text-primary)]"
                   >
-                    <User className="size-4 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
+                    <User className="size-4 shrink-0 text-[var(--g-text-tertiary)]" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate">{r.label}</p>
-                      {r.sub && <p className="text-xs truncate" style={{ color: "var(--g-text-tertiary)" }}>{r.sub}</p>}
+                      {r.sub && <p className="text-xs truncate text-[var(--g-text-tertiary)]">{r.sub}</p>}
                     </div>
                   </Command.Item>
                 ))}
@@ -144,17 +139,15 @@ export function CommandPalette() {
                     key={`note-${r.id}`}
                     value={`note-${r.id}-${r.label}`}
                     onSelect={() => navigate(r.path)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors data-[selected=true]:bg-[var(--g-accent-soft)]"
-                    style={{ color: "var(--g-text-primary)" }}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors data-[selected=true]:bg-[var(--g-accent-soft)] text-[var(--g-text-primary)]"
                   >
-                    <FileText className="size-4 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
+                    <FileText className="size-4 shrink-0 text-[var(--g-text-tertiary)]" />
                     <p className="truncate">{r.label}</p>
                   </Command.Item>
                 ))}
               </Command.Group>
             )}
 
-            {/* Page navigation — always shown when query is short */}
             {debouncedQuery.length < 2 && (
               <Command.Group heading="Pages">
                 {PAGES.map((page) => (
@@ -162,17 +155,16 @@ export function CommandPalette() {
                     key={page.path}
                     value={`${page.label} ${page.keywords}`}
                     onSelect={() => navigate(page.path)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors data-[selected=true]:bg-[var(--g-accent-soft)]"
-                    style={{ color: "var(--g-text-primary)" }}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors data-[selected=true]:bg-[var(--g-accent-soft)] text-[var(--g-text-primary)]"
                   >
-                    <page.icon className="size-4 shrink-0" style={{ color: "var(--g-text-tertiary)" }} />
+                    <page.icon className="size-4 shrink-0 text-[var(--g-text-tertiary)]" />
                     {page.label}
                   </Command.Item>
                 ))}
               </Command.Group>
             )}
           </Command.List>
-          <div className="flex items-center gap-4 px-4 py-2 border-t text-[10px]" style={{ borderColor: "var(--g-border-subtle)", color: "var(--g-text-tertiary)" }}>
+          <div className="flex items-center gap-4 px-4 py-2 border-t border-[var(--g-border-subtle)] text-[10px] text-[var(--g-text-tertiary)]">
             <span><kbd className="font-mono">↑↓</kbd> navigate</span>
             <span><kbd className="font-mono">↵</kbd> open</span>
             <span><kbd className="font-mono">esc</kbd> close</span>

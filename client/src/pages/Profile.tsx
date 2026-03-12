@@ -71,6 +71,7 @@ export function Profile() {
   const avgGradeNum = progress?.avgGrade ?? 0;
   const avgGradePct = Math.round(avgGradeNum * 25);
   const streak = progress?.streak ?? 0;
+  const samplesPct = Math.min(100, ((voiceProfile?.totalSamples ?? 0) / 20) * 100);
 
   const handleSaveProfile = async () => {
     if (!name.trim()) return;
@@ -102,7 +103,7 @@ export function Profile() {
             {editing ? (
               <Input value={name} onChange={(e) => setName(e.target.value)} className="max-w-[200px] bg-[var(--g-bg-surface)]" />
             ) : (
-              <h1 className="text-2xl font-bold" style={{ color: "var(--g-text-primary)" }}>{displayName || "User"}</h1>
+              <h1 className="text-2xl font-bold text-[var(--g-text-primary)]">{displayName || "User"}</h1>
             )}
             <Badge variant="secondary">{role}</Badge>
             {editing ? (
@@ -116,33 +117,33 @@ export function Profile() {
               <Button size="sm" variant="outline" onClick={() => setEditing(true)}><Pencil className="size-4" />Edit Profile</Button>
             )}
           </div>
-          <p className="text-sm mt-1" style={{ color: "var(--g-text-tertiary)" }}>{displayEmail}</p>
+          <p className="text-sm mt-1 text-[var(--g-text-tertiary)]">{displayEmail}</p>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
-            <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Calls Graded</p>
-            <p className="text-3xl font-bold mt-1" style={{ color: "var(--g-text-primary)" }}>{callsGraded}</p>
+            <p className="text-sm text-[var(--g-text-tertiary)]">Calls Graded</p>
+            <p className="text-3xl font-bold mt-1 text-[var(--g-text-primary)]">{callsGraded}</p>
           </CardContent>
         </Card>
         <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
-            <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Average Grade</p>
+            <p className="text-sm text-[var(--g-text-tertiary)]">Average Grade</p>
             <p className="text-3xl font-bold mt-1" style={{ color: gradeColor(avgGradePct) }}>{avgGradePct}</p>
           </CardContent>
         </Card>
         <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
           <CardContent className="pt-6">
-            <p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Current Streak</p>
-            <p className="text-3xl font-bold mt-1 flex items-center gap-1" style={{ color: "var(--g-streak)" }}><Flame className="size-6" />{streak} days</p>
+            <p className="text-sm text-[var(--g-text-tertiary)]">Current Streak</p>
+            <p className="text-3xl font-bold mt-1 flex items-center gap-1 text-[var(--g-streak)]"><Flame className="size-6" />{streak} days</p>
           </CardContent>
         </Card>
       </div>
 
       <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
-        <CardHeader><CardTitle>Preferences</CardTitle><p className="text-sm" style={{ color: "var(--g-text-tertiary)" }}>Communication style for AI coaching</p></CardHeader>
+        <CardHeader><CardTitle>Preferences</CardTitle><p className="text-sm text-[var(--g-text-tertiary)]">Communication style for AI coaching</p></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>SMS Tone</Label>
@@ -165,23 +166,25 @@ export function Profile() {
 
       <Card className="bg-[var(--g-bg-card)] border-[var(--g-border-subtle)]">
         <CardHeader className="flex flex-row items-start gap-3">
-          <div className="p-2 rounded-lg" style={{ background: "var(--g-accent-soft)" }}><Mic className="size-5" style={{ color: "var(--g-accent-text)" }} /></div>
+          <div className="p-2 rounded-lg bg-[var(--g-accent-soft)]"><Mic className="size-5 text-[var(--g-accent-text)]" /></div>
           <div>
             <CardTitle>Voice Profile</CardTitle>
-            <p className="text-sm mt-1" style={{ color: "var(--g-text-tertiary)" }}>We collect voice samples to personalize your AI experience and improve coaching feedback.</p>
+            <p className="text-sm mt-1 text-[var(--g-text-tertiary)]">We collect voice samples to personalize your AI experience and improve coaching feedback.</p>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="p-4 rounded-lg" style={{ background: "var(--g-bg-inset)", border: "1px solid var(--g-border-subtle)" }}>
-            <p className="text-sm font-medium" style={{ color: "var(--g-text-secondary)" }}>Voice Samples Collected: {voiceProfile?.totalSamples ?? 0}/20</p>
-            <div className="h-2 rounded-full mt-2 overflow-hidden" style={{ background: "var(--g-stat-bar-bg)" }}><div className="h-full rounded-full" style={{ background: "var(--g-accent)", width: `${Math.min(100, ((voiceProfile?.totalSamples ?? 0) / 20) * 100)}%` }} /></div>
+          <div className="p-4 rounded-lg bg-[var(--g-bg-inset)] border border-[var(--g-border-subtle)]">
+            <p className="text-sm font-medium text-[var(--g-text-secondary)]">Voice Samples Collected: {voiceProfile?.totalSamples ?? 0}/20</p>
+            <div className="h-2 rounded-full mt-2 overflow-hidden bg-[var(--g-stat-bar-bg)]">
+              <div className="h-full rounded-full bg-[var(--g-accent)]" style={{ width: `${samplesPct}%` }} />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" disabled={!voiceConsent} onClick={() => toast("Voice recording coming soon — your consent is saved.")}><Phone className="size-4" />Record Sample</Button>
             <Badge variant="outline" className="text-xs">Coming soon</Badge>
           </div>
           <div className="flex items-center justify-between pt-2">
-            <Label htmlFor="voice-consent" className="text-sm" style={{ color: "var(--g-text-secondary)" }}>I consent to voice sample collection</Label>
+            <Label htmlFor="voice-consent" className="text-sm text-[var(--g-text-secondary)]">I consent to voice sample collection</Label>
             <Switch id="voice-consent" checked={voiceConsent} disabled={updateVoiceConsentMutation.isPending} onCheckedChange={async (v) => {
               setVoiceConsent(v);
               await updateVoiceConsentMutation.mutateAsync({ consentGiven: v });

@@ -16,7 +16,7 @@ const DEFAULT_ROLES: RoleDef[] = [
 ];
 
 const DEFAULT_STAGES: StageDef[] = [
-  { code: "new", name: "New", pipeline: "default", order: 0 },
+  { code: "", name: "Loading...", pipeline: "default", order: 0 },
 ];
 
 const FIVE_MINUTES = 5 * 60 * 1000;

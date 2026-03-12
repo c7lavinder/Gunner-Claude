@@ -62,6 +62,8 @@ export interface CrmAdapter {
   getOpportunities(pipelineId?: string): Promise<CrmOpportunity[]>;
   getTasks(assignedTo?: string): Promise<CrmTask[]>;
   getConversation(contactId: string): Promise<CrmConversation | null>;
+  searchConversations(locationId: string, query?: string): Promise<CrmConversation[]>;
+  getConversationMessages(conversationId: string): Promise<CrmMessage[]>;
   getCallRecordings(since: Date): Promise<CrmCallRecording[]>;
 
   sendSms(contactId: string, message: string, fromUserId?: string): Promise<ActionResult>;

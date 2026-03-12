@@ -2,12 +2,15 @@ import { z } from "zod";
 import { eq, and, desc, gte, count, or, ilike, lt, isNull, like, sql, ne, inArray } from "drizzle-orm";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
-import { calls, callGrades, contactCache, dispoProperties, dailyKpiEntries, teamMembers } from "../../drizzle/schema";
+import { calls, callGrades, contactCache, dispoProperties, dailyKpiEntries, teamMembers, tenants } from "../../drizzle/schema";
+import { GhlAdapter } from "../crm/ghl/ghlAdapter";
+import { refreshGhlToken, saveGhlTokens } from "../services/ghlOAuth";
+import { getTenantPlaybook, getIndustryPlaybook, resolveAlgorithmConfig } from "../services/playbooks";
 
 const todayStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
-// KPI types and their default daily targets
+// Fallback KPI targets (used when tenant playbook has no overrides)
 const DEFAULT_KPI_TARGETS: Record<string, number> = {
   calls: 50,
   convos: 20,
@@ -15,6 +18,57 @@ const DEFAULT_KPI_TARGETS: Record<string, number> = {
   offers: 2,
   contracts: 1,
 };
+
+/**
+ * Returns a GhlAdapter with a fresh access token for the given tenant,
+ * or null if no CRM is connected.
+ */
+async function getCrmAdapterForTenant(tenantId: number): Promise<GhlAdapter | null> {
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  if (!tenant?.crmConfig || tenant.crmType !== "ghl") return null;
+
+  let config: Record<string, unknown>;
+  try {
+    config = JSON.parse(tenant.crmConfig) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  if (!config.oauthConnected || !config.accessToken || !config.locationId) return null;
+
+  let accessToken = String(config.accessToken);
+  const locationId = String(config.locationId);
+
+  // Refresh token if it expires within 5 minutes
+  const expiresAt = config.tokenExpiresAt ? new Date(String(config.tokenExpiresAt)).getTime() : 0;
+  const fiveMinFromNow = Date.now() + 5 * 60 * 1000;
+  if (expiresAt <= fiveMinFromNow && config.refreshToken) {
+    try {
+      const refreshed = await refreshGhlToken(String(config.refreshToken));
+      await saveGhlTokens(tenantId, locationId, refreshed.access_token, refreshed.refresh_token, refreshed.expires_in);
+      accessToken = refreshed.access_token;
+    } catch (e) {
+      console.error(`[today] Token refresh failed for tenant ${tenantId}:`, e);
+      // Still try with current token — it might not be expired yet
+    }
+  }
+
+  return new GhlAdapter({ apiKey: "", locationId, accessToken });
+}
+
+/**
+ * Resolve KPI targets from tenant/industry playbook, falling back to defaults.
+ */
+async function resolveKpiTargets(tenantId: number): Promise<Record<string, number>> {
+  const tenantPb = await getTenantPlaybook(tenantId);
+  const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+  const algorithmConfig = resolveAlgorithmConfig(industryPb, tenantPb);
+  const pbTargets = (algorithmConfig as Record<string, unknown>).kpiTargets;
+  if (pbTargets && typeof pbTargets === "object") {
+    return { ...DEFAULT_KPI_TARGETS, ...(pbTargets as Record<string, number>) };
+  }
+  return DEFAULT_KPI_TARGETS;
+}
 
 export const todayRouter = router({
   getConversations: protectedProcedure
@@ -130,6 +184,52 @@ export const todayRouter = router({
       }));
     }),
 
+  getContactActivity: protectedProcedure
+    .input(z.object({ ghlContactId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const tid = ctx.user!.tenantId;
+
+      // Local call history for this contact
+      const localCalls = await db.select({
+        id: calls.id,
+        contactName: calls.contactName,
+        contactPhone: calls.contactPhone,
+        callTimestamp: calls.callTimestamp,
+        duration: calls.duration,
+        grade: callGrades.overallGrade,
+      }).from(calls)
+        .leftJoin(callGrades, and(eq(callGrades.callId, calls.id), eq(callGrades.tenantId, tid)))
+        .where(and(eq(calls.tenantId, tid), eq(calls.ghlContactId, input.ghlContactId)))
+        .orderBy(desc(calls.callTimestamp))
+        .limit(10);
+
+      // CRM conversation messages (if adapter available)
+      let crmMessages: Array<{ id: string; direction: string; body: string; timestamp: string; type: string }> = [];
+      const adapter = await getCrmAdapterForTenant(tid);
+      if (adapter) {
+        try {
+          const conversation = await adapter.getConversation(input.ghlContactId);
+          if (conversation) {
+            crmMessages = conversation.messages.slice(0, 20);
+          }
+        } catch {
+          // CRM unavailable — return local data only
+        }
+      }
+
+      return {
+        calls: localCalls.map((r) => ({
+          id: r.id,
+          contactName: r.contactName ?? "Unknown",
+          contactPhone: r.contactPhone ?? "",
+          callTimestamp: r.callTimestamp,
+          duration: r.duration ?? null,
+          grade: r.grade ?? null,
+        })),
+        messages: crmMessages,
+      };
+    }),
+
   getStats: protectedProcedure.query(async ({ ctx }) => {
     const tid = ctx.user!.tenantId;
     const uid = ctx.user!.userId;
@@ -159,20 +259,32 @@ export const todayRouter = router({
 
       // Get team member IDs scoped to the selected role tab
       let scopedUserIds: number[] | null = null;
+      let scopedTeamMemberIds: number[] | null = null;
       if (input.role && input.role !== "admin") {
-        const members = await db.select({ userId: teamMembers.userId })
+        const members = await db.select({ id: teamMembers.id, userId: teamMembers.userId })
           .from(teamMembers)
           .where(and(eq(teamMembers.tenantId, tid), eq(teamMembers.teamRole, input.role), eq(teamMembers.isActive, "true")));
         scopedUserIds = members.map((m) => m.userId).filter((id): id is number => id !== null);
+        scopedTeamMemberIds = members.map((m) => m.id);
       }
+
+      // If role is set but no team members found, return zeroes for calls/convos
+      const roleHasNoMembers = scopedTeamMemberIds !== null && scopedTeamMemberIds.length === 0;
 
       // calls: any call today for this tenant (scoped by role if set)
       const callsWhere = [eq(calls.tenantId, tid), gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, start)];
-      const [callsResult] = await db.select({ count: count() }).from(calls).where(and(...callsWhere));
+      if (scopedTeamMemberIds && scopedTeamMemberIds.length > 0) {
+        callsWhere.push(inArray(calls.teamMemberId, scopedTeamMemberIds));
+      }
+      const [callsResult] = roleHasNoMembers
+        ? [{ count: 0 }]
+        : await db.select({ count: count() }).from(calls).where(and(...callsWhere));
 
       // convos: calls with duration >= 60s
       const convosWhere = [...callsWhere, gte(calls.duration, 60)];
-      const [convosResult] = await db.select({ count: count() }).from(calls).where(and(...convosWhere));
+      const [convosResult] = roleHasNoMembers
+        ? [{ count: 0 }]
+        : await db.select({ count: count() }).from(calls).where(and(...convosWhere));
 
       // apts, offers, contracts: from daily_kpi_entries
       const kpiTypes = ["apts", "offers", "contracts"];
@@ -186,12 +298,14 @@ export const todayRouter = router({
         kpiCounts[kpiType] = res?.count ?? 0;
       }
 
+      const targets = await resolveKpiTargets(tid);
+
       return {
-        calls: { actual: callsResult?.count ?? 0, target: DEFAULT_KPI_TARGETS.calls },
-        convos: { actual: convosResult?.count ?? 0, target: DEFAULT_KPI_TARGETS.convos },
-        apts: { actual: kpiCounts.apts ?? 0, target: DEFAULT_KPI_TARGETS.apts },
-        offers: { actual: kpiCounts.offers ?? 0, target: DEFAULT_KPI_TARGETS.offers },
-        contracts: { actual: kpiCounts.contracts ?? 0, target: DEFAULT_KPI_TARGETS.contracts },
+        calls: { actual: callsResult?.count ?? 0, target: targets.calls ?? DEFAULT_KPI_TARGETS.calls },
+        convos: { actual: convosResult?.count ?? 0, target: targets.convos ?? DEFAULT_KPI_TARGETS.convos },
+        apts: { actual: kpiCounts.apts ?? 0, target: targets.apts ?? DEFAULT_KPI_TARGETS.apts },
+        offers: { actual: kpiCounts.offers ?? 0, target: targets.offers ?? DEFAULT_KPI_TARGETS.offers },
+        contracts: { actual: kpiCounts.contracts ?? 0, target: targets.contracts ?? DEFAULT_KPI_TARGETS.contracts },
       };
     }),
 

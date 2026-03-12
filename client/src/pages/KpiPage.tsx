@@ -266,7 +266,7 @@ export function KpiPage() {
             <div className="text-sm text-[var(--g-text-secondary)]">
               {kpiFunnelStages.length >= 2
                 ? `${kpiFunnelStages[0]} → ${kpiFunnelStages[kpiFunnelStages.length - 1]}`
-                : "Lead → Closed"}
+                : "Start → Closed"}
             </div>
           </CardContent>
         </Card>

@@ -37,6 +37,14 @@ export function progressColor(pct: number): string {
   return "bg-[var(--g-down)]";
 }
 
+export function presenceDotColor(lastContactDate: Date | string | null | undefined): string {
+  if (!lastContactDate) return "bg-gray-400";
+  const diff = Date.now() - new Date(lastContactDate).getTime();
+  if (diff < 3_600_000) return "bg-emerald-500";   // < 1hr = green
+  if (diff < 86_400_000) return "bg-yellow-500";    // < 24hr = yellow
+  return "bg-gray-400";                              // > 24hr = grey
+}
+
 /* ── stat card type ── */
 
 export interface StatCard {
@@ -60,6 +68,23 @@ export interface ConvoItem {
   phone: string;
   ghlContactId?: string | null;
   lastContactDate?: Date | string | null;
+  unreadCount?: number;
+  propertyAddress?: string;
+  currentStage?: string;
+  lastMessageBody?: string;
+}
+
+/* ── task type ── */
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  contact?: string;
+  due?: string;
+  propertyAddress?: string;
+  currentStage?: string;
+  assignedTo?: string;
+  dueDate?: string;
 }
 
 /* ── hook ── */
@@ -140,8 +165,8 @@ export function useTodayData() {
     return colors;
   }, [stages]);
 
-  const filteredTasks = useMemo(() => {
-    const tasks = taskData?.tasks ?? [];
+  const filteredTasks: TaskItem[] = useMemo(() => {
+    const tasks = (taskData?.tasks ?? []) as TaskItem[];
     if (!taskSearch.trim()) return tasks;
     const q = taskSearch.toLowerCase();
     return tasks.filter(
@@ -161,6 +186,11 @@ export function useTodayData() {
       return stages[0]?.code ?? "unknown";
     },
     [stages],
+  );
+
+  const unreadTotal = useMemo(
+    () => (convos ?? []).reduce((sum, c) => sum + ((c as ConvoItem).unreadCount ?? 0), 0),
+    [convos],
   );
 
   // ── handlers ──
@@ -230,6 +260,7 @@ export function useTodayData() {
     apts: apts ?? [],
     convoModal,
     setConvoModal,
+    unreadTotal,
 
     // tasks
     filteredTasks,
