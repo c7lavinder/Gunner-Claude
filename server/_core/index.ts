@@ -122,25 +122,23 @@ if (ENV.isProduction) {
   });
 }
 
-runStartupMigrations()
-  .then(() => seedIndustryPlaybooks())
-  .then(() => seedNahTenantPlaybook())
-  .then(() => seedDemoTenant())
-  .then(() => {
-    app.listen(ENV.port, "0.0.0.0", () => {
-      console.log(`Gunner v2 running on port ${ENV.port}`);
-      if (ENV.isProduction) {
-        try { startPolling(5); } catch (e) { console.error("[services] Polling failed:", e); }
-        try { startDailyDigestJob(); } catch (e) { console.error("[services] Digest failed:", e); }
-        try { startEventFlusher(); } catch (e) { console.error("[services] Flusher failed:", e); }
-        try { startRetryProcessor(); } catch (e) { console.error("[services] Retry failed:", e); }
-        try { startScheduledJobs(); } catch (e) { console.error("[services] Jobs failed:", e); }
-      }
-    });
-  })
-  .catch((err) => {
-    console.error("[startup] Fatal migration/seed error:", err);
-    process.exit(1);
-  });
+app.listen(ENV.port, "0.0.0.0", () => {
+  console.log(`Gunner v2 running on port ${ENV.port}`);
+  // Run migrations + seeds in the background so the server starts immediately
+  // and Railway's healthcheck can pass before migrations complete.
+  runStartupMigrations()
+    .then(() => seedIndustryPlaybooks())
+    .then(() => seedNahTenantPlaybook())
+    .then(() => seedDemoTenant())
+    .then(() => console.log("[startup] All migrations and seeds complete."))
+    .catch((err) => console.error("[startup] Migration/seed error:", err));
+  if (ENV.isProduction) {
+    try { startPolling(5); } catch (e) { console.error("[services] Polling failed:", e); }
+    try { startDailyDigestJob(); } catch (e) { console.error("[services] Digest failed:", e); }
+    try { startEventFlusher(); } catch (e) { console.error("[services] Flusher failed:", e); }
+    try { startRetryProcessor(); } catch (e) { console.error("[services] Retry failed:", e); }
+    try { startScheduledJobs(); } catch (e) { console.error("[services] Jobs failed:", e); }
+  }
+});
 
 export type AppRouter = typeof appRouter;
