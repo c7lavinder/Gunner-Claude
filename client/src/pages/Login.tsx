@@ -16,6 +16,7 @@ export function Login() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [showResetMsg, setShowResetMsg] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) setLocation("/today");
@@ -63,7 +64,7 @@ export function Login() {
               <Label htmlFor="password">Password</Label>
               <button
                 type="button"
-                onClick={() => window.alert("Password reset coming soon. Contact support for help.")}
+                onClick={() => setShowResetMsg(true)}
                 className="text-sm text-[var(--g-text-tertiary)] hover:text-[var(--g-accent-text)]"
               >
                 Forgot password?
@@ -79,6 +80,11 @@ export function Login() {
               disabled={isSubmitting}
             />
           </div>
+          {showResetMsg && (
+            <p className="text-sm text-[var(--g-text-secondary)]">
+              Password reset coming soon. Contact corey@getgunner.ai for help.
+            </p>
+          )}
           {error && (
             <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
               {error}

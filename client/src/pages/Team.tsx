@@ -16,8 +16,6 @@ import {
   BarChart3,
   Zap,
   UserPlus,
-  Award,
-  Lock,
 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
@@ -304,49 +302,45 @@ export function Team() {
       <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
         <CardHeader>
           <CardTitle className="text-[var(--g-text-primary)] flex items-center gap-2">
-            <Award className="size-5 text-[var(--g-accent-text)]" />
-            Badge Wall
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-6 justify-center py-4">
-            {["Closer", "Hot Streak", "Consistent", "Volume", "Improvement", "All-Star"].map((name) => (
-              <div key={name} className="flex flex-col items-center gap-2">
-                <div className="size-16 rounded-full bg-[var(--g-bg-inset)] flex items-center justify-center">
-                  <Lock className="size-5 text-[var(--g-text-tertiary)]" />
-                </div>
-                <span className="text-xs text-[var(--g-text-tertiary)]">{name}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-center text-[var(--g-text-tertiary)] pt-2">
-            Earned badges appear here as team members unlock them
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-[var(--g-border-subtle)] bg-[var(--g-bg-card)]">
-        <CardHeader>
-          <CardTitle className="text-[var(--g-text-primary)] flex items-center gap-2">
             <Flame className="size-5 text-[var(--g-accent-text)]" />
             Hot Streaks
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--g-bg-surface)]">
-              <div className="size-9 rounded-full bg-[var(--g-bg-inset)] animate-pulse shrink-0" />
-              <div className="flex-1">
-                <div className="h-4 w-28 rounded bg-[var(--g-bg-inset)] animate-pulse" />
-              </div>
-              <Badge variant="secondary" className="bg-[var(--g-bg-inset)] text-[var(--g-text-tertiary)] text-xs">
-                🔥 {i * 3} day streak
-              </Badge>
-            </div>
-          ))}
-          <Badge variant="outline" className="text-[10px] text-[var(--g-text-tertiary)]">
-            Coming soon — live streak tracking
-          </Badge>
+          {(() => {
+            const streakers = displayList
+              .filter((m) => (m.streak?.hotStreakCurrent ?? 0) >= 1)
+              .sort((a, b) => (b.streak?.hotStreakCurrent ?? 0) - (a.streak?.hotStreakCurrent ?? 0))
+              .slice(0, 5);
+            if (streakers.length === 0) {
+              return (
+                <EmptyState
+                  icon={Flame}
+                  title="No active streaks"
+                  description="Streaks start when team members get consecutive C+ grades."
+                />
+              );
+            }
+            return streakers.map((m) => {
+              const streak = m.streak?.hotStreakCurrent ?? 0;
+              return (
+                <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--g-bg-surface)]">
+                  <Avatar className="size-9 shrink-0">
+                    <AvatarFallback className="text-xs font-medium bg-[var(--g-bg-inset)] text-[var(--g-text-primary)]">
+                      {m.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate text-[var(--g-text-primary)]">{m.name}</p>
+                    <p className="text-xs text-[var(--g-text-tertiary)]">{roleLabel(m.teamRole, roles)}</p>
+                  </div>
+                  <Badge variant="secondary" className={cn("text-xs", streak >= 3 ? "bg-[var(--g-streak-bg)] text-[var(--g-streak)]" : "bg-[var(--g-bg-inset)] text-[var(--g-text-secondary)]")}>
+                    {streak}d streak
+                  </Badge>
+                </div>
+              );
+            });
+          })()}
         </CardContent>
       </Card>
     </div>

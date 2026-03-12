@@ -99,8 +99,8 @@ export function IndustryLanding() {
               <span>Gunner</span>
             </Link>
             <div className="flex items-center gap-6 text-sm text-[var(--g-text-tertiary)]">
-              <a href="#" className="hover:text-[var(--g-text-secondary)]">Privacy</a>
-              <a href="#" className="hover:text-[var(--g-text-secondary)]">Terms</a>
+              <a href="/privacy" className="hover:text-[var(--g-text-secondary)]">Privacy</a>
+              <a href="/terms" className="hover:text-[var(--g-text-secondary)]">Terms</a>
             </div>
           </div>
           <p className="text-center text-xs text-[var(--g-text-tertiary)] mt-6">

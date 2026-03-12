@@ -67,7 +67,7 @@ export function Profile() {
   const displayEmail = user?.email ?? "";
   const myMember = members?.find((m) => m.userId === user?.id);
   const role = myMember?.teamRole ?? user?.role ?? "user";
-  const callsGraded = progress?.recentCalls?.length ?? 0;
+  const callsGraded = progress?.totalCallsGraded ?? 0;
   const avgGradeNum = progress?.avgGrade ?? 0;
   const avgGradePct = Math.round(avgGradeNum * 25);
   const streak = progress?.streak ?? 0;

@@ -64,7 +64,7 @@ export function CallInbox() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<number>>(new Set());
   const [tab, setTab] = useState("all");
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [transcriptOpenId, setTranscriptOpenId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [dateRange, setDateRange] = useState("7");
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
@@ -327,9 +327,9 @@ export function CallInbox() {
                                 )}
                               </div>
                             )}
-                            <Collapsible open={transcriptOpen} onOpenChange={setTranscriptOpen}>
+                            <Collapsible open={transcriptOpenId === call.id} onOpenChange={(open) => setTranscriptOpenId(open ? call.id : null)}>
                               <CollapsibleTrigger className="flex items-center gap-1 text-sm text-[var(--g-accent-text)]">
-                                {transcriptOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                                {transcriptOpenId === call.id ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                                 Transcript
                               </CollapsibleTrigger>
                               <CollapsibleContent>

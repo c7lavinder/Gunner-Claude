@@ -38,7 +38,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Do you offer a free trial?",
-    a: "Yes, every new account starts with a 14-day free trial of the Pro plan. No credit card required. Downgrade to our free Starter plan anytime.",
+    a: "Yes, every new account starts with a 14-day free trial of the Growth plan. No credit card required. Downgrade to the Starter plan anytime.",
   },
   {
     q: "How accurate is AI call grading?",
@@ -46,7 +46,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What kind of support do you offer?",
-    a: "Starter plan includes email support. Pro includes priority email support with a 4-hour response SLA. Enterprise customers get a dedicated account manager and phone support.",
+    a: "Starter plan includes email support. Growth includes priority email support with a 4-hour response SLA. Enterprise customers get a dedicated account manager and phone support.",
   },
   {
     q: "Are there long-term contracts?",

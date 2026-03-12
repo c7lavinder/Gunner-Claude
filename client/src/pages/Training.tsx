@@ -287,22 +287,37 @@ export function Training() {
             <BookOpen className="size-5 text-[var(--g-accent-text)]" />
             Objection Library
           </h2>
-          <div className="space-y-2">
-            {["I need to think about it", "The price is too high", "I'm not interested", "Let me talk to my spouse"].map((objection) => (
-              <div key={objection} className="flex items-center justify-between p-3 rounded-lg border border-[var(--g-border-subtle)]">
-                <span className="text-sm font-medium text-[var(--g-text-primary)]">{objection}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs gap-1 text-[var(--g-text-secondary)]"
-                  onClick={() => toast("Coming soon — objection responses powered by your Industry Playbook")}
-                >
-                  View Response
-                  <ChevronRight className="size-3" />
-                </Button>
+          {(() => {
+            const allObjections = roleplayPersonas.flatMap((p) => (p as { objections?: string[] }).objections ?? []);
+            const uniqueObjections = Array.from(new Set(allObjections));
+            if (uniqueObjections.length === 0) {
+              return (
+                <EmptyState
+                  icon={BookOpen}
+                  title="No objections loaded"
+                  description="Objections will appear here from your Industry Playbook's roleplay personas."
+                />
+              );
+            }
+            return (
+              <div className="space-y-2">
+                {uniqueObjections.map((objection) => (
+                  <div key={objection} className="flex items-center justify-between p-3 rounded-lg border border-[var(--g-border-subtle)]">
+                    <span className="text-sm font-medium text-[var(--g-text-primary)]">{objection}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs gap-1 text-[var(--g-text-secondary)]"
+                      onClick={() => toast("Coming soon — objection responses powered by your Industry Playbook")}
+                    >
+                      View Response
+                      <ChevronRight className="size-3" />
+                    </Button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
           <Badge variant="outline" className="mt-3 text-[10px] text-[var(--g-text-tertiary)]">
             Powered by Industry Playbook
           </Badge>

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, count } from "drizzle-orm";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
 import {
@@ -59,6 +59,7 @@ export const trainingRouter = router({
     let trend: "up" | "down" | "flat" = "flat";
     let xp = 0;
     let streak = 0;
+    let totalCallsGraded = 0;
 
     if (tm) {
       const callRows = await db
@@ -84,6 +85,18 @@ export const trainingRouter = router({
           grade: r.grade,
         }))
       );
+
+      const [countRow] = await db
+        .select({ total: count() })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.tenantId, tenantId),
+            eq(calls.teamMemberId, tm.id),
+            eq(calls.status, "graded")
+          )
+        );
+      totalCallsGraded = countRow?.total ?? 0;
 
       const grades = callRows.map((r) => gradeToNum(r.grade));
       if (grades.length > 0) {
@@ -127,6 +140,7 @@ export const trainingRouter = router({
       xp,
       streak,
       level,
+      totalCallsGraded,
     };
   }),
 
