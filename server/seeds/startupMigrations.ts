@@ -1,7 +1,5 @@
-import { sql, eq, and, or, gte, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../_core/db";
-import { calls, callGrades } from "../../drizzle/schema";
-import { gradeCall } from "../services/grading";
 
 /**
  * Idempotent DDL that must exist before the seed and runtime code runs.
@@ -254,9 +252,7 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
-  // Call next steps — AI-suggested and manual post-call actions (snake_case columns)
-  // Drop old camelCase version if it exists, then recreate with snake_case
-  await db.execute(sql`DROP TABLE IF EXISTS "call_next_steps"`);
+  // Call next steps — AI-suggested and manual post-call actions
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS "call_next_steps" (
       "id" serial PRIMARY KEY NOT NULL,
@@ -294,54 +290,92 @@ export async function runStartupMigrations(): Promise<void> {
 
   console.log("[migrations] Startup migrations complete.");
 
-  // Grade orphaned / pending calls (limit 10 to avoid overwhelming OpenAI)
-  await gradeOrphanedCalls();
+  await bootstrapDemoTenant();
 }
 
-async function gradeOrphanedCalls(): Promise<void> {
+const DEMO_TENANT_ID = 540044;
+const DEMO_PW_HASH = "$2b$10$demohashedpasswordplaceholderxyz123456789abc";
+
+async function bootstrapDemoTenant(): Promise<void> {
   try {
-    // Find calls marked "graded" but missing a call_grades row (orphaned status)
-    const orphaned = await db
-      .select({ id: calls.id, tenantId: calls.tenantId })
-      .from(calls)
-      .leftJoin(callGrades, eq(callGrades.callId, calls.id))
-      .where(and(or(eq(calls.status, "graded"), eq(calls.status, "completed"))!, isNull(callGrades.id)))
-      .limit(10);
+    // Tenant
+    await db.execute(sql`
+      INSERT INTO "tenants" ("id", "name", "crmType", "crmConnected", "crmConfig", "industryCode", "onboardingComplete", "createdAt", "updatedAt")
+      VALUES (${DEMO_TENANT_ID}, 'Apex Property Solutions', 'demo', 'true', '{}', 're_wholesaling', 'true', now(), now())
+      ON CONFLICT ("id") DO UPDATE SET "crmType" = 'demo', "crmConnected" = 'true'
+    `);
 
-    // Find calls that are "pending" with duration >= 60 (should have been graded)
-    const pending = await db
-      .select({ id: calls.id, tenantId: calls.tenantId })
-      .from(calls)
-      .where(and(
-        or(eq(calls.status, "pending"), eq(calls.status, "transcribed"))!,
-        gte(calls.duration, 60),
-      ))
-      .limit(10 - orphaned.length);
+    // 7 users (admin + 6 team)
+    const demoUsers = [
+      { email: "demo@getgunner.ai", name: "Demo Admin", role: "owner", teamRole: "acquisitions", isAdmin: true },
+      { email: "marcus@apex-demo.local", name: "Marcus Williams", role: "member", teamRole: "lead_manager", isAdmin: false },
+      { email: "sarah@apex-demo.local", name: "Sarah Chen", role: "member", teamRole: "lead_manager", isAdmin: false },
+      { email: "jake@apex-demo.local", name: "Jake Morrison", role: "member", teamRole: "lead_generator", isAdmin: false },
+      { email: "tyler@apex-demo.local", name: "Tyler Brooks", role: "member", teamRole: "lead_generator", isAdmin: false },
+      { email: "alyssa@apex-demo.local", name: "Alyssa Reeves", role: "member", teamRole: "lead_generator", isAdmin: false },
+      { email: "derek@apex-demo.local", name: "Derek Park", role: "member", teamRole: "acquisitions", isAdmin: false },
+      { email: "nick@apex-demo.local", name: "Nick Torres", role: "member", teamRole: "dispositions", isAdmin: false },
+    ];
 
-    const toGrade = [...orphaned, ...pending].slice(0, 10);
-    if (toGrade.length === 0) return;
-
-    console.log(`[migrations] Grading ${toGrade.length} orphaned/pending calls...`);
-
-    for (const call of toGrade) {
-      try {
-        // Check for transcript before attempting to grade
-        const [callRow] = await db.select({ transcript: calls.transcript }).from(calls).where(eq(calls.id, call.id));
-        if (!callRow?.transcript) {
-          console.log(`[migrations] Skipping call ${call.id} — no transcript`);
-          continue;
-        }
-        // Reset status to pending before grading
-        await db.update(calls).set({ status: "pending" }).where(eq(calls.id, call.id));
-        await gradeCall(call.id, call.tenantId);
-        console.log(`[migrations] Graded call ${call.id}`);
-      } catch (e) {
-        console.error(`[migrations] Failed to grade call ${call.id}:`, e);
-      }
+    for (const u of demoUsers) {
+      await db.execute(sql`
+        INSERT INTO "users" ("tenantId", "name", "email", "passwordHash", "loginMethod", "role", "teamRole", "isTenantAdmin", "emailVerified", "createdAt", "updatedAt")
+        VALUES (${DEMO_TENANT_ID}, ${u.name}, ${u.email}, ${DEMO_PW_HASH}, 'password', ${u.role}, ${u.teamRole}, ${u.isAdmin}, true, now(), now())
+        ON CONFLICT ("email") DO NOTHING
+      `);
     }
 
-    console.log("[migrations] Orphaned call grading complete.");
+    // Team members (link users to team)
+    for (const u of demoUsers) {
+      if (u.role === "owner") continue;
+      await db.execute(sql`
+        INSERT INTO "team_members" ("tenantId", "userId", "role", "status", "createdAt", "updatedAt")
+        SELECT ${DEMO_TENANT_ID}, u.id, ${u.teamRole}, 'active', now(), now()
+        FROM "users" u WHERE u."email" = ${u.email}
+        ON CONFLICT DO NOTHING
+      `);
+    }
+
+    // Tenant playbook (linked to RE Wholesaling, adds lead_generator role)
+    await db.execute(sql`
+      INSERT INTO "tenant_playbooks" ("tenantId", "industryCode", "roles", "createdAt", "updatedAt")
+      VALUES (
+        ${DEMO_TENANT_ID},
+        're_wholesaling',
+        ${JSON.stringify([
+          { code: "lead_manager", name: "Lead Manager", description: "First contact with inbound leads, qualifies and routes", color: "#0ea5e9" },
+          { code: "lead_generator", name: "Lead Generator", description: "Cold calls new leads from lists, sets appointments", color: "#f59e0b" },
+          { code: "acquisitions", name: "Acquisitions Manager", description: "Negotiates deals with sellers, runs comps, makes offers", color: "#6366f1" },
+          { code: "dispositions", name: "Dispositions Manager", description: "Sells contracts to cash buyers, manages buyer list", color: "#8b5cf6" },
+        ])}::jsonb,
+        now(),
+        now()
+      )
+      ON CONFLICT ("tenantId") DO NOTHING
+    `);
+
+    // User playbooks (one per team member with initial strengths)
+    const userPlaybookSeeds: Record<string, { role: string; strengths: string[]; growthAreas: string[] }> = {
+      "marcus@apex-demo.local": { role: "lead_manager", strengths: ["Qualification questions", "Rapport building"], growthAreas: ["Closing for next steps", "Handling price objections"] },
+      "sarah@apex-demo.local": { role: "lead_manager", strengths: ["Empathy and active listening", "Information capture"], growthAreas: ["Urgency creation", "Deeper motivation probing"] },
+      "jake@apex-demo.local": { role: "lead_generator", strengths: ["High energy openers", "Volume consistency"], growthAreas: ["Financial discovery", "Setting concrete next steps"] },
+      "tyler@apex-demo.local": { role: "lead_generator", strengths: ["Overcoming initial resistance", "Clear introductions"], growthAreas: ["Property condition questions", "Timeline urgency"] },
+      "alyssa@apex-demo.local": { role: "lead_generator", strengths: ["Building trust quickly", "Empathetic tone"], growthAreas: ["Financial discovery", "Pushing for appointments"] },
+      "derek@apex-demo.local": { role: "acquisitions", strengths: ["Value anchoring", "Number presentation"], growthAreas: ["Handling 'let me think about it'", "Creating urgency without pressure"] },
+      "nick@apex-demo.local": { role: "dispositions", strengths: ["Deal presentation clarity", "Buyer rapport"], growthAreas: ["Closing for commitment", "Urgency with buyers"] },
+    };
+
+    for (const [email, seed] of Object.entries(userPlaybookSeeds)) {
+      await db.execute(sql`
+        INSERT INTO "user_playbooks" ("tenantId", "userId", "role", "strengths", "growthAreas", "gradeTrend", "createdAt", "updatedAt")
+        SELECT ${DEMO_TENANT_ID}, u.id, ${seed.role}, ${JSON.stringify(seed.strengths)}::jsonb, ${JSON.stringify(seed.growthAreas)}::jsonb, 'improving', now(), now()
+        FROM "users" u WHERE u."email" = ${email}
+        ON CONFLICT ("userId") DO NOTHING
+      `);
+    }
+
+    console.log("[migrations] Demo tenant (Apex Property Solutions) bootstrapped.");
   } catch (e) {
-    console.error("[migrations] gradeOrphanedCalls error:", e);
+    console.error("[migrations] Demo tenant bootstrap error:", e);
   }
 }

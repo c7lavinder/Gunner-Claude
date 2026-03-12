@@ -4,8 +4,11 @@ import { uploadFile } from "../_core/storage";
 import { createCrmAdapter } from "../crm";
 import { gradeCall } from "./grading";
 import { SOFTWARE_PLAYBOOK } from "./playbooks";
-import { calls, tenants, dispoProperties, tenantPlaybooks } from "../../drizzle/schema";
+import { calls, callGrades, tenants, dispoProperties, tenantPlaybooks } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { demoRecordingMeta } from "../crm/demo/demoAdapter";
+import { getRandomTranscript, getCallOutcome } from "../seeds/demoTranscripts";
+import { getRandomGrade } from "../seeds/demoGrades";
 
 const BUCKET = "gunner-recordings";
 
@@ -22,11 +25,15 @@ function normalizeCrmConfig(raw: Record<string, unknown>): Record<string, string
 
 export async function ingestCallsForTenant(tenantId: number) {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
-  if (!tenant?.crmConfig || tenant.crmType === "none") return { processed: 0, skipped: 0, errors: 0 };
+  const isDemo = tenant?.crmType === "demo";
 
-  const since = tenant.lastGhlSync ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const config = normalizeCrmConfig(JSON.parse(tenant.crmConfig) as Record<string, unknown>);
-  const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
+  if (!isDemo && (!tenant?.crmConfig || tenant.crmType === "none")) {
+    return { processed: 0, skipped: 0, errors: 0 };
+  }
+
+  const since = tenant!.lastGhlSync ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const config = isDemo ? {} : normalizeCrmConfig(JSON.parse(tenant!.crmConfig!) as Record<string, unknown>);
+  const adapter = createCrmAdapter(tenant!.crmType ?? "ghl", config);
 
   const recordings = await adapter.getCallRecordings(since);
   let processed = 0;
@@ -41,15 +48,21 @@ export async function ingestCallsForTenant(tenantId: number) {
         continue;
       }
 
+      const meta = isDemo ? demoRecordingMeta.get(rec.id) : undefined;
+      const outcome = isDemo && meta ? getCallOutcome(meta.callType) : undefined;
+
       const [call] = await db
         .insert(calls)
         .values({
           tenantId,
           ghlCallId: rec.id,
           ghlContactId: rec.contactId,
-          ghlLocationId: config.locationId,
+          ghlLocationId: isDemo ? "demo" : config.locationId,
           duration: rec.duration,
           callDirection: rec.direction,
+          callType: meta?.callType,
+          callOutcome: outcome?.callOutcome,
+          classification: outcome?.classification,
           status: "processing",
           callTimestamp: rec.timestamp ? new Date(rec.timestamp) : undefined,
         })
@@ -57,7 +70,6 @@ export async function ingestCallsForTenant(tenantId: number) {
 
       if (!call) continue;
 
-      // Skip calls shorter than minimum duration — not enough content to grade
       const MIN_DURATION = SOFTWARE_PLAYBOOK.minGradingDurationSeconds ?? 60;
       if ((call.duration ?? 0) < MIN_DURATION) {
         await db.update(calls).set({ status: "too_short" }).where(eq(calls.id, call.id));
@@ -65,6 +77,39 @@ export async function ingestCallsForTenant(tenantId: number) {
         continue;
       }
 
+      if (isDemo && meta) {
+        const transcript = getRandomTranscript(meta.callType, meta.contactName, meta.address);
+        const grade = getRandomGrade(meta.callType);
+
+        await db
+          .update(calls)
+          .set({
+            transcript,
+            contactName: meta.contactName,
+            propertyAddress: meta.address,
+            status: "graded",
+            updatedAt: new Date(),
+          })
+          .where(eq(calls.id, call.id));
+
+        await db.insert(callGrades).values({
+          callId: call.id,
+          tenantId,
+          rubricType: meta.callType,
+          overallGrade: grade.overallGrade,
+          overallScore: String(grade.overallScore),
+          summary: grade.summary,
+          strengths: grade.strengths,
+          improvements: grade.improvements,
+          criteriaScores: grade.criteriaScores,
+        });
+
+        demoRecordingMeta.delete(rec.id);
+        processed++;
+        continue;
+      }
+
+      // Real CRM path: download audio, transcribe, grade
       const res = await fetch(rec.recordingUrl);
       if (!res.ok) throw new Error(`Failed to fetch recording: ${res.status}`);
       const audioBuffer = Buffer.from(await res.arrayBuffer());
