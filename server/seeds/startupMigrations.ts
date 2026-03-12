@@ -251,5 +251,22 @@ export async function runStartupMigrations(): Promise<void> {
     )
   `);
 
+  // Call next steps — AI-suggested and manual post-call actions
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "call_next_steps" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "callId" integer NOT NULL REFERENCES "calls"("id"),
+      "tenantId" integer REFERENCES "tenants"("id"),
+      "actionType" varchar(50) NOT NULL,
+      "reason" text NOT NULL,
+      "suggested" varchar(5) NOT NULL DEFAULT 'true',
+      "payload" jsonb NOT NULL,
+      "status" text DEFAULT 'pending',
+      "result" text,
+      "createdAt" timestamp DEFAULT now() NOT NULL,
+      "updatedAt" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+
   console.log("[migrations] Startup migrations complete.");
 }

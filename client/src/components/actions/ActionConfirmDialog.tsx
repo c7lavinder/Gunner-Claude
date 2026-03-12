@@ -27,6 +27,10 @@ const TYPE_COLORS: Record<ActionType, string> = {
   workflow: "bg-rose-500/15 text-rose-600 border-rose-500/30",
   tag: "bg-slate-500/15 text-slate-600 border-slate-500/30",
   field_update: "bg-orange-500/15 text-orange-600 border-orange-500/30",
+  check_off_task: "bg-green-500/15 text-green-600 border-green-500/30",
+  update_task: "bg-blue-500/15 text-blue-600 border-blue-500/30",
+  schedule_sms: "bg-teal-500/15 text-teal-600 border-teal-500/30",
+  remove_workflow: "bg-red-500/15 text-red-600 border-red-500/30",
 };
 const EDIT_TYPES = ["note", "task"] as const;
 

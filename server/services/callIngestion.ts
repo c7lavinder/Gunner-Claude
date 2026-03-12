@@ -3,6 +3,7 @@ import { transcribeAudio } from "../_core/llm";
 import { uploadFile } from "../_core/storage";
 import { createCrmAdapter } from "../crm";
 import { gradeCall } from "./grading";
+import { SOFTWARE_PLAYBOOK } from "./playbooks";
 import { calls, tenants, dispoProperties, tenantPlaybooks } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
@@ -55,6 +56,14 @@ export async function ingestCallsForTenant(tenantId: number) {
         .returning();
 
       if (!call) continue;
+
+      // Skip calls shorter than minimum duration — not enough content to grade
+      const MIN_DURATION = SOFTWARE_PLAYBOOK.minGradingDurationSeconds ?? 60;
+      if ((call.duration ?? 0) < MIN_DURATION) {
+        await db.update(calls).set({ status: "too_short" }).where(eq(calls.id, call.id));
+        skipped++;
+        continue;
+      }
 
       const res = await fetch(rec.recordingUrl);
       if (!res.ok) throw new Error(`Failed to fetch recording: ${res.status}`);

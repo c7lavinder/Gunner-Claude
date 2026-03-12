@@ -14,6 +14,7 @@ import { GoogleAuthCallback } from "@/pages/GoogleAuthCallback";
 
 const Today = lazy(() => import("@/pages/Today").then((m) => ({ default: m.Today })));
 const CallInbox = lazy(() => import("@/pages/CallInbox").then((m) => ({ default: m.CallInbox })));
+const CallDetail = lazy(() => import("@/pages/CallDetail").then((m) => ({ default: m.CallDetail })));
 const Inventory = lazy(() => import("@/pages/Inventory").then((m) => ({ default: m.Inventory })));
 const KpiPage = lazy(() => import("@/pages/KpiPage").then((m) => ({ default: m.KpiPage })));
 const Team = lazy(() => import("@/pages/Team").then((m) => ({ default: m.Team })));
@@ -117,6 +118,7 @@ export function App() {
                 <Suspense fallback={<PageLoader />}>
                   <Switch>
                     <Route path="/today" component={Today} />
+                    <Route path="/calls/:id" component={CallDetail} />
                     <Route path="/calls" component={CallInbox} />
                     <Route path="/inventory" component={Inventory} />
                     <Route path="/kpis" component={KpiPage} />

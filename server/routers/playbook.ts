@@ -27,6 +27,8 @@ import {
   resolveKpiMetrics,
   resolveRoleplayPersonas,
   resolveTrainingCategories,
+  resolveOutcomeTypes,
+  resolveClassificationLabels,
 } from "../services/playbooks";
 
 export const playbookRouter = router({
@@ -43,6 +45,8 @@ export const playbookRouter = router({
       kpiMetrics: resolveKpiMetrics(industry, tenant),
       roleplayPersonas: resolveRoleplayPersonas(industry),
       trainingCategories: resolveTrainingCategories(industry),
+      outcomeTypes: resolveOutcomeTypes(industry),
+      classificationLabels: resolveClassificationLabels(industry),
       markets: tenant?.markets ?? [],
       leadSources: tenant?.leadSources ?? [],
     };

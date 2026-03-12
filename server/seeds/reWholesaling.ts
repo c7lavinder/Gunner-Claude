@@ -22,12 +22,48 @@ const STAGES: StageDef[] = [
 ];
 
 const CALL_TYPES: CallTypeDef[] = [
-  { code: "cold_call", name: "Cold Call", description: "First outreach to a new lead from a list" },
-  { code: "warm_call", name: "Warm Call", description: "Follow-up with a lead who has shown interest" },
-  { code: "inbound", name: "Inbound Call", description: "Seller-initiated call from marketing" },
-  { code: "follow_up", name: "Follow Up", description: "Scheduled callback or nurture touch" },
-  { code: "offer_call", name: "Offer Call", description: "Presenting or negotiating an offer with the seller" },
-  { code: "dispo_call", name: "Dispo Call", description: "Pitching a deal to a cash buyer" },
+  {
+    code: "cold_call",
+    name: "Cold Call",
+    description: "First outreach to a new lead from a list",
+    coachingChips: ["How do I handle 'I'm not interested'?", "Tips for building rapport fast", "How to get a seller to open up?"],
+    actionChips: ["Add note to contact", "Create task: Follow up next week", "Send SMS: Still interested in an offer?"],
+  },
+  {
+    code: "warm_call",
+    name: "Warm Call",
+    description: "Follow-up with a lead who has shown interest",
+    coachingChips: ["How do I qualify motivation quickly?", "What questions reveal true timeline?", "Tips for uncovering hidden objections"],
+    actionChips: ["Add note with qualification summary", "Change pipeline stage", "Create task: Schedule walkthrough"],
+  },
+  {
+    code: "inbound",
+    name: "Inbound Call",
+    description: "Seller-initiated call from marketing",
+    coachingChips: ["How do I qualify motivation quickly?", "What questions reveal true timeline?", "Tips for uncovering hidden objections"],
+    actionChips: ["Add note with qualification summary", "Change pipeline stage", "Create task: Schedule walkthrough"],
+  },
+  {
+    code: "follow_up",
+    name: "Follow Up",
+    description: "Scheduled callback or nurture touch",
+    coachingChips: ["How do I re-engage a cold lead?", "Tips for following up without being pushy", "What to say when they stopped responding"],
+    actionChips: ["Add note to contact", "Send SMS: Following up on our conversation", "Create task: Call back next week"],
+  },
+  {
+    code: "offer_call",
+    name: "Offer Call",
+    description: "Presenting or negotiating an offer with the seller",
+    coachingChips: ["How do I handle 'price too low'?", "Tips for anchoring value", "How to create urgency without pressure?"],
+    actionChips: ["Add note with offer details", "Change pipeline stage", "Schedule follow-up call"],
+  },
+  {
+    code: "dispo_call",
+    name: "Dispo Call",
+    description: "Pitching a deal to a cash buyer",
+    coachingChips: ["How do I pitch a deal to a buyer?", "Tips for handling buyer objections on price", "How to create urgency with buyers?"],
+    actionChips: ["Add note: Dispo call summary", "Send SMS to buyer", "Create appointment: Property walkthrough"],
+  },
 ];
 
 const RUBRICS: RubricDef[] = [
@@ -327,4 +363,16 @@ export const RE_WHOLESALING_PLAYBOOK: IndustryPlaybook = {
   roleplayPersonas: ROLEPLAY_PERSONAS,
   trainingCategories: TRAINING_CATEGORIES,
   gradingPhilosophy: GRADING_PHILOSOPHY,
+  classificationLabels: {
+    "Interested": { label: "Interested", color: "green" },
+    "Not Interested": { label: "Not Interested", color: "red" },
+    "Follow-Up Scheduled": { label: "Follow-Up Scheduled", color: "amber" },
+    "Offer Rejected": { label: "Offer Rejected", color: "red" },
+    "Offer Accepted": { label: "Offer Accepted", color: "green" },
+    "No Answer": { label: "No Answer", color: "gray" },
+    "Voicemail": { label: "Voicemail", color: "gray" },
+    "Callback Requested": { label: "Callback Requested", color: "amber" },
+    "Conversation": { label: "Conversation", color: "green" },
+    "Admin Call": { label: "Admin Call", color: "gray" },
+  },
 };

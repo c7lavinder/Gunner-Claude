@@ -36,6 +36,8 @@ export interface CallTypeDef {
   name: string;
   description: string;
   rubricId?: string;
+  coachingChips?: string[];
+  actionChips?: string[];
 }
 
 export interface RubricCriteria {
@@ -104,6 +106,7 @@ export interface IndustryPlaybook {
   roleplayPersonas?: RoleplayPersona[];
   trainingCategories?: TrainingCategory[];
   gradingPhilosophy?: GradingPhilosophy;
+  classificationLabels?: Record<string, { label: string; color: "green" | "red" | "amber" | "gray" }>;
 }
 
 export interface TenantPlaybook {
@@ -117,6 +120,8 @@ export interface TenantPlaybook {
   leadSources: { name: string; crmMapping?: string }[];
   algorithmOverrides?: Partial<AlgorithmConfig>;
   terminology?: Partial<Terminology>;
+  minGradingDurationSeconds?: number;
+  customNextStepsRules?: string[];
 }
 
 export interface UserPlaybook {
@@ -143,7 +148,11 @@ export type ActionType =
   | "stage_change"
   | "workflow"
   | "tag"
-  | "field_update";
+  | "field_update"
+  | "check_off_task"
+  | "update_task"
+  | "schedule_sms"
+  | "remove_workflow";
 
 export interface ActionRequest {
   type: ActionType;

@@ -1,31 +1,31 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAction } from "@/hooks/useActions";
 
-export function useCallInboxData() {
+interface UseCallInboxParams {
+  dateRange: string;
+  callTypeFilter: string;
+  gradeFilter: string;
+  teamMemberIds: number[];
+  outcome: string;
+}
+
+const NEEDS_REVIEW_STATUSES = new Set(["pending", "transcribing", "error", "failed_transcription"]);
+
+export function useCallInboxData(params: UseCallInboxParams) {
   const [search, setSearch] = useState("");
-  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<number>>(new Set());
   const [tab, setTab] = useState("all");
-  const [transcriptOpenId, setTranscriptOpenId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [dateRange, setDateRange] = useState("7");
-  const [gradeFilter, setGradeFilter] = useState("All");
-  const [callTypeFilter, setCallTypeFilter] = useState("All");
-  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [actionTarget, setActionTarget] = useState<{ name: string; contactId: string } | null>(null);
-  const { executeAction, isExecuting, result, reset } = useAction();
 
   const statusFilter =
     tab === "graded" ? "graded" : tab === "needs-review" ? "pending" : undefined;
 
   const dateFrom = useMemo(() => {
-    if (dateRange === "all") return undefined;
+    if (params.dateRange === "all") return undefined;
     const d = new Date();
-    d.setDate(d.getDate() - parseInt(dateRange, 10));
+    d.setDate(d.getDate() - parseInt(params.dateRange, 10));
     return d.toISOString();
-  }, [dateRange]);
+  }, [params.dateRange]);
 
   const { data: callsData, isLoading, isError } = trpc.calls.list.useQuery({
     page: currentPage,
@@ -33,17 +33,14 @@ export function useCallInboxData() {
     status: statusFilter,
     starred: tab === "starred" ? true : undefined,
     dateFrom,
-    callType: callTypeFilter !== "All" ? callTypeFilter : undefined,
-    gradeMin: gradeFilter === "All" ? undefined : gradeRanges[gradeFilter]?.[0],
-    gradeMax: gradeFilter === "All" ? undefined : gradeRanges[gradeFilter]?.[1],
+    callType: params.callTypeFilter !== "All" ? params.callTypeFilter : undefined,
+    gradeMin: params.gradeFilter === "All" ? undefined : gradeRanges[params.gradeFilter]?.[0],
+    gradeMax: params.gradeFilter === "All" ? undefined : gradeRanges[params.gradeFilter]?.[1],
   });
 
   const toggleStarMutation = trpc.calls.toggleStar.useMutation();
   const { data: stats } = trpc.calls.getStats.useQuery();
-  const { data: callDetail } = trpc.calls.getById.useQuery(
-    { id: expandedId! },
-    { enabled: !!expandedId },
-  );
+  const utils = trpc.useUtils();
 
   const items = callsData?.items ?? [];
 
@@ -53,7 +50,7 @@ export function useCallInboxData() {
     setStarred((prev) => {
       const next = new Set(prev);
       items.forEach((c) => {
-        if (!!c.isStarred) next.add(c.id);
+        if (c.isStarred) next.add(c.id);
       });
       return next;
     });
@@ -73,6 +70,23 @@ export function useCallInboxData() {
     return list;
   }, [items, search, tab, starred]);
 
+  // Needs review: calls with pending/transcribing/error/failed_transcription status
+  const needsReviewFiltered = useMemo(
+    () => items.filter((c) => NEEDS_REVIEW_STATUSES.has(c.status ?? "")),
+    [items],
+  );
+
+  // Skipped: calls that are archived or too short or have no recording
+  const skippedFiltered = useMemo(
+    () =>
+      items.filter(
+        (c) =>
+          !c.recordingUrl ||
+          (c.duration != null && c.duration < 60),
+      ),
+    [items],
+  );
+
   const toggleStar = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setStarred((s) => {
@@ -85,47 +99,36 @@ export function useCallInboxData() {
     });
   };
 
+  const refreshStats = useCallback(() => {
+    void utils.calls.getStats.invalidate();
+    void utils.calls.list.invalidate();
+  }, [utils]);
+
   const total = callsData?.total ?? 0;
   const limit = callsData?.limit ?? 25;
   const totalPages = Math.max(1, Math.ceil(total / limit));
-  const grade = callDetail?.grade;
-  const criteriaScores =
-    (grade?.criteriaScores as Array<{ name: string; earned: number; max: number }>) ?? [];
-  const coachImprovements = (grade?.improvements as string[]) ?? [];
-  const coachStrengths = (grade?.strengths as string[]) ?? [];
 
   return {
     search, setSearch,
-    expandedId, setExpandedId,
     starred,
     tab, setTab,
-    transcriptOpenId, setTranscriptOpenId,
     currentPage, setCurrentPage,
-    dateRange, setDateRange,
-    gradeFilter, setGradeFilter,
-    callTypeFilter, setCallTypeFilter,
-    noteDialogOpen, setNoteDialogOpen,
-    taskDialogOpen, setTaskDialogOpen,
-    actionTarget, setActionTarget,
-    executeAction, isExecuting, result, reset,
     isLoading,
     isError,
     filtered,
-    callDetail,
-    grade,
-    criteriaScores,
-    coachImprovements,
-    coachStrengths,
+    needsReviewFiltered,
+    skippedFiltered,
     stats,
     totalPages,
     toggleStar,
+    refreshStats,
   };
 }
 
 const gradeRanges: Record<string, [number, number]> = {
   A: [90, 100],
-  B: [75, 89],
-  C: [60, 74],
-  D: [45, 59],
-  F: [0, 44],
+  B: [80, 89],
+  C: [70, 79],
+  D: [60, 69],
+  F: [0, 59],
 };

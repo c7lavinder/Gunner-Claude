@@ -1,7 +1,7 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 12, 2026 — **INFRASTRUCTURE UPGRADE COMPLETE**
-> Last deploy: commit `9d0a42b` — Railway live, site loading correctly
+> Last updated: March 12, 2026 — **CALLS SECTION OVERHAUL COMPLETE**
+> Last deploy: production branch — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
@@ -9,6 +9,20 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 ---
 
 ## Completed Work
+
+### Calls Section Overhaul — March 12, 2026
+
+- [x] **Call Detail Page (`/calls/:id`)** — Full two-panel layout: grade circle + strengths/red flags left, 4-tab content right (Coaching, Criteria, Transcript, Next Steps). WaveSurfer.js audio player, Feedback modal, Reclassify modal. All labels playbook-driven via `useTenantConfig()`
+- [x] **CallCard Redesign** — Rich badges (direction, call type, classification from playbook), address pill, summary preview, grade circle with letter+%, navigates to `/calls/:id` on click
+- [x] **CallFilters Redesign** — 5 dropdowns (date, team member grouped by roles, call type from playbook, outcome from `outcomeTypes`, score A-F). Role-scoped access: `isAdmin || isManager` for team filter
+- [x] **AI Coach Sidebar (`CallsAiCoachPanel`)** — Always-visible right column on Call Inbox, coaching chips + action chips from playbook per call type, context-aware
+- [x] **Next Steps Engine** — AI-generated action suggestions (note, task, stage_change, sms, appointment), editable cards, push to GHL, mark done/skip, manual add. Auto-generated on grade. `callNextSteps` table + 5 tRPC mutations
+- [x] **Call Highlights** — Generate + persist to `call_grades.highlights` column
+- [x] **AI Grading Updates** — Explanation per criterion (`criteriaScores[].feedback`), `objectionHandling` array with suggested responses, `overallGrade` letter stored, coaching tips array
+- [x] **60-Second Grading Gate** — Calls under 60s auto-skipped, shown in Skipped tab with reason + "Grade This Call" override button
+- [x] **`call_feedback` Table** — `aiFeedback` table for grade disputes (type, explanation, suggested score/grade, original score). `submitFeedback` mutation, Feedback modal on CallDetail
+- [x] **Call Reclassification** — `updateClassification` mutation + Reclassify modal using `classificationLabels` from playbook
+- [x] **Playbook Compliance Audit** — Removed hardcoded `"acquisition_manager"` role check in `CallFilters.tsx`, replaced with `isAdmin || isManager` from `useAuth()`
 
 ### Infrastructure Upgrade — March 12, 2026
 
@@ -141,6 +155,12 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [ ] Import NAH team members + map to GHL user IDs (needs real GHL data)
 - [ ] Supabase bucket: `gunner-voice-samples` (create manually in Supabase dashboard)
 - [ ] GHL OAuth end-to-end test (built, needs live GHL OAuth app credentials)
+
+### Calls Section — Remaining Polish
+
+- [ ] `user_events` — track `next_step.pushed`, `next_step.edited` (original+final), `next_step.skipped`, `next_step.added_manual`, `next_step.regenerated` for every Next Steps interaction
+- [ ] Role-scoped call list access — resolve `allowedTeamMemberIds` from `teamAssignments` per user role on `calls.list`
+- [ ] `grade.summary` included in `calls.list` response for preview in CallCard
 
 ### Future features (enhancement backlog)
 - [ ] E2E testing: Playwright

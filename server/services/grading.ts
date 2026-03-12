@@ -1,11 +1,12 @@
 import { db } from "../_core/db";
 import { chatCompletion } from "../_core/llm";
-import { calls, callGrades, tenantRubrics } from "../../drizzle/schema";
+import { calls, callGrades, tenantRubrics, teamMembers } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { sendGradeAlert } from "./notifications";
 import { processCallGamification } from "./gamification";
 import { extractVoiceSample } from "./voiceSamples";
 import { getTenantPlaybook, getIndustryPlaybook } from "./playbooks";
+import { generateNextStepsForCall } from "../routers/calls";
 import type { RubricDef } from "../../shared/types";
 
 // RE Wholesaling fallback — used only when playbook rubric lookup fails
@@ -87,23 +88,25 @@ export async function gradeCall(callId: number, tenantId: number) {
     : "";
 
   const systemPrompt = `You are an expert sales call grading AI. Grade this call transcript against the provided rubric. Return valid JSON only, no markdown.${philosophyText}`;
-  const userPrompt = `Rubric criteria:\n${rubricText}${failText}\n\nTranscript:\n${call.transcript}\n\nReturn JSON: { "overallScore": number 0-100, "criteriaScores": [{ "name": string, "earned": number, "max": number }], "strengths": [string, string, string], "improvements": [string, string, string], "coachingTips": [string, string, string], "redFlags": [string], "summary": string }`;
+  const userPrompt = `Rubric criteria:\n${rubricText}${failText}\n\nTranscript:\n${call.transcript}\n\nReturn JSON: { "overallScore": number 0-100, "overallGrade": "A"|"B"|"C"|"D"|"F", "criteriaScores": [{ "name": string, "earned": number, "max": number, "explanation": string }], "strengths": [string], "improvements": [string], "coachingTips": [string], "redFlags": [string], "summary": string, "objectionHandling": [{ "objection": string, "context": string, "suggestedResponses": [string] }] }`;
 
   const raw = await chatCompletion({
     model: "gpt-4o",
     messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
     temperature: 0.2,
-    maxTokens: 2048,
+    maxTokens: 3000,
   });
 
   const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "")) as {
     overallScore: number;
-    criteriaScores: Array<{ name: string; earned: number; max: number }>;
+    overallGrade: string;
+    criteriaScores: Array<{ name: string; earned: number; max: number; explanation: string }>;
     strengths: string[];
     improvements: string[];
     coachingTips: string[];
     redFlags: string[];
     summary: string;
+    objectionHandling: Array<{ objection: string; context: string; suggestedResponses: string[] }>;
   };
 
   const [grade] = await db
@@ -112,11 +115,13 @@ export async function gradeCall(callId: number, tenantId: number) {
       tenantId,
       callId,
       overallScore: String(parsed.overallScore),
+      overallGrade: parsed.overallGrade ?? null,
       criteriaScores: parsed.criteriaScores,
       strengths: parsed.strengths ?? [],
       improvements: parsed.improvements ?? [],
       coachingTips: parsed.coachingTips ?? [],
       redFlags: parsed.redFlags ?? [],
+      objectionHandling: parsed.objectionHandling ?? [],
       summary: parsed.summary ?? "",
       rubricType,
       tenantRubricId,
@@ -143,6 +148,12 @@ export async function gradeCall(callId: number, tenantId: number) {
     }
   } catch {
     // Voice sample extraction failure shouldn't block grading
+  }
+
+  try {
+    await generateNextStepsForCall(callId, tenantId);
+  } catch {
+    // Next steps generation failure shouldn't block grading
   }
 
   return grade;

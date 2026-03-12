@@ -64,6 +64,7 @@ export const SOFTWARE_PLAYBOOK = {
     badgeEarned: 25,
     improvement: 20,
   },
+  minGradingDurationSeconds: 60,
   hotStreakThreshold: HOT_STREAK_THRESHOLD,
   levelThresholds: LEVEL_THRESHOLDS,
   levelTitles: [
@@ -278,4 +279,16 @@ export function resolveTrainingCategories(
   industry?: IndustryPlaybook | null
 ): TrainingCategory[] {
   return industry?.trainingCategories ?? [];
+}
+
+export function resolveOutcomeTypes(
+  industry?: IndustryPlaybook | null
+): string[] {
+  return industry?.outcomeTypes ?? [];
+}
+
+export function resolveClassificationLabels(
+  industry?: IndustryPlaybook | null
+): Record<string, { label: string; color: string }> {
+  return industry?.classificationLabels ?? {};
 }

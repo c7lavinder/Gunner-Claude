@@ -36,6 +36,8 @@ export function useTenantConfig() {
     kpiMetrics: data?.kpiMetrics ?? ([] as Array<{ key: string; label: string }>),
     roleplayPersonas: data?.roleplayPersonas ?? ([] as RoleplayPersona[]),
     trainingCategories: data?.trainingCategories ?? ([] as TrainingCategory[]),
+    outcomeTypes: data?.outcomeTypes ?? ([] as string[]),
+    classificationLabels: data?.classificationLabels ?? ({} as Record<string, { label: string; color: string }>),
     markets: data?.markets ?? [],
     leadSources: data?.leadSources ?? [],
     isLoading,
