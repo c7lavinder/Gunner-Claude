@@ -2,7 +2,7 @@
 
 > **Purpose:** This is the strategic north star for all product decisions. It maps the 16-stage SaaS lifecycle to Gunner's current state, gaps, and priorities. Update this document whenever a stage advances.
 >
-> **Last updated:** March 11, 2026
+> **Last updated:** March 12, 2026
 
 ---
 
@@ -376,8 +376,8 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | Idea           | DONE   | --                                                   |
 | Validation     | DONE   | --                                                   |
 | Planning       | DONE   | --                                                   |
-| Design         | 92%    | Low -- iterate in code                               |
-| Development    | 97%    | Medium -- ongoing feature work, 20 AI agents active  |
+| Design         | 95%    | Low -- iterate in code                               |
+| Development    | 98%    | Medium -- ongoing feature work, 20 AI agents active  |
 | Infrastructure | 90%    | Low -- operational, needs staging + uptime monitoring |
 | Testing        | 35%    | Medium -- Vitest CI enforced, need E2E coverage      |
 | Launch         | 50%    | HIGH -- flip DNS, plan Product Hunt                  |
@@ -442,4 +442,5 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | 2026-03-11 | Design / Dev | 24-hour post-build sprint — bug fixes, visual alignment, design system cleanup, GitHub CI hygiene. Waves 0-3: CI wiring (sync-main, ESLint in PR check), env var hardening, isStarred/D-grade/icon-sm/warning token fixes, CallInbox polish, --obs-* token removal (58 lines), stageColor() fallback, getContactContext tRPC + Recent Calls UI, landing page integration badge corrections, Privacy/Terms stubs, XP thresholds centralized to shared/types.ts, 35 inline styles removed from Settings/Playbook. Design: 80% → 92%. Development: 90% → 95%. | Claude |
 | 2026-03-11 | Wave 6A-6C | Google OAuth fixed, Day Hub rebuilt with KPI ledger, role tabs, clickable stat cards | Claude |
 | 2026-03-12 | Infrastructure Upgrade | Added 7-agent orchestration (server/agents/), BullMQ/Redis queue system (server/queues/), agent memory store, Control Room API, Vitest test suite with CI enforcement, Dockerfile, Redis Cloud connected. 190 ESLint warnings cleared. Compliance violations #8, #10, #12, #14, #15, #16, #17, #21 resolved. | Claude |
-| 2026-03-12 | Call Coaching | Full call page overhaul — detail page (`/calls/:id`), next steps engine (AI-generated action suggestions, push to GHL), AI coach sidebar, grading improvements (per-criterion explanations, objection handling, overallGrade stored), 60-second grading gate, `call_feedback` table, reclassification modal, CallCard/CallFilters redesign, playbook compliance audit | Claude |
+| 2026-03-12 | Call Coaching | Full call page overhaul — detail page (`/calls/:id`), next steps engine (AI-generated action suggestions, push to CRM), AI coach sidebar, grading improvements (per-criterion explanations, objection handling, overallGrade stored), 60-second grading gate, `call_feedback` table, reclassification modal, CallCard/CallFilters redesign, playbook compliance audit | Claude |
+| 2026-03-12 | Day Hub / Design | Day Hub polish — fixed-height panels (no bounce), inbox row redesign (SMS icon, property address, team member label), per-contact AM/PM chips on every task row, task categories playbook field (New Lead/Follow Up/Admin/Reschedule), two-click task complete with CRM write-back, overdue gradient text, 50-task pagination, Team Members filter (admin only), Update Workflow smart stage dropdown, KPI card visual polish, AI Coach full Day Hub context injection, dynamic quick-prompt chips, Settings CRM Phone linking. Design: 92% → 95%. Development: 97% → 98%. | Claude |

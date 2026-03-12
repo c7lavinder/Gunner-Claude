@@ -1,6 +1,6 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 12, 2026 — **CALLS SECTION OVERHAUL COMPLETE**
+> Last updated: March 12, 2026 — **DAY HUB POLISH + AI COACH CONTEXT COMPLETE**
 > Last deploy: production branch — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
 
@@ -10,7 +10,24 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 
 ## Completed Work
 
-### Calls Section Overhaul — March 12, 2026
+### Day Hub Polish — March 12, 2026
+
+- [x] **Fixed-height panels** — Inbox card and AI Coach card both locked to `h-[620px]`. Zero layout bounce regardless of conversation count. Scrolls internally.
+- [x] **Inbox row redesign** — Letter avatar replaced with SMS `MessageSquare` icon. Property address shown as second line (hidden if none). "via [Team Member]" label shows who the contact is texting on the team.
+- [x] **Per-contact AM/PM chips** — Every task row shows AM and PM pill badges. Green = qualifying call (≥30s) made to that specific contact before/after noon today. Gray = not yet. Always shown for consistent row width.
+- [x] **Task categories (playbook-driven)** — `taskCategories` added to `IndustryPlaybook` type, seeded in RE Wholesaling (New Lead, Follow Up, Admin, Reschedule), resolved through 4-layer playbook chain, exposed in `useTenantConfig()`. Categories filter dropdown on task list.
+- [x] **Task complete → CRM write-back** — Two-click confirm flow: first click stages, inline confirm bar appears ("Mark complete? This will update your CRM."), confirm click marks done in Gunner AND calls `adapter.completeTask(crmTaskId)` through CRM adapter. Never blocks on CRM failure.
+- [x] **Overdue gradient text** — Red "Overdue" badge replaced with plain gradient text: `1d` = yellow, `2-3d` = orange, `4d+` = red.
+- [x] **Task list pagination** — 50 tasks shown, "View More (N remaining)" button at bottom. No infinite scroll.
+- [x] **Team Members filter (admin only)** — Dropdown filters task list by assigned rep. Only visible to admin/owner roles.
+- [x] **Update Workflow button** — Expanded task panel now has "Update Workflow" button. Opens a searchable stage dropdown (from playbook, never hardcoded). Smart sort: adjacent funnel stages float to top. Fires `actions.execute` with `type: "stage_change"`.
+- [x] **KPI cards polished** — Bigger numbers (`text-3xl`), uppercase labels (`tracking-widest`), more padding (`p-5`), thicker progress bar (`h-1.5`).
+- [x] **AI Coach — full Day Hub context** — `pageContext` (KPIs, AM/PM status, tasks, overdue contacts, conversations, missed calls) passed on every message. Backend builds a structured context block in the system prompt. Coach now knows exactly what's on screen and can draft replies, recommend next actions, give task scripts, and calculate KPI gap.
+- [x] **Dynamic AI Coach chips** — 3 quick-prompt chips are now context-driven: shows "Draft reply to [top unread contact]" if unread convos exist, "Best call to make right now?" if AM not done, "How do I hit my offer target?" if offers behind. Never static.
+- [x] **Settings — Team CRM Phones** — Admin-only section in Settings. Lists all team members with editable CRM Phone Number field. Saves via `team.updateLcPhone` mutation. All labels say "CRM Phone" — never CRM-specific.
+- [x] **CRM-agnostic throughout** — No "GHL" in any user-facing label. All task completion, stage changes, and phone linking go through the CRM adapter interface.
+
+
 
 - [x] **Call Detail Page (`/calls/:id`)** — Full two-panel layout: grade circle + strengths/red flags left, 4-tab content right (Coaching, Criteria, Transcript, Next Steps). WaveSurfer.js audio player, Feedback modal, Reclassify modal. All labels playbook-driven via `useTenantConfig()`
 - [x] **CallCard Redesign** — Rich badges (direction, call type, classification from playbook), address pill, summary preview, grade circle with letter+%, navigates to `/calls/:id` on click
