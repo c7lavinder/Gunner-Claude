@@ -51,6 +51,8 @@ export interface CrmCallRecording {
   direction: "inbound" | "outbound";
   timestamp: string;
   assignedTo?: string;
+  /** Auth headers needed to fetch the recording (e.g. GHL API recordings) */
+  authHeaders?: Record<string, string>;
 }
 
 export interface CrmAdapter {

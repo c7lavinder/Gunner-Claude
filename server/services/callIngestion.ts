@@ -132,7 +132,8 @@ export async function ingestCallsForTenant(tenantId: number) {
       }
 
       // Real CRM path: download audio, transcribe, grade
-      const res = await fetch(rec.recordingUrl);
+      const fetchOpts: RequestInit = rec.authHeaders ? { headers: rec.authHeaders } : {};
+      const res = await fetch(rec.recordingUrl, fetchOpts);
       if (!res.ok) throw new Error(`Failed to fetch recording: ${res.status}`);
       const audioBuffer = Buffer.from(await res.arrayBuffer());
 

@@ -256,43 +256,60 @@ export class GhlAdapter implements CrmAdapter {
 
   async getCallRecordings(since: Date): Promise<CrmCallRecording[]> {
     const MAX_PAGES = 50;
-    const sinceStr = since.toISOString();
+    const recordings: CrmCallRecording[] = [];
+    const authHeaders = {
+      Authorization: `Bearer ${this.token}`,
+      Version: "2021-07-28",
+    };
+
     const params = new URLSearchParams({
       locationId: this.locationId,
-      type: "Call",
-      dateFrom: sinceStr,
+      channel: "Call",
+      startDate: since.toISOString(),
+      limit: "100",
     });
-    const recordings: CrmCallRecording[] = [];
-    let url: string | null = `/conversations/search?${params}`;
+    let cursor: string | null = null;
 
-    for (let page = 0; page < MAX_PAGES && url; page++) {
-      const data = (await ghlFetch(url, { token: this.token })) as {
-        conversations?: Array<Record<string, unknown>>;
-        meta?: { nextPageUrl?: string; nextPage?: string };
-        nextPageUrl?: string;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const pageParams = new URLSearchParams(params);
+      if (cursor) pageParams.set("cursor", cursor);
+
+      const data = (await ghlFetch(`/conversations/messages/export?${pageParams}`, { token: this.token })) as {
+        messages?: Array<Record<string, unknown>>;
+        cursor?: string;
+        nextCursor?: string;
+        totalCount?: number;
       };
-      const conversations = data.conversations ?? [];
-      for (const conv of conversations) {
-        const contactId = String(conv.contactId ?? conv.contact_id ?? "");
-        const messages = (conv.messages ?? []) as Array<Record<string, unknown>>;
-        for (const msg of messages) {
-          const recUrl = msg.recordingUrl ?? msg.recording_url;
-          if (!recUrl) continue;
-          const ts = String(msg.createdAt ?? msg.created_at ?? msg.timestamp ?? "");
-          if (ts && new Date(ts) < since) continue;
-          recordings.push({
-            id: String(msg.id ?? msg.messageId ?? ""),
-            contactId,
-            recordingUrl: String(recUrl),
-            duration: Number(msg.duration ?? 0),
-            direction: (msg.direction === "inbound" ? "inbound" : "outbound") as "inbound" | "outbound",
-            timestamp: ts,
-            assignedTo: msg.assignedTo ? String(msg.assignedTo) : undefined,
-          });
-        }
+
+      const messages = data.messages ?? [];
+      if (messages.length === 0) break;
+
+      for (const msg of messages) {
+        const msgId = String(msg.id ?? msg.messageId ?? "");
+        if (!msgId) continue;
+
+        const contactId = String(msg.contactId ?? msg.contact_id ?? "");
+        const ts = String(msg.dateAdded ?? msg.createdAt ?? msg.timestamp ?? "");
+        const dur = Number(msg.duration ?? msg.callDuration ?? (msg.meta as Record<string, unknown> | undefined)?.duration ?? 0);
+
+        const recordingUrl = `${GHL_BASE}/conversations/messages/${msgId}/locations/${this.locationId}/recording`;
+
+        recordings.push({
+          id: msgId,
+          contactId,
+          recordingUrl,
+          duration: dur,
+          direction: (String(msg.direction ?? "outbound").toLowerCase() === "inbound" ? "inbound" : "outbound") as "inbound" | "outbound",
+          timestamp: ts,
+          assignedTo: msg.userId ? String(msg.userId) : undefined,
+          authHeaders,
+        });
       }
-      url = data.meta?.nextPageUrl ?? data.meta?.nextPage ?? data.nextPageUrl ?? null;
+
+      cursor = (data.nextCursor ?? data.cursor ?? null) as string | null;
+      if (!cursor) break;
     }
+
     return recordings;
   }
 
