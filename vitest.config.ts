@@ -25,6 +25,7 @@ export default defineConfig({
       "tests/**/*.test.ts",
       "tests/**/*.spec.ts",
     ],
+    exclude: ["tests/e2e/**", "node_modules/**", "**/dist/**"],
     env: {
       DATABASE_URL: "postgresql://test:test@localhost:5432/test",
       JWT_SECRET: "test-jwt-secret",
