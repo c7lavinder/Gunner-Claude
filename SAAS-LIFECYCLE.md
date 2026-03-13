@@ -86,6 +86,8 @@ The bar: Linear, Notion, Stripe, Vercel -- companies that treat UI as a competit
 
 ## 5. Development (BUILT — 99% — Feature Complete, Polish In Progress)
 
+> **99%.** All 9 AI touchpoints industry-aware. Multi-industry playbook system complete with generic fallback. CRM bridge fully bidirectional with 16 action types. User intelligence loop closed.
+
 ### Core Architecture: Four-Playbook System
 
 The foundational design pattern -- everything flows through 4 playbook layers:
@@ -161,7 +163,9 @@ Pipeline command center, not a property list. Asset-focused (not contact-focused
 
 ---
 
-## 6. Infrastructure (BUILT — 95%)
+## 6. Infrastructure (BUILT — 97%)
+
+> **97%.** 12 DB indexes added. Token refresh storms fixed. Startup fails on migration error. CodeRabbit configured. Vitest runs all test files.
 
 ### CRM Sync Architecture (Triple-Layer)
 
@@ -213,9 +217,11 @@ Every trigger follows the rule: ONE input → ONE action → ONE result → ONE 
 
 ---
 
-## 7. Testing (AGENT-POWERED — 45%)
+## 7. Testing (AGENT-POWERED — 50%)
 
-- **Unit Testing:** Vitest configured, no test files written yet. Need: @testing-library/react for frontend.
+> **50%.** 5 unit test files running in CI. 23-point regression checklist verified. CodeRabbit auto-reviews all PRs. 60 tests passing.
+
+- **Unit Testing:** Vitest configured with 8 test files (60 tests passing). Covers: tenant isolation, grading crash protection, action routing, agents, algorithms, playbooks, gamification, EmptyState component.
 - **Integration Testing:** None automated. Manual testing via live NAH tenant.
 - **E2E Testing:** None. Need: Playwright for full user journey tests (login → grade → action → verify).
 - **Bug Fixing:** Sentry alerts + CodeRabbit PR reviews + Jules autonomous fixing + 8 testing Claude agents.
@@ -223,7 +229,7 @@ Every trigger follows the rule: ONE input → ONE action → ONE result → ONE 
 - **Beta Testing:** NAH (tenant 1) live with 3,263+ calls. Kitty Hawk onboarding next.
 - **Second Tenant Test (from REBUILD-PLAN):** After rebuild, onboarding a second RE wholesaling tenant should take <30 min and require ZERO code changes. Onboarding a solar company should require ZERO code changes -- just creating a solar industry playbook.
 
-**Gaps:** Zero automated test coverage. Agent testing is reactive, not CI-integrated. Priority: grading pipeline tests, auth flow tests, webhook handler tests. Need Migration Health Check script that verifies all endpoints have tenantId enforcement.
+**Gaps:** Need E2E test coverage (Playwright). Need integration tests for webhook handler, auth flow, grading pipeline. Need Migration Health Check script that verifies all endpoints have tenantId enforcement.
 
 ---
 
@@ -378,8 +384,8 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | Planning       | DONE   | --                                                   |
 | Design         | 95%    | Low -- iterate in code                               |
 | Development    | 99%    | Medium -- ongoing feature work, 20 AI agents active  |
-| Infrastructure | 95%    | Low -- operational, needs staging + uptime monitoring |
-| Testing        | 45%    | Medium -- Vitest CI enforced, need E2E coverage      |
+| Infrastructure | 97%    | Low -- operational, needs staging + uptime monitoring |
+| Testing        | 50%    | Medium -- 60 tests passing, need E2E coverage        |
 | Launch         | 50%    | HIGH -- flip DNS, plan Product Hunt                  |
 | Acquisition    | 5%     | CRITICAL -- no customers finding you organically     |
 | Distribution   | 10%    | HIGH -- GHL Marketplace is low-hanging fruit         |
@@ -445,3 +451,4 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | 2026-03-12 | Call Coaching | Full call page overhaul — detail page (`/calls/:id`), next steps engine (AI-generated action suggestions, push to CRM), AI coach sidebar, grading improvements (per-criterion explanations, objection handling, overallGrade stored), 60-second grading gate, `call_feedback` table, reclassification modal, CallCard/CallFilters redesign, playbook compliance audit | Claude |
 | 2026-03-12 | Day Hub / Design | Day Hub polish — fixed-height panels (no bounce), inbox row redesign (SMS icon, property address, team member label), per-contact AM/PM chips on every task row, task categories playbook field (New Lead/Follow Up/Admin/Reschedule), two-click task complete with CRM write-back, overdue gradient text, 50-task pagination, Team Members filter (admin only), Update Workflow smart stage dropdown, KPI card visual polish, AI Coach full Day Hub context injection, dynamic quick-prompt chips, Settings CRM Phone linking. Design: 92% → 95%. Development: 97% → 98%. | Claude |
 | 2026-03-12 | Quality Gate | 23-point security/CRM/grading audit — all PASS. Security: session revocation, no hardcoded emails, signup transaction, login orphan guard, RBAC hierarchy, tenant-scoped writes, AI rate limiter, AI tenant filter. CRM: config merge safety, webhook HMAC, real handlers, full action types, mock scoping, 30-day first sync, pagination caps, reconciliation auto-import. Grading: JSON parse fallback, tenant-scoped updates, atomic XP, transactional streaks, closer badge lookup. Development: 98% → 99%. Infrastructure: 90% → 95%. Testing: 35% → 45%. | Claude |
+| 2026-03-12 | Dev/Infra/AI | Waves 1-4: 9 CRIT + 15 HIGH bugs fixed, CRM bridge bidirectional (16 action types, 4 GHL pickers), LLM prompt architecture (9 touchpoints industry-aware, feedback loop, user intelligence), multi-industry playbooks (generic fallback, taskSort generic, 4 industry seeds verified), structured rubric editor, stage editor, onboarding flow, 12 DB indexes, CodeRabbit CI | Claude Code |

@@ -1,8 +1,9 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 12, 2026 — **23-POINT QUALITY GATE PASSED**
+> Last updated: March 12, 2026 — **ALL WAVES COMPLETE (1-4)**
 > Last deploy: production branch — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
+> Tests: `npx vitest run` — 60 tests passing (8 test files)
 
 Read `REBUILD-PLAN.md` for the full specification. This file tracks progress against that spec.
 
@@ -19,6 +20,81 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 - [x] **`call_feedback` table** — Schema + startup migration for grade dispute tracking
 - [x] **`callNextSteps.editableContent`** — New column for user-edited next step content
 - [x] **Inner ErrorBoundary** — Page crashes inside DashboardLayout show error UI instead of white screen
+
+### Security Hardening — March 12, 2026 (Wave 1)
+
+- [x] Session revocation enforcement in context.ts — checks `revokedAt IS NULL`
+- [x] TOCTOU patches: `updateNextStep`, `updateClassification`, `completeTask` all verify tenantId+userId in WHERE
+- [x] NAH hardcoded admin emails removed from auth.ts
+- [x] Owner role hierarchy fixed (level 40) in sdk.ts
+- [x] Signup wrapped in `db.transaction()` — no orphan users on failure
+- [x] SSE rate limiter on `/api/ai/stream` (20 requests/min)
+- [x] `userInstructions` tenant isolation in AI router
+
+### CRM Bridge Complete — March 12, 2026 (Waves 1+3)
+
+- [x] 3 webhook event handlers (OpportunityStageUpdate, ContactUpdate, AppointmentScheduled)
+- [x] Action router gaps fixed (`check_off_task`, `remove_workflow` in ACTION_TYPES)
+- [x] Error-swallowing mockSuccess removed — only fires when no CRM configured
+- [x] `saveCrm` merge fix — preserves OAuth tokens when saving API key
+- [x] 30-day initial backfill on OAuth connect
+- [x] GHL adapter cursor pagination (MAX_PAGES=50)
+- [x] Reconciliation re-ingests missing calls
+- [x] 4 new action types: `email`, `update_opportunity`, `create_opportunity`, `dnc`
+- [x] Dynamic GHL pickers: `getCalendars`, `getPipelines`, `getTags`, `getWorkflows` (tRPC + adapter)
+- [x] Inbound field capture: `assignedTo` → `teamMemberId` lookup in polling + webhooks
+- [x] `callTimestamp` captured from webhook events
+- [x] Contact enrichment on first opportunity insert (city/state/zip/sellerName/sellerPhone)
+- [x] Hidden actions surfaced in Inventory UI (tag, field_update, workflow, email buttons)
+- [x] `createAppointment` accepts `calendarId` (was hardcoded to "primary")
+
+### LLM Architecture — March 12, 2026 (Wave 3)
+
+- [x] All 9 AI touchpoints now industry-aware (grading, coaching, next steps, roleplay, etc.)
+- [x] Generic `FALLBACK_CRITERIA` replaced RE-specific criteria (industry-agnostic)
+- [x] `aiFeedback` connected to grading — last 5 calibration notes injected into prompt
+- [x] `rubricSnapshot` populated on grade insert (preserves rubric at grade time)
+- [x] `weakCriteria` tracked in user_playbooks (criteria scoring <60%)
+- [x] User playbook updates immediately after grading (not just weekly)
+- [x] Terminology injected into all prompts (`t.contact`, `t.asset`, `t.deal`, `t.walkthrough`)
+
+### Multi-Industry Playbooks — March 12, 2026 (Wave 3)
+
+- [x] `GENERIC_INDUSTRY_PLAYBOOK` fallback for unknown industries
+- [x] `taskSort` generic with `default` role config key
+- [x] Algorithm configs surfaced to call sites
+- [x] `resolveCallTypes` reads `tenant_call_types` table
+- [x] Solar, Insurance, Home Services seeds verified complete
+- [x] `ADDING-NEW-INDUSTRY.md` guide created
+
+### Quality Infrastructure — March 12, 2026 (Wave 2)
+
+- [x] Vitest config fixed — all 8 test files run (60 tests passing)
+- [x] 3 critical-path unit tests added (tenant isolation, grading crash, action routing)
+- [x] CodeRabbit `.coderabbit.yaml` configured with auto_review
+- [x] controlRoom router mounted
+- [x] 12 DB indexes added (calls, dispo_properties, daily_kpi_entries, contact_cache, team_members)
+- [x] Agent stubs clearly marked with STUB AGENT banner
+- [x] `RAILWAY_STATIC_URL` centralized to env.ts
+
+### Admin UI Enhancements — March 12, 2026 (Wave 4)
+
+- [x] Structured rubric criterion editor (replaces JSON textarea)
+- [x] Stage editor with reordering
+- [x] Coaching tone selector
+- [x] Grading philosophy override textarea
+- [x] KPI target inputs
+- [x] Min grading duration control
+- [x] Export JSON button
+- [x] Copy from Industry shortcut
+
+### Onboarding Flow — March 12, 2026 (Wave 4)
+
+- [x] Signup redirects to `/onboarding`
+- [x] Onboarding gate in DashboardLayout
+- [x] Admin `team_members` row created at signup
+- [x] Badge definitions seeded for new tenants
+- [x] Industry defaults pre-populated on tenant creation
 
 ### Three-Layer CRM Sync System — March 12, 2026
 

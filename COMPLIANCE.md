@@ -19,7 +19,7 @@ The backend resolver chain lives in `server/services/playbooks.ts`.
 
 ## Violation Tracker
 
-Last audited: March 12, 2026 — 23-point quality gate (security/CRM/grading) all PASS
+Last audited: March 12, 2026 — Waves 1-4 complete, 23-point regression checklist all PASS
 
 ### Severity 1 — Tenant-Breaking (breaks for any non-RE-Wholesaling tenant)
 
@@ -110,6 +110,16 @@ These patterns are compliant and should be followed as the model:
 
 ---
 
+## Wave 1-4 Compliance Fixes (March 12, 2026)
+
+- `FALLBACK_CRITERIA` replaced with industry-agnostic defaults (generic sales criteria, no RE-specific terminology)
+- `taskSort` uses generic role keys with `default` fallback (lead_manager, acquisition_manager, dispo_manager are industry examples, not hardcoded dependencies)
+- "Stale properties" in AI coach replaced with `t.assetPlural` from playbook terminology
+- "seller/walkthrough" in next-step generation replaced with `t.contact`/`t.walkthrough`
+- All grading prompts inject tenant terminology via `resolveTerminology()` — uses `t.contact` instead of "prospect", `t.asset` instead of "property", `t.deal` instead of "deal", `t.walkthrough` instead of "walkthrough"
+
+---
+
 ## Change Log
 
 | Date | Change | Author |
@@ -118,3 +128,4 @@ These patterns are compliant and should be followed as the model:
 | 2026-03-11 | Wave 5 fixes — violations 3, 4, 5, 6 (partial), 7, 9, 11, 13 resolved. 9 files changed. | Cursor AI Sprint |
 | 2026-03-11 | Sprint 4 fixes — violations 1, 2 resolved (Inventory refactor). Schema violations 18-21 added; 18, 19, 20 fixed. Color tokens, Zod validation, parseJsonField generics, LEVEL_THRESHOLDS dedup. | Claude AI Sprint 4 |
 | 2026-03-12 | Infrastructure Upgrade — violations 8, 10, 12, 14, 15, 16, 17, 21 resolved. MATERIAL_ICONS keys fixed, algorithm typed, Terminology.leadSource added, cosmetic hardcodes removed, HOT_STREAK_THRESHOLD centralized. All 21 violations now resolved. | Claude AI |
+| 2026-03-12 | Wave 1-4 Compliance Fixes — FALLBACK_CRITERIA replaced with industry-agnostic defaults; taskSort uses generic role keys with default fallback; "Stale properties" in AI coach replaced with t.assetPlural; "seller/walkthrough" in next-step generation replaced with t.contact/t.walkthrough; all grading prompts inject tenant terminology. | Claude Code |
