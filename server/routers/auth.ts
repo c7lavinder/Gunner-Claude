@@ -4,10 +4,12 @@ import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
-import { users, tenants, sessions } from "../../drizzle/schema";
+import { users, tenants, sessions, teamMembers, badges, tenantPlaybooks } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import * as authService from "../services/auth";
 import { nanoid } from "nanoid";
+import { DEFAULT_BADGE_DEFINITIONS } from "../services/gamification";
+import { getIndustryPlaybook } from "../services/playbooks";
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -187,6 +189,41 @@ export const authRouter = router({
 
         return { tenant: t, user: u };
       });
+
+      // 1b: Create a team_members row for the admin user
+      try {
+        await db.insert(teamMembers).values({
+          tenantId: tenant.id,
+          userId: user.id,
+          name: input.name,
+          teamRole: "admin",
+          isActive: "true",
+        });
+      } catch { /* non-fatal — team member may already exist */ }
+
+      // 1c: Seed badge definitions for the new tenant
+      try {
+        await db.insert(badges).values(
+          DEFAULT_BADGE_DEFINITIONS.map((b) => ({
+            tenantId: tenant.id,
+            code: b.code,
+            name: b.name,
+            description: b.description,
+            icon: b.icon,
+            category: b.category,
+            tier: b.tier,
+            target: b.target,
+            criteriaType: b.criteriaType,
+          }))
+        ).onConflictDoNothing();
+      } catch { /* non-fatal */ }
+
+      // 3a: Create tenant_playbooks row (industry defaults populated during onboarding)
+      try {
+        await db.insert(tenantPlaybooks).values({
+          tenantId: tenant.id,
+        }).onConflictDoNothing();
+      } catch { /* non-fatal */ }
 
       const token = await authService.createJwtToken({
         userId: user.id,

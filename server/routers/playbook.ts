@@ -95,6 +95,9 @@ export const playbookRouter = router({
       z.object({
         terminology: z.string().optional(),
         algorithmOverrides: z.string().optional(),
+        coachingTone: z.enum(["supportive", "direct", "socratic", "challenging"]).optional(),
+        gradingPhilosophyOverride: z.string().optional(),
+        minGradingDurationSeconds: z.number().int().min(0).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -115,6 +118,9 @@ export const playbookRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid algorithm overrides JSON" });
         }
       }
+      if (input.coachingTone !== undefined) updates.coachingTone = input.coachingTone;
+      if (input.gradingPhilosophyOverride !== undefined) updates.gradingPhilosophyOverride = input.gradingPhilosophyOverride;
+      if (input.minGradingDurationSeconds !== undefined) updates.minGradingDurationSeconds = input.minGradingDurationSeconds;
 
       const [existing] = await db
         .select({ id: tenantPlaybooks.id })
@@ -137,6 +143,44 @@ export const playbookRouter = router({
         .values(insertValues)
         .returning();
       logAction({ tenantId, userId: ctx.user.userId, action: "playbook_edit", entityType: "tenant_playbook", after: updates });
+      return inserted ?? null;
+    }),
+
+  updateTenantStages: protectedProcedure
+    .input(z.object({
+      stages: z.array(z.object({
+        code: z.string(),
+        name: z.string(),
+        pipeline: z.string().optional().default("default"),
+        order: z.number(),
+        crmStageId: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
+      const tenantId = ctx.user.tenantId;
+      const updates = { stages: input.stages, updatedAt: new Date() };
+
+      const [existing] = await db
+        .select({ id: tenantPlaybooks.id })
+        .from(tenantPlaybooks)
+        .where(eq(tenantPlaybooks.tenantId, tenantId))
+        .limit(1);
+
+      if (existing) {
+        const [updated] = await db
+          .update(tenantPlaybooks)
+          .set(updates as typeof tenantPlaybooks.$inferInsert)
+          .where(eq(tenantPlaybooks.id, existing.id))
+          .returning();
+        logAction({ tenantId, userId: ctx.user.userId, action: "playbook_stages_edit", entityType: "tenant_playbook", entityId: existing.id, after: { stages: input.stages } });
+        return updated ?? null;
+      }
+      const [inserted] = await db
+        .insert(tenantPlaybooks)
+        .values({ tenantId, ...updates } as typeof tenantPlaybooks.$inferInsert)
+        .returning();
+      logAction({ tenantId, userId: ctx.user.userId, action: "playbook_stages_edit", entityType: "tenant_playbook", after: { stages: input.stages } });
       return inserted ?? null;
     }),
 

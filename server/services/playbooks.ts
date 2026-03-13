@@ -266,6 +266,9 @@ export async function getTenantPlaybook(
     algorithmOverrides: parseJsonField<Partial<AlgorithmConfig> | undefined>(row.algorithmOverrides, undefined),
     terminology: parseJsonField<Partial<Terminology> | undefined>(row.terminology, undefined),
     coachingTone: (row.coachingTone as TenantPlaybook["coachingTone"]) ?? undefined,
+    gradingPhilosophyOverride: row.gradingPhilosophyOverride ?? undefined,
+    minGradingDurationSeconds: row.minGradingDurationSeconds ?? undefined,
+    updatedAt: row.updatedAt?.toISOString(),
   };
 }
 

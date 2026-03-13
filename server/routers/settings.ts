@@ -19,6 +19,7 @@ import { createCrmAdapter } from "../crm";
 import { createCheckoutSession, createPortalSession, getPlans } from "../services/stripe";
 import { getGhlOAuthUrl, exchangeGhlCode, saveGhlTokens, registerGhlWebhooks, getGhlSyncHealth, refreshTokenIfNeeded } from "../services/ghlOAuth";
 import { ENV } from "../_core/env";
+import { getIndustryPlaybook } from "../services/playbooks";
 
 const updateWorkspaceInput = z.object({
   name: z.string().optional(),
@@ -81,6 +82,15 @@ export const settingsRouter = router({
       if (input.onboardingStep !== undefined) updates.onboardingStep = input.onboardingStep;
       if (input.onboardingCompleted !== undefined) updates.onboardingCompleted = input.onboardingCompleted;
       if (input.industryCode) {
+        // Resolve industry playbook defaults for roles and stages
+        const industryPb = await getIndustryPlaybook(input.industryCode);
+        const industryDefaults: Record<string, unknown> = {
+          industryCode: input.industryCode,
+          updatedAt: new Date(),
+        };
+        if (industryPb?.roles) industryDefaults.roles = industryPb.roles;
+        if (industryPb?.stages) industryDefaults.stages = industryPb.stages;
+
         const [existing] = await db
           .select({ id: tenantPlaybooks.id })
           .from(tenantPlaybooks)
@@ -89,12 +99,12 @@ export const settingsRouter = router({
         if (existing) {
           await db
             .update(tenantPlaybooks)
-            .set({ industryCode: input.industryCode, updatedAt: new Date() })
+            .set(industryDefaults)
             .where(eq(tenantPlaybooks.id, existing.id));
         } else {
           await db.insert(tenantPlaybooks).values({
             tenantId,
-            industryCode: input.industryCode,
+            ...industryDefaults,
           });
         }
       }

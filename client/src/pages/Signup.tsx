@@ -20,7 +20,7 @@ export function Signup() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) setLocation("/today");
+    if (!isLoading && isAuthenticated) setLocation("/onboarding");
   }, [isLoading, isAuthenticated, setLocation]);
 
   const handleSubmit = async (e: React.FormEvent) => {

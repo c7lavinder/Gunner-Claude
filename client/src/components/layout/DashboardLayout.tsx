@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
@@ -72,6 +72,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: workspace } = trpc.settings.getWorkspace.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Onboarding gate — redirect to /onboarding if not completed
+  const skipGateRoutes = ["/onboarding", "/login", "/signup", "/settings"];
+  const shouldGate = workspace?.tenant?.onboardingCompleted !== "true"
+    && !skipGateRoutes.some((r) => location.startsWith(r));
+  useEffect(() => {
+    if (workspace && shouldGate) navigate("/onboarding");
+  }, [workspace, shouldGate, navigate]);
 
   const initial = (user?.name ?? user?.email ?? "U").charAt(0).toUpperCase();
 

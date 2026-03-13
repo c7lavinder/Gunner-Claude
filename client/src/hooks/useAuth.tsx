@@ -122,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenantId: result.user.tenantId ?? null,
         profilePicture: result.user.profilePicture ?? null,
       });
-      setLocation("/today");
+      setLocation("/onboarding");
     },
     [signupMutation, setLocation]
   );

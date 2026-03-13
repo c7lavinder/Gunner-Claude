@@ -122,8 +122,10 @@ export interface TenantPlaybook {
   algorithmOverrides?: Partial<AlgorithmConfig>;
   terminology?: Partial<Terminology>;
   coachingTone?: "supportive" | "direct" | "socratic" | "challenging";
+  gradingPhilosophyOverride?: string;
   minGradingDurationSeconds?: number;
   customNextStepsRules?: string[];
+  updatedAt?: string;
 }
 
 export interface UserPlaybook {
