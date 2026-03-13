@@ -1,6 +1,6 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 12, 2026 — **ALL WAVES COMPLETE (1-4)**
+> Last updated: March 12, 2026 — **WAVE 5 COMPLETE — CSP, Logging, PostHog, Boolean Migration, Playwright**
 > Last deploy: production branch — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
 > Tests: `npx vitest run` — 60 tests passing (8 test files)
@@ -10,6 +10,15 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 ---
 
 ## Completed Work
+
+### Wave 5 — March 12, 2026
+
+- [x] **Helmet CSP enabled** — script/style/connect/media/frame directives configured
+- [x] **Structured JSON logging** — `server/_core/logger.ts` created, structured logging with levels
+- [x] **console.log replaced with logger** — today.ts, ai.ts, webhook.ts, grading.ts migrated to structured logger
+- [x] **PostHog fully wired** — autocapture, pageview/pageleave, `useTrackEvent` hook, `vite-env.d.ts` typed
+- [x] **Boolean column migration stage 1** — 11 real boolean columns added across 5 tables, backfilled, old columns deprecated
+- [x] **Playwright E2E** — `playwright.config.ts`, 4 test files in `tests/e2e/`, `@playwright/test` installed, Chromium ready
 
 ### 23-Point Quality Gate — March 12, 2026
 

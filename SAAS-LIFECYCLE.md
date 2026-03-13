@@ -163,9 +163,9 @@ Pipeline command center, not a property list. Asset-focused (not contact-focused
 
 ---
 
-## 6. Infrastructure (BUILT — 97%)
+## 6. Infrastructure (BUILT — 98%)
 
-> **97%.** 12 DB indexes added. Token refresh storms fixed. Startup fails on migration error. CodeRabbit configured. Vitest runs all test files.
+> **98%.** Helmet CSP enabled, structured logger, boolean migration stage 1. 12 DB indexes added. Token refresh storms fixed. Startup fails on migration error. CodeRabbit configured. Vitest runs all test files.
 
 ### CRM Sync Architecture (Triple-Layer)
 
@@ -217,19 +217,19 @@ Every trigger follows the rule: ONE input → ONE action → ONE result → ONE 
 
 ---
 
-## 7. Testing (AGENT-POWERED — 50%)
+## 7. Testing (AGENT-POWERED — 65%)
 
-> **50%.** 5 unit test files running in CI. 23-point regression checklist verified. CodeRabbit auto-reviews all PRs. 60 tests passing.
+> **65%.** @playwright/test installed, Chromium ready, 4 E2E test files active. Run with: pnpm test:e2e
 
 - **Unit Testing:** Vitest configured with 8 test files (60 tests passing). Covers: tenant isolation, grading crash protection, action routing, agents, algorithms, playbooks, gamification, EmptyState component.
 - **Integration Testing:** None automated. Manual testing via live NAH tenant.
-- **E2E Testing:** None. Need: Playwright for full user journey tests (login → grade → action → verify).
+- **E2E Testing:** Playwright installed (`@playwright/test`), Chromium browser ready, `playwright.config.ts` configured, 4 test files in `tests/e2e/`. Targets `http://localhost:5173`.
 - **Bug Fixing:** Sentry alerts + CodeRabbit PR reviews + Jules autonomous fixing + 8 testing Claude agents.
 - **Performance Testing:** Performance Benchmarker agent available, no benchmarks run.
 - **Beta Testing:** NAH (tenant 1) live with 3,263+ calls. Kitty Hawk onboarding next.
 - **Second Tenant Test (from REBUILD-PLAN):** After rebuild, onboarding a second RE wholesaling tenant should take <30 min and require ZERO code changes. Onboarding a solar company should require ZERO code changes -- just creating a solar industry playbook.
 
-**Gaps:** Need E2E test coverage (Playwright). Need integration tests for webhook handler, auth flow, grading pipeline. Need Migration Health Check script that verifies all endpoints have tenantId enforcement.
+**Gaps:** Need more E2E test coverage (4 files active, more needed). Need integration tests for webhook handler, auth flow, grading pipeline. Need Migration Health Check script that verifies all endpoints have tenantId enforcement.
 
 ---
 
@@ -315,15 +315,17 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 
 ---
 
-## 13. Analytics (PARTIALLY BUILT — 25%)
+## 13. Analytics (PARTIALLY BUILT — 50%)
 
-- **User Tracking:** user_events table + trackEvent() service. Sentry for errors.
+> **50%.** PostHog fully wired — autocapture, pageview, useTrackEvent hook.
+
+- **User Tracking:** user_events table + trackEvent() service. Sentry for errors. PostHog autocapture + pageview/pageleave + useTrackEvent hook fully wired.
 - **Funnel Analysis:** KPI dashboard tracks call-to-deal funnels for tenants.
 - **Cohort Analysis:** None.
 - **KPI Dashboard:** Built for tenant sales KPIs. No internal Gunner business KPIs (MRR, churn, activation).
 - **A/B Testing:** None.
 
-**Gaps:** No MRR dashboard. No churn tracking. No activation funnel. PostHog needs frontend integration.
+**Gaps:** No MRR dashboard. No churn tracking. No activation funnel.
 
 ---
 
@@ -384,14 +386,14 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | Planning       | DONE   | --                                                   |
 | Design         | 95%    | Low -- iterate in code                               |
 | Development    | 99%    | Medium -- ongoing feature work, 20 AI agents active  |
-| Infrastructure | 97%    | Low -- operational, needs staging + uptime monitoring |
-| Testing        | 50%    | Medium -- 60 tests passing, need E2E coverage        |
+| Infrastructure | 98%    | Low -- operational, needs staging + uptime monitoring |
+| Testing        | 65%    | Medium -- Playwright E2E + 60 unit tests, need more coverage |
 | Launch         | 50%    | HIGH -- flip DNS, plan Product Hunt                  |
 | Acquisition    | 5%     | CRITICAL -- no customers finding you organically     |
 | Distribution   | 10%    | HIGH -- GHL Marketplace is low-hanging fruit         |
 | Conversion     | 40%    | Medium -- pricing page, trial logic, upgrade prompts |
 | Revenue        | 30%    | Medium -- annual plans, upsells                      |
-| Analytics      | 25%    | Medium -- need MRR/churn dashboards                  |
+| Analytics      | 50%    | Medium -- PostHog wired, need MRR/churn dashboards   |
 | Retention      | 40%    | Medium -- finish Loops drip, add help center         |
 | Growth         | 10%    | Medium -- referral program, viral loops              |
 | Scaling        | 35%    | Low -- AI-first model in place, premature until 50+  |
@@ -452,3 +454,4 @@ Template architecture: IndustryLanding.tsx + industryConfigs/ (pure data objects
 | 2026-03-12 | Day Hub / Design | Day Hub polish — fixed-height panels (no bounce), inbox row redesign (SMS icon, property address, team member label), per-contact AM/PM chips on every task row, task categories playbook field (New Lead/Follow Up/Admin/Reschedule), two-click task complete with CRM write-back, overdue gradient text, 50-task pagination, Team Members filter (admin only), Update Workflow smart stage dropdown, KPI card visual polish, AI Coach full Day Hub context injection, dynamic quick-prompt chips, Settings CRM Phone linking. Design: 92% → 95%. Development: 97% → 98%. | Claude |
 | 2026-03-12 | Quality Gate | 23-point security/CRM/grading audit — all PASS. Security: session revocation, no hardcoded emails, signup transaction, login orphan guard, RBAC hierarchy, tenant-scoped writes, AI rate limiter, AI tenant filter. CRM: config merge safety, webhook HMAC, real handlers, full action types, mock scoping, 30-day first sync, pagination caps, reconciliation auto-import. Grading: JSON parse fallback, tenant-scoped updates, atomic XP, transactional streaks, closer badge lookup. Development: 98% → 99%. Infrastructure: 90% → 95%. Testing: 35% → 45%. | Claude |
 | 2026-03-12 | Dev/Infra/AI | Waves 1-4: 9 CRIT + 15 HIGH bugs fixed, CRM bridge bidirectional (16 action types, 4 GHL pickers), LLM prompt architecture (9 touchpoints industry-aware, feedback loop, user intelligence), multi-industry playbooks (generic fallback, taskSort generic, 4 industry seeds verified), structured rubric editor, stage editor, onboarding flow, 12 DB indexes, CodeRabbit CI | Claude Code |
+| 2026-03-12 | Security/Testing/Analytics | Helmet CSP, structured logging, PostHog wired, boolean migration stage 1, Playwright E2E fully installed | Claude Code |
