@@ -329,6 +329,7 @@ export const settingsRouter = router({
         status: config.apiKey ? "connected" : "not_set",
         hasApiKey: !!config.apiKey,
         hasLocationId: !!config.locationId,
+        apiKeyLast4: config.apiKey ? String(config.apiKey).slice(-4) : null,
         lastActivity: layerLastAt.api ?? null,
       },
       polling: {

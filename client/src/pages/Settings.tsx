@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -147,6 +148,7 @@ export function Settings() {
   const { data: workspace, isLoading, isError } = trpc.settings.getWorkspace.useQuery();
   const { data: industries } = trpc.playbook.listIndustries.useQuery();
   const updateMutation = trpc.settings.updateWorkspace.useMutation();
+  const saveCrmMutation = trpc.settings.saveCrm.useMutation();
   const { data: plans } = trpc.settings.getPlans.useQuery();
   const GHL_INSTALL_URL = "https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Fgunner-production.up.railway.app%2Fsettings%3Ftab%3Dcrm%26crm_callback%3D1&client_id=69b0ef6de3575a61010ffe83-mmok5cx9&scope=contacts.readonly+contacts.write+conversations.readonly+conversations.write+conversations%2Fmessage.readonly+conversations%2Fmessage.write+opportunities.readonly+opportunities.write+users.readonly+calendars.readonly+calendars.write+calendars%2Fevents.readonly+calendars%2Fevents.write+workflows.readonly+locations.readonly+locations%2FcustomValues.readonly+locations%2FcustomValues.write+locations%2FcustomFields.readonly+locations%2FcustomFields.write+locations%2Ftasks.readonly+locations%2Ftasks.write+locations%2Ftags.readonly+locations%2Ftags.write+campaigns.readonly+forms.readonly+surveys.readonly+phonenumbers.read&version_id=69b1f3b569fa990a9ca57a3f";
   const testQuery = trpc.settings.testCrmConnection.useQuery(undefined, { enabled: false });
@@ -191,7 +193,9 @@ export function Settings() {
     setTimezone((s.timezone as string) ?? "America/New_York");
     setEmailDigest((s.emailDigest as boolean) ?? true);
     setGradeAlerts((s.gradeAlerts as boolean) ?? true);
+    const token = (c.apiKey ?? c.ghlApiKey) as string | undefined;
     const loc = (c.locationId ?? c.ghlLocationId) as string | undefined;
+    setApiKey(token ?? "");
     if (loc) setLocationId(loc);
   }, [tenant]);
 
@@ -206,8 +210,27 @@ export function Settings() {
     await utils.playbook.getConfig.invalidate();
   };
   const saveCrm = async () => {
-    await updateMutation.mutateAsync({ crmType: "ghl", crmConfig: JSON.stringify({ apiKey: apiKey || crmConfig.apiKey, locationId: locationId || crmConfig.locationId }) });
-    await utils.settings.getWorkspace.invalidate();
+    const nextApiKey = apiKey.trim() || crmConfig.apiKey;
+    const nextLocationId = locationId.trim() || crmConfig.locationId;
+
+    if (!nextApiKey || !nextLocationId) {
+      toast.error("Enter both a private integration token and location ID.");
+      return;
+    }
+
+    try {
+      await saveCrmMutation.mutateAsync({
+        apiKey: nextApiKey,
+        locationId: nextLocationId,
+      });
+      await utils.settings.getWorkspace.invalidate();
+      await utils.settings.getSyncLayerStatus.invalidate();
+      await utils.settings.getSyncHealth.invalidate();
+      await testQuery.refetch();
+      toast.success("CRM token saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save CRM token.");
+    }
   };
   const sendInvite = async () => {
     await inviteMutation.mutateAsync({ name: inviteName, email: inviteEmail, teamRole: inviteRole });
@@ -272,7 +295,7 @@ export function Settings() {
               crmConnected={crmConnected}
               crmError={crmError}
               onSaveCrm={saveCrm}
-              isSaving={updateMutation.isPending}
+              isSaving={saveCrmMutation.isPending}
               syncHealthDisplay={null}
             />
           </TabsContent>

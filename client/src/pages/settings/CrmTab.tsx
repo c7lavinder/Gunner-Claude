@@ -370,7 +370,7 @@ export function CrmTab({
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <Key className="size-4 text-[var(--g-text-tertiary)]" />
-            <CardTitle className="text-base">Layer 2: API Token</CardTitle>
+            <CardTitle className="text-base">Layer 2: Private Integration Token</CardTitle>
           </div>
           <StatusBadge status={apiStatus} />
         </CardHeader>
@@ -379,14 +379,22 @@ export function CrmTab({
             Direct API access as a fallback when webhooks miss events.
           </p>
           <div className="space-y-2">
-            <Label>API Key</Label>
+            <Label>Private Integration Token</Label>
+            {layerStatus?.api.apiKeyLast4 && (
+              <p className="text-xs text-[var(--g-text-tertiary)]">
+                Active token: ••••{layerStatus.api.apiKeyLast4}
+              </p>
+            )}
             <Input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={crmConfig.apiKey ? "••••••••••••••••" : "Enter API key"}
+              placeholder={layerStatus?.api.apiKeyLast4 ? `••••${layerStatus.api.apiKeyLast4}` : "Enter private integration token"}
               className="bg-[var(--g-bg-surface)]"
             />
+            <p className="text-xs text-[var(--g-text-tertiary)]">
+              Use a location-scoped GHL private integration token that matches the location ID below.
+            </p>
           </div>
           <div className="space-y-2">
             <Label>Location ID</Label>
