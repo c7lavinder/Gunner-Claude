@@ -11,6 +11,7 @@ const HIERARCHY: Record<string, number> = {
   manager: 1,
   admin: 2,
   super_admin: 2,
+  owner: 40,
 };
 
 /**

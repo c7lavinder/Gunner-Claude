@@ -100,13 +100,19 @@ For "appointment": editableContent is the appointment description, payload = { "
     maxTokens: 2048,
   });
 
-  const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "")) as Array<{
+  let parsed: Array<{
     actionType: string;
     label: string;
     reason: string;
     editableContent: string;
     payload: Record<string, unknown>;
   }>;
+  try {
+    parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
+  } catch {
+    console.error(`[next-steps] JSON parse failed for call ${callId}. Raw output: ${raw.slice(0, 500)}`);
+    return [];
+  }
 
   const inserted = [];
   for (const step of parsed) {
@@ -361,7 +367,7 @@ export const callsRouter = router({
 
       const [updated] = await db.update(callNextSteps)
         .set(updates as typeof callNextSteps.$inferInsert)
-        .where(eq(callNextSteps.id, input.id))
+        .where(and(eq(callNextSteps.id, input.id), eq(callNextSteps.tenantId, tenantId)))
         .returning();
       return updated ?? null;
     }),
@@ -457,7 +463,7 @@ export const callsRouter = router({
         classification: input.classification,
         classificationReason: input.reason ?? null,
         updatedAt: new Date(),
-      }).where(eq(calls.id, input.callId));
+      }).where(and(eq(calls.id, input.callId), eq(calls.tenantId, tenantId)));
 
       return { success: true };
     }),

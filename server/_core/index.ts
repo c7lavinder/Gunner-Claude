@@ -99,6 +99,25 @@ app.use(
 
 app.use("/api/webhooks", webhookRouter);
 
+// Rate limit the AI streaming endpoint (20 req/min per user)
+app.use(
+  "/api/ai/stream",
+  rateLimiter({
+    windowMs: 60 * 1000,
+    max: 20,
+    keyPrefix: "ai-stream",
+    keyGenerator: (req: express.Request) => {
+      const token = req.cookies?.auth_token ?? (req.headers.authorization?.replace("Bearer ", "") || "");
+      try {
+        const payload = jwt.verify(token, ENV.jwtSecret) as jwt.JwtPayload;
+        return String(payload.userId ?? req.ip);
+      } catch {
+        return req.ip ?? "unknown";
+      }
+    },
+  })
+);
+
 // SSE streaming endpoint for AI coach
 app.post("/api/ai/stream", async (req, res) => {
   const token = req.cookies?.auth_token ?? (req.headers.authorization?.replace("Bearer ", "") || "");

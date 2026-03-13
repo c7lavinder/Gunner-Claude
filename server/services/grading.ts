@@ -97,7 +97,7 @@ export async function gradeCall(callId: number, tenantId: number) {
     maxTokens: 3000,
   });
 
-  const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "")) as {
+  let parsed: {
     overallScore: number;
     overallGrade: string;
     criteriaScores: Array<{ name: string; earned: number; max: number; explanation: string }>;
@@ -108,6 +108,13 @@ export async function gradeCall(callId: number, tenantId: number) {
     summary: string;
     objectionHandling: Array<{ objection: string; context: string; suggestedResponses: string[] }>;
   };
+  try {
+    parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
+  } catch {
+    console.error(`[grading] JSON parse failed for call ${callId}. Raw output: ${raw.slice(0, 500)}`);
+    await db.update(calls).set({ status: "grade_failed", updatedAt: new Date() }).where(and(eq(calls.id, callId), eq(calls.tenantId, tenantId)));
+    return null;
+  }
 
   const [grade] = await db
     .insert(callGrades)
@@ -126,9 +133,25 @@ export async function gradeCall(callId: number, tenantId: number) {
       rubricType,
       tenantRubricId,
     })
+    .onConflictDoUpdate({
+      target: callGrades.callId,
+      set: {
+        overallScore: String(parsed.overallScore),
+        overallGrade: parsed.overallGrade ?? null,
+        criteriaScores: parsed.criteriaScores,
+        strengths: parsed.strengths ?? [],
+        improvements: parsed.improvements ?? [],
+        coachingTips: parsed.coachingTips ?? [],
+        redFlags: parsed.redFlags ?? [],
+        objectionHandling: parsed.objectionHandling ?? [],
+        summary: parsed.summary ?? "",
+        rubricType,
+        tenantRubricId,
+      },
+    })
     .returning();
 
-  await db.update(calls).set({ status: "graded", updatedAt: new Date() }).where(eq(calls.id, callId));
+  await db.update(calls).set({ status: "graded", updatedAt: new Date() }).where(and(eq(calls.id, callId), eq(calls.tenantId, tenantId)));
 
   try {
     await processCallGamification(callId, tenantId);

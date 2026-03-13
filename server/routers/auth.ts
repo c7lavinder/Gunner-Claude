@@ -92,17 +92,31 @@ export const authRouter = router({
         .set({ failedLoginAttempts: 0, lockedUntil: rawSql`NULL`, lastSignedIn: new Date() })
         .where(eq(users.id, user.id));
 
-      const tenantId = user.tenantId ?? 0;
+      if (!user.tenantId) {
+        return {
+          token: null,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            tenantId: null,
+            profilePicture: user.profilePicture ?? null,
+          },
+          needsOnboarding: true,
+        };
+      }
+
       const token = await authService.createJwtToken({
         userId: user.id,
-        tenantId,
+        tenantId: user.tenantId,
         email: user.email ?? "",
         name: user.name ?? "",
         role: user.role,
       });
 
       setAuthCookie(ctx.res, token);
-      void createSession(user.id, tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
+      void createSession(user.id, user.tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
 
       return {
         token,
@@ -136,39 +150,43 @@ export const authRouter = router({
         throw new TRPCError({ code: "CONFLICT", message: "Email already registered" });
       }
 
-      const slug = `${slugFromName(input.companyName)}-${nanoid(8)}`;
-      const [tenant] = await db
-        .insert(tenants)
-        .values({
-          name: input.companyName,
-          slug,
-        })
-        .returning();
-
-      if (!tenant) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create tenant" });
-      }
-
       const passwordHash = await authService.hashPassword(input.password);
       const openId = `email:${input.email}`;
+      const slug = `${slugFromName(input.companyName)}-${nanoid(8)}`;
 
-      const [user] = await db
-        .insert(users)
-        .values({
-          tenantId: tenant.id,
-          openId,
-          name: input.name,
-          email: input.email,
-          passwordHash,
-          loginMethod: "email_password",
-          role: "admin",
-          isTenantAdmin: "true",
-        })
-        .returning();
+      const { tenant, user } = await db.transaction(async (tx) => {
+        const [t] = await tx
+          .insert(tenants)
+          .values({
+            name: input.companyName,
+            slug,
+          })
+          .returning();
 
-      if (!user) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user" });
-      }
+        if (!t) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create tenant" });
+        }
+
+        const [u] = await tx
+          .insert(users)
+          .values({
+            tenantId: t.id,
+            openId,
+            name: input.name,
+            email: input.email,
+            passwordHash,
+            loginMethod: "email_password",
+            role: "admin",
+            isTenantAdmin: "true",
+          })
+          .returning();
+
+        if (!u) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user" });
+        }
+
+        return { tenant: t, user: u };
+      });
 
       const token = await authService.createJwtToken({
         userId: user.id,
@@ -296,46 +314,55 @@ export const authRouter = router({
         isNewUser = true;
       }
 
-      // If user has no tenant yet, auto-assign to NAH (tenant 1) if their email
-      // matches the owner account — covers first-time Google login as super admin
+      // If user has no tenant yet and is new, create a tenant for them (same as email signup)
       let resolvedUser = user;
-      if (!user.tenantId && user.email) {
-        const NAH_ADMIN_EMAILS = [
-          "corey@newagainhouses.com",
-          "xhakalavinder@gmail.com",
-        ];
-        if (NAH_ADMIN_EMAILS.includes(user.email.toLowerCase())) {
-          const [nahTenant] = await db
-            .select({ id: tenants.id })
-            .from(tenants)
-            .where(eq(tenants.id, 1))
-            .limit(1);
-          if (nahTenant) {
-            const [updated] = await db
-              .update(users)
-              .set({
-                tenantId: nahTenant.id,
-                role: "admin",
-                isTenantAdmin: "true",
-              })
-              .where(eq(users.id, user.id))
-              .returning();
-            if (updated) resolvedUser = updated;
-          }
+      if (!user.tenantId && isNewUser) {
+        const displayName = user.name ?? user.email ?? "My Company";
+        const slug = `${slugFromName(displayName)}-${nanoid(8)}`;
+        const [newTenant] = await db
+          .insert(tenants)
+          .values({ name: displayName, slug })
+          .returning();
+        if (newTenant) {
+          const [updated] = await db
+            .update(users)
+            .set({
+              tenantId: newTenant.id,
+              role: "admin",
+              isTenantAdmin: "true",
+            })
+            .where(eq(users.id, user.id))
+            .returning();
+          if (updated) resolvedUser = updated;
         }
       }
 
-      const tenantId = resolvedUser.tenantId ?? 0;
+      if (!resolvedUser.tenantId) {
+        return {
+          token: null,
+          user: {
+            id: resolvedUser.id,
+            name: resolvedUser.name,
+            email: resolvedUser.email,
+            role: resolvedUser.role,
+            tenantId: null,
+            profilePicture: resolvedUser.profilePicture ?? null,
+          },
+          isNewUser,
+          needsOnboarding: true,
+        };
+      }
+
       const token = await authService.createJwtToken({
         userId: resolvedUser.id,
-        tenantId,
+        tenantId: resolvedUser.tenantId,
         email: resolvedUser.email ?? "",
         name: resolvedUser.name ?? "",
         role: resolvedUser.role,
       });
 
       setAuthCookie(ctx.res, token);
-      void createSession(resolvedUser.id, tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
+      void createSession(resolvedUser.id, resolvedUser.tenantId, token, ctx.req.headers["user-agent"], ctx.req.ip);
 
       return {
         token,

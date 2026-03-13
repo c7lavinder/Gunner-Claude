@@ -45,7 +45,7 @@ export async function processCallGamification(
 
   const [existingXp] = await db.select().from(userXp).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
   if (existingXp) {
-    await db.update(userXp).set({ totalXp: existingXp.totalXp + totalXp, updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
+    await db.update(userXp).set({ totalXp: sql`${userXp.totalXp} + ${totalXp}`, updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
   } else {
     await db.insert(userXp).values({ tenantId, teamMemberId, totalXp });
   }
@@ -53,40 +53,45 @@ export async function processCallGamification(
 
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  const [streakRow] = await db.select().from(userStreaks).where(and(eq(userStreaks.teamMemberId, teamMemberId), eq(userStreaks.tenantId, tenantId)));
-  const hotCurrent = score >= 70 ? (streakRow?.hotStreakCurrent ?? 0) + 1 : 0;
-  const hotBest = Math.max(streakRow?.hotStreakBest ?? 0, hotCurrent);
-  const consistencyLastDate = streakRow?.consistencyLastDate ?? null;
-  const consistencyCurrent =
-    consistencyLastDate !== today
-      ? consistencyLastDate === yesterday
-        ? (streakRow?.consistencyStreakCurrent ?? 0) + 1
-        : 1
-      : streakRow?.consistencyStreakCurrent ?? 0;
-  const consistencyBest = Math.max(streakRow?.consistencyStreakBest ?? 0, consistencyCurrent);
 
-  if (streakRow) {
-    await db.update(userStreaks).set({
-      hotStreakCurrent: hotCurrent,
-      hotStreakBest: hotBest,
-      hotStreakLastCallId: callId,
-      consistencyStreakCurrent: consistencyCurrent,
-      consistencyStreakBest: consistencyBest,
-      consistencyLastDate: today,
-      updatedAt: new Date(),
-    }).where(eq(userStreaks.id, streakRow.id));
-  } else {
-    await db.insert(userStreaks).values({
-      tenantId,
-      teamMemberId,
-      hotStreakCurrent: hotCurrent,
-      hotStreakBest: hotBest,
-      hotStreakLastCallId: callId,
-      consistencyStreakCurrent: consistencyCurrent,
-      consistencyStreakBest: consistencyBest,
-      consistencyLastDate: today,
-    });
-  }
+  // Streak update in a transaction for atomicity
+  const { hotCurrent, hotBest: hotBestFinal, consistencyCurrent, consistencyBest: consistencyBestFinal } = await db.transaction(async (tx) => {
+    const [streakRow] = await tx.select().from(userStreaks).where(and(eq(userStreaks.teamMemberId, teamMemberId), eq(userStreaks.tenantId, tenantId)));
+    const hot = score >= 70 ? (streakRow?.hotStreakCurrent ?? 0) + 1 : 0;
+    const hotB = Math.max(streakRow?.hotStreakBest ?? 0, hot);
+    const consistencyLastDate = streakRow?.consistencyLastDate ?? null;
+    const consistency =
+      consistencyLastDate !== today
+        ? consistencyLastDate === yesterday
+          ? (streakRow?.consistencyStreakCurrent ?? 0) + 1
+          : 1
+        : streakRow?.consistencyStreakCurrent ?? 0;
+    const consistencyB = Math.max(streakRow?.consistencyStreakBest ?? 0, consistency);
+
+    if (streakRow) {
+      await tx.update(userStreaks).set({
+        hotStreakCurrent: hot,
+        hotStreakBest: hotB,
+        hotStreakLastCallId: callId,
+        consistencyStreakCurrent: consistency,
+        consistencyStreakBest: consistencyB,
+        consistencyLastDate: today,
+        updatedAt: new Date(),
+      }).where(eq(userStreaks.id, streakRow.id));
+    } else {
+      await tx.insert(userStreaks).values({
+        tenantId,
+        teamMemberId,
+        hotStreakCurrent: hot,
+        hotStreakBest: hotB,
+        hotStreakLastCallId: callId,
+        consistencyStreakCurrent: consistency,
+        consistencyStreakBest: consistencyB,
+        consistencyLastDate: today,
+      });
+    }
+    return { hotCurrent: hot, hotBest: hotB, consistencyCurrent: consistency, consistencyBest: consistencyB };
+  });
 
   const earnedSet = new Set(
     (await db.select({ badgeCode: userBadges.badgeCode }).from(userBadges).where(and(eq(userBadges.teamMemberId, teamMemberId), eq(userBadges.tenantId, tenantId)))).map((b) => b.badgeCode)
@@ -105,7 +110,7 @@ export async function processCallGamification(
   const [{ count: weekCalls }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(calls)
-    .where(and(eq(calls.teamMemberId, teamMemberId), eq(calls.tenantId, tenantId), eq(calls.status, "graded"), gte(calls.createdAt, weekStart)));
+    .where(and(eq(calls.teamMemberId, teamMemberId), eq(calls.tenantId, tenantId), eq(calls.status, "graded"), gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, weekStart)));
 
   // Previous average score (all calls excluding current one)
   const prevGrades = await db
@@ -123,10 +128,7 @@ export async function processCallGamification(
     const xpBonus = score - prevAvg >= 15
       ? SOFTWARE_PLAYBOOK.xpRewards.improvement * 2
       : SOFTWARE_PLAYBOOK.xpRewards.improvement;
-    const xpNow = await db.select().from(userXp).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
-    if (xpNow[0]) {
-      await db.update(userXp).set({ totalXp: xpNow[0].totalXp + xpBonus, updatedAt: new Date() }).where(eq(userXp.id, xpNow[0].id));
-    }
+    await db.update(userXp).set({ totalXp: sql`${userXp.totalXp} + ${xpBonus}`, updatedAt: new Date() }).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
     await db.insert(xpTransactions).values({ tenantId, teamMemberId, amount: xpBonus, reason: `Improvement: +${(score - prevAvg).toFixed(0)}pts above avg`, callId });
   }
 
@@ -206,7 +208,7 @@ export async function processDealClosedGamification(
 
   const [existingXp] = await db.select().from(userXp).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
   if (existingXp) {
-    await db.update(userXp).set({ totalXp: existingXp.totalXp + xpAmount, updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
+    await db.update(userXp).set({ totalXp: sql`${userXp.totalXp} + ${xpAmount}`, updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
   } else {
     await db.insert(userXp).values({ tenantId, teamMemberId, totalXp: xpAmount });
   }
@@ -216,10 +218,13 @@ export async function processDealClosedGamification(
     (await db.select({ badgeCode: userBadges.badgeCode }).from(userBadges).where(and(eq(userBadges.teamMemberId, teamMemberId), eq(userBadges.tenantId, tenantId)))).map((b) => b.badgeCode)
   );
 
+  // dispoProperties.assignedToUserId references users.id, not teamMembers.id
+  const [dealMemberLookup] = await db.select({ userId: teamMembers.userId }).from(teamMembers).where(and(eq(teamMembers.id, teamMemberId), eq(teamMembers.tenantId, tenantId)));
+  const closerUserId = dealMemberLookup?.userId;
   const [{ count: closedDeals }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(dispoProperties)
-    .where(and(eq(dispoProperties.tenantId, tenantId), eq(dispoProperties.assignedToUserId, teamMemberId), eq(dispoProperties.status, "closed")));
+    .where(and(eq(dispoProperties.tenantId, tenantId), closerUserId ? eq(dispoProperties.assignedToUserId, closerUserId) : sql`false`, eq(dispoProperties.status, "closed")));
 
   const closerChecks: Array<[string, boolean]> = [
     ["first_close", closedDeals >= 1],
@@ -268,9 +273,7 @@ export async function processDealClosedGamification(
   // Award badge XP
   if (newBadges.length > 0) {
     const badgeXp = newBadges.length * SOFTWARE_PLAYBOOK.xpRewards.badgeEarned;
-    if (existingXp) {
-      await db.update(userXp).set({ totalXp: (existingXp.totalXp + xpAmount + badgeXp), updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
-    }
+    await db.update(userXp).set({ totalXp: sql`${userXp.totalXp} + ${badgeXp}`, updatedAt: new Date() }).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
     await db.insert(xpTransactions).values({ tenantId, teamMemberId, amount: badgeXp, reason: `Badge(s) earned: ${newBadges.join(", ")}` });
   }
 
@@ -295,7 +298,7 @@ export async function processImprovementXp(
 
   const [existingXp] = await db.select().from(userXp).where(and(eq(userXp.teamMemberId, teamMemberId), eq(userXp.tenantId, tenantId)));
   if (existingXp) {
-    await db.update(userXp).set({ totalXp: existingXp.totalXp + xpBonus, updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
+    await db.update(userXp).set({ totalXp: sql`${userXp.totalXp} + ${xpBonus}`, updatedAt: new Date() }).where(eq(userXp.id, existingXp.id));
   } else {
     await db.insert(userXp).values({ tenantId, teamMemberId, totalXp: xpBonus });
   }
@@ -314,6 +317,7 @@ export const DEFAULT_BADGE_DEFINITIONS = [
   { code: "hot_streak_3", name: "On Fire", description: "3 calls in a row scoring 70%+", icon: "🔥", category: "streak", tier: "bronze", target: 3, criteriaType: "hot_streak" },
   { code: "hot_streak_5", name: "Blazing", description: "5 calls in a row scoring 70%+", icon: "🔥", category: "streak", tier: "silver", target: 5, criteriaType: "hot_streak" },
   { code: "hot_streak_10", name: "Unstoppable", description: "10 calls in a row scoring 70%+", icon: "🔥", category: "streak", tier: "gold", target: 10, criteriaType: "hot_streak" },
+  { code: "hot_streak_25", name: "Legendary Streak", description: "25 calls in a row scoring 70%+", icon: "🔥", category: "streak", tier: "platinum", target: 25, criteriaType: "hot_streak" },
   { code: "consistency_7", name: "Weekly Warrior", description: "7-day consistency streak", icon: "📅", category: "streak", tier: "bronze", target: 7, criteriaType: "consistency_streak" },
   { code: "consistency_14", name: "Reliable", description: "14-day consistency streak", icon: "📅", category: "streak", tier: "silver", target: 14, criteriaType: "consistency_streak" },
   { code: "consistency_30", name: "Iron Discipline", description: "30-day consistency streak", icon: "📅", category: "streak", tier: "gold", target: 30, criteriaType: "consistency_streak" },

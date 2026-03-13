@@ -280,7 +280,7 @@ export const todayRouter = router({
       const [row] = await db
         .update(dailyKpiEntries)
         .set({ notes: newNotes })
-        .where(eq(dailyKpiEntries.id, input.id))
+        .where(and(eq(dailyKpiEntries.id, input.id), eq(dailyKpiEntries.tenantId, tid), eq(dailyKpiEntries.userId, uid)))
         .returning();
 
       // Also complete the task in the CRM if we have a reference ID

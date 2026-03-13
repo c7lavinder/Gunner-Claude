@@ -1,9 +1,12 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import jwt from "jsonwebtoken";
+import { createHash } from "node:crypto";
 import superjson from "superjson";
+import { eq, and, isNull, gt } from "drizzle-orm";
 import { ENV } from "./env";
 import { db } from "./db";
+import { sessions } from "../../drizzle/schema";
 
 export interface SessionUser {
   userId: number;
@@ -23,13 +26,30 @@ export async function createContext({ req, res }: CreateExpressContextOptions) {
   if (token) {
     try {
       const payload = jwt.verify(token, ENV.jwtSecret) as jwt.JwtPayload;
-      user = {
-        userId: payload.userId as number,
-        tenantId: payload.tenantId as number,
-        email: payload.email as string,
-        name: payload.name as string,
-        role: payload.role as string,
-      };
+      // Verify session exists, is not revoked, and has not expired
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const now = new Date();
+      const [session] = await db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.tokenHash, tokenHash),
+            isNull(sessions.revokedAt),
+            gt(sessions.expiresAt, now)
+          )
+        )
+        .limit(1);
+
+      if (session) {
+        user = {
+          userId: payload.userId as number,
+          tenantId: payload.tenantId as number,
+          email: payload.email as string,
+          name: payload.name as string,
+          role: payload.role as string,
+        };
+      }
     } catch {
       // Invalid or expired JWT — treat as unauthenticated
     }

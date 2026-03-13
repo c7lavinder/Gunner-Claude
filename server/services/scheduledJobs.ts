@@ -309,12 +309,18 @@ Return JSON only:
         maxTokens: 512,
       });
 
-      const insights = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "")) as {
+      let insights: {
         strengths: string[];
         growthAreas: string[];
         gradeTrend: string;
         communicationStyle: Record<string, string>;
       };
+      try {
+        insights = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
+      } catch {
+        console.error(`[coaching-distill] JSON parse failed for user ${member.userId}. Raw: ${raw.slice(0, 300)}`);
+        continue;
+      }
 
       // Upsert user_playbooks
       const [existing] = await db.select({ id: userPlaybooks.id }).from(userPlaybooks).where(eq(userPlaybooks.userId, member.userId));
@@ -498,7 +504,13 @@ Return JSON array only:
           maxTokens: 256,
         });
 
-        const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "")) as Array<{ suggestionType: string; content: string }>;
+        let parsed: Array<{ suggestionType: string; content: string }>;
+        try {
+          parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
+        } catch {
+          console.error(`[daily-suggestions] JSON parse failed for user ${member.userId}. Raw: ${raw.slice(0, 300)}`);
+          continue;
+        }
 
         for (const s of parsed) {
           await db.insert(aiSuggestions).values({

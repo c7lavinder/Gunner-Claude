@@ -13,6 +13,10 @@ export function GoogleAuthCallback() {
 
   const callbackMutation = trpc.auth.googleCallback.useMutation({
     onSuccess: (data) => {
+      if (data.needsOnboarding || !data.token) {
+        setLocation("/onboarding");
+        return;
+      }
       setAuthenticatedUser(
         {
           id: data.user.id,

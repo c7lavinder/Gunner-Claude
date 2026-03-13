@@ -216,12 +216,44 @@ export async function runStartupMigrations(): Promise<void> {
   // Add isStarred to calls if not present
   await db.execute(sql`ALTER TABLE "calls" ADD COLUMN IF NOT EXISTS "isStarred" text DEFAULT 'false'`);
 
+  // Add tenantId to user_instructions if not present
+  await db.execute(sql`ALTER TABLE "user_instructions" ADD COLUMN IF NOT EXISTS "tenantId" integer REFERENCES "tenants"("id")`);
+
   // Performance indexes
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_created" ON "calls" ("tenantId", "createdAt" DESC)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_user" ON "calls" ("tenantId", "teamMemberId")`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_user_events_tenant_user_created" ON "user_events" ("tenantId", "userId", "createdAt" DESC)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_notifications_tenant_user_read" ON "notifications" ("tenantId", "userId", "isRead")`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_audit_log_tenant_created" ON "audit_log" ("tenantId", "createdAt" DESC)`);
+
+  // Unique index on call_grades to prevent duplicate grades per call
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "call_grades_callid_unique" ON "call_grades" ("callId")`);
+
+  // Intelligence columns on call_grades
+  await db.execute(sql`ALTER TABLE "call_grades" ADD COLUMN IF NOT EXISTS "rubricSnapshot" jsonb`);
+
+  // Intelligence columns on industry_playbooks
+  await db.execute(sql`
+    ALTER TABLE "industry_playbooks"
+    ADD COLUMN IF NOT EXISTS "kpiMetrics" jsonb,
+    ADD COLUMN IF NOT EXISTS "taskCategories" jsonb,
+    ADD COLUMN IF NOT EXISTS "classificationLabels" jsonb
+  `);
+
+  // Intelligence columns on tenant_playbooks
+  await db.execute(sql`
+    ALTER TABLE "tenant_playbooks"
+    ADD COLUMN IF NOT EXISTS "gradingPhilosophyOverride" text,
+    ADD COLUMN IF NOT EXISTS "coachingTone" varchar(50),
+    ADD COLUMN IF NOT EXISTS "minGradingDurationSeconds" integer
+  `);
+
+  // Intelligence columns on user_playbooks
+  await db.execute(sql`
+    ALTER TABLE "user_playbooks"
+    ADD COLUMN IF NOT EXISTS "weakCriteria" jsonb,
+    ADD COLUMN IF NOT EXISTS "gradeBaseline" numeric(4,2)
+  `);
 
   // Demo data tables for tenants without a live CRM connection
   await db.execute(sql`

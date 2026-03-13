@@ -320,7 +320,7 @@ export type InsertCall = typeof calls.$inferInsert;
 export const callGrades = pgTable("call_grades", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenantId").references(() => tenants.id).notNull(), // Multi-tenancy
-  callId: integer("callId").references(() => calls.id).notNull(),
+  callId: integer("callId").references(() => calls.id).notNull().unique(),
   // Overall score
   overallScore: decimal("overallScore", { precision: 5, scale: 2 }),
   overallGrade: text("overallGrade"),
@@ -342,6 +342,8 @@ export const callGrades = pgTable("call_grades", {
   rubricType: text("rubricType").notNull(),
   // Custom rubric reference
   tenantRubricId: integer("tenantRubricId").references(() => tenantRubrics.id),
+  // Snapshot of the rubric used for grading
+  rubricSnapshot: jsonb("rubricSnapshot"),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -1336,6 +1338,7 @@ export type InsertCoachMessage = typeof coachMessages.$inferInsert;
  */
 export const userInstructions = pgTable("user_instructions", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenantId").references(() => tenants.id),
   userId: integer("userId").references(() => users.id).notNull(),
   // The raw instruction text as the user stated it
   instruction: text("instruction").notNull(),
@@ -1889,6 +1892,9 @@ export const industryPlaybooks = pgTable("industry_playbooks", {
   roleplayPersonas: jsonb("roleplayPersonas"),
   trainingCategories: jsonb("trainingCategories"),
   gradingPhilosophy: jsonb("gradingPhilosophy"),
+  kpiMetrics: jsonb("kpiMetrics"),
+  taskCategories: jsonb("taskCategories"),
+  classificationLabels: jsonb("classificationLabels"),
   isActive: text("isActive").default("true"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -1910,6 +1916,9 @@ export const tenantPlaybooks = pgTable("tenant_playbooks", {
   algorithmOverrides: jsonb("algorithmOverrides"),
   terminology: jsonb("terminology"),
   customConfig: jsonb("customConfig"),
+  gradingPhilosophyOverride: text("gradingPhilosophyOverride"),
+  coachingTone: varchar("coachingTone", { length: 50 }),
+  minGradingDurationSeconds: integer("minGradingDurationSeconds"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -1929,6 +1938,8 @@ export const userPlaybooks = pgTable("user_playbooks", {
   gradeTrend: varchar("gradeTrend", { length: 50 }),
   communicationStyle: jsonb("communicationStyle"),
   instructions: jsonb("instructions"),
+  weakCriteria: jsonb("weakCriteria"),
+  gradeBaseline: decimal("gradeBaseline", { precision: 4, scale: 2 }),
   voiceConsentGiven: text("voiceConsentGiven").default("false"),
   voiceSampleCount: integer("voiceSampleCount").default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

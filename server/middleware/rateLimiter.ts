@@ -14,10 +14,10 @@ setInterval(() => {
   });
 }, 60_000);
 
-export function rateLimiter(opts: { windowMs: number; max: number; keyPrefix?: string }) {
+export function rateLimiter(opts: { windowMs: number; max: number; keyPrefix?: string; keyGenerator?: (req: Request) => string }) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
-    const key = `${opts.keyPrefix ?? "rl"}:${ip}`;
+    const identifier = opts.keyGenerator ? opts.keyGenerator(req) : (req.ip ?? req.socket.remoteAddress ?? "unknown");
+    const key = `${opts.keyPrefix ?? "rl"}:${identifier}`;
     const now = Date.now();
 
     let entry = buckets.get(key);

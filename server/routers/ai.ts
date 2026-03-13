@@ -42,6 +42,7 @@ export const aiRouter = router({
       .where(
         and(
           eq(userInstructions.userId, userId),
+          eq(userInstructions.tenantId, tenantId),
           eq(userInstructions.isActive, "true")
         )
       );
@@ -202,10 +203,27 @@ Use the correct terminology for this team's industry. Be direct, actionable, and
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const tenantId = ctx.user.tenantId;
+      const userId = ctx.user.userId;
+
+      // Deactivate stale instructions in the same category
+      await db
+        .update(userInstructions)
+        .set({ isActive: "false", updatedAt: new Date() })
+        .where(
+          and(
+            eq(userInstructions.userId, userId),
+            eq(userInstructions.tenantId, tenantId),
+            eq(userInstructions.category, input.category),
+            eq(userInstructions.isActive, "true")
+          )
+        );
+
       const [row] = await db
         .insert(userInstructions)
         .values({
-          userId: ctx.user.userId,
+          tenantId,
+          userId,
           instruction: input.instruction,
           category: input.category,
           isActive: "true",
@@ -293,11 +311,17 @@ Generate 2-3 items. Be specific, not generic.`;
       maxTokens: 512,
     });
 
-    const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "")) as Array<{
+    let parsed: Array<{
       suggestionType: string;
       content: string;
       reasoning: string;
     }>;
+    try {
+      parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
+    } catch {
+      console.error(`[ai-suggestions] JSON parse failed for user ${userId}. Raw output: ${raw.slice(0, 500)}`);
+      return [];
+    }
 
     const inserted = [];
     for (const s of parsed) {
