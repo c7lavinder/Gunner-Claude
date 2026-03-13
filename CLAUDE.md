@@ -244,7 +244,7 @@ Three layers of data synchronization:
 ## Deploy
 
 Push to the active deploy branch → Railway auto-deploys → live in ~3 minutes.
-Staging URL: https://gunner-app-production.up.railway.app
+Staging URL: https://gunner-production.up.railway.app
 Health check: `GET /health` returns `{"status":"ok"}`
 
 ## What to Read Next

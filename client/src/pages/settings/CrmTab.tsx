@@ -185,7 +185,7 @@ export function CrmTab({
     if (code && crmCallback) {
       setOauthCompleting(true);
       setOauthError(null);
-      const redirectUri = `${window.location.origin}/settings?tab=crm&crm_callback=1`;
+      const redirectUri = "https://gunner-app-production.up.railway.app/settings?tab=crm&crm_callback=1";
 
       completeOAuth.mutateAsync({ code, redirectUri })
         .then(() => {
