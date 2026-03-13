@@ -7,8 +7,16 @@ import { GhlAdapter } from "../crm/ghl/ghlAdapter";
 import { refreshGhlToken, saveGhlTokens } from "../services/ghlOAuth";
 import { getTenantPlaybook, getIndustryPlaybook, resolveAlgorithmConfig } from "../services/playbooks";
 
+const DEFAULT_TIMEZONE = "America/New_York";
 const todayStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = (tz: string = DEFAULT_TIMEZONE) => {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    return parts; // en-CA format is YYYY-MM-DD
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+};
 
 // Fallback KPI targets (used when tenant playbook has no overrides)
 const DEFAULT_KPI_TARGETS: Record<string, number> = {
@@ -226,27 +234,35 @@ export const todayRouter = router({
       or(isNull(dispoProperties.lastContactedAt), lt(dispoProperties.lastContactedAt, twoDaysAgo))!
     ));
 
-    // Gather contact IDs from tasks to look up AM/PM call flags
+    // Batch AM/PM call lookup — one query each instead of 2 per contact
     const contactIds = taskRows.map((r) => r.contactId).filter((c): c is string => !!c);
     const amPmMap = new Map<string, { amDone: boolean; pmDone: boolean }>();
-    if (contactIds.length > 0) {
+    const uniqueContactIds = Array.from(new Set(contactIds));
+    if (uniqueContactIds.length > 0) {
       const amEnd = new Date(todayStr() + "T12:00:00.000Z");
       const dayStart = todayStart();
       const dayEnd = new Date(todayStr() + "T23:59:59.999Z");
-      for (const cid of Array.from(new Set(contactIds))) {
-        const [am] = await db.select({ id: calls.id }).from(calls).where(and(
-          eq(calls.tenantId, tid), eq(calls.ghlContactId, cid),
-          gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, dayStart),
-          sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) < ${amEnd}`,
-          gte(calls.duration, 30),
-        )).limit(1);
-        const [pm] = await db.select({ id: calls.id }).from(calls).where(and(
-          eq(calls.tenantId, tid), eq(calls.ghlContactId, cid),
-          gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, amEnd),
-          sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) <= ${dayEnd}`,
-          gte(calls.duration, 30),
-        )).limit(1);
-        amPmMap.set(cid, { amDone: !!am, pmDone: !!pm });
+
+      // Single query for AM calls across all contacts
+      const amRows = await db.select({ ghlContactId: calls.ghlContactId }).from(calls).where(and(
+        eq(calls.tenantId, tid), inArray(calls.ghlContactId, uniqueContactIds),
+        gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, dayStart),
+        sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) < ${amEnd}`,
+        gte(calls.duration, 30),
+      ));
+      const amSet = new Set(amRows.map((r) => r.ghlContactId).filter(Boolean));
+
+      // Single query for PM calls across all contacts
+      const pmRows = await db.select({ ghlContactId: calls.ghlContactId }).from(calls).where(and(
+        eq(calls.tenantId, tid), inArray(calls.ghlContactId, uniqueContactIds),
+        gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, amEnd),
+        sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) <= ${dayEnd}`,
+        gte(calls.duration, 30),
+      ));
+      const pmSet = new Set(pmRows.map((r) => r.ghlContactId).filter(Boolean));
+
+      for (const cid of uniqueContactIds) {
+        amPmMap.set(cid, { amDone: amSet.has(cid), pmDone: pmSet.has(cid) });
       }
     }
 
@@ -586,19 +602,31 @@ export const todayRouter = router({
       const dayStart = new Date(date + "T00:00:00.000Z");
       const dayEnd = new Date(date + "T23:59:59.999Z");
 
-      const [amCall] = await db.select({ id: calls.id }).from(calls).where(and(
+      // Look up user's teamMemberId for per-user filtering
+      const [userMember] = await db.select({ id: teamMembers.id }).from(teamMembers)
+        .where(and(eq(teamMembers.tenantId, tid), eq(teamMembers.userId, uid)))
+        .limit(1);
+      const userTeamMemberId = userMember?.id ?? null;
+
+      const amCallConds = [
         eq(calls.tenantId, tid),
         gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, dayStart),
         sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) < ${amEnd}`,
         gte(calls.duration, 30),
-      )).limit(1);
+      ];
+      if (userTeamMemberId != null) amCallConds.push(eq(calls.teamMemberId, userTeamMemberId));
 
-      const [pmCall] = await db.select({ id: calls.id }).from(calls).where(and(
+      const [amCall] = await db.select({ id: calls.id }).from(calls).where(and(...amCallConds)).limit(1);
+
+      const pmCallConds = [
         eq(calls.tenantId, tid),
         gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, amEnd),
         sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) <= ${dayEnd}`,
         gte(calls.duration, 30),
-      )).limit(1);
+      ];
+      if (userTeamMemberId != null) pmCallConds.push(eq(calls.teamMemberId, userTeamMemberId));
+
+      const [pmCall] = await db.select({ id: calls.id }).from(calls).where(and(...pmCallConds)).limit(1);
 
       const [manualAm] = await db.select({ id: dailyKpiEntries.id }).from(dailyKpiEntries).where(and(
         eq(dailyKpiEntries.tenantId, tid),

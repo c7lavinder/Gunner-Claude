@@ -25,5 +25,5 @@ export function registerAllAgents(): void {
   agentRegistry.register(new UIUXAgent());
   agentRegistry.register(new ProductOptimizationAgent());
   agentRegistry.register(new ArchitectureAgent());
-  console.log(`[agents] ${agentRegistry.getIds().length} agents registered`);
+  console.log("[agents] 7 agents registered (all stubs — no real execution)");
 }

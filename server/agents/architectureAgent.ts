@@ -1,4 +1,8 @@
 /**
+ * STUB AGENT — Infrastructure only, no real execution logic yet.
+ * The act/validate/improve methods return placeholders.
+ * To activate: implement real logic in act() above this banner.
+ *
  * Architecture Agent — reviews system design, enforces patterns,
  * prevents drift, audits schema, reviews code architecture.
  */

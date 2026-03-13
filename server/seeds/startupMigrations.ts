@@ -226,6 +226,23 @@ export async function runStartupMigrations(): Promise<void> {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_notifications_tenant_user_read" ON "notifications" ("tenantId", "userId", "isRead")`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_audit_log_tenant_created" ON "audit_log" ("tenantId", "createdAt" DESC)`);
 
+  // Additional performance indexes for high-traffic query patterns
+  // calls table
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_timestamp" ON "calls" ("tenantId", "callTimestamp" DESC)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_contact" ON "calls" ("tenantId", "ghlContactId")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_calls_tenant_member" ON "calls" ("tenantId", "teamMemberId")`);
+  // dispo_properties table
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_dispo_tenant_status" ON "dispo_properties" ("tenantId", "status")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_dispo_tenant_created" ON "dispo_properties" ("tenantId", "createdAt" DESC)`);
+  // daily_kpi_entries table
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_kpi_tenant_date_type" ON "daily_kpi_entries" ("tenantId", "date", "kpiType")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_kpi_tenant_user_date" ON "daily_kpi_entries" ("tenantId", "userId", "date")`);
+  // contact_cache table
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_contact_tenant_date" ON "contact_cache" ("tenantId", "lastContactDate" DESC)`);
+  // team_members table
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_team_tenant_user" ON "team_members" ("tenantId", "userId")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_team_tenant_role_active" ON "team_members" ("tenantId", "teamRole", "isActive")`);
+
   // Unique index on call_grades to prevent duplicate grades per call
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "call_grades_callid_unique" ON "call_grades" ("callId")`);
 

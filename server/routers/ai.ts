@@ -80,19 +80,29 @@ export const aiRouter = router({
       const [convosResult] = await db.select({ count: count() }).from(calls)
         .where(and(eq(calls.tenantId, tenantId), gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, todayStartDt), gte(calls.duration, 60)));
 
-      // AM/PM call status for this user
-      const [amCall] = await db.select({ id: calls.id }).from(calls).where(and(
+      // AM/PM call status for this user (per-user, not tenant-wide)
+      const [userMember] = await db.select({ id: teamMembers.id }).from(teamMembers)
+        .where(and(eq(teamMembers.tenantId, tenantId), eq(teamMembers.userId, userId)))
+        .limit(1);
+      const userTmId = userMember?.id ?? null;
+
+      const amConds = [
         eq(calls.tenantId, tenantId),
         gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, todayStartDt),
         sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) < ${amEnd}`,
         gte(calls.duration, 30),
-      )).limit(1);
-      const [pmCall] = await db.select({ id: calls.id }).from(calls).where(and(
+      ];
+      if (userTmId != null) amConds.push(eq(calls.teamMemberId, userTmId));
+      const [amCall] = await db.select({ id: calls.id }).from(calls).where(and(...amConds)).limit(1);
+
+      const pmConds = [
         eq(calls.tenantId, tenantId),
         gte(sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt})`, amEnd),
         sql`COALESCE(${calls.callTimestamp}, ${calls.createdAt}) <= ${dayEnd}`,
         gte(calls.duration, 30),
-      )).limit(1);
+      ];
+      if (userTmId != null) pmConds.push(eq(calls.teamMemberId, userTmId));
+      const [pmCall] = await db.select({ id: calls.id }).from(calls).where(and(...pmConds)).limit(1);
 
       // Task count
       const [taskResult] = await db.select({ count: count() }).from(dailyKpiEntries).where(and(

@@ -1,4 +1,8 @@
 /**
+ * STUB AGENT — Infrastructure only, no real execution logic yet.
+ * The act/validate/improve methods return placeholders.
+ * To activate: implement real logic in act() above this banner.
+ *
  * UI/UX Agent — frontend bug fixes, accessibility improvements,
  * design system compliance, and performance optimization.
  */

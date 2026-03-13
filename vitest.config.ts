@@ -22,6 +22,17 @@ export default defineConfig({
       "server/**/*.test.ts",
       "server/**/*.spec.ts",
       "client/src/**/*.test.{ts,tsx}",
+      "tests/**/*.test.ts",
+      "tests/**/*.spec.ts",
     ],
+    env: {
+      DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+      JWT_SECRET: "test-jwt-secret",
+      OPENAI_API_KEY: "sk-test-placeholder",
+      SUPABASE_URL: "https://test.supabase.co",
+      SUPABASE_SERVICE_KEY: "test-supabase-key",
+      GOOGLE_CLIENT_ID: "test-google-client-id",
+      GOOGLE_CLIENT_SECRET: "test-google-client-secret",
+    },
   },
 });

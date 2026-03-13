@@ -1,4 +1,8 @@
 /**
+ * STUB AGENT — Infrastructure only, no real execution logic yet.
+ * The act/validate/improve methods return placeholders.
+ * To activate: implement real logic in act() above this banner.
+ *
  * Testing Agent — writes unit/integration/E2E tests, runs regression suites,
  * monitors coverage, and identifies untested code paths.
  */

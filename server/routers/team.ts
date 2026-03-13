@@ -100,6 +100,7 @@ export const teamRouter = router({
     }),
 
   export: protectedProcedure.query(async ({ ctx }) => {
+    requireRole(ctx, "admin");
     const tid = ctx.user.tenantId;
 
     const members = await db

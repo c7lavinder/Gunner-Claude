@@ -1,4 +1,8 @@
 /**
+ * STUB AGENT — Infrastructure only, no real execution logic yet.
+ * The act/validate/improve methods return placeholders.
+ * To activate: implement real logic in act() above this banner.
+ *
  * Code Repair Agent — detects, reproduces, and fixes bugs.
  * Follows TEST-FIRST debugging: write failing test → fix code → verify test passes.
  */

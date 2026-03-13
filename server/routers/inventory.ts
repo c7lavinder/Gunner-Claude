@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, desc, or, ilike, count } from "drizzle-orm"; // count used in getStageCounts
+import { eq, and, desc, or, ilike, count, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
@@ -9,6 +9,7 @@ import {
   propertyStageHistory,
 } from "../../drizzle/schema";
 import { inventorySort } from "../algorithms";
+import { getTenantPlaybook, getIndustryPlaybook, resolveStages } from "../services/playbooks";
 
 export const inventoryRouter = router({
   list: protectedProcedure
@@ -31,14 +32,24 @@ export const inventoryRouter = router({
         conditions.push(or(ilike(dispoProperties.address, term), ilike(dispoProperties.sellerName, term))!);
       }
 
+      // inventorySort requires all matching rows to compute urgency tiers,
+      // so we fetch up to 500 rows, sort in memory, then slice for pagination.
+      const MAX_SORTABLE = 500;
+
+      const [totalResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dispoProperties)
+        .where(and(...conditions));
+      const total = totalResult?.count ?? 0;
+
       const allItems = await db
         .select()
         .from(dispoProperties)
         .where(and(...conditions))
-        .orderBy(desc(dispoProperties.createdAt));
+        .orderBy(desc(dispoProperties.createdAt))
+        .limit(MAX_SORTABLE);
 
       const sortedAll = inventorySort(allItems);
-      const total = sortedAll.length;
       const items = sortedAll.slice(offset, offset + input.limit);
 
       return {
@@ -111,6 +122,16 @@ export const inventoryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const tenantId = ctx.user!.tenantId;
+
+      // Resolve default stage from playbook if not explicitly provided
+      let status = input.status;
+      if (status === "new_lead") {
+        const tenantPb = await getTenantPlaybook(tenantId);
+        const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+        const stages = resolveStages(industryPb, tenantPb);
+        if (stages.length > 0) status = stages[0]!.code;
+      }
+
       const [property] = await db
         .insert(dispoProperties)
         .values({
@@ -121,7 +142,7 @@ export const inventoryRouter = router({
           zip: input.zip,
           sellerName: input.sellerName ?? null,
           sellerPhone: input.sellerPhone ?? null,
-          status: input.status,
+          status,
           leadSource: input.leadSource ?? null,
           stageChangedAt: new Date(),
         })

@@ -1,4 +1,8 @@
 /**
+ * STUB AGENT — Infrastructure only, no real execution logic yet.
+ * The act/validate/improve methods return placeholders.
+ * To activate: implement real logic in act() above this banner.
+ *
  * DevOps Agent — manages CI/CD pipelines, deployment monitoring,
  * container management, and infrastructure health.
  */

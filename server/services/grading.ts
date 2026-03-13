@@ -6,7 +6,7 @@ import { sendGradeAlert } from "./notifications";
 import { processCallGamification } from "./gamification";
 import { extractVoiceSample } from "./voiceSamples";
 import { getTenantPlaybook, getIndustryPlaybook } from "./playbooks";
-import { generateNextStepsForCall } from "../routers/calls";
+import { generateNextStepsForCall } from "./nextSteps";
 import type { RubricDef } from "../../shared/types";
 
 // RE Wholesaling fallback — used only when playbook rubric lookup fails

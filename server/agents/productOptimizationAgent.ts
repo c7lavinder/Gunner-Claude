@@ -1,4 +1,8 @@
 /**
+ * STUB AGENT — Infrastructure only, no real execution logic yet.
+ * The act/validate/improve methods return placeholders.
+ * To activate: implement real logic in act() above this banner.
+ *
  * Product Optimization Agent — analyzes usage data, suggests features,
  * optimizes conversion funnels, designs A/B tests.
  */

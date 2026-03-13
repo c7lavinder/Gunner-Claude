@@ -1,4 +1,8 @@
 /**
+ * STUB AGENT — Infrastructure only, no real execution logic yet.
+ * The act/validate/improve methods return placeholders.
+ * To activate: implement real logic in act() above this banner.
+ *
  * Integration Agent (GoHighLevel) — monitors CRM sync health,
  * fixes webhook issues, manages OAuth token refresh, handles rate limits.
  */

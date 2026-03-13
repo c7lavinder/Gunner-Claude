@@ -6,6 +6,7 @@ import { db } from "../_core/db";
 import { tenants } from "../../drizzle/schema";
 import { createCrmAdapter } from "../crm";
 import { trackEvent } from "../services/eventTracking";
+import { refreshTokenIfNeeded } from "../services/ghlOAuth";
 
 const ACTION_TYPES: ActionType[] = [
   "sms",
@@ -69,6 +70,13 @@ export const actionsRouter = router({
     }
 
     const config = tenant.crmConfig ? (JSON.parse(tenant.crmConfig) as Record<string, string>) : {};
+
+    // Refresh OAuth token if expired before making CRM API calls
+    const freshToken = await refreshTokenIfNeeded(ctx.user.tenantId);
+    if (freshToken) {
+      config.accessToken = freshToken;
+    }
+
     const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
     const contactId = input.contactId;
     const payload = input.payload;
