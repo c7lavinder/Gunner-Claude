@@ -1,6 +1,6 @@
 # BUILD-STATUS.md — What's Done, What Remains
 
-> Last updated: March 12, 2026 — **THREE-LAYER CRM SYNC SYSTEM COMPLETE**
+> Last updated: March 12, 2026 — **23-POINT QUALITY GATE PASSED**
 > Last deploy: production branch — Railway live, site loading correctly
 > Type check: `npx tsc --noEmit` — 0 errors
 
@@ -9,6 +9,16 @@ Read `REBUILD-PLAN.md` for the full specification. This file tracks progress aga
 ---
 
 ## Completed Work
+
+### 23-Point Quality Gate — March 12, 2026
+
+- [x] **TypeScript clean** — `npx tsc --noEmit` returns 0 errors
+- [x] **Security (10/10 PASS)** — Session checks `revokedAt IS NULL` + `expiresAt > now`; no hardcoded admin emails; signup in `db.transaction()`; login orphan guard (`needsOnboarding`); RBAC `owner: 40`; `updateNextStep`/`updateClassification`/`completeTask` all tenant-scoped; AI stream rate-limited (20/min); AI `userInstructions` tenant-filtered
+- [x] **CRM Bridge (8/8 PASS)** — `saveCrm` merges only apiKey/locationId; webhook HMAC rejects when secret unset; real handlers for OpportunityStageUpdate/ContactUpdate/AppointmentScheduled; `check_off_task`/`remove_workflow` in ACTION_TYPES; `mockSuccess` only fires when no CRM configured; first-sync 30-day lookback; pagination MAX_PAGES=50 on opportunities+calls; reconciliation auto-imports missed calls
+- [x] **Grading & Gamification (5/5 PASS)** — JSON.parse in try/catch with `grade_failed` fallback; gradeCall WHERE includes tenantId; XP uses SQL atomic increment; streak in `db.transaction()`; closer badge resolves userId from teamMembers
+- [x] **`call_feedback` table** — Schema + startup migration for grade dispute tracking
+- [x] **`callNextSteps.editableContent`** — New column for user-edited next step content
+- [x] **Inner ErrorBoundary** — Page crashes inside DashboardLayout show error UI instead of white screen
 
 ### Three-Layer CRM Sync System — March 12, 2026
 

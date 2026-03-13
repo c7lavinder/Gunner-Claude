@@ -19,7 +19,7 @@ The backend resolver chain lives in `server/services/playbooks.ts`.
 
 ## Violation Tracker
 
-Last audited: March 12, 2026
+Last audited: March 12, 2026 — 23-point quality gate (security/CRM/grading) all PASS
 
 ### Severity 1 — Tenant-Breaking (breaks for any non-RE-Wholesaling tenant)
 
