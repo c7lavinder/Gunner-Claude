@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, desc, sql, ne, count, asc, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql, ne, count, asc, gte, lte, or, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/context";
 import { requireRole } from "../_core/sdk";
@@ -40,10 +40,10 @@ export const callsRouter = router({
       if (input.teamMemberId) conditions.push(eq(calls.teamMemberId, input.teamMemberId));
       if (input.classification) conditions.push(eq(calls.classification, input.classification));
 
-      // Grade range filters require a join condition
+      // Grade range filters — include ungraded calls (NULL score) so LEFT JOIN doesn't silently drop them
       const gradeConditions: ReturnType<typeof eq>[] = [];
-      if (input.gradeMin != null) gradeConditions.push(gte(callGrades.overallScore, String(input.gradeMin)));
-      if (input.gradeMax != null) gradeConditions.push(lte(callGrades.overallScore, String(input.gradeMax)));
+      if (input.gradeMin != null) gradeConditions.push(or(gte(callGrades.overallScore, String(input.gradeMin)), isNull(callGrades.callId))!);
+      if (input.gradeMax != null) gradeConditions.push(or(lte(callGrades.overallScore, String(input.gradeMax)), isNull(callGrades.callId))!);
 
       const allConditions = [...conditions, ...gradeConditions];
 

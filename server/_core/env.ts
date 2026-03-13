@@ -48,6 +48,8 @@ export const ENV = {
 
   redisUrl: optional("REDIS_URL"),
 
+  appUrl: optional("RAILWAY_STATIC_URL", "https://gunner-app-production.up.railway.app"),
+
   isProduction: process.env.NODE_ENV === "production",
   port: parseInt(optional("PORT", "3000"), 10),
 };

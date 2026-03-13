@@ -3,7 +3,9 @@ import { sendEmail } from "../_core/email";
 import { calls, callGrades, teamMembers, users, tenants } from "../../drizzle/schema";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 
-const APP_URL = process.env.RAILWAY_STATIC_URL || "https://gunner-app-production.up.railway.app";
+import { ENV } from "../_core/env";
+
+const APP_URL = ENV.appUrl;
 
 export async function sendDailyDigest(tenantId: number): Promise<number> {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));

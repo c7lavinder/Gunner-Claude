@@ -15,6 +15,7 @@ import { notificationsRouter } from "./notifications";
 import { usersRouter } from "./users";
 import { searchRouter } from "./search";
 import { auditLogRouter } from "./auditLog";
+import { controlRoomRouter } from "../controlRoom/router";
 
 export const appRouter = router({
   calls: callsRouter,
@@ -33,6 +34,7 @@ export const appRouter = router({
   users: usersRouter,
   search: searchRouter,
   auditLog: auditLogRouter,
+  controlRoom: controlRoomRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,0 +1,25 @@
+language: en
+tone_instructions: "Be assertive. Flag security issues, hardcoded values that violate playbook compliance, and missing tenantId filters. Reference CLAUDE.md and .cursor/rules/playbook-compliance.mdc for project conventions."
+early_access: true
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - production
+  path_instructions:
+    - path: "server/_core/**"
+      instructions: "Security-critical. Check for: missing auth guards, tenantId filters, rate limiting, env var usage."
+    - path: "server/middleware/**"
+      instructions: "Webhook and auth middleware. Verify HMAC signatures, tenant isolation, error handling."
+    - path: "server/services/grading.ts"
+      instructions: "AI grading pipeline. Ensure rubric comes from playbook (not hardcoded), JSON.parse has try/catch, tenantId in all queries."
+    - path: "server/routers/ai.ts"
+      instructions: "AI coach. Verify industry context, user playbook context, and tenantId isolation on all queries."
+    - path: "server/services/playbooks.ts"
+      instructions: "Playbook resolution. Verify 4-layer precedence (User > Tenant > Industry > Software). No hardcoded stage codes, role names, or call types."
+    - path: "server/seeds/**"
+      instructions: "Industry seed data. Verify completeness: terminology, roles, stages, callTypes, rubrics, gradingPhilosophy, personas."
+    - path: "shared/types.ts"
+      instructions: "Shared types. Ensure interfaces match DB schema columns and seed data shapes."
+chat:
+  auto_reply: true

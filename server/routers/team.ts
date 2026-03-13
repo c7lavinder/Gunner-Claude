@@ -81,22 +81,24 @@ export const teamRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       requireRole(ctx, "manager");
-      const [member] = await db
-        .insert(teamMembers)
-        .values({
+      return db.transaction(async (tx) => {
+        const [member] = await tx
+          .insert(teamMembers)
+          .values({
+            tenantId: ctx.user.tenantId,
+            name: input.name,
+            teamRole: input.teamRole,
+          })
+          .returning();
+        if (!member) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        await tx.insert(pendingInvitations).values({
           tenantId: ctx.user.tenantId,
-          name: input.name,
+          email: input.email,
           teamRole: input.teamRole,
-        })
-        .returning();
-      if (!member) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(pendingInvitations).values({
-        tenantId: ctx.user.tenantId,
-        email: input.email,
-        teamRole: input.teamRole,
-        invitedBy: ctx.user.userId,
+          invitedBy: ctx.user.userId,
+        });
+        return member;
       });
-      return member;
     }),
 
   export: protectedProcedure.query(async ({ ctx }) => {

@@ -18,6 +18,7 @@ import { desc, sql } from "drizzle-orm";
 import { createCrmAdapter } from "../crm";
 import { createCheckoutSession, createPortalSession, getPlans } from "../services/stripe";
 import { getGhlOAuthUrl, exchangeGhlCode, saveGhlTokens, registerGhlWebhooks, getGhlSyncHealth, refreshTokenIfNeeded } from "../services/ghlOAuth";
+import { ENV } from "../_core/env";
 
 const updateWorkspaceInput = z.object({
   name: z.string().optional(),
@@ -273,7 +274,7 @@ export const settingsRouter = router({
         tokens.expires_in
       );
       // Register webhooks after OAuth
-      const appUrl = process.env.RAILWAY_STATIC_URL || "https://gunner-app-production.up.railway.app";
+      const appUrl = ENV.appUrl;
       const webhookUrl = `${appUrl}/api/webhooks/ghl`;
       await registerGhlWebhooks(tokens.locationId, tokens.access_token, webhookUrl);
       return { success: true, locationId: tokens.locationId };

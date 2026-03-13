@@ -172,8 +172,7 @@ async function startup() {
     console.log("[startup] Migrations and seeds complete");
   } catch (err) {
     console.error("[startup] Migration/seed error:", err);
-    // Continue anyway — drizzle-kit push in the start script handles core tables,
-    // startup migrations are supplementary (IF NOT EXISTS)
+    throw err;
   }
 
   // 2. Initialize queue system (Redis + BullMQ or in-memory fallback)

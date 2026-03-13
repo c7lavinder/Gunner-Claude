@@ -19,7 +19,9 @@ import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { createCrmAdapter } from "../crm";
 import { ingestCallsForTenant } from "./callIngestion";
 
-const APP_URL = process.env.RAILWAY_STATIC_URL || "https://gunner-app-production.up.railway.app";
+import { ENV } from "../_core/env";
+
+const APP_URL = ENV.appUrl;
 
 // ─── Weekly Digest ───────────────────────────────────────
 
