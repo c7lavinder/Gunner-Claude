@@ -235,8 +235,8 @@ export async function runStartupMigrations(): Promise<void> {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_dispo_tenant_status" ON "dispo_properties" ("tenantId", "status")`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_dispo_tenant_created" ON "dispo_properties" ("tenantId", "createdAt" DESC)`);
   // daily_kpi_entries table
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_kpi_tenant_date_type" ON "daily_kpi_entries" ("tenantId", "date", "kpiType")`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_kpi_tenant_user_date" ON "daily_kpi_entries" ("tenantId", "userId", "date")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_kpi_tenant_date_type" ON "daily_kpi_entries" ("tenantId", "entryDate", "kpiType")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_kpi_tenant_user_date" ON "daily_kpi_entries" ("tenantId", "userId", "entryDate")`);
   // contact_cache table
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_contact_tenant_date" ON "contact_cache" ("tenantId", "lastContactDate" DESC)`);
   // team_members table
@@ -405,7 +405,7 @@ async function bootstrapDemoTenant(): Promise<void> {
   try {
     // Tenant
     await db.execute(sql`
-      INSERT INTO "tenants" ("id", "name", "crmType", "crmConnected", "crmConfig", "industryCode", "onboardingComplete", "createdAt", "updatedAt")
+      INSERT INTO "tenants" ("id", "name", "crmType", "crmConnected", "crmConfig", "industryCode", "onboardingCompleted", "createdAt", "updatedAt")
       VALUES (${DEMO_TENANT_ID}, 'Apex Property Solutions', 'demo', 'true', '{}', 're_wholesaling', 'true', now(), now())
       ON CONFLICT ("id") DO UPDATE SET "crmType" = 'demo', "crmConnected" = 'true'
     `);

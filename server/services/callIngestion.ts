@@ -251,7 +251,7 @@ export async function ingestOpportunitiesForTenant(tenantId: number): Promise<{ 
           status,
           contractPrice: opp.value ? opp.value * 100 : null,
           stageChangedAt: new Date(),
-        });
+        }).onConflictDoNothing();
       }
       upserted++;
     } catch (e) {
