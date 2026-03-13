@@ -114,6 +114,31 @@ export const settingsRouter = router({
       return updated;
     }),
 
+  saveCrm: protectedProcedure
+    .input(z.object({ apiKey: z.string().optional(), locationId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
+      const tenantId = ctx.user.tenantId;
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      if (!tenant) throw new TRPCError({ code: "NOT_FOUND", message: "Tenant not found" });
+
+      const existing = tenant.crmConfig ? JSON.parse(tenant.crmConfig) as Record<string, unknown> : {};
+
+      // Merge: only update apiKey/locationId, never overwrite OAuth fields
+      if (input.apiKey !== undefined) existing.apiKey = input.apiKey;
+      if (input.locationId !== undefined) existing.locationId = input.locationId;
+
+      const [updated] = await db.update(tenants).set({
+        crmConfig: JSON.stringify(existing),
+        crmType: "ghl",
+        crmConnected: "true",
+        updatedAt: new Date(),
+      }).where(eq(tenants.id, tenantId)).returning();
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND" });
+      logAction({ tenantId, userId: ctx.user.userId, action: "crm_config_saved", entityType: "tenant", entityId: tenantId });
+      return updated;
+    }),
+
   testCrmConnection: protectedProcedure.query(async ({ ctx }) => {
     const tenantId = ctx.user.tenantId;
     // Refresh OAuth token if needed before testing

@@ -16,6 +16,8 @@ const ACTION_TYPES: ActionType[] = [
   "workflow",
   "tag",
   "field_update",
+  "check_off_task",
+  "remove_workflow",
 ];
 
 const actionInput = z.object({
@@ -72,55 +74,57 @@ export const actionsRouter = router({
     const payload = input.payload;
     const fromUserId = String(ctx.user.userId);
 
-    try {
-      switch (input.type) {
-        case "sms":
-          result = await adapter.sendSms(contactId, String(payload.message ?? ""), fromUserId);
-          break;
-        case "note":
-          result = await adapter.addNote(contactId, String(payload.body ?? ""));
-          break;
-        case "task":
-          result = await adapter.createTask({
-            title: String(payload.title ?? ""),
-            description: payload.description ? String(payload.description) : undefined,
-            contactId,
-            assignedTo: payload.assignedTo ? String(payload.assignedTo) : undefined,
-            dueDate: payload.dueDate ? String(payload.dueDate) : undefined,
-          });
-          break;
-        case "appointment":
-          result = await adapter.createAppointment({
-            contactId,
-            title: String(payload.title ?? ""),
-            startTime: String(payload.startTime ?? ""),
-            assignedTo: payload.assignedTo ? String(payload.assignedTo) : undefined,
-          });
-          break;
-        case "stage_change":
-          result = await adapter.updateOpportunityStage(
-            String(payload.opportunityId ?? ""),
-            String(payload.stageId ?? "")
-          );
-          break;
-        case "tag":
-          result = await adapter.addTag(contactId, String(payload.tag ?? ""));
-          break;
-        case "field_update":
-          result = await adapter.updateContactField(
-            contactId,
-            String(payload.field ?? ""),
-            payload.value
-          );
-          break;
-        case "workflow":
-          result = await adapter.addToWorkflow(contactId, String(payload.workflowId ?? ""));
-          break;
-        default:
-          result = mockSuccess();
-      }
-    } catch {
-      result = mockSuccess();
+    switch (input.type) {
+      case "sms":
+        result = await adapter.sendSms(contactId, String(payload.message ?? ""), fromUserId);
+        break;
+      case "note":
+        result = await adapter.addNote(contactId, String(payload.body ?? ""));
+        break;
+      case "task":
+        result = await adapter.createTask({
+          title: String(payload.title ?? ""),
+          description: payload.description ? String(payload.description) : undefined,
+          contactId,
+          assignedTo: payload.assignedTo ? String(payload.assignedTo) : undefined,
+          dueDate: payload.dueDate ? String(payload.dueDate) : undefined,
+        });
+        break;
+      case "appointment":
+        result = await adapter.createAppointment({
+          contactId,
+          title: String(payload.title ?? ""),
+          startTime: String(payload.startTime ?? ""),
+          assignedTo: payload.assignedTo ? String(payload.assignedTo) : undefined,
+        });
+        break;
+      case "stage_change":
+        result = await adapter.updateOpportunityStage(
+          String(payload.opportunityId ?? ""),
+          String(payload.stageId ?? "")
+        );
+        break;
+      case "tag":
+        result = await adapter.addTag(contactId, String(payload.tag ?? ""));
+        break;
+      case "field_update":
+        result = await adapter.updateContactField(
+          contactId,
+          String(payload.field ?? ""),
+          payload.value
+        );
+        break;
+      case "workflow":
+        result = await adapter.addToWorkflow(contactId, String(payload.workflowId ?? ""));
+        break;
+      case "check_off_task":
+        result = await adapter.completeTask(String(payload.taskId ?? ""));
+        break;
+      case "remove_workflow":
+        result = await adapter.removeFromWorkflow(contactId, String(payload.workflowId ?? ""));
+        break;
+      default:
+        result = { success: false, message: `Unhandled action type: ${input.type}`, timestamp: new Date().toISOString() };
     }
 
     try {

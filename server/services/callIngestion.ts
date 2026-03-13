@@ -42,7 +42,7 @@ export async function ingestCallsForTenant(tenantId: number) {
     }
   }
 
-  const since = tenant!.lastGhlSync ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const since = tenant!.lastGhlSync ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const config = isDemo ? {} : normalizeCrmConfig(JSON.parse(tenant!.crmConfig!) as Record<string, unknown>);
   const adapter = createCrmAdapter(tenant!.crmType ?? "ghl", config);
 

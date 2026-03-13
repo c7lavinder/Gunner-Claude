@@ -115,27 +115,39 @@ export class GhlAdapter implements CrmAdapter {
   }
 
   async getOpportunities(pipelineId?: string): Promise<CrmOpportunity[]> {
+    const MAX_PAGES = 50;
+    const allOpps: CrmOpportunity[] = [];
     try {
       const params = new URLSearchParams({ location_id: this.locationId });
       if (pipelineId) params.set("pipeline_id", pipelineId);
-      const data = (await ghlFetch(`/opportunities/search?${params}`, {
-        token: this.token,
-      })) as { opportunities?: Array<Record<string, unknown>> };
-      return (data.opportunities ?? []).map((o) => ({
-        id: String(o.id ?? ""),
-        contactId: String(o.contactId ?? o.contact_id ?? ""),
-        name: String(o.name ?? ""),
-        pipelineId: String(o.pipelineId ?? o.pipeline_id ?? ""),
-        stageId: String(o.pipelineStageId ?? o.stageId ?? o.stage_id ?? ""),
-        value: o.monetaryValue != null ? Number(o.monetaryValue) : undefined,
-        customFields:
-          typeof o.customFields === "object"
-            ? (o.customFields as Record<string, unknown>)
-            : undefined,
-      }));
+      let url: string | null = `/opportunities/search?${params}`;
+
+      for (let page = 0; page < MAX_PAGES && url; page++) {
+        const data = (await ghlFetch(url, { token: this.token })) as {
+          opportunities?: Array<Record<string, unknown>>;
+          meta?: { nextPageUrl?: string; nextPage?: string };
+          nextPageUrl?: string;
+        };
+        for (const o of data.opportunities ?? []) {
+          allOpps.push({
+            id: String(o.id ?? ""),
+            contactId: String(o.contactId ?? o.contact_id ?? ""),
+            name: String(o.name ?? ""),
+            pipelineId: String(o.pipelineId ?? o.pipeline_id ?? ""),
+            stageId: String(o.pipelineStageId ?? o.stageId ?? o.stage_id ?? ""),
+            value: o.monetaryValue != null ? Number(o.monetaryValue) : undefined,
+            customFields:
+              typeof o.customFields === "object"
+                ? (o.customFields as Record<string, unknown>)
+                : undefined,
+          });
+        }
+        url = data.meta?.nextPageUrl ?? data.meta?.nextPage ?? data.nextPageUrl ?? null;
+      }
     } catch {
-      return [];
+      // Return whatever we accumulated so far
     }
+    return allOpps;
   }
 
   async getTasks(assignedTo?: string): Promise<CrmTask[]> {
@@ -243,36 +255,43 @@ export class GhlAdapter implements CrmAdapter {
   }
 
   async getCallRecordings(since: Date): Promise<CrmCallRecording[]> {
+    const MAX_PAGES = 50;
     const sinceStr = since.toISOString();
     const params = new URLSearchParams({
       locationId: this.locationId,
       type: "Call",
       dateFrom: sinceStr,
     });
-    const data = (await ghlFetch(
-      `/conversations/search?${params}`,
-      { token: this.token }
-    )) as { conversations?: Array<Record<string, unknown>> };
-    const conversations = data.conversations ?? [];
     const recordings: CrmCallRecording[] = [];
-    for (const conv of conversations) {
-      const contactId = String(conv.contactId ?? conv.contact_id ?? "");
-      const messages = (conv.messages ?? []) as Array<Record<string, unknown>>;
-      for (const msg of messages) {
-        const recUrl = msg.recordingUrl ?? msg.recording_url;
-        if (!recUrl) continue;
-        const ts = String(msg.createdAt ?? msg.created_at ?? msg.timestamp ?? "");
-        if (ts && new Date(ts) < since) continue;
-        recordings.push({
-          id: String(msg.id ?? msg.messageId ?? ""),
-          contactId,
-          recordingUrl: String(recUrl),
-          duration: Number(msg.duration ?? 0),
-          direction: (msg.direction === "inbound" ? "inbound" : "outbound") as "inbound" | "outbound",
-          timestamp: ts,
-          assignedTo: msg.assignedTo ? String(msg.assignedTo) : undefined,
-        });
+    let url: string | null = `/conversations/search?${params}`;
+
+    for (let page = 0; page < MAX_PAGES && url; page++) {
+      const data = (await ghlFetch(url, { token: this.token })) as {
+        conversations?: Array<Record<string, unknown>>;
+        meta?: { nextPageUrl?: string; nextPage?: string };
+        nextPageUrl?: string;
+      };
+      const conversations = data.conversations ?? [];
+      for (const conv of conversations) {
+        const contactId = String(conv.contactId ?? conv.contact_id ?? "");
+        const messages = (conv.messages ?? []) as Array<Record<string, unknown>>;
+        for (const msg of messages) {
+          const recUrl = msg.recordingUrl ?? msg.recording_url;
+          if (!recUrl) continue;
+          const ts = String(msg.createdAt ?? msg.created_at ?? msg.timestamp ?? "");
+          if (ts && new Date(ts) < since) continue;
+          recordings.push({
+            id: String(msg.id ?? msg.messageId ?? ""),
+            contactId,
+            recordingUrl: String(recUrl),
+            duration: Number(msg.duration ?? 0),
+            direction: (msg.direction === "inbound" ? "inbound" : "outbound") as "inbound" | "outbound",
+            timestamp: ts,
+            assignedTo: msg.assignedTo ? String(msg.assignedTo) : undefined,
+          });
+        }
       }
+      url = data.meta?.nextPageUrl ?? data.meta?.nextPage ?? data.nextPageUrl ?? null;
     }
     return recordings;
   }

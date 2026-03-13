@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createHmac } from "node:crypto";
 import { db } from "../_core/db";
-import { webhookEvents, webhookRetryQueue, calls, tenants, syncActivityLog } from "../../drizzle/schema";
+import { webhookEvents, webhookRetryQueue, calls, tenants, syncActivityLog, dispoProperties, contactCache, dispoPropertyShowings, tenantPlaybooks } from "../../drizzle/schema";
 import { eq, and, lte, lt } from "drizzle-orm";
 import { ENV } from "../_core/env";
 import { gradeCall } from "../services/grading";
@@ -98,6 +98,122 @@ async function processCallEvent(
   await db.update(webhookEvents).set({ tenantId: tenant.id, status: "processed", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
 }
 
+function mapGhlStageToStatus(stageId: string, stageMappings?: Record<string, string>): string {
+  if (stageMappings?.[stageId]) return stageMappings[stageId]!;
+  const lower = stageId.toLowerCase();
+  if (lower.includes("new") || lower.includes("lead")) return "new_lead"; // eslint-disable-line no-restricted-syntax -- CRM stage matching
+  if (lower.includes("contact") || lower.includes("reached")) return "contacted";
+  if (lower.includes("appt") || lower.includes("appointment") || lower.includes("sched")) return "apt_set";
+  if (lower.includes("offer") || lower.includes("negotiat")) return "offer_made";
+  if (lower.includes("contract") || lower.includes("accept")) return "under_contract";
+  if (lower.includes("close") || lower.includes("won") || lower.includes("sold")) return "closed";
+  if (lower.includes("dead") || lower.includes("lost") || lower.includes("disqualified")) return "dead";
+  return "new_lead";
+}
+
+async function processOpportunityStageUpdate(
+  body: Record<string, unknown>,
+  locationId: string,
+  webhookEventId: number
+): Promise<void> {
+  const tenant = await findTenantByLocationId(locationId);
+  if (!tenant) {
+    await db.update(webhookEvents).set({ status: "failed", errorMessage: "Tenant not found", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+    return;
+  }
+  const oppId = String(body.opportunityId ?? body.opportunity_id ?? (body.opportunity as Record<string, unknown> | undefined)?.id ?? "").trim();
+  const stageId = String(body.stageId ?? body.stage_id ?? body.pipelineStageId ?? (body.opportunity as Record<string, unknown> | undefined)?.pipelineStageId ?? "").trim();
+  if (!oppId) {
+    await db.update(webhookEvents).set({ tenantId: tenant.id, status: "failed", errorMessage: "Missing opportunityId", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+    return;
+  }
+
+  const [existing] = await db.select().from(dispoProperties).where(and(eq(dispoProperties.tenantId, tenant.id), eq(dispoProperties.ghlOpportunityId, oppId))).limit(1);
+  if (existing && stageId) {
+    const [playbook] = await db.select().from(tenantPlaybooks).where(eq(tenantPlaybooks.tenantId, tenant.id)).limit(1);
+    const stageMappings = (playbook?.algorithmOverrides as Record<string, unknown> | null)?.stageMappings as Record<string, string> | undefined;
+    const status = mapGhlStageToStatus(stageId, stageMappings);
+    await db.update(dispoProperties).set({ status, ghlPipelineStageId: stageId, stageChangedAt: new Date(), updatedAt: new Date() }).where(eq(dispoProperties.id, existing.id));
+  }
+
+  await db.update(webhookEvents).set({ tenantId: tenant.id, status: "processed", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+  await db.insert(syncActivityLog).values({ tenantId: tenant.id, layer: "webhook", eventType: "OpportunityStageUpdate", status: "success", details: JSON.stringify({ oppId, stageId }) });
+}
+
+async function processContactUpdate(
+  body: Record<string, unknown>,
+  locationId: string,
+  webhookEventId: number
+): Promise<void> {
+  const tenant = await findTenantByLocationId(locationId);
+  if (!tenant) {
+    await db.update(webhookEvents).set({ status: "failed", errorMessage: "Tenant not found", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+    return;
+  }
+  const contact = (body.contact ?? body) as Record<string, unknown>;
+  const ghlContactId = String(contact.id ?? contact.contactId ?? contact.contact_id ?? "").trim();
+  if (!ghlContactId) {
+    await db.update(webhookEvents).set({ tenantId: tenant.id, status: "failed", errorMessage: "Missing contactId", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+    return;
+  }
+  const name = String(contact.name ?? ((contact.firstName ?? "") + " " + (contact.lastName ?? "")).toString().trim()).trim() || null;
+  const email = contact.email ? String(contact.email) : null;
+  const phone = contact.phone ? String(contact.phone) : null;
+
+  const [existing] = await db.select({ id: contactCache.id }).from(contactCache).where(and(eq(contactCache.tenantId, tenant.id), eq(contactCache.ghlContactId, ghlContactId))).limit(1);
+  if (existing) {
+    await db.update(contactCache).set({ name, email, phone, ghlLocationId: locationId, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(contactCache.id, existing.id));
+  } else {
+    await db.insert(contactCache).values({ tenantId: tenant.id, ghlContactId, ghlLocationId: locationId, name, email, phone, lastSyncedAt: new Date() });
+  }
+
+  await db.update(webhookEvents).set({ tenantId: tenant.id, status: "processed", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+  await db.insert(syncActivityLog).values({ tenantId: tenant.id, layer: "webhook", eventType: "ContactUpdate", status: "success", details: JSON.stringify({ ghlContactId }) });
+}
+
+async function processAppointmentScheduled(
+  body: Record<string, unknown>,
+  locationId: string,
+  webhookEventId: number
+): Promise<void> {
+  const tenant = await findTenantByLocationId(locationId);
+  if (!tenant) {
+    await db.update(webhookEvents).set({ status: "failed", errorMessage: "Tenant not found", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+    return;
+  }
+  const appt = (body.appointment ?? body) as Record<string, unknown>;
+  const propertyId = appt.propertyId ? Number(appt.propertyId) : null;
+  const ghlContactId = String(appt.contactId ?? appt.contact_id ?? "").trim();
+  const buyerName = String(appt.title ?? appt.name ?? appt.buyerName ?? "Unknown").trim();
+  const startTime = appt.startTime ?? appt.start_time ?? appt.scheduledAt;
+
+  // Try to find associated property by contact
+  let resolvedPropertyId = propertyId;
+  if (!resolvedPropertyId && ghlContactId) {
+    const [prop] = await db.select({ id: dispoProperties.id }).from(dispoProperties).where(and(eq(dispoProperties.tenantId, tenant.id), eq(dispoProperties.ghlContactId, ghlContactId))).limit(1);
+    if (prop) resolvedPropertyId = prop.id;
+  }
+
+  if (resolvedPropertyId) {
+    const dateObj = startTime ? new Date(String(startTime)) : new Date();
+    const showingDate = dateObj.toISOString().split("T")[0]!;
+    const showingTime = dateObj.toISOString().split("T")[1]?.slice(0, 5) ?? null;
+    await db.insert(dispoPropertyShowings).values({
+      tenantId: tenant.id,
+      propertyId: resolvedPropertyId,
+      buyerName,
+      buyerPhone: appt.phone ? String(appt.phone) : null,
+      ghlContactId: ghlContactId || null,
+      showingDate,
+      showingTime,
+      status: "scheduled",
+    });
+  }
+
+  await db.update(webhookEvents).set({ tenantId: tenant.id, status: "processed", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+  await db.insert(syncActivityLog).values({ tenantId: tenant.id, layer: "webhook", eventType: "AppointmentScheduled", status: "success", details: JSON.stringify({ ghlContactId, buyerName }) });
+}
+
 async function enqueueRetry(webhookEventId: number, tenantId: number, payload: Record<string, unknown>, attempt: number): Promise<void> {
   if (attempt >= MAX_RETRY_ATTEMPTS) return;
   const nextRetryAt = new Date(Date.now() + RETRY_BACKOFF_MS[attempt]!);
@@ -163,7 +279,10 @@ export const webhookRouter = Router();
  * If GHL_WEBHOOK_SECRET is not configured, verification is skipped (dev/test mode).
  */
 function verifyGhlSignature(rawBody: Buffer, signature: string | undefined): boolean {
-  if (!ENV.ghlWebhookSecret) return true; // Skip verification if no secret configured
+  if (!ENV.ghlWebhookSecret) {
+    console.warn("[webhook] GHL_WEBHOOK_SECRET not configured — rejecting unsigned webhook");
+    return false;
+  }
   if (!signature) return false;
   const expected = createHmac("sha256", ENV.ghlWebhookSecret)
     .update(rawBody)
@@ -209,19 +328,17 @@ webhookRouter.post("/:provider", async (req, res) => {
     try {
       if (provider === "ghl" && (eventType === "CallCompleted" || eventType === "call.completed")) {
         await processCallEvent(body, locationId, ev!.id);
+      } else if (provider === "ghl" && (eventType === "OpportunityStageUpdate" || eventType === "opportunity.stage_update")) {
+        await processOpportunityStageUpdate(body, locationId, ev!.id);
+      } else if (provider === "ghl" && (eventType === "ContactUpdate" || eventType === "contact.update")) {
+        await processContactUpdate(body, locationId, ev!.id);
+      } else if (provider === "ghl" && (eventType === "AppointmentScheduled" || eventType === "appointment.scheduled")) {
+        await processAppointmentScheduled(body, locationId, ev!.id);
       } else {
         await db.update(webhookEvents).set({ status: "processed", processedAt: new Date() }).where(eq(webhookEvents.id, ev!.id));
       }
-      // Log successful webhook processing
+      // Log successful webhook processing and update lastWebhookAt
       if (tenant) {
-        await db.insert(syncActivityLog).values({
-          tenantId: tenant.id,
-          layer: "oauth",
-          eventType,
-          status: "success",
-          details: JSON.stringify({ provider, eventId, locationId }),
-        });
-        // Update lastWebhookAt on tenant
         await db.update(tenants).set({ lastWebhookAt: new Date() }).where(eq(tenants.id, tenant.id));
       }
     } catch (err) {

@@ -13,9 +13,11 @@ import {
   userPlaybooks,
   userEvents,
   aiSuggestions,
+  syncActivityLog,
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { createCrmAdapter } from "../crm";
+import { ingestCallsForTenant } from "./callIngestion";
 
 const APP_URL = process.env.RAILWAY_STATIC_URL || "https://gunner-app-production.up.railway.app";
 
@@ -153,9 +155,42 @@ export async function reconcileTenant(tenantId: number): Promise<{ callsMissing:
     console.error(`[reconcile] Tenant ${tenantId} opp check failed:`, e);
   }
 
-  if (callsMissing > 0 || opportunitiesUpdated > 0) {
-    console.log(`[reconcile] Tenant ${tenantId}: ${callsMissing} calls missing, ${opportunitiesUpdated} opps updated`);
+  // Re-ingest missing calls instead of just counting them
+  if (callsMissing > 0) {
+    console.log(`[reconcile] Tenant ${tenantId}: ${callsMissing} calls missing — re-ingesting`);
+    try {
+      const result = await ingestCallsForTenant(tenantId);
+      console.log(`[reconcile] Tenant ${tenantId}: re-ingested ${result.processed} calls`);
+      await db.insert(syncActivityLog).values({
+        tenantId,
+        layer: "reconciliation",
+        eventType: "call_recovery",
+        status: result.errors > 0 ? "error" : "success",
+        details: JSON.stringify({ callsMissing, recovered: result.processed, errors: result.errors }),
+      });
+    } catch (e) {
+      console.error(`[reconcile] Tenant ${tenantId} re-ingest failed:`, e);
+      await db.insert(syncActivityLog).values({
+        tenantId,
+        layer: "reconciliation",
+        eventType: "call_recovery",
+        status: "error",
+        details: JSON.stringify({ callsMissing, error: e instanceof Error ? e.message : String(e) }),
+      });
+    }
   }
+
+  if (opportunitiesUpdated > 0) {
+    console.log(`[reconcile] Tenant ${tenantId}: ${opportunitiesUpdated} opps updated`);
+    await db.insert(syncActivityLog).values({
+      tenantId,
+      layer: "reconciliation",
+      eventType: "opportunity_sync",
+      status: "success",
+      details: JSON.stringify({ opportunitiesUpdated }),
+    });
+  }
+
   return { callsMissing, opportunitiesUpdated };
 }
 
