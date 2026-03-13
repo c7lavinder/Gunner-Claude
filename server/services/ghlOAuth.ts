@@ -87,17 +87,21 @@ export async function saveGhlTokens(
   refreshToken: string,
   expiresIn: number
 ): Promise<void> {
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  const existing = tenant?.crmConfig ? JSON.parse(tenant.crmConfig) as Record<string, unknown> : {};
+
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
-  const crmConfig = JSON.stringify({
+  const merged = {
+    ...existing,
     locationId,
     accessToken,
     refreshToken,
     tokenExpiresAt: expiresAt,
     oauthConnected: true,
-  });
+  };
   await db.update(tenants).set({
     crmType: "ghl",
-    crmConfig,
+    crmConfig: JSON.stringify(merged),
     crmConnected: "true",
     updatedAt: new Date(),
   }).where(eq(tenants.id, tenantId));
