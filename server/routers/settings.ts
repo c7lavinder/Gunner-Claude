@@ -440,24 +440,40 @@ export const settingsRouter = router({
       const lookbackDate = new Date(Date.now() - input.lookbackDays * 24 * 60 * 60 * 1000);
       await db.update(tenants).set({ lastGhlSync: lookbackDate }).where(eq(tenants.id, tenantId));
 
-      const callResult = await ingestCallsForTenant(tenantId);
-      const oppResult = await ingestOpportunitiesForTenant(tenantId);
+      // Fire-and-forget: return immediately, run sync in background to avoid HTTP timeout
+      void (async () => {
+        try {
+          console.log(`[manual-sync] Tenant ${tenantId}: starting ${input.lookbackDays}-day backfill`);
+          const callResult = await ingestCallsForTenant(tenantId);
+          const oppResult = await ingestOpportunitiesForTenant(tenantId);
+          console.log(`[manual-sync] Tenant ${tenantId}: calls=${JSON.stringify(callResult)}, opps=${JSON.stringify(oppResult)}`);
 
-      await db.insert(syncActivityLog).values({
-        tenantId,
-        layer: "api",
-        eventType: "manual_backfill",
-        status: (callResult.errors > 0 || oppResult.errors > 0) ? "error" : "success",
-        details: JSON.stringify({
-          lookbackDays: input.lookbackDays,
-          calls: callResult,
-          opportunities: oppResult,
-        }),
-      });
+          await db.insert(syncActivityLog).values({
+            tenantId,
+            layer: "api",
+            eventType: "manual_backfill",
+            status: (callResult.errors > 0 || oppResult.errors > 0) ? "error" : "success",
+            details: JSON.stringify({
+              lookbackDays: input.lookbackDays,
+              calls: callResult,
+              opportunities: oppResult,
+            }),
+          });
+        } catch (e) {
+          console.error(`[manual-sync] Tenant ${tenantId} failed:`, e);
+          await db.insert(syncActivityLog).values({
+            tenantId,
+            layer: "api",
+            eventType: "manual_backfill",
+            status: "error",
+            details: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
+          }).catch(() => {});
+        }
+      })();
 
       logAction({ tenantId, userId: ctx.user.userId, action: "manual_sync_triggered", entityType: "tenant", entityId: tenantId, after: { lookbackDays: input.lookbackDays } });
 
-      return { calls: callResult, opportunities: oppResult };
+      return { calls: { processed: 0, skipped: 0, errors: 0 }, opportunities: { upserted: 0, skipped: 0, errors: 0 }, backgrounded: true };
     }),
 
   getGhlCalendars: protectedProcedure.query(async ({ ctx }) => {

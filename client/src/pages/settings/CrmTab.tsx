@@ -181,13 +181,13 @@ export function CrmTab({
   const completeOAuth = trpc.settings.completeGhlOAuth.useMutation();
   const disconnectOAuth = trpc.settings.disconnectOAuth.useMutation();
   const triggerSync = trpc.settings.triggerSync.useMutation({
-    onSuccess: (data) => {
-      const callCount = data.calls.processed;
-      const oppCount = data.opportunities.upserted;
-      toast.success(`Synced ${callCount} call${callCount !== 1 ? "s" : ""}, ${oppCount} opportunit${oppCount !== 1 ? "ies" : "y"}`);
-      void utils.settings.getSyncSummary.invalidate();
-      void utils.settings.getSyncLayerStatus.invalidate();
-      void utils.settings.getSyncActivityLog.invalidate();
+    onSuccess: () => {
+      toast.success("Sync started — calls and opportunities are importing in the background. Refresh in a few minutes to see results.");
+      setTimeout(() => {
+        void utils.settings.getSyncSummary.invalidate();
+        void utils.settings.getSyncLayerStatus.invalidate();
+        void utils.settings.getSyncActivityLog.invalidate();
+      }, 10000);
     },
     onError: (err) => {
       toast.error(err.message || "Sync failed");
