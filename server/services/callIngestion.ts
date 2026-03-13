@@ -4,7 +4,7 @@ import { uploadFile } from "../_core/storage";
 import { createCrmAdapter } from "../crm";
 import { gradeCall } from "./grading";
 import { SOFTWARE_PLAYBOOK } from "./playbooks";
-import { calls, callGrades, tenants, dispoProperties, tenantPlaybooks, syncActivityLog } from "../../drizzle/schema";
+import { calls, callGrades, tenants, dispoProperties, tenantPlaybooks, syncActivityLog, teamMembers } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { demoRecordingMeta } from "../crm/demo/demoAdapter";
 import { getRandomTranscript, getCallOutcome } from "../seeds/demoTranscripts";
@@ -62,6 +62,16 @@ export async function ingestCallsForTenant(tenantId: number) {
       const meta = isDemo ? demoRecordingMeta.get(rec.id) : undefined;
       const outcome = isDemo && meta ? getCallOutcome(meta.callType) : undefined;
 
+      // 4a: Lookup teamMemberId from rec.assignedTo via team_members.ghlUserId
+      let teamMemberId: number | undefined;
+      if (rec.assignedTo) {
+        const [member] = await db.select({ id: teamMembers.id })
+          .from(teamMembers)
+          .where(and(eq(teamMembers.tenantId, tenantId), eq(teamMembers.ghlUserId, rec.assignedTo)))
+          .limit(1);
+        if (member) teamMemberId = member.id;
+      }
+
       const [call] = await db
         .insert(calls)
         .values({
@@ -76,6 +86,7 @@ export async function ingestCallsForTenant(tenantId: number) {
           classification: outcome?.classification,
           status: "processing",
           callTimestamp: rec.timestamp ? new Date(rec.timestamp) : undefined,
+          teamMemberId: teamMemberId ?? null,
         })
         .returning();
 
@@ -205,12 +216,34 @@ export async function ingestOpportunitiesForTenant(tenantId: number): Promise<{ 
           updatedAt: new Date(),
         }).where(eq(dispoProperties.id, existing.id));
       } else {
+        // 4c: Enrich with contact details on first insert
+        let city = "";
+        let state = "";
+        let zip = "";
+        let sellerName: string | undefined;
+        let sellerPhone: string | undefined;
+        try {
+          const contact = await adapter.getContact(opp.contactId);
+          if (contact) {
+            const cf = contact.customFields ?? {};
+            city = String(cf.city ?? cf.address_city ?? "");
+            state = String(cf.state ?? cf.address_state ?? "");
+            zip = String(cf.zip ?? cf.postal_code ?? cf.address_zip ?? "");
+            sellerName = contact.name !== "Unknown" ? contact.name : undefined;
+            sellerPhone = contact.phone ?? undefined;
+          }
+        } catch {
+          // Contact enrichment failure shouldn't block ingestion
+        }
+
         await db.insert(dispoProperties).values({
           tenantId,
           address: opp.name || "Unknown",
-          city: "",
-          state: "",
-          zip: "",
+          city,
+          state,
+          zip,
+          sellerName: sellerName ?? null,
+          sellerPhone: sellerPhone ?? null,
           ghlContactId: opp.contactId,
           ghlOpportunityId: opp.id,
           ghlPipelineId: opp.pipelineId,

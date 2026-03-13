@@ -386,4 +386,48 @@ export const settingsRouter = router({
       lastSync: tenant?.lastGhlSync?.toISOString() ?? null,
     };
   }),
+
+  getGhlCalendars: protectedProcedure.query(async ({ ctx }) => {
+    requireRole(ctx, "manager");
+    const tenantId = ctx.user.tenantId;
+    await refreshTokenIfNeeded(tenantId);
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    if (!tenant?.crmConfig || tenant.crmType === "none") return [];
+    const config = JSON.parse(tenant.crmConfig) as Record<string, string>;
+    const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
+    return adapter.getCalendars();
+  }),
+
+  getGhlPipelines: protectedProcedure.query(async ({ ctx }) => {
+    requireRole(ctx, "manager");
+    const tenantId = ctx.user.tenantId;
+    await refreshTokenIfNeeded(tenantId);
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    if (!tenant?.crmConfig || tenant.crmType === "none") return [];
+    const config = JSON.parse(tenant.crmConfig) as Record<string, string>;
+    const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
+    return adapter.getPipelines();
+  }),
+
+  getGhlTags: protectedProcedure.query(async ({ ctx }) => {
+    requireRole(ctx, "manager");
+    const tenantId = ctx.user.tenantId;
+    await refreshTokenIfNeeded(tenantId);
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    if (!tenant?.crmConfig || tenant.crmType === "none") return [];
+    const config = JSON.parse(tenant.crmConfig) as Record<string, string>;
+    const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
+    return adapter.getLocationTags();
+  }),
+
+  getGhlWorkflows: protectedProcedure.query(async ({ ctx }) => {
+    requireRole(ctx, "manager");
+    const tenantId = ctx.user.tenantId;
+    await refreshTokenIfNeeded(tenantId);
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+    if (!tenant?.crmConfig || tenant.crmType === "none") return [];
+    const config = JSON.parse(tenant.crmConfig) as Record<string, string>;
+    const adapter = createCrmAdapter(tenant.crmType ?? "ghl", config);
+    return adapter.getWorkflows();
+  }),
 });

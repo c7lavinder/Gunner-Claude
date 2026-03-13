@@ -1,4 +1,4 @@
-import { MessageSquare, StickyNote, ListTodo, ArrowRightLeft } from "lucide-react";
+import { MessageSquare, StickyNote, ListTodo, ArrowRightLeft, Tag, Zap, Mail } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -104,6 +104,15 @@ export function InventoryGrid({
                     </Button>
                     <Button variant="ghost" size="icon-sm" aria-label="Change stage" onClick={() => onAction("stage_change", item, { stageCode: item.status })}>
                       <ArrowRightLeft className="size-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" aria-label="Send email" onClick={() => onAction("email", item, { message: "" })}>
+                      <Mail className="size-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" aria-label="Add tag" onClick={() => onAction("tag", item, { tag: "" })}>
+                      <Tag className="size-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" aria-label="Add to workflow" onClick={() => onAction("workflow", item, { workflowId: "" })}>
+                      <Zap className="size-4" />
                     </Button>
                   </div>
                 </CardContent>

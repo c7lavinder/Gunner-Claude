@@ -67,21 +67,31 @@ export interface CrmAdapter {
   getCallRecordings(since: Date): Promise<CrmCallRecording[]>;
 
   sendSms(contactId: string, message: string, fromUserId?: string): Promise<ActionResult>;
+  sendMessage(contactId: string, message: string, type: "SMS" | "Email", fromUserId?: string): Promise<ActionResult>;
   addNote(contactId: string, body: string): Promise<ActionResult>;
   createTask(task: Omit<CrmTask, "id" | "completed">): Promise<ActionResult>;
   completeTask(taskId: string): Promise<ActionResult>;
   updateOpportunityStage(opportunityId: string, stageId: string): Promise<ActionResult>;
+  updateOpportunity(opportunityId: string, data: { monetaryValue?: number; name?: string; stageId?: string; customFields?: Record<string, unknown> }): Promise<ActionResult>;
+  createOpportunity(data: { pipelineId: string; stageId: string; name: string; contactId: string; monetaryValue?: number }): Promise<ActionResult>;
+  markDnc(contactId: string): Promise<ActionResult>;
   createAppointment(params: {
     contactId: string;
     title: string;
     startTime: string;
     assignedTo?: string;
+    calendarId?: string;
   }): Promise<ActionResult>;
   addTag(contactId: string, tag: string): Promise<ActionResult>;
   removeTag(contactId: string, tag: string): Promise<ActionResult>;
   updateContactField(contactId: string, field: string, value: unknown): Promise<ActionResult>;
   addToWorkflow(contactId: string, workflowId: string): Promise<ActionResult>;
   removeFromWorkflow(contactId: string, workflowId: string): Promise<ActionResult>;
+
+  getCalendars(): Promise<Array<{ id: string; name: string }>>;
+  getPipelines(): Promise<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>>;
+  getLocationTags(): Promise<Array<{ id: string; name: string }>>;
+  getWorkflows(): Promise<Array<{ id: string; name: string }>>;
 
   testConnection(): Promise<{ connected: boolean; error?: string }>;
 }

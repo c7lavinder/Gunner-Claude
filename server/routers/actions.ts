@@ -10,6 +10,7 @@ import { refreshTokenIfNeeded } from "../services/ghlOAuth";
 
 const ACTION_TYPES: ActionType[] = [
   "sms",
+  "email",
   "note",
   "task",
   "appointment",
@@ -19,6 +20,9 @@ const ACTION_TYPES: ActionType[] = [
   "field_update",
   "check_off_task",
   "remove_workflow",
+  "update_opportunity",
+  "create_opportunity",
+  "dnc",
 ];
 
 const actionInput = z.object({
@@ -86,6 +90,9 @@ export const actionsRouter = router({
       case "sms":
         result = await adapter.sendSms(contactId, String(payload.message ?? ""), fromUserId);
         break;
+      case "email":
+        result = await adapter.sendMessage(contactId, String(payload.message ?? ""), "Email", fromUserId);
+        break;
       case "note":
         result = await adapter.addNote(contactId, String(payload.body ?? ""));
         break;
@@ -104,6 +111,7 @@ export const actionsRouter = router({
           title: String(payload.title ?? ""),
           startTime: String(payload.startTime ?? ""),
           assignedTo: payload.assignedTo ? String(payload.assignedTo) : undefined,
+          calendarId: payload.calendarId ? String(payload.calendarId) : undefined,
         });
         break;
       case "stage_change":
@@ -130,6 +138,25 @@ export const actionsRouter = router({
         break;
       case "remove_workflow":
         result = await adapter.removeFromWorkflow(contactId, String(payload.workflowId ?? ""));
+        break;
+      case "update_opportunity":
+        result = await adapter.updateOpportunity(String(payload.opportunityId ?? ""), {
+          monetaryValue: payload.monetaryValue != null ? Number(payload.monetaryValue) : undefined,
+          name: payload.name ? String(payload.name) : undefined,
+          stageId: payload.stageId ? String(payload.stageId) : undefined,
+        });
+        break;
+      case "create_opportunity":
+        result = await adapter.createOpportunity({
+          pipelineId: String(payload.pipelineId ?? ""),
+          stageId: String(payload.stageId ?? ""),
+          name: String(payload.name ?? ""),
+          contactId,
+          monetaryValue: payload.monetaryValue != null ? Number(payload.monetaryValue) : undefined,
+        });
+        break;
+      case "dnc":
+        result = await adapter.markDnc(contactId);
         break;
       default:
         result = { success: false, message: `Unhandled action type: ${input.type}`, timestamp: new Date().toISOString() };

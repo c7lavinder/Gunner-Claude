@@ -1,6 +1,7 @@
 import { db } from "../_core/db";
 import { sendEmail } from "../_core/email";
 import { chatCompletion } from "../_core/llm";
+import { getTenantPlaybook, getIndustryPlaybook, resolveTerminology, DEFAULT_TERMINOLOGY } from "./playbooks";
 import {
   tenants,
   teamMembers,
@@ -282,9 +283,14 @@ export async function updateUserProfiles(tenantId: number): Promise<number> {
  */
 export async function distillCoachingMemory(tenantId: number): Promise<number> {
   const members = await db
-    .select({ id: teamMembers.id, userId: teamMembers.userId })
+    .select({ id: teamMembers.id, userId: teamMembers.userId, teamRole: teamMembers.teamRole })
     .from(teamMembers)
     .where(and(eq(teamMembers.tenantId, tenantId), eq(teamMembers.isActive, "true")));
+
+  // 3c: Load industry name for the system prompt
+  const tenantPb = await getTenantPlaybook(tenantId);
+  const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "");
+  const industryName = industryPb?.name ?? "sales";
 
   let updated = 0;
   const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -321,7 +327,9 @@ export async function distillCoachingMemory(tenantId: number): Promise<number> {
           : grades[0] - grades[grades.length - 1] > 5 ? "declining"
           : "stable";
 
-      const prompt = `Analyze this sales coaching conversation history and extract coaching insights.
+      const repRole = member.teamRole ?? "member";
+      const prompt = `Analyze this ${industryName} coaching conversation history and extract coaching insights.
+Role: ${repRole}
 
 Conversation (last 2 weeks):
 ${transcript}
@@ -333,13 +341,13 @@ Return JSON only:
   "strengths": ["strength 1", "strength 2", "strength 3"],
   "growthAreas": ["area 1", "area 2", "area 3"],
   "gradeTrend": "improving" | "declining" | "stable",
-  "communicationStyle": { "pace": "fast/normal/slow", "tone": "confident/uncertain/professional", "notes": "one sentence" }
+  "communicationStyle": { "smsStyle": "brief description of their SMS writing style or null", "noteStyle": "brief description of their note-taking style or null", "taskStyle": "brief description of how they handle tasks or null" }
 }`;
 
       const raw = await chatCompletion({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "You are a sales coaching analyst. Extract actionable insights from coaching conversations. Return valid JSON only." },
+          { role: "system", content: `You are a ${industryName} coaching analyst. Extract actionable insights from coaching conversations. Return valid JSON only.` },
           { role: "user", content: prompt },
         ],
         temperature: 0.3,
@@ -350,7 +358,7 @@ Return JSON only:
         strengths: string[];
         growthAreas: string[];
         gradeTrend: string;
-        communicationStyle: Record<string, string>;
+        communicationStyle: { smsStyle?: string; noteStyle?: string; taskStyle?: string };
       };
       try {
         insights = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
@@ -483,6 +491,12 @@ export async function generateDailySuggestions(): Promise<number> {
   let totalGenerated = 0;
 
   for (const tenant of activeTenants) {
+    // 3d: Load industry name and terminology per tenant
+    const dailyTenantPb = await getTenantPlaybook(tenant.id);
+    const dailyIndustryPb = await getIndustryPlaybook(dailyTenantPb?.industryCode ?? "");
+    const dailyTerms = dailyIndustryPb ? resolveTerminology(dailyIndustryPb, dailyTenantPb) : DEFAULT_TERMINOLOGY;
+    const dailyIndustryName = dailyIndustryPb?.name ?? "sales";
+
     const members = await db
       .select({ id: teamMembers.id, userId: teamMembers.userId })
       .from(teamMembers)
@@ -520,7 +534,8 @@ export async function generateDailySuggestions(): Promise<number> {
           ? JSON.stringify((userPb.instructions as Record<string, unknown>).actionPatterns ?? {})
           : "{}";
 
-        const prompt = `You are a sales coaching AI. Based on this rep's profile, generate 1-2 actionable suggestions for today. Be specific and brief.
+        const prompt = `You are a ${dailyIndustryName} coaching AI. Based on this rep's profile, generate 1-2 actionable suggestions for today. Be specific and brief.
+Use these terms: ${dailyTerms.contact} for customers, ${dailyTerms.asset} for assets, ${dailyTerms.deal} for deals.
 
 Rep profile:
 - Strengths: ${strengths}
@@ -534,7 +549,7 @@ Return JSON array only:
         const raw = await chatCompletion({
           model: "gpt-4o",
           messages: [
-            { role: "system", content: "You are a sales coaching AI. Return valid JSON array only." },
+            { role: "system", content: `You are a ${dailyIndustryName} coaching AI. Return valid JSON array only.` },
             { role: "user", content: prompt },
           ],
           temperature: 0.4,

@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { MessageSquare, StickyNote, ListTodo, ArrowRightLeft, Send, Users, Phone, Activity, Sparkles } from "lucide-react";
+import { MessageSquare, StickyNote, ListTodo, ArrowRightLeft, Send, Users, Phone, Activity, Sparkles, Tag, Zap, Mail } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { trpc } from "@/lib/trpc";
 import type { PropertyItem } from "@/hooks/useInventoryData";
@@ -239,6 +239,15 @@ export function InventoryDetailSheet({ asset, open, onClose, stages, getStageCol
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => onStageChange(asset)}>
                     <ArrowRightLeft className="size-4 mr-1" />Stage
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onAction("email", asset, { message: "" })}>
+                    <Mail className="size-4 mr-1" />Email
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onAction("tag", asset, { tag: "" })}>
+                    <Tag className="size-4 mr-1" />Tag
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onAction("workflow", asset, { workflowId: "" })}>
+                    <Zap className="size-4 mr-1" />Workflow
                   </Button>
                 </div>
               </TabsContent>

@@ -264,6 +264,38 @@ export class DemoCrmAdapter implements CrmAdapter {
     return okResult();
   }
 
+  async sendMessage(): Promise<ActionResult> {
+    return okResult();
+  }
+
+  async updateOpportunity(): Promise<ActionResult> {
+    return okResult();
+  }
+
+  async createOpportunity(): Promise<ActionResult> {
+    return okResult();
+  }
+
+  async markDnc(): Promise<ActionResult> {
+    return okResult();
+  }
+
+  async getCalendars(): Promise<Array<{ id: string; name: string }>> {
+    return [{ id: "demo-cal-1", name: "Demo Calendar" }];
+  }
+
+  async getPipelines(): Promise<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>> {
+    return [{ id: "demo-pipe-1", name: "Demo Pipeline", stages: [{ id: "new", name: "New" }] }];
+  }
+
+  async getLocationTags(): Promise<Array<{ id: string; name: string }>> {
+    return [{ id: "demo-tag-1", name: "Demo Tag" }];
+  }
+
+  async getWorkflows(): Promise<Array<{ id: string; name: string }>> {
+    return [{ id: "demo-wf-1", name: "Demo Workflow" }];
+  }
+
   async testConnection(): Promise<{ connected: boolean; error?: string }> {
     return { connected: true };
   }

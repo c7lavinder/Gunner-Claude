@@ -121,6 +121,7 @@ export interface TenantPlaybook {
   leadSources: { name: string; crmMapping?: string }[];
   algorithmOverrides?: Partial<AlgorithmConfig>;
   terminology?: Partial<Terminology>;
+  coachingTone?: "supportive" | "direct" | "socratic" | "challenging";
   minGradingDurationSeconds?: number;
   customNextStepsRules?: string[];
 }
@@ -143,6 +144,7 @@ export interface UserPlaybook {
 
 export type ActionType =
   | "sms"
+  | "email"
   | "note"
   | "task"
   | "appointment"
@@ -153,7 +155,10 @@ export type ActionType =
   | "check_off_task"
   | "update_task"
   | "schedule_sms"
-  | "remove_workflow";
+  | "remove_workflow"
+  | "update_opportunity"
+  | "create_opportunity"
+  | "dnc";
 
 export interface ActionRequest {
   type: ActionType;

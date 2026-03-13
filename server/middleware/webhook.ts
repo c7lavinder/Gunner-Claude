@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createHmac } from "node:crypto";
 import { db } from "../_core/db";
-import { webhookEvents, webhookRetryQueue, calls, tenants, syncActivityLog, dispoProperties, contactCache, dispoPropertyShowings, tenantPlaybooks } from "../../drizzle/schema";
+import { webhookEvents, webhookRetryQueue, calls, tenants, syncActivityLog, dispoProperties, contactCache, dispoPropertyShowings, tenantPlaybooks, teamMembers } from "../../drizzle/schema";
 import { eq, and, lte, lt } from "drizzle-orm";
 import { ENV } from "../_core/env";
 import { gradeCall } from "../services/grading";
@@ -62,6 +62,8 @@ async function processCallEvent(
   const duration = Number(rec.duration ?? 0) || undefined;
   const direction = String(rec.direction ?? rec.callDirection ?? "outbound").toLowerCase();
   const callId = String(rec.callId ?? rec.id ?? rec.call_id ?? "").trim();
+  const assignedTo = String(rec.assignedTo ?? rec.assigned_to ?? "").trim();
+  const callTimestamp = rec.timestamp ?? rec.dateAdded ?? rec.createdAt;
 
   if (!recordingUrl || !callId) {
     await db.update(webhookEvents).set({ status: "failed", errorMessage: "Missing recordingUrl or callId", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
@@ -74,6 +76,16 @@ async function processCallEvent(
     return;
   }
 
+  // 4b: Lookup teamMemberId from assignedTo via team_members.ghlUserId
+  let teamMemberId: number | null = null;
+  if (assignedTo) {
+    const [member] = await db.select({ id: teamMembers.id })
+      .from(teamMembers)
+      .where(and(eq(teamMembers.tenantId, tenant.id), eq(teamMembers.ghlUserId, assignedTo)))
+      .limit(1);
+    if (member) teamMemberId = member.id;
+  }
+
   const [call] = await db.insert(calls).values({
     tenantId: tenant.id,
     ghlCallId: callId,
@@ -83,6 +95,8 @@ async function processCallEvent(
     duration: duration ?? null,
     callDirection: direction === "inbound" ? "inbound" : "outbound",
     status: "processing",
+    teamMemberId,
+    callTimestamp: callTimestamp ? new Date(String(callTimestamp)) : null,
   }).returning();
 
   if (!call) throw new Error("Insert failed");

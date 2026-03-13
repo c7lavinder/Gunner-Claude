@@ -3,13 +3,15 @@ import { z } from "zod";
 import { eq, and, desc, gte, count, sql, like, or, isNull, lt } from "drizzle-orm";
 import { router, protectedProcedure } from "../_core/context";
 import { db } from "../_core/db";
-import { coachMessages, userInstructions, aiSuggestions, userEvents, callGrades, calls, teamMembers, dailyKpiEntries, dispoProperties, contactCache } from "../../drizzle/schema";
+import { coachMessages, userInstructions, aiSuggestions, userEvents, callGrades, calls, teamMembers, dailyKpiEntries, dispoProperties, contactCache, userPlaybooks } from "../../drizzle/schema";
 import { chatCompletion } from "../_core/llm";
 import {
   getIndustryPlaybook,
   getTenantPlaybook,
   getUserPlaybook,
   resolveTerminology,
+  SOFTWARE_PLAYBOOK,
+  DEFAULT_TERMINOLOGY,
 } from "../services/playbooks";
 
 const chatInput = z.object({
@@ -53,17 +55,52 @@ export const aiRouter = router({
         : "";
 
     const tenantPb = await getTenantPlaybook(tenantId);
-    const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+    const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "");
     const userPb = await getUserPlaybook(userId, tenantId);
-    const terms = resolveTerminology(industryPb, tenantPb);
+    // 2c: Use DEFAULT_TERMINOLOGY when industry playbook is null
+    const terms = industryPb ? resolveTerminology(industryPb, tenantPb) : DEFAULT_TERMINOLOGY;
+
+    // 2a: Add recent call grades to context
+    const [userMemberForGrades] = await db.select({ id: teamMembers.id }).from(teamMembers)
+      .where(and(eq(teamMembers.userId, userId), eq(teamMembers.tenantId, tenantId)))
+      .limit(1);
+    let recentGradesText = "";
+    if (userMemberForGrades) {
+      const recentGrades = await db
+        .select({ callType: calls.callType, contactName: calls.contactName, overallGrade: callGrades.overallGrade, summary: callGrades.summary })
+        .from(callGrades)
+        .innerJoin(calls, and(eq(calls.id, callGrades.callId), eq(calls.tenantId, tenantId)))
+        .where(eq(calls.teamMemberId, userMemberForGrades.id))
+        .orderBy(desc(callGrades.createdAt))
+        .limit(5);
+      if (recentGrades.length > 0) {
+        recentGradesText = `Recent call grades: ${recentGrades.map((g) => `[${g.callType ?? "unknown"}] ${g.overallGrade ?? "?"} — ${(g.summary ?? "").slice(0, 80)}`).join("; ")}`;
+      }
+    }
+
+    // 2e: Add weakCriteria to prompt
+    let weakCriteriaText = "";
+    if (userMemberForGrades) {
+      const [pbRow] = await db.select({ weakCriteria: userPlaybooks.weakCriteria }).from(userPlaybooks)
+        .where(and(eq(userPlaybooks.userId, userId), eq(userPlaybooks.tenantId, tenantId)))
+        .limit(1);
+      if (pbRow?.weakCriteria && typeof pbRow.weakCriteria === "object" && !Array.isArray(pbRow.weakCriteria)) {
+        const weak = Object.keys(pbRow.weakCriteria as Record<string, unknown>);
+        if (weak.length > 0) {
+          weakCriteriaText = `This rep consistently scores low on: ${weak.join(", ")}. Focus coaching on these areas.`;
+        }
+      }
+    }
 
     const playbookContext = [
-      industryPb ? `Industry: ${industryPb.name}` : null,
-      terms ? `Terminology: ${terms.contact}/${terms.contactPlural}, ${terms.asset}/${terms.assetPlural}, ${terms.deal}/${terms.dealPlural}` : null,
+      industryPb ? `Industry: ${industryPb.name}` : `Industry: General (using default terminology)`,
+      `Terminology: ${terms.contact}/${terms.contactPlural}, ${terms.asset}/${terms.assetPlural}, ${terms.deal}/${terms.dealPlural}`,
       userPb?.role ? `User role: ${userPb.role}` : null,
       userPb?.strengths?.length ? `User strengths: ${userPb.strengths.join(", ")}` : null,
       userPb?.growthAreas?.length ? `Growth areas: ${userPb.growthAreas.join(", ")}` : null,
       userPb?.gradeTrend ? `Grade trend: ${userPb.gradeTrend}` : null,
+      recentGradesText || null,
+      weakCriteriaText || null,
     ].filter(Boolean).join("\n");
 
     // Build Day Hub context when on the Today page
@@ -142,10 +179,13 @@ AM call done: ${amCall ? "yes" : "no"}
 PM call done: ${pmCall ? "yes" : "no"}
 Tasks: ${doneTaskResult?.count ?? 0}/${taskResult?.count ?? 0} completed
 Missed calls: ${missedResult?.count ?? 0}
-Stale properties (no contact 2+ days): ${staleResult?.count ?? 0}
+Stale ${terms.assetPlural.toLowerCase()} (no contact 2+ days): ${staleResult?.count ?? 0}
 Total contacts: ${convoResult?.count ?? 0}
 --- END SNAPSHOT ---`;
     }
+
+    // 2b: Add coachingTone from tenant playbook
+    const coachingToneText = tenantPb?.coachingTone ? `\nYour coaching style should be ${tenantPb.coachingTone}.` : "";
 
     const systemPrompt = `You are the Gunner AI Coach — a consistent, persistent AI assistant.
 You help ${ctx.user.name ?? "User"} (${ctx.user.role}) improve their performance.
@@ -154,7 +194,7 @@ ${playbookContext}
 Current page: ${input.page}
 ${dayHubContext}
 ${input.pageContext ? `Page context: ${JSON.stringify(input.pageContext)}` : ""}
-${userInstructionsText}
+${userInstructionsText}${coachingToneText}
 Use the correct terminology for this team's industry. Be direct, actionable, and encouraging. Never be generic.`;
 
     const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -288,12 +328,19 @@ Use the correct terminology for this team's industry. Be direct, actionable, and
         ? recentGrades.reduce((s, r) => s + parseFloat(String(r.overallScore ?? 0)), 0) / count
         : 0;
 
-    // Get user playbook context
-    const userPb = await getUserPlaybook(userId, tenantId);
-    const gradeTrend = userPb?.gradeTrend ?? "stable";
-    const growthAreas = userPb?.growthAreas?.length ? (userPb.growthAreas as string[]).join(", ") : "not yet identified";
+    // Get user playbook context + industry context
+    const userPbSugg = await getUserPlaybook(userId, tenantId);
+    const gradeTrend = userPbSugg?.gradeTrend ?? "stable";
+    const growthAreas = userPbSugg?.growthAreas?.length ? (userPbSugg.growthAreas as string[]).join(", ") : "not yet identified";
 
-    const prompt = `You are a sales coaching AI. Generate 2-3 proactive suggestions for this sales rep.
+    // 3a: Add industry name and terminology
+    const tenantPbSugg = await getTenantPlaybook(tenantId);
+    const industryPbSugg = await getIndustryPlaybook(tenantPbSugg?.industryCode ?? "");
+    const termsSugg = industryPbSugg ? resolveTerminology(industryPbSugg, tenantPbSugg) : DEFAULT_TERMINOLOGY;
+    const industryName = industryPbSugg?.name ?? "sales";
+
+    const prompt = `You are a ${industryName} coaching AI. Generate 2-3 proactive suggestions for this sales rep.
+Use these terms: ${termsSugg.contact} for customers, ${termsSugg.asset} for assets, ${termsSugg.deal} for deals.
 
 User context:
 - Recent calls graded: ${count} calls in last 14 days
@@ -314,7 +361,7 @@ Generate 2-3 items. Be specific, not generic.`;
     const raw = await chatCompletion({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "You are a sales coaching AI. Return valid JSON array only." },
+        { role: "system", content: `You are a ${industryName} coaching AI. Return valid JSON array only.` },
         { role: "user", content: prompt },
       ],
       temperature: 0.4,

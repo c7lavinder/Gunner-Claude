@@ -301,15 +301,24 @@ export class GhlAdapter implements CrmAdapter {
     message: string,
     _fromUserId?: string
   ): Promise<ActionResult> {
+    return this.sendMessage(contactId, message, "SMS", _fromUserId);
+  }
+
+  async sendMessage(
+    contactId: string,
+    message: string,
+    type: "SMS" | "Email",
+    _fromUserId?: string
+  ): Promise<ActionResult> {
     try {
       await ghlFetch("/conversations/messages", {
         method: "POST",
         token: this.token,
-        body: { type: "SMS", contactId, message },
+        body: { type, contactId, message },
       });
-      return this.actionResult(true, "SMS sent");
+      return this.actionResult(true, `${type === "Email" ? "Email" : "SMS"} sent`);
     } catch (e) {
-      return this.actionResult(false, "Failed to send SMS", e instanceof Error ? e.message : String(e));
+      return this.actionResult(false, `Failed to send ${type}`, e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -374,11 +383,60 @@ export class GhlAdapter implements CrmAdapter {
     }
   }
 
+  async updateOpportunity(
+    opportunityId: string,
+    data: { monetaryValue?: number; name?: string; stageId?: string; customFields?: Record<string, unknown> }
+  ): Promise<ActionResult> {
+    try {
+      await ghlFetch(`/opportunities/${opportunityId}`, {
+        method: "PUT",
+        token: this.token,
+        body: data,
+      });
+      return this.actionResult(true, "Opportunity updated");
+    } catch (e) {
+      return this.actionResult(false, "Failed to update opportunity", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async createOpportunity(data: {
+    pipelineId: string;
+    stageId: string;
+    name: string;
+    contactId: string;
+    monetaryValue?: number;
+  }): Promise<ActionResult> {
+    try {
+      await ghlFetch("/opportunities/", {
+        method: "POST",
+        token: this.token,
+        body: { ...data, locationId: this.locationId },
+      });
+      return this.actionResult(true, "Opportunity created");
+    } catch (e) {
+      return this.actionResult(false, "Failed to create opportunity", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async markDnc(contactId: string): Promise<ActionResult> {
+    try {
+      await ghlFetch(`/contacts/${contactId}`, {
+        method: "PUT",
+        token: this.token,
+        body: { dnd: true, dndSettings: { Call: { status: "active" }, SMS: { status: "active" }, Email: { status: "active" } } },
+      });
+      return this.actionResult(true, "Contact marked Do Not Contact");
+    } catch (e) {
+      return this.actionResult(false, "Failed to mark DNC", e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async createAppointment(params: {
     contactId: string;
     title: string;
     startTime: string;
     assignedTo?: string;
+    calendarId?: string;
   }): Promise<ActionResult> {
     try {
       await ghlFetch("/calendars/events/appointments", {
@@ -389,7 +447,7 @@ export class GhlAdapter implements CrmAdapter {
           title: params.title,
           startTime: params.startTime,
           assignedUserId: params.assignedTo,
-          calendarId: "primary",
+          calendarId: params.calendarId ?? "primary",
         },
       });
       return this.actionResult(true, "Appointment created");
@@ -471,6 +529,46 @@ export class GhlAdapter implements CrmAdapter {
         "Failed to remove from workflow",
         e instanceof Error ? e.message : String(e)
       );
+    }
+  }
+
+  async getCalendars(): Promise<Array<{ id: string; name: string }>> {
+    try {
+      const data = (await ghlFetch(`/calendars/?locationId=${this.locationId}`, { token: this.token })) as { calendars?: Array<Record<string, unknown>> };
+      return (data.calendars ?? []).map((c) => ({ id: String(c.id ?? ""), name: String(c.name ?? "") }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getPipelines(): Promise<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>> {
+    try {
+      const data = (await ghlFetch(`/opportunities/pipelines?locationId=${this.locationId}`, { token: this.token })) as { pipelines?: Array<Record<string, unknown>> };
+      return (data.pipelines ?? []).map((p) => ({
+        id: String(p.id ?? ""),
+        name: String(p.name ?? ""),
+        stages: Array.isArray(p.stages) ? (p.stages as Array<Record<string, unknown>>).map((s) => ({ id: String(s.id ?? ""), name: String(s.name ?? "") })) : [],
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getLocationTags(): Promise<Array<{ id: string; name: string }>> {
+    try {
+      const data = (await ghlFetch(`/locations/${this.locationId}/tags`, { token: this.token })) as { tags?: Array<Record<string, unknown>> };
+      return (data.tags ?? []).map((t) => ({ id: String(t.id ?? t.name ?? ""), name: String(t.name ?? "") }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getWorkflows(): Promise<Array<{ id: string; name: string }>> {
+    try {
+      const data = (await ghlFetch(`/workflows/?locationId=${this.locationId}`, { token: this.token })) as { workflows?: Array<Record<string, unknown>> };
+      return (data.workflows ?? []).map((w) => ({ id: String(w.id ?? ""), name: String(w.name ?? "") }));
+    } catch {
+      return [];
     }
   }
 
