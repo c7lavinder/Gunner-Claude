@@ -47,6 +47,7 @@ export async function ingestCallsForTenant(tenantId: number) {
   const adapter = createCrmAdapter(tenant!.crmType ?? "ghl", config);
 
   const recordings = await adapter.getCallRecordings(since);
+  console.log(`[ingest] Tenant ${tenantId}: adapter returned ${recordings.length} recordings (since=${since.toISOString()})`);
   let processed = 0;
   let skipped = 0;
   let errors = 0;

@@ -274,14 +274,27 @@ export class GhlAdapter implements CrmAdapter {
       const pageParams = new URLSearchParams(params);
       if (cursor) pageParams.set("cursor", cursor);
 
-      const data = (await ghlFetch(`/conversations/messages/export?${pageParams}`, { token: this.token })) as {
-        messages?: Array<Record<string, unknown>>;
-        cursor?: string;
-        nextCursor?: string;
-        totalCount?: number;
-      };
+      const rawData = (await ghlFetch(`/conversations/messages/export?${pageParams}`, { token: this.token })) as Record<string, unknown>;
 
-      const messages = data.messages ?? [];
+      // Log response shape so we can diagnose empty results
+      const topKeys = Object.keys(rawData);
+      console.log(`[ghl-calls] Page ${page}: response keys=[${topKeys.join(",")}]`);
+
+      // Handle both { messages: [...] } and nested shapes
+      let messages: Array<Record<string, unknown>> = [];
+      if (Array.isArray(rawData.messages)) {
+        messages = rawData.messages as Array<Record<string, unknown>>;
+      } else if (Array.isArray(rawData.data)) {
+        messages = rawData.data as Array<Record<string, unknown>>;
+      }
+
+      console.log(`[ghl-calls] Page ${page}: ${messages.length} messages found`);
+      if (messages.length > 0) {
+        const sample = messages[0]!;
+        console.log(`[ghl-calls] Sample message keys: [${Object.keys(sample).join(",")}]`);
+        console.log(`[ghl-calls] Sample: id=${String(sample.id ?? sample.messageId ?? "?")}, type=${String(sample.type ?? sample.messageType ?? "?")}, direction=${String(sample.direction ?? "?")}`);
+      }
+
       if (messages.length === 0) break;
 
       for (const msg of messages) {
@@ -306,10 +319,11 @@ export class GhlAdapter implements CrmAdapter {
         });
       }
 
-      cursor = (data.nextCursor ?? data.cursor ?? null) as string | null;
+      cursor = String(rawData.nextCursor ?? rawData.cursor ?? "");
       if (!cursor) break;
     }
 
+    console.log(`[ghl-calls] Total recordings found: ${recordings.length}`);
     return recordings;
   }
 
