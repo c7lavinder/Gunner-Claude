@@ -5,4 +5,4 @@ export { matchBuyers, DEFAULT_BUYER_MATCH_CONFIG } from "./buyerMatch";
 export type { BuyerMatchConfig, SortableBuyer, PropertyForMatch, ScoredBuyer } from "./buyerMatch";
 
 export { taskSort, DEFAULT_TASK_SORT_CONFIG } from "./taskSort";
-export type { TaskSortConfig, SortableTask } from "./taskSort";
+export type { TaskSortConfig, RoleTaskConfig, SortableTask } from "./taskSort";

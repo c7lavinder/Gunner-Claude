@@ -30,6 +30,9 @@ export async function seedIndustryPlaybooks() {
           roleplayPersonas: pb.roleplayPersonas ?? null,
           trainingCategories: pb.trainingCategories ?? null,
           gradingPhilosophy: pb.gradingPhilosophy ?? null,
+          kpiMetrics: pb.kpiMetrics ?? null,
+          taskCategories: pb.taskCategories ?? null,
+          classificationLabels: pb.classificationLabels ?? null,
           updatedAt: new Date(),
         })
         .where(eq(industryPlaybooks.id, existing.id));
@@ -51,6 +54,9 @@ export async function seedIndustryPlaybooks() {
       roleplayPersonas: pb.roleplayPersonas ?? null,
       trainingCategories: pb.trainingCategories ?? null,
       gradingPhilosophy: pb.gradingPhilosophy ?? null,
+      kpiMetrics: pb.kpiMetrics ?? null,
+      taskCategories: pb.taskCategories ?? null,
+      classificationLabels: pb.classificationLabels ?? null,
     });
     inserted++;
   }

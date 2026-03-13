@@ -4,6 +4,7 @@ import {
   industryPlaybooks,
   tenantPlaybooks,
   userPlaybooks,
+  tenantCallTypes,
 } from "../../drizzle/schema";
 import {
   HOT_STREAK_THRESHOLD,
@@ -97,10 +98,111 @@ function parseJsonField<T>(raw: unknown, fallback: T): T {
   return fallback;
 }
 
+export const GENERIC_INDUSTRY_PLAYBOOK: IndustryPlaybook = {
+  code: "default",
+  name: "General Sales",
+  terminology: {
+    contact: "Customer",
+    contactPlural: "Customers",
+    asset: "Account",
+    assetPlural: "Accounts",
+    deal: "Deal",
+    dealPlural: "Deals",
+    walkthrough: "Site Visit",
+  },
+  roles: [
+    { code: "agent", name: "Agent", description: "Frontline sales representative", color: "#0ea5e9" },
+    { code: "manager", name: "Manager", description: "Team lead overseeing agents", color: "#6366f1" },
+    { code: "admin", name: "Admin", description: "System administrator", color: "#10b981" },
+  ],
+  stages: [
+    { code: "new", name: "New", pipeline: "default", order: 0 },
+    { code: "in_progress", name: "In Progress", pipeline: "default", order: 1 },
+    { code: "qualified", name: "Qualified", pipeline: "default", order: 2 },
+    { code: "won", name: "Won", pipeline: "default", order: 3 },
+    { code: "lost", name: "Lost", pipeline: "default", order: 99 },
+  ],
+  callTypes: [
+    { code: "inbound", name: "Inbound Call", description: "Customer-initiated call" },
+    { code: "outbound", name: "Outbound Call", description: "Rep-initiated call" },
+    { code: "follow_up", name: "Follow Up", description: "Scheduled follow-up call" },
+  ],
+  rubrics: [
+    {
+      id: "generic-sales",
+      name: "General Sales Call",
+      role: "agent",
+      callType: "outbound",
+      totalPoints: 100,
+      criteria: [
+        { name: "Introduction", maxPoints: 15, description: "Clear, professional introduction" },
+        { name: "Needs Discovery", maxPoints: 25, description: "Uncovers customer needs and pain points" },
+        { name: "Solution Presentation", maxPoints: 20, description: "Presents relevant solution clearly" },
+        { name: "Objection Handling", maxPoints: 20, description: "Handles objections professionally" },
+        { name: "Next Steps", maxPoints: 20, description: "Secures clear next step or commitment" },
+      ],
+    },
+  ],
+  outcomeTypes: ["Positive", "Neutral", "Negative", "Not Reached"],
+  kpiFunnelStages: ["Leads", "Contacts Made", "Qualified", "Won"],
+  algorithmDefaults: {
+    inventorySort: { newLeadWeight: 100, staleContactWeight: 80 },
+    buyerMatch: {},
+    taskSort: { urgentCallbackWeight: 100, followUpWeight: 70 },
+  },
+  roleplayPersonas: [
+    {
+      id: "generic-skeptical",
+      name: "Skeptical Sarah",
+      description: "A prospect who has dealt with pushy salespeople before and needs to be won over through genuine value",
+      role: "agent",
+      difficulty: "intermediate",
+      personality: "Guarded and direct. Responds to honesty and specifics, not generic sales pitches.",
+      scenario: "Has been evaluating options for 2 weeks. Has spoken to one competitor. Needs clear differentiation.",
+      objections: ["I'm already talking to someone else", "Why should I choose you?", "Can you send me some info?", "This isn't a priority right now"],
+    },
+    {
+      id: "generic-eager",
+      name: "Eager Eddie",
+      description: "An enthusiastic prospect who is ready to move forward but needs guidance on the right solution",
+      role: "agent",
+      difficulty: "beginner",
+      personality: "Open and talkative. Easily sold but the rep's job is to sell the right solution, not just close.",
+      scenario: "Reached out through your website. Has budget approved. Wants to start within 2 weeks.",
+      objections: ["Can we get started faster?", "Do I really need the premium option?", "My boss wants to see a demo first", "What if it doesn't work out?"],
+    },
+  ],
+  trainingCategories: [
+    { code: "opener", name: "Opening Techniques", description: "How to start calls confidently and earn the first 30 seconds", order: 0 },
+    { code: "discovery", name: "Needs Discovery", description: "Uncovering real pain points and buying motivations", order: 1 },
+    { code: "objections", name: "Objection Handling", description: "Frameworks for the most common objections", order: 2 },
+    { code: "closing", name: "Closing Skills", description: "Moving from conversation to commitment", order: 3 },
+  ],
+  gradingPhilosophy: {
+    overview: "Sales calls are graded on process quality, not just outcomes. A great call uncovers needs, builds trust, and advances the relationship — even if no deal closes today.",
+    criticalFailurePolicy: "Critical failure caps the score at 50%. Conditions: rep is rude or argumentative; rep presents a solution without discovering any needs; rep ends the call without proposing a next step.",
+    talkRatioGuidance: "Reps should talk no more than 50% of the time on discovery calls. On follow-ups and presentations, up to 60% is acceptable. If the rep is talking more than 65%, they are lecturing, not selling.",
+    roleSpecific: {
+      agent: "Grade on discovery quality, professionalism, and next-step commitment. A rep who has a pleasant conversation but doesn't advance the deal scores no higher than a C.",
+      manager: "Managers on calls are graded on coaching effectiveness, not selling. Did they guide the conversation productively? Did they support without taking over?",
+    },
+  },
+  taskCategories: [
+    { code: "follow_up", name: "Follow Up" },
+    { code: "admin", name: "Admin" },
+  ],
+  classificationLabels: {
+    "Interested": { label: "Interested", color: "green" },
+    "Not Interested": { label: "Not Interested", color: "red" },
+    "Follow Up": { label: "Follow Up", color: "amber" },
+    "No Answer": { label: "No Answer", color: "gray" },
+  },
+};
+
 export async function getIndustryPlaybook(
   industryCode: string
-): Promise<IndustryPlaybook | null> {
-  if (!industryCode) return null;
+): Promise<IndustryPlaybook> {
+  if (!industryCode) return GENERIC_INDUSTRY_PLAYBOOK;
 
   const [row] = await db
     .select()
@@ -113,7 +215,7 @@ export async function getIndustryPlaybook(
     )
     .limit(1);
 
-  if (!row) return null;
+  if (!row) return GENERIC_INDUSTRY_PLAYBOOK;
 
   return {
     code: row.code,
@@ -133,6 +235,9 @@ export async function getIndustryPlaybook(
     roleplayPersonas: parseJsonField<RoleplayPersona[]>(row.roleplayPersonas, []),
     trainingCategories: parseJsonField<TrainingCategory[]>(row.trainingCategories, []),
     gradingPhilosophy: parseJsonField<GradingPhilosophy | undefined>(row.gradingPhilosophy, undefined),
+    kpiMetrics: parseJsonField<Array<{ key: string; label: string }>>(row.kpiMetrics, []),
+    taskCategories: parseJsonField<Array<{ code: string; name: string }>>(row.taskCategories, []),
+    classificationLabels: parseJsonField<Record<string, { label: string; color: "green" | "red" | "amber" | "gray" }>>(row.classificationLabels, {}),
   };
 }
 
@@ -160,6 +265,7 @@ export async function getTenantPlaybook(
     leadSources: parseJsonField<{ name: string; crmMapping?: string }[]>(row.leadSources, []),
     algorithmOverrides: parseJsonField<Partial<AlgorithmConfig> | undefined>(row.algorithmOverrides, undefined),
     terminology: parseJsonField<Partial<Terminology> | undefined>(row.terminology, undefined),
+    coachingTone: (row.coachingTone as TenantPlaybook["coachingTone"]) ?? undefined,
   };
 }
 
@@ -226,13 +332,33 @@ export function resolveStages(
   return [{ code: "new", name: "New", pipeline: "default", order: 0 }];
 }
 
-export function resolveCallTypes(
-  industry?: IndustryPlaybook | null
-): CallTypeDef[] {
-  if (industry?.callTypes?.length) return industry.callTypes;
-  return [
-    { code: "sales", name: "Sales Call", description: "Default call type" },
-  ];
+export async function resolveCallTypes(
+  industry?: IndustryPlaybook | null,
+  tenantId?: number
+): Promise<CallTypeDef[]> {
+  const base: CallTypeDef[] = industry?.callTypes?.length
+    ? industry.callTypes
+    : [{ code: "sales", name: "Sales Call", description: "Default call type" }];
+
+  if (!tenantId) return base;
+
+  const tenantRows = await db
+    .select()
+    .from(tenantCallTypes)
+    .where(and(eq(tenantCallTypes.tenantId, tenantId), eq(tenantCallTypes.isActive, "true")));
+
+  if (!tenantRows.length) return base;
+
+  // Tenant call types override industry ones by code; append new ones
+  const merged = new Map(base.map((ct) => [ct.code, ct]));
+  for (const row of tenantRows) {
+    merged.set(row.code, {
+      code: row.code,
+      name: row.name,
+      description: row.description ?? "",
+    });
+  }
+  return Array.from(merged.values());
 }
 
 export function resolveAlgorithmConfig(

@@ -40,7 +40,7 @@ export const playbookRouter = router({
       terminology: resolveTerminology(industry, tenant),
       roles: resolveRoles(industry, tenant),
       stages: resolveStages(industry, tenant),
-      callTypes: resolveCallTypes(industry),
+      callTypes: await resolveCallTypes(industry, ctx.user.tenantId),
       algorithm: resolveAlgorithmConfig(industry, tenant),
       kpiFunnelStages: resolveKpiFunnelStages(industry, tenant),
       kpiMetrics: resolveKpiMetrics(industry, tenant),

@@ -175,6 +175,28 @@ export const SOLAR_PLAYBOOK: IndustryPlaybook = {
   roleplayPersonas: SOLAR_PERSONAS,
   trainingCategories: SOLAR_TRAINING_CATEGORIES,
   gradingPhilosophy: SOLAR_GRADING_PHILOSOPHY,
+  taskCategories: [
+    { code: "appointment", name: "Appointment" },
+    { code: "follow_up", name: "Follow Up" },
+    { code: "admin", name: "Admin" },
+    { code: "install", name: "Install" },
+  ],
+  classificationLabels: {
+    "Appointment Set": { label: "Appointment Set", color: "green" },
+    "Proposal Sent": { label: "Proposal Sent", color: "amber" },
+    "Contract Signed": { label: "Contract Signed", color: "green" },
+    "Not Interested": { label: "Not Interested", color: "red" },
+    "Not Qualified": { label: "Not Qualified", color: "red" },
+    "Voicemail": { label: "Voicemail", color: "gray" },
+    "Follow Up": { label: "Follow Up", color: "amber" },
+  },
+  kpiMetrics: [
+    { key: "doors_knocked", label: "Doors Knocked" },
+    { key: "contacts_made", label: "Contacts Made" },
+    { key: "appointments_set", label: "Appointments Set" },
+    { key: "proposals_sent", label: "Proposals Sent" },
+    { key: "contracts_signed", label: "Contracts Signed" },
+  ],
 };
 
 // ─── INSURANCE ───────────────────────────────────────────────────────────────
@@ -345,6 +367,27 @@ export const INSURANCE_PLAYBOOK: IndustryPlaybook = {
   roleplayPersonas: INSURANCE_PERSONAS,
   trainingCategories: INSURANCE_TRAINING_CATEGORIES,
   gradingPhilosophy: INSURANCE_GRADING_PHILOSOPHY,
+  taskCategories: [
+    { code: "follow_up", name: "Follow Up" },
+    { code: "renewal", name: "Renewal" },
+    { code: "claims", name: "Claims" },
+    { code: "admin", name: "Admin" },
+  ],
+  classificationLabels: {
+    "Quote Requested": { label: "Quote Requested", color: "amber" },
+    "Application Started": { label: "Application Started", color: "amber" },
+    "Policy Bound": { label: "Policy Bound", color: "green" },
+    "Not Interested": { label: "Not Interested", color: "red" },
+    "Voicemail": { label: "Voicemail", color: "gray" },
+    "Call Back Later": { label: "Call Back Later", color: "amber" },
+  },
+  kpiMetrics: [
+    { key: "leads_generated", label: "Leads Generated" },
+    { key: "contacts_made", label: "Contacts Made" },
+    { key: "quotes_sent", label: "Quotes Sent" },
+    { key: "applications", label: "Applications" },
+    { key: "policies_issued", label: "Policies Issued" },
+  ],
 };
 
 // ─── SAAS ─────────────────────────────────────────────────────────────────────
@@ -519,6 +562,28 @@ export const SAAS_PLAYBOOK: IndustryPlaybook = {
   roleplayPersonas: SAAS_PERSONAS,
   trainingCategories: SAAS_TRAINING_CATEGORIES,
   gradingPhilosophy: SAAS_GRADING_PHILOSOPHY,
+  taskCategories: [
+    { code: "discovery", name: "Discovery" },
+    { code: "demo", name: "Demo" },
+    { code: "follow_up", name: "Follow Up" },
+    { code: "admin", name: "Admin" },
+  ],
+  classificationLabels: {
+    "Demo Booked": { label: "Demo Booked", color: "green" },
+    "Qualified Out": { label: "Qualified Out", color: "red" },
+    "Proposal Sent": { label: "Proposal Sent", color: "amber" },
+    "Closed Won": { label: "Closed Won", color: "green" },
+    "Closed Lost": { label: "Closed Lost", color: "red" },
+    "Voicemail": { label: "Voicemail", color: "gray" },
+    "No Show": { label: "No Show", color: "red" },
+  },
+  kpiMetrics: [
+    { key: "leads", label: "Leads" },
+    { key: "sqls", label: "SQLs" },
+    { key: "demos", label: "Demos" },
+    { key: "proposals", label: "Proposals" },
+    { key: "closed_won", label: "Closed Won" },
+  ],
 };
 
 // ─── HOME SERVICES ────────────────────────────────────────────────────────────
@@ -691,6 +756,27 @@ export const HOME_SERVICES_PLAYBOOK: IndustryPlaybook = {
   roleplayPersonas: HOME_SERVICES_PERSONAS,
   trainingCategories: HOME_SERVICES_TRAINING_CATEGORIES,
   gradingPhilosophy: HOME_SERVICES_GRADING_PHILOSOPHY,
+  taskCategories: [
+    { code: "estimate", name: "Estimate" },
+    { code: "follow_up", name: "Follow Up" },
+    { code: "scheduling", name: "Scheduling" },
+    { code: "admin", name: "Admin" },
+  ],
+  classificationLabels: {
+    "Estimate Booked": { label: "Estimate Booked", color: "green" },
+    "Job Sold": { label: "Job Sold", color: "green" },
+    "Follow-Up Set": { label: "Follow-Up Set", color: "amber" },
+    "Not Interested": { label: "Not Interested", color: "red" },
+    "Voicemail": { label: "Voicemail", color: "gray" },
+    "Wrong Number": { label: "Wrong Number", color: "gray" },
+  },
+  kpiMetrics: [
+    { key: "inbound_calls", label: "Inbound Calls" },
+    { key: "estimates_booked", label: "Estimates Booked" },
+    { key: "estimates_run", label: "Estimates Run" },
+    { key: "jobs_sold", label: "Jobs Sold" },
+    { key: "jobs_completed", label: "Jobs Completed" },
+  ],
 };
 
 export const ALL_INDUSTRY_PLAYBOOKS: IndustryPlaybook[] = [

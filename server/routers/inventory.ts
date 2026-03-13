@@ -9,7 +9,7 @@ import {
   propertyStageHistory,
 } from "../../drizzle/schema";
 import { inventorySort } from "../algorithms";
-import { getTenantPlaybook, getIndustryPlaybook, resolveStages } from "../services/playbooks";
+import { getTenantPlaybook, getIndustryPlaybook, resolveStages, resolveAlgorithmConfig } from "../services/playbooks";
 
 export const inventoryRouter = router({
   list: protectedProcedure
@@ -49,7 +49,10 @@ export const inventoryRouter = router({
         .orderBy(desc(dispoProperties.createdAt))
         .limit(MAX_SORTABLE);
 
-      const sortedAll = inventorySort(allItems);
+      const tenantPb = await getTenantPlaybook(tenantId);
+      const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+      const algorithmConfig = resolveAlgorithmConfig(industryPb, tenantPb);
+      const sortedAll = inventorySort(allItems, algorithmConfig.inventorySort);
       const items = sortedAll.slice(offset, offset + input.limit);
 
       return {

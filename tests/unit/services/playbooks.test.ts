@@ -118,14 +118,14 @@ describe("resolveStages", () => {
 });
 
 describe("resolveCallTypes", () => {
-  it("returns default call type when no industry", () => {
-    const result = resolveCallTypes();
+  it("returns default call type when no industry", async () => {
+    const result = await resolveCallTypes();
     expect(result).toHaveLength(1);
     expect(result[0].code).toBe("sales");
   });
 
-  it("uses industry call types", () => {
-    const result = resolveCallTypes(mockIndustry);
+  it("uses industry call types", async () => {
+    const result = await resolveCallTypes(mockIndustry);
     expect(result).toHaveLength(2);
     expect(result[0].code).toBe("cold_call");
   });

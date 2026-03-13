@@ -381,4 +381,12 @@ export const RE_WHOLESALING_PLAYBOOK: IndustryPlaybook = {
     "Conversation": { label: "Conversation", color: "green" },
     "Admin Call": { label: "Admin Call", color: "gray" },
   },
+  kpiMetrics: [
+    { key: "leads_generated", label: "Leads Generated" },
+    { key: "contacts_made", label: "Contacts Made" },
+    { key: "appointments_set", label: "Appointments Set" },
+    { key: "offers_made", label: "Offers Made" },
+    { key: "contracts_signed", label: "Contracts Signed" },
+    { key: "deals_closed", label: "Deals Closed" },
+  ],
 };

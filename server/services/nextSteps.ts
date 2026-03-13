@@ -8,6 +8,8 @@ import {
   resolveStages,
   resolveCallTypes,
   resolveOutcomeTypes,
+  resolveTerminology,
+  DEFAULT_TERMINOLOGY,
 } from "./playbooks";
 
 /**
@@ -30,10 +32,11 @@ export async function generateNextStepsForCall(callId: number, tenantId: number)
 
   // Load playbook context for stage names and outcome labels
   const tenantPb = await getTenantPlaybook(tenantId);
-  const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "default");
+  const industryPb = await getIndustryPlaybook(tenantPb?.industryCode ?? "");
   const stages = resolveStages(industryPb, tenantPb);
-  const callTypes = resolveCallTypes(industryPb);
+  const callTypes = await resolveCallTypes(industryPb, tenantId);
   const outcomeTypes = resolveOutcomeTypes(industryPb);
+  const t = industryPb ? resolveTerminology(industryPb, tenantPb) : DEFAULT_TERMINOLOGY;
 
   // Load custom next-step rules from tenant config if any
   let customRules = "";
@@ -60,7 +63,7 @@ Conditionally suggest other actions based on call content and outcome:
 - "task" for follow-up reminders
 - "stage_change" if the call outcome warrants advancing the pipeline stage
 - "sms" for follow-up text messages
-- "appointment" if the seller agreed to a walkthrough or meeting
+- "appointment" if the ${t.contact.toLowerCase()} agreed to a ${t.walkthrough.toLowerCase()} or meeting
 Only suggest actions that are warranted by the actual call content.${customRules}`;
 
   const summary = grade.summary ?? "";

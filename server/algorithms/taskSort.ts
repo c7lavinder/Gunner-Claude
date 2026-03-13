@@ -8,12 +8,11 @@
  */
 
 export interface TaskSortConfig {
-  lead_manager: RoleTaskConfig;
-  acquisition_manager: RoleTaskConfig;
-  dispo_manager: RoleTaskConfig;
+  [roleCode: string]: RoleTaskConfig;
+  default: RoleTaskConfig;
 }
 
-interface RoleTaskConfig {
+export interface RoleTaskConfig {
   newLeadUrgencyMinutes: number;
   newLeadAlertMinutes: number;
   revenueWeightedStages: string[];
@@ -42,6 +41,13 @@ export const DEFAULT_TASK_SORT_CONFIG: TaskSortConfig = {
     revenueWeightedStages: ["under_contract", "closing"],
     closingDayWarning: 7,
     tiers: ["buyer_response", "time_sensitive", "no_contact", "regular"],
+  },
+  default: {
+    newLeadUrgencyMinutes: 30,
+    newLeadAlertMinutes: 120,
+    revenueWeightedStages: [],
+    closingDayWarning: 7,
+    tiers: ["new_lead", "inbound", "callback", "overdue", "appointment", "regular"],
   },
 };
 
@@ -87,8 +93,8 @@ export function taskSort<T extends SortableTask>(
   config: Partial<TaskSortConfig> = {}
 ): T[] {
   const c = { ...DEFAULT_TASK_SORT_CONFIG, ...config };
-  const roleKey = role.replace(/[\s-]+/g, "_").toLowerCase() as keyof TaskSortConfig;
-  const roleConfig = c[roleKey] ?? c.lead_manager;
+  const roleKey = role.replace(/[\s-]+/g, "_").toLowerCase();
+  const roleConfig = c[roleKey] ?? c.default;
   const tiers = roleConfig.tiers;
 
   return [...tasks].sort((a, b) => {
