@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Link2,
   Check,
@@ -16,8 +17,10 @@ import {
   Zap,
   Key,
   Timer,
+  Download,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 const CRM_DISPLAY_NAMES: Record<string, string> = {
   ghl: "GoHighLevel",
@@ -173,8 +176,23 @@ export function CrmTab({
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthSuccess, setOauthSuccess] = useState(false);
 
+  const [lookbackDays, setLookbackDays] = useState("90");
+
   const completeOAuth = trpc.settings.completeGhlOAuth.useMutation();
   const disconnectOAuth = trpc.settings.disconnectOAuth.useMutation();
+  const triggerSync = trpc.settings.triggerSync.useMutation({
+    onSuccess: (data) => {
+      const callCount = data.calls.processed;
+      const oppCount = data.opportunities.upserted;
+      toast.success(`Synced ${callCount} call${callCount !== 1 ? "s" : ""}, ${oppCount} opportunit${oppCount !== 1 ? "ies" : "y"}`);
+      void utils.settings.getSyncSummary.invalidate();
+      void utils.settings.getSyncLayerStatus.invalidate();
+      void utils.settings.getSyncActivityLog.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Sync failed");
+    },
+  });
 
   // Bug fix #1: Read ?code= param on mount and complete OAuth flow
   useEffect(() => {
@@ -260,7 +278,7 @@ export function CrmTab({
       {oauthSuccess && (
         <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400">
           <Check className="size-4 inline mr-2" />
-          {crmName} connected successfully. Webhooks registered.
+          {crmName} connected successfully. Webhooks registered. Initial data sync is running in the background.
         </div>
       )}
       {oauthError && (
@@ -475,6 +493,33 @@ export function CrmTab({
             }
             return null;
           })()}
+
+          <div className="flex items-center gap-3 pt-2 border-t border-[var(--g-border-subtle)]">
+            <Select value={lookbackDays} onValueChange={setLookbackDays}>
+              <SelectTrigger className="w-[140px] bg-[var(--g-bg-surface)]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="60">Last 60 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+                <SelectItem value="180">Last 180 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={triggerSync.isPending}
+              onClick={() => triggerSync.mutate({ lookbackDays: Number(lookbackDays) })}
+            >
+              {triggerSync.isPending ? (
+                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5 mr-1.5" />
+              )}
+              {triggerSync.isPending ? "Syncing..." : "Sync Now"}
+            </Button>
+          </div>
 
           <div className="pt-2 border-t border-[var(--g-border-subtle)]">
             <p className="text-xs font-medium text-[var(--g-text-secondary)] mb-2">Recent Activity</p>

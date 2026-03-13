@@ -20,6 +20,7 @@ import { createCheckoutSession, createPortalSession, getPlans } from "../service
 import { getGhlOAuthUrl, exchangeGhlCode, saveGhlTokens, registerGhlWebhooks, getGhlSyncHealth, refreshTokenIfNeeded } from "../services/ghlOAuth";
 import { ENV } from "../_core/env";
 import { getIndustryPlaybook } from "../services/playbooks";
+import { ingestCallsForTenant, ingestOpportunitiesForTenant } from "../services/callIngestion";
 
 const updateWorkspaceInput = z.object({
   name: z.string().optional(),
@@ -287,6 +288,33 @@ export const settingsRouter = router({
       const appUrl = ENV.appUrl;
       const webhookUrl = `${appUrl}/api/webhooks/ghl`;
       await registerGhlWebhooks(tokens.locationId, tokens.access_token, webhookUrl);
+
+      // Fire-and-forget initial 30-day backfill so data flows immediately
+      const tid = ctx.user.tenantId;
+      void (async () => {
+        try {
+          const callResult = await ingestCallsForTenant(tid);
+          const oppResult = await ingestOpportunitiesForTenant(tid);
+          await db.insert(syncActivityLog).values({
+            tenantId: tid,
+            layer: "oauth",
+            eventType: "initial_sync",
+            status: (callResult.errors > 0 || oppResult.errors > 0) ? "error" : "success",
+            details: JSON.stringify({ calls: callResult, opportunities: oppResult }),
+          });
+          console.log(`[oauth-sync] Tenant ${tid}: calls=${callResult.processed}, opps=${oppResult.upserted}`);
+        } catch (e) {
+          console.error(`[oauth-sync] Tenant ${tid} initial sync failed:`, e);
+          await db.insert(syncActivityLog).values({
+            tenantId: tid,
+            layer: "oauth",
+            eventType: "initial_sync",
+            status: "error",
+            details: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
+          }).catch(() => {});
+        }
+      })();
+
       return { success: true, locationId: tokens.locationId };
     }),
 
@@ -397,6 +425,40 @@ export const settingsRouter = router({
       lastSync: tenant?.lastGhlSync?.toISOString() ?? null,
     };
   }),
+
+  triggerSync: protectedProcedure
+    .input(z.object({ lookbackDays: z.number().min(1).max(180).optional().default(90) }))
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, "admin");
+      const tenantId = ctx.user.tenantId;
+
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      if (!tenant?.crmConfig || tenant.crmType === "none") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No CRM configured" });
+      }
+
+      const lookbackDate = new Date(Date.now() - input.lookbackDays * 24 * 60 * 60 * 1000);
+      await db.update(tenants).set({ lastGhlSync: lookbackDate }).where(eq(tenants.id, tenantId));
+
+      const callResult = await ingestCallsForTenant(tenantId);
+      const oppResult = await ingestOpportunitiesForTenant(tenantId);
+
+      await db.insert(syncActivityLog).values({
+        tenantId,
+        layer: "api",
+        eventType: "manual_backfill",
+        status: (callResult.errors > 0 || oppResult.errors > 0) ? "error" : "success",
+        details: JSON.stringify({
+          lookbackDays: input.lookbackDays,
+          calls: callResult,
+          opportunities: oppResult,
+        }),
+      });
+
+      logAction({ tenantId, userId: ctx.user.userId, action: "manual_sync_triggered", entityType: "tenant", entityId: tenantId, after: { lookbackDays: input.lookbackDays } });
+
+      return { calls: callResult, opportunities: oppResult };
+    }),
 
   getGhlCalendars: protectedProcedure.query(async ({ ctx }) => {
     requireRole(ctx, "manager");
