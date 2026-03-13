@@ -7,6 +7,7 @@ import { processCallGamification } from "./gamification";
 import { extractVoiceSample } from "./voiceSamples";
 import { getTenantPlaybook, getIndustryPlaybook, resolveTerminology } from "./playbooks";
 import { generateNextStepsForCall } from "./nextSteps";
+import { logger } from "../_core/logger";
 import type { RubricDef } from "../../shared/types";
 
 // Generic software-level rubric — industry-agnostic fallback
@@ -67,7 +68,7 @@ export async function gradeCall(callId: number, tenantId: number) {
 
   const callType = call.callType ?? null;
   if (callType === null) {
-    console.warn(`[grading] call ${call.id} has no callType — using FALLBACK_CRITERIA`);
+    logger.warn("[grading] call has no callType — using fallback", { callId: call.id, tenantId });
   }
   const { criteria, rubricType, tenantRubricId, criticalFailures } = callType
     ? await resolveRubricCriteria(tenantId, callType)
@@ -159,7 +160,7 @@ export async function gradeCall(callId: number, tenantId: number) {
   try {
     parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
   } catch {
-    console.error(`[grading] JSON parse failed for call ${callId}. Raw output: ${raw.slice(0, 500)}`);
+    logger.error("[grading] JSON parse failed", { callId, tenantId, raw: raw.slice(0, 200) });
     await db.update(calls).set({ status: "grade_failed", updatedAt: new Date() }).where(and(eq(calls.id, callId), eq(calls.tenantId, tenantId)));
     return null;
   }

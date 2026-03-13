@@ -4,6 +4,7 @@ import { db } from "../_core/db";
 import { webhookEvents, webhookRetryQueue, calls, tenants, syncActivityLog, dispoProperties, contactCache, dispoPropertyShowings, tenantPlaybooks, teamMembers } from "../../drizzle/schema";
 import { eq, and, lte, lt } from "drizzle-orm";
 import { ENV } from "../_core/env";
+import { logger } from "../_core/logger";
 import { gradeCall } from "../services/grading";
 import { transcribeAudio } from "../_core/llm";
 import { uploadFile } from "../_core/storage";
@@ -275,14 +276,14 @@ export async function processRetryQueue(): Promise<void> {
           nextRetryAt,
         }).where(eq(webhookRetryQueue.id, item.id));
       }
-      console.error(`[webhook-retry] Item ${item.id} attempt ${nextAttempt + 1} failed:`, msg);
+      logger.error("[webhook] retry failed", { itemId: item.id, attempt: nextAttempt + 1, error: msg });
     }
   }
 }
 
 export function startRetryProcessor(): void {
   setInterval(() => void processRetryQueue(), 60_000);
-  console.log("[webhook-retry] Retry processor started (60s interval)");
+  logger.info("[webhook] retry processor started");
 }
 
 export const webhookRouter = Router();
@@ -294,7 +295,7 @@ export const webhookRouter = Router();
  */
 function verifyGhlSignature(rawBody: Buffer, signature: string | undefined): boolean {
   if (!ENV.ghlWebhookSecret) {
-    console.warn("[webhook] GHL_WEBHOOK_SECRET not configured — rejecting unsigned webhook");
+    logger.warn("[webhook] GHL_WEBHOOK_SECRET not set — rejecting unsigned webhook");
     return false;
   }
   if (!signature) return false;

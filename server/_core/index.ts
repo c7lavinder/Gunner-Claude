@@ -54,7 +54,28 @@ app.use(cookieParser());
 
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https:", "blob:"],
+        connectSrc: [
+          "'self'",
+          "https://api.openai.com",
+          "https://*.sentry.io",
+          "https://*.supabase.co",
+          "https://app.posthog.com",
+          "https://resend.com",
+          "wss:",
+          "https:",
+        ],
+        mediaSrc: ["'self'", "blob:", "https://*.supabase.co"],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
   })
 );

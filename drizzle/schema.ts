@@ -24,14 +24,16 @@ export const tenants = pgTable("tenants", {
   maxUsers: integer("maxUsers").default(3), // Starter: 3, Growth: 10, Scale: unlimited (999)
   // CRM integration
   crmType: text("crmType").default("none"),
-  crmConnected: text("crmConnected").default("false"),
+  crmConnected: text("crmConnected").default("false"), // DEPRECATED: use crmConnectedBool — remove after boolean migration verified in production
+  crmConnectedBool: boolean("crmConnectedBool").default(false).notNull(),
   crmConfig: text("crmConfig"), // JSON config for CRM connection
   // Branding (Phase 2)
   logoUrl: text("logoUrl"),
   primaryColor: varchar("primaryColor", { length: 20 }),
   // Onboarding progress
   onboardingStep: integer("onboardingStep").default(1),
-  onboardingCompleted: text("onboardingCompleted").default("false"),
+  onboardingCompleted: text("onboardingCompleted").default("false"), // DEPRECATED: use onboardingCompletedBool — remove after boolean migration verified in production
+  onboardingCompletedBool: boolean("onboardingCompletedBool").default(false).notNull(),
   // Settings
   settings: text("settings"), // JSON for tenant-specific settings
   // CRM sync timestamps
@@ -39,9 +41,11 @@ export const tenants = pgTable("tenants", {
   lastBatchDialerSync: timestamp("lastBatchDialerSync"),
   lastBatchLeadsSync: timestamp("lastBatchLeadsSync"),
   // Webhook status
-  webhookActive: text("webhookActive").default("false"),
+  webhookActive: text("webhookActive").default("false"), // DEPRECATED: use webhookActiveBool — remove after boolean migration verified in production
+  webhookActiveBool: boolean("webhookActiveBool").default(false).notNull(),
   lastWebhookAt: timestamp("lastWebhookAt"),
-  contactCacheImported: text("contactCacheImported").default("false"),
+  contactCacheImported: text("contactCacheImported").default("false"), // DEPRECATED: use contactCacheImportedBool — remove after boolean migration verified in production
+  contactCacheImportedBool: boolean("contactCacheImportedBool").default(false).notNull(),
   // Timestamps
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -62,13 +66,15 @@ export const users = pgTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   passwordHash: varchar("passwordHash", { length: 255 }), // For email/password auth
-  emailVerified: text("emailVerified").default("false"), // Email verification status
+  emailVerified: text("emailVerified").default("false"), // DEPRECATED: use emailVerifiedBool — remove after boolean migration verified in production
+  emailVerifiedBool: boolean("emailVerifiedBool").default(false).notNull(),
   loginMethod: varchar("loginMethod", { length: 64 }), // 'google' or 'email_password'
   role: text("role").default("user").notNull(), // user, admin, super_admin
   // Team role for call coaching (consolidated - this is the single source of truth for roles)
   teamRole: text("teamRole").default("lead_manager"),
   // Is this user a tenant admin?
-  isTenantAdmin: text("isTenantAdmin").default("false"),
+  isTenantAdmin: text("isTenantAdmin").default("false"), // DEPRECATED: use isTenantAdminBool — remove after boolean migration verified in production
+  isTenantAdminBool: boolean("isTenantAdminBool").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -163,7 +169,8 @@ export const teamMembers = pgTable("team_members", {
   ghlUserId: varchar("ghlUserId", { length: 255 }), // GoHighLevel user ID for matching
   lcPhone: varchar("lcPhone", { length: 20 }), // LC phone number from GHL (e.g. +16157688784)
   lcPhones: text("lcPhones"), // JSON array of all LC phone numbers for this team member
-  isActive: text("isActive").default("true"),
+  isActive: text("isActive").default("true"), // DEPRECATED: use isActiveBool — remove after boolean migration verified in production
+  isActiveBool: boolean("isActiveBool").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -289,7 +296,8 @@ export const calls = pgTable("calls", {
   // Call outcome
   callOutcome: text("callOutcome").default("none"),
   // Secondary tag: whether a follow-up/callback was scheduled
-  followUpScheduled: text("followUpScheduled").default("false"),
+  followUpScheduled: text("followUpScheduled").default("false"), // DEPRECATED: use followUpScheduledBool — remove after boolean migration verified in production
+  followUpScheduledBool: boolean("followUpScheduledBool").default(false).notNull(),
   // Call classification
   classification: text("classification").default("pending"),
   classificationReason: text("classificationReason"), // AI explanation for classification
@@ -301,9 +309,11 @@ export const calls = pgTable("calls", {
   // BatchLeads property enrichment data (JSON)
   batchLeadsEnrichment: text("batchLeadsEnrichment"),
   // Starred / bookmarked
-  isStarred: text("isStarred").default("false"),
+  isStarred: text("isStarred").default("false"), // DEPRECATED: use isStarredBool — remove after boolean migration verified in production
+  isStarredBool: boolean("isStarredBool").default(false).notNull(),
   // Archival
-  isArchived: text("isArchived").default("false"),
+  isArchived: text("isArchived").default("false"), // DEPRECATED: use isArchivedBool — remove after boolean migration verified in production
+  isArchivedBool: boolean("isArchivedBool").default(false).notNull(),
   archivedAt: timestamp("archivedAt"),
   // Timestamps
   callTimestamp: timestamp("callTimestamp"),

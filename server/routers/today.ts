@@ -6,6 +6,7 @@ import { calls, callGrades, contactCache, dispoProperties, dailyKpiEntries, team
 import { GhlAdapter } from "../crm/ghl/ghlAdapter";
 import { refreshGhlToken, saveGhlTokens } from "../services/ghlOAuth";
 import { getTenantPlaybook, getIndustryPlaybook, resolveAlgorithmConfig } from "../services/playbooks";
+import { logger } from "../_core/logger";
 
 const DEFAULT_TIMEZONE = "America/New_York";
 const todayStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
@@ -56,7 +57,7 @@ async function getCrmAdapterForTenant(tenantId: number): Promise<GhlAdapter | nu
       await saveGhlTokens(tenantId, locationId, refreshed.access_token, refreshed.refresh_token, refreshed.expires_in);
       accessToken = refreshed.access_token;
     } catch (e) {
-      console.error(`[today] Token refresh failed for tenant ${tenantId}:`, e);
+      logger.error("[crm] token refresh failed", { tenantId, error: String(e) });
       // Still try with current token — it might not be expired yet
     }
   }
@@ -306,7 +307,7 @@ export const todayRouter = router({
           try {
             await adapter.completeTask(existing.ghlReferenceId);
           } catch (e) {
-            console.error(`[completeTask] CRM update failed for task ${existing.ghlReferenceId}:`, e);
+            logger.error("[crm] completeTask failed", { taskId: existing.ghlReferenceId, error: String(e) });
           }
         }
       }

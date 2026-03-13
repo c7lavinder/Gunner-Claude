@@ -351,6 +351,48 @@ export async function runStartupMigrations(): Promise<void> {
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_sync_activity_tenant_created" ON "sync_activity_log" ("tenantId", "createdAt" DESC)`);
 
+  // ============ BOOLEAN COLUMN MIGRATION (Stage 1) ============
+  // Adds real boolean columns alongside existing text columns.
+  // Does NOT remove old columns — that happens after new columns are verified in production.
+
+  // tenants table
+  await db.execute(sql`ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "crmConnectedBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "tenants" SET "crmConnectedBool" = ("crmConnected" = 'true') WHERE "crmConnectedBool" IS DISTINCT FROM ("crmConnected" = 'true')`);
+
+  await db.execute(sql`ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "onboardingCompletedBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "tenants" SET "onboardingCompletedBool" = ("onboardingCompleted" = 'true') WHERE "onboardingCompletedBool" IS DISTINCT FROM ("onboardingCompleted" = 'true')`);
+
+  await db.execute(sql`ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "webhookActiveBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "tenants" SET "webhookActiveBool" = ("webhookActive" = 'true') WHERE "webhookActiveBool" IS DISTINCT FROM ("webhookActive" = 'true')`);
+
+  await db.execute(sql`ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "contactCacheImportedBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "tenants" SET "contactCacheImportedBool" = ("contactCacheImported" = 'true') WHERE "contactCacheImportedBool" IS DISTINCT FROM ("contactCacheImported" = 'true')`);
+
+  // users table
+  await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "emailVerifiedBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "users" SET "emailVerifiedBool" = ("emailVerified" = 'true') WHERE "emailVerifiedBool" IS DISTINCT FROM ("emailVerified" = 'true')`);
+
+  await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "isTenantAdminBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "users" SET "isTenantAdminBool" = ("isTenantAdmin" = 'true') WHERE "isTenantAdminBool" IS DISTINCT FROM ("isTenantAdmin" = 'true')`);
+
+  // team_members table
+  await db.execute(sql`ALTER TABLE "team_members" ADD COLUMN IF NOT EXISTS "isActiveBool" boolean NOT NULL DEFAULT true`);
+  await db.execute(sql`UPDATE "team_members" SET "isActiveBool" = ("isActive" = 'true') WHERE "isActiveBool" IS DISTINCT FROM ("isActive" = 'true')`);
+
+  // calls table (followUpScheduled, isStarred, isArchived)
+  await db.execute(sql`ALTER TABLE "calls" ADD COLUMN IF NOT EXISTS "followUpScheduledBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "calls" SET "followUpScheduledBool" = ("followUpScheduled" = 'true') WHERE "followUpScheduledBool" IS DISTINCT FROM ("followUpScheduled" = 'true')`);
+
+  await db.execute(sql`ALTER TABLE "calls" ADD COLUMN IF NOT EXISTS "isStarredBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "calls" SET "isStarredBool" = ("isStarred" = 'true') WHERE "isStarredBool" IS DISTINCT FROM ("isStarred" = 'true')`);
+
+  await db.execute(sql`ALTER TABLE "calls" ADD COLUMN IF NOT EXISTS "isArchivedBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "calls" SET "isArchivedBool" = ("isArchived" = 'true') WHERE "isArchivedBool" IS DISTINCT FROM ("isArchived" = 'true')`);
+
+  // notifications table (isRead)
+  await db.execute(sql`ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "isReadBool" boolean NOT NULL DEFAULT false`);
+  await db.execute(sql`UPDATE "notifications" SET "isReadBool" = ("isRead" = 'true') WHERE "isReadBool" IS DISTINCT FROM ("isRead" = 'true')`);
+
   console.log("[migrations] Startup migrations complete.");
 
   await bootstrapDemoTenant();

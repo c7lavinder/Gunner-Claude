@@ -13,6 +13,7 @@ import {
   SOFTWARE_PLAYBOOK,
   DEFAULT_TERMINOLOGY,
 } from "../services/playbooks";
+import { logger } from "../_core/logger";
 
 const chatInput = z.object({
   message: z.string(),
@@ -376,7 +377,7 @@ Generate 2-3 items. Be specific, not generic.`;
     try {
       parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
     } catch {
-      console.error(`[ai-suggestions] JSON parse failed for user ${userId}. Raw output: ${raw.slice(0, 500)}`);
+      logger.error("[ai] suggestions parse failed", { userId, raw: raw.slice(0, 200) });
       return [];
     }
 
