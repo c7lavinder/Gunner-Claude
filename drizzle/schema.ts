@@ -2065,7 +2065,8 @@ export const notifications = pgTable("notifications", {
   body: text("body"),
   entityType: text("entityType"), // e.g. "call", "badge"
   entityId: text("entityId"),
-  isRead: text("isRead").default("false"),
+  isRead: text("isRead").default("false"), // DEPRECATED: use isReadBool — remove after boolean migration verified in production
+  isReadBool: boolean("isReadBool").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

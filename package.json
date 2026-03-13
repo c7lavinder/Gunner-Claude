@@ -13,6 +13,9 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
