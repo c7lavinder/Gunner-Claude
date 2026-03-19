@@ -1,0 +1,32 @@
+# railway.toml
+# Gunner AI — Railway deployment configuration
+
+[build]
+builder = "nixpacks"
+buildCommand = "npm run db:migrate:prod && npm run build"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "gunner-ai-web"
+
+[services.env]
+PORT = "3000"
+NODE_ENV = "production"
+
+# Cron job: daily self-audit at 2am UTC
+[[cron]]
+name = "daily-audit"
+schedule = "0 2 * * *"
+command = "npx tsx scripts/audit.ts"
+
+# Cron job: daily KPI snapshot at midnight UTC
+[[cron]]
+name = "daily-kpi-snapshot"
+schedule = "0 0 * * *"
+command = "npx tsx scripts/kpi-snapshot.ts"

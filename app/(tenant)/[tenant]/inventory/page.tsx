@@ -1,0 +1,71 @@
+import { requireSession } from '@/lib/auth/session'
+// app/(tenant)/[tenant]/inventory/page.tsx
+
+
+import { db } from '@/lib/db/client'
+import { redirect } from 'next/navigation'
+import { InventoryClient } from '@/components/inventory/inventory-client'
+import type { UserRole } from '@/types/roles'
+import { hasPermission } from '@/types/roles'
+
+export default async function InventoryPage({ params }: { params: { tenant: string } }) {
+  const session = await requireSession()
+  
+
+  const userId = session.userId
+  const tenantId = session.tenantId
+  const role = (session.role) as UserRole
+
+  if (!hasPermission(role, 'inventory.view')) redirect(`/${params.tenant}/dashboard`)
+
+  const canViewAll = hasPermission(role, 'properties.view.all')
+
+  const properties = await db.property.findMany({
+    where: {
+      tenantId,
+      ...(!canViewAll ? { assignedToId: userId } : {}),
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      sellers: {
+        include: { seller: { select: { name: true, phone: true, email: true } } },
+        where: { isPrimary: true },
+        take: 1,
+      },
+      assignedTo: { select: { id: true, name: true } },
+      _count: { select: { calls: true, tasks: true } },
+    },
+  })
+
+  // Status counts for filter chips
+  const statusCounts = properties.reduce<Record<string, number>>((acc, p) => {
+    acc[p.status] = (acc[p.status] ?? 0) + 1
+    return acc
+  }, {})
+
+  return (
+    <InventoryClient
+      properties={properties.map((p) => ({
+        id: p.id,
+        address: p.address,
+        city: p.city,
+        state: p.state,
+        zip: p.zip,
+        status: p.status,
+        arv: p.arv?.toString() ?? null,
+        askingPrice: p.askingPrice?.toString() ?? null,
+        mao: p.mao?.toString() ?? null,
+        assignmentFee: p.assignmentFee?.toString() ?? null,
+        createdAt: p.createdAt.toISOString(),
+        sellerName: p.sellers[0]?.seller.name ?? null,
+        sellerPhone: p.sellers[0]?.seller.phone ?? null,
+        assignedTo: p.assignedTo,
+        callCount: p._count.calls,
+        taskCount: p._count.tasks,
+      }))}
+      statusCounts={statusCounts}
+      tenantSlug={params.tenant}
+      canManage={hasPermission(role, 'inventory.manage')}
+    />
+  )
+}

@@ -1,0 +1,45 @@
+// config/env.ts
+// Validated environment variables — import this instead of process.env directly
+// Fails at startup if required vars are missing
+
+import { z } from 'zod'
+
+const envSchema = z.object({
+  // App
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NEXTAUTH_SECRET: z.string().min(32),
+  NEXTAUTH_URL: z.string().url(),
+
+  // Database
+  DATABASE_URL: z.string().url(),
+  DIRECT_URL: z.string().url(),
+
+  // GHL
+  GHL_CLIENT_ID: z.string(),
+  GHL_CLIENT_SECRET: z.string(),
+  GHL_REDIRECT_URI: z.string().url(),
+  GHL_WEBHOOK_SECRET: z.string(),
+
+  // Anthropic
+  ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-'),
+
+  // Supabase
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string(),
+
+  // Audit schedule (optional)
+  AUDIT_SCHEDULE: z.string().default('0 2 * * *'),
+})
+
+const parsed = envSchema.safeParse(process.env)
+
+if (!parsed.success) {
+  console.error('❌ Missing or invalid environment variables:')
+  console.error(parsed.error.flatten().fieldErrors)
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1)
+  }
+}
+
+export const env = parsed.success ? parsed.data : ({} as z.infer<typeof envSchema>)

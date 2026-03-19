@@ -1,0 +1,464 @@
+// Gunner AI — Prisma Schema
+// Source of truth for all database models
+// Run: npx prisma migrate dev --name <description>
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────
+// TENANTS
+// Each paying client is a tenant. Fully isolated.
+// ─────────────────────────────────────────
+
+model Tenant {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Identity
+  name    String
+  slug    String  @unique // used in URL: gunnerai.com/{slug}/dashboard
+  logoUrl String? @map("logo_url")
+
+  // GHL OAuth (Marketplace App)
+  ghlLocationId    String? @unique @map("ghl_location_id")   // sub-account ID
+  ghlAccessToken   String? @map("ghl_access_token")
+  ghlRefreshToken  String? @map("ghl_refresh_token")
+  ghlTokenExpiry   DateTime? @map("ghl_token_expiry")
+  ghlWebhookId     String? @map("ghl_webhook_id")
+
+  // Property trigger config
+  propertyPipelineId    String? @map("property_pipeline_id")    // which GHL pipeline
+  propertyTriggerStage  String? @map("property_trigger_stage")  // which stage creates a property
+
+  // Onboarding state
+  onboardingStep      Int     @default(0) @map("onboarding_step")
+  onboardingCompleted Boolean @default(false) @map("onboarding_completed")
+
+  // Tenant-level config (JSON — flexible per client)
+  callTypes    Json @default("[]") @map("call_types")    // ["inbound", "outbound", "followup"]
+  callResults  Json @default("[]") @map("call_results")  // ["interested", "not interested", "callback"]
+  config       Json @default("{}") // misc config blob
+
+  // Relations
+  users         User[]
+  properties    Property[]
+  sellers       Seller[]
+  calls         Call[]
+  tasks         Task[]
+  kpiSnapshots  KpiSnapshot[]
+  auditLogs     AuditLog[]
+  callRubrics   CallRubric[]
+  roleConfigs   RoleConfig[]
+
+  @@map("tenants")
+}
+
+// ─────────────────────────────────────────
+// USERS
+// Team members within a tenant
+// ─────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Auth
+  email          String  @unique
+  hashedPassword String? @map("hashed_password")
+  emailVerified  DateTime? @map("email_verified")
+
+  // Profile
+  name      String
+  avatarUrl String? @map("avatar_url")
+  phone     String?
+
+  // Role + hierarchy
+  role      UserRole
+  reportsTo String? @map("reports_to") // user id of their manager
+
+  // Manager relation (self-referential)
+  manager    User?  @relation("UserReportsTo", fields: [reportsTo], references: [id])
+  directReports User[] @relation("UserReportsTo")
+
+  // Per-user config
+  kpiConfig       Json @default("{}") @map("kpi_config")       // which KPIs to show
+  cardConfig      Json @default("{}") @map("card_config")       // property card layout
+  taskSortConfig  Json @default("{}") @map("task_sort_config")  // task list preferences
+  dashboardConfig Json @default("{}") @map("dashboard_config")
+
+  // GHL
+  ghlUserId String? @map("ghl_user_id")
+
+  // Relations
+  assignedCalls      Call[]     @relation("CallAssignedTo")
+  assignedTasks      Task[]     @relation("TaskAssignedTo")
+  assignedProperties Property[] @relation("PropertyAssignedTo")
+  kpiSnapshots       KpiSnapshot[]
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  TEAM_LEAD
+  LEAD_MANAGER
+  ACQUISITION_MANAGER
+  DISPOSITION_MANAGER
+
+  @@map("user_role")
+}
+
+// ─────────────────────────────────────────
+// PROPERTIES (Inventory)
+// Core of the wholesaling business
+// NOT contacts — one seller can have multiple properties
+// ─────────────────────────────────────────
+
+model Property {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Assignment
+  assignedToId String? @map("assigned_to_id")
+  assignedTo   User?   @relation("PropertyAssignedTo", fields: [assignedToId], references: [id])
+
+  // Address
+  address String
+  city    String
+  state   String
+  zip     String
+
+  // Financial
+  arv          Decimal? @db.Decimal(12, 2) // After Repair Value
+  askingPrice  Decimal? @db.Decimal(12, 2) @map("asking_price")
+  mao          Decimal? @db.Decimal(12, 2) // Max Allowable Offer
+  contractPrice Decimal? @db.Decimal(12, 2) @map("contract_price")
+  assignmentFee Decimal? @db.Decimal(12, 2) @map("assignment_fee")
+
+  // Status
+  status PropertyStatus @default(NEW_LEAD)
+
+  // GHL sync
+  ghlContactId     String? @map("ghl_contact_id")
+  ghlPipelineId    String? @map("ghl_pipeline_id")
+  ghlPipelineStage String? @map("ghl_pipeline_stage")
+
+  // Enrichment (Phase 2 — Zillow, county records)
+  zillowData   Json? @map("zillow_data")
+  countyData   Json? @map("county_data")
+  constructionEstimate Decimal? @db.Decimal(12, 2) @map("construction_estimate")
+
+  // Flexible custom fields per tenant config
+  customFields Json @default("{}") @map("custom_fields")
+
+  // Relations
+  sellers  PropertySeller[]
+  calls    Call[]
+  tasks    Task[]
+
+  @@map("properties")
+}
+
+enum PropertyStatus {
+  NEW_LEAD
+  CONTACTED
+  APPOINTMENT_SET
+  APPOINTMENT_COMPLETED
+  OFFER_MADE
+  UNDER_CONTRACT
+  IN_DISPOSITION
+  SOLD
+  DEAD
+
+  @@map("property_status")
+}
+
+// ─────────────────────────────────────────
+// SELLERS
+// People who own properties
+// One seller can have multiple properties
+// ─────────────────────────────────────────
+
+model Seller {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name         String
+  phone        String?
+  email        String?
+  ghlContactId String? @map("ghl_contact_id") // links back to GHL contact
+
+  properties PropertySeller[]
+
+  @@map("sellers")
+}
+
+model PropertySeller {
+  propertyId String   @map("property_id")
+  sellerId   String   @map("seller_id")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  seller     Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  isPrimary  Boolean  @default(false) @map("is_primary")
+
+  @@id([propertyId, sellerId])
+  @@map("property_sellers")
+}
+
+// ─────────────────────────────────────────
+// CALLS
+// Every call graded automatically when it ends
+// ─────────────────────────────────────────
+
+model Call {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Who made/received the call
+  assignedToId String? @map("assigned_to_id")
+  assignedTo   User?   @relation("CallAssignedTo", fields: [assignedToId], references: [id])
+
+  // Property this call is about
+  propertyId String?  @map("property_id")
+  property   Property? @relation(fields: [propertyId], references: [id])
+
+  // GHL data
+  ghlCallId    String? @unique @map("ghl_call_id")
+  recordingUrl String? @map("recording_url")
+  transcript   String? @db.Text
+
+  // Call metadata
+  callType     String? @map("call_type")   // from tenant.callTypes config
+  callResult   String? @map("call_result") // from tenant.callResults config
+  direction    CallDirection @default(OUTBOUND)
+  durationSeconds Int? @map("duration_seconds")
+  calledAt     DateTime? @map("called_at")
+
+  // AI Grading
+  gradingStatus GradingStatus @default(PENDING) @map("grading_status")
+  score         Float?        // 0-100
+  rubricScores  Json?         @map("rubric_scores") // per-category scores
+  aiSummary     String?       @db.Text @map("ai_summary")
+  aiFeedback    String?       @db.Text @map("ai_feedback")
+  aiCoachingTips Json?        @map("ai_coaching_tips")
+  gradedAt      DateTime?     @map("graded_at")
+
+  @@map("calls")
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+
+  @@map("call_direction")
+}
+
+enum GradingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("grading_status")
+}
+
+// ─────────────────────────────────────────
+// CALL RUBRICS
+// Per-tenant, per-role grading templates
+// ─────────────────────────────────────────
+
+model CallRubric {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  role      UserRole // which role this rubric applies to
+  callType  String?  @map("call_type") // null = applies to all call types
+  name      String
+  isDefault Boolean  @default(false) @map("is_default")
+
+  // Rubric criteria (array of {category, maxScore, description, weight})
+  criteria  Json
+
+  @@map("call_rubrics")
+}
+
+// ─────────────────────────────────────────
+// TASKS
+// Synced with GHL tasks, shown per user
+// ─────────────────────────────────────────
+
+model Task {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  assignedToId String? @map("assigned_to_id")
+  assignedTo   User?   @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
+
+  propertyId String?   @map("property_id")
+  property   Property? @relation(fields: [propertyId], references: [id])
+
+  // Task data
+  title       String
+  description String? @db.Text
+  category    String? // from tenant task category config
+  status      TaskStatus @default(PENDING)
+  priority    TaskPriority @default(MEDIUM)
+  dueAt       DateTime? @map("due_at")
+  completedAt DateTime? @map("completed_at")
+
+  // GHL sync
+  ghlTaskId String? @unique @map("ghl_task_id")
+
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@map("task_status")
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+
+  @@map("task_priority")
+}
+
+// ─────────────────────────────────────────
+// KPI SNAPSHOTS
+// Daily snapshots — auto-populated from properties/calls
+// ─────────────────────────────────────────
+
+model KpiSnapshot {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id])
+
+  snapshotDate DateTime @map("snapshot_date") @db.Date
+  period       SnapshotPeriod @default(DAILY)
+
+  // Metrics stored as flexible JSON
+  // Populated from: properties, calls, tasks counts
+  metrics Json
+
+  @@unique([tenantId, userId, snapshotDate, period])
+  @@map("kpi_snapshots")
+}
+
+enum SnapshotPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+
+  @@map("snapshot_period")
+}
+
+// ─────────────────────────────────────────
+// ROLE CONFIGS
+// Per-tenant custom KPI + permission config per role
+// ─────────────────────────────────────────
+
+model RoleConfig {
+  id       String @id @default(cuid())
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  role            UserRole
+  defaultKpis     Json @map("default_kpis")      // which KPIs are shown by default
+  allowedKpis     Json @map("allowed_kpis")       // which KPIs this role can enable
+  permissions     Json                             // feature-level permissions
+  taskCategories  Json @map("task_categories")    // task categories for this role
+
+  @@unique([tenantId, role])
+  @@map("role_configs")
+}
+
+// ─────────────────────────────────────────
+// AUDIT LOGS
+// Every action tracked — also used by self-audit agent
+// ─────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String? @map("tenant_id")
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id])
+
+  // What happened
+  action   String               // e.g. "call.graded", "property.created", "audit.run"
+  resource String?              // e.g. "call", "property", "system"
+  resourceId String?            @map("resource_id")
+  payload  Json?                // full context
+  source   AuditSource @default(USER)
+
+  // For system audit agent results
+  severity AuditSeverity?
+  resolved Boolean @default(false)
+
+  @@map("audit_logs")
+}
+
+enum AuditSource {
+  USER
+  SYSTEM
+  GHL_WEBHOOK
+  AUDIT_AGENT
+  SCHEDULER
+
+  @@map("audit_source")
+}
+
+enum AuditSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+
+  @@map("audit_severity")
+}
