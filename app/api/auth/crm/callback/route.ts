@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     // Exchange code for tokens
     const tokens = await exchangeGHLCode(code)
 
-    // Save tokens to tenant
+    // Save tokens and advance onboarding in one update
     await db.tenant.update({
       where: { id: tenantId },
       data: {
@@ -52,25 +52,24 @@ export async function GET(request: NextRequest) {
         ghlAccessToken: tokens.access_token,
         ghlRefreshToken: tokens.refresh_token,
         ghlTokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+        onboardingStep: 2,
       },
     })
 
-    // Register webhooks with GHL
-    const ghlClient = await getGHLClient(tenantId)
-    const webhookUrl = `${baseUrl}/api/webhooks/ghl`
-
-    const webhook = await ghlClient.registerWebhook(webhookUrl, GHL_WEBHOOK_EVENTS)
-
-    await db.tenant.update({
-      where: { id: tenantId },
-      data: { ghlWebhookId: webhook.id },
-    })
-
-    // Advance onboarding step
-    await db.tenant.update({
-      where: { id: tenantId },
-      data: { onboardingStep: 2 },
-    })
+    // Attempt webhook registration — non-blocking, we have polling fallback
+    try {
+      const ghlClient = await getGHLClient(tenantId)
+      const webhookUrl = `${baseUrl}/api/webhooks/ghl`
+      const webhook = await ghlClient.registerWebhook(webhookUrl, GHL_WEBHOOK_EVENTS)
+      await db.tenant.update({
+        where: { id: tenantId },
+        data: { ghlWebhookId: webhook.id },
+      })
+    } catch (webhookErr) {
+      // Webhook registration failed — log but don't block onboarding
+      // Call grading still works via poll-calls.ts polling fallback
+      console.warn('[GHL OAuth] Webhook registration failed (non-blocking):', webhookErr)
+    }
 
     return NextResponse.redirect(
       new URL(`/onboarding?step=2&success=ghl_connected`, baseUrl),
