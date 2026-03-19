@@ -20,7 +20,7 @@
 ## Phase 1 Exit Criteria — must ALL be true before Phase 2
 
 - [x] App deployed to Railway with a real public URL
-- [ ] GHL Marketplace App created with correct scopes and redirect URI
+- [x] GHL Marketplace App created with correct scopes and redirect URI
 - [ ] One real tenant onboarded through the full onboarding flow
 - [ ] GHL connected via OAuth — webhooks registered and confirmed in GHL dashboard
 - [ ] One real call made in GHL → appears graded in Gunner AI /calls page
