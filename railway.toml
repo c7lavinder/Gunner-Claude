@@ -19,6 +19,12 @@ name = "gunner-ai-web"
 PORT = "3000"
 NODE_ENV = "production"
 
+# Cron job: poll GHL for new calls every minute (CallCompleted webhook unavailable)
+[[cron]]
+name = "poll-calls"
+schedule = "* * * * *"
+command = "npx tsx scripts/poll-calls.ts"
+
 # Cron job: daily self-audit at 2am UTC
 [[cron]]
 name = "daily-audit"

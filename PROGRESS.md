@@ -51,6 +51,20 @@
 
 ## Session Log
 
+### Session 10 — Step 3 complete (3a + 3b + 3c)
+**What was done:**
+- 3a: Verified all OAuth callback references use /api/auth/crm/callback — zero old paths remain
+- 3b: Built lib/db/settings.ts with updateTenantSettings() using ToolResponse contract
+- 3b: Built components/ui/ghl-dropdown.tsx — reusable GHL dropdown component
+- 3b: Added Pipeline tab to settings with live GHL dropdowns for pipeline + stage selection
+- 3b: Added data contract comments to all settings fields (WRITES TO / READ BY / DROPDOWN SOURCE)
+- 3b: Renamed 'ghl' tab to 'integrations', passed propertyPipelineId/propertyTriggerStage from server
+- 3c: Added getRecentCalls() method to GHL client
+- 3c: Built scripts/poll-calls.ts — polls all tenants for ungraded calls every 60 seconds
+- 3c: Added poll-calls cron to railway.toml (every minute)
+- Bugs #1, #2, #3, #6, #9 resolved
+- Zero TypeScript errors, zero ESLint errors
+
 ### Session 9 — Railway + GHL Marketplace App
 **What was done:**
 - Railway deployed successfully at https://gunner-claude-production.up.railway.app
@@ -87,15 +101,15 @@
 
 | # | Description | File | Priority | Status |
 |---|---|---|---|---|
-| 1 | Pipeline selector in settings not using live GHL dropdown — violates Rule 2 | settings-client.tsx | CRITICAL | Fix in Phase 1 Step 3 |
-| 2 | Settings fields missing data contract comments — violates Rule 1 | settings-client.tsx | CRITICAL | Fix in Phase 1 Step 3 |
-| 3 | CallCompleted webhook not available in GHL Marketplace App — need polling fallback | lib/ghl/ | HIGH | Build in Step 3 |
+| 1 | ~~Pipeline selector not using live GHL dropdown~~ | settings-client.tsx | ~~CRITICAL~~ | ✅ FIXED — Step 3b |
+| 2 | ~~Settings fields missing data contract comments~~ | settings-client.tsx | ~~CRITICAL~~ | ✅ FIXED — Step 3b |
+| 3 | ~~CallCompleted webhook unavailable — polling fallback needed~~ | scripts/poll-calls.ts | ~~HIGH~~ | ✅ FIXED — Step 3c |
 | 4 | lib/ai/scoring.ts does not exist — TCP model not built | lib/ai/ | HIGH | Phase 2 |
 | 5 | lib/gates/requireApproval.ts does not exist — high-stakes gates not built | lib/ | HIGH | Before SMS blast feature |
-| 6 | updateTenantSettings() server action does not exist | lib/db/ | HIGH | Step 3 |
+| 6 | ~~updateTenantSettings() server action does not exist~~ | lib/db/settings.ts | ~~HIGH~~ | ✅ FIXED — Step 3b |
 | 7 | withTenantContext() not called in API routes — RLS inactive per-request | lib/db/client.ts | MEDIUM | Before production |
 | 8 | Invite email sends empty companyName | app/api/tenants/invite/route.ts | LOW | Fix anytime |
-| 9 | OAuth callback route renamed to /crm/callback but onboarding page may still reference old path | app/(auth)/onboarding/page.tsx | HIGH | Verify in Step 3 |
+| 9 | ~~OAuth callback references old /ghl/callback path~~ | all files | ~~HIGH~~ | ✅ FIXED — Step 3a |
 
 ---
 
@@ -110,7 +124,7 @@ App created. Credentials in Railway env vars.
 Redirect URI: https://gunner-claude-production.up.railway.app/api/auth/crm/callback
 Note: CallCompleted webhook unavailable — polling fallback needed.
 
-### Step 3 — Fix Settings + Build Polling Fallback ← CURRENT STEP
+### Step 3 — Fix Settings + Build Polling Fallback ✅ DONE
 Three things to do:
 
 **3a — Verify OAuth callback path**
@@ -149,6 +163,6 @@ Three things to do:
 
 ## Next Session — Start Exactly Here
 
-**Task:** Step 3 — Fix OAuth path, live GHL dropdowns, call polling fallback
+**Task:** Step 4 — First real tenant onboarding on Railway
 
-**First message to Claude Code:**
+**What to do:** Remove DEV_BYPASS_AUTH from Railway env vars, register as real tenant on Railway URL, complete onboarding, connect GHL, verify webhooks in GHL dashboard, configure pipeline trigger.

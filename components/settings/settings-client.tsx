@@ -1,14 +1,25 @@
-'use client'
 // components/settings/settings-client.tsx
+// Client component for the /{tenant}/settings page
+// Contains 4 tabs: Team, Integrations, Pipeline, Call Config
+// Rule 3: All settings live here — no gear icons on individual pages
 
-import { useState } from 'react'
-import { Users, Phone, Zap, CheckCircle, XCircle, Copy, Check } from 'lucide-react'
+'use client'
+
+import { useState, useCallback } from 'react'
+import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2 } from 'lucide-react'
 import { ROLE_LABELS, type UserRole } from '@/types/roles'
 import { RubricEditor } from '@/components/settings/rubric-editor'
+import { GHLDropdown } from '@/components/ui/ghl-dropdown'
 
 interface TenantInfo {
   id: string; name: string; slug: string; ghlConnected: boolean
   callTypes: string[]; callResults: string[]
+  // WRITES TO: tenants.property_pipeline_id (String?)
+  // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
+  propertyPipelineId: string
+  // WRITES TO: tenants.property_trigger_stage (String?)
+  // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
+  propertyTriggerStage: string
 }
 interface TeamMember {
   id: string; name: string; email: string; role: string
@@ -18,7 +29,7 @@ interface Rubric {
   id: string; name: string; role: string; callType: string | null; isDefault: boolean
 }
 
-type Tab = 'team' | 'ghl' | 'calls'
+type Tab = 'team' | 'integrations' | 'pipeline' | 'calls'
 
 export function SettingsClient({
   tenant, teamMembers, rubrics, callTypes, currentUserId, currentUserRole, canManage,
@@ -37,6 +48,24 @@ export function SettingsClient({
   const [inviting, setInviting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
   const [copied, setCopied] = useState(false)
+
+  // Pipeline settings state
+  // WRITES TO: tenants.property_pipeline_id (String?)
+  // API ENDPOINT: PATCH /api/tenants/config
+  // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
+  // READ QUERY: db.tenant.findUnique({ select: { propertyPipelineId: true } })
+  // DROPDOWN SOURCE: GET /api/ghl/pipelines → pipelines[].id
+  const [selectedPipeline, setSelectedPipeline] = useState(tenant.propertyPipelineId)
+
+  // WRITES TO: tenants.property_trigger_stage (String?)
+  // API ENDPOINT: PATCH /api/tenants/config
+  // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
+  // READ QUERY: db.tenant.findUnique({ select: { propertyTriggerStage: true } })
+  // DROPDOWN SOURCE: derived from selected pipeline stages[]
+  const [selectedStage, setSelectedStage] = useState(tenant.propertyTriggerStage)
+  const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; name: string }>>([])
+  const [savingPipeline, setSavingPipeline] = useState(false)
+  const [pipelineSaveMsg, setPipelineSaveMsg] = useState('')
 
   async function invite() {
     if (!inviteEmail) return
@@ -58,9 +87,56 @@ export function SettingsClient({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Transform pipeline response to extract stages for the selected pipeline
+  const handlePipelineChange = useCallback((pipelineId: string) => {
+    setSelectedPipeline(pipelineId)
+    setSelectedStage('')
+    setPipelineStages([])
+
+    if (!pipelineId) return
+
+    // Fetch stages for the selected pipeline
+    fetch('/api/ghl/pipelines')
+      .then((r) => r.json())
+      .then((data) => {
+        const pipeline = (data.pipelines ?? []).find(
+          (p: { id: string }) => p.id === pipelineId
+        )
+        if (pipeline?.stages) {
+          setPipelineStages(pipeline.stages)
+        }
+      })
+      .catch(() => setPipelineStages([]))
+  }, [])
+
+  async function savePipelineSettings() {
+    setSavingPipeline(true)
+    setPipelineSaveMsg('')
+    try {
+      const res = await fetch('/api/tenants/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyPipelineId: selectedPipeline || null,
+          propertyTriggerStage: selectedStage || null,
+        }),
+      })
+      if (res.ok) {
+        setPipelineSaveMsg('Pipeline settings saved')
+      } else {
+        setPipelineSaveMsg('Failed to save pipeline settings')
+      }
+    } catch {
+      setPipelineSaveMsg('Error saving pipeline settings')
+    }
+    setSavingPipeline(false)
+    setTimeout(() => setPipelineSaveMsg(''), 3000)
+  }
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'team', label: 'Team', icon: <Users size={14} /> },
-    { id: 'ghl', label: 'GHL connection', icon: <Zap size={14} /> },
+    { id: 'integrations', label: 'Integrations', icon: <Zap size={14} /> },
+    { id: 'pipeline', label: 'Pipeline', icon: <GitBranch size={14} /> },
     { id: 'calls', label: 'Call config', icon: <Phone size={14} /> },
   ]
 
@@ -86,7 +162,7 @@ export function SettingsClient({
         ))}
       </div>
 
-      {/* Team tab */}
+      {/* ── Team tab ────────────────────────────────────────────────────── */}
       {tab === 'team' && (
         <div className="space-y-4">
           {/* Invite */}
@@ -147,8 +223,10 @@ export function SettingsClient({
         </div>
       )}
 
-      {/* GHL tab */}
-      {tab === 'ghl' && (
+      {/* ── Integrations tab ───────────────────────────────────────────── */}
+      {/* READS: tenants.ghl_location_id (presence = connected)
+         READS: tenants.ghl_access_token (via ghlConnected boolean) */}
+      {tab === 'integrations' && (
         <div className="space-y-4">
           <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center gap-3 mb-4">
@@ -194,7 +272,100 @@ export function SettingsClient({
         </div>
       )}
 
-      {/* Call config tab */}
+      {/* ── Pipeline tab ───────────────────────────────────────────────── */}
+      {/* WRITES TO: tenants.property_pipeline_id (String?)
+         WRITES TO: tenants.property_trigger_stage (String?)
+         API ENDPOINT: PATCH /api/tenants/config
+         READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
+         DROPDOWN SOURCE: GET /api/ghl/pipelines → pipelines[].id, pipelines[].stages[].id */}
+      {tab === 'pipeline' && (
+        <div className="space-y-4">
+          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5 space-y-5">
+            <div>
+              <h2 className="text-sm font-medium text-white mb-1">Property creation trigger</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                When a GHL contact enters the selected pipeline stage, Gunner AI automatically creates a property in your inventory.
+              </p>
+            </div>
+
+            {!tenant.ghlConnected ? (
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-sm text-yellow-300">
+                Connect GHL in the Integrations tab first to configure pipeline triggers.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Pipeline dropdown — live from GHL API */}
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1.5">Pipeline</label>
+                  <GHLDropdown
+                    endpoint="/api/ghl/pipelines"
+                    valueKey="id"
+                    labelKey="name"
+                    value={selectedPipeline}
+                    onChange={handlePipelineChange}
+                    placeholder="Select a pipeline..."
+                  />
+                </div>
+
+                {/* Stage dropdown — derived from selected pipeline */}
+                {selectedPipeline && (
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-1.5">Trigger stage</label>
+                    {pipelineStages.length > 0 ? (
+                      <select
+                        value={selectedStage}
+                        onChange={(e) => setSelectedStage(e.target.value)}
+                        className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500"
+                      >
+                        <option value="">Select a stage...</option>
+                        {pipelineStages.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-gray-500">
+                        <Loader2 size={14} className="animate-spin" />
+                        Loading stages...
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Preview what will happen */}
+                {selectedStage && (
+                  <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 text-sm text-orange-300">
+                    When a contact enters stage <strong>{pipelineStages.find(s => s.id === selectedStage)?.name}</strong>, a property will be created automatically.
+                  </div>
+                )}
+
+                {/* Save button */}
+                <button
+                  onClick={savePipelineSettings}
+                  disabled={savingPipeline}
+                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                >
+                  {savingPipeline ? (
+                    <><Loader2 size={14} className="animate-spin" /> Saving...</>
+                  ) : (
+                    'Save pipeline settings'
+                  )}
+                </button>
+
+                {pipelineSaveMsg && (
+                  <p className={`text-xs ${pipelineSaveMsg.includes('Failed') || pipelineSaveMsg.includes('Error') ? 'text-red-400' : 'text-green-400'}`}>
+                    {pipelineSaveMsg}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Call config tab ─────────────────────────────────────────────── */}
+      {/* READS: tenants.call_types (Json)
+         READS: tenants.call_results (Json)
+         READS: call_rubrics table (via RubricEditor) */}
       {tab === 'calls' && (
         <div className="space-y-4">
           <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">

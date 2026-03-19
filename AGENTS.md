@@ -232,9 +232,10 @@ Critical files to re-inject at start of any new context window:
 |---|---|---|
 | GHL client | lib/ghl/client.ts | All GHL API calls |
 | Session helper | lib/auth/session.ts | Auth in API routes |
-| Settings writer | lib/db/settings.ts | All tenant settings writes (not yet built) |
+| Settings writer | lib/db/settings.ts | All tenant settings writes |
+| GHL dropdown | components/ui/ghl-dropdown.tsx | Reusable GHL entity dropdown (Rule 2) |
 | Call grader | lib/ai/grading.ts | Claude-powered call scoring |
-| Call poller | scripts/poll-calls.ts | Polling fallback for call grading (not yet built) |
+| Call poller | scripts/poll-calls.ts | Polling fallback for call grading (every 60s cron) |
 | TCP scorer | lib/ai/scoring.ts | Lead conversion probability (not yet built) |
 | AI coach | lib/ai/coach.ts | User-facing coaching chat |
 | Approval gates | lib/gates/requireApproval.ts | High-stakes action gates (not yet built) |

@@ -1,4 +1,5 @@
 // app/(tenant)/[tenant]/settings/page.tsx
+// Server component — fetches tenant, team, rubric data and passes to client
 import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { redirect } from 'next/navigation'
@@ -48,6 +49,8 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         ghlConnected: !!tenant.ghlLocationId,
         callTypes,
         callResults: tenant.callResults as string[],
+        propertyPipelineId: tenant.propertyPipelineId ?? '',
+        propertyTriggerStage: tenant.propertyTriggerStage ?? '',
       }}
       teamMembers={teamMembers.map((u) => ({
         id: u.id,

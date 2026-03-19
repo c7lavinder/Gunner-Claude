@@ -114,6 +114,16 @@ export class GHLClient {
     return this.request<{ url: string }>('GET', `/calls/${callId}/recording`)
   }
 
+  async getRecentCalls(params?: { startDate?: string; endDate?: string; limit?: number }) {
+    const query = new URLSearchParams({
+      locationId: this.locationId,
+      ...(params?.startDate && { startDate: params.startDate }),
+      ...(params?.endDate && { endDate: params.endDate }),
+      ...(params?.limit && { limit: String(params.limit) }),
+    })
+    return this.request<GHLCallList>('GET', `/calls?${query}`)
+  }
+
   // ─── Appointments ──────────────────────────────────────────────────────────
 
   async getAppointments(params: { userId?: string; startDate: string; endDate: string }) {
@@ -314,6 +324,11 @@ export interface GHLCall {
   contactId: string
   userId: string
   createdAt: string
+}
+
+export interface GHLCallList {
+  calls: GHLCall[]
+  total: number
 }
 
 export interface GHLConversationList {
