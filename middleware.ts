@@ -54,10 +54,11 @@ export async function middleware(request: NextRequest) {
   const segments = pathname.split('/').filter(Boolean)
   const tenantSlug = segments[0]
 
-  // Root path — redirect to their tenant dashboard
+  // Root path — redirect to onboarding if not completed, otherwise dashboard
   if (!tenantSlug || tenantSlug === '') {
     const userTenantSlug = token.tenantSlug as string | undefined
-    if (userTenantSlug) {
+    const onboardingCompleted = token.onboardingCompleted as boolean | undefined
+    if (userTenantSlug && onboardingCompleted) {
       return NextResponse.redirect(new URL(`/${userTenantSlug}/dashboard`, request.url))
     }
     return NextResponse.redirect(new URL('/onboarding', request.url))
