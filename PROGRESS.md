@@ -11,7 +11,7 @@
 **Phase**: Phase 1 — Foundation hardening
 **App state**: Running locally at localhost:3000 with seed data
 **Auth**: DEV_BYPASS_AUTH=true — goes straight to dashboard (owner@apex.dev)
-**Deployment**: NOT deployed — no public URL yet
+**Deployment**: LIVE at https://gunner-claude-production.up.railway.app
 **GHL**: NOT connected — no Marketplace App created yet
 **First call graded**: NOT achieved — this is the Phase 1 exit criteria
 
@@ -19,7 +19,7 @@
 
 ## Phase 1 Exit Criteria — must ALL be true before Phase 2
 
-- [ ] App deployed to Railway with a real public URL
+- [x] App deployed to Railway with a real public URL
 - [ ] GHL Marketplace App created with correct scopes and redirect URI
 - [ ] One real tenant onboarded through the full onboarding flow
 - [ ] GHL connected via OAuth — webhooks registered and confirmed in GHL dashboard
@@ -43,6 +43,18 @@
 ---
 
 ## Session Log
+
+### Session 9 — Railway deployment (2026-03-19)
+**What was done:**
+- Upgraded Next.js 14.2.3 → 14.2.35 (Railway blocked on CVEs)
+- Fixed 12 pre-existing TypeScript errors across 8 files
+- Fixed ESLint config (removed missing @typescript-eslint plugin rules)
+- Added Node >=20 engine requirement to package.json
+- Wrapped login + onboarding pages in Suspense (Next.js 14.2 SSG requirement)
+- Added /api/health to public paths in middleware
+- Deployed to Railway: https://gunner-claude-production.up.railway.app
+- Health check confirmed: `{"status":"ok"}`
+- Phase 1 Exit Criteria #1 checked off
 
 ### Session 8 — Phase 1 hardening + doc rewrite
 **What was done:**
@@ -129,6 +141,6 @@ Work through these IN ORDER. Do not skip ahead.
 
 ## Next Session — Start Exactly Here
 
-**Task:** Deploy to Railway (Step 1 above)
+**Task:** Create GHL Marketplace App (Step 2 above)
 
-**First message to Claude Code:**
+**What to do:** Follow the Step 2 instructions — create the app in GHL, get CLIENT_ID + CLIENT_SECRET, add to Railway env vars.
