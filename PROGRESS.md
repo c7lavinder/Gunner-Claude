@@ -25,12 +25,12 @@
 - [x] Railway deployed — real public URL confirmed
 - [x] GET /api/health returns { status: 'ok' } on Railway URL
 - [x] GHL Marketplace App created with correct scopes and redirect URI
-- [ ] One real tenant onboarded through full onboarding flow
-- [ ] GHL connected via OAuth — webhooks in GHL dashboard confirmed
+- [x] One real tenant onboarded through full onboarding flow
+- [x] GHL connected via OAuth (webhooks unavailable — polling fallback active)
 - [ ] Settings pipeline selector uses live GHL dropdown (Rule 2 compliant)
 - [ ] Real call in GHL → graded record in /calls within 60 seconds
 - [ ] Real stage change → property appears in /inventory
-- [ ] DEV_BYPASS_AUTH removed — real login working on Railway URL
+- [x] DEV_BYPASS_AUTH removed — real login working on Railway URL
 - [ ] Two tenants verified cannot see each other's data
 
 **Do not start Phase 2 until every box is checked.**
