@@ -11,6 +11,7 @@ const PUBLIC_PATHS = [
   '/onboarding',
   '/api/auth',
   '/api/health',
+  '/api/tenants/register',
   '/api/webhooks',
   '/_next',
   '/favicon.ico',
