@@ -104,7 +104,7 @@ Work through these IN ORDER. Do not skip ahead.
 ### Step 2 — GHL Marketplace App
 - Go to GHL Agency → Settings → Developer → My Apps → Create App
 - Name: Gunner AI
-- Redirect URI: https://[your-railway-url]/api/auth/ghl/callback
+- Redirect URI: https://[your-railway-url]/api/auth/crm/callback
 - Scopes: contacts.readonly/write, opportunities.readonly/write, conversations.readonly/write, calls.readonly, tasks.readonly/write, calendars.readonly
 - Copy CLIENT_ID and CLIENT_SECRET → add to Railway env vars
 - Why second: Can't do OAuth without the app existing and having a live redirect URI.

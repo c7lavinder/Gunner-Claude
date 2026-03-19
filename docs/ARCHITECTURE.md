@@ -77,7 +77,7 @@ Redirect to GHL OAuth chooselocation
         ↓
 User selects their sub-account
         ↓
-GHL redirects to /api/auth/ghl/callback?code=XXX
+GHL redirects to /api/auth/crm/callback?code=XXX
         ↓
 Exchange code for access_token + refresh_token
         ↓

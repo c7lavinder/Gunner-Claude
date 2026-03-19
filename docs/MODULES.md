@@ -119,7 +119,7 @@ const ghl = await getGHLClient(tenantId)
 - API version header `Version: 2021-07-28` is required on every request
 - Rate limits: GHL allows ~100 requests/minute per location. Add throttling if bulk operations are needed.
 
-**OAuth flow:** `app/api/auth/ghl/callback/route.ts` handles the redirect, calls `exchangeGHLCode()`, saves tokens, and registers webhooks.
+**OAuth flow:** `app/api/auth/crm/callback/route.ts` handles the redirect, calls `exchangeGHLCode()`, saves tokens, and registers webhooks.
 
 ---
 
@@ -141,7 +141,7 @@ Receives all events from GHL, verifies the signature, routes to the right handle
 **To add a new event:**
 1. Add a case to the `switch` in `handleGHLWebhook()`
 2. Write a handler function `async function handleXxx(tenantId, event)`
-3. Add the event name to the `GHL_WEBHOOK_EVENTS` array in `app/api/auth/ghl/callback/route.ts`
+3. Add the event name to the `GHL_WEBHOOK_EVENTS` array in `app/api/auth/crm/callback/route.ts`
 
 **Signature verification:**
 GHL sends `x-ghl-signature` header with HMAC-SHA256 of the body using `GHL_WEBHOOK_SECRET`. If the secret is wrong or missing, all webhooks fail silently in production.

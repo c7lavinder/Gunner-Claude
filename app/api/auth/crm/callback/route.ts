@@ -1,5 +1,5 @@
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
-// app/api/auth/ghl/callback/route.ts
+// app/api/auth/crm/callback/route.ts
 // Handles the OAuth redirect from GHL Marketplace App
 // Exchanges code for tokens, saves to tenant, registers webhooks
 

@@ -67,7 +67,7 @@ Then run the RLS policies in Supabase SQL Editor:
 ### 4. Set up GHL Marketplace App
 
 1. Go to GHL → Settings → Developer → Apps
-2. Create a new app with redirect URI: `http://localhost:3000/api/auth/ghl/callback`
+2. Create a new app with redirect URI: `http://localhost:3000/api/auth/crm/callback`
 3. Copy the Client ID and Client Secret to your `.env.local`
 4. Set required scopes: `contacts.readonly contacts.write opportunities.readonly opportunities.write conversations.readonly conversations.write calls.readonly tasks.readonly tasks.write calendars.readonly`
 
