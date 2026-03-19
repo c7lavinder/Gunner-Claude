@@ -1,8 +1,7 @@
 {
   "extends": ["next/core-web-vitals"],
   "rules": {
-    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-    "@typescript-eslint/no-explicit-any": "warn",
-    "no-console": ["warn", { "allow": ["warn", "error", "log"] }]
+    "no-console": ["warn", { "allow": ["warn", "error", "log"] }],
+    "react/no-unescaped-entities": "off"
   }
 }

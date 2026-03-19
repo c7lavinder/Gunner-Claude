@@ -116,8 +116,7 @@ async function generateUniqueSlug(base: string): Promise<string> {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function seedDefaultRoleConfigs(tx: any, tenantId: string) {
+async function seedDefaultRoleConfigs(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0], tenantId: string) {
   const roles = [
     'OWNER', 'ADMIN', 'TEAM_LEAD',
     'LEAD_MANAGER', 'ACQUISITION_MANAGER', 'DISPOSITION_MANAGER',
