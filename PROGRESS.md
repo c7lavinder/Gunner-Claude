@@ -51,6 +51,13 @@
 
 ## Session Log
 
+### Session 10b — GHL API endpoint fixes
+**What was done:**
+- Fixed conversations endpoint: `/conversations` → `/conversations/search` (404 → 200)
+- Fixed appointments endpoint: `/appointments` → `/calendars/events` with `startTime`/`endTime` params
+- Appointments may still 401 due to missing `calendars/events.readonly` scope — page handles gracefully
+- Root cause: GHL API v2 uses different paths than documented in v1
+
 ### Session 10 — Step 3 complete (3a + 3b + 3c)
 **What was done:**
 - 3a: Verified all OAuth callback references use /api/auth/crm/callback — zero old paths remain

@@ -93,10 +93,9 @@ export class GHLClient {
   async getConversations(params?: { unreadOnly?: boolean; limit?: number }) {
     const query = new URLSearchParams({
       locationId: this.locationId,
-      ...(params?.unreadOnly && { unreadOnly: 'true' }),
       ...(params?.limit && { limit: String(params.limit) }),
     })
-    return this.request<GHLConversationList>('GET', `/conversations?${query}`)
+    return this.request<GHLConversationList>('GET', `/conversations/search?${query}`)
   }
 
   async getUnreadCount() {
@@ -129,11 +128,11 @@ export class GHLClient {
   async getAppointments(params: { userId?: string; startDate: string; endDate: string }) {
     const query = new URLSearchParams({
       locationId: this.locationId,
-      startDate: params.startDate,
-      endDate: params.endDate,
+      startTime: params.startDate,
+      endTime: params.endDate,
       ...(params.userId && { userId: params.userId }),
     })
-    return this.request<GHLAppointmentList>('GET', `/appointments?${query}`)
+    return this.request<GHLAppointmentList>('GET', `/calendars/events?${query}`)
   }
 
   // ─── Pipeline ──────────────────────────────────────────────────────────────
