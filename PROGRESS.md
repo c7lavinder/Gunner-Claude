@@ -9,14 +9,15 @@
 ## Current Status
 
 **Phase**: Phase 1 — Foundation + first live call graded
-**App state**: Running locally at localhost:3000 with seed data
-**Auth**: DEV_BYPASS_AUTH=true (dev only — must be removed before production)
+**App state**: Live on Railway + running locally
+**Auth**: Real login working on Railway (DEV_BYPASS_AUTH removed from production, still in .env.local for local dev)
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude ✅
 **Railway**: https://gunner-claude-production.up.railway.app ✅
 **Health check**: PASSING ✅
 **GHL Marketplace App**: CREATED ✅
-**GHL credentials in Railway**: ADDED ✅
-**First call graded**: NOT achieved ← Phase 1 exit criteria
+**GHL OAuth**: CONNECTED — tenant "New Again Houses" (location: hmD7eWGQJE7EVFpJxj4q)
+**Pipeline configured**: pipelineId: tOqQbembKlIoPiXbepP3, stageId: f919c1a7-17da-456f-b8f9-10c1aca62691
+**First call graded**: NOT YET — next session priority
 
 ---
 
@@ -27,13 +28,13 @@
 - [x] GHL Marketplace App created with correct scopes and redirect URI
 - [x] One real tenant onboarded through full onboarding flow
 - [x] GHL connected via OAuth (webhooks unavailable — polling fallback active)
-- [ ] Settings pipeline selector uses live GHL dropdown (Rule 2 compliant)
+- [x] Settings pipeline selector uses live GHL dropdown (Rule 2 compliant)
 - [ ] Real call in GHL → graded record in /calls within 60 seconds
 - [ ] Real stage change → property appears in /inventory
 - [x] DEV_BYPASS_AUTH removed — real login working on Railway URL
 - [ ] Two tenants verified cannot see each other's data
 
-**Do not start Phase 2 until every box is checked.**
+**7 of 10 checked. Remaining: first graded call, property creation, tenant isolation.**
 
 ---
 
@@ -51,56 +52,50 @@
 
 ## Session Log
 
-### Session 10b — GHL API endpoint fixes
+### Session 11 — Full deployment night (2026-03-19)
 **What was done:**
-- Fixed conversations endpoint: `/conversations` → `/conversations/search` (404 → 200)
-- Fixed appointments endpoint: `/appointments` → `/calendars/events` with `startTime`/`endTime` params
-- Appointments may still 401 due to missing `calendars/events.readonly` scope — page handles gracefully
-- Root cause: GHL API v2 uses different paths than documented in v1
+- Deployed to Railway — fixed Next.js CVE (14.2.3→14.2.35), ESLint config, Suspense boundaries, health check public path
+- Created GHL Marketplace App — added credentials to Railway env vars
+- Renamed OAuth callback /api/auth/ghl → /api/auth/crm (GHL blocks "ghl" in URIs)
+- Fixed OAuth scopes — removed invalid calls.readonly, tasks.readonly, tasks.write
+- Fixed middleware to check onboardingCompleted before redirecting to dashboard
+- Fixed OAuth callback to use NEXTAUTH_URL instead of request.url (was resolving to localhost in Railway)
+- Made webhook registration non-blocking — GHL Marketplace API returns 404 on webhook endpoint, polling fallback handles call grading
+- Added /api/tenants/register to public paths (was blocked by auth middleware)
+- Built Step 3: GHLDropdown component, updateTenantSettings(), Pipeline tab with live dropdowns, data contract comments, poll-calls.ts polling fallback
+- Fixed GHL API endpoints: /conversations → /conversations/search, /appointments → /calendars/events
+- First real tenant "New Again Houses" onboarded and GHL connected on production
+- Pipeline trigger configured via live GHL dropdown
+- Phase 1 exit criteria: 7 of 10 checked
+
+**Fixes deployed tonight (11 commits):**
+1. Next.js 14.2.35 + TypeScript errors
+2. ESLint config for Railway build
+3. Suspense boundaries for login + onboarding
+4. /api/health public path
+5. /api/tenants/register public path
+6. OAuth callback rename /ghl → /crm
+7. Invalid GHL OAuth scopes removed
+8. Middleware onboardingCompleted check
+9. OAuth callback uses NEXTAUTH_URL for redirects
+10. Webhook registration non-blocking
+11. GHL API endpoint fixes (conversations, appointments)
 
 ### Session 10 — Step 3 complete (3a + 3b + 3c)
-**What was done:**
-- 3a: Verified all OAuth callback references use /api/auth/crm/callback — zero old paths remain
-- 3b: Built lib/db/settings.ts with updateTenantSettings() using ToolResponse contract
-- 3b: Built components/ui/ghl-dropdown.tsx — reusable GHL dropdown component
-- 3b: Added Pipeline tab to settings with live GHL dropdowns for pipeline + stage selection
-- 3b: Added data contract comments to all settings fields (WRITES TO / READ BY / DROPDOWN SOURCE)
-- 3b: Renamed 'ghl' tab to 'integrations', passed propertyPipelineId/propertyTriggerStage from server
-- 3c: Added getRecentCalls() method to GHL client
-- 3c: Built scripts/poll-calls.ts — polls all tenants for ungraded calls every 60 seconds
-- 3c: Added poll-calls cron to railway.toml (every minute)
-- Bugs #1, #2, #3, #6, #9 resolved
-- Zero TypeScript errors, zero ESLint errors
+- Verified OAuth callback paths (3a)
+- Built GHLDropdown, updateTenantSettings(), Pipeline tab (3b)
+- Built poll-calls.ts polling fallback (3c)
 
 ### Session 9 — Railway + GHL Marketplace App
-**What was done:**
-- Railway deployed successfully at https://gunner-claude-production.up.railway.app
-- Health check passing at /api/health
-- GHL Marketplace App created with full webhook list and correct redirect URI
-- Redirect URI changed from /api/auth/ghl/callback to /api/auth/crm/callback (GHL blocked "ghl" in URIs)
-- GHL_CLIENT_ID, GHL_CLIENT_SECRET, GHL_REDIRECT_URI, NEXT_PUBLIC_GHL_CLIENT_ID added to Railway
-- CallCompleted webhook not available in GHL Marketplace App — polling fallback needed
-- Phase 1 exit criteria: 2 of 10 checked off
-
-**What was NOT finished:**
-- Machine-grade docs (CLAUDE.md, PROGRESS.md, ARCHITECTURE.md, AGENTS.md) not yet pushed to GitHub
-- Step 3 (live GHL dropdown in settings) not started
-- Polling fallback for call grading not built
+- Railway deployed, health check passing
+- GHL Marketplace App created, credentials added to Railway
+- OAuth callback renamed from /ghl to /crm
 
 ### Session 8 — Phase 1 hardening
-- Integrated 5 non-negotiable rules from prior failed build
-- DEV_BYPASS_AUTH bypass implemented
-- App confirmed running locally with seed data
+- Integrated non-negotiable rules, DEV_BYPASS_AUTH implemented
 
 ### Session 7 — Migration + property CRUD + rubric editor
-- Migrated all 19 pages to requireSession() / getSession()
-- Built property edit + create forms
-- Built call rubric editor with full CRUD
-
 ### Sessions 1–6 — Full MVP built
-- All pages, GHL integration, auto call grading, AI coach
-- Inventory, KPIs, tasks, inbox, appointments, settings shell
-- Self-audit agent, seed data, Railway config
 
 ---
 
@@ -117,49 +112,28 @@
 | 7 | withTenantContext() not called in API routes — RLS inactive per-request | lib/db/client.ts | MEDIUM | Before production |
 | 8 | Invite email sends empty companyName | app/api/tenants/invite/route.ts | LOW | Fix anytime |
 | 9 | ~~OAuth callback references old /ghl/callback path~~ | all files | ~~HIGH~~ | ✅ FIXED — Step 3a |
+| 10 | GHL webhook registration returns 404 — Marketplace Apps may not support /locations/{id}/webhooks endpoint | lib/ghl/client.ts | HIGH | Investigate correct GHL v2 webhook API or rely on polling |
+| 11 | Appointments page returns 401 — calendars/events scope may not be covered by calendars.readonly | lib/ghl/client.ts | HIGH | Add correct scope to GHL Marketplace App |
+| 12 | GHL API version header may be outdated (2021-07-28) — some endpoints return 404 | lib/ghl/client.ts | MEDIUM | Test with newer version string |
 
 ---
 
 ## Phase 1 — Sequenced Task List
 
 ### Step 1 — Deploy to Railway ✅ DONE
-Railway live at https://gunner-claude-production.up.railway.app
-Health check passing.
-
 ### Step 2 — GHL Marketplace App ✅ DONE
-App created. Credentials in Railway env vars.
-Redirect URI: https://gunner-claude-production.up.railway.app/api/auth/crm/callback
-Note: CallCompleted webhook unavailable — polling fallback needed.
-
 ### Step 3 — Fix Settings + Build Polling Fallback ✅ DONE
-Three things to do:
+### Step 4 — First Real Tenant Onboarding ✅ DONE
+Tenant: New Again Houses (corey@newagainhouses.com)
+GHL location: hmD7eWGQJE7EVFpJxj4q
+Pipeline: tOqQbembKlIoPiXbepP3
+Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
-**3a — Verify OAuth callback path**
-- Confirm app/(auth)/onboarding/page.tsx uses /api/auth/crm/callback not old path
-- Confirm all references to old /ghl/callback are updated
-
-**3b — Live GHL dropdown in settings (Rule 2 compliance)**
-- Build GHLDropdown reusable component
-- Replace pipeline text inputs with live GHL dropdowns
-- Add data contract comments to every settings field
-- Build updateTenantSettings() server action in lib/db/settings.ts
-
-**3c — Call grading polling fallback**
-- Build scripts/poll-calls.ts — runs every 60 seconds via Railway cron
-- Fetches recent calls from GHL API
-- Checks for ungraded calls → triggers gradeCall()
-- Add to railway.toml as cron job
-
-### Step 4 — First Real Tenant Onboarding
-- Remove DEV_BYPASS_AUTH from Railway env vars (NOT from .env.local yet)
-- Register as real tenant on Railway URL
-- Complete onboarding → connect GHL → verify webhooks in GHL dashboard
-- Configure pipeline trigger using live dropdown
-
-### Step 5 — First Call Graded ← Phase 1 exit
+### Step 5 — First Call Graded ← NEXT SESSION
 - Make real call in GHL
-- Confirm graded record in /calls within 60 seconds
-- Confirm score + rubric + AI feedback populated
+- Wait 60 seconds for poll-calls.ts to detect it
+- Confirm graded record in /calls with score + rubric + AI feedback
+- If polling doesn't pick up the call, debug poll-calls.ts on Railway logs
 - Screenshot as proof
 
 ### Step 6 — Verify tenant isolation
@@ -170,6 +144,16 @@ Three things to do:
 
 ## Next Session — Start Exactly Here
 
-**Task:** Step 4 — First real tenant onboarding on Railway
+**Task:** Step 5 — Get the first real call graded
 
-**What to do:** Remove DEV_BYPASS_AUTH from Railway env vars, register as real tenant on Railway URL, complete onboarding, connect GHL, verify webhooks in GHL dashboard, configure pipeline trigger.
+**First message to Claude Code:**
+
+Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
+
+We are on Step 5 — first call graded. I will make a real call in GHL.
+Your job:
+1. Verify poll-calls.ts is running on Railway (check cron logs)
+2. After I make a call, check if it was detected and graded
+3. If not, debug: check GHL API for recent calls, check if poll-calls.ts
+   can reach GHL, check if gradeCall() is being triggered
+4. Do not stop until a real call shows up graded in the database
