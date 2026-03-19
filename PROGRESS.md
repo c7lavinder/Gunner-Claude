@@ -1,125 +1,69 @@
 # PROGRESS.md — Gunner AI Build Tracker
 
-> Updated at the end of every session. First thing to read when resuming work.
+> This is the first file Claude Code reads every session.
+> The "Next Session" section tells Claude Code exactly where to start.
+> Updated at the end of EVERY session — no exceptions.
 
 ---
 
 ## Current Status
 
-**Phase**: MVP complete + Phase 2 core features built
-**Last worked on**: Session 8 (local setup)
-**Deployment status**: Not yet deployed — needs GHL Marketplace App credentials
-**Test status**: Local dev environment running — not yet end-to-end tested with real GHL account
-**Local dev**: Running on http://localhost:3000 — all non-GHL features functional
+**Phase**: Phase 1 — Foundation hardening
+**App state**: Running locally at localhost:3000 with seed data
+**Auth**: DEV_BYPASS_AUTH=true — goes straight to dashboard (owner@apex.dev)
+**Deployment**: NOT deployed — no public URL yet
+**GHL**: NOT connected — no Marketplace App created yet
+**First call graded**: NOT achieved — this is the Phase 1 exit criteria
+
+---
+
+## Phase 1 Exit Criteria — must ALL be true before Phase 2
+
+- [ ] App deployed to Railway with a real public URL
+- [ ] GHL Marketplace App created with correct scopes and redirect URI
+- [ ] One real tenant onboarded through the full onboarding flow
+- [ ] GHL connected via OAuth — webhooks registered and confirmed in GHL dashboard
+- [ ] One real call made in GHL → appears graded in Gunner AI /calls page
+- [ ] Settings pipeline selector uses live GHL dropdown (not text input)
+- [ ] DEV_BYPASS_AUTH removed — real login working
+- [ ] PROGRESS.md updated with all of the above confirmed
+
+**Do not start Phase 2 until every box above is checked.**
+
+---
+
+## Non-Negotiable Rules (from CLAUDE.md — repeated here for visibility)
+
+1. **Data Contract Rule** — every settings field must declare what it writes to and what reads it
+2. **No text inputs for GHL mappings** — always live dropdowns from GHL API
+3. **Single settings hub** — 7 sections, no gear icons on individual pages
+4. **Gunner enhances GHL, doesn't replace it** — we own properties/KPIs/grades, GHL owns contacts
+5. **Autonomous handoff** — PROGRESS.md updated every session, next task explicitly stated
 
 ---
 
 ## Session Log
 
-### Session 8 — Local environment setup + dev auth bypass (2026-03-19)
+### Session 8 — Phase 1 hardening + doc rewrite
 **What was done:**
-- Generated NEXTAUTH_SECRET, configured all env vars in `.env.local`
-- Symlinked `.env` → `.env.local` so Prisma can read env vars
-- Ran `npm install` — all 629 packages installed
-- Ran `prisma generate` — Prisma Client generated
-- Ran `prisma migrate dev --name init` — first migration applied to Supabase
-- Applied RLS policies (`prisma/rls-policies.sql`) via Supabase SQL Editor
-- Ran `db:seed` — tenant "Apex Wholesaling" with 5 users, 5 properties, 3 graded calls, 4 tasks
-- Started `npm run dev` — server running on http://localhost:3000 with no errors
-- Verified login page loads (200) and root redirects correctly (307)
-- Added temporary auth bypass for local dev/testing (DEV_BYPASS_AUTH=true in .env.local)
-
-**Dev auth bypass details (TEMPORARY — revert before go-live):**
-- `DEV_BYPASS_AUTH=true` in `.env.local` — delete this line to restore normal login
-- Files touched: `middleware.ts`, `lib/auth/session.ts`, `app/page.tsx`
-- All bypass code marked with `// TEMP: DEV BYPASS` comments
-- Visiting http://localhost:3000 goes straight to /apex-dev/dashboard as owner@apex.dev
-- No auth code was deleted — bypass wraps around the existing flow
-
-**What's working locally (no GHL needed):**
-- Auth, dashboard, calls, inventory, tasks, KPIs, AI coach, settings, rubric editor
-
-**What still needs GHL:**
-- OAuth connection, auto call grading, property auto-create, inbox, appointments, GHL actions
+- Integrated 5 non-negotiable rules from prior failed build into CLAUDE.md
+- Rewrote PROGRESS.md with Phase 1 exit criteria
+- Rewrote docs/ARCHITECTURE.md with data contract rule and GHL boundary
+- App running locally with DEV_BYPASS_AUTH=true
+- Seed data confirmed working (3 graded calls, 5 properties, team visible)
+- GitHub repo created and code pushed to github.com/c7lavinder/Gunner-Claude
 
 ### Session 7 — Migration + property CRUD + rubric editor
-**What was done:**
-- Migrated all 19 pages and API routes from `getServerSession(authConfig)` + casting to `requireSession()` / `getSession()`
-- All ugly `(session.user as { tenantId?: string })` casts eliminated — uses `session.tenantId` directly
-- Built property edit page (`inventory/[propertyId]/edit/page.tsx`)
-- Built new property page (`inventory/new/page.tsx`)
-- Built shared `PropertyForm` component — handles create and edit
-- Built properties API: `POST /api/properties`, `PATCH /api/properties/[id]`
-- Built call rubric editor UI (`components/settings/rubric-editor.tsx`) — full CRUD
-- Built call rubrics API: `GET/POST /api/call-rubrics`, `PATCH/DELETE /api/call-rubrics/[id]`
-- Wired edit button on property detail page → edit form
-- Wired `RubricEditor` into Settings → Call config tab
+- Migrated all 19 pages to requireSession() / getSession()
+- Built property edit + create forms
+- Built call rubric editor UI with full CRUD
+- Built properties API and call rubrics API
 
-### Session 6 — Bug fixes + new utilities
-**What was done:**
-- Fixed NextAuth v5 → v4 (all API routes used `getServerSession` from v4 but config was v5 type)
-- Fixed Supabase RLS wiring — added `setTenantContext()` and `withTenantContext()` to `lib/db/client.ts`
-- Fixed `null as any` in `kpi-snapshot.ts`
-- Built `lib/auth/session.ts` — typed `requireSession()` / `getSession()` helpers
-- Built `lib/utils.ts` — `cn()`, `formatCurrency()`, `formatDuration()`, `slugify()` etc
-- Built `lib/email/index.ts` — Resend integration with team invite + call graded emails
-- Updated invite route to send real emails via Resend
-- Added `app/page.tsx` root redirect (was causing 404 at `/`)
-- Added `app/(tenant)/[tenant]/error.tsx` — error boundary
-- Added `app/(tenant)/[tenant]/loading.tsx` — skeleton loader
-- Added `types/next-auth.d.ts` for v4 — properly extends session types
-- Fixed `postcss.config.js` / added `autoprefixer` to devDependencies
-- Added `NEXT_PUBLIC_GHL_CLIENT_ID` to `.env.example`
-- Added `RESEND_API_KEY` and `EMAIL_FROM` to `.env.example`
-
-### Sessions 1–5 — Foundation + full MVP
-See previous PROGRESS.md for detailed log of each session.
-Short summary: full project scaffolded, all pages built, GHL integration, auto call grading,
-AI coach, inventory, KPIs, tasks, inbox, appointments, settings, self-audit, seed data, Railway deploy config.
-
----
-
-## Complete Feature Map
-
-### ✅ Fully built
-- Self-registration + auto-slug + login
-- 5-step onboarding wizard with GHL OAuth
-- Multi-tenant routing with middleware enforcement
-- Supabase RLS tenant isolation (policies + Prisma wiring)
-- Role-based access (6 roles, full permission matrix)
-- Dashboard with live KPI cards + recent calls/tasks/properties
-- Call grading list with score filters
-- Call detail: rubric bars, coaching tips, audio player, transcript
-- Inventory list with status chips + search
-- Property detail with GHL action panel (SMS, add note)
-- **Property create form** (`/inventory/new`) ← new this session
-- **Property edit form** (`/inventory/[id]/edit`) ← new this session
-- Task list grouped by priority, create/complete with GHL sync
-- Inbox — live GHL conversations
-- Appointments — 7-day view from GHL
-- KPIs — today/week/month toggle, score trend bars
-- AI Coach chat with user context (scores, tasks, properties)
-- Settings: team management, GHL connection, call types
-- **Call rubric editor** — full CRUD per role/call type ← new this session
-- GHL webhook receiver (all event types)
-- Auto call grading on call end (Claude API)
-- Property auto-create from GHL pipeline stage
-- GHL actions API: SMS, note, task, stage update
-- Email invite system (Resend)
-- Daily self-audit agent (Claude-powered, 2am cron)
-- Daily KPI snapshot cron
-- Dev seed data (5 users, 5 properties, graded calls, tasks)
-- Railway deployment config + health check
-
-### ⚠️ Built but not end-to-end tested
-- GHL OAuth flow (needs real marketplace app credentials)
-- Auto call grading via webhook (needs real GHL account)
-- Property auto-create from pipeline stage (needs real GHL pipeline)
-- Email sending via Resend (needs RESEND_API_KEY)
-- Token auto-refresh logic (needs expired token)
-
-### ❌ Not yet built — backlog
-See BACKLOG section below.
+### Sessions 1–6 — Foundation
+- Full project scaffolded, all pages built
+- GHL integration layer, auto call grading, AI coach
+- Inventory, KPIs, tasks, inbox, appointments, settings shell
+- Self-audit agent, seed data, Railway deploy config
 
 ---
 
@@ -127,67 +71,64 @@ See BACKLOG section below.
 
 | # | Description | File | Priority | Status |
 |---|---|---|---|---|
-| 1 | `withTenantContext()` not called in API routes — RLS doesn't activate per-request | `lib/db/client.ts` | Medium | Needs wiring in each route |
-| 2 | `session.role` cast still uses `as UserRole` in some pages — minor but avoidable | various pages | Low | Cosmetic |
-| 3 | Invite email uses empty `companyName` string — needs tenant.name lookup | `app/api/tenants/invite/route.ts` | Low | Fix next session |
+| 1 | Pipeline selector in settings does not use live GHL dropdown — violates Rule 2 | settings-client.tsx | HIGH | Fix in Phase 1 |
+| 2 | Settings fields missing data contract comments — violates Rule 1 | settings-client.tsx | HIGH | Fix in Phase 1 |
+| 3 | withTenantContext() not called in API routes — RLS doesn't activate per-request | lib/db/client.ts | MEDIUM | Fix before production |
+| 4 | Invite email sends empty companyName | app/api/tenants/invite/route.ts | LOW | Fix next session |
 
 ---
 
-## Phase 2 Backlog — prioritized
+## Phase 1 — Sequenced Task List
 
-### Priority 1 — do before first paid client
-| Feature | Effort |
-|---|---|
-| Wire `withTenantContext()` into sensitive API routes | Small |
-| Fix invite email to include company name | Tiny |
-| End-to-end test with real GHL account | Medium |
-| Error monitoring (Sentry or similar) | Small |
+Work through these IN ORDER. Do not skip ahead.
 
-### Priority 2 — next feature wave
-| Feature | Effort |
-|---|---|
-| Buyer list management | Large |
-| Deal blasting (SMS/email to buyer list) | Large |
-| Property enrichment (Zillow API) | Medium |
-| Bulk property import from GHL pipeline | Medium |
-| Call transcript integration (Deepgram or GHL native) | Medium |
-| Custom KPI formula builder per role | Large |
-| Reporting + CSV export | Medium |
+### Step 1 — Deploy to Railway (BLOCKER)
+- Create Railway project → connect GitHub repo
+- Add all env vars from .env.example
+- Confirm deployment succeeds
+- Confirm https://[your-url]/api/health returns { status: ok }
+- Why first: GHL webhooks need a public URL. Nothing real can be tested without this.
 
-### Priority 3 — scale
-| Feature | Effort |
-|---|---|
-| GHL Marketplace App public submission | Large |
-| White-label / custom domain per tenant | Large |
-| Mobile-responsive polish | Medium |
-| Push notifications | Medium |
+### Step 2 — GHL Marketplace App
+- Go to GHL Agency → Settings → Developer → My Apps → Create App
+- Name: Gunner AI
+- Redirect URI: https://[your-railway-url]/api/auth/ghl/callback
+- Scopes: contacts.readonly/write, opportunities.readonly/write, conversations.readonly/write, calls.readonly, tasks.readonly/write, calendars.readonly
+- Copy CLIENT_ID and CLIENT_SECRET → add to Railway env vars
+- Why second: Can't do OAuth without the app existing and having a live redirect URI.
+
+### Step 3 — Fix Settings Pipeline Selector (Rule 2 compliance)
+- Settings → Pipeline tab → must use live GHL dropdown
+- Call GET /opportunities/pipelines and populate options from API
+- Store pipelineId and stageId (not names)
+- Add data contract comment to every field touched
+- Why now: If wrong, property auto-create will never work.
+
+### Step 4 — First Real Tenant Onboarding
+- Remove DEV_BYPASS_AUTH from .env.local
+- Register as a new real tenant through /register
+- Go through full 5-step onboarding wizard
+- Connect real GHL sub-account via OAuth
+- Confirm webhooks appear in GHL dashboard
+- Configure pipeline trigger using the live dropdown
+
+### Step 5 — First Call Graded (Phase 1 exit criteria)
+- Make a real call through GHL
+- Confirm it appears in Gunner AI /calls within 30 seconds
+- Confirm score, rubric breakdown, and AI feedback are populated
+- Screenshot as proof
+- This is the moment the architecture is proven.
+
+### Step 6 — Invite testers + verify isolation
+- Invite 1-2 test users from Settings → Team
+- Confirm invite email arrives
+- Log in as each tester → confirm they only see their own data
+- Confirm roles restrict access correctly
 
 ---
 
-## Next Session — exact tasks
+## Next Session — Start Exactly Here
 
-1. Fix invite route to pass `companyName` (fetch tenant.name before sending email)
-2. Wire `withTenantContext(session.tenantId, session.userId)` into the 5 most sensitive API routes
-3. Deploy to Railway — full deployment checklist below
-4. Test end-to-end with a real GHL account
-5. Start buyer list module if time allows
+**Task:** Deploy to Railway (Step 1 above)
 
----
-
-## Deployment Checklist
-
-- [ ] `git init && git add . && git commit -m "initial: Gunner AI MVP"`
-- [ ] Push to GitHub
-- [ ] Create Supabase project → copy `DATABASE_URL` and `DIRECT_URL`
-- [ ] Run `npm run db:migrate` locally pointing at Supabase
-- [ ] Paste `prisma/rls-policies.sql` into Supabase SQL Editor → Run
-- [ ] Create GHL Marketplace App → get `GHL_CLIENT_ID` + `GHL_CLIENT_SECRET`
-- [ ] Sign up for Resend → get `RESEND_API_KEY` → verify your domain
-- [ ] Create Railway project → connect GitHub repo
-- [ ] Add ALL env vars to Railway (reference `.env.example`)
-- [ ] Trigger first deploy → check logs
-- [ ] Hit `GET /api/health` → should return `{ status: 'ok' }`
-- [ ] Open `/register` → create first tenant → complete onboarding
-- [ ] Connect GHL → verify webhook shows in GHL dashboard
-- [ ] Make a test call in GHL → verify it appears graded in `/calls`
-- [ ] Invite a team member → verify email arrives
+**First message to Claude Code:**

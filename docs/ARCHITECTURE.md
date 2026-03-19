@@ -1,308 +1,231 @@
 # ARCHITECTURE.md — Gunner AI System Design
 
-> The "why" behind every structural decision. Read this before adding a new module, changing a data flow, or questioning why something works the way it does.
+> The "why" behind every structural decision.
+> Read before adding a new module, changing a data flow, or questioning why something works the way it does.
+> Updated: Phase 1 hardening — GHL boundary and data contract rules integrated.
 
 ---
 
-## System Overview
+## Core Product Philosophy
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    CLIENTS (browsers)                    │
-└──────────────────────────┬──────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────┐
-│              Next.js 14 — Railway                        │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │  App Router  │  │  API Routes  │  │  Middleware   │  │
-│  │  (pages)    │  │  (/api/*)    │  │  (auth+tenant)│  │
-│  └──────┬──────┘  └──────┬───────┘  └───────────────┘  │
-│         │                │                               │
-│  ┌──────▼──────────────────▼──────────────────────────┐ │
-│  │                   lib/                              │ │
-│  │  ghl/client.ts  ai/grading.ts  ai/coach.ts         │ │
-│  │  auth/config.ts  db/client.ts  properties.ts       │ │
-│  └──────────────────────────┬───────────────────────-─┘ │
-└─────────────────────────────┼───────────────────────────┘
-                              │
-          ┌───────────────────┼───────────────────┐
-          │                   │                   │
-┌─────────▼──────┐  ┌─────────▼──────┐  ┌────────▼───────┐
-│   Supabase     │  │  Anthropic     │  │  Go High Level │
-│   PostgreSQL   │  │  Claude API    │  │  (GHL) API     │
-│   + Auth       │  │                │  │                │
-└────────────────┘  └────────────────┘  └────────────────┘
-```
+**Gunner AI enhances GHL. It does not replace it.**
+
+This boundary is the most important architectural decision in the entire system.
+Getting it wrong means duplicating data, fighting sync conflicts, and building features GHL already has.
+
+### What GHL owns (source of truth — we read, never overwrite)
+- Contacts (sellers, buyers, leads)
+- Conversations and messages
+- Appointments and calendar events
+- Pipelines and stages
+- Tasks (we can create them, GHL stores them)
+- Call recordings and metadata
+
+### What Gunner AI owns (our source of truth — GHL cannot do this)
+- **Properties** — ARV, repair estimates, equity, MAO, assignment fee, status
+- **Call grades** — score, rubric breakdown, AI feedback, coaching tips
+- **KPI milestones** — historical snapshots, trend data, goal tracking
+- **Buyer activity** — deal blasts sent, responses, buyer list
+- **Rubrics** — grading criteria per role and call type
+- **Role configs** — which KPIs each role sees, task categories, permissions
+
+When in doubt: if GHL can store it natively, we don't duplicate it.
+We only build what GHL cannot do.
 
 ---
 
-## Multi-Tenancy Architecture
+## The Data Contract Rule
 
-### How tenant isolation works
+**Every settings field must have an explicit data contract before it is built.**
 
-Every client (wholesaling company) is a **tenant**. They are completely isolated from each other at every layer:
+A data contract means:
+1. **WRITES TO:** exact table, column, and data type
+2. **READ BY:** exact file, function, and query that consumes it
 
-**Layer 1 — URL routing**
+If both are not defined and verified to be identical before building the UI, the UI does not get built.
+
+### Example — correct implementation
 ```
-gunnerai.com/apex-wholesaling/dashboard
-             ^^^^^^^^^^^^^^^^
-             tenant slug — resolved in middleware.ts
+// Settings field: "Property pipeline trigger"
+// WRITES TO: tenants.property_trigger_stage (string — GHL stage ID)
+// READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
+//          checks: event.stageId === tenant.propertyTriggerStage
+// DROPDOWN SOURCE: GET /opportunities/pipelines → stages array
 ```
-Middleware reads `session.tenantSlug` and rejects requests where URL slug ≠ session slug. A user from "apex-wholesaling" can never access "sunrise-deals" routes, even if they guess the URL.
 
-**Layer 2 — Application queries**
-Every single DB query filters by `tenantId`:
-```typescript
-// WRONG — leaks data across tenants
-db.property.findMany()
-
-// RIGHT — always
-db.property.findMany({ where: { tenantId } })
-```
-The `tenantId` comes from the NextAuth session, which is set at login and signed with `NEXTAUTH_SECRET`.
-
-**Layer 3 — Supabase Row Level Security**
-Even if a bug in the app forgets the `tenantId` filter, Supabase RLS blocks the query at the database level. The policies in `prisma/rls-policies.sql` enforce that users can only see rows where `tenant_id` matches the value set in `app.tenant_id`.
-
-**Why three layers?**
-- Layer 1 prevents URL guessing attacks
-- Layer 2 is the primary enforcement (fast, in application code)
-- Layer 3 is the safety net (catches bugs in Layer 2)
+### Example — what failure looks like
+Settings writes to `tenant.config.pipelineStage` (JSON blob).
+Live page reads from `tenant.propertyTriggerStage` (top-level column).
+Different fields → setting does nothing → user sees no effect → trust is broken.
+This exact failure killed the previous build. It cannot happen again.
 
 ---
 
 ## GHL Integration Architecture
 
 ### Why OAuth Marketplace App (not API keys)
-
-| Approach | Pros | Cons |
-|---|---|---|
-| API keys per tenant | Simple to start | Manual setup, error-prone, not scalable |
-| OAuth Marketplace App | Self-serve, automatic, scalable, GHL-approved | More complex to build initially |
-
-We built OAuth from the start because the goal is 100 tenants. API keys don't scale.
+- Self-serve: tenants connect themselves during onboarding
+- Scoped: tokens are per-location, not agency-wide
+- Scalable: works for 100 tenants without manual credential management
+- GHL-approved: better rate limits, marketplace visibility
 
 ### Token flow
-
 ```
 User clicks "Connect GHL" in onboarding
         ↓
-Redirect to GHL OAuth chooselocation page
+Redirect to GHL OAuth chooselocation
         ↓
-User picks their sub-account
+User selects their sub-account
         ↓
 GHL redirects to /api/auth/ghl/callback?code=XXX
         ↓
-We exchange code for access_token + refresh_token
+Exchange code for access_token + refresh_token
         ↓
-Store both in tenants table (ghl_access_token, ghl_refresh_token, ghl_token_expiry)
+Store in tenants table (ghl_access_token, ghl_refresh_token, ghl_token_expiry)
         ↓
 Register webhooks on GHL for this location
         ↓
-Every subsequent GHL API call goes through getGHLClient(tenantId)
-which auto-refreshes the token if it expires in <5 minutes
+Every GHL API call uses getGHLClient(tenantId) — auto-refreshes on expiry
 ```
 
 ### Webhook flow
-
 ```
 GHL fires event (e.g. call ends)
         ↓
 POST /api/webhooks/ghl
         ↓
-Verify HMAC signature (GHL_WEBHOOK_SECRET)
+Verify HMAC signature
         ↓
-Return 200 immediately (so GHL doesn't retry)
+Return 200 immediately (prevents GHL retry)
         ↓
-Process async in background:
-  - Find tenant by locationId
-  - Route to correct handler (handleCallCompleted, etc.)
-  - Handler does the work (grade call, create property, etc.)
+Process async:
+  Find tenant by locationId
+  Route to handler
+  Handler does the work
 ```
 
-**Why return 200 before processing?**
-GHL will retry the webhook if we don't respond within 5 seconds. Call grading takes 10-30 seconds. So we respond immediately and process asynchronously.
+Critical: Always return 200 before processing.
+GHL retries if no response in 5 seconds.
+Grading takes 10-30 seconds.
+Async is non-negotiable.
+
+---
+
+## GHL Dropdown Rule
+
+**No text inputs for any field that maps to a GHL entity.**
+
+Every GHL mapping field must:
+1. Fetch live data from GHL API on render
+2. Display human-readable names
+3. Store GHL IDs (not names — names change, IDs don't)
+4. Handle loading and error states gracefully
+
+Applies to:
+- Pipeline selection → GET /opportunities/pipelines
+- Stage selection → populated from selected pipeline stages
+- Custom field mapping → GET /locations/{id}/customFields
+- User assignment → GET /users on the location
+- Calendar selection → GET /calendars
+
+---
+
+## Settings Architecture — 7 Sections, One Page
+
+All configuration lives at /{tenant}/settings. No gear icons on individual pages.
+
+| Section | What it controls | Key data contracts |
+|---|---|---|
+| Integrations | GHL OAuth, webhook status | tenants.ghl_access_token, ghl_location_id |
+| Pipeline | Which stage creates a property | tenants.property_pipeline_id, property_trigger_stage |
+| Team | Members, roles, hierarchy | users table, role assignments |
+| Calls | Call types, results, rubrics | tenants.call_types, call_rubrics table |
+| Inventory | Property card fields | tenants.config → inventory section |
+| KPIs | Which metrics each role sees | role_configs table, kpi_snapshots |
+| Day Hub | Task categories, default views | role_configs.task_categories |
+
+---
+
+## Multi-Tenancy — Three Layer Isolation
+
+**Layer 1 — URL routing (middleware.ts)**
+/{slug}/page → middleware validates slug matches session tenantSlug.
+User from tenant A cannot access tenant B's URL even if they guess it.
+
+**Layer 2 — Application queries**
+Every DB query includes tenantId. Comes from verified session, not URL.
+
+**Layer 3 — Supabase RLS**
+Even if layers 1-2 have a bug, RLS blocks at DB level.
+Requires setTenantContext(tenantId, userId) before each request.
 
 ---
 
 ## Call Grading Architecture
-
 ```
 GHL fires CallCompleted webhook
         ↓
-handleCallCompleted() in lib/ghl/webhooks.ts
+createCall() — saves record with gradingStatus: PENDING
         ↓
-Creates Call record with gradingStatus: 'PENDING'
-        ↓
-Calls gradeCall(callId) — fire and forget (no await)
-        ↓ (async, may take 10-30 seconds)
-gradeCall() in lib/ai/grading.ts:
-  1. Updates gradingStatus → 'PROCESSING'
-  2. Fetches call + user + rubric from DB
-  3. Builds system prompt with rubric criteria
-  4. Builds user prompt with transcript/metadata
-  5. Calls Claude claude-opus-4-6 API
-  6. Parses JSON response
-  7. Updates Call record with score, rubricScores, aiSummary, aiFeedback, coachingTips
-  8. Updates gradingStatus → 'COMPLETED'
-  9. Logs to audit_logs
+gradeCall(callId) — fire and forget (no await)
+        ↓ async
+1. Set gradingStatus → PROCESSING (prevents duplicate grading)
+2. Fetch call + user + rubric from DB
+3. Build prompt with rubric criteria
+4. Call Claude claude-opus-4-6
+5. Parse JSON response
+6. Update call: score, rubricScores, aiSummary, aiFeedback, coachingTips
+7. Set gradingStatus → COMPLETED
+8. Log to audit_logs
 ```
 
-**Why fire-and-forget?**
-The webhook must return 200 in <5 seconds. Grading takes longer. So we decouple them.
-
-**What if grading fails?**
-- Sets `gradingStatus: 'FAILED'`
-- Logs error to `audit_logs`
-- User sees "Grading failed" on the call card
-- Can be manually triggered in a future release
-
-**What if there's no recording?**
-Claude grades on available metadata (direction, duration, call type, role). Score will be lower quality but still gives basic feedback.
+gradingStatus: PROCESSING must be set before calling Claude.
+If not set and webhook fires twice, you get duplicate grades.
 
 ---
 
 ## Property / Inventory Architecture
 
 ### Why property-based not contact-based
-
-GHL is contact-based. We are property-based. This is intentional.
-
-In wholesaling:
-- One seller (contact in GHL) can own 3 properties
-- You want to track each property separately (different ARV, status, assigned rep)
-- Your KPIs are deals closed (properties sold), not contacts touched
-
-So: GHL owns the contact → we own the property → they're linked via `ghlContactId`.
+GHL is contact-based. Gunner AI is property-based. This is intentional.
+One seller (GHL contact) can own multiple properties.
+GHL has no native property object — we own this entirely.
 
 ### How a property gets created
-
 ```
-Seller fills out form or gets uploaded to GHL
-        ↓
-Rep works the lead → moves contact to configured pipeline stage
+Rep moves GHL contact to configured pipeline stage
         ↓
 GHL fires OpportunityStageChanged webhook
         ↓
-We check: does stageId match tenant.propertyTriggerStage?
+Check: does stageId === tenant.propertyTriggerStage?
+        ↓ yes
+createPropertyFromContact(tenantId, ghlContactId)
         ↓
-If yes: createPropertyFromContact(tenantId, contactId)
-        ↓
-Fetch contact details from GHL API
-        ↓
-Create Property record with address from contact
-        ↓
-Create or find Seller record
-        ↓
-Create PropertySeller join (isPrimary: true)
+Fetch contact from GHL → extract address
+Create Property + Seller + PropertySeller records
 ```
 
-### The seller-property many-to-many
-
-One seller can own multiple properties:
-```
-Seller: Robert Smith
-  → 123 Main St (active)
-  → 456 Oak Ave (sold)
-  → 789 Pine Rd (dead)
-```
-
-We use `property_sellers` as a join table. `isPrimary` marks the main contact for a property.
+The stage ID must come from a live GHL dropdown in settings.
+If the user types the wrong stage name, properties never get created. Silent failure.
 
 ---
 
-## AI Coach Architecture
-
-### What makes it context-aware
-
-Every coach request pulls fresh context before calling Claude:
-```typescript
-// Fetched every time, not cached:
-- Last 5 graded calls + scores + feedback
-- Open task count
-- Active property count
-- Role config (what KPIs they track)
+## Database — Key Relationships
 ```
+Tenant (1) ── (many) User
+Tenant (1) ── (many) Property
+Tenant (1) ── (many) Seller
+Tenant (1) ── (many) Call
+Tenant (1) ── (many) Task
+Tenant (1) ── (many) CallRubric
+Tenant (1) ── (many) RoleConfig
 
-This context goes into Claude's system prompt. The coach knows:
-- "You scored 61 on your last call — here's what the grader said"
-- "You have 3 open tasks right now"
-- "You're a lead manager, so I'll focus on qualifying and appointment-setting"
+Property (many) ── (many) Seller  [via PropertySeller]
+Property (1) ── (many) Call
+Property (1) ── (many) Task
 
-### Why we don't store conversation history
-
-The coach is stateless — each session starts fresh. This is intentional:
-- Keeps context window clean
-- No storage cost for message history
-- Users tend to start new topics each session anyway
-- Simpler to implement for MVP
-
-Future: add optional conversation memory for returning users.
-
----
-
-## KPI Architecture
-
-### Source of truth
-
-KPIs auto-populate from these tables:
-- **Calls** → calls made, avg score, grading distribution
-- **Properties** → active pipeline, new leads, sold this month
-- **Tasks** → completed today, open count
-- **KpiSnapshots** → historical trend data (daily snapshots)
-
-### Snapshot system
-
-A cron job runs daily at midnight and saves a snapshot of every user's metrics to `kpi_snapshots`. This enables:
-- Historical trend charts (score over time)
-- Weekly/monthly comparisons
-- Without snapshots, we can only show current state
-
----
-
-## Database Schema — key relationships
-
+User (many) ── (many) User  [via reportsTo self-reference]
 ```
-Tenant (1) ─── (many) User
-Tenant (1) ─── (many) Property
-Tenant (1) ─── (many) Seller
-Tenant (1) ─── (many) Call
-Tenant (1) ─── (many) Task
-Tenant (1) ─── (many) CallRubric
-Tenant (1) ─── (many) RoleConfig
-
-Property (many) ─── (many) Seller  [via PropertySeller join table]
-Property (1) ─── (many) Call
-Property (1) ─── (many) Task
-
-User (many) ─── (many) User  [via reportsTo self-reference]
-User (1) ─── (many) Call  [assignedTo]
-User (1) ─── (many) Task  [assignedTo]
-User (1) ─── (many) KpiSnapshot
-```
-
----
-
-## File Naming Conventions
-
-| Pattern | Meaning | Example |
-|---|---|---|
-| `app/(group)/page.tsx` | Route group (no URL segment) | `(auth)/login/page.tsx` |
-| `app/(tenant)/[tenant]/page.tsx` | Dynamic tenant segment | `[tenant]/dashboard/page.tsx` |
-| `components/module/module-client.tsx` | Client component for a module | `calls/calls-client.tsx` |
-| `lib/domain/action.ts` | Business logic | `ghl/client.ts`, `ai/grading.ts` |
-| `app/api/resource/route.ts` | API route | `api/tasks/route.ts` |
-| `scripts/verb.ts` | Runnable script | `scripts/seed.ts` |
-
----
-
-## Performance Considerations
-
-- **Server components** fetch data — keeps client bundle small
-- **Parallel queries** with `Promise.all()` — dashboard loads all data in one round-trip
-- **GHL token refresh** happens automatically — no failed requests due to expired tokens
-- **Webhook processing** is async — never blocks GHL's retry timeout
-- **KPI snapshots** are pre-computed nightly — KPI page doesn't scan millions of rows
 
 ---
 
@@ -310,9 +233,21 @@ User (1) ─── (many) KpiSnapshot
 
 | Threat | Mitigation |
 |---|---|
-| Tenant A accessing Tenant B data | Middleware slug check + DB `tenantId` filter + RLS |
-| Forged GHL webhooks | HMAC signature verification with `GHL_WEBHOOK_SECRET` |
-| Session hijacking | NextAuth JWT signed with `NEXTAUTH_SECRET`, httpOnly cookies |
-| Exposed secrets | `config/env.ts` validates at startup, never reads `process.env` in components |
+| Tenant A accessing Tenant B data | Middleware slug check + tenantId filter + RLS |
+| Forged GHL webhooks | HMAC signature with GHL_WEBHOOK_SECRET |
+| Session hijacking | NextAuth JWT signed with NEXTAUTH_SECRET |
+| Exposed secrets | config/env.ts validates at startup |
 | SQL injection | Prisma ORM parameterizes all queries |
-| Privilege escalation | `hasPermission(role, permission)` checked on every protected action |
+| Privilege escalation | hasPermission(role, permission) on every action |
+
+---
+
+## Phase 1 Success Criteria
+
+The architecture is not proven until:
+1. A real GHL call → creates a graded record in Gunner AI automatically
+2. A real pipeline stage change → creates a property in inventory automatically
+3. Two different tenant accounts → cannot see each other's data
+4. Settings pipeline selector → uses live GHL dropdown → writes correct stage ID → triggers property creation
+
+If all four work, the foundation is solid. Phase 2 can begin.
