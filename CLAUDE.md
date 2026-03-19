@@ -1,149 +1,176 @@
 # CLAUDE.md — Gunner AI
 
-> Read this ENTIRE file before writing a single line of code.
-> Rules + orientation only. For status → PROGRESS.md. For architecture → docs/ARCHITECTURE.md.
-> Last updated: Phase 1 hardening — lessons from prior failed build integrated.
+> You are a Production Systems Engineer, not a chatbot.
+> Read this ENTIRE file before touching any code.
+> Rules + orientation only. Status → PROGRESS.md. Architecture → docs/ARCHITECTURE.md. Agent standards → AGENTS.md.
 
 ---
 
 ## What this is
 
-**Gunner AI** — multi-tenant SaaS command center for real estate wholesaling teams in the US.
-Backed by Go High Level (GHL). Empowers teams through accountability, training, and AI automation.
+**Gunner AI** — AI-first CRM Enhancer for wholesale real estate teams.
+Backed by Go High Level (GHL). Zero friction. Revenue-driven.
 
 The three things it does:
 1. Grades every sales call automatically using Claude AI the moment it ends
 2. Manages wholesale properties (inventory) with KPI auto-population
-3. Provides an AI coach that knows each user's scores, pipeline, and progress
+3. Scores leads using True Conversion Probability (0.0–1.0 ensemble model)
+
+**This is not a CRM. This is a revenue intelligence layer on top of GHL.**
 
 ---
 
-## NON-NEGOTIABLE RULES — learned from prior failed build
+## NON-NEGOTIABLE RULES
 
-These rules exist because a previous version of this product failed due to these exact mistakes.
-Violating any of these is grounds to stop and revert.
+Violating any of these is grounds to stop, revert, and fix.
 
-### Rule 1 — The Data Contract Rule (Settings)
+---
 
-**The single biggest failure mode: building settings UI that doesn't actually control what the live pages read.**
+### Rule 1 — Data Contract Rule (Settings Foundation)
 
-Before building ANY settings field or tab:
-1. Define the exact DB field it writes to (table, column, type)
-2. Define the exact query the live page uses to read it
-3. Confirm both are identical — same field, same table, same format
+**Settings built without data logic = UI shells = wasted work. This killed the prior build.**
 
-If you cannot answer both questions before writing the UI, DO NOT BUILD IT.
+Before building ANY settings field:
+1. Define the Prisma schema field it writes to (table, column, type)
+2. Define the exact API endpoint and query the live page uses to read it
+3. Confirm write-path key === read-path key — identical, no exceptions
 
-Every settings field must have a comment like:
-```
-// WRITES TO: tenants.property_trigger_stage (string)
+Every settings field in code must have this comment block:
+```typescript
+// WRITES TO: tenants.property_trigger_stage (String)
+// API ENDPOINT: PATCH /api/tenants/config
 // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
+// READ QUERY: db.tenant.findUnique({ select: { propertyTriggerStage: true } })
+// DROPDOWN SOURCE: GET /api/ghl/pipelines → stages[]
 ```
+
+Use updateTenantSettings() server action for all settings writes.
+Dashboard read-path and settings write-path must use identical Prisma field names.
+
+---
 
 ### Rule 2 — No Text Inputs for GHL Mappings
 
-**Users cannot type GHL stage names, field keys, or pipeline IDs. Too fragile. Always breaks.**
+**Zero text inputs for any CRM field mapping. Zero exceptions.**
 
-Every field that maps to a GHL entity MUST be:
-- A dropdown populated by a live GHL API call
-- Searchable if the list is long
-- Storing the GHL ID (not the display name)
+Every GHL mapping field must be:
+- A searchable dropdown populated by a live GHL API call
+- Storing GHL IDs (not display names — names change, IDs don't)
+- Handling loading, error, and empty states explicitly
 
-Never: `<input placeholder="Enter stage name" />`
-Always: `<Select options={fetchedFromGHL} />`
-
-### Rule 3 — Single Settings Hub
-
-All settings live at `/{tenant}/settings` with these 7 sections:
-1. **Integrations** — GHL connection, OAuth status, webhook health
-2. **Pipeline** — which pipeline + stage triggers property creation
-3. **Team** — invite members, assign roles, hierarchy
-4. **Calls** — call types, results, grading rubrics per role
-5. **Inventory** — property card fields, custom fields
-6. **KPIs** — which metrics each role sees
-7. **Day Hub** — task categories, default views
-
-Individual pages show data. Settings page controls configuration. Never mix them.
-
-### Rule 4 — Gunner is a CRM Enhancer, Not a CRM
-
-What GHL owns (we read, never overwrite):
-- Contacts, conversations, appointments, pipelines, tasks, call recordings
-
-What WE own (GHL cannot do this):
-- Properties (ARV, repairs, equity, assignment fee)
-- Call grades, rubric scores, AI feedback
-- KPI milestones and historical snapshots
-- Buyer activity and deal blast history
-
-### Rule 5 — Autonomous Handoff (Session Discipline)
-
-Every session ends with PROGRESS.md updated. No exceptions.
-
-At the end of every Claude Code session:
-1. Update PROGRESS.md → Session Log with exactly what was done
-2. Update PROGRESS.md → Known Bugs with anything discovered
-3. Update PROGRESS.md → Next Session with the exact first task
-4. If any architectural decision was made → add to docs/DECISIONS.md
-
-The test: could a new Claude Code session pick up exactly where this one left off
-using only PROGRESS.md? If no → the handoff is incomplete.
-
----
-
-## Hard rules — technical
-
-### Security
-- Every API route must call `getSession()` from `lib/auth/session.ts` before touching data
-- Every DB query must include `tenantId` — no exceptions, ever
-- Never expose `SUPABASE_SERVICE_ROLE_KEY` or `ANTHROPIC_API_KEY` to the client
-- Verify GHL webhook `locationId` maps to a real tenant before processing
-
-### Architecture
-- All GHL API calls go through `lib/ghl/client.ts` — never fetch GHL directly from components
-- All Claude API calls go through `lib/ai/` — never call Anthropic SDK directly from routes
-- All env vars go through `config/env.ts` — never read `process.env` directly
-- Server components fetch data. Client components display it. No exceptions.
-
-### Code quality
-- TypeScript strict mode — no `any`, no `@ts-ignore`, no `as unknown as X`
-- Every async function needs try/catch — errors log to `audit_logs` table
-- No TODO comments in committed code — add to PROGRESS.md instead
-
-### Database
-- Properties are inventory, not contacts — one seller can own multiple properties
-- Tenant isolation enforced at TWO levels: middleware slug check + Supabase RLS
-- Never run a migration on production without testing on dev first
-- Never query without `tenantId` — you will leak cross-tenant data
-
----
-
-## What NOT to do
-
-- Do NOT build a settings field without defining its data contract first
-- Do NOT use text inputs for any GHL mapping — always live dropdowns
-- Do NOT add gear icons or config UI to individual pages — everything in /settings
-- Do NOT store data GHL should own, or let GHL own data we should own
-- Do NOT end a session without updating PROGRESS.md
-- Do NOT add npm packages without checking `package.json` first
-- Do NOT create DB tables without updating `schema.prisma` AND `rls-policies.sql`
-- Do NOT add a new page without adding it to `components/ui/sidebar-nav.tsx`
-- Do NOT call `db.user.findMany()` without `tenantId` filter
-- Do NOT add a GHL call without using `getGHLClient(tenantId)` factory
-
----
-
-## Orientation — read these files in order
-
-| File | Purpose |
+| Field type | GHL endpoint |
 |---|---|
-| `CLAUDE.md` | Rules, constraints, orientation (this file) |
-| `PROGRESS.md` | Exact build status, bugs, next task |
-| `docs/ARCHITECTURE.md` | System design, data flows, decisions |
-| `docs/DECISIONS.md` | Why things are built the way they are |
-| `docs/MODULES.md` | Every module: inputs, outputs, gotchas |
-| `prisma/schema.prisma` | Database — single source of truth |
-| `types/roles.ts` | Permission system — single source of truth |
+| Pipeline | GET /opportunities/pipelines |
+| Stage | Derived from selected pipeline |
+| Custom field | GET /locations/{id}/customFields |
+| Assigned user | GET /users (location scoped) |
+| Calendar | GET /calendars |
+
+Never: <input placeholder="Enter stage name" />
+Always: <GHLDropdown endpoint="/api/ghl/pipelines" storeId />
+
+---
+
+### Rule 3 — Single Settings Hub — 7 Sections
+
+All configuration at /{tenant}/settings. No gear icons on individual pages.
+
+| # | Section | Data contract target |
+|---|---|---|
+| 1 | Integrations | tenants.ghl_access_token, ghl_location_id |
+| 2 | Pipeline | tenants.property_pipeline_id, property_trigger_stage |
+| 3 | Team | users table, role assignments, hierarchy |
+| 4 | Calls | tenants.call_types, call_rubrics table |
+| 5 | Inventory | tenants.config → inventory_fields |
+| 6 | KPIs | role_configs table, kpi_snapshots |
+| 7 | Day Hub | role_configs.task_categories |
+
+No Orphan UI: If a setting does not visibly change something on a live dashboard, do not build the write-path until the read-path exists.
+
+---
+
+### Rule 4 — Worker Agent Architecture
+
+**Gunner agents are Workers, not Chatbots.**
+
+- Completion signal: Use stop_reason: "end_turn" as the only unambiguous signal. Never parse natural language to detect completion.
+- High-stakes gates: SMS blasts, record deletion, bulk updates — gated by code-level interceptors requiring explicit human approval. Prompt instructions are not security boundaries.
+- Isolated context: Every sub-agent spawn passes full context explicitly (CLAUDE.md, AGENTS.md, relevant module docs). Never assume inherited context.
+- Self-healing tools: All tools return structured JSON:
+
+{
+  status: 'success' | 'error' | 'no_results',
+  data?: unknown,
+  error?: string,
+  suggestion?: string
+}
+
+---
+
+### Rule 5 — True Conversion Probability (Lead Scoring)
+
+**Gunner calculates True Conversion Probability (TCP): 0.0–1.0.**
+
+Ensemble model factors:
+- Call sentiment score (from grading)
+- Previous touch count and recency
+- Property equity percentage
+- Seller motivation score
+- Days since first contact
+- Appointment set/no-show history
+- Pipeline stage velocity
+
+The Buy Signal: High TCP + Low team engagement = priority lead.
+Team efficiency tracked via Sharpe Ratio (profit per unit of risk/time).
+Performance logged as Log Returns: ln(P1/P0) for additive accuracy.
+
+Implementation lives in lib/ai/scoring.ts.
+Score recalculates on every: call graded, stage change, task completed.
+
+---
+
+### Rule 6 — Onboarding is 70% of the App
+
+The first 60 seconds must connect GHL and show a wow result.
+
+Onboarding flow:
+1. Connect GHL (OAuth) — must complete in under 3 clicks
+2. Select pipeline trigger — live dropdown, no typing
+3. Make or replay a call — show first graded result
+4. Hard paywall gate here — user has seen the value, now subscribe
+5. Invite team → dashboard
+
+The paywall goes AFTER the user sees the first graded call.
+
+---
+
+### Rule 7 — Autonomous Handoff (Session Discipline)
+
+Every session ends with PROGRESS.md updated. Every single session.
+
+End of session checklist:
+1. PROGRESS.md → Session Log: exactly what was done
+2. PROGRESS.md → Known Bugs: anything discovered
+3. PROGRESS.md → Next Session: exact first task, exact first prompt
+4. AGENTS.md → updated if any new convention was established
+5. docs/DECISIONS.md → updated if any architectural choice was made
+
+Test: could a brand new Claude Code session pick up exactly where this left off
+using only PROGRESS.md + AGENTS.md? If no → handoff is incomplete.
+
+---
+
+## Hard Technical Rules
+
+- Every API route calls getSession() from lib/auth/session.ts before touching data
+- Every DB query includes tenantId — no exceptions
+- Never expose SUPABASE_SERVICE_ROLE_KEY or ANTHROPIC_API_KEY client-side
+- All GHL calls go through lib/ghl/client.ts
+- All Claude calls go through lib/ai/
+- All env vars go through config/env.ts
+- TypeScript strict mode — no any, no @ts-ignore
+- Every async function has try/catch — errors log to audit_logs
+- Server components fetch. Client components display.
 
 ---
 
@@ -157,25 +184,18 @@ using only PROGRESS.md? If no → the handoff is incomplete.
 | Auth | NextAuth.js v4 | lib/auth/config.ts |
 | AI | Anthropic claude-opus-4-6 | lib/ai/ |
 | GHL | OAuth Marketplace App | lib/ghl/client.ts |
+| Lead Scoring | Ensemble TCP model | lib/ai/scoring.ts |
 | Styling | Tailwind CSS | tailwind.config.ts |
 | Deploy | Railway + Supabase | railway.toml |
+| Agent Standards | AGENTS.md | /AGENTS.md |
 
 ---
 
-## Role hierarchy
+## Session Start Protocol
 
-OWNER → ADMIN → TEAM_LEAD → ACQUISITION_MANAGER → LEAD_MANAGER
-                           → DISPOSITION_MANAGER
-
-Full permissions in `types/roles.ts`. Use `hasPermission(role, permission)` for all checks.
-When adding a feature, define its permission in `types/roles.ts` first.
-
----
-
-## How to start any coding session
-
-1. Read PROGRESS.md — find "Next Session" section, start exactly there
-2. Read the relevant section of docs/MODULES.md for what you're building
-3. Check docs/DECISIONS.md before making any architectural choice
-4. Build the thing
-5. Update PROGRESS.md before ending the session — always
+1. Read PROGRESS.md → find Next Session → start exactly there
+2. Read AGENTS.md → confirm you understand the conventions
+3. Read relevant section of docs/MODULES.md
+4. Check docs/DECISIONS.md before any architectural choice
+5. Build
+6. Update PROGRESS.md + AGENTS.md before ending

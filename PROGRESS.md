@@ -8,74 +8,78 @@
 
 ## Current Status
 
-**Phase**: Phase 1 — Foundation hardening
+**Phase**: Phase 1 — Foundation + first live call graded
 **App state**: Running locally at localhost:3000 with seed data
-**Auth**: DEV_BYPASS_AUTH=true — goes straight to dashboard (owner@apex.dev)
-**Deployment**: LIVE at https://gunner-claude-production.up.railway.app
-**GHL**: NOT connected — no Marketplace App created yet
-**First call graded**: NOT achieved — this is the Phase 1 exit criteria
+**Auth**: DEV_BYPASS_AUTH=true (dev only — must be removed before production)
+**GitHub**: https://github.com/c7lavinder/Gunner-Claude ✅
+**Railway**: https://gunner-claude-production.up.railway.app ✅
+**Health check**: PASSING ✅
+**GHL Marketplace App**: CREATED ✅
+**GHL credentials in Railway**: ADDED ✅
+**First call graded**: NOT achieved ← Phase 1 exit criteria
 
 ---
 
-## Phase 1 Exit Criteria — must ALL be true before Phase 2
+## Phase 1 Exit Criteria — ALL must be true before Phase 2
 
-- [x] App deployed to Railway with a real public URL
+- [x] Railway deployed — real public URL confirmed
+- [x] GET /api/health returns { status: 'ok' } on Railway URL
 - [x] GHL Marketplace App created with correct scopes and redirect URI
-- [ ] One real tenant onboarded through the full onboarding flow
-- [ ] GHL connected via OAuth — webhooks registered and confirmed in GHL dashboard
-- [ ] One real call made in GHL → appears graded in Gunner AI /calls page
-- [ ] Settings pipeline selector uses live GHL dropdown (not text input)
-- [ ] DEV_BYPASS_AUTH removed — real login working
-- [ ] PROGRESS.md updated with all of the above confirmed
+- [ ] One real tenant onboarded through full onboarding flow
+- [ ] GHL connected via OAuth — webhooks in GHL dashboard confirmed
+- [ ] Settings pipeline selector uses live GHL dropdown (Rule 2 compliant)
+- [ ] Real call in GHL → graded record in /calls within 60 seconds
+- [ ] Real stage change → property appears in /inventory
+- [ ] DEV_BYPASS_AUTH removed — real login working on Railway URL
+- [ ] Two tenants verified cannot see each other's data
 
-**Do not start Phase 2 until every box above is checked.**
+**Do not start Phase 2 until every box is checked.**
 
 ---
 
-## Non-Negotiable Rules (from CLAUDE.md — repeated here for visibility)
+## Non-Negotiable Rules (from CLAUDE.md)
 
-1. **Data Contract Rule** — every settings field must declare what it writes to and what reads it
-2. **No text inputs for GHL mappings** — always live dropdowns from GHL API
-3. **Single settings hub** — 7 sections, no gear icons on individual pages
-4. **Gunner enhances GHL, doesn't replace it** — we own properties/KPIs/grades, GHL owns contacts
-5. **Autonomous handoff** — PROGRESS.md updated every session, next task explicitly stated
+1. Data Contract — every settings field declares WRITES TO + READ BY before UI is built
+2. No text inputs for GHL mappings — live dropdowns only
+3. Single settings hub — 7 sections, no orphan UI
+4. Worker agent architecture — stop_reason: end_turn, code-level gates, structured JSON responses
+5. True Conversion Probability — lead scoring via ensemble model in lib/ai/scoring.ts
+6. Onboarding is 70% — first 60 seconds must show graded call, paywall after wow moment
+7. Autonomous handoff — PROGRESS.md + AGENTS.md updated every session
 
 ---
 
 ## Session Log
 
-### Session 9 — Railway deployment (2026-03-19)
+### Session 9 — Railway + GHL Marketplace App
 **What was done:**
-- Upgraded Next.js 14.2.3 → 14.2.35 (Railway blocked on CVEs)
-- Fixed 12 pre-existing TypeScript errors across 8 files
-- Fixed ESLint config (removed missing @typescript-eslint plugin rules)
-- Added Node >=20 engine requirement to package.json
-- Wrapped login + onboarding pages in Suspense (Next.js 14.2 SSG requirement)
-- Added /api/health to public paths in middleware
-- Deployed to Railway: https://gunner-claude-production.up.railway.app
-- Health check confirmed: `{"status":"ok"}`
-- Phase 1 Exit Criteria #1 checked off
+- Railway deployed successfully at https://gunner-claude-production.up.railway.app
+- Health check passing at /api/health
+- GHL Marketplace App created with full webhook list and correct redirect URI
+- Redirect URI changed from /api/auth/ghl/callback to /api/auth/crm/callback (GHL blocked "ghl" in URIs)
+- GHL_CLIENT_ID, GHL_CLIENT_SECRET, GHL_REDIRECT_URI, NEXT_PUBLIC_GHL_CLIENT_ID added to Railway
+- CallCompleted webhook not available in GHL Marketplace App — polling fallback needed
+- Phase 1 exit criteria: 2 of 10 checked off
 
-### Session 8 — Phase 1 hardening + doc rewrite
-**What was done:**
-- Integrated 5 non-negotiable rules from prior failed build into CLAUDE.md
-- Rewrote PROGRESS.md with Phase 1 exit criteria
-- Rewrote docs/ARCHITECTURE.md with data contract rule and GHL boundary
-- App running locally with DEV_BYPASS_AUTH=true
-- Seed data confirmed working (3 graded calls, 5 properties, team visible)
-- GitHub repo created and code pushed to github.com/c7lavinder/Gunner-Claude
+**What was NOT finished:**
+- Machine-grade docs (CLAUDE.md, PROGRESS.md, ARCHITECTURE.md, AGENTS.md) not yet pushed to GitHub
+- Step 3 (live GHL dropdown in settings) not started
+- Polling fallback for call grading not built
+
+### Session 8 — Phase 1 hardening
+- Integrated 5 non-negotiable rules from prior failed build
+- DEV_BYPASS_AUTH bypass implemented
+- App confirmed running locally with seed data
 
 ### Session 7 — Migration + property CRUD + rubric editor
 - Migrated all 19 pages to requireSession() / getSession()
 - Built property edit + create forms
-- Built call rubric editor UI with full CRUD
-- Built properties API and call rubrics API
+- Built call rubric editor with full CRUD
 
-### Sessions 1–6 — Foundation
-- Full project scaffolded, all pages built
-- GHL integration layer, auto call grading, AI coach
+### Sessions 1–6 — Full MVP built
+- All pages, GHL integration, auto call grading, AI coach
 - Inventory, KPIs, tasks, inbox, appointments, settings shell
-- Self-audit agent, seed data, Railway deploy config
+- Self-audit agent, seed data, Railway config
 
 ---
 
@@ -83,64 +87,68 @@
 
 | # | Description | File | Priority | Status |
 |---|---|---|---|---|
-| 1 | Pipeline selector in settings does not use live GHL dropdown — violates Rule 2 | settings-client.tsx | HIGH | Fix in Phase 1 |
-| 2 | Settings fields missing data contract comments — violates Rule 1 | settings-client.tsx | HIGH | Fix in Phase 1 |
-| 3 | withTenantContext() not called in API routes — RLS doesn't activate per-request | lib/db/client.ts | MEDIUM | Fix before production |
-| 4 | Invite email sends empty companyName | app/api/tenants/invite/route.ts | LOW | Fix next session |
+| 1 | Pipeline selector in settings not using live GHL dropdown — violates Rule 2 | settings-client.tsx | CRITICAL | Fix in Phase 1 Step 3 |
+| 2 | Settings fields missing data contract comments — violates Rule 1 | settings-client.tsx | CRITICAL | Fix in Phase 1 Step 3 |
+| 3 | CallCompleted webhook not available in GHL Marketplace App — need polling fallback | lib/ghl/ | HIGH | Build in Step 3 |
+| 4 | lib/ai/scoring.ts does not exist — TCP model not built | lib/ai/ | HIGH | Phase 2 |
+| 5 | lib/gates/requireApproval.ts does not exist — high-stakes gates not built | lib/ | HIGH | Before SMS blast feature |
+| 6 | updateTenantSettings() server action does not exist | lib/db/ | HIGH | Step 3 |
+| 7 | withTenantContext() not called in API routes — RLS inactive per-request | lib/db/client.ts | MEDIUM | Before production |
+| 8 | Invite email sends empty companyName | app/api/tenants/invite/route.ts | LOW | Fix anytime |
+| 9 | OAuth callback route renamed to /crm/callback but onboarding page may still reference old path | app/(auth)/onboarding/page.tsx | HIGH | Verify in Step 3 |
 
 ---
 
 ## Phase 1 — Sequenced Task List
 
-Work through these IN ORDER. Do not skip ahead.
+### Step 1 — Deploy to Railway ✅ DONE
+Railway live at https://gunner-claude-production.up.railway.app
+Health check passing.
 
-### Step 1 — Deploy to Railway (BLOCKER)
-- Create Railway project → connect GitHub repo
-- Add all env vars from .env.example
-- Confirm deployment succeeds
-- Confirm https://[your-url]/api/health returns { status: ok }
-- Why first: GHL webhooks need a public URL. Nothing real can be tested without this.
+### Step 2 — GHL Marketplace App ✅ DONE
+App created. Credentials in Railway env vars.
+Redirect URI: https://gunner-claude-production.up.railway.app/api/auth/crm/callback
+Note: CallCompleted webhook unavailable — polling fallback needed.
 
-### Step 2 — GHL Marketplace App
-- Go to GHL Agency → Settings → Developer → My Apps → Create App
-- Name: Gunner AI
-- Redirect URI: https://[your-railway-url]/api/auth/crm/callback
-- Scopes: contacts.readonly/write, opportunities.readonly/write, conversations.readonly/write, calls.readonly, tasks.readonly/write, calendars.readonly
-- Copy CLIENT_ID and CLIENT_SECRET → add to Railway env vars
-- Why second: Can't do OAuth without the app existing and having a live redirect URI.
+### Step 3 — Fix Settings + Build Polling Fallback ← CURRENT STEP
+Three things to do:
 
-### Step 3 — Fix Settings Pipeline Selector (Rule 2 compliance)
-- Settings → Pipeline tab → must use live GHL dropdown
-- Call GET /opportunities/pipelines and populate options from API
-- Store pipelineId and stageId (not names)
-- Add data contract comment to every field touched
-- Why now: If wrong, property auto-create will never work.
+**3a — Verify OAuth callback path**
+- Confirm app/(auth)/onboarding/page.tsx uses /api/auth/crm/callback not old path
+- Confirm all references to old /ghl/callback are updated
+
+**3b — Live GHL dropdown in settings (Rule 2 compliance)**
+- Build GHLDropdown reusable component
+- Replace pipeline text inputs with live GHL dropdowns
+- Add data contract comments to every settings field
+- Build updateTenantSettings() server action in lib/db/settings.ts
+
+**3c — Call grading polling fallback**
+- Build scripts/poll-calls.ts — runs every 60 seconds via Railway cron
+- Fetches recent calls from GHL API
+- Checks for ungraded calls → triggers gradeCall()
+- Add to railway.toml as cron job
 
 ### Step 4 — First Real Tenant Onboarding
-- Remove DEV_BYPASS_AUTH from .env.local
-- Register as a new real tenant through /register
-- Go through full 5-step onboarding wizard
-- Connect real GHL sub-account via OAuth
-- Confirm webhooks appear in GHL dashboard
-- Configure pipeline trigger using the live dropdown
+- Remove DEV_BYPASS_AUTH from Railway env vars (NOT from .env.local yet)
+- Register as real tenant on Railway URL
+- Complete onboarding → connect GHL → verify webhooks in GHL dashboard
+- Configure pipeline trigger using live dropdown
 
-### Step 5 — First Call Graded (Phase 1 exit criteria)
-- Make a real call through GHL
-- Confirm it appears in Gunner AI /calls within 30 seconds
-- Confirm score, rubric breakdown, and AI feedback are populated
+### Step 5 — First Call Graded ← Phase 1 exit
+- Make real call in GHL
+- Confirm graded record in /calls within 60 seconds
+- Confirm score + rubric + AI feedback populated
 - Screenshot as proof
-- This is the moment the architecture is proven.
 
-### Step 6 — Invite testers + verify isolation
-- Invite 1-2 test users from Settings → Team
-- Confirm invite email arrives
-- Log in as each tester → confirm they only see their own data
-- Confirm roles restrict access correctly
+### Step 6 — Verify tenant isolation
+- Create second test tenant
+- Confirm tenant 1 cannot see tenant 2 data
 
 ---
 
 ## Next Session — Start Exactly Here
 
-**Task:** Create GHL Marketplace App (Step 2 above)
+**Task:** Step 3 — Fix OAuth path, live GHL dropdowns, call polling fallback
 
-**What to do:** Follow the Step 2 instructions — create the app in GHL, get CLIENT_ID + CLIENT_SECRET, add to Railway env vars.
+**First message to Claude Code:**
