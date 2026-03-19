@@ -19,9 +19,11 @@ const GHL_WEBHOOK_EVENTS = [
 ]
 
 export async function GET(request: NextRequest) {
+  const baseUrl = process.env.NEXTAUTH_URL ?? request.nextUrl.origin
+
   const session = await getSession()
   if (!session) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(new URL('/login', baseUrl))
   }
 
   const { searchParams } = request.nextUrl
@@ -34,7 +36,7 @@ export async function GET(request: NextRequest) {
   if (error || !code) {
     console.error('[GHL OAuth] Error:', error)
     return NextResponse.redirect(
-      new URL(`/${tenantSlug}/settings?error=ghl_oauth_failed`, request.url),
+      new URL(`/${tenantSlug}/settings?error=ghl_oauth_failed`, baseUrl),
     )
   }
 
@@ -54,8 +56,8 @@ export async function GET(request: NextRequest) {
     })
 
     // Register webhooks with GHL
-    const ghlClient = await getGHLClient(tenantId!)
-    const webhookUrl = `${process.env.NEXTAUTH_URL}/api/webhooks/ghl`
+    const ghlClient = await getGHLClient(tenantId)
+    const webhookUrl = `${baseUrl}/api/webhooks/ghl`
 
     const webhook = await ghlClient.registerWebhook(webhookUrl, GHL_WEBHOOK_EVENTS)
 
@@ -71,12 +73,12 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.redirect(
-      new URL(`/onboarding?step=2&success=ghl_connected`, request.url),
+      new URL(`/onboarding?step=2&success=ghl_connected`, baseUrl),
     )
   } catch (err) {
     console.error('[GHL OAuth] Token exchange failed:', err)
     return NextResponse.redirect(
-      new URL(`/onboarding?step=1&error=ghl_connection_failed`, request.url),
+      new URL(`/onboarding?step=1&error=ghl_connection_failed`, baseUrl),
     )
   }
 }
