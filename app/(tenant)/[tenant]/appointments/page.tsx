@@ -31,7 +31,8 @@ export default async function AppointmentsPage({ params }: { params: { tenant: s
       contactId: a.contactId,
       status: a.status,
     }))
-  } catch {
+  } catch (err) {
+    console.error('[Appointments] GHL fetch failed:', err instanceof Error ? err.message : err)
     fetchError = true
   }
 

@@ -25,7 +25,8 @@ export default async function InboxPage({ params }: { params: { tenant: string }
       lastMessageType: c.lastMessageType,
       updatedAt: c.updatedAt,
     }))
-  } catch {
+  } catch (err) {
+    console.error('[Inbox] GHL fetch failed:', err instanceof Error ? err.message : err)
     fetchError = true
   }
 
