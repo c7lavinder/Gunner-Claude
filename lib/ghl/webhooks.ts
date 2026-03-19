@@ -3,6 +3,7 @@
 // Called by: app/api/webhooks/ghl/route.ts
 
 import { db } from '@/lib/db/client'
+import { Prisma } from '@prisma/client'
 import { gradeCall } from '@/lib/ai/grading'
 import { createPropertyFromContact } from '@/lib/properties'
 
@@ -58,7 +59,7 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
           tenantId: tenant.id,
           action: `ghl.webhook.unhandled`,
           resource: 'webhook',
-          payload: event as Record<string, unknown>,
+          payload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
           source: 'GHL_WEBHOOK',
           severity: 'INFO',
         },
@@ -195,7 +196,7 @@ async function handleAppointmentCreated(tenantId: string, event: GHLWebhookEvent
       resource: 'appointment',
       source: 'GHL_WEBHOOK',
       severity: 'INFO',
-      payload: event as Record<string, unknown>,
+      payload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
     },
   })
 }

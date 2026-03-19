@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
+import { PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
 
 const propertySchema = z.object({
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
           city,
           state,
           zip: zip ?? '',
-          status,
+          status: status as PropertyStatus,
           arv: arv ? parseFloat(arv) : null,
           askingPrice: askingPrice ? parseFloat(askingPrice) : null,
           mao: mao ? parseFloat(mao) : null,

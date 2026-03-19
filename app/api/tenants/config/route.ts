@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 
 import { db } from '@/lib/db/client'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
 const configSchema = z.object({
@@ -26,9 +27,15 @@ export async function PATCH(request: NextRequest) {
 
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
+  const { config, ...rest } = parsed.data
   const updated = await db.tenant.update({
     where: { id: tenantId },
-    data: parsed.data,
+    data: {
+      ...rest,
+      ...(config !== undefined && {
+        config: JSON.parse(JSON.stringify(config)) as Prisma.InputJsonValue,
+      }),
+    },
   })
 
   return NextResponse.json({ tenant: { id: updated.id, slug: updated.slug, onboardingStep: updated.onboardingStep } })

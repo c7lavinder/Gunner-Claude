@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
 import { hasPermission, type UserRole } from '@/types/roles'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
 const actionSchema = z.discriminatedUnion('type', [
@@ -88,12 +89,12 @@ export async function POST(request: NextRequest) {
     await db.auditLog.create({
       data: {
         tenantId,
-        userId: session.user.id,
+        userId: session.userId,
         action: `ghl.${action.type}`,
         resource: 'ghl',
         source: 'USER',
         severity: 'INFO',
-        payload: action as Record<string, unknown>,
+        payload: JSON.parse(JSON.stringify(action)) as Prisma.InputJsonValue,
       },
     })
 

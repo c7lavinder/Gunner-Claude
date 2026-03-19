@@ -41,7 +41,7 @@ export async function POST(
   await db.auditLog.create({
     data: {
       tenantId,
-      userId: session.user.id,
+      userId: session.userId,
       action: 'task.completed',
       resource: 'task',
       resourceId: taskId,

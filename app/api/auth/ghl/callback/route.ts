@@ -20,7 +20,7 @@ const GHL_WEBHOOK_EVENTS = [
 
 export async function GET(request: NextRequest) {
   const session = await getSession()
-  if (!session?.user) {
+  if (!session) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const error = searchParams.get('error')
 
-  const tenantId = (session.user as { tenantId?: string }).tenantId
+  const tenantId = session.tenantId
   const tenantSlug = session.tenantSlug
 
   if (error || !code) {

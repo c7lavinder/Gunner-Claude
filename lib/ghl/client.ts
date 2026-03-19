@@ -65,7 +65,7 @@ export class GHLClient {
   // ─── Tasks ─────────────────────────────────────────────────────────────────
 
   async createTask(contactId: string, task: GHLTaskInput) {
-    return this.request<GHLTask>('POST', `/contacts/${contactId}/tasks`, task)
+    return this.request<GHLTask>('POST', `/contacts/${contactId}/tasks`, { ...task })
   }
 
   async updateTask(contactId: string, taskId: string, data: Partial<GHLTaskInput>) {

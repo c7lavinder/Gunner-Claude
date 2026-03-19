@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
+import { Prisma, PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
 
 const updateSchema = z.object({
@@ -57,13 +58,13 @@ export async function PATCH(
           ...(city && { city }),
           ...(state && { state }),
           ...(zip !== undefined && { zip }),
-          ...(status && { status }),
+          ...(status && { status: status as PropertyStatus }),
           ...(arv !== undefined && { arv: arv ? parseFloat(arv) : null }),
           ...(askingPrice !== undefined && { askingPrice: askingPrice ? parseFloat(askingPrice) : null }),
           ...(mao !== undefined && { mao: mao ? parseFloat(mao) : null }),
           ...(contractPrice !== undefined && { contractPrice: contractPrice ? parseFloat(contractPrice) : null }),
           ...(assignmentFee !== undefined && { assignmentFee: assignmentFee ? parseFloat(assignmentFee) : null }),
-          ...(assignedToId !== undefined && { assignedToId: assignedToId ?? null }),
+          ...(assignedToId !== undefined && { assignedToId: assignedToId ?? undefined }),
         },
       })
 
@@ -108,7 +109,7 @@ export async function PATCH(
         resourceId: params.propertyId,
         source: 'USER',
         severity: 'INFO',
-        payload: parsed.data as Record<string, unknown>,
+        payload: JSON.parse(JSON.stringify(parsed.data)) as Prisma.InputJsonValue,
       },
     })
 
