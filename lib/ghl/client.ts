@@ -125,6 +125,12 @@ export class GHLClient {
     return this.request<GHLCallList>('GET', `/calls?${query}`)
   }
 
+  // ─── Tasks (search from GHL) ───────────────────────────────────────────────
+
+  async searchTasks(status: 'incompleted' | 'completed' = 'incompleted') {
+    return this.request<GHLTaskSearchResult>('POST', `/locations/${this.locationId}/tasks/search`, { status })
+  }
+
   // ─── Appointments ──────────────────────────────────────────────────────────
 
   async getCalendars() {
@@ -132,16 +138,29 @@ export class GHLClient {
   }
 
   async getAppointments(params: { userId?: string; startDate: string; endDate: string }) {
-    // calendars/events requires a calendarId or groupId — fetch calendars first
-    const calendarsResult = await this.getCalendars()
-    const calendars = calendarsResult.calendars ?? []
-    if (calendars.length === 0) return { events: [] } as GHLAppointmentList
+    // Try fetching calendars first — need groupId for events query
+    try {
+      const calendarsResult = await this.getCalendars()
+      const calendars = calendarsResult.calendars ?? []
 
-    // Use the first calendar's groupId to get all events in the group
-    const groupId = calendars[0].groupId
+      if (calendars.length > 0) {
+        const groupId = calendars[0].groupId
+        const query = new URLSearchParams({
+          locationId: this.locationId,
+          groupId,
+          startTime: params.startDate,
+          endTime: params.endDate,
+          ...(params.userId && { userId: params.userId }),
+        })
+        return this.request<GHLAppointmentList>('GET', `/calendars/events?${query}`)
+      }
+    } catch (err) {
+      console.warn('[GHL] Calendar fetch failed, trying direct events query:', err instanceof Error ? err.message : err)
+    }
+
+    // Fallback: try without groupId using just locationId
     const query = new URLSearchParams({
       locationId: this.locationId,
-      groupId,
       startTime: params.startDate,
       endTime: params.endDate,
       ...(params.userId && { userId: params.userId }),
@@ -388,6 +407,21 @@ export interface GHLAppointment {
   userId: string
   status: string
   calendarId: string
+}
+
+export interface GHLTaskSearchResult {
+  tasks: GHLTaskItem[]
+  total?: number
+}
+
+export interface GHLTaskItem {
+  id: string
+  title: string
+  body?: string
+  dueDate: string
+  completed: boolean
+  contactId: string
+  assignedTo?: string
 }
 
 export interface GHLPipelineList {

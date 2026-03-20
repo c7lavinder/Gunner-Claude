@@ -27,11 +27,12 @@ const PRIORITY_COLORS: Record<string, string> = {
   LOW: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
 }
 
-export function TasksClient({ tasks, categories, tenantSlug, canCreateForOthers }: {
+export function TasksClient({ tasks, categories, tenantSlug, canCreateForOthers, fetchError }: {
   tasks: Task[]
   categories: string[]
   tenantSlug: string
   canCreateForOthers: boolean
+  fetchError?: boolean
 }) {
   const [localTasks, setLocalTasks] = useState(tasks)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
@@ -101,6 +102,14 @@ export function TasksClient({ tasks, categories, tenantSlug, canCreateForOthers 
           <Plus size={14} /> New task
         </button>
       </div>
+
+      {/* GHL fetch error */}
+      {fetchError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
+          <AlertCircle size={14} />
+          Could not load tasks from GHL. Showing locally-created tasks only.
+        </div>
+      )}
 
       {/* New task form */}
       {showNew && (

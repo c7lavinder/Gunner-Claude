@@ -10,6 +10,7 @@ interface AppointmentItem {
   startTime: string
   endTime: string
   contactId: string
+  contactName?: string | null
   status: string
 }
 
@@ -89,6 +90,12 @@ export function AppointmentsClient({ appointments, fetchError, tenantSlug }: {
                         <Clock size={10} />
                         {format(start, 'h:mm a')} – {format(end, 'h:mm a')}
                       </span>
+                      {appt.contactName && (
+                        <span className="flex items-center gap-1 text-xs text-gray-500">
+                          <User size={10} />
+                          {appt.contactName}
+                        </span>
+                      )}
                     </div>
                   </div>
 

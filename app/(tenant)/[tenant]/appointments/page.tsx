@@ -1,18 +1,14 @@
-import { requireSession } from '@/lib/auth/session'
 // app/(tenant)/[tenant]/appointments/page.tsx
-
-
+// Appointments page — fetches from GHL calendars API with contact enrichment
+import { requireSession } from '@/lib/auth/session'
 import { getGHLClient } from '@/lib/ghl/client'
 import { AppointmentsClient } from '@/components/appointments/appointments-client'
 import { format, startOfDay, endOfDay, addDays } from 'date-fns'
 
 export default async function AppointmentsPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
-  
 
   const tenantId = session.tenantId
-  const ghlUserId = undefined
-
   const today = new Date()
   const startDate = format(startOfDay(today), "yyyy-MM-dd'T'HH:mm:ss'Z'")
   const endDate = format(endOfDay(addDays(today, 7)), "yyyy-MM-dd'T'HH:mm:ss'Z'")
@@ -22,13 +18,30 @@ export default async function AppointmentsPage({ params }: { params: { tenant: s
 
   try {
     const ghl = await getGHLClient(tenantId)
-    const result = await ghl.getAppointments({ startDate, endDate, userId: ghlUserId })
-    appointments = (result.events ?? result.appointments ?? []).map((a) => ({
+    const result = await ghl.getAppointments({ startDate, endDate })
+    const events = result.events ?? result.appointments ?? []
+
+    // Enrich with contact names (batch, max 15)
+    const contactIds = [...new Set(events.map(a => a.contactId).filter(Boolean))]
+    const contactMap = new Map<string, string>()
+    const batchIds = contactIds.slice(0, 15)
+    const contactResults = await Promise.allSettled(
+      batchIds.map(id => ghl.getContact(id))
+    )
+    contactResults.forEach((result, i) => {
+      if (result.status === 'fulfilled' && result.value) {
+        const c = result.value
+        contactMap.set(batchIds[i], `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || c.email || 'Unknown')
+      }
+    })
+
+    appointments = events.map((a) => ({
       id: a.id,
-      title: a.title,
+      title: a.title || contactMap.get(a.contactId) || 'Appointment',
       startTime: a.startTime,
       endTime: a.endTime,
       contactId: a.contactId,
+      contactName: contactMap.get(a.contactId) ?? null,
       status: a.status,
     }))
   } catch (err) {
@@ -51,5 +64,6 @@ interface AppointmentItem {
   startTime: string
   endTime: string
   contactId: string
+  contactName: string | null
   status: string
 }
