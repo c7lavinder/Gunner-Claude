@@ -71,6 +71,8 @@ model Tenant {
   coachLogs           CoachLog[]
   workflowDefinitions WorkflowDefinition[]
   workflowExecutions  WorkflowExecution[]
+  buyers              Buyer[]
+  dealBlasts          DealBlast[]
 
   @@map("tenants")
 }
@@ -125,6 +127,7 @@ model User {
   badges             UserBadge[]
   xpEvents           XpEvent[]
   coachLogs          CoachLog[]
+  dealBlasts         DealBlast[] @relation("BlastCreatedBy")
 
   @@map("users")
 }
@@ -196,9 +199,10 @@ model Property {
   customFields Json @default("{}") @map("custom_fields")
 
   // Relations
-  sellers  PropertySeller[]
-  calls    Call[]
-  tasks    Task[]
+  sellers    PropertySeller[]
+  calls      Call[]
+  tasks      Task[]
+  dealBlasts DealBlast[]
 
   @@map("properties")
 }
@@ -632,4 +636,76 @@ model WorkflowExecution {
   status      String  @default("active") // active, completed, paused, failed
 
   @@map("workflow_executions")
+}
+
+// ─────────────────────────────────────────
+// BUYERS — disposition buyer list
+// ─────────────────────────────────────────
+
+model Buyer {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name     String
+  phone    String?
+  email    String?
+  company  String?
+  markets  Json     @default("[]") // ["Dallas", "Fort Worth"]
+  criteria Json     @default("{}") // { minARV: 100000, maxARV: 500000, types: ["SFR"] }
+  tags     Json     @default("[]") // ["cash buyer", "fix and flip"]
+  notes    String?  @db.Text
+  isActive Boolean  @default(true) @map("is_active")
+
+  blastRecipients DealBlastRecipient[]
+
+  @@map("buyers")
+}
+
+// ─────────────────────────────────────────
+// DEAL BLASTS — property marketing to buyers
+// ─────────────────────────────────────────
+
+model DealBlast {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  propertyId String @map("property_id")
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  createdById String @map("created_by_id")
+  createdBy   User   @relation("BlastCreatedBy", fields: [createdById], references: [id])
+
+  channel    String  // sms, email
+  message    String  @db.Text
+  status     String  @default("pending") // pending, approved, sent, failed
+  approvedAt DateTime? @map("approved_at")
+  sentAt     DateTime? @map("sent_at")
+
+  recipients DealBlastRecipient[]
+
+  @@map("deal_blasts")
+}
+
+model DealBlastRecipient {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blastId String    @map("blast_id")
+  blast   DealBlast @relation(fields: [blastId], references: [id], onDelete: Cascade)
+
+  buyerId String @map("buyer_id")
+  buyer   Buyer  @relation(fields: [buyerId], references: [id])
+
+  response   String?   // interested, pass, no_response
+  respondedAt DateTime? @map("responded_at")
+
+  @@unique([blastId, buyerId])
+  @@map("deal_blast_recipients")
 }
