@@ -28,21 +28,39 @@ export async function createPropertyFromContact(
     const state = contact.state ?? ''
     const zip = contact.postalCode ?? ''
 
-    // Deduplicate by address — same address = same property
-    // One contact CAN have multiple properties (different addresses)
-    if (address && address !== 'Address pending') {
+    // Deduplicate by normalized street address + state
+    // Skip city (suburbs vs nearest city mismatch) and zip (often missing)
+    // One contact CAN have multiple properties at different addresses
+    const normalizedAddress = normalizeStreetAddress(address)
+    const normalizedState = state.trim().toUpperCase()
+
+    if (normalizedAddress) {
       const existing = await db.property.findFirst({
         where: {
           tenantId,
-          address: { equals: address, mode: 'insensitive' },
-          city: { equals: city, mode: 'insensitive' },
-          state: { equals: state, mode: 'insensitive' },
+          state: { equals: normalizedState, mode: 'insensitive' },
         },
       })
 
+      // Check all properties in this state for a street address match
+      // Using DB query + code-level normalize comparison for accuracy
       if (existing) {
-        console.log(`[Property] Already exists at ${address}, ${city} ${state} — skipping`)
-        return existing.id
+        const candidates = await db.property.findMany({
+          where: {
+            tenantId,
+            state: { equals: normalizedState, mode: 'insensitive' },
+          },
+          select: { id: true, address: true },
+        })
+
+        const match = candidates.find(
+          (p) => normalizeStreetAddress(p.address) === normalizedAddress
+        )
+
+        if (match) {
+          console.log(`[Property] Already exists at ${address}, ${state} (matched ${match.address}) — skipping`)
+          return match.id
+        }
       }
     }
 
@@ -126,4 +144,30 @@ export async function createPropertyFromContact(
 
     return null
   }
+}
+
+// Normalize street address for dedup matching
+// "1799 Mellow Rd." → "1799 mellow rd"
+// "123 N. Main Street" → "123 n main st"
+function normalizeStreetAddress(address: string): string {
+  if (!address || address === 'Address pending') return ''
+
+  return address
+    .toLowerCase()
+    .trim()
+    .replace(/[.,#]+/g, '')          // remove punctuation
+    .replace(/\s+/g, ' ')            // collapse whitespace
+    .replace(/\bstreet\b/g, 'st')
+    .replace(/\broad\b/g, 'rd')
+    .replace(/\bdrive\b/g, 'dr')
+    .replace(/\bavenue\b/g, 'ave')
+    .replace(/\bboulevard\b/g, 'blvd')
+    .replace(/\blane\b/g, 'ln')
+    .replace(/\bcourt\b/g, 'ct')
+    .replace(/\bplace\b/g, 'pl')
+    .replace(/\bcircle\b/g, 'cir')
+    .replace(/\bnorth\b/g, 'n')
+    .replace(/\bsouth\b/g, 's')
+    .replace(/\beast\b/g, 'e')
+    .replace(/\bwest\b/g, 'w')
 }
