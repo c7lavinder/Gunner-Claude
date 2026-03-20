@@ -1,7 +1,6 @@
-import { requireSession } from '@/lib/auth/session'
 // app/(tenant)/[tenant]/calls/[callId]/page.tsx
-
-
+// Call detail — full data query including transcript, recording, all AI fields
+import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { redirect, notFound } from 'next/navigation'
 import { CallDetailClient } from '@/components/calls/call-detail-client'
@@ -14,11 +13,10 @@ export default async function CallDetailPage({
   params: { tenant: string; callId: string }
 }) {
   const session = await requireSession()
-  
 
   const userId = session.userId
   const tenantId = session.tenantId
-  const role = (session.role) as UserRole
+  const role = session.role as UserRole
 
   const call = await db.call.findUnique({
     where: { id: params.callId, tenantId },
@@ -35,7 +33,6 @@ export default async function CallDetailPage({
 
   if (!call) notFound()
 
-  // Enforce visibility — only owner/admin/manager can see others' calls
   const isOwn = call.assignedToId === userId
   const canSeeAll = hasPermission(role, 'calls.view.all')
   const canSeeTeam = hasPermission(role, 'calls.view.team')
@@ -43,6 +40,8 @@ export default async function CallDetailPage({
 
   const rubricScores = (call.rubricScores as Record<string, { score: number; maxScore: number; notes: string }> | null) ?? {}
   const coachingTips = (call.aiCoachingTips as string[] | null) ?? []
+  const keyMoments = (call.keyMoments as Array<{ timestamp: string; type: string; description: string }> | null) ?? []
+  const objections = (call.objections as Array<{ objection: string; response: string; handled: boolean }> | null) ?? []
 
   return (
     <CallDetailClient
@@ -61,10 +60,14 @@ export default async function CallDetailPage({
         aiFeedback: call.aiFeedback,
         sentiment: call.sentiment,
         sellerMotivation: call.sellerMotivation,
+        talkRatio: call.talkRatio,
         nextBestAction: call.nextBestAction,
-        keyMoments: (call.keyMoments as Array<{ timestamp: string; type: string; description: string }> | null) ?? [],
+        keyMoments,
+        objections,
         rubricScores,
         coachingTips,
+        contactName: call.property?.sellers[0]?.seller.name ?? null,
+        contactPhone: call.property?.sellers[0]?.seller.phone ?? null,
         assignedTo: call.assignedTo,
         property: call.property ? {
           id: call.property.id,
