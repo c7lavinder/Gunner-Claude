@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Phase**: PHASE 4 IN PROGRESS — 4A + 4B done
+**Phase**: PHASE 4 NEARLY COMPLETE — 4A, 4B, 4C, 4F done
 **App state**: Live on Railway + running locally
 **Auth**: Real login on Railway, DEV_BYPASS_AUTH in .env.local only
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude ✅
@@ -67,6 +67,20 @@
   - properties/[propertyId] PATCH — missing tenantId in where clause
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
+
+### Session 25 — Phase 4C + 4F: Lead Source ROI + password reset (2026-03-20)
+**What was done:**
+- **4C — Lead Source ROI** (/{tenant}/roi):
+  - Monthly spend tracking per source (7 default sources)
+  - Auto-calculates cost per lead from property.leadSource
+  - Summary cards, log spend form, source breakdown with ROI
+  - GET/POST /api/lead-sources API
+- **4F — Password reset**:
+  - /reset-password page with email input
+  - POST /api/auth/reset-password: generates temp password, sends via Resend
+  - Prevents email enumeration, audit-logged
+  - "Forgot password?" link on login page
+- Added Lead ROI to sidebar navigation
 
 ### Session 24 — Phase 4B: Workflow Engine (2026-03-20)
 **What was done:**
@@ -373,18 +387,21 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 4C–4F — Lead source ROI, multi-pipeline, API access, polish
+**Task:** Production verification + Stripe activation (when ready)
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-Phase 4A (Disposition Hub) + 4B (Workflow Engine) done. Remaining:
+Phase 4 is functionally complete (4A–4F built). Remaining items:
+- 4D (Multi-Pipeline) and 4E (API Access) are nice-to-haves, not blockers
+- Stripe activation deferred per Corey's instruction — product first
 
-**4C — Lead Source ROI:** Track cost per lead source, calculate ROI per channel
-**4D — Multi-Pipeline:** Support multiple pipelines per tenant
-**4E — API Access:** Tenant-scoped API keys for integrations
-**4F — Polish:** Password reset, mobile responsive, error boundaries, loading states
+**Production verification needed:**
+1. Log in to Railway URL, verify all new pages render
+2. Test: Dashboard, Day Hub, Training, Disposition, ROI, AI Coach, Workflows
+3. Test password reset flow
+4. When ready for monetization, activate Stripe (see Session 17)
 
 ---
 
