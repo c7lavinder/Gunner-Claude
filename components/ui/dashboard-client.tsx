@@ -2,17 +2,30 @@
 // components/ui/dashboard-client.tsx
 
 import Link from 'next/link'
-import { Phone, CheckSquare, Building2, TrendingUp, ArrowUpRight, Clock, Star } from 'lucide-react'
+import { Phone, CheckSquare, Building2, TrendingUp, ArrowUpRight, Clock, Star, Zap, Target } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 interface DashboardData {
   userName: string
   role: string
-  kpis: { callsToday: number; avgScore: number; tasksCompleted: number; propertiesActive: number }
+  kpis: {
+    callsToday: number; callsWeek: number; callsMonth: number
+    avgScore: number; tasksCompleted: number; propertiesActive: number
+  }
+  scoreTrend: ScoreTrendPoint[]
+  priorityLeads: PriorityLead[]
   recentCalls: CallSummary[]
   todayTasks: TaskSummary[]
   recentProperties: PropertySummary[]
 }
 
+interface ScoreTrendPoint {
+  date: string; avgScore: number; count: number
+}
+interface PriorityLead {
+  id: string; address: string; city: string; state: string; status: string
+  tcpScore: number | null; sellerName: string; callCount: number; buySignal: boolean
+}
 interface CallSummary {
   id: string; score: number | null; summary: string | null
   assignedTo: string; property: string; ago: string; direction: string
@@ -46,6 +59,7 @@ export function DashboardClient({ data, tenantSlug }: { data: DashboardData; ten
           icon={<Phone size={16} />}
           label="Calls today"
           value={String(data.kpis.callsToday)}
+          sub={`${data.kpis.callsWeek} this week / ${data.kpis.callsMonth} this month`}
           color="orange"
         />
         <KpiCard
@@ -66,6 +80,82 @@ export function DashboardClient({ data, tenantSlug }: { data: DashboardData; ten
           value={String(data.kpis.propertiesActive)}
           color="purple"
         />
+      </div>
+
+      {/* Score trend + Priority leads */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Score trend chart — last 7 days */}
+        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+          <h2 className="text-sm font-medium text-white flex items-center gap-2 mb-4">
+            <TrendingUp size={14} className="text-green-400" />
+            Call score trend — last 7 days
+          </h2>
+          {data.scoreTrend.some(d => d.count > 0) ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={data.scoreTrend} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: '#1a1d27', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 12 }}
+                  labelStyle={{ color: '#9ca3af' }}
+                  formatter={(value: number) => [`${value}%`, 'Avg score']}
+                />
+                <Bar dataKey="avgScore" radius={[6, 6, 0, 0]} maxBarSize={32}>
+                  {data.scoreTrend.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={entry.avgScore >= 70 ? '#22c55e' : entry.avgScore >= 50 ? '#eab308' : entry.avgScore > 0 ? '#ef4444' : '#374151'}
+                      fillOpacity={entry.count > 0 ? 0.8 : 0.2}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState icon={<TrendingUp size={20} />} message="Score trend will appear once calls are graded this week" />
+          )}
+        </div>
+
+        {/* Priority leads — TCP ranking */}
+        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-medium text-white flex items-center gap-2">
+              <Target size={14} className="text-orange-400" />
+              Priority leads
+            </h2>
+            <Link href={`/${tenantSlug}/inventory`} className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+              All <ArrowUpRight size={11} />
+            </Link>
+          </div>
+          {data.priorityLeads.length === 0 ? (
+            <EmptyState icon={<Target size={20} />} message="Priority leads appear when properties have TCP scores calculated" />
+          ) : (
+            <div className="space-y-2">
+              {data.priorityLeads.map((lead) => (
+                <Link
+                  key={lead.id}
+                  href={`/${tenantSlug}/inventory/${lead.id}`}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-semibold shrink-0 bg-orange-500/10 text-orange-400">
+                    {Math.round((lead.tcpScore ?? 0) * 100)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-white truncate">{lead.address}</p>
+                      {lead.buySignal && (
+                        <span className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 shrink-0">
+                          <Zap size={10} /> Buy signal
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">{lead.sellerName} — {lead.callCount} calls</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main grid */}
@@ -145,7 +235,7 @@ export function DashboardClient({ data, tenantSlug }: { data: DashboardData; ten
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function KpiCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
+function KpiCard({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub?: string; color: string }) {
   const colors: Record<string, string> = {
     orange: 'text-orange-400 bg-orange-500/10',
     green: 'text-green-400 bg-green-500/10',
@@ -163,6 +253,7 @@ function KpiCard({ icon, label, value, color }: { icon: React.ReactNode; label: 
       </div>
       <p className="text-2xl font-semibold text-white">{value}</p>
       <p className="text-xs text-gray-400 mt-1">{label}</p>
+      {sub && <p className="text-xs text-gray-600 mt-0.5">{sub}</p>}
     </div>
   )
 }
