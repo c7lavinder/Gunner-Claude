@@ -51,7 +51,7 @@ export function AppointmentsClient({ appointments, fetchError, tenantSlug }: {
       {fetchError && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
           <AlertCircle size={14} />
-          Could not load appointments. Check your GHL connection in Settings.
+          Could not load appointments. Your GHL connection may need additional permissions — try reconnecting GHL in Settings → Integrations.
         </div>
       )}
 
