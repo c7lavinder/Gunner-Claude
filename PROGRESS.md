@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Phase**: PHASE 2 COMPLETE — ready for Phase 3
+**Phase**: PHASE 3 COMPLETE — ready for Phase 4
 **App state**: Live on Railway + running locally
 **Auth**: Real login on Railway, DEV_BYPASS_AUTH in .env.local only
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude ✅
@@ -67,6 +67,13 @@
   - properties/[propertyId] PATCH — missing tenantId in where clause
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
+
+### Session 22 — Phase 3E: Advanced TCP + score distribution (2026-03-20)
+**What was done:**
+- Score distribution chart on KPI page: 5-bucket bar chart (Recharts), color-coded red→green
+- TCP lead ranking on KPI page: top 10 properties by conversion probability with progress bars
+- Batch TCP recalculation: ran against both tenants, 10 properties updated
+- Both new sections linked to property detail pages
 
 ### Session 21 — Phase 3C + 3D: Training Hub + Day Hub (2026-03-20)
 **What was done:**
@@ -337,19 +344,21 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 3E — Advanced TCP + Phase 4 readiness
+**Task:** Phase 4A — Disposition Hub (buyer management + deal blasting)
 
 **First message to Claude Code:**
 
-Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
+Read CLAUDE.md, AGENTS.md, PROGRESS.md, and TECH_STACK.md first.
 
-Phase 3A-3D complete. Remaining Phase 3 item:
+Phase 3 complete (3A-3E). Phase 4 expands revenue:
 
-**3E — Advanced TCP:**
-1. Add rubric category breakdown to TCP factors (which rubric areas are weak?)
-2. Surface score distribution chart on KPI page
-3. Batch recalculate TCP for all properties (one-time backfill)
-4. Exit criteria: TCP factors include rubric analysis, KPI page shows score distribution
+**4A — Disposition Hub:**
+1. Build buyer management UI (/{tenant}/buyers): name, phone, email, markets, criteria
+2. Build deal blast: select property → select matching buyers → compose SMS/email
+3. Implement lib/gates/requireApproval.ts for SMS blast confirmation (10+ contacts)
+4. Track blast responses (interested / pass / no response)
+5. Add buyers + deal_blasts + blast_responses tables to schema
+6. Exit criteria: one deal blast queued with approval gate on production
 
 ---
 
