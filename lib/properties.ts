@@ -6,6 +6,7 @@
 
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
+import { triggerWorkflows } from '@/lib/workflows/engine'
 
 interface PropertyTriggerContext {
   ghlPipelineId?: string
@@ -127,6 +128,13 @@ export async function createPropertyFromContact(
     })
 
     console.log(`[Property] Created ${property.id} at ${address || 'no address'} (source: ${leadSource || 'unknown'}) for contact ${ghlContactId}`)
+
+    // Trigger property_created workflows
+    triggerWorkflows(tenantId, 'property_created', {
+      contactId: ghlContactId,
+      propertyId: property.id,
+    }).catch(err => console.warn('[Property] Workflow trigger failed:', err))
+
     return property.id
   } catch (err) {
     console.error(`[Property] Failed to create from contact ${ghlContactId}:`, err)

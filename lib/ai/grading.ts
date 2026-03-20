@@ -9,6 +9,7 @@ import { getGHLClient } from '@/lib/ghl/client'
 import { transcribeRecording } from '@/lib/ai/transcribe'
 import { calculateTCP } from '@/lib/ai/scoring'
 import { awardCallXP } from '@/lib/gamification/xp'
+import { triggerWorkflows } from '@/lib/workflows/engine'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -146,6 +147,14 @@ export async function gradeCall(callId: string): Promise<void> {
         console.warn(`[Call Grading] XP award failed for call ${callId}:`, xpErr)
       })
     }
+
+    // Trigger call_graded workflows
+    triggerWorkflows(call.tenantId, 'call_graded', {
+      callId,
+      contactId: call.ghlCallId ?? undefined,
+      propertyId: call.propertyId ?? undefined,
+      score: grading.overallScore,
+    }).catch(() => {})
 
     // Recalculate TCP for the associated property
     if (call.propertyId) {

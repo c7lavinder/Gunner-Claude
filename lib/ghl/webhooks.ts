@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client'
 import { gradeCall } from '@/lib/ai/grading'
 import { createPropertyFromContact } from '@/lib/properties'
 import { awardTaskXP } from '@/lib/gamification/xp'
+import { triggerWorkflows } from '@/lib/workflows/engine'
 
 export type GHLWebhookEvent = {
   type: string
@@ -347,6 +348,9 @@ async function handleTaskCompleted(tenantId: string, event: GHLWebhookEvent) {
       console.warn(`[Webhook] XP award failed for task ${updated.id}:`, err)
     })
   }
+
+  // Trigger task_completed workflows
+  triggerWorkflows(tenantId, 'task_completed', { taskId: updated?.id }).catch(() => {})
 }
 
 // ─── Appointment Created → Log it ──────────────────────────────────────────

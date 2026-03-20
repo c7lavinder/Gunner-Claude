@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2 } from 'lucide-react'
+import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power } from 'lucide-react'
 import { ROLE_LABELS, type UserRole } from '@/types/roles'
 import { RubricEditor } from '@/components/settings/rubric-editor'
 import { GHLDropdown } from '@/components/ui/ghl-dropdown'
@@ -32,7 +32,7 @@ interface Rubric {
   id: string; name: string; role: string; callType: string | null; isDefault: boolean
 }
 
-type Tab = 'team' | 'integrations' | 'pipeline' | 'calls'
+type Tab = 'team' | 'integrations' | 'pipeline' | 'calls' | 'workflows'
 
 export function SettingsClient({
   tenant, teamMembers, rubrics, callTypes, currentUserId, currentUserRole, canManage,
@@ -177,6 +177,7 @@ export function SettingsClient({
     { id: 'integrations', label: 'Integrations', icon: <Zap size={14} /> },
     { id: 'pipeline', label: 'Pipeline', icon: <GitBranch size={14} /> },
     { id: 'calls', label: 'Call config', icon: <Phone size={14} /> },
+    { id: 'workflows', label: 'Workflows', icon: <Workflow size={14} /> },
   ]
 
   return (
@@ -458,6 +459,180 @@ export function SettingsClient({
           </div>
         </div>
       )}
+
+      {/* ── Workflows tab ────────────────────────────────────────────── */}
+      {tab === 'workflows' && <WorkflowsTab canManage={canManage} />}
+    </div>
+  )
+}
+
+// ─── Workflows Tab Component ────────────────────────────────────────────────
+
+const TRIGGER_LABELS: Record<string, string> = {
+  property_created: 'Property created',
+  stage_changed: 'Stage changed',
+  call_graded: 'Call graded',
+  task_completed: 'Task completed',
+}
+
+const STEP_LABELS: Record<string, string> = {
+  send_sms: 'Send SMS',
+  create_task: 'Create task',
+  update_status: 'Update status',
+  notify: 'Notification',
+  wait: 'Wait',
+}
+
+interface WorkflowEntry {
+  id: string; name: string; triggerEvent: string
+  steps: Array<{ type: string; delay?: number; action?: string; content?: string }>
+  isActive: boolean; executionCount: number
+}
+
+function WorkflowsTab({ canManage }: { canManage: boolean }) {
+  const [workflows, setWorkflows] = useState<WorkflowEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newTrigger, setNewTrigger] = useState('property_created')
+  const [newSteps, setNewSteps] = useState([{ type: 'create_task', action: '', content: '', delay: 0 }])
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/workflows').then(r => r.json()).then(data => {
+      setWorkflows(data.workflows ?? [])
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
+  async function createWorkflow() {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/workflows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, triggerEvent: newTrigger, steps: newSteps }),
+      })
+      const data = await res.json()
+      if (data.workflow) {
+        setWorkflows(prev => [{ ...data.workflow, executionCount: 0, steps: newSteps }, ...prev])
+        setShowCreate(false)
+        setNewName('')
+        setNewSteps([{ type: 'create_task', action: '', content: '', delay: 0 }])
+      }
+    } catch { /* ignore */ }
+    setSaving(false)
+  }
+
+  async function toggleWorkflow(id: string, isActive: boolean) {
+    await fetch('/api/workflows', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle', id, isActive }),
+    })
+    setWorkflows(prev => prev.map(w => w.id === id ? { ...w, isActive } : w))
+  }
+
+  function addStep() {
+    setNewSteps(prev => [...prev, { type: 'create_task', action: '', content: '', delay: 0 }])
+  }
+
+  function updateStep(index: number, field: string, value: string | number) {
+    setNewSteps(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s))
+  }
+
+  function removeStep(index: number) {
+    if (newSteps.length <= 1) return
+    setNewSteps(prev => prev.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="space-y-4">
+      {canManage && (
+        <div className="flex justify-between items-center">
+          <p className="text-sm text-gray-400">Automate actions when events occur</p>
+          <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg">
+            <Plus size={14} /> New workflow
+          </button>
+        </div>
+      )}
+
+      {/* Create form */}
+      {showCreate && (
+        <div className="bg-[#1a1d27] border border-orange-500/30 rounded-2xl p-5 space-y-4">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Name</label>
+              <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New lead follow-up" className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Trigger</label>
+              <select value={newTrigger} onChange={e => setNewTrigger(e.target.value)} className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-400 mb-2 block">Steps</label>
+            <div className="space-y-2">
+              {newSteps.map((step, i) => (
+                <div key={i} className="flex gap-2 items-start bg-[#0f1117] border border-white/10 rounded-lg p-3">
+                  <span className="text-xs text-gray-600 mt-2 w-5 shrink-0">{i + 1}</span>
+                  <select value={step.type} onChange={e => updateStep(i, 'type', e.target.value)} className="bg-transparent border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none">
+                    {Object.entries(STEP_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  {step.type === 'wait' ? (
+                    <input type="number" value={step.delay} onChange={e => updateStep(i, 'delay', parseInt(e.target.value) || 0)} placeholder="Minutes" className="w-20 bg-transparent border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none" />
+                  ) : (
+                    <input value={step.action || step.content} onChange={e => updateStep(i, step.type === 'create_task' ? 'action' : 'content', e.target.value)} placeholder={step.type === 'create_task' ? 'Task title...' : 'Content...'} className="flex-1 bg-transparent border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none" />
+                  )}
+                  <button onClick={() => removeStep(i)} className="text-gray-600 hover:text-red-400 mt-1"><Trash2 size={12} /></button>
+                </div>
+              ))}
+            </div>
+            <button onClick={addStep} className="text-xs text-orange-400 hover:text-orange-300 mt-2 flex items-center gap-1"><Plus size={10} /> Add step</button>
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={createWorkflow} disabled={!newName || saving} className="bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium px-4 py-2 rounded-lg">
+              {saving ? 'Creating...' : 'Create workflow'}
+            </button>
+            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-white text-sm px-3 py-2">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Workflow list */}
+      <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
+        {loading ? (
+          <div className="p-8 text-center"><Loader2 size={16} className="text-gray-600 animate-spin mx-auto" /></div>
+        ) : workflows.length === 0 ? (
+          <div className="p-8 text-center">
+            <Workflow size={24} className="text-gray-600 mx-auto mb-3" />
+            <p className="text-sm text-gray-400">No workflows yet. Create one to automate actions.</p>
+          </div>
+        ) : (
+          workflows.map(w => (
+            <div key={w.id} className="flex items-center gap-3 px-5 py-4">
+              <button onClick={() => canManage && toggleWorkflow(w.id, !w.isActive)} className="shrink-0">
+                <Power size={16} className={w.isActive ? 'text-green-400' : 'text-gray-600'} />
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium">{w.name}</p>
+                <p className="text-xs text-gray-500">
+                  {TRIGGER_LABELS[w.triggerEvent] ?? w.triggerEvent} → {w.steps.length} step{w.steps.length !== 1 ? 's' : ''} · {w.executionCount} runs
+                </p>
+              </div>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${w.isActive ? 'bg-green-500/10 text-green-400' : 'bg-gray-500/10 text-gray-500'}`}>
+                {w.isActive ? 'Active' : 'Paused'}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }

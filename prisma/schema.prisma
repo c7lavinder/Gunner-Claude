@@ -611,9 +611,10 @@ model WorkflowDefinition {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  name     String
-  steps    Json   // [{delay, condition, action, content}]
-  isActive Boolean @default(true) @map("is_active")
+  name         String
+  triggerEvent String  @map("trigger_event") // property_created, stage_changed, call_graded, task_completed
+  steps        Json    // [{type, delay?, action, content?, condition?}]
+  isActive     Boolean @default(true) @map("is_active")
 
   executions WorkflowExecution[]
 
@@ -632,8 +633,11 @@ model WorkflowExecution {
   workflow   WorkflowDefinition  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   contactId   String  @map("contact_id") // GHL contact ID
+  propertyId  String? @map("property_id")
   currentStep Int     @default(0) @map("current_step")
   status      String  @default("active") // active, completed, paused, failed
+  context     Json    @default("{}") // execution context: {callId, propertyId, score, etc.}
+  nextRunAt   DateTime? @map("next_run_at") // when to run the next step (for delays)
 
   @@map("workflow_executions")
 }
