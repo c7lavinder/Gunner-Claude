@@ -68,6 +68,29 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 13 — Level 2 grading pipeline + Deepgram (2026-03-20)
+**What was done:**
+- Enriched call grading with GHL context: contact name/tags/source, conversation history, call duration/status
+- All 17 calls regraded — scores now range 8-72 (was all 0)
+- Investigated GHL recording URLs — NOT in conversations/messages API (236 calls, 0 recordings)
+- Recording URLs only come through real-time InboundMessage/OutboundMessage webhooks
+- Built InboundMessage/OutboundMessage handler in webhooks.ts — extracts recording URL from attachments[], recordingUrl, recording_url, recordingURL, meta.call.recordingUrl
+- Duration routing: <30s = dial attempt (skip), 30-60s = summary only, 60s+ = full transcription + grading
+- Built lib/ai/transcribe.ts — Deepgram REST API (nova-2) for call transcription
+- Grading pipeline: recording URL → Deepgram transcribe → transcript saved to DB → Claude grades with full transcript
+- Installed @deepgram/sdk, added DEEPGRAM_API_KEY to Railway
+- Added calendars/events.readonly and conversations/message scopes
+- Fixed OAuth reconnect flow (returns to Settings instead of onboarding)
+- Fixed appointments endpoint (needs groupId)
+- Fixed 3 cross-tenant vulnerabilities in API routes
+- Added production verification rule to CLAUDE.md and AGENTS.md
+- Added "agent builds the plan" rule to AGENTS.md
+- Railway Function cron for call polling every 5 minutes (fallback)
+
+**What needs live validation:**
+- First call with recording URL via webhook → transcription → graded with real transcript
+- This can only be tested with a new real-time call (historical calls don't have recording URLs)
+
 ### Session 12 — Phase 1 completion (2026-03-20)
 **What was done:**
 - Fixed inbox: GHL dateUpdated is Unix ms not ISO string, mapped contactName/phone/lastMessageBody
