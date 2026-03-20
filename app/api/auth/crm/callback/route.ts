@@ -44,7 +44,14 @@ export async function GET(request: NextRequest) {
     // Exchange code for tokens
     const tokens = await exchangeGHLCode(code)
 
-    // Save tokens and advance onboarding in one update
+    // Check if tenant already completed onboarding (reconnect vs first connect)
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { onboardingCompleted: true },
+    })
+    const isReconnect = tenant?.onboardingCompleted === true
+
+    // Save tokens — only advance onboarding step if first-time connect
     await db.tenant.update({
       where: { id: tenantId },
       data: {
@@ -52,7 +59,7 @@ export async function GET(request: NextRequest) {
         ghlAccessToken: tokens.access_token,
         ghlRefreshToken: tokens.refresh_token,
         ghlTokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
-        onboardingStep: 2,
+        ...(!isReconnect && { onboardingStep: 2 }),
       },
     })
 
@@ -66,16 +73,30 @@ export async function GET(request: NextRequest) {
         data: { ghlWebhookId: webhook.id },
       })
     } catch (webhookErr) {
-      // Webhook registration failed — log but don't block onboarding
-      // Call grading still works via poll-calls.ts polling fallback
       console.warn('[GHL OAuth] Webhook registration failed (non-blocking):', webhookErr)
     }
 
+    // Reconnect → back to settings. First connect → onboarding step 2.
+    if (isReconnect) {
+      return NextResponse.redirect(
+        new URL(`/${tenantSlug}/settings?success=ghl_reconnected`, baseUrl),
+      )
+    }
     return NextResponse.redirect(
       new URL(`/onboarding?step=2&success=ghl_connected`, baseUrl),
     )
   } catch (err) {
     console.error('[GHL OAuth] Token exchange failed:', err)
+    // Reconnect → back to settings with error. First connect → onboarding with error.
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { onboardingCompleted: true },
+    }).catch(() => null)
+    if (tenant?.onboardingCompleted) {
+      return NextResponse.redirect(
+        new URL(`/${tenantSlug}/settings?error=ghl_connection_failed`, baseUrl),
+      )
+    }
     return NextResponse.redirect(
       new URL(`/onboarding?step=1&error=ghl_connection_failed`, baseUrl),
     )
