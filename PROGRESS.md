@@ -68,26 +68,24 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
-### Session 15 — Phase 2B historical import + TECH_STACK.md (2026-03-20)
+### Session 15 — Phase 2B + 2C: historical import, dashboard KPIs (2026-03-20)
 **What was done:**
 - Wrote complete TECH_STACK.md (615 lines): 5 core systems, 9 feature modules, full DB schema, cost model, build priority, 14 decisions
-- Built scripts/import-historical-calls.ts:
-  - Paginated GHL conversation fetch with dedup (handles broken cursor pagination)
-  - --dry-run mode shows count before importing
-  - --tenant=slug filter for specific tenant
-  - Rate-limited grading (2s between calls, 0.5s between GHL pages)
-  - Deduplicates against existing DB records by ghlCallId
-  - Handles unique constraint race conditions with poll-calls
-  - TCP recalculation for all properties after import
-- Added startAfterId pagination to GHL client getConversations()
-- Dry-run results for New Again Houses:
-  - GHL exposes 51 call conversations via /conversations/search (only first page, no cursor pagination at API v2021-07-28)
-  - 76 calls already in DB (all COMPLETED, all with scores > 0) — poll-calls cron captured them over time
-  - 0 new calls to import — all visible conversations already in DB
-- Finding: GHL startAfterId pagination is ignored at API version 2021-07-28. Script detects stall and stops.
+- **2B — Historical import:**
+  - Built scripts/import-historical-calls.ts with --dry-run, --tenant=slug, rate limiting, dedup
+  - Added startAfterId pagination to GHL client getConversations()
+  - Dry-run: 51 unique call conversations in GHL, 76 already in DB, 0 new to import
+  - Finding: GHL ignores startAfterId at API v2021-07-28 — script detects stall and stops
+- **2C — Dashboard KPIs wired to real data:**
+  - Call volume context: today / this week / this month counts on KPI card
+  - Score trend chart: 7-day bar chart using Recharts, color-coded by score thresholds
+  - Priority leads widget: top 5 properties by TCP score with Buy Signal badges
+  - Removed per-user filtering on KPI counts (now tenant-wide for team metrics)
+  - All data from real DB queries — 76 graded calls, 2 properties with TCP
+- Next.js build passes cleanly
 
 **Known limitation:**
-- GHL only exposes ~100 most recent conversations. Older calls not accessible via this API. If more history needed, try updating GHL API version header or use a different endpoint.
+- GHL only exposes ~100 most recent conversations. Older calls not accessible via this API.
 
 ### Session 14 — Phase 2 schema, TCP scoring, call detail 4-tab (2026-03-20)
 **What was done:**
@@ -241,23 +239,22 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 2C — Dashboard KPIs (wire real data)
+**Task:** Phase 2E — Team invites + role-based views
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-Dashboard is the daily driver. Empty dashboard = dead product. Wire it to real data:
-1. Dashboard cards: calls today, avg score, properties in pipeline, tasks open
-2. Score trend chart (last 7/30 days) using kpi_snapshots or calls table
-3. Priority leads widget: properties sorted by TCP score, Buy Signal indicator
-4. Recent calls widget: last 5 graded calls with scores
-5. Verify kpi-snapshot.ts cron is running and populating kpi_snapshots table on Railway
-6. Exit criteria: dashboard shows real numbers from New Again Houses on production
+Phase 2C dashboard is done. 2D (4-tab layout) was built in Session 14. Next:
+1. Fix invite email bug #8 (empty companyName)
+2. Test invite flow end-to-end on Railway
+3. Verify role-based access: team leads see their team, managers see own data
+4. Assign calls to correct team members (match GHL userId to Gunner user)
+5. Exit criteria: at least 2 team members logged in, seeing their own calls/KPIs
 
-**Also verify (quick):**
-- 2D: Call detail 4-tab layout renders correctly on Railway with real graded calls
-- 2B: Import script committed and ready for new tenants
+**Also verify on production:**
+- Dashboard shows real numbers (score trend chart, priority leads, KPI cards)
+- Call detail 4-tab layout renders with real graded calls
 
 ---
 
