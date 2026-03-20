@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 import { KpisClient } from '@/components/kpis/kpis-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission, DEFAULT_KPIS } from '@/types/roles'
-import { startOfWeek, startOfMonth, startOfDay } from 'date-fns'
+import { startOfWeek, startOfMonth, startOfDay, subDays } from 'date-fns'
 
 export default async function KpisPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
@@ -65,6 +65,37 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
     db.task.count({ where: { tenantId, assignedToId: userId, status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
   ])
 
+  // Score distribution + TCP data
+  const [allScores, tcpProperties] = await Promise.all([
+    db.call.findMany({
+      where: { ...callFilter, gradingStatus: 'COMPLETED', score: { not: null } },
+      select: { score: true },
+    }),
+    db.property.findMany({
+      where: { tenantId, tcpScore: { not: null }, status: { notIn: ['DEAD', 'SOLD'] } },
+      select: { id: true, address: true, tcpScore: true, status: true },
+      orderBy: { tcpScore: 'desc' },
+      take: 10,
+    }),
+  ])
+
+  // Build score distribution buckets: 0-19, 20-39, 40-59, 60-79, 80-100
+  const distribution = [
+    { range: '0-19', count: 0 },
+    { range: '20-39', count: 0 },
+    { range: '40-59', count: 0 },
+    { range: '60-79', count: 0 },
+    { range: '80-100', count: 0 },
+  ]
+  for (const call of allScores) {
+    const s = call.score ?? 0
+    if (s < 20) distribution[0].count++
+    else if (s < 40) distribution[1].count++
+    else if (s < 60) distribution[2].count++
+    else if (s < 80) distribution[3].count++
+    else distribution[4].count++
+  }
+
   const metrics = {
     calls: { today: callsToday, week: callsWeek, month: callsMonth },
     avgScore: {
@@ -76,7 +107,14 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
     contracts: { month: contractsMonth },
     properties: { active: propertiesActive, newThisMonth: propertiesNew, soldThisMonth: propertiesSold },
     tasks: { completedToday: tasksCompleted, open: tasksPending },
+    scoreDistribution: distribution,
+    tcpLeads: tcpProperties.map(p => ({
+      id: p.id,
+      address: p.address,
+      tcpScore: p.tcpScore ?? 0,
+      status: p.status,
+    })),
   }
 
-  return <KpisClient metrics={metrics} role={role} userName={session.name} />
+  return <KpisClient metrics={metrics} role={role} userName={session.name} tenantSlug={params.tenant} />
 }

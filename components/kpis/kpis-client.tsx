@@ -2,7 +2,9 @@
 // components/kpis/kpis-client.tsx
 
 import { useState } from 'react'
-import { Phone, Star, Calendar, FileSignature, Building2, CheckSquare, TrendingUp } from 'lucide-react'
+import Link from 'next/link'
+import { Phone, Star, Calendar, FileSignature, Building2, CheckSquare, TrendingUp, Target } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import type { UserRole } from '@/types/roles'
 
 type Period = 'today' | 'week' | 'month'
@@ -14,12 +16,15 @@ interface Metrics {
   contracts: { month: number }
   properties: { active: number; newThisMonth: number; soldThisMonth: number }
   tasks: { completedToday: number; open: number }
+  scoreDistribution: Array<{ range: string; count: number }>
+  tcpLeads: Array<{ id: string; address: string; tcpScore: number; status: string }>
 }
 
-export function KpisClient({ metrics, role, userName }: {
+export function KpisClient({ metrics, role, userName, tenantSlug }: {
   metrics: Metrics
   role: UserRole
   userName: string
+  tenantSlug: string
 }) {
   const [period, setPeriod] = useState<Period>('week')
 
@@ -164,6 +169,72 @@ export function KpisClient({ metrics, role, userName }: {
                     />
                   </div>
                 </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Score distribution chart */}
+      {metrics.scoreDistribution.some(d => d.count > 0) && (
+        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+          <h2 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
+            <TrendingUp size={14} className="text-blue-400" />
+            Score distribution — all graded calls
+          </h2>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={metrics.scoreDistribution} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+              <XAxis dataKey="range" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ background: '#1a1d27', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 12 }}
+                formatter={(value: number) => [`${value} calls`, 'Count']}
+              />
+              <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={40}>
+                {metrics.scoreDistribution.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={i >= 4 ? '#22c55e' : i >= 3 ? '#eab308' : i >= 2 ? '#f97316' : '#ef4444'}
+                    fillOpacity={0.8}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex justify-between px-2 mt-2">
+            <span className="text-xs text-red-400">Needs work</span>
+            <span className="text-xs text-green-400">Excellent</span>
+          </div>
+        </div>
+      )}
+
+      {/* TCP Lead Ranking */}
+      {metrics.tcpLeads.length > 0 && (
+        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+          <h2 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
+            <Target size={14} className="text-orange-400" />
+            TCP lead ranking — conversion probability
+          </h2>
+          <div className="space-y-1.5">
+            {metrics.tcpLeads.map((lead, i) => {
+              const pct = Math.round(lead.tcpScore * 100)
+              const color = pct >= 50 ? 'text-green-400' : pct >= 30 ? 'text-yellow-400' : 'text-gray-400'
+              const bg = pct >= 50 ? 'bg-green-500' : pct >= 30 ? 'bg-yellow-500' : 'bg-gray-500'
+              return (
+                <Link
+                  key={lead.id}
+                  href={`/${tenantSlug}/inventory/${lead.id}`}
+                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-colors"
+                >
+                  <span className="text-xs text-gray-600 w-5 text-right shrink-0">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{lead.address}</p>
+                    <div className="h-1 bg-white/10 rounded-full mt-1.5 overflow-hidden">
+                      <div className={`h-full rounded-full ${bg}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                  <span className={`text-sm font-semibold shrink-0 ${color}`}>{pct}%</span>
+                </Link>
               )
             })}
           </div>
