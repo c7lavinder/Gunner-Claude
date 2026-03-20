@@ -68,6 +68,22 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 21 — Phase 3C + 3D: Training Hub + Day Hub (2026-03-20)
+**What was done:**
+- **3C Training Hub** (/{tenant}/training):
+  - Call of the Week: golden gradient card, auto-promotes highest score this week
+  - Top Calls Library: best 10 calls (70+) for studying
+  - Review Queue: calls under 50 flagged for manager review (role-gated)
+  - All rows link to full call detail with 4-tab layout
+- **3D Day Hub** (/{tenant}/day-hub):
+  - Morning planner with greeting, XP level, daily completion stats
+  - Overdue tasks (red alert section)
+  - Today's tasks grouped by role-based categories from roleConfig
+  - One-click task completion
+  - Tomorrow preview (dimmed, read-only)
+  - Empty state with quick links to calls/inventory
+- Added Day Hub and Training to sidebar navigation
+
 ### Session 20 — Phase 3B: Coaching v2 — proactive insights, session history (2026-03-20)
 **What was done:**
 - Built generateInsights(): week-over-week score trends, volume alerts, XP milestones, high score celebrations
@@ -321,25 +337,19 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 3C — Training Hub + Phase 3D — Day Hub
+**Task:** Phase 3E — Advanced TCP + Phase 4 readiness
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-3A gamification + 3B coaching v2 are built. Next:
+Phase 3A-3D complete. Remaining Phase 3 item:
 
-**3C — Training Hub:**
-1. "Call of the Week" — auto-promote highest scoring call
-2. Review queue — calls below threshold flagged for manager review
-3. Build /{tenant}/training page with call library
-4. Exit criteria: training page shows top calls and flagged calls
-
-**3D — Day Hub:**
-1. Daily task planner with role-based default categories
-2. Build /{tenant}/day-hub page
-3. Wire to tasks table with GHL sync
-4. Exit criteria: day hub shows today's prioritized tasks by category
+**3E — Advanced TCP:**
+1. Add rubric category breakdown to TCP factors (which rubric areas are weak?)
+2. Surface score distribution chart on KPI page
+3. Batch recalculate TCP for all properties (one-time backfill)
+4. Exit criteria: TCP factors include rubric analysis, KPI page shows score distribution
 
 ---
 
