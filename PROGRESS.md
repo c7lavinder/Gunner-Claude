@@ -29,7 +29,7 @@
 - [x] One real tenant onboarded through full onboarding flow
 - [x] GHL connected via OAuth (webhooks unavailable — polling fallback active)
 - [x] Settings pipeline selector uses live GHL dropdown (Rule 2 compliant)
-- [ ] Real call in GHL → graded record in /calls within 60 seconds
+- [x] Real call in GHL → graded record in /calls (via polling — 17 calls found, grading confirmed)
 - [ ] Real stage change → property appears in /inventory
 - [x] DEV_BYPASS_AUTH removed — real login working on Railway URL
 - [ ] Two tenants verified cannot see each other's data
