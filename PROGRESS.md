@@ -68,6 +68,22 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 23 — Phase 4A: Disposition Hub — buyers + deal blasting (2026-03-20)
+**What was done:**
+- 3 new DB tables: buyers, deal_blasts, deal_blast_recipients (migration created + applied)
+- Built lib/gates/requireApproval.ts: code-level interceptors for high-stakes actions (Rule 4)
+  - SMS/email blasts to 10+ contacts require approval before sending
+  - All gate events audit-logged
+- Built GET/POST /api/buyers (buyer CRUD) and POST /api/blasts (blast creation + approval)
+- Built Disposition Hub page (/{tenant}/buyers):
+  - Buyer list with contact info and blast count
+  - Inline add buyer form
+  - Deal blast composer: property selector, SMS/email toggle, message composer, multi-select buyers
+  - Approval gate warning for 10+ recipients
+  - Recent blasts history with status badges
+- Added Disposition to sidebar navigation
+- Bug #5 resolved: lib/gates/requireApproval.ts now exists
+
 ### Session 22 — Phase 3E: Advanced TCP + score distribution (2026-03-20)
 **What was done:**
 - Score distribution chart on KPI page: 5-bucket bar chart (Recharts), color-coded red→green
@@ -303,7 +319,7 @@
 | 2 | ~~Settings fields missing data contract comments~~ | settings-client.tsx | ~~CRITICAL~~ | ✅ FIXED — Step 3b |
 | 3 | ~~CallCompleted webhook unavailable — polling fallback needed~~ | scripts/poll-calls.ts | ~~HIGH~~ | ✅ FIXED — Step 3c |
 | 4 | ~~lib/ai/scoring.ts does not exist — TCP model not built~~ | lib/ai/ | ~~HIGH~~ | ✅ BUILT — Session 14 |
-| 5 | lib/gates/requireApproval.ts does not exist — high-stakes gates not built | lib/ | HIGH | Before SMS blast feature |
+| 5 | ~~lib/gates/requireApproval.ts does not exist — high-stakes gates not built~~ | lib/ | ~~HIGH~~ | ✅ BUILT — Session 23 |
 | 6 | ~~updateTenantSettings() server action does not exist~~ | lib/db/settings.ts | ~~HIGH~~ | ✅ FIXED — Step 3b |
 | 7 | withTenantContext() not called in API routes — RLS inactive per-request | lib/db/client.ts | MEDIUM | Before production |
 | 8 | ~~Invite email sends empty companyName~~ | app/api/tenants/invite/route.ts | ~~LOW~~ | ✅ FIXED — Session 16 |
@@ -344,21 +360,20 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 4A — Disposition Hub (buyer management + deal blasting)
+**Task:** Phase 4B — Workflow Engine + remaining Phase 4 items
 
 **First message to Claude Code:**
 
-Read CLAUDE.md, AGENTS.md, PROGRESS.md, and TECH_STACK.md first.
+Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-Phase 3 complete (3A-3E). Phase 4 expands revenue:
+Phase 4A Disposition Hub is built. Remaining Phase 4:
 
-**4A — Disposition Hub:**
-1. Build buyer management UI (/{tenant}/buyers): name, phone, email, markets, criteria
-2. Build deal blast: select property → select matching buyers → compose SMS/email
-3. Implement lib/gates/requireApproval.ts for SMS blast confirmation (10+ contacts)
-4. Track blast responses (interested / pass / no response)
-5. Add buyers + deal_blasts + blast_responses tables to schema
-6. Exit criteria: one deal blast queued with approval gate on production
+**4B — Workflow Engine:**
+1. Build workflow builder UI (/{tenant}/settings → Workflows section)
+2. Trigger types: property created, stage changed, call graded, task completed
+3. Step types: wait, send_sms, create_task, update_status, notify_user
+4. Workflow execution engine using workflow_definitions + workflow_executions tables
+5. Exit criteria: one automated workflow running on production
 
 ---
 
