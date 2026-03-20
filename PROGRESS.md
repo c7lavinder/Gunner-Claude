@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Phase**: PHASE 1 COMPLETE — ready for Phase 2
+**Phase**: PHASE 2 COMPLETE — ready for Phase 3
 **App state**: Live on Railway + running locally
 **Auth**: Real login on Railway, DEV_BYPASS_AUTH in .env.local only
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude ✅
@@ -67,6 +67,25 @@
   - properties/[propertyId] PATCH — missing tenantId in where clause
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
+
+### Session 17 — Phase 2F/2G: Stripe paywall + pricing page (2026-03-20)
+**What was done:**
+- Installed stripe package, added 5 subscription fields to Tenant schema
+  - stripeCustomerId, stripePriceId, subscriptionStatus, stripeSubscriptionId, stripeCurrentPeriodEnd
+- Built lib/stripe/index.ts: Stripe client, 3-tier plan definitions (Starter $97, Growth $197, Team $397), isSubscriptionActive() helper
+- Built POST /api/stripe/checkout: creates Stripe Checkout session with customer creation
+- Built POST /api/webhooks/stripe: handles checkout.session.completed, subscription.updated/deleted, invoice.payment_failed
+- Built /pricing page: 3 plan cards with Stripe Checkout redirect, auto-redirect if already subscribed
+- Updated onboarding Done step: routes to /pricing instead of dashboard (Rule 6 — paywall after value shown)
+- Added /pricing and /api/stripe to middleware public paths
+- Next.js build passes cleanly
+
+**To activate Stripe:**
+1. Create Stripe account at stripe.com
+2. Create 3 products with monthly prices ($97, $197, $397)
+3. Set env vars: STRIPE_SECRET_KEY, NEXT_PUBLIC_STRIPE_PUBLIC_KEY, STRIPE_WEBHOOK_SECRET
+4. Set price IDs: STRIPE_PRICE_STARTER, STRIPE_PRICE_GROWTH, STRIPE_PRICE_TEAM
+5. Register webhook endpoint: https://your-railway-url/api/webhooks/stripe
 
 ### Session 16 — Phase 2E: team invites + role-based views (2026-03-20)
 **What was done:**
@@ -260,27 +279,25 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 2F — Onboarding polish + Phase 2G — Stripe paywall
+**Task:** Phase 3A — Gamification (XP, levels, badges, leaderboard)
 
 **First message to Claude Code:**
 
-Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
+Read CLAUDE.md, AGENTS.md, PROGRESS.md, and TECH_STACK.md first.
 
-2E team invites are built. Code is ready — needs production validation:
-- Send a real invite on Railway to verify email shows company name
-- Map a GHL user in Settings → Team and verify call assignment
+Phase 2 is functionally complete (2A–2G all built). Before moving to Phase 3:
+1. Verify on production: dashboard KPIs, call detail 4-tab, invite flow, pricing page
+2. Set up Stripe in test mode (see Session 17 activation steps)
 
-Now build 2F + 2G:
-1. Streamline onboarding: connect GHL → see first graded call in under 60 seconds
-2. Add Stripe integration (npm install stripe @stripe/stripe-js @stripe/react-stripe-js)
-3. Paywall after first graded call is shown (Rule 6)
-4. Build pricing page with Starter ($97), Growth ($197), Team ($397) tiers
-5. Exit criteria: new tenant can register, connect GHL, see graded call, hit paywall
-
-**Also verify on production:**
-- Dashboard shows real numbers (score trend, priority leads)
-- Call detail 4-tab layout renders correctly
-- Invite flow works end-to-end
+Phase 3A — Gamification:
+1. Build XP award system (lib/gamification/xp.ts):
+   - Call graded >70 = +50 XP, >90 = +100 XP
+   - Task completed = +20 XP, Appointment set = +75 XP
+   - Property Under Contract = +200 XP, Sold = +500 XP
+2. Wire XP events into grading.ts and webhook handlers
+3. Build leaderboard component for dashboard
+4. Build badge system (First Blood, Hot Streak, Closer, Iron Rep, TCP Hunter)
+5. Exit criteria: XP awards on real call grading, leaderboard visible on dashboard
 
 ---
 
