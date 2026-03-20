@@ -338,9 +338,15 @@ export interface GHLConversationList {
 export interface GHLConversation {
   id: string
   contactId: string
+  contactName: string
+  fullName: string
+  phone: string
   unreadCount: number
   lastMessage: string
+  lastMessageBody: string
   lastMessageType: string
+  lastMessageDate: number
+  lastMessageDirection: string
   updatedAt: string | number
   dateUpdated: number
 }

@@ -7,6 +7,8 @@ import { MessageSquare, Phone, Mail, AlertCircle } from 'lucide-react'
 interface ConversationItem {
   id: string
   contactId: string
+  contactName: string
+  phone: string
   unreadCount: number
   lastMessage: string
   lastMessageType: string
@@ -86,17 +88,16 @@ function ConversationRow({ conversation: c, typeIcon }: {
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors cursor-pointer">
-      {/* Avatar placeholder */}
       <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-sm text-gray-400 font-medium">
-        ?
+        {c.contactName?.[0]?.toUpperCase() ?? '?'}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-white truncate">Contact</p>
+          <p className="text-sm font-medium text-white truncate">{c.contactName || c.phone || 'Unknown'}</p>
           <span className="shrink-0">{typeIcon}</span>
         </div>
-        <p className="text-xs text-gray-500 truncate mt-0.5">{c.lastMessage || 'No message'}</p>
+        <p className="text-xs text-gray-500 truncate mt-0.5">{c.lastMessage || c.phone || 'No message'}</p>
       </div>
 
       <div className="text-right shrink-0 space-y-1">

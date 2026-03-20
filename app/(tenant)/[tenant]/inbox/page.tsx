@@ -20,14 +20,16 @@ export default async function InboxPage({ params }: { params: { tenant: string }
     conversations = (result.conversations ?? []).map((c) => ({
       id: c.id,
       contactId: c.contactId,
+      contactName: c.contactName || c.fullName || 'Unknown',
+      phone: c.phone || '',
       unreadCount: c.unreadCount ?? 0,
-      lastMessage: c.lastMessage ?? '',
+      lastMessage: c.lastMessageBody || c.lastMessage || '',
       lastMessageType: c.lastMessageType ?? '',
-      updatedAt: typeof c.updatedAt === 'number'
-        ? new Date(c.updatedAt).toISOString()
-        : typeof c.dateUpdated === 'number'
-          ? new Date(c.dateUpdated).toISOString()
-          : String(c.updatedAt ?? c.dateUpdated ?? new Date().toISOString()),
+      updatedAt: typeof c.dateUpdated === 'number'
+        ? new Date(c.dateUpdated).toISOString()
+        : typeof c.lastMessageDate === 'number'
+          ? new Date(c.lastMessageDate).toISOString()
+          : new Date().toISOString(),
     }))
   } catch (err) {
     console.error('[Inbox] GHL fetch failed:', err instanceof Error ? err.message : err)
@@ -46,6 +48,8 @@ export default async function InboxPage({ params }: { params: { tenant: string }
 interface ConversationItem {
   id: string
   contactId: string
+  contactName: string
+  phone: string
   unreadCount: number
   lastMessage: string
   lastMessageType: string

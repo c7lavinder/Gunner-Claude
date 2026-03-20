@@ -46,21 +46,9 @@ export async function gradeCall(callId: string): Promise<void> {
         })
       : null
 
-    // If no recording URL, we can only do minimal grading
-    if (!call.recordingUrl && !call.transcript) {
-      await db.call.update({
-        where: { id: callId },
-        data: {
-          gradingStatus: 'FAILED',
-          aiFeedback: 'No recording or transcript available for grading.',
-        },
-      })
-      return
-    }
-
     const rubricCriteria = rubric?.criteria as RubricCriteria[] | null ?? getDefaultRubric(call.assignedTo?.role)
 
-    // Build the grading prompt
+    // Build the grading prompt — works with transcript, recording URL, or metadata only
     const systemPrompt = buildGradingSystemPrompt(rubricCriteria)
     const userPrompt = buildGradingUserPrompt(call, rubricCriteria)
 
