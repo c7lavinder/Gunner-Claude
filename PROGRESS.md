@@ -296,29 +296,24 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Production verification + Stripe setup, THEN Phase 3A
+**Task:** Phase 3A — Gamification (XP, levels, badges, leaderboard)
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-Phase 2 code is complete. Before Phase 3, verify everything works on production:
+Phase 2 product features are complete. Stripe/pricing is built but deferred — will activate at the very end.
+Onboarding goes straight to dashboard (no paywall gate yet).
 
-**Step 1 — Production verification (do first):**
-1. Open Railway URL → login → check dashboard renders with real data
-2. Click a call → verify 4-tab layout (Rubric, Coaching, Transcript, Next Steps)
-3. Go to Settings → Team → verify GHL user mapping dropdown loads
-4. Go to /pricing → verify 3-tier pricing page renders
-5. Report what works and what doesn't
-
-**Step 2 — Stripe activation:**
-1. Corey creates Stripe account + 3 products ($97, $197, $397 monthly)
-2. Set env vars on Railway: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_STARTER, STRIPE_PRICE_GROWTH, STRIPE_PRICE_TEAM
-3. Register webhook: https://gunner-claude-production.up.railway.app/api/webhooks/stripe
-4. Test checkout flow in Stripe test mode
-
-**Step 3 — THEN Phase 3A Gamification:**
-Build XP system, leaderboard, badge system per TECH_STACK.md
+Phase 3A — Gamification:
+1. Build XP award system (lib/gamification/xp.ts):
+   - Call graded >70 = +50 XP, >90 = +100 XP
+   - Task completed = +20 XP, Appointment set = +75 XP
+   - Property Under Contract = +200 XP, Sold = +500 XP
+2. Wire XP events into grading.ts and webhook handlers
+3. Build leaderboard component for dashboard
+4. Build badge system (First Blood, Hot Streak, Closer, Iron Rep, TCP Hunter)
+5. Exit criteria: XP awards on real call grading, leaderboard visible on dashboard
 
 ---
 
