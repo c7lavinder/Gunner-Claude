@@ -125,9 +125,21 @@ export class GHLClient {
 
   // ─── Appointments ──────────────────────────────────────────────────────────
 
+  async getCalendars() {
+    return this.request<{ calendars: Array<{ id: string; name: string; groupId: string }> }>('GET', `/calendars/?locationId=${this.locationId}`)
+  }
+
   async getAppointments(params: { userId?: string; startDate: string; endDate: string }) {
+    // calendars/events requires a calendarId or groupId — fetch calendars first
+    const calendarsResult = await this.getCalendars()
+    const calendars = calendarsResult.calendars ?? []
+    if (calendars.length === 0) return { events: [] } as GHLAppointmentList
+
+    // Use the first calendar's groupId to get all events in the group
+    const groupId = calendars[0].groupId
     const query = new URLSearchParams({
       locationId: this.locationId,
+      groupId,
       startTime: params.startDate,
       endTime: params.endDate,
       ...(params.userId && { userId: params.userId }),
@@ -352,7 +364,8 @@ export interface GHLConversation {
 }
 
 export interface GHLAppointmentList {
-  appointments: GHLAppointment[]
+  events: GHLAppointment[]
+  appointments?: GHLAppointment[]
 }
 
 export interface GHLAppointment {
@@ -363,6 +376,7 @@ export interface GHLAppointment {
   contactId: string
   userId: string
   status: string
+  calendarId: string
 }
 
 export interface GHLPipelineList {

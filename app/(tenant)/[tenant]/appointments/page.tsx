@@ -23,7 +23,7 @@ export default async function AppointmentsPage({ params }: { params: { tenant: s
   try {
     const ghl = await getGHLClient(tenantId)
     const result = await ghl.getAppointments({ startDate, endDate, userId: ghlUserId })
-    appointments = (result.appointments ?? []).map((a) => ({
+    appointments = (result.events ?? result.appointments ?? []).map((a) => ({
       id: a.id,
       title: a.title,
       startTime: a.startTime,
