@@ -2,14 +2,16 @@
 // components/calls/call-detail-client.tsx
 // Two-column call detail: grade + audio + highlights | 4 tabs
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Phone, Clock, Star, Lightbulb, FileText, Zap, Search, Mic,
   CheckCircle, Send, ChevronRight, ShieldCheck, CalendarCheck, DollarSign,
   Heart, AlertTriangle, Target, RotateCcw, Tag, MessageSquare, X, Loader2,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { useToast } from '@/components/ui/toaster'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +73,10 @@ const MOMENT_ICONS: Record<string, typeof Star> = {
 export function CallDetailClient({ call, tenantSlug, isOwn }: {
   call: CallDetail; tenantSlug: string; isOwn: boolean
 }) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const { toast } = useToast()
+
   const [tab, setTab] = useState<Tab>('coaching')
   const [searchQuery, setSearchQuery] = useState('')
   const [playbackRate, setPlaybackRate] = useState(1)
@@ -106,38 +112,81 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   async function reprocess() {
     if (!window.confirm('Re-process this call? It will be re-graded from scratch.')) return
     setActionLoading('reprocess')
-    await fetch(`/api/${tenantSlug}/calls/${call.id}/reprocess`, { method: 'POST' }).catch(() => {})
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/reprocess`, { method: 'POST' })
+      if (res.ok) {
+        toast('Call queued for re-grading', 'success')
+        startTransition(() => router.refresh())
+      } else {
+        toast('Failed to reprocess — please try again', 'error')
+      }
+    } catch {
+      toast('Failed to reprocess — please try again', 'error')
+    }
     setActionLoading(null)
-    window.location.reload()
   }
 
   async function reclassify(callType: string) {
     setReclassifying(false)
     setActionLoading('reclassify')
-    await fetch(`/api/${tenantSlug}/calls/${call.id}/reclassify`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callType }),
-    }).catch(() => {})
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/reclassify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callType }),
+      })
+      if (res.ok) {
+        toast(`Reclassified as ${callType.replace(/_/g, ' ')}`, 'success')
+        startTransition(() => router.refresh())
+      } else {
+        toast('Failed to reclassify — please try again', 'error')
+      }
+    } catch {
+      toast('Failed to reclassify — please try again', 'error')
+    }
     setActionLoading(null)
-    window.location.reload()
   }
 
   async function generateNextSteps() {
     setGeneratingSteps(true)
     try {
       const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/generate-next-steps`, { method: 'POST' })
-      const data = await res.json()
-      if (data.steps) setGeneratedSteps(data.steps)
-    } catch { /* ignore */ }
+      if (res.ok) {
+        const data = await res.json()
+        if (data.steps) {
+          setGeneratedSteps(data.steps)
+          toast('Next steps generated', 'success')
+        }
+      } else {
+        toast('Failed to generate next steps', 'error')
+      }
+    } catch {
+      toast('Failed to generate next steps', 'error')
+    }
     setGeneratingSteps(false)
+  }
+
+  const QUICK_ACTION_MESSAGES: Record<string, { success: string; error: string }> = {
+    add_note: { success: 'Note added to GHL', error: 'Failed to add note' },
+    create_task: { success: 'Follow-up task created', error: 'Failed to create task' },
+    send_sms: { success: 'SMS sent', error: 'SMS feature coming soon' },
   }
 
   async function quickAction(type: string) {
     setActionLoading(type)
-    await fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type }),
-    }).catch(() => {})
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast(QUICK_ACTION_MESSAGES[type]?.success ?? 'Action completed', 'success')
+      } else {
+        toast(data.message ?? QUICK_ACTION_MESSAGES[type]?.error ?? 'Action failed', 'error')
+      }
+    } catch {
+      toast(QUICK_ACTION_MESSAGES[type]?.error ?? 'Action failed', 'error')
+    }
     setActionLoading(null)
   }
 
@@ -389,8 +438,18 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                     <TranscriptView transcript={call.transcript} searchQuery={searchQuery} />
                   </div>
                 </>
+              ) : call.recordingUrl ? (
+                <EmptyTab
+                  icon={<Mic size={24} />}
+                  message="A recording was found but hasn't been transcribed yet"
+                  sub="Use Reprocess to trigger transcription."
+                />
               ) : (
-                <EmptyTab icon={<Mic size={24} />} message="No transcript available" sub="Transcripts are generated from call recordings" />
+                <EmptyTab
+                  icon={<Mic size={24} />}
+                  message="This call has no recording URL — graded from metadata only"
+                  sub="Transcripts require a recording captured via GHL webhook. Recording URLs are only available on real-time calls, not historical ones."
+                />
               )}
             </div>
           )}

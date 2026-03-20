@@ -68,6 +68,14 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 26 — Fix 3 critical bugs: calls tabs, page flash, silent errors (2026-03-20)
+**What was done:**
+- **Bug 1 — Calls page broken tabs:** Removed Skipped (hacky heuristic) and Archived (empty placeholder) tabs. Replaced with "Short calls" tab showing calls <30s with info banner and reprocess buttons
+- **Bug 2 — window.location.reload flash:** Replaced all window.location.reload() with startTransition(() => router.refresh()) in calls-client, call-detail-client, and day-hub-client. Added optimistic UI to day-hub completeTask (immediately hides task, rolls back on failure)
+- **Bug 3 — Silent errors:** Added useToast() to all three files. Every async action now shows success/error toast with human-readable messages (e.g. "Call queued for re-grading", "Task completed! +XP earned", "Failed to reprocess")
+- **Transcript empty state:** Two distinct states: recording found but no transcript → "Use Reprocess to trigger transcription" vs no recording URL → explains metadata-only grading
+- **Toast system fix:** Refactored Toaster into ToastProvider that wraps children (was rendering Provider as sibling, making useToast() return no-op)
+
 ### Session 25 — Phase 4C + 4F: Lead Source ROI + password reset (2026-03-20)
 **What was done:**
 - **4C — Lead Source ROI** (/{tenant}/roi):

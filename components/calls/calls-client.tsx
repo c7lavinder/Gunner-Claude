@@ -2,10 +2,12 @@
 // components/calls/calls-client.tsx
 // Full calls list: 4 tabs, filters, grade letters, outcome/type badges
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Phone, Clock, ArrowDownLeft, ArrowUpRight as ArrowUp, AlertCircle, RefreshCw, SkipForward, RotateCcw, Loader2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Phone, Clock, ArrowDownLeft, ArrowUpRight as ArrowUp, AlertCircle, RefreshCw, RotateCcw, Loader2, Info, SkipForward } from 'lucide-react'
 import { formatDistanceToNow, subDays, subMonths } from 'date-fns'
+import { useToast } from '@/components/ui/toaster'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -18,7 +20,7 @@ interface Call {
   property: { id: string; address: string; city: string; state: string } | null
 }
 
-type Tab = 'all' | 'review' | 'skipped' | 'archived'
+type Tab = 'all' | 'review' | 'short'
 
 // ─── Grade + color helpers ─────────────────────────────────────────────────
 
@@ -77,6 +79,10 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   canViewAll: boolean
   teamMembers: Array<{ id: string; name: string }>
 }) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const { toast } = useToast()
+
   const [tab, setTab] = useState<Tab>('all')
   const [showFilters, setShowFilters] = useState(false)
   const [teamFilter, setTeamFilter] = useState<string>('')
@@ -91,12 +97,10 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const reviewCalls = calls.filter(c => ['PENDING', 'PROCESSING', 'FAILED'].includes(c.gradingStatus))
   const processingCalls = reviewCalls.filter(c => ['PENDING', 'PROCESSING'].includes(c.gradingStatus))
   const failedCalls = reviewCalls.filter(c => c.gradingStatus === 'FAILED')
-  // TODO: gradingStatus 'skipped' and 'archived' don't exist in schema yet
-  const skippedCalls = calls.filter(c => c.gradingStatus === 'FAILED' && c.score === null && c.durationSeconds !== null && c.durationSeconds < 30)
-  const archivedCalls: Call[] = [] // placeholder — no archive status in schema
+  const shortCalls = calls.filter(c => c.durationSeconds !== null && c.durationSeconds < 30)
 
   // Apply filters on All tab
-  let filtered = tab === 'all' ? allCalls : tab === 'review' ? reviewCalls : tab === 'skipped' ? skippedCalls : archivedCalls
+  let filtered = tab === 'all' ? allCalls : tab === 'review' ? reviewCalls : shortCalls
 
   if (tab === 'all') {
     if (teamFilter) filtered = filtered.filter(c => c.assignedTo?.id === teamFilter)
@@ -125,20 +129,32 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const uniqueTypes = [...new Set(calls.map(c => c.callType).filter(Boolean))] as string[]
   const uniqueOutcomes = [...new Set(calls.map(c => c.callOutcome).filter(Boolean))] as string[]
 
+  const ACTION_MESSAGES: Record<string, { success: string; error: string }> = {
+    reprocess: { success: 'Call queued for re-grading', error: 'Failed to reprocess — please try again' },
+    skip: { success: 'Call marked as skipped', error: 'Failed to skip call' },
+    'refetch-recording': { success: 'Recording re-fetch started', error: 'Failed to re-fetch recording' },
+  }
+
   async function callAction(callId: string, action: 'reprocess' | 'skip' | 'refetch-recording') {
     setActionLoading(`${callId}-${action}`)
     try {
-      await fetch(`/api/${tenantSlug}/calls/${callId}/${action}`, { method: 'POST' })
-      window.location.reload()
-    } catch { /* ignore */ }
+      const res = await fetch(`/api/${tenantSlug}/calls/${callId}/${action}`, { method: 'POST' })
+      if (res.ok) {
+        toast(ACTION_MESSAGES[action].success, 'success')
+        startTransition(() => router.refresh())
+      } else {
+        toast(ACTION_MESSAGES[action].error, 'error')
+      }
+    } catch {
+      toast(ACTION_MESSAGES[action].error, 'error')
+    }
     setActionLoading(null)
   }
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
-    { id: 'all', label: 'All', count: allCalls.length },
-    { id: 'review', label: 'Review', count: reviewCalls.length },
-    { id: 'skipped', label: 'Skipped', count: skippedCalls.length },
-    { id: 'archived', label: 'Archived', count: archivedCalls.length },
+    { id: 'all', label: 'All graded', count: allCalls.length },
+    { id: 'review', label: 'Needs review', count: reviewCalls.length },
+    { id: 'short', label: 'Short calls', count: shortCalls.length },
   ]
 
   return (
@@ -152,7 +168,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
           </p>
         </div>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => startTransition(() => router.refresh())}
           className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
         >
           <RefreshCw size={14} /> Refresh
@@ -300,31 +316,36 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
         </div>
       )}
 
-      {/* ── Skipped tab ───────────────────────────────────────────────── */}
-      {tab === 'skipped' && (
-        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
-          {skippedCalls.length === 0 ? (
-            <div className="py-12 text-center text-gray-500 text-sm">No skipped calls</div>
-          ) : (
-            skippedCalls.map(c => (
-              <div key={c.id} className="flex items-center gap-3 px-5 py-4">
-                <SkipForward size={16} className="text-gray-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
-                  <p className="text-xs text-gray-500">{formatDuration(c.durationSeconds)} · {c.aiSummary ?? 'Skipped'}</p>
+      {/* ── Short calls tab ─────────────────────────────────────────── */}
+      {tab === 'short' && (
+        <div className="space-y-4">
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-blue-300">
+            <Info size={14} className="shrink-0 mt-0.5" />
+            <p>Calls under 30 seconds — likely dial attempts or voicemails. Not graded automatically. Reprocess any call here if it has a recording worth grading.</p>
+          </div>
+          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
+            {shortCalls.length === 0 ? (
+              <div className="py-12 text-center text-gray-500 text-sm">No short calls</div>
+            ) : (
+              shortCalls.map(c => (
+                <div key={c.id} className="flex items-center gap-3 px-5 py-4">
+                  <div className="w-10 h-10 rounded-lg bg-gray-500/10 flex items-center justify-center shrink-0">
+                    <Phone size={14} className="text-gray-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
+                    <p className="text-xs text-gray-500">{formatDuration(c.durationSeconds)} · {formatDistanceToNow(new Date(c.calledAt), { addSuffix: true })}</p>
+                  </div>
+                  {c.recordingUrl && (
+                    <button onClick={() => callAction(c.id, 'reprocess')} disabled={actionLoading === `${c.id}-reprocess`}
+                      className="text-xs bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1">
+                      {actionLoading === `${c.id}-reprocess` ? <Loader2 size={10} className="animate-spin" /> : <><RotateCcw size={10} /> Reprocess</>}
+                    </button>
+                  )}
                 </div>
-                <button onClick={() => callAction(c.id, 'reprocess')}
-                  className="text-xs text-orange-400 hover:text-orange-300">Reclassify</button>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* ── Archived tab ──────────────────────────────────────────────── */}
-      {tab === 'archived' && (
-        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl py-12 text-center">
-          <p className="text-gray-500 text-sm">No archived calls</p>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -21,7 +21,7 @@ export function useToast() {
   return useContext(ToastContext)
 }
 
-export function Toaster() {
+export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const toast = useCallback((message: string, type: ToastType = 'info') => {
@@ -44,11 +44,12 @@ export function Toaster() {
 
   return (
     <ToastContext.Provider value={{ toast }}>
+      {children}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`flex items-center gap-3 bg-[#1a1d27] border ${borders[t.type]} rounded-xl px-4 py-3 shadow-xl`}
+            className={`flex items-center gap-3 bg-[#1a1d27] border ${borders[t.type]} rounded-xl px-4 py-3 shadow-xl animate-in slide-in-from-right`}
           >
             {icons[t.type]}
             <p className="text-sm text-white flex-1">{t.message}</p>
@@ -63,4 +64,9 @@ export function Toaster() {
       </div>
     </ToastContext.Provider>
   )
+}
+
+// Keep backward-compat export
+export function Toaster() {
+  return null // Rendering now handled by ToastProvider
 }

@@ -2,9 +2,11 @@
 // app/(tenant)/[tenant]/day-hub/day-hub-client.tsx
 // Day Hub — morning planner with overdue alerts, categorized tasks, XP motivation
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Sun, AlertTriangle, CheckCircle2, Circle, Clock, ChevronRight, Zap, Calendar } from 'lucide-react'
+import { useToast } from '@/components/ui/toaster'
 
 interface TaskEntry {
   id: string; title: string; description: string | null
@@ -26,28 +28,48 @@ export function DayHubClient({
   completedToday: number
   xp: { level: number; weeklyXp: number } | null
 }) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const { toast } = useToast()
   const [completing, setCompleting] = useState<string | null>(null)
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   const firstName = userName.split(' ')[0]
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-  const totalToday = todayTasks.length + overdueTasks.length
+  // totalToday computed after optimistic filter below
 
   async function completeTask(taskId: string) {
     setCompleting(taskId)
+    // Optimistic: immediately mark as completed visually
+    setCompletedIds(prev => new Set(prev).add(taskId))
     try {
-      await fetch(`/api/tasks/${taskId}/complete`, { method: 'POST' })
-      window.location.reload()
+      const res = await fetch(`/api/tasks/${taskId}/complete`, { method: 'POST' })
+      if (res.ok) {
+        toast('Task completed! +XP earned', 'success')
+        startTransition(() => router.refresh())
+      } else {
+        // Rollback optimistic state
+        setCompletedIds(prev => { const next = new Set(prev); next.delete(taskId); return next })
+        toast('Failed to complete task', 'error')
+      }
     } catch {
-      setCompleting(null)
+      setCompletedIds(prev => { const next = new Set(prev); next.delete(taskId); return next })
+      toast('Failed to complete task', 'error')
     }
+    setCompleting(null)
   }
+
+  // Filter out optimistically-completed tasks
+  const visibleTodayTasks = todayTasks.filter(t => !completedIds.has(t.id))
+  const visibleOverdueTasks = overdueTasks.filter(t => !completedIds.has(t.id))
+  const totalToday = visibleTodayTasks.length + visibleOverdueTasks.length
 
   // Group today's tasks by category
   const grouped = new Map<string, TaskEntry[]>()
   for (const cat of categories) grouped.set(cat, [])
   grouped.set('Other', [])
 
-  for (const task of todayTasks) {
+  for (const task of visibleTodayTasks) {
     const cat = task.category && categories.includes(task.category) ? task.category : 'Other'
     grouped.get(cat)!.push(task)
   }
@@ -76,14 +98,14 @@ export function DayHubClient({
       </div>
 
       {/* Overdue alert */}
-      {overdueTasks.length > 0 && (
+      {visibleOverdueTasks.length > 0 && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle size={14} className="text-red-400" />
-            <h2 className="text-sm font-medium text-red-400">Overdue ({overdueTasks.length})</h2>
+            <h2 className="text-sm font-medium text-red-400">Overdue ({visibleOverdueTasks.length})</h2>
           </div>
           <div className="space-y-1.5">
-            {overdueTasks.map(task => (
+            {visibleOverdueTasks.map(task => (
               <TaskRow key={task.id} task={task} tenantSlug={tenantSlug} onComplete={completeTask} completing={completing} isOverdue />
             ))}
           </div>
@@ -91,7 +113,7 @@ export function DayHubClient({
       )}
 
       {/* Today's tasks by category */}
-      {todayTasks.length > 0 ? (
+      {visibleTodayTasks.length > 0 ? (
         <div className="space-y-4">
           {Array.from(grouped.entries())
             .filter(([, tasks]) => tasks.length > 0)
@@ -109,7 +131,7 @@ export function DayHubClient({
               </div>
             ))}
         </div>
-      ) : overdueTasks.length === 0 ? (
+      ) : visibleOverdueTasks.length === 0 ? (
         <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-8 text-center">
           <CheckCircle2 size={24} className="text-green-400 mx-auto mb-3" />
           <p className="text-sm text-white font-medium">All clear for today</p>
