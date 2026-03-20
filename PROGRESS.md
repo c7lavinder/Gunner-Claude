@@ -68,6 +68,27 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 15 — Phase 2B historical import + TECH_STACK.md (2026-03-20)
+**What was done:**
+- Wrote complete TECH_STACK.md (615 lines): 5 core systems, 9 feature modules, full DB schema, cost model, build priority, 14 decisions
+- Built scripts/import-historical-calls.ts:
+  - Paginated GHL conversation fetch with dedup (handles broken cursor pagination)
+  - --dry-run mode shows count before importing
+  - --tenant=slug filter for specific tenant
+  - Rate-limited grading (2s between calls, 0.5s between GHL pages)
+  - Deduplicates against existing DB records by ghlCallId
+  - Handles unique constraint race conditions with poll-calls
+  - TCP recalculation for all properties after import
+- Added startAfterId pagination to GHL client getConversations()
+- Dry-run results for New Again Houses:
+  - GHL exposes 51 call conversations via /conversations/search (only first page, no cursor pagination at API v2021-07-28)
+  - 76 calls already in DB (all COMPLETED, all with scores > 0) — poll-calls cron captured them over time
+  - 0 new calls to import — all visible conversations already in DB
+- Finding: GHL startAfterId pagination is ignored at API version 2021-07-28. Script detects stall and stops.
+
+**Known limitation:**
+- GHL only exposes ~100 most recent conversations. Older calls not accessible via this API. If more history needed, try updating GHL API version header or use a different endpoint.
+
 ### Session 14 — Phase 2 schema, TCP scoring, call detail 4-tab (2026-03-20)
 **What was done:**
 - Full TECH_STACK.md vision analyzed — built vs missing assessment
@@ -178,7 +199,7 @@
 | 1 | ~~Pipeline selector not using live GHL dropdown~~ | settings-client.tsx | ~~CRITICAL~~ | ✅ FIXED — Step 3b |
 | 2 | ~~Settings fields missing data contract comments~~ | settings-client.tsx | ~~CRITICAL~~ | ✅ FIXED — Step 3b |
 | 3 | ~~CallCompleted webhook unavailable — polling fallback needed~~ | scripts/poll-calls.ts | ~~HIGH~~ | ✅ FIXED — Step 3c |
-| 4 | lib/ai/scoring.ts does not exist — TCP model not built | lib/ai/ | HIGH | Phase 2 |
+| 4 | ~~lib/ai/scoring.ts does not exist — TCP model not built~~ | lib/ai/ | ~~HIGH~~ | ✅ BUILT — Session 14 |
 | 5 | lib/gates/requireApproval.ts does not exist — high-stakes gates not built | lib/ | HIGH | Before SMS blast feature |
 | 6 | ~~updateTenantSettings() server action does not exist~~ | lib/db/settings.ts | ~~HIGH~~ | ✅ FIXED — Step 3b |
 | 7 | withTenantContext() not called in API routes — RLS inactive per-request | lib/db/client.ts | MEDIUM | Before production |
@@ -220,28 +241,23 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Tasks:** Phase 2B — Historical data import + Phase 2D — Call detail 4-tab layout (production verification)
+**Task:** Phase 2C — Dashboard KPIs (wire real data)
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-**2B — Historical data import:**
-Build scripts/import-historical-calls.ts:
-1. Paginate all GHL conversations with TYPE_CALL messages
-2. Filter: duration over 45 seconds
-3. Create call records for any not already in our DB
-4. Grade each with Level 1 enriched metadata immediately
-5. Calculate TCP for all associated properties
-6. Dry-run mode that shows count before importing
-7. Run it against New Again Houses and report results
+Dashboard is the daily driver. Empty dashboard = dead product. Wire it to real data:
+1. Dashboard cards: calls today, avg score, properties in pipeline, tasks open
+2. Score trend chart (last 7/30 days) using kpi_snapshots or calls table
+3. Priority leads widget: properties sorted by TCP score, Buy Signal indicator
+4. Recent calls widget: last 5 graded calls with scores
+5. Verify kpi-snapshot.ts cron is running and populating kpi_snapshots table on Railway
+6. Exit criteria: dashboard shows real numbers from New Again Houses on production
 
-**2D — Call detail 4-tab layout (verify on production):**
-The 4-tab layout (Rubric, Coaching, Transcript, Next Steps) was built in Session 14.
-1. Verify all 4 tabs render correctly on Railway production URL
-2. Test with real graded calls from New Again Houses
-3. Confirm quick action buttons on Next Steps tab work end-to-end
-4. Fix any production-only issues found
+**Also verify (quick):**
+- 2D: Call detail 4-tab layout renders correctly on Railway with real graded calls
+- 2B: Import script committed and ready for new tenants
 
 ---
 
