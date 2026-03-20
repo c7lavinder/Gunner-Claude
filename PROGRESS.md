@@ -68,6 +68,23 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 19 — Phase 3A: Gamification — XP, badges, leaderboard (2026-03-20)
+**What was done:**
+- Built lib/gamification/xp.ts (310 lines):
+  - XP award system with 7 event types and point values
+  - 30-level progression system (100 XP → 130,000 XP)
+  - 10 badge definitions with auto-check logic
+  - Leaderboard query, weekly XP tracking, reset function
+- Wired XP into existing pipelines:
+  - grading.ts: awardCallXP() after every graded call
+  - webhooks.ts: awardTaskXP() on GHL task completion
+  - properties/[propertyId]: awardPropertyXP() on Under Contract / Sold
+- Dashboard additions:
+  - Leaderboard widget (rank, level, XP, weekly gain)
+  - Earned badges grid
+  - Conditionally hidden when no XP data exists
+- TypeScript + Next.js build pass clean
+
 ### Session 18 — Pre-Phase 3 audit + cleanup (2026-03-20)
 **What was done:**
 - Created missing Prisma migration file for Stripe fields (20260320120000_add_stripe_subscription_fields)
@@ -296,24 +313,18 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 3A — Gamification (XP, levels, badges, leaderboard)
+**Task:** Phase 3B — Coaching Loop v2 (proactive alerts, session history)
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-Phase 2 product features are complete. Stripe/pricing is built but deferred — will activate at the very end.
-Onboarding goes straight to dashboard (no paywall gate yet).
-
-Phase 3A — Gamification:
-1. Build XP award system (lib/gamification/xp.ts):
-   - Call graded >70 = +50 XP, >90 = +100 XP
-   - Task completed = +20 XP, Appointment set = +75 XP
-   - Property Under Contract = +200 XP, Sold = +500 XP
-2. Wire XP events into grading.ts and webhook handlers
-3. Build leaderboard component for dashboard
-4. Build badge system (First Blood, Hot Streak, Closer, Iron Rep, TCP Hunter)
-5. Exit criteria: XP awards on real call grading, leaderboard visible on dashboard
+3A gamification is built. Next:
+1. Proactive coaching alerts: "Your objection handling dropped 15 points this week"
+2. Coaching session summaries saved to coach_logs table
+3. Role-specific coaching paths
+4. Manager visibility into team coaching sessions
+5. Exit criteria: coach gives proactive alerts based on real score trends
 
 ---
 
