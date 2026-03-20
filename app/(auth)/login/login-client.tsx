@@ -65,7 +65,10 @@ export default function LoginClient() {
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm text-gray-300">Password</label>
+                <a href="/reset-password" className="text-xs text-orange-400 hover:text-orange-300">Forgot password?</a>
+              </div>
               <input
                 type="password"
                 value={password}

@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   '/register',
   '/onboarding',
   '/pricing',
+  '/reset-password',
   '/api/auth',
   '/api/cron',
   '/api/health',
