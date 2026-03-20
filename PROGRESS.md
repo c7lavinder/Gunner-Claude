@@ -30,11 +30,11 @@
 - [x] GHL connected via OAuth (webhooks unavailable — polling fallback active)
 - [x] Settings pipeline selector uses live GHL dropdown (Rule 2 compliant)
 - [x] Real call in GHL → graded record in /calls (via polling — 17 calls found, grading confirmed)
-- [ ] Real stage change → property appears in /inventory
+- [x] Real stage change → property appears in /inventory (Emi Yoshimura, 17828 Cape Dr, source: PPL)
 - [x] DEV_BYPASS_AUTH removed — real login working on Railway URL
-- [ ] Two tenants verified cannot see each other's data
+- [x] Two tenants verified cannot see each other's data
 
-**7 of 10 checked. Remaining: first graded call, property creation, tenant isolation.**
+**10 of 10 checked. PHASE 1 COMPLETE.**
 
 ---
 
