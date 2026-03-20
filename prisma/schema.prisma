@@ -156,6 +156,9 @@ model Property {
   // Status
   status PropertyStatus @default(NEW_LEAD)
 
+  // Lead tracking
+  leadSource       String? @map("lead_source") // GHL opportunity source — tracked for KPIs
+
   // GHL sync
   ghlContactId     String? @map("ghl_contact_id")
   ghlPipelineId    String? @map("ghl_pipeline_id")

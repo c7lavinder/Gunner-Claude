@@ -1,5 +1,7 @@
 // lib/properties.ts
-// Property management logic
+// Property management logic — Gunner is source of truth for properties
+// A contact (seller) can be attached to multiple properties
+// No duplicate properties — deduped by tenantId + address
 // Called from GHL webhook when pipeline stage matches tenant trigger
 
 import { db } from '@/lib/db/client'
@@ -8,6 +10,7 @@ import { getGHLClient } from '@/lib/ghl/client'
 interface PropertyTriggerContext {
   ghlPipelineId?: string
   ghlPipelineStage?: string
+  opportunitySource?: string
 }
 
 export async function createPropertyFromContact(
@@ -15,16 +18,6 @@ export async function createPropertyFromContact(
   ghlContactId: string,
   context: PropertyTriggerContext = {},
 ): Promise<string | null> {
-  // Don't create duplicates
-  const existing = await db.property.findFirst({
-    where: { tenantId, ghlContactId },
-  })
-
-  if (existing) {
-    console.log(`[Property] Already exists for contact ${ghlContactId}, skipping`)
-    return existing.id
-  }
-
   try {
     const ghlClient = await getGHLClient(tenantId)
     const contact = await ghlClient.getContact(ghlContactId)
@@ -35,13 +28,35 @@ export async function createPropertyFromContact(
     const state = contact.state ?? ''
     const zip = contact.postalCode ?? ''
 
-    // Create property
+    // Deduplicate by address — same address = same property
+    // One contact CAN have multiple properties (different addresses)
+    if (address && address !== 'Address pending') {
+      const existing = await db.property.findFirst({
+        where: {
+          tenantId,
+          address: { equals: address, mode: 'insensitive' },
+          city: { equals: city, mode: 'insensitive' },
+          state: { equals: state, mode: 'insensitive' },
+        },
+      })
+
+      if (existing) {
+        console.log(`[Property] Already exists at ${address}, ${city} ${state} — skipping`)
+        return existing.id
+      }
+    }
+
+    // Lead source: from opportunity source, or contact source
+    const leadSource = context.opportunitySource || contact.source || null
+
+    // Create property — Gunner is source of truth
     const property = await db.property.create({
       data: {
         tenantId,
         ghlContactId,
         ghlPipelineId: context.ghlPipelineId,
         ghlPipelineStage: context.ghlPipelineStage,
+        leadSource,
         address: address || 'Address pending',
         city: city || '',
         state: state || '',
@@ -67,6 +82,7 @@ export async function createPropertyFromContact(
       })
     }
 
+    // Link seller to property — one seller can own multiple properties
     await db.propertySeller.create({
       data: {
         propertyId: property.id,
@@ -83,11 +99,16 @@ export async function createPropertyFromContact(
         resourceId: property.id,
         source: 'GHL_WEBHOOK',
         severity: 'INFO',
-        payload: { ghlContactId, address, pipelineStage: context.ghlPipelineStage },
+        payload: {
+          ghlContactId,
+          address,
+          leadSource,
+          pipelineStage: context.ghlPipelineStage,
+        },
       },
     })
 
-    console.log(`[Property] Created ${property.id} for contact ${ghlContactId}`)
+    console.log(`[Property] Created ${property.id} at ${address || 'no address'} (source: ${leadSource || 'unknown'}) for contact ${ghlContactId}`)
     return property.id
   } catch (err) {
     console.error(`[Property] Failed to create from contact ${ghlContactId}:`, err)

@@ -291,6 +291,7 @@ export interface GHLContact {
   city: string
   state: string
   postalCode: string
+  source: string
   tags: string[]
   customFields: Array<{ id: string; value: string }>
 }

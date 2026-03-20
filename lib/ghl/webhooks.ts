@@ -142,6 +142,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     stageId?: string
     contactId?: string
     pipelineId?: string
+    source?: string
     locationId: string
   }
 
@@ -159,11 +160,12 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
 
   if (!isPropertyTrigger) return
 
-  // Create a property from this contact
+  // Create a property from this contact — includes lead source for KPI tracking
   if (oppData.contactId) {
     await createPropertyFromContact(tenantId, oppData.contactId, {
       ghlPipelineId: oppData.pipelineId,
       ghlPipelineStage: oppData.stageId,
+      opportunitySource: oppData.source,
     })
   }
 }
