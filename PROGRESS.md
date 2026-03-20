@@ -183,10 +183,55 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 2 planning — decide priorities and start building
+**Task:** Phase 2, Step 1 — Call transcripts + real grading scores
 
-**First message to Claude Code:**
+---
 
-Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
-Phase 1 is complete. All 10 exit criteria verified on live Railway.
-Let's plan Phase 2 priorities.
+## Phase 2 — Sequenced Task List
+
+The core revenue loop: calls get graded → grades drive KPIs → KPIs drive accountability → accountability drives revenue. Every step below strengthens that loop in dependency order.
+
+### Step 1 — Call Transcripts + Real Grading (BLOCKER for everything)
+All 17 calls scored 0 because we have no transcripts. Without real scores, KPIs are empty, coaching is useless, and TCP scoring has no signal.
+- Investigate GHL call recording/transcript access (may need conversations.messages scope or direct recording URL)
+- If GHL doesn't expose transcripts: integrate Deepgram or AssemblyAI to transcribe from recording URLs
+- Re-grade existing calls with transcripts → real scores populate
+- **Exit criteria:** at least 3 calls with score > 0 and real AI feedback on production
+
+### Step 2 — Dashboard KPIs (Wire Real Data)
+Dashboard is the daily driver. Empty dashboard = dead product.
+- Wire dashboard cards to real data: calls today, avg score, properties in pipeline, tasks open
+- Add score trend chart (last 7/30 days)
+- KPI snapshot cron already exists — verify it's running and populating kpi_snapshots table
+- **Exit criteria:** dashboard shows real numbers from New Again Houses data on production
+
+### Step 3 — Team Invites + Role-Based Views
+Can't track team performance without a team. Can't sell seats without multi-user.
+- Fix invite email (bug #8 — empty companyName)
+- Invite 2-3 real team members from New Again Houses
+- Verify role-based access: team leads see their team, managers see their own data
+- Assign calls to correct team members (match GHL userId to Gunner user)
+- **Exit criteria:** at least 2 team members logged in, seeing their own calls/KPIs
+
+### Step 4 — Onboarding Polish + Paywall
+Product works. Now charge for it.
+- Streamline onboarding: connect GHL → see first graded call in under 60 seconds
+- Add Stripe integration with paywall after first graded call is shown
+- Free trial period or immediate charge — your call on pricing
+- **Exit criteria:** new tenant can register, connect GHL, see graded call, hit paywall
+
+### Step 5 — TCP Lead Scoring
+Build the True Conversion Probability model (CLAUDE.md Rule 5).
+- Create lib/ai/scoring.ts — ensemble model using call scores, touch count, equity, motivation
+- Add tcp_score column to properties
+- Recalculate on: call graded, stage change, task completed
+- Surface "Buy Signal" alerts: high TCP + low team engagement
+- **Exit criteria:** properties in inventory show TCP scores, buy signals surfaced on dashboard
+
+### Step 6 — Buyer List + Deal Blasting
+New revenue module — requires high-stakes gates (Rule 4).
+- Build buyer management UI
+- Build deal blast: select property → select buyers → send SMS/email
+- Implement lib/gates/requireApproval.ts for SMS blast confirmation
+- Track buyer responses and interest
+- **Exit criteria:** one real deal blast sent to real buyers on production
