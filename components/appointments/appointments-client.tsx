@@ -11,6 +11,7 @@ interface AppointmentItem {
   endTime: string
   contactId: string
   contactName?: string | null
+  assignedUserName?: string | null
   status: string
 }
 
@@ -94,6 +95,11 @@ export function AppointmentsClient({ appointments, fetchError, tenantSlug }: {
                         <span className="flex items-center gap-1 text-xs text-gray-500">
                           <User size={10} />
                           {appt.contactName}
+                        </span>
+                      )}
+                      {appt.assignedUserName && (
+                        <span className="text-xs text-blue-400/70 flex items-center gap-1">
+                          <User size={10} /> {appt.assignedUserName}
                         </span>
                       )}
                     </div>

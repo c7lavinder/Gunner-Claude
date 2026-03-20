@@ -3,7 +3,8 @@
 import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
-import type { GHLTask } from '@/lib/ghl/client'
+import type { GHLTaskItem } from '@/lib/ghl/client'
+import { Prisma } from '@prisma/client'
 import { TasksClient, type EnrichedTask } from '@/components/tasks/tasks-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
@@ -80,12 +81,12 @@ export default async function TasksPage({ params }: { params: { tenant: string }
 
     // Fetch tasks from GHL
     const result = await ghl.searchTasks('incompleted')
-    let tasks: GHLTask[] = result.tasks ?? []
+    let tasks: GHLTaskItem[] = result.tasks ?? []
 
     // Filter: non-admins only see their own tasks
     if (!isAdmin && currentUser?.ghlUserId) {
       tasks = tasks.filter(t => {
-        const taskUserId = t.assignedTo ?? t.userId
+        const taskUserId = t.assignedTo
         return taskUserId === currentUser.ghlUserId
       })
     } else if (!isAdmin && !currentUser?.ghlUserId) {
@@ -112,28 +113,35 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       }
     })
 
-    // AM/PM call tracking — find calls made today for these contacts
-    // Call model doesn't have contactId directly, so we check ghlCallId (conversation ID)
-    // which may not map 1:1 to contactId. For now, we use calledAt time for all calls today.
-    const todayStart = startOfDay(new Date())
-    const todayCalls = await db.call.findMany({
-      where: {
-        tenantId,
-        calledAt: { gte: todayStart },
-      },
-      select: { ghlCallId: true, calledAt: true },
-    })
+    // AM/PM call tracking via ghlContactId + Central timezone
+    const contactIdList = [...new Set(tasks.map(t => t.contactId).filter(Boolean))]
+    const amPmMap = new Map<string, { am: boolean; pm: boolean }>()
 
-    // Build a rough AM/PM map keyed by ghlCallId (conversation IDs)
-    // Since GHL conversations are 1:1 with contacts, this gives us per-contact call tracking
-    const amPmByConversation = new Map<string, { am: boolean; pm: boolean }>()
-    for (const call of todayCalls) {
-      if (!call.ghlCallId || !call.calledAt) continue
-      const hour = call.calledAt.getHours()
-      const existing = amPmByConversation.get(call.ghlCallId) ?? { am: false, pm: false }
-      if (hour < 12) existing.am = true
-      else existing.pm = true
-      amPmByConversation.set(call.ghlCallId, existing)
+    if (contactIdList.length > 0) {
+      const todayStartUTC = new Date()
+      todayStartUTC.setUTCHours(0, 0, 0, 0)
+
+      type AmPmRow = { ghl_contact_id: string; is_am: boolean }
+      const callRows = await db.$queryRaw<AmPmRow[]>`
+        SELECT
+          ghl_contact_id,
+          EXTRACT(HOUR FROM (called_at AT TIME ZONE 'America/Chicago')) < 12 AS is_am
+        FROM calls
+        WHERE
+          tenant_id = ${tenantId}
+          AND direction = 'OUTBOUND'
+          AND ghl_contact_id = ANY(ARRAY[${Prisma.join(contactIdList)}])
+          AND called_at >= ${todayStartUTC}
+          AND called_at IS NOT NULL
+      `
+
+      for (const row of callRows) {
+        if (!row.ghl_contact_id) continue
+        const existing = amPmMap.get(row.ghl_contact_id) ?? { am: false, pm: false }
+        if (row.is_am) existing.am = true
+        else existing.pm = true
+        amPmMap.set(row.ghl_contact_id, existing)
+      }
     }
 
     // Resolve GHL user names for assignedTo
@@ -156,12 +164,10 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       const dueDate = t.dueDate ? new Date(t.dueDate) : null
       const taskIsOverdue = dueDate ? isPast(dueDate) && !isToday(dueDate) : false
       const taskIsDueToday = dueDate ? isToday(dueDate) : false
-      const assignedUserId = t.assignedTo ?? t.userId
+      const assignedUserId = t.assignedTo ?? null
       const assignedToName = assignedUserId ? ghlUserMap.get(assignedUserId) ?? null : null
 
-      // AM/PM: check if any conversation for this contactId had calls today
-      // This is approximate — works when ghlCallId matches contactId conversations
-      const callStatus = amPmByConversation.get(t.contactId) ?? { am: false, pm: false }
+      const callStatus = amPmMap.get(t.contactId) ?? { am: false, pm: false }
 
       return {
         id: t.id,

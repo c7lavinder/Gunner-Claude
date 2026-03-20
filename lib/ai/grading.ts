@@ -126,6 +126,7 @@ export async function gradeCall(callId: string): Promise<void> {
         gradedAt: new Date(),
         ...(ghlContext?.duration && !call.durationSeconds && { durationSeconds: ghlContext.duration }),
         ...(ghlContext?.callStatus && { callResult: ghlContext.callStatus }),
+        ...(ghlContext?.contactId && { ghlContactId: ghlContext.contactId }),
       },
     })
 
@@ -190,6 +191,7 @@ export async function gradeCall(callId: string): Promise<void> {
 // ─── GHL context enrichment ────────────────────────────────────────────────
 
 interface GHLCallContext {
+  contactId: string
   contactName: string
   contactPhone: string
   contactTags: string[]
@@ -254,6 +256,7 @@ async function fetchGHLCallContext(tenantId: string, ghlConversationId: string):
     }
 
     return {
+      contactId: conv.contactId,
       contactName: conv.contactName || conv.fullName || 'Unknown',
       contactPhone: conv.phone || '',
       contactTags,

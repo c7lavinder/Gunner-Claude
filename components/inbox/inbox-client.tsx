@@ -13,6 +13,8 @@ interface ConversationItem {
   lastMessage: string
   lastMessageType: string
   updatedAt: string
+  toUserName: string | null
+  propertyAddress: string | null
 }
 
 export function InboxClient({ conversations, fetchError, tenantSlug }: {
@@ -87,7 +89,12 @@ function ConversationRow({ conversation: c, typeIcon }: {
   typeIcon: React.ReactNode
 }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors cursor-pointer">
+    <a
+      href={`https://app.gohighlevel.com/conversations/${c.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors block"
+    >
       <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-sm text-gray-400 font-medium">
         {c.contactName?.[0]?.toUpperCase() ?? '?'}
       </div>
@@ -95,9 +102,15 @@ function ConversationRow({ conversation: c, typeIcon }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium text-white truncate">{c.contactName || c.phone || 'Unknown'}</p>
+          {c.toUserName && (
+            <span className="text-xs text-blue-400/70">→ {c.toUserName}</span>
+          )}
           <span className="shrink-0">{typeIcon}</span>
         </div>
         <p className="text-xs text-gray-500 truncate mt-0.5">{c.lastMessage || c.phone || 'No message'}</p>
+        {c.propertyAddress && (
+          <p className="text-xs text-purple-400/70 truncate mt-0.5">{c.propertyAddress}</p>
+        )}
       </div>
 
       <div className="text-right shrink-0 space-y-1">
@@ -116,6 +129,6 @@ function ConversationRow({ conversation: c, typeIcon }: {
           })()}
         </p>
       </div>
-    </div>
+    </a>
   )
 }

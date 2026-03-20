@@ -1,7 +1,7 @@
 // app/(tenant)/[tenant]/appointments/page.tsx
-// Appointments page — fetches from GHL calendars API with contact enrichment
+// Appointments page — fetches from GHL calendars API with contact + user enrichment
 import { requireSession } from '@/lib/auth/session'
-import { getGHLClient } from '@/lib/ghl/client'
+import { getGHLClient, GHLError } from '@/lib/ghl/client'
 import { AppointmentsClient } from '@/components/appointments/appointments-client'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
 
@@ -10,7 +10,6 @@ export default async function AppointmentsPage({ params }: { params: { tenant: s
 
   const tenantId = session.tenantId
   const today = new Date()
-  // GHL expects full ISO timestamps
   const startDate = startOfDay(today).toISOString()
   const endDate = endOfDay(addDays(today, 7)).toISOString()
 
@@ -19,6 +18,17 @@ export default async function AppointmentsPage({ params }: { params: { tenant: s
 
   try {
     const ghl = await getGHLClient(tenantId)
+
+    // Resolve GHL user IDs to names
+    let apptUserMap = new Map<string, string>()
+    try {
+      const usersResult = await ghl.getLocationUsers()
+      for (const u of (usersResult?.users ?? [])) {
+        const name = u.name || `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim()
+        if (u.id && name) apptUserMap.set(u.id, name)
+      }
+    } catch { /* non-fatal */ }
+
     const result = await ghl.getAppointments({ startDate, endDate })
     const events = result.events ?? result.appointments ?? []
 
@@ -43,10 +53,15 @@ export default async function AppointmentsPage({ params }: { params: { tenant: s
       endTime: a.endTime,
       contactId: a.contactId,
       contactName: contactMap.get(a.contactId) ?? null,
+      assignedUserName: apptUserMap.get(a.userId) ?? null,
       status: a.status,
     }))
   } catch (err) {
-    console.error('[Appointments] GHL fetch failed:', err instanceof Error ? err.message : err)
+    const statusCode = err instanceof GHLError ? err.statusCode : null
+    console.error('[Appointments] GHL fetch failed:', {
+      statusCode,
+      message: err instanceof Error ? err.message : err,
+    })
     fetchError = true
   }
 
@@ -66,5 +81,6 @@ interface AppointmentItem {
   endTime: string
   contactId: string
   contactName: string | null
+  assignedUserName: string | null
   status: string
 }

@@ -132,7 +132,10 @@ export class GHLClient {
   // ─── Tasks (search from GHL) ───────────────────────────────────────────────
 
   async searchTasks(status: 'incompleted' | 'completed' = 'incompleted') {
-    return this.request<{ tasks: GHLTask[] }>('POST', `/locations/${this.locationId}/tasks/search`, { status })
+    return this.request<{ tasks: GHLTaskItem[] }>('POST', `/locations/${this.locationId}/tasks/search`, {
+      locationId: this.locationId,
+      status,
+    })
   }
 
   // ─── Appointments ──────────────────────────────────────────────────────────
@@ -142,14 +145,15 @@ export class GHLClient {
   }
 
   async getAppointments(params: { startDate: string; endDate: string; userId?: string }) {
-    // Strategy 1: Try the location-level events endpoint directly
+    // GHL /calendars/events expects Unix timestamps in milliseconds
     const baseParams: Record<string, string> = {
       locationId: this.locationId,
-      startTime: params.startDate,
-      endTime: params.endDate,
+      startTime: String(new Date(params.startDate).getTime()),
+      endTime: String(new Date(params.endDate).getTime()),
     }
     if (params.userId) baseParams.userId = params.userId
 
+    // Strategy 1: Try the location-level events endpoint directly
     try {
       const query = new URLSearchParams(baseParams)
       const result = await this.request<GHLAppointmentList>('GET', `/calendars/events?${query}`)
@@ -168,6 +172,7 @@ export class GHLClient {
         const calQuery = new URLSearchParams({
           ...baseParams,
           calendarId: cal.id,
+          ...(cal.groupId ? { groupId: cal.groupId } : {}),
         })
         const result = await this.request<GHLAppointmentList>('GET', `/calendars/events?${calQuery}`)
         const events = result.events ?? result.appointments ?? []

@@ -68,6 +68,25 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 27 — Fix Inbox, Appointments, Tasks — 10 targeted fixes (2026-03-20)
+**What was done:**
+- **Inbox (3 fixes):**
+  - ConversationRow now opens GHL in new tab via `<a target="_blank">`
+  - Team member name resolved from GHL users (shows "→ Daniel")
+  - Property address cross-referenced from DB (shows "123 Main St, Nashville TN")
+- **Appointments (3 fixes):**
+  - getAppointments now passes Unix ms timestamps (was ISO strings → 0 results)
+  - Strategy 2 per-calendar queries include groupId
+  - Assigned user name resolved and shown on appointment cards
+  - Error logging includes GHLError statusCode for diagnostics
+- **Tasks (4 fixes):**
+  - searchTasks POST body now includes locationId (was missing → 422 errors)
+  - GHLTaskItem type used throughout (was GHLTask with wrong fields)
+  - Added ghlContactId field to Call schema + migration for AM/PM tracking
+  - AM/PM query uses PostgreSQL AT TIME ZONE 'America/Chicago' via raw SQL
+  - poll-calls.ts and grading.ts now save ghlContactId on call records
+  - Error banner improved with actionable troubleshooting steps
+
 ### Session 26 — Fix 3 critical bugs: calls tabs, page flash, silent errors (2026-03-20)
 **What was done:**
 - **Bug 1 — Calls page broken tabs:** Removed Skipped (hacky heuristic) and Archived (empty placeholder) tabs. Replaced with "Short calls" tab showing calls <30s with info banner and reprocess buttons

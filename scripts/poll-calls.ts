@@ -73,6 +73,7 @@ async function pollCalls() {
             data: {
               tenantId: tenant.id,
               ghlCallId: conv.id,
+              ghlContactId: conv.contactId ?? null,
               assignedToId: user?.id ?? null,
               direction: direction as 'INBOUND' | 'OUTBOUND',
               calledAt: new Date(conv.lastMessageDate || conv.dateUpdated || Date.now()),

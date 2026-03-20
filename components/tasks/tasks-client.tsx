@@ -90,9 +90,16 @@ export function TasksClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
       {/* GHL fetch error */}
       {fetchError && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
-          <AlertCircle size={14} />
-          Could not load tasks from GHL. Check your GHL connection in Settings.
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-4 space-y-2">
+          <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
+            <AlertCircle size={14} />
+            Could not load tasks from Go High Level
+          </div>
+          <p className="text-xs text-amber-300/70 leading-relaxed">
+            Check Railway logs for the exact error. Most common causes: GHL token needs refresh, or the POST body format changed. Go to{' '}
+            <a href={`/${tenantSlug}/settings`} className="underline hover:text-amber-300">Settings → Integrations</a>
+            {' '}and reconnect GHL if the error persists.
+          </p>
         </div>
       )}
 
