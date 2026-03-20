@@ -68,6 +68,14 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 20 — Phase 3B: Coaching v2 — proactive insights, session history (2026-03-20)
+**What was done:**
+- Built generateInsights(): week-over-week score trends, volume alerts, XP milestones, high score celebrations
+- Proactive insight cards on coach page load (warning/celebration/tip, clickable for deeper analysis)
+- Session history: all coach conversations saved to coach_logs table
+- Richer coach context: XP level, weekly XP, week avg score
+- Switched coach model from Opus to Sonnet for faster responses
+
 ### Session 19 — Phase 3A: Gamification — XP, badges, leaderboard (2026-03-20)
 **What was done:**
 - Built lib/gamification/xp.ts (310 lines):
@@ -313,18 +321,25 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 3B — Coaching Loop v2 (proactive alerts, session history)
+**Task:** Phase 3C — Training Hub + Phase 3D — Day Hub
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-3A gamification is built. Next:
-1. Proactive coaching alerts: "Your objection handling dropped 15 points this week"
-2. Coaching session summaries saved to coach_logs table
-3. Role-specific coaching paths
-4. Manager visibility into team coaching sessions
-5. Exit criteria: coach gives proactive alerts based on real score trends
+3A gamification + 3B coaching v2 are built. Next:
+
+**3C — Training Hub:**
+1. "Call of the Week" — auto-promote highest scoring call
+2. Review queue — calls below threshold flagged for manager review
+3. Build /{tenant}/training page with call library
+4. Exit criteria: training page shows top calls and flagged calls
+
+**3D — Day Hub:**
+1. Daily task planner with role-based default categories
+2. Build /{tenant}/day-hub page
+3. Wire to tasks table with GHL sync
+4. Exit criteria: day hub shows today's prioritized tasks by category
 
 ---
 
