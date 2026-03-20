@@ -161,6 +161,12 @@ export class GHLClient {
     })
   }
 
+  // ─── Users (location team members) ────────────────────────────────────────
+
+  async getLocationUsers() {
+    return this.request<GHLUserList>('GET', `/users/search?companyId=${this.locationId}&locationId=${this.locationId}`)
+  }
+
   // ─── Webhooks ──────────────────────────────────────────────────────────────
 
   async registerWebhook(url: string, events: string[]) {
@@ -364,6 +370,8 @@ export interface GHLConversation {
   lastMessageDirection: string
   updatedAt: string | number
   dateUpdated: number
+  userId?: string         // GHL user assigned to conversation
+  assignedTo?: string     // alternate field name for assigned user
 }
 
 export interface GHLAppointmentList {
@@ -390,4 +398,21 @@ export interface GHLPipeline {
   id: string
   name: string
   stages: Array<{ id: string; name: string }>
+}
+
+export interface GHLUserList {
+  users: GHLUser[]
+  count?: number
+}
+
+export interface GHLUser {
+  id: string
+  name: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  type: string
+  role: string
+  locationIds: string[]
 }

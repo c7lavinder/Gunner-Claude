@@ -68,6 +68,27 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 16 — Phase 2E: team invites + role-based views (2026-03-20)
+**What was done:**
+- Fixed bug #8: invite email now shows actual company name (was hardcoded empty string)
+  - Fetches tenant.name from DB before sending email
+- Built GHL user mapping for team members:
+  - Added GET /api/ghl/users endpoint (fetches location users from GHL)
+  - Added PATCH /api/users/[userId] endpoint (updates ghlUserId, reportsTo)
+  - Added GHL user dropdown per team member in Settings → Team tab
+  - Updates save instantly on selection
+- Added GHL userId/assignedTo fields to GHLConversation interface
+- Updated poll-calls.ts to match calls to correct user:
+  - Pre-fetches all tenant users with GHL mappings
+  - Matches conversation userId/assignedTo to user.ghlUserId
+  - Falls back to first user if no match
+- Added getLocationUsers() method to GHL client
+- Next.js build passes cleanly
+
+**What needs live validation:**
+- Send a real invite on Railway and verify email shows company name
+- Map GHL users in Settings and verify new calls are assigned correctly
+
 ### Session 15 — Phase 2B + 2C: historical import, dashboard KPIs (2026-03-20)
 **What was done:**
 - Wrote complete TECH_STACK.md (615 lines): 5 core systems, 9 feature modules, full DB schema, cost model, build priority, 14 decisions
@@ -201,7 +222,7 @@
 | 5 | lib/gates/requireApproval.ts does not exist — high-stakes gates not built | lib/ | HIGH | Before SMS blast feature |
 | 6 | ~~updateTenantSettings() server action does not exist~~ | lib/db/settings.ts | ~~HIGH~~ | ✅ FIXED — Step 3b |
 | 7 | withTenantContext() not called in API routes — RLS inactive per-request | lib/db/client.ts | MEDIUM | Before production |
-| 8 | Invite email sends empty companyName | app/api/tenants/invite/route.ts | LOW | Fix anytime |
+| 8 | ~~Invite email sends empty companyName~~ | app/api/tenants/invite/route.ts | ~~LOW~~ | ✅ FIXED — Session 16 |
 | 9 | ~~OAuth callback references old /ghl/callback path~~ | all files | ~~HIGH~~ | ✅ FIXED — Step 3a |
 | 10 | GHL webhook registration returns 404 — Marketplace Apps may not support /locations/{id}/webhooks endpoint | lib/ghl/client.ts | HIGH | Investigate correct GHL v2 webhook API or rely on polling |
 | 11 | Appointments page returns 401 — calendars/events scope may not be covered by calendars.readonly | lib/ghl/client.ts | HIGH | Add correct scope to GHL Marketplace App |
@@ -239,22 +260,27 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 2E — Team invites + role-based views
+**Task:** Phase 2F — Onboarding polish + Phase 2G — Stripe paywall
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-Phase 2C dashboard is done. 2D (4-tab layout) was built in Session 14. Next:
-1. Fix invite email bug #8 (empty companyName)
-2. Test invite flow end-to-end on Railway
-3. Verify role-based access: team leads see their team, managers see own data
-4. Assign calls to correct team members (match GHL userId to Gunner user)
-5. Exit criteria: at least 2 team members logged in, seeing their own calls/KPIs
+2E team invites are built. Code is ready — needs production validation:
+- Send a real invite on Railway to verify email shows company name
+- Map a GHL user in Settings → Team and verify call assignment
+
+Now build 2F + 2G:
+1. Streamline onboarding: connect GHL → see first graded call in under 60 seconds
+2. Add Stripe integration (npm install stripe @stripe/stripe-js @stripe/react-stripe-js)
+3. Paywall after first graded call is shown (Rule 6)
+4. Build pricing page with Starter ($97), Growth ($197), Team ($397) tiers
+5. Exit criteria: new tenant can register, connect GHL, see graded call, hit paywall
 
 **Also verify on production:**
-- Dashboard shows real numbers (score trend chart, priority leads, KPI cards)
-- Call detail 4-tab layout renders with real graded calls
+- Dashboard shows real numbers (score trend, priority leads)
+- Call detail 4-tab layout renders correctly
+- Invite flow works end-to-end
 
 ---
 

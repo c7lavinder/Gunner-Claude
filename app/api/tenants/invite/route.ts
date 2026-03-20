@@ -26,6 +26,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
+  // Fetch tenant name for invite email (fixes bug #8: empty companyName)
+  const tenant = await db.tenant.findUnique({
+    where: { id: session.tenantId },
+    select: { name: true },
+  })
+  const companyName = tenant?.name ?? session.tenantSlug
+
   const results = []
 
   for (const invite of parsed.data.invites) {
@@ -54,7 +61,7 @@ export async function POST(request: NextRequest) {
     const emailResult = await sendTeamInvite({
       toEmail: invite.email,
       inviterName: session.name,
-      companyName: '', // fetched below if needed
+      companyName,
       tenantSlug: session.tenantSlug,
       role: invite.role,
       tempPassword,

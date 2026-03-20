@@ -5,8 +5,8 @@
 
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2 } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2 } from 'lucide-react'
 import { ROLE_LABELS, type UserRole } from '@/types/roles'
 import { RubricEditor } from '@/components/settings/rubric-editor'
 import { GHLDropdown } from '@/components/ui/ghl-dropdown'
@@ -23,7 +23,10 @@ interface TenantInfo {
 }
 interface TeamMember {
   id: string; name: string; email: string; role: string
-  reportsTo: string | null; createdAt: string
+  reportsTo: string | null; ghlUserId: string | null; createdAt: string
+}
+interface GHLUserOption {
+  id: string; name: string; email: string
 }
 interface Rubric {
   id: string; name: string; role: string; callType: string | null; isDefault: boolean
@@ -66,6 +69,42 @@ export function SettingsClient({
   const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; name: string }>>([])
   const [savingPipeline, setSavingPipeline] = useState(false)
   const [pipelineSaveMsg, setPipelineSaveMsg] = useState('')
+
+  // GHL user mapping state
+  const [ghlUsers, setGhlUsers] = useState<GHLUserOption[]>([])
+  const [ghlUsersLoading, setGhlUsersLoading] = useState(false)
+  const [savingGhlMap, setSavingGhlMap] = useState<string | null>(null)
+
+  // Fetch GHL users when team tab is shown
+  useEffect(() => {
+    if (tab === 'team' && tenant.ghlConnected && ghlUsers.length === 0) {
+      setGhlUsersLoading(true)
+      fetch('/api/ghl/users')
+        .then(r => r.json())
+        .then(data => {
+          const users = (data.users ?? []).map((u: { id: string; name: string; firstName: string; lastName: string; email: string }) => ({
+            id: u.id,
+            name: u.name || `${u.firstName} ${u.lastName}`.trim(),
+            email: u.email,
+          }))
+          setGhlUsers(users)
+        })
+        .catch(() => setGhlUsers([]))
+        .finally(() => setGhlUsersLoading(false))
+    }
+  }, [tab, tenant.ghlConnected, ghlUsers.length])
+
+  async function saveGhlUserMapping(userId: string, ghlUserId: string | null) {
+    setSavingGhlMap(userId)
+    try {
+      await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ghlUserId }),
+      })
+    } catch { /* ignore */ }
+    setSavingGhlMap(null)
+  }
 
   async function invite() {
     if (!inviteEmail) return
@@ -213,6 +252,31 @@ export function SettingsClient({
                     )}
                   </div>
                   <p className="text-xs text-gray-500">{member.email}</p>
+                  {/* GHL user mapping */}
+                  {canManage && tenant.ghlConnected && (
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <Link2 size={10} className="text-gray-600 shrink-0" />
+                      {ghlUsersLoading ? (
+                        <span className="text-xs text-gray-600">Loading GHL users...</span>
+                      ) : ghlUsers.length > 0 ? (
+                        <select
+                          value={member.ghlUserId ?? ''}
+                          onChange={(e) => saveGhlUserMapping(member.id, e.target.value || null)}
+                          disabled={savingGhlMap === member.id}
+                          className="text-xs bg-transparent border-none text-gray-500 hover:text-gray-300 focus:outline-none cursor-pointer p-0"
+                        >
+                          <option value="">Map to GHL user...</option>
+                          {ghlUsers.map(u => (
+                            <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-gray-600">
+                          {member.ghlUserId ? `GHL: ${member.ghlUserId.slice(0, 8)}...` : 'No GHL mapping'}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <span className="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded-full">
                   {ROLE_LABELS[member.role as UserRole] ?? member.role}

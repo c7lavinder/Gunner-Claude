@@ -198,7 +198,7 @@ True Conversion Probability recalculates on:
 
 Score stored in properties.tcp_score (Float, 0.0 to 1.0).
 High TCP + Low engagement = Buy Signal = surface to team immediately.
-Implementation: lib/ai/scoring.ts (not yet built)
+Implementation: lib/ai/scoring.ts (v1 built — 8-factor weighted ensemble)
 
 ---
 
@@ -238,7 +238,7 @@ Critical files to re-inject at start of any new context window:
 | GHL dropdown | components/ui/ghl-dropdown.tsx | Reusable GHL entity dropdown (Rule 2) |
 | Call grader | lib/ai/grading.ts | Claude-powered call scoring |
 | Call poller | scripts/poll-calls.ts | Polling fallback for call grading (every 60s cron) |
-| TCP scorer | lib/ai/scoring.ts | Lead conversion probability (not yet built) |
+| TCP scorer | lib/ai/scoring.ts | Lead conversion probability (v1 built — 8-factor ensemble) |
 | AI coach | lib/ai/coach.ts | User-facing coaching chat |
 | Approval gates | lib/gates/requireApproval.ts | High-stakes action gates (not yet built) |
 | Audit logger | lib/db/client.ts | All action logging |

@@ -41,6 +41,12 @@ async function pollCalls() {
           continue
         }
 
+        // Pre-fetch all users with GHL mappings for this tenant
+        const tenantUsers = await db.user.findMany({
+          where: { tenantId: tenant.id },
+          select: { id: true, ghlUserId: true },
+        })
+
         for (const conv of callConversations) {
           // Skip if we already have this conversation as a call
           const existing = await db.call.findFirst({
@@ -53,11 +59,11 @@ async function pollCalls() {
 
           if (existing) continue
 
-          // Find the user in our system
-          const user = await db.user.findFirst({
-            where: { tenantId: tenant.id },
-            select: { id: true },
-          })
+          // Match to user: try GHL userId from conversation, fall back to first user
+          const ghlUserId = conv.userId ?? conv.assignedTo
+          const user = (ghlUserId && tenantUsers.find(u => u.ghlUserId === ghlUserId))
+            || tenantUsers[0]
+            || null
 
           // Determine call direction from conversation
           const direction = conv.lastMessageDirection === 'inbound' ? 'INBOUND' : 'OUTBOUND'

@@ -25,7 +25,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
     }),
     db.user.findMany({
       where: { tenantId },
-      select: { id: true, name: true, email: true, role: true, reportsTo: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, reportsTo: true, ghlUserId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     }),
     db.callRubric.findMany({
@@ -58,6 +58,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         email: u.email,
         role: u.role,
         reportsTo: u.reportsTo,
+        ghlUserId: u.ghlUserId,
         createdAt: u.createdAt.toISOString(),
       }))}
       rubrics={rubrics}
