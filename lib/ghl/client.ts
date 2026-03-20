@@ -48,7 +48,8 @@ export class GHLClient {
   // ─── Contacts ──────────────────────────────────────────────────────────────
 
   async getContact(contactId: string) {
-    return this.request<GHLContact>('GET', `/contacts/${contactId}`)
+    const result = await this.request<{ contact: GHLContact }>('GET', `/contacts/${contactId}`)
+    return result.contact
   }
 
   async updateContact(contactId: string, data: Partial<GHLContactUpdate>) {
