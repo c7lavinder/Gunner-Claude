@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import {
   LayoutDashboard, Phone, Inbox, Calendar, CheckSquare,
-  Building2, BarChart3, Bot, Settings, ChevronRight
+  Building2, BarChart3, Bot, Settings, ChevronRight, GraduationCap, Sun
 } from 'lucide-react'
 import { hasPermission, type UserRole } from '@/types/roles'
 
@@ -28,7 +28,9 @@ export function SidebarNav({ tenantSlug }: SidebarNavProps) {
     { href: `${base}/appointments`, icon: Calendar, label: 'Appointments', always: true },
     { href: `${base}/tasks`, icon: CheckSquare, label: 'Tasks', always: true },
     { href: `${base}/inventory`, icon: Building2, label: 'Inventory', permission: 'inventory.view' as const },
+    { href: `${base}/day-hub`, icon: Sun, label: 'Day Hub', always: true },
     { href: `${base}/kpis`, icon: BarChart3, label: 'KPIs', permission: 'kpis.view.own' as const },
+    { href: `${base}/training`, icon: GraduationCap, label: 'Training', permission: 'calls.view.own' as const },
     { href: `${base}/ai-coach`, icon: Bot, label: 'AI Coach', permission: 'ai.coach' as const },
   ]
 
