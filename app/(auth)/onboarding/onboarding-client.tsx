@@ -105,7 +105,8 @@ export default function OnboardingClient() {
   }
 
   function goToDashboard() {
-    router.push(`/${tenantSlug}/dashboard`)
+    // Route to pricing page — paywall after onboarding (Rule 6)
+    router.push('/pricing')
   }
 
   const selectedPipelineObj = pipelines.find((p) => p.id === selectedPipeline)
@@ -394,7 +395,7 @@ export default function OnboardingClient() {
                 onClick={goToDashboard}
                 className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg px-8 py-3 text-sm transition-colors"
               >
-                Open my dashboard <ArrowRight size={14} />
+                Choose your plan <ArrowRight size={14} />
               </button>
             </div>
           )}

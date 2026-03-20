@@ -42,6 +42,13 @@ model Tenant {
   onboardingStep      Int     @default(0) @map("onboarding_step")
   onboardingCompleted Boolean @default(false) @map("onboarding_completed")
 
+  // Stripe subscription
+  stripeCustomerId      String?   @unique @map("stripe_customer_id")
+  stripePriceId         String?   @map("stripe_price_id")
+  subscriptionStatus    String?   @map("subscription_status")   // active, past_due, canceled, trialing
+  stripeSubscriptionId  String?   @unique @map("stripe_subscription_id")
+  stripeCurrentPeriodEnd DateTime? @map("stripe_current_period_end")
+
   // Tenant-level config (JSON — flexible per client)
   callTypes    Json @default("[]") @map("call_types")    // ["inbound", "outbound", "followup"]
   callResults  Json @default("[]") @map("call_results")  // ["interested", "not interested", "callback"]
