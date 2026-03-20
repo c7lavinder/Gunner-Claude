@@ -2,11 +2,17 @@
 // components/ai-coach/ai-coach-client.tsx
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Loader2, Zap } from 'lucide-react'
+import { Send, Bot, User, Loader2, Zap, AlertTriangle, PartyPopper, Lightbulb } from 'lucide-react'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
+}
+
+interface CoachInsight {
+  type: 'warning' | 'celebration' | 'tip'
+  title: string
+  detail: string
 }
 
 const SUGGESTED_PROMPTS = [
@@ -19,11 +25,12 @@ const SUGGESTED_PROMPTS = [
 ]
 
 export function AiCoachClient({
-  tenantSlug, userName, userRole,
+  tenantSlug, userName, userRole, insights = [],
 }: {
   tenantSlug: string
   userName: string
   userRole: string
+  insights?: CoachInsight[]
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -108,6 +115,33 @@ export function AiCoachClient({
                 </p>
               </div>
             </div>
+
+            {/* Proactive insights */}
+            {insights.length > 0 && (
+              <div className="pl-11 space-y-2">
+                {insights.map((insight, i) => {
+                  const styles = {
+                    warning: { bg: 'bg-red-500/10 border-red-500/20', icon: <AlertTriangle size={14} className="text-red-400" />, color: 'text-red-300' },
+                    celebration: { bg: 'bg-green-500/10 border-green-500/20', icon: <PartyPopper size={14} className="text-green-400" />, color: 'text-green-300' },
+                    tip: { bg: 'bg-blue-500/10 border-blue-500/20', icon: <Lightbulb size={14} className="text-blue-400" />, color: 'text-blue-300' },
+                  }
+                  const s = styles[insight.type]
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => send(`Tell me more about: ${insight.title}`)}
+                      className={`w-full text-left ${s.bg} border rounded-xl p-3 hover:opacity-90 transition-opacity`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        {s.icon}
+                        <span className={`text-xs font-medium ${s.color}`}>{insight.title}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 pl-5">{insight.detail}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Suggested prompts */}
             <div className="pl-11">

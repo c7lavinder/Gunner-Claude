@@ -1,10 +1,12 @@
 // lib/ai/coach.ts
-// AI Coach conversation engine
-// Has full context: user's recent calls, scores, KPIs, industry knowledge
+// AI Coach v2 — conversation engine with proactive insights and session history
+// Has full context: user's recent calls, scores, XP, badges, trends
 
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
+import { Prisma } from '@prisma/client'
 import type { UserRole } from '@/types/roles'
+import { subDays, startOfWeek } from 'date-fns'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -13,6 +15,109 @@ export interface CoachMessage {
   content: string
 }
 
+// ─── Proactive Insights ────────────────────────────────────────────────────
+
+export interface CoachInsight {
+  type: 'warning' | 'celebration' | 'tip'
+  title: string
+  detail: string
+}
+
+export async function generateInsights(
+  tenantId: string,
+  userId: string,
+): Promise<CoachInsight[]> {
+  const now = new Date()
+  const weekAgo = subDays(now, 7)
+  const twoWeeksAgo = subDays(now, 14)
+
+  const [thisWeekCalls, lastWeekCalls, xpRecord, badgeCount] = await Promise.all([
+    db.call.findMany({
+      where: { tenantId, assignedToId: userId, gradingStatus: 'COMPLETED', calledAt: { gte: weekAgo } },
+      select: { score: true, calledAt: true },
+      orderBy: { calledAt: 'desc' },
+    }),
+    db.call.findMany({
+      where: { tenantId, assignedToId: userId, gradingStatus: 'COMPLETED', calledAt: { gte: twoWeeksAgo, lt: weekAgo } },
+      select: { score: true },
+    }),
+    db.userXp.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+      select: { totalXp: true, level: true, weeklyXp: true },
+    }),
+    db.userBadge.count({ where: { tenantId, userId } }),
+  ])
+
+  const insights: CoachInsight[] = []
+
+  const thisWeekAvg = thisWeekCalls.length > 0
+    ? Math.round(thisWeekCalls.reduce((s, c) => s + (c.score ?? 0), 0) / thisWeekCalls.length)
+    : null
+  const lastWeekAvg = lastWeekCalls.length > 0
+    ? Math.round(lastWeekCalls.reduce((s, c) => s + (c.score ?? 0), 0) / lastWeekCalls.length)
+    : null
+
+  // Score trend alerts
+  if (thisWeekAvg !== null && lastWeekAvg !== null) {
+    const diff = thisWeekAvg - lastWeekAvg
+    if (diff <= -10) {
+      insights.push({
+        type: 'warning',
+        title: `Scores dropped ${Math.abs(diff)} points this week`,
+        detail: `Last week avg: ${lastWeekAvg} → This week: ${thisWeekAvg}. Let's diagnose what changed.`,
+      })
+    } else if (diff >= 10) {
+      insights.push({
+        type: 'celebration',
+        title: `Scores up ${diff} points this week!`,
+        detail: `${lastWeekAvg} → ${thisWeekAvg}. Whatever you're doing, keep it up.`,
+      })
+    }
+  }
+
+  // Volume alerts
+  if (thisWeekCalls.length === 0 && lastWeekCalls.length > 0) {
+    insights.push({
+      type: 'warning',
+      title: 'No calls graded this week',
+      detail: `You had ${lastWeekCalls.length} calls last week. Time to get on the phone.`,
+    })
+  } else if (thisWeekCalls.length > 0 && lastWeekCalls.length > 0 && thisWeekCalls.length < lastWeekCalls.length * 0.5) {
+    insights.push({
+      type: 'warning',
+      title: 'Call volume is down',
+      detail: `${thisWeekCalls.length} calls this week vs ${lastWeekCalls.length} last week.`,
+    })
+  }
+
+  // XP milestones
+  if (xpRecord) {
+    if (xpRecord.weeklyXp >= 200) {
+      insights.push({
+        type: 'celebration',
+        title: `${xpRecord.weeklyXp} XP earned this week`,
+        detail: `Level ${xpRecord.level} — ${badgeCount} badges earned. You're grinding.`,
+      })
+    }
+  }
+
+  // High score celebration
+  if (thisWeekCalls.length > 0) {
+    const highScore = Math.max(...thisWeekCalls.map(c => c.score ?? 0))
+    if (highScore >= 90) {
+      insights.push({
+        type: 'celebration',
+        title: `Hit ${highScore}/100 on a call this week`,
+        detail: 'That\'s elite performance. Study what you did differently on that call.',
+      })
+    }
+  }
+
+  return insights
+}
+
+// ─── Coach Response ────────────────────────────────────────────────────────
+
 export async function getCoachResponse(
   tenantId: string,
   userId: string,
@@ -20,13 +125,20 @@ export async function getCoachResponse(
   userName: string,
   messages: CoachMessage[],
 ): Promise<string> {
+  const now = new Date()
+  const weekAgo = subDays(now, 7)
+
   // Pull context to make the coach genuinely useful
-  const [recentCalls, activeTasks, recentProperties, roleConfig] = await Promise.all([
+  const [recentCalls, weekCalls, activeTasks, recentProperties, xpRecord] = await Promise.all([
     db.call.findMany({
       where: { tenantId, assignedToId: userId, gradingStatus: 'COMPLETED' },
       orderBy: { createdAt: 'desc' },
       take: 5,
       select: { score: true, aiFeedback: true, aiCoachingTips: true, callType: true, calledAt: true },
+    }),
+    db.call.findMany({
+      where: { tenantId, assignedToId: userId, gradingStatus: 'COMPLETED', calledAt: { gte: weekAgo } },
+      select: { score: true },
     }),
     db.task.count({
       where: { tenantId, assignedToId: userId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
@@ -34,8 +146,9 @@ export async function getCoachResponse(
     db.property.count({
       where: { tenantId, assignedToId: userId, status: { notIn: ['SOLD', 'DEAD'] } },
     }),
-    db.roleConfig.findUnique({
-      where: { tenantId_role: { tenantId, role: userRole } },
+    db.userXp.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+      select: { totalXp: true, level: true, weeklyXp: true },
     }),
   ])
 
@@ -43,7 +156,10 @@ export async function getCoachResponse(
     ? Math.round(recentCalls.reduce((s, c) => s + (c.score ?? 0), 0) / recentCalls.length)
     : null
 
-  // Build a rich system prompt with user context
+  const weekAvg = weekCalls.length > 0
+    ? Math.round(weekCalls.reduce((s, c) => s + (c.score ?? 0), 0) / weekCalls.length)
+    : null
+
   const systemPrompt = `You are Gunner, an elite AI coach for real estate wholesaling teams.
 
 You are talking with ${userName}, who is a ${formatRole(userRole)} on their wholesaling team.
@@ -56,10 +172,11 @@ YOUR PERSONALITY:
 - Short answers for simple questions, deeper for complex ones
 
 THEIR CURRENT CONTEXT:
-${avgScore !== null ? `- Recent avg call score: ${avgScore}/100` : '- No graded calls yet'}
-${recentCalls.length > 0 ? `- Last ${recentCalls.length} calls graded` : ''}
+${avgScore !== null ? `- Recent avg call score: ${avgScore}/100 (last 5 calls)` : '- No graded calls yet'}
+${weekAvg !== null ? `- This week avg: ${weekAvg}/100 across ${weekCalls.length} calls` : ''}
 ${activeTasks > 0 ? `- ${activeTasks} open tasks` : '- No open tasks'}
 ${recentProperties > 0 ? `- ${recentProperties} active properties assigned` : ''}
+${xpRecord ? `- Level ${xpRecord.level} (${xpRecord.totalXp} total XP, +${xpRecord.weeklyXp} this week)` : ''}
 
 ${recentCalls.length > 0 && recentCalls[0].aiFeedback ? `MOST RECENT CALL FEEDBACK:
 "${recentCalls[0].aiFeedback}"` : ''}
@@ -84,7 +201,7 @@ RULES:
 `
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-6',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     system: systemPrompt,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
@@ -92,6 +209,29 @@ RULES:
 
   const content = response.content[0]
   if (content.type !== 'text') throw new Error('Unexpected response type')
+
+  // Save to coach_logs
+  const lastUserMsg = messages.filter(m => m.role === 'user').pop()
+  if (lastUserMsg) {
+    await db.coachLog.create({
+      data: {
+        tenantId,
+        userId,
+        message: lastUserMsg.content,
+        role: 'user',
+      },
+    }).catch(() => {}) // non-blocking
+
+    await db.coachLog.create({
+      data: {
+        tenantId,
+        userId,
+        message: content.text,
+        role: 'assistant',
+      },
+    }).catch(() => {}) // non-blocking
+  }
+
   return content.text
 }
 
