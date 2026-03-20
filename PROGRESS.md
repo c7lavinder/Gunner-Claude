@@ -8,16 +8,16 @@
 
 ## Current Status
 
-**Phase**: Phase 1 — Foundation + first live call graded
+**Phase**: PHASE 1 COMPLETE — ready for Phase 2
 **App state**: Live on Railway + running locally
-**Auth**: Real login working on Railway (DEV_BYPASS_AUTH removed from production, still in .env.local for local dev)
+**Auth**: Real login on Railway, DEV_BYPASS_AUTH in .env.local only
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude ✅
 **Railway**: https://gunner-claude-production.up.railway.app ✅
 **Health check**: PASSING ✅
-**GHL Marketplace App**: CREATED ✅
 **GHL OAuth**: CONNECTED — tenant "New Again Houses" (location: hmD7eWGQJE7EVFpJxj4q)
-**Pipeline configured**: pipelineId: tOqQbembKlIoPiXbepP3, stageId: f919c1a7-17da-456f-b8f9-10c1aca62691
-**First call graded**: NOT YET — next session priority
+**Calls graded**: 17 of 17 COMPLETED
+**Properties**: 2 created via live webhook (Emi Yoshimura, Gregory Palm)
+**Cron polling**: Railway Function running every 5 minutes
 
 ---
 
@@ -27,10 +27,10 @@
 - [x] GET /api/health returns { status: 'ok' } on Railway URL
 - [x] GHL Marketplace App created with correct scopes and redirect URI
 - [x] One real tenant onboarded through full onboarding flow
-- [x] GHL connected via OAuth (webhooks unavailable — polling fallback active)
+- [x] GHL connected via OAuth (webhooks active — OpportunityCreate/Update handled)
 - [x] Settings pipeline selector uses live GHL dropdown (Rule 2 compliant)
 - [x] Real call in GHL → graded record in /calls (via polling — 17 calls found, grading confirmed)
-- [x] Real stage change → property appears in /inventory (Emi Yoshimura, 17828 Cape Dr, source: PPL)
+- [x] Real stage change → property appears in /inventory (verified end-to-end: Gregory Palm auto-created via webhook)
 - [x] DEV_BYPASS_AUTH removed — real login working on Railway URL
 - [x] Two tenants verified cannot see each other's data
 
@@ -67,6 +67,25 @@
   - properties/[propertyId] PATCH — missing tenantId in where clause
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
+
+### Session 12 — Phase 1 completion (2026-03-20)
+**What was done:**
+- Fixed inbox: GHL dateUpdated is Unix ms not ISO string, mapped contactName/phone/lastMessageBody
+- Fixed poll-calls: rewrote to use /conversations/search TYPE_CALL (no /calls endpoint exists)
+- Fixed grading: removed hard FAIL when no transcript, Claude grades on metadata
+- All 17 calls graded to COMPLETED
+- Fixed 3 cross-tenant vulnerabilities (call-rubrics, tasks, properties missing tenantId in UPDATE)
+- Added calendars/events.readonly scope, fixed appointments endpoint (needs groupId)
+- OAuth reconnect now returns to Settings instead of restarting onboarding
+- Added leadSource to properties from GHL opportunity source
+- Property dedup changed to normalized street address + state (skips city/zip mismatch)
+- Fixed webhook handler: GHL sends OpportunityCreate/Update not OpportunityStageChanged
+- Fixed getContact: GHL returns { contact: {...} } wrapper, was reading undefined fields
+- Gregory Palm property created automatically via live webhook — end-to-end verified on Railway
+- Railway Function cron created for call polling every 5 minutes
+- Added production verification rule to CLAUDE.md and AGENTS.md
+- Multi-tenancy audit: 14/14 API routes safe, 14/14 server pages safe
+- PHASE 1 COMPLETE — all 10 exit criteria verified on live production
 
 ### Session 11 — Full deployment night (2026-03-19)
 **What was done:**
@@ -164,16 +183,10 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Step 5 — Get the first real call graded
+**Task:** Phase 2 planning — decide priorities and start building
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
-
-We are on Step 5 — first call graded. I will make a real call in GHL.
-Your job:
-1. Verify poll-calls.ts is running on Railway (check cron logs)
-2. After I make a call, check if it was detected and graded
-3. If not, debug: check GHL API for recent calls, check if poll-calls.ts
-   can reach GHL, check if gradeCall() is being triggered
-4. Do not stop until a real call shows up graded in the database
+Phase 1 is complete. All 10 exit criteria verified on live Railway.
+Let's plan Phase 2 priorities.
