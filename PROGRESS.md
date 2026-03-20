@@ -68,6 +68,19 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 14 — Phase 2 schema, TCP scoring, call detail 4-tab (2026-03-20)
+**What was done:**
+- Full TECH_STACK.md vision analyzed — built vs missing assessment
+- Phase 2 schema expansion: 7 new call fields (sentiment, objections, talkRatio, keyMoments, callOutcome, sellerMotivation, nextBestAction), 3 new property fields (tcpScore, tcpFactors, tcpUpdatedAt), 7 new tables (user_xp, user_badges, xp_events, lead_source_costs, coach_logs, workflow_definitions, workflow_executions)
+- TCP Scoring v1 built (lib/ai/scoring.ts) — rule-based ensemble with 8 weighted factors, tested on live properties (0.349 score), auto-recalculates on call grading
+- Call detail page rebuilt with 4-tab layout:
+  - Tab 1: Rubric — visual score bars, sentiment/motivation indicators
+  - Tab 2: Coaching — detailed feedback, numbered tips, key moments
+  - Tab 3: Transcript — searchable with speaker labels and highlight
+  - Tab 4: Next Steps — AI recommended action, quick action buttons with confirm-before-execute
+- Prioritized Phase 2 build plan: 2A→2B→2C→2D→2E→2F→2G
+- Added "agent builds the plan" rule to AGENTS.md
+
 ### Session 13 — Level 2 grading pipeline + Deepgram (2026-03-20)
 **What was done:**
 - Enriched call grading with GHL context: contact name/tags/source, conversation history, call duration/status
@@ -206,7 +219,19 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 2, Step 1 — Call transcripts + real grading scores
+**Task:** Phase 2B — Historical data import
+
+**First message to Claude Code:**
+
+Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
+Build scripts/import-historical-calls.ts per TECH_STACK.md spec:
+1. Paginate all GHL conversations with TYPE_CALL messages
+2. Filter: duration over 45 seconds
+3. Create call records for any not already in our DB
+4. Grade each with Level 1 enriched metadata immediately
+5. Calculate TCP for all associated properties
+6. Dry-run mode that shows count before importing
+7. Run it against New Again Houses and report results
 
 ---
 
