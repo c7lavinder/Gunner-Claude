@@ -106,7 +106,13 @@ function ConversationRow({ conversation: c, typeIcon }: {
           </span>
         )}
         <p className="text-xs text-gray-600">
-          {formatDistanceToNow(new Date(c.updatedAt), { addSuffix: true })}
+          {(() => {
+            try {
+              const d = new Date(c.updatedAt)
+              if (isNaN(d.getTime())) return ''
+              return formatDistanceToNow(d, { addSuffix: true })
+            } catch { return '' }
+          })()}
         </p>
       </div>
     </div>

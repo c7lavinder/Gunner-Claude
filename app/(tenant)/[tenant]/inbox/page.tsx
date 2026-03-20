@@ -20,10 +20,14 @@ export default async function InboxPage({ params }: { params: { tenant: string }
     conversations = (result.conversations ?? []).map((c) => ({
       id: c.id,
       contactId: c.contactId,
-      unreadCount: c.unreadCount,
-      lastMessage: c.lastMessage,
-      lastMessageType: c.lastMessageType,
-      updatedAt: c.updatedAt,
+      unreadCount: c.unreadCount ?? 0,
+      lastMessage: c.lastMessage ?? '',
+      lastMessageType: c.lastMessageType ?? '',
+      updatedAt: typeof c.updatedAt === 'number'
+        ? new Date(c.updatedAt).toISOString()
+        : typeof c.dateUpdated === 'number'
+          ? new Date(c.dateUpdated).toISOString()
+          : String(c.updatedAt ?? c.dateUpdated ?? new Date().toISOString()),
     }))
   } catch (err) {
     console.error('[Inbox] GHL fetch failed:', err instanceof Error ? err.message : err)

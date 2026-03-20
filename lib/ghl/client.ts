@@ -341,7 +341,8 @@ export interface GHLConversation {
   unreadCount: number
   lastMessage: string
   lastMessageType: string
-  updatedAt: string
+  updatedAt: string | number
+  dateUpdated: number
 }
 
 export interface GHLAppointmentList {
