@@ -81,7 +81,15 @@ app.use(
 );
 
 app.get("/health", async (_req, res) => {
-  let crmStatus: "connected" | "degraded" | "disconnected" = "disconnected";
+  // crmStatus logic:
+  //   "connected"    — at least one tenant has crmConnected=true AND received a webhook in the last 24h
+  //   "ok"           — at least one tenant has crmConnected=true (webhook may be stale — normal overnight/weekends)
+  //   "disconnected" — no tenants with crmConnected=true
+  //   "degraded"     — DB query failed (actual infrastructure issue)
+  //
+  // Previous 2-hour window caused false "degraded" every night/weekend when no webhooks fire.
+  // crmConnected=true is the authoritative signal; lastWebhookAt is supplementary freshness.
+  let crmStatus: "connected" | "ok" | "degraded" | "disconnected" = "disconnected";
   try {
     const { db: healthDb } = await import("./db");
     const { tenants: tenantsTable } = await import("../../drizzle/schema");
@@ -93,10 +101,11 @@ app.get("/health", async (_req, res) => {
       .limit(1);
     if (connected.length > 0) {
       const lastWebhook = connected[0]?.lastWebhookAt;
-      if (lastWebhook && Date.now() - lastWebhook.getTime() < 2 * 60 * 60 * 1000) {
+      if (lastWebhook && Date.now() - lastWebhook.getTime() < 24 * 60 * 60 * 1000) {
         crmStatus = "connected";
       } else {
-        crmStatus = "degraded";
+        // Tenant is CRM-connected but no recent webhook — still OK, not degraded
+        crmStatus = "ok";
       }
     }
   } catch {
