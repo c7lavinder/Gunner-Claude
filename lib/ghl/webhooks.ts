@@ -34,6 +34,8 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
 
     case 'OpportunityStageChanged':
     case 'opportunity.stageChanged':
+    case 'OpportunityCreate':
+    case 'OpportunityUpdate':
       await handleOpportunityStageChanged(tenant.id, event)
       break
 
@@ -138,13 +140,17 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
 
 async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhookEvent) {
   const oppData = event as {
-    opportunityId?: string
+    id?: string
     stageId?: string
+    pipelineStageId?: string
     contactId?: string
     pipelineId?: string
     source?: string
     locationId: string
   }
+
+  // GHL uses pipelineStageId in OpportunityCreate/Update, stageId in StageChanged
+  const stageId = oppData.pipelineStageId || oppData.stageId
 
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
@@ -155,7 +161,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
 
   // Check if this stage change matches the configured trigger
   const isPropertyTrigger =
-    oppData.stageId === tenant.propertyTriggerStage &&
+    stageId === tenant.propertyTriggerStage &&
     (!tenant.propertyPipelineId || oppData.pipelineId === tenant.propertyPipelineId)
 
   if (!isPropertyTrigger) return
@@ -164,7 +170,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
   if (oppData.contactId) {
     await createPropertyFromContact(tenantId, oppData.contactId, {
       ghlPipelineId: oppData.pipelineId,
-      ghlPipelineStage: oppData.stageId,
+      ghlPipelineStage: stageId,
       opportunitySource: oppData.source,
     })
   }
