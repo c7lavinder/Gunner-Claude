@@ -68,6 +68,23 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 18 — Pre-Phase 3 audit + cleanup (2026-03-20)
+**What was done:**
+- Created missing Prisma migration file for Stripe fields (20260320120000_add_stripe_subscription_fields)
+  - Used IF NOT EXISTS for safety since db push already applied changes
+  - Marked as applied via prisma migrate resolve
+  - Verified prisma migrate deploy passes clean (what Railway runs on build)
+- Updated AGENTS.md toolset: added Stripe and historical import entries
+- Pre-Phase 3 audit identified items needing production verification
+
+**Production verification checklist (must be done before Phase 3):**
+- [ ] Dashboard loads on Railway URL with real data (score trend chart, priority leads, KPI cards)
+- [ ] Call detail 4-tab layout renders with real graded calls
+- [ ] Pricing page loads at /pricing
+- [ ] Settings → Team tab shows GHL user mapping dropdown
+- [ ] Set Stripe env vars on Railway (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, price IDs)
+- [ ] Register Stripe webhook endpoint on Stripe dashboard
+
 ### Session 17 — Phase 2F/2G: Stripe paywall + pricing page (2026-03-20)
 **What was done:**
 - Installed stripe package, added 5 subscription fields to Tenant schema
@@ -279,25 +296,29 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 3A — Gamification (XP, levels, badges, leaderboard)
+**Task:** Production verification + Stripe setup, THEN Phase 3A
 
 **First message to Claude Code:**
 
-Read CLAUDE.md, AGENTS.md, PROGRESS.md, and TECH_STACK.md first.
+Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-Phase 2 is functionally complete (2A–2G all built). Before moving to Phase 3:
-1. Verify on production: dashboard KPIs, call detail 4-tab, invite flow, pricing page
-2. Set up Stripe in test mode (see Session 17 activation steps)
+Phase 2 code is complete. Before Phase 3, verify everything works on production:
 
-Phase 3A — Gamification:
-1. Build XP award system (lib/gamification/xp.ts):
-   - Call graded >70 = +50 XP, >90 = +100 XP
-   - Task completed = +20 XP, Appointment set = +75 XP
-   - Property Under Contract = +200 XP, Sold = +500 XP
-2. Wire XP events into grading.ts and webhook handlers
-3. Build leaderboard component for dashboard
-4. Build badge system (First Blood, Hot Streak, Closer, Iron Rep, TCP Hunter)
-5. Exit criteria: XP awards on real call grading, leaderboard visible on dashboard
+**Step 1 — Production verification (do first):**
+1. Open Railway URL → login → check dashboard renders with real data
+2. Click a call → verify 4-tab layout (Rubric, Coaching, Transcript, Next Steps)
+3. Go to Settings → Team → verify GHL user mapping dropdown loads
+4. Go to /pricing → verify 3-tier pricing page renders
+5. Report what works and what doesn't
+
+**Step 2 — Stripe activation:**
+1. Corey creates Stripe account + 3 products ($97, $197, $397 monthly)
+2. Set env vars on Railway: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_STARTER, STRIPE_PRICE_GROWTH, STRIPE_PRICE_TEAM
+3. Register webhook: https://gunner-claude-production.up.railway.app/api/webhooks/stripe
+4. Test checkout flow in Stripe test mode
+
+**Step 3 — THEN Phase 3A Gamification:**
+Build XP system, leaderboard, badge system per TECH_STACK.md
 
 ---
 

@@ -240,9 +240,11 @@ Critical files to re-inject at start of any new context window:
 | Call poller | scripts/poll-calls.ts | Polling fallback for call grading (every 60s cron) |
 | TCP scorer | lib/ai/scoring.ts | Lead conversion probability (v1 built — 8-factor ensemble) |
 | AI coach | lib/ai/coach.ts | User-facing coaching chat |
-| Approval gates | lib/gates/requireApproval.ts | High-stakes action gates (not yet built) |
+| Approval gates | lib/gates/requireApproval.ts | High-stakes action gates (not yet built — Phase 4A) |
 | Audit logger | lib/db/client.ts | All action logging |
 | Self-audit agent | scripts/audit.ts | Scheduled code review |
+| Stripe | lib/stripe/index.ts | Subscription management, plan definitions |
+| Historical import | scripts/import-historical-calls.ts | Bulk import + grade GHL call history |
 
 ---
 
