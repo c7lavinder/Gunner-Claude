@@ -1,11 +1,62 @@
 // app/(tenant)/[tenant]/tasks/page.tsx
-// Tasks page — fetches from GHL tasks API, enriches with contact data
+// Tasks page — full rewrite: fetches GHL tasks, classifies, scores, enriches
 import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
-import { TasksClient } from '@/components/tasks/tasks-client'
+import type { GHLTask } from '@/lib/ghl/client'
+import { TasksClient, type EnrichedTask } from '@/components/tasks/tasks-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
+import { startOfDay, differenceInDays, isPast, isToday } from 'date-fns'
+
+// ─── Category classification ───────────────────────────────────────────────
+
+type TaskCategory = 'New Lead' | 'Reschedule' | 'Admin' | 'Follow-Up'
+
+const CATEGORY_KEYWORDS: Array<{ category: TaskCategory; keywords: string[] }> = [
+  { category: 'New Lead', keywords: ['new lead', 'speed to lead', 'first call', 'fresh lead'] },
+  { category: 'Reschedule', keywords: ['reschedule', 'no show', 'confirm meeting'] },
+  { category: 'Admin', keywords: ['admin', 'action required', 'update crm'] },
+]
+
+function classifyTask(title: string, body: string): TaskCategory {
+  const text = `${title} ${body}`.toLowerCase()
+  for (const { category, keywords } of CATEGORY_KEYWORDS) {
+    if (keywords.some(kw => text.includes(kw))) return category
+  }
+  return 'Follow-Up'
+}
+
+// ─── Priority scoring ──────────────────────────────────────────────────────
+
+const CATEGORY_SCORES: Record<TaskCategory, { overdue: number; dueToday: number; future: number }> = {
+  'New Lead':   { overdue: 1000, dueToday: 900, future: 300 },
+  'Reschedule': { overdue: 800,  dueToday: 700, future: 250 },
+  'Admin':      { overdue: 600,  dueToday: 500, future: 200 },
+  'Follow-Up':  { overdue: 400,  dueToday: 300, future: 150 },
+}
+
+function scoreTask(category: TaskCategory, dueDate: string | null): number {
+  const scores = CATEGORY_SCORES[category]
+  if (!dueDate) return scores.future
+
+  const due = new Date(dueDate)
+  const todayStart = startOfDay(new Date())
+
+  if (isToday(due)) return scores.dueToday
+
+  if (isPast(due)) {
+    const daysOverdue = differenceInDays(todayStart, startOfDay(due))
+    const decay = Math.min(daysOverdue * 5, 50)
+    return scores.overdue - decay
+  }
+
+  // Future: subtract 10 per day until due
+  const daysUntilDue = differenceInDays(startOfDay(due), todayStart)
+  return Math.max(scores.future - (daysUntilDue * 10), 0)
+}
+
+// ─── Page component ────────────────────────────────────────────────────────
 
 export default async function TasksPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
@@ -13,117 +64,136 @@ export default async function TasksPage({ params }: { params: { tenant: string }
   const userId = session.userId
   const tenantId = session.tenantId
   const role = session.role as UserRole
-  const canViewTeam = hasPermission(role, 'tasks.view.team')
+  const isAdmin = hasPermission(role, 'tasks.view.team')
 
-  // Get role config for categories
-  const roleConfig = await db.roleConfig.findUnique({
-    where: { tenantId_role: { tenantId, role } },
-    select: { taskCategories: true },
+  // Get user's GHL mapping for filtering
+  const currentUser = await db.user.findUnique({
+    where: { id: userId },
+    select: { ghlUserId: true },
   })
-  const categories = (roleConfig?.taskCategories as string[]) ?? ['Follow-up', 'Call', 'Research', 'Admin']
 
-  // Fetch tasks from GHL
-  let ghlTasks: Array<{
-    id: string; title: string; description: string | null
-    category: string | null; status: string; priority: string
-    dueAt: string | null; completedAt: string | null; ghlTaskId: string | null
-    assignedTo: { id: string; name: string } | null
-    property: { id: string; address: string; city: string } | null
-    contactName: string | null; contactPhone: string | null; contactAddress: string | null
-  }> = []
-
+  let enrichedTasks: EnrichedTask[] = []
   let fetchError = false
 
   try {
     const ghl = await getGHLClient(tenantId)
+
+    // Fetch tasks from GHL
     const result = await ghl.searchTasks('incompleted')
-    const tasks = result.tasks ?? []
+    let tasks: GHLTask[] = result.tasks ?? []
 
-    // Collect unique contactIds for bulk enrichment
-    const contactIds = [...new Set(tasks.map(t => t.contactId).filter(Boolean))]
+    // Filter: non-admins only see their own tasks
+    if (!isAdmin && currentUser?.ghlUserId) {
+      tasks = tasks.filter(t => {
+        const taskUserId = t.assignedTo ?? t.userId
+        return taskUserId === currentUser.ghlUserId
+      })
+    } else if (!isAdmin && !currentUser?.ghlUserId) {
+      // User has no GHL mapping and isn't admin — show nothing from GHL
+      tasks = []
+    }
 
-    // Fetch contact details (batch, max 20 to avoid rate limits)
+    // Collect unique contactIds for bulk enrichment (cap at 50)
+    const contactIds = [...new Set(tasks.map(t => t.contactId).filter(Boolean))].slice(0, 50)
+
+    // Bulk fetch contacts
     const contactMap = new Map<string, { name: string; phone: string; address: string }>()
-    const batchIds = contactIds.slice(0, 20)
     const contactResults = await Promise.allSettled(
-      batchIds.map(id => ghl.getContact(id))
+      contactIds.map(id => ghl.getContact(id))
     )
-    contactResults.forEach((result, i) => {
-      if (result.status === 'fulfilled' && result.value) {
-        const c = result.value
-        contactMap.set(batchIds[i], {
+    contactResults.forEach((res, i) => {
+      if (res.status === 'fulfilled' && res.value) {
+        const c = res.value
+        contactMap.set(contactIds[i], {
           name: `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || c.email || 'Unknown',
           phone: c.phone ?? '',
-          address: c.address1 ?? '',
+          address: [c.address1, c.city, c.state].filter(Boolean).join(', '),
         })
       }
     })
 
-    ghlTasks = tasks.map(t => {
+    // AM/PM call tracking — find calls made today for these contacts
+    // Call model doesn't have contactId directly, so we check ghlCallId (conversation ID)
+    // which may not map 1:1 to contactId. For now, we use calledAt time for all calls today.
+    const todayStart = startOfDay(new Date())
+    const todayCalls = await db.call.findMany({
+      where: {
+        tenantId,
+        calledAt: { gte: todayStart },
+      },
+      select: { ghlCallId: true, calledAt: true },
+    })
+
+    // Build a rough AM/PM map keyed by ghlCallId (conversation IDs)
+    // Since GHL conversations are 1:1 with contacts, this gives us per-contact call tracking
+    const amPmByConversation = new Map<string, { am: boolean; pm: boolean }>()
+    for (const call of todayCalls) {
+      if (!call.ghlCallId || !call.calledAt) continue
+      const hour = call.calledAt.getHours()
+      const existing = amPmByConversation.get(call.ghlCallId) ?? { am: false, pm: false }
+      if (hour < 12) existing.am = true
+      else existing.pm = true
+      amPmByConversation.set(call.ghlCallId, existing)
+    }
+
+    // Resolve GHL user names for assignedTo
+    let ghlUserMap = new Map<string, string>()
+    try {
+      const usersResult = await ghl.getLocationUsers()
+      for (const u of usersResult.users ?? []) {
+        const name = u.name || `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim()
+        if (name) ghlUserMap.set(u.id, name)
+      }
+    } catch {
+      // GHL users endpoint may not be available — continue without names
+    }
+
+    // Build enriched tasks
+    enrichedTasks = tasks.map(t => {
       const contact = contactMap.get(t.contactId)
+      const category = classifyTask(t.title || '', t.body || '')
+      const score = scoreTask(category, t.dueDate)
+      const dueDate = t.dueDate ? new Date(t.dueDate) : null
+      const taskIsOverdue = dueDate ? isPast(dueDate) && !isToday(dueDate) : false
+      const taskIsDueToday = dueDate ? isToday(dueDate) : false
+      const assignedUserId = t.assignedTo ?? t.userId
+      const assignedToName = assignedUserId ? ghlUserMap.get(assignedUserId) ?? null : null
+
+      // AM/PM: check if any conversation for this contactId had calls today
+      // This is approximate — works when ghlCallId matches contactId conversations
+      const callStatus = amPmByConversation.get(t.contactId) ?? { am: false, pm: false }
+
       return {
         id: t.id,
         title: t.title || 'Untitled task',
-        description: t.body ?? null,
-        category: null, // GHL tasks don't have categories
-        status: t.completed ? 'COMPLETED' : 'PENDING',
-        priority: 'MEDIUM', // GHL doesn't have priority — default to medium
-        dueAt: t.dueDate ?? null,
-        completedAt: null,
-        ghlTaskId: t.id,
-        assignedTo: null, // Could be matched via t.assignedTo if GHL userId mapping exists
-        property: contact?.address ? { id: '', address: contact.address, city: '' } : null,
+        body: t.body ?? null,
+        category,
+        score,
+        dueDate: t.dueDate ?? null,
+        isOverdue: taskIsOverdue,
+        isDueToday: taskIsDueToday,
+        contactId: t.contactId,
         contactName: contact?.name ?? null,
         contactPhone: contact?.phone ?? null,
         contactAddress: contact?.address ?? null,
+        assignedToName,
+        amDone: callStatus.am,
+        pmDone: callStatus.pm,
       }
     })
+
+    // Sort by score descending
+    enrichedTasks.sort((a, b) => b.score - a.score)
   } catch (err) {
     console.error('[Tasks] GHL fetch failed:', err instanceof Error ? err.message : err)
     fetchError = true
   }
 
-  // Also fetch any locally-created tasks from our DB
-  const localTasks = await db.task.findMany({
-    where: {
-      tenantId,
-      ...(canViewTeam ? {} : { assignedToId: userId }),
-      status: { in: ['PENDING', 'IN_PROGRESS'] },
-    },
-    orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }],
-    include: {
-      assignedTo: { select: { id: true, name: true } },
-      property: { select: { id: true, address: true, city: true } },
-    },
-  })
-
-  // Merge: local tasks first (have priority/category), then GHL tasks not already in DB
-  const localGhlIds = new Set(localTasks.map(t => t.ghlTaskId).filter(Boolean))
-  const deduplicatedGhlTasks = ghlTasks.filter(t => !localGhlIds.has(t.ghlTaskId))
-
-  const allTasks = [
-    ...localTasks.map(t => ({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      category: t.category,
-      status: t.status,
-      priority: t.priority,
-      dueAt: t.dueAt?.toISOString() ?? null,
-      completedAt: t.completedAt?.toISOString() ?? null,
-      ghlTaskId: t.ghlTaskId,
-      assignedTo: t.assignedTo,
-      property: t.property,
-    })),
-    ...deduplicatedGhlTasks,
-  ]
-
   return (
     <TasksClient
-      tasks={allTasks}
-      categories={categories}
+      tasks={enrichedTasks}
+      isAdmin={isAdmin}
       tenantSlug={params.tenant}
-      canCreateForOthers={canViewTeam}
       fetchError={fetchError}
     />
   )

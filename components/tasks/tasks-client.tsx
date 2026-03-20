@@ -1,84 +1,75 @@
 'use client'
 // components/tasks/tasks-client.tsx
+// Day Hub-style task view — category tabs, AM/PM badges, expandable details
 
-import { useState, useTransition } from 'react'
-import { CheckSquare, Square, Plus, Clock, AlertCircle, Filter } from 'lucide-react'
-import { formatDistanceToNow, format, isToday, isTomorrow, isPast } from 'date-fns'
+import { useState } from 'react'
+import { CheckSquare, Clock, AlertCircle, MapPin, Phone, User, ChevronDown, ChevronUp, Loader2, ExternalLink } from 'lucide-react'
+import { format, differenceInDays } from 'date-fns'
+import Link from 'next/link'
 
-interface Task {
+// ─── Types ─────────────────────────────────────────────────────────────────
+
+export interface EnrichedTask {
   id: string
   title: string
-  description: string | null
-  category: string | null
-  status: string
-  priority: string
-  dueAt: string | null
-  completedAt: string | null
-  ghlTaskId: string | null
-  assignedTo: { id: string; name: string } | null
-  property: { id: string; address: string; city: string } | null
+  body: string | null
+  category: 'New Lead' | 'Reschedule' | 'Admin' | 'Follow-Up'
+  score: number
+  dueDate: string | null
+  isOverdue: boolean
+  isDueToday: boolean
+  contactId: string
+  contactName: string | null
+  contactPhone: string | null
+  contactAddress: string | null
+  assignedToName: string | null
+  amDone: boolean
+  pmDone: boolean
 }
 
-const PRIORITY_ORDER = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
-const PRIORITY_COLORS: Record<string, string> = {
-  URGENT: 'text-red-400 bg-red-500/10 border-red-500/20',
-  HIGH: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
-  MEDIUM: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-  LOW: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
+interface TaskDetails {
+  notes: Array<{ id: string; body: string; dateAdded: string }>
+  lastCall: { id: string; score: number | null; summary: string | null; createdAt: string } | null
+  todayActivity: Array<{ type: string; direction: string; body: string; dateAdded: string }>
 }
 
-export function TasksClient({ tasks, categories, tenantSlug, canCreateForOthers, fetchError }: {
-  tasks: Task[]
-  categories: string[]
+const CATEGORY_COLORS: Record<string, { badge: string; header: string }> = {
+  'New Lead': { badge: 'text-orange-400 bg-orange-500/10', header: 'text-orange-400' },
+  'Reschedule': { badge: 'text-yellow-400 bg-yellow-500/10', header: 'text-yellow-400' },
+  'Admin': { badge: 'text-blue-400 bg-blue-500/10', header: 'text-blue-400' },
+  'Follow-Up': { badge: 'text-gray-400 bg-white/5', header: 'text-gray-400' },
+}
+
+const ALL_CATEGORIES = ['New Lead', 'Reschedule', 'Follow-Up', 'Admin'] as const
+
+// ─── Main component ────────────────────────────────────────────────────────
+
+export function TasksClient({ tasks, isAdmin, tenantSlug, fetchError }: {
+  tasks: EnrichedTask[]
+  isAdmin: boolean
   tenantSlug: string
-  canCreateForOthers: boolean
   fetchError?: boolean
 }) {
-  const [localTasks, setLocalTasks] = useState(tasks)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [activePriority, setActivePriority] = useState<string | null>(null)
-  const [showNew, setShowNew] = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newCategory, setNewCategory] = useState(categories[0] ?? 'Follow-up')
-  const [newPriority, setNewPriority] = useState('MEDIUM')
-  const [isPending, startTransition] = useTransition()
+  const [assignedFilter, setAssignedFilter] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const filtered = localTasks.filter((t) => {
-    if (activeCategory && t.category !== activeCategory) return false
-    if (activePriority && t.priority !== activePriority) return false
-    return true
-  })
+  // Filter
+  let filtered = tasks
+  if (activeCategory) filtered = filtered.filter(t => t.category === activeCategory)
+  if (assignedFilter) filtered = filtered.filter(t => t.assignedToName === assignedFilter)
 
-  // Group by priority
-  const grouped = PRIORITY_ORDER.reduce<Record<string, Task[]>>((acc, p) => {
-    const items = filtered.filter((t) => t.priority === p)
-    if (items.length > 0) acc[p] = items
+  // Group by category (preserving score order within groups)
+  const grouped = ALL_CATEGORIES.reduce<Record<string, EnrichedTask[]>>((acc, cat) => {
+    const items = filtered.filter(t => t.category === cat)
+    if (items.length > 0) acc[cat] = items
     return acc
   }, {})
 
-  async function completeTask(taskId: string) {
-    setLocalTasks((prev) => prev.filter((t) => t.id !== taskId))
-    await fetch(`/api/tasks/${taskId}/complete`, { method: 'POST' })
-  }
+  // Unique assigned names for admin filter
+  const assignedNames = [...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[]
 
-  async function createTask() {
-    if (!newTitle.trim()) return
-    const res = await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: newTitle, category: newCategory, priority: newPriority }),
-    })
-    const data = await res.json()
-    if (data.task) {
-      setLocalTasks((prev) => [data.task, ...prev])
-      setNewTitle('')
-      setShowNew(false)
-    }
-  }
-
-  const overdueCount = localTasks.filter(
-    (t) => t.dueAt && isPast(new Date(t.dueAt)) && t.status !== 'COMPLETED'
-  ).length
+  const overdueCount = tasks.filter(t => t.isOverdue).length
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -87,166 +78,316 @@ export function TasksClient({ tasks, categories, tenantSlug, canCreateForOthers,
         <div>
           <h1 className="text-xl font-semibold text-white">Tasks</h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            {localTasks.length} open
+            {tasks.length} open task{tasks.length !== 1 ? 's' : ''}
             {overdueCount > 0 && (
-              <span className="ml-2 text-red-400 flex items-center gap-1 inline-flex">
+              <span className="ml-2 text-red-400 inline-flex items-center gap-1">
                 <AlertCircle size={11} /> {overdueCount} overdue
               </span>
             )}
           </p>
         </div>
-        <button
-          onClick={() => setShowNew(true)}
-          className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <Plus size={14} /> New task
-        </button>
       </div>
 
       {/* GHL fetch error */}
       {fetchError && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
           <AlertCircle size={14} />
-          Could not load tasks from GHL. Showing locally-created tasks only.
+          Could not load tasks from GHL. Check your GHL connection in Settings.
         </div>
       )}
 
-      {/* New task form */}
-      {showNew && (
-        <div className="bg-[#1a1d27] border border-orange-500/30 rounded-2xl p-4 space-y-3">
-          <input
-            autoFocus
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && createTask()}
-            placeholder="Task title…"
-            className="w-full bg-transparent text-sm text-white placeholder-gray-500 focus:outline-none"
-          />
-          <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
+      {/* Category filter tabs */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <button
+          onClick={() => setActiveCategory(null)}
+          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+            activeCategory === null
+              ? 'border-orange-500 bg-orange-500/15 text-orange-400'
+              : 'border-white/10 text-gray-400 hover:text-white'
+          }`}
+        >
+          All <span className="ml-1 text-gray-600">{tasks.length}</span>
+        </button>
+        {ALL_CATEGORIES.map(cat => {
+          const count = tasks.filter(t => t.category === cat).length
+          if (count === 0) return null
+          return (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                activeCategory === cat
+                  ? 'border-orange-500 bg-orange-500/15 text-orange-400'
+                  : 'border-white/10 text-gray-400 hover:text-white'
+              }`}
             >
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select
-              value={newPriority}
-              onChange={(e) => setNewPriority(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
-            >
-              {PRIORITY_ORDER.map((p) => <option key={p} value={p}>{p.toLowerCase()}</option>)}
-            </select>
-            <div className="flex gap-2 ml-auto">
-              <button
-                onClick={() => setShowNew(false)}
-                className="text-xs text-gray-400 hover:text-white px-3 py-1.5 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createTask}
-                disabled={!newTitle.trim()}
-                className="text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors"
-              >
-                Add task
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              {cat} <span className="ml-1 text-gray-600">{count}</span>
+            </button>
+          )
+        })}
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              activeCategory === cat
-                ? 'border-orange-500 bg-orange-500/15 text-orange-400'
-                : 'border-white/10 text-gray-400 hover:text-white'
-            }`}
+        {/* Admin: team member filter */}
+        {isAdmin && assignedNames.length > 0 && (
+          <select
+            value={assignedFilter ?? ''}
+            onChange={e => setAssignedFilter(e.target.value || null)}
+            className="ml-auto bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 focus:outline-none"
           >
-            {cat}
-          </button>
-        ))}
+            <option value="">All team members</option>
+            {assignedNames.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
-      {/* Task groups */}
+      {/* Task groups by category */}
       {Object.keys(grouped).length === 0 ? (
         <div className="bg-[#1a1d27] border border-white/10 rounded-2xl py-16 text-center">
-          <CheckSquare size={24} className="text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">No tasks here — you're clear</p>
+          <CheckSquare size={28} className="text-green-500/40 mx-auto mb-3" />
+          <p className="text-white font-medium text-sm">You're all caught up</p>
+          <p className="text-gray-600 text-xs mt-1">No tasks to show</p>
         </div>
       ) : (
-        Object.entries(grouped).map(([priority, items]) => (
-          <div key={priority}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`text-xs px-2 py-0.5 rounded-full border ${PRIORITY_COLORS[priority]}`}>
-                {priority.toLowerCase()}
-              </span>
-              <span className="text-xs text-gray-600">{items.length}</span>
+        Object.entries(grouped).map(([category, items]) => {
+          const colors = CATEGORY_COLORS[category] ?? CATEGORY_COLORS['Follow-Up']
+          return (
+            <div key={category}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`text-xs font-medium uppercase tracking-wider ${colors.header}`}>{category}</span>
+                <span className="text-xs text-gray-600">{items.length}</span>
+              </div>
+              <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
+                {items.map(task => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    tenantSlug={tenantSlug}
+                    expanded={expandedId === task.id}
+                    onToggle={() => setExpandedId(expandedId === task.id ? null : task.id)}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
-              {items.map((task) => (
-                <TaskRow key={task.id} task={task} onComplete={completeTask} />
-              ))}
-            </div>
-          </div>
-        ))
+          )
+        })
       )}
     </div>
   )
 }
 
-function TaskRow({ task, onComplete }: { task: Task; onComplete: (id: string) => void }) {
-  const [completing, setCompleting] = useState(false)
+// ─── Task card ─────────────────────────────────────────────────────────────
 
-  async function handleComplete() {
-    setCompleting(true)
-    await onComplete(task.id)
-  }
-
-  const dueLabel = () => {
-    if (!task.dueAt) return null
-    const d = new Date(task.dueAt)
-    if (isPast(d)) return { label: 'Overdue', cls: 'text-red-400' }
-    if (isToday(d)) return { label: 'Due today', cls: 'text-orange-400' }
-    if (isTomorrow(d)) return { label: 'Due tomorrow', cls: 'text-yellow-400' }
-    return { label: format(d, 'MMM d'), cls: 'text-gray-400' }
-  }
-
-  const due = dueLabel()
+function TaskCard({ task, tenantSlug, expanded, onToggle }: {
+  task: EnrichedTask
+  tenantSlug: string
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const daysOverdue = task.dueDate && task.isOverdue
+    ? differenceInDays(new Date(), new Date(task.dueDate))
+    : 0
 
   return (
-    <div className={`flex items-start gap-3 px-4 py-3.5 transition-opacity ${completing ? 'opacity-40' : ''}`}>
+    <div>
       <button
-        onClick={handleComplete}
-        disabled={completing}
-        className="mt-0.5 shrink-0 text-gray-500 hover:text-green-400 transition-colors"
+        onClick={onToggle}
+        className={`w-full text-left px-4 py-3.5 hover:bg-white/[0.02] transition-colors ${task.isOverdue ? 'bg-red-500/[0.03]' : ''}`}
       >
-        {completing ? <CheckSquare size={16} className="text-green-400" /> : <Square size={16} />}
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            {/* Contact name (large) */}
+            <p className={`text-sm font-medium ${task.isOverdue ? 'text-red-300' : 'text-white'}`}>
+              {task.contactName ?? 'Unknown contact'}
+            </p>
+
+            {/* Contact address */}
+            <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+              <MapPin size={9} className="shrink-0" />
+              {task.contactAddress || 'No address'}
+            </p>
+
+            {/* Task title */}
+            <p className="text-xs text-gray-400 mt-1">{task.title}</p>
+
+            {/* Metadata row */}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {/* Category badge */}
+              <span className={`text-xs px-2 py-0.5 rounded-full ${CATEGORY_COLORS[task.category]?.badge ?? 'text-gray-400 bg-white/5'}`}>
+                {task.category}
+              </span>
+
+              {/* Due date badge */}
+              {task.isOverdue && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">
+                  Overdue {daysOverdue}d
+                </span>
+              )}
+              {task.isDueToday && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400">
+                  Due today
+                </span>
+              )}
+              {!task.isOverdue && !task.isDueToday && task.dueDate && (
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <Clock size={9} /> Due {format(new Date(task.dueDate), 'MMM d')}
+                </span>
+              )}
+
+              {/* AM/PM badges */}
+              <span className={`text-xs px-1.5 py-0.5 rounded ${task.amDone ? 'bg-green-500/15 text-green-400' : 'bg-white/5 text-gray-600'}`}>
+                AM {task.amDone ? '✓' : ''}
+              </span>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${task.pmDone ? 'bg-green-500/15 text-green-400' : 'bg-white/5 text-gray-600'}`}>
+                PM {task.pmDone ? '✓' : ''}
+              </span>
+
+              {/* Assigned to */}
+              {task.assignedToName && (
+                <span className="text-xs text-gray-600 flex items-center gap-1">
+                  <User size={9} /> {task.assignedToName}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Expand icon */}
+          <div className="shrink-0 mt-1 text-gray-600">
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </div>
+        </div>
       </button>
 
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-white">{task.title}</p>
-        <div className="flex items-center gap-3 mt-1 flex-wrap">
-          {task.category && (
-            <span className="text-xs text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">{task.category}</span>
+      {/* Expanded detail panel */}
+      {expanded && (
+        <TaskDetailPanel
+          contactId={task.contactId}
+          contactName={task.contactName}
+          contactPhone={task.contactPhone}
+          contactAddress={task.contactAddress}
+          tenantSlug={tenantSlug}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Expandable detail panel ───────────────────────────────────────────────
+
+function TaskDetailPanel({ contactId, contactName, contactPhone, contactAddress, tenantSlug }: {
+  contactId: string
+  contactName: string | null
+  contactPhone: string | null
+  contactAddress: string | null
+  tenantSlug: string
+}) {
+  const [details, setDetails] = useState<TaskDetails | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  async function loadDetails() {
+    if (loaded) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/tasks/${contactId}/details`)
+      if (res.ok) {
+        const data = await res.json()
+        setDetails(data)
+      }
+    } catch {
+      // ignore
+    }
+    setLoading(false)
+    setLoaded(true)
+  }
+
+  return (
+    <div className="px-4 pb-4 border-t border-white/5 bg-white/[0.01]">
+      <div className="pt-3 space-y-3">
+        {/* Contact summary */}
+        <div className="flex items-center gap-4 text-xs text-gray-400">
+          {contactName && <span className="text-white font-medium">{contactName}</span>}
+          {contactPhone && (
+            <span className="flex items-center gap-1"><Phone size={10} /> {contactPhone}</span>
           )}
-          {task.property && (
-            <span className="text-xs text-gray-500 truncate max-w-40">{task.property.address}</span>
-          )}
-          {task.assignedTo && (
-            <span className="text-xs text-gray-500">{task.assignedTo.name}</span>
-          )}
-          {due && (
-            <span className={`text-xs flex items-center gap-1 ${due.cls}`}>
-              <Clock size={10} /> {due.label}
-            </span>
+          {contactAddress && (
+            <span className="flex items-center gap-1"><MapPin size={10} /> {contactAddress}</span>
           )}
         </div>
+
+        {/* Load details button */}
+        {!loaded && (
+          <button
+            onClick={loadDetails}
+            disabled={loading}
+            className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 transition-colors"
+          >
+            {loading ? <><Loader2 size={10} className="animate-spin" /> Loading...</> : 'Load details'}
+          </button>
+        )}
+
+        {/* Details content */}
+        {details && (
+          <div className="space-y-3">
+            {/* Last graded call */}
+            {details.lastCall && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Last graded call</p>
+                <Link
+                  href={`/${tenantSlug}/calls/${details.lastCall.id}`}
+                  className="flex items-center gap-2 text-xs bg-white/5 rounded-lg px-3 py-2 hover:bg-white/10 transition-colors"
+                >
+                  <span className={`font-semibold ${
+                    (details.lastCall.score ?? 0) >= 70 ? 'text-green-400' :
+                    (details.lastCall.score ?? 0) >= 50 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {details.lastCall.score ?? 0}
+                  </span>
+                  <span className="text-gray-400 truncate flex-1">{details.lastCall.summary ?? 'Graded call'}</span>
+                  <span className="text-gray-600">{format(new Date(details.lastCall.createdAt), 'MMM d')}</span>
+                  <ExternalLink size={10} className="text-orange-400" />
+                </Link>
+              </div>
+            )}
+
+            {/* Notes */}
+            {details.notes.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Recent notes ({details.notes.length})</p>
+                <div className="space-y-1">
+                  {details.notes.slice(0, 5).map(note => (
+                    <div key={note.id} className="text-xs bg-white/5 rounded-lg px-3 py-2">
+                      <p className="text-gray-300">{note.body}</p>
+                      <p className="text-gray-600 mt-0.5">{format(new Date(note.dateAdded), 'MMM d, h:mm a')}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Today's activity */}
+            {details.todayActivity.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Today's activity</p>
+                <div className="space-y-1">
+                  {details.todayActivity.map((msg, i) => (
+                    <div key={i} className="text-xs bg-white/5 rounded-lg px-3 py-2 flex items-center gap-2">
+                      <span className={`shrink-0 ${msg.direction === 'inbound' ? 'text-blue-400' : 'text-orange-400'}`}>
+                        {msg.direction === 'inbound' ? '←' : '→'}
+                      </span>
+                      <span className="text-gray-300 truncate flex-1">{msg.body}</span>
+                      <span className="text-gray-600 shrink-0">{msg.dateAdded}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!details.lastCall && details.notes.length === 0 && details.todayActivity.length === 0 && (
+              <p className="text-xs text-gray-600">No activity found for this contact</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

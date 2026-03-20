@@ -56,6 +56,10 @@ export class GHLClient {
     return this.request<GHLContact>('PUT', `/contacts/${contactId}`, data)
   }
 
+  async getContactNotes(contactId: string) {
+    return this.request<{ notes: Array<{ id: string; body: string; dateAdded: string }> }>('GET', `/contacts/${contactId}/notes`)
+  }
+
   async addNote(contactId: string, note: string) {
     return this.request('POST', `/contacts/${contactId}/notes`, {
       body: note,
@@ -128,7 +132,7 @@ export class GHLClient {
   // ─── Tasks (search from GHL) ───────────────────────────────────────────────
 
   async searchTasks(status: 'incompleted' | 'completed' = 'incompleted') {
-    return this.request<GHLTaskSearchResult>('POST', `/locations/${this.locationId}/tasks/search`, { status })
+    return this.request<{ tasks: GHLTask[] }>('POST', `/locations/${this.locationId}/tasks/search`, { status })
   }
 
   // ─── Appointments ──────────────────────────────────────────────────────────
@@ -137,35 +141,43 @@ export class GHLClient {
     return this.request<{ calendars: Array<{ id: string; name: string; groupId: string }> }>('GET', `/calendars/?locationId=${this.locationId}`)
   }
 
-  async getAppointments(params: { userId?: string; startDate: string; endDate: string }) {
-    // Try fetching calendars first — need groupId for events query
-    try {
-      const calendarsResult = await this.getCalendars()
-      const calendars = calendarsResult.calendars ?? []
-
-      if (calendars.length > 0) {
-        const groupId = calendars[0].groupId
-        const query = new URLSearchParams({
-          locationId: this.locationId,
-          groupId,
-          startTime: params.startDate,
-          endTime: params.endDate,
-          ...(params.userId && { userId: params.userId }),
-        })
-        return this.request<GHLAppointmentList>('GET', `/calendars/events?${query}`)
-      }
-    } catch (err) {
-      console.warn('[GHL] Calendar fetch failed, trying direct events query:', err instanceof Error ? err.message : err)
-    }
-
-    // Fallback: try without groupId using just locationId
-    const query = new URLSearchParams({
+  async getAppointments(params: { startDate: string; endDate: string; userId?: string }) {
+    // Strategy 1: Try the location-level events endpoint directly
+    const baseParams: Record<string, string> = {
       locationId: this.locationId,
       startTime: params.startDate,
       endTime: params.endDate,
-      ...(params.userId && { userId: params.userId }),
-    })
-    return this.request<GHLAppointmentList>('GET', `/calendars/events?${query}`)
+    }
+    if (params.userId) baseParams.userId = params.userId
+
+    try {
+      const query = new URLSearchParams(baseParams)
+      const result = await this.request<GHLAppointmentList>('GET', `/calendars/events?${query}`)
+      if ((result.events ?? []).length > 0) return result
+    } catch {
+      // fall through to per-calendar strategy
+    }
+
+    // Strategy 2: Fetch each calendar individually and merge events
+    const calendarsResult = await this.getCalendars()
+    const calendars = calendarsResult.calendars ?? []
+
+    const allEvents: GHLAppointment[] = []
+    for (const cal of calendars) {
+      try {
+        const calQuery = new URLSearchParams({
+          ...baseParams,
+          calendarId: cal.id,
+        })
+        const result = await this.request<GHLAppointmentList>('GET', `/calendars/events?${calQuery}`)
+        const events = result.events ?? result.appointments ?? []
+        allEvents.push(...events)
+      } catch {
+        continue // skip calendars that error
+      }
+    }
+
+    return { events: allEvents }
   }
 
   // ─── Pipeline ──────────────────────────────────────────────────────────────
@@ -343,6 +355,8 @@ export interface GHLTask {
   dueDate: string
   completed: boolean
   contactId: string
+  assignedTo?: string   // GHL user ID
+  userId?: string       // alternate field name
 }
 
 export interface GHLTaskInput {

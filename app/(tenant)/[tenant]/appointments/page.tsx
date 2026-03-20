@@ -3,15 +3,16 @@
 import { requireSession } from '@/lib/auth/session'
 import { getGHLClient } from '@/lib/ghl/client'
 import { AppointmentsClient } from '@/components/appointments/appointments-client'
-import { format, startOfDay, endOfDay, addDays } from 'date-fns'
+import { startOfDay, endOfDay, addDays } from 'date-fns'
 
 export default async function AppointmentsPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
 
   const tenantId = session.tenantId
   const today = new Date()
-  const startDate = format(startOfDay(today), "yyyy-MM-dd'T'HH:mm:ss'Z'")
-  const endDate = format(endOfDay(addDays(today, 7)), "yyyy-MM-dd'T'HH:mm:ss'Z'")
+  // GHL expects full ISO timestamps
+  const startDate = startOfDay(today).toISOString()
+  const endDate = endOfDay(addDays(today, 7)).toISOString()
 
   let appointments: AppointmentItem[] = []
   let fetchError = false
@@ -28,9 +29,9 @@ export default async function AppointmentsPage({ params }: { params: { tenant: s
     const contactResults = await Promise.allSettled(
       batchIds.map(id => ghl.getContact(id))
     )
-    contactResults.forEach((result, i) => {
-      if (result.status === 'fulfilled' && result.value) {
-        const c = result.value
+    contactResults.forEach((res, i) => {
+      if (res.status === 'fulfilled' && res.value) {
+        const c = res.value
         contactMap.set(batchIds[i], `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || c.email || 'Unknown')
       }
     })
