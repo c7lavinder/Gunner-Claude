@@ -80,6 +80,7 @@
   - Tab 4: Next Steps — AI recommended action, quick action buttons with confirm-before-execute
 - Prioritized Phase 2 build plan: 2A→2B→2C→2D→2E→2F→2G
 - Added "agent builds the plan" rule to AGENTS.md
+- Session closeout: PROGRESS.md updated, Next Session set for 2B + 2D
 
 ### Session 13 — Level 2 grading pipeline + Deepgram (2026-03-20)
 **What was done:**
@@ -219,12 +220,14 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 2B — Historical data import
+**Tasks:** Phase 2B — Historical data import + Phase 2D — Call detail 4-tab layout (production verification)
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
-Build scripts/import-historical-calls.ts per TECH_STACK.md spec:
+
+**2B — Historical data import:**
+Build scripts/import-historical-calls.ts:
 1. Paginate all GHL conversations with TYPE_CALL messages
 2. Filter: duration over 45 seconds
 3. Create call records for any not already in our DB
@@ -232,6 +235,13 @@ Build scripts/import-historical-calls.ts per TECH_STACK.md spec:
 5. Calculate TCP for all associated properties
 6. Dry-run mode that shows count before importing
 7. Run it against New Again Houses and report results
+
+**2D — Call detail 4-tab layout (verify on production):**
+The 4-tab layout (Rubric, Coaching, Transcript, Next Steps) was built in Session 14.
+1. Verify all 4 tabs render correctly on Railway production URL
+2. Test with real graded calls from New Again Houses
+3. Confirm quick action buttons on Next Steps tab work end-to-end
+4. Fix any production-only issues found
 
 ---
 
