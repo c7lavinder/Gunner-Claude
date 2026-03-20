@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { transcribeRecording } from '@/lib/ai/transcribe'
+import { calculateTCP } from '@/lib/ai/scoring'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -134,9 +135,16 @@ export async function gradeCall(callId: string): Promise<void> {
         resourceId: callId,
         source: 'SYSTEM',
         severity: 'INFO',
-        payload: { score: grading.overallScore, userId: call.assignedToId, hasGHLContext: !!ghlContext },
+        payload: { score: grading.overallScore, userId: call.assignedToId, hasGHLContext: !!ghlContext, hasTranscript: !!transcript },
       },
     })
+
+    // Recalculate TCP for the associated property
+    if (call.propertyId) {
+      calculateTCP(call.propertyId).catch((tcpErr) => {
+        console.warn(`[Call Grading] TCP recalc failed for property ${call.propertyId}:`, tcpErr)
+      })
+    }
   } catch (err) {
     console.error(`[Call Grading] Error grading call ${callId}:`, err)
 
